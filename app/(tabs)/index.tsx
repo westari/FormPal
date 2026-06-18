@@ -11,7 +11,7 @@ import {
 } from 'lucide-react-native';
 import { Picker } from '@react-native-picker/picker';
 import * as Haptics from 'expo-haptics';
-import Svg, { Path as SvgPath, Text as SvgText } from 'react-native-svg';
+import Svg, { Path as SvgPath, Text as SvgText, Circle as SvgCircle } from 'react-native-svg';
 import { useTabBarVisibility } from './_layout';
 
 // ---------------------------------------------------------------------------
@@ -25,7 +25,7 @@ const C = {
   textPrimary: '#F0F0F2',
   textSecondary: '#9A9AA2',
   textMuted: '#62626A',
-  primary: '#D6D7DC',                       // light cool grey accent
+  primary: '#D6D7DC',
   primarySoft: 'rgba(214,215,220,0.14)',
 };
 
@@ -34,6 +34,16 @@ const haptic = (style: Haptics.ImpactFeedbackStyle = Haptics.ImpactFeedbackStyle
 };
 
 const AGE_OPTIONS = Array.from({ length: 73 }, (_, i) => String(i + 13)); // 13–85
+
+// 4'8" → 6'10"
+const HEIGHT_OPTIONS: string[] = [];
+for (let ft = 4; ft <= 6; ft++) {
+  const startIn = ft === 4 ? 8 : 0;
+  const endIn   = ft === 6 ? 10 : 11;
+  for (let inch = startIn; inch <= endIn; inch++) {
+    HEIGHT_OPTIONS.push(`${ft}'${inch}"`);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Onboarding definition
@@ -47,7 +57,7 @@ interface Step {
   subtitle?: string;
   options?: OptionDef[];
   placeholder?: string;
-  wheelKind?: 'age';
+  wheelKind?: 'age' | 'height';
   showIf?: (a: Record<string, any>) => boolean;
 }
 
@@ -60,39 +70,50 @@ const SECTION_ICONS: Record<string, any> = {
 };
 
 const STEPS: Step[] = [
+  // ---- Personal / body questions first ----
+  { id: 'age', section: 'About You', type: 'wheel', wheelKind: 'age', question: 'How old are you?', subtitle: 'Helps me dial in the right pace.' },
+  { id: 'height', section: 'About You', type: 'wheel', wheelKind: 'height', question: 'How tall are you?', subtitle: 'Helps set the right benchmarks for your body.' },
+  { id: 'weight', section: 'About You', type: 'text', question: 'What do you weigh?', subtitle: 'So weight suggestions actually fit you.', placeholder: '0' },
+  { id: 'sex', section: 'About You', type: 'select', question: "What's your sex?", subtitle: 'Helps me set the right starting weights.', options: [
+    { label: 'Male',              icon: UserIcon },
+    { label: 'Female',            icon: UserIcon },
+    { label: 'Prefer not to say', icon: UserIcon },
+  ] },
+
+  // ---- Goal / experience / training questions ----
   { id: 'goal', section: 'Your Goal', type: 'select', question: "What's your main goal?", subtitle: "I'll shape your whole plan around this.", options: [
-    { label: 'Build muscle', icon: Dumbbell },
-    { label: 'Get stronger', icon: TrendingUp },
-    { label: 'Lose fat', icon: Flame },
-    { label: 'General fitness', icon: Heart },
+    { label: 'Build muscle',    icon: Dumbbell   },
+    { label: 'Get stronger',    icon: TrendingUp },
+    { label: 'Lose fat',        icon: Flame      },
+    { label: 'General fitness', icon: Heart      },
   ] },
   { id: 'experience', section: 'Your Experience', type: 'select', question: 'How much lifting experience do you have?', subtitle: 'Sets where your plan starts.', options: [
-    { label: 'Brand new', icon: Sprout },
+    { label: 'Brand new',       icon: Sprout   },
     { label: 'Some experience', icon: Activity },
-    { label: 'Experienced', icon: Award },
+    { label: 'Experienced',     icon: Award    },
   ] },
   { id: 'struggle', section: 'Your Experience', type: 'select', question: "What's your biggest struggle?", subtitle: 'So I focus where it actually counts.', options: [
-    { label: 'My form', icon: Camera },
-    { label: 'Knowing what to do', icon: Compass },
-    { label: 'Staying consistent', icon: Repeat },
-    { label: 'Gym anxiety', icon: Shield },
+    { label: 'My form',             icon: Camera  },
+    { label: 'Knowing what to do',  icon: Compass },
+    { label: 'Staying consistent',  icon: Repeat  },
+    { label: 'Gym anxiety',         icon: Shield  },
   ] },
   { id: 'location', section: 'Your Training', type: 'select', question: 'Where do you train?', subtitle: 'Decides what equipment I plan around.', options: [
-    { label: 'Gym', icon: Dumbbell },
-    { label: 'Home with equipment', icon: HomeIcon },
-    { label: 'Home, bodyweight only', icon: UserIcon },
+    { label: 'Gym',                   icon: Dumbbell  },
+    { label: 'Home with equipment',   icon: HomeIcon  },
+    { label: 'Home, bodyweight only', icon: UserIcon  },
   ] },
   { id: 'equipment', section: 'Your Training', type: 'multiselect', question: 'What do you have access to?', subtitle: "I'll only pick moves you can actually do.", options: [
-    { label: 'Barbell', icon: Dumbbell },
-    { label: 'Dumbbells', icon: Dumbbell },
-    { label: 'Machines', icon: Settings },
-    { label: 'Resistance bands', icon: Zap },
-    { label: 'Bench', icon: Activity },
+    { label: 'Barbell',          icon: Dumbbell },
+    { label: 'Dumbbells',        icon: Dumbbell },
+    { label: 'Machines',         icon: Settings },
+    { label: 'Resistance bands', icon: Zap      },
+    { label: 'Bench',            icon: Activity },
   ], showIf: (a) => a.location !== 'Home, bodyweight only' },
   { id: 'days', section: 'Your Training', type: 'select', question: 'How many days a week can you train?', subtitle: 'Sets your weekly split.', options: [
-    { label: '2 days', icon: Calendar },
-    { label: '3 days', icon: Calendar },
-    { label: '4 days', icon: Calendar },
+    { label: '2 days',  icon: Calendar },
+    { label: '3 days',  icon: Calendar },
+    { label: '4 days',  icon: Calendar },
     { label: '5+ days', icon: Calendar },
   ] },
   { id: 'duration', section: 'Your Training', type: 'select', question: 'How long per session?', subtitle: "I'll size each workout to fit.", options: [
@@ -101,16 +122,9 @@ const STEPS: Step[] = [
     { label: '45 min', icon: Clock },
     { label: '60 min', icon: Clock },
   ] },
-  { id: 'sex', section: 'About You', type: 'select', question: "What's your sex?", subtitle: 'Helps me set the right starting weights.', options: [
-    { label: 'Male', icon: UserIcon },
-    { label: 'Female', icon: UserIcon },
-    { label: 'Prefer not to say', icon: UserIcon },
-  ] },
-  { id: 'age', section: 'About You', type: 'wheel', wheelKind: 'age', question: 'How old are you?', subtitle: 'Helps me dial in the right pace.' },
-  { id: 'weight', section: 'About You', type: 'text', question: 'What do you weigh?', subtitle: 'So weight suggestions actually fit you.', placeholder: '0' },
   { id: 'notifications', section: 'Reminders', type: 'select', question: 'Want a reminder on training days?', subtitle: 'A quick nudge on the days you train.', options: [
-    { label: 'Yes, remind me', icon: Bell },
-    { label: 'No thanks', icon: BellOff },
+    { label: 'Yes, remind me', icon: Bell    },
+    { label: 'No thanks',      icon: BellOff },
   ] },
 ];
 
@@ -131,25 +145,25 @@ function buildPlan(a: Record<string, any>): { focus: string; exercises: Exercise
   const bodyweight = a.location === 'Home, bodyweight only';
   const exercises: Exercise[] = bodyweight
     ? [
-        { name: 'Bodyweight Squats', scheme: '3 × 12', formCheck: true },
-        { name: 'Push-ups', scheme: '3 × 10', formCheck: false },
-        { name: 'Reverse Lunges', scheme: '3 × 10 each', formCheck: true },
-        { name: 'Plank', scheme: '3 × 30 sec', formCheck: false },
+        { name: 'Bodyweight Squats', scheme: '3 × 12',      formCheck: true  },
+        { name: 'Push-ups',          scheme: '3 × 10',      formCheck: false },
+        { name: 'Reverse Lunges',    scheme: '3 × 10 each', formCheck: true  },
+        { name: 'Plank',             scheme: '3 × 30 sec',  formCheck: false },
       ]
     : [
-        { name: 'Goblet Squats', scheme: '3 × 8', formCheck: true },
-        { name: 'Dumbbell Press', scheme: '3 × 10', formCheck: false },
-        { name: 'Romanian Deadlift', scheme: '3 × 10', formCheck: false },
-        { name: 'Walking Lunges', scheme: '3 × 12 each', formCheck: true },
+        { name: 'Goblet Squats',      scheme: '3 × 8',       formCheck: true  },
+        { name: 'Dumbbell Press',     scheme: '3 × 10',      formCheck: false },
+        { name: 'Romanian Deadlift',  scheme: '3 × 10',      formCheck: false },
+        { name: 'Walking Lunges',     scheme: '3 × 12 each', formCheck: true  },
       ];
   return { focus: 'Full Body', exercises };
 }
 
 function projectionLine(a: Record<string, any>): string {
   const goalWord: Record<string, string> = {
-    'Build muscle': 'building real muscle',
-    'Get stronger': 'getting noticeably stronger',
-    'Lose fat': 'leaning out',
+    'Build muscle':    'building real muscle',
+    'Get stronger':    'getting noticeably stronger',
+    'Lose fat':        'leaning out',
     'General fitness': 'feeling fitter',
   };
   const days = (a.days || '3 days').replace(' days', '');
@@ -161,11 +175,11 @@ function projectionLine(a: Record<string, any>): string {
 // Animated option (fade + rise on mount, staggered)
 // ---------------------------------------------------------------------------
 function AnimatedOption({ index, children, style, onPress }: { index: number; children: React.ReactNode; style: any; onPress: () => void; }) {
-  const opacity = useRef(new Animated.Value(0)).current;
+  const opacity    = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(12)).current;
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(opacity, { toValue: 1, duration: 320, delay: index * 70, useNativeDriver: true }),
+      Animated.timing(opacity,    { toValue: 1, duration: 320, delay: index * 70, useNativeDriver: true }),
       Animated.timing(translateY, { toValue: 0, duration: 320, delay: index * 70, useNativeDriver: true }),
     ]).start();
   }, []);
@@ -179,28 +193,47 @@ function AnimatedOption({ index, children, style, onPress }: { index: number; ch
 }
 
 // ---------------------------------------------------------------------------
-// Projection chart — animated SVG line draw
+// Projection chart — animated SVG line draw with glow dot
 // ---------------------------------------------------------------------------
-const AnimatedSvgPath = Animated.createAnimatedComponent(SvgPath);
+const AnimatedSvgPath   = Animated.createAnimatedComponent(SvgPath);
+const AnimatedSvgCircle = Animated.createAnimatedComponent(SvgCircle);
 
-// Bezier M 25,100 C 90,100 205,18 280,18 — estimated path length
+// Curve: M 25,100 C 90,100 205,18 280,18 — estimated path length
 const CURVE_LEN = 330;
+// Line draw: 350ms delay + 1500ms duration = finishes at 1850ms from mount
+const LINE_DRAW_DURATION = 1500;
+const LINE_DRAW_DELAY    = 350;
 
 function ProjectionChart() {
-  const lineProgress = useRef(new Animated.Value(0)).current;
+  const lineProgress  = useRef(new Animated.Value(0)).current;
+  const dotOpacity    = useRef(new Animated.Value(0)).current;
+  const pulseOpacity  = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.timing(lineProgress, {
       toValue: 1,
-      duration: 1500,
-      delay: 350,
-      useNativeDriver: false, // SVG props can't use native driver
-    }).start();
+      duration: LINE_DRAW_DURATION,
+      delay: LINE_DRAW_DELAY,
+      useNativeDriver: false, // SVG props cannot use native driver
+    }).start(() => {
+      Animated.timing(dotOpacity, { toValue: 1, duration: 250, useNativeDriver: false }).start();
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseOpacity, { toValue: 0.55, duration: 850, useNativeDriver: false }),
+          Animated.timing(pulseOpacity, { toValue: 0,    duration: 850, useNativeDriver: false }),
+        ])
+      ).start();
+    });
   }, []);
 
   const strokeDashoffset = lineProgress.interpolate({
-    inputRange: [0, 1],
+    inputRange:  [0, 1],
     outputRange: [CURVE_LEN, 0],
+  });
+
+  const fillOpacity = lineProgress.interpolate({
+    inputRange:  [0, 1],
+    outputRange: [0, 0.08],
   });
 
   return (
@@ -218,11 +251,18 @@ function ProjectionChart() {
       </View>
 
       {/* Chart */}
-      <Svg width="100%" height={140} viewBox="0 0 300 135">
-        {/* Baseline grid */}
+      <Svg width="100%" height={150} viewBox="0 0 300 145">
         <SvgPath d="M 25,105 L 280,105" stroke={C.surfaceBorder} strokeWidth={1} fill="none" />
 
-        {/* "Without" — dashed flat line, shown immediately as the reference */}
+        {/* Soft glow fill under "With FormPal" curve */}
+        <AnimatedSvgPath
+          d="M 25,100 C 90,100 205,18 280,18 L 280,105 L 25,105 Z"
+          fill="white"
+          opacity={fillOpacity}
+          stroke="none"
+        />
+
+        {/* "Without" — dashed flat line */}
         <SvgPath
           d="M 25,100 L 280,100"
           stroke={C.textMuted}
@@ -232,34 +272,62 @@ function ProjectionChart() {
           strokeLinecap="round"
         />
 
-        {/* "With FormPal" — solid curve drawing in from left */}
+        {/* "With FormPal" — animated curve */}
         <AnimatedSvgPath
           d="M 25,100 C 90,100 205,18 280,18"
           stroke={C.textPrimary}
-          strokeWidth={2.5}
+          strokeWidth={3}
           strokeDasharray={`${CURVE_LEN} ${CURVE_LEN}`}
           strokeDashoffset={strokeDashoffset}
           fill="none"
           strokeLinecap="round"
         />
 
-        {/* X-axis labels */}
-        <SvgText x="25" y="122" fill={C.textMuted} fontSize="10" textAnchor="middle">Week 1</SvgText>
-        <SvgText x="280" y="122" fill={C.textMuted} fontSize="10" textAnchor="middle">Week 8</SvgText>
+        {/* Pulsing glow ring + solid dot at curve end */}
+        <AnimatedSvgCircle cx="280" cy="18" r="10" fill="white" opacity={pulseOpacity} />
+        <AnimatedSvgCircle cx="280" cy="18" r="4"  fill="white" opacity={dotOpacity}   />
 
-        {/* Y-axis label */}
-        <SvgText
-          x="8"
-          y="60"
-          fill={C.textMuted}
-          fontSize="9"
-          textAnchor="middle"
-          transform="rotate(-90 8 60)"
-        >
+        <SvgText x="25"  y="126" fill={C.textMuted} fontSize="11" textAnchor="middle">Week 1</SvgText>
+        <SvgText x="280" y="126" fill={C.textMuted} fontSize="11" textAnchor="middle">Week 8</SvgText>
+        <SvgText x="8" y="60" fill={C.textMuted} fontSize="11" textAnchor="middle" transform="rotate(-90 8 60)">
           Form score
         </SvgText>
       </Svg>
     </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Projection bullet item — staggered fade-in after chart line finishes
+// ---------------------------------------------------------------------------
+const BULLET_ITEMS = [
+  'Personalized from day one',
+  'Real-time form feedback on every rep',
+  'Adapts as you improve',
+];
+
+const BULLET_BASE_DELAY = LINE_DRAW_DELAY + LINE_DRAW_DURATION + 100;
+const BULLET_STAGGER    = 300;
+
+function BulletItem({ text, index }: { text: string; index: number }) {
+  const opacity    = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(8)).current;
+
+  useEffect(() => {
+    const delay = BULLET_BASE_DELAY + index * BULLET_STAGGER;
+    Animated.parallel([
+      Animated.timing(opacity,    { toValue: 1, duration: 350, delay, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: 0, duration: 350, delay, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  return (
+    <Animated.View style={{ opacity, transform: [{ translateY }], flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+      <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <Check size={12} color={C.bg} strokeWidth={3} />
+      </View>
+      <Text style={{ fontSize: 15, color: C.textPrimary, fontWeight: '500', flex: 1 }}>{text}</Text>
+    </Animated.View>
   );
 }
 
@@ -272,28 +340,25 @@ export default function TodayScreen() {
   const insets = useSafeAreaInsets();
   const { setTabsVisible } = useTabBarVisibility();
 
-  const [appState, setAppState] = useState<AppState>('welcome');
-  const [stepIndex, setStepIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, any>>({});
-  const [textInput, setTextInput] = useState('');
-  const [plan, setPlan] = useState<{ focus: string; exercises: Exercise[] } | null>(null);
+  const [appState,   setAppState]   = useState<AppState>('welcome');
+  const [stepIndex,  setStepIndex]  = useState(0);
+  const [answers,    setAnswers]    = useState<Record<string, any>>({});
+  const [textInput,  setTextInput]  = useState('');
+  const [plan,       setPlan]       = useState<{ focus: string; exercises: Exercise[] } | null>(null);
+  const [loadStep,   setLoadStep]   = useState(0);
+  const [loadPct,    setLoadPct]    = useState(0);
 
-  const [loadStep, setLoadStep] = useState(0);
-  const [loadPct, setLoadPct] = useState(0);
-
-  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const fadeAnim  = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
 
-  // day-1 placeholders (wire to real data later)
-  const streak = 0;
+  const streak   = 0;
   const sessions = 0;
   const goodForm = '—';
 
   const visibleSteps = getVisibleSteps(answers);
-  const currentStep = visibleSteps[stepIndex];
-  const progress = visibleSteps.length > 0 ? (stepIndex + 1) / visibleSteps.length : 0;
+  const currentStep  = visibleSteps[stepIndex];
+  const progress     = visibleSteps.length > 0 ? (stepIndex + 1) / visibleSteps.length : 0;
 
-  // Drive tab bar visibility: only show tabs on the home screen
   useEffect(() => {
     setTabsVisible(appState === 'home');
   }, [appState]);
@@ -322,13 +387,13 @@ export default function TodayScreen() {
     const out = dir === 'forward' ? -36 : 36;
     const inn = dir === 'forward' ? 36 : -36;
     Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 0, duration: 130, useNativeDriver: true }),
+      Animated.timing(fadeAnim,  { toValue: 0, duration: 130, useNativeDriver: true }),
       Animated.timing(slideAnim, { toValue: out, duration: 130, useNativeDriver: true }),
     ]).start(() => {
       cb();
       slideAnim.setValue(inn);
       Animated.parallel([
-        Animated.timing(fadeAnim, { toValue: 1, duration: 220, useNativeDriver: true }),
+        Animated.timing(fadeAnim,  { toValue: 1, duration: 220, useNativeDriver: true }),
         Animated.spring(slideAnim, { toValue: 0, friction: 8, tension: 60, useNativeDriver: true }),
       ]).start();
     });
@@ -422,9 +487,12 @@ export default function TodayScreen() {
       </>
     );
 
-    // WHEEL (age)
+    // WHEEL (age or height)
     if (st.type === 'wheel') {
-      const ageVal = (answers[st.id] as string) || '16';
+      const isHeight   = st.wheelKind === 'height';
+      const options    = isHeight ? HEIGHT_OPTIONS : AGE_OPTIONS;
+      const defaultVal = isHeight ? `5'8"` : '16';
+      const wheelVal   = (answers[st.id] as string) || defaultVal;
       return (
         <View style={[s.c, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
           {header}
@@ -432,17 +500,17 @@ export default function TodayScreen() {
             {sectionHeader}
             <View style={{ marginTop: 16 }}>
               <Picker
-                selectedValue={ageVal}
+                selectedValue={wheelVal}
                 onValueChange={(v) => setAnswers({ ...answers, [st.id]: v as string })}
                 style={{ height: 230 }}
                 itemStyle={{ color: C.textPrimary, fontSize: 28, fontWeight: '600' }}
               >
-                {AGE_OPTIONS.map(o => <Picker.Item key={o} label={o} value={o} />)}
+                {options.map(o => <Picker.Item key={o} label={o} value={o} />)}
               </Picker>
             </View>
           </View>
           <View style={s.bn}>
-            <TouchableOpacity style={s.cb} onPress={() => advance({ ...answers, [st.id]: ageVal })} activeOpacity={0.85}>
+            <TouchableOpacity style={s.cb} onPress={() => advance({ ...answers, [st.id]: wheelVal })} activeOpacity={0.85}>
               <Text style={s.ct}>Continue</Text>
             </TouchableOpacity>
           </View>
@@ -502,7 +570,7 @@ export default function TodayScreen() {
           <Animated.View style={{ opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
             {sectionHeader}
             {(st.options || []).map((o, i) => {
-              const sel = isSel(o.label);
+              const sel  = isSel(o.label);
               const Icon = o.icon || UserIcon;
               return (
                 <AnimatedOption
@@ -551,12 +619,12 @@ export default function TodayScreen() {
         <Text style={{ fontSize: 15, color: C.textSecondary, marginBottom: 36, lineHeight: 22 }}>Putting together a workout around your goal and setup.</Text>
         <View>
           {LOADING_STEPS.map((step, i) => {
-            const done = i < loadStep;
+            const done    = i < loadStep;
             const current = i === loadStep;
             return (
               <View key={i} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14, opacity: i > loadStep ? 0.35 : 1 }}>
                 <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: done ? C.primary : 'transparent', borderWidth: done ? 0 : 1.5, borderColor: current ? C.primary : C.surfaceBorder, alignItems: 'center', justifyContent: 'center', marginRight: 14 }}>
-                  {done && <Text style={{ color: C.bg, fontSize: 13, fontWeight: '700' }}>✓</Text>}
+                  {done    && <Text style={{ color: C.bg, fontSize: 13, fontWeight: '700' }}>✓</Text>}
                   {current && <ActivityIndicator size="small" color={C.primary} />}
                 </View>
                 <Text style={{ fontSize: 16, fontWeight: current ? '600' : '500', color: done || current ? C.textPrimary : C.textMuted }}>{step}</Text>
@@ -585,17 +653,8 @@ export default function TodayScreen() {
 
           <ProjectionChart />
 
-          {[
-            'Personalized from day one',
-            'Real-time form feedback on every rep',
-            'Adapts as you improve',
-          ].map((item, i) => (
-            <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16 }}>
-              <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <Check size={12} color={C.bg} strokeWidth={3} />
-              </View>
-              <Text style={{ fontSize: 15, color: C.textPrimary, fontWeight: '500', flex: 1 }}>{item}</Text>
-            </View>
+          {BULLET_ITEMS.map((item, i) => (
+            <BulletItem key={item} text={item} index={i} />
           ))}
         </ScrollView>
         <View style={s.bn}>
@@ -656,7 +715,6 @@ export default function TodayScreen() {
   return (
     <View style={s.c}>
       <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: insets.top + 12, paddingBottom: insets.bottom + 32 }} showsVerticalScrollIndicator={false}>
-        {/* top bar */}
         <View style={s.homeTop}>
           <Text style={s.wordmark}>FormPal</Text>
           <View style={s.streakPill}>
@@ -665,12 +723,10 @@ export default function TodayScreen() {
           </View>
         </View>
 
-        {/* coach greeting */}
         <Text style={s.greeting}>
           {streak > 0 ? 'Welcome back. Ready when you are.' : "Welcome. Let's get your first session in."}
         </Text>
 
-        {/* today's workout — hero */}
         <View style={s.heroCard}>
           <Text style={s.heroLabel}>TODAY'S WORKOUT</Text>
           <Text style={s.heroFocus}>{plan?.focus || 'Full Body'}</Text>
@@ -691,7 +747,6 @@ export default function TodayScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* this week */}
         <View style={s.weekStrip}>
           <View style={s.weekItem}>
             <Text style={s.weekNum}>{streak}</Text>
@@ -709,7 +764,6 @@ export default function TodayScreen() {
           </View>
         </View>
 
-        {/* recent */}
         <Text style={s.sectionHdr}>Recent sessions</Text>
         <View style={s.emptyCard}>
           <Text style={s.emptyTxt}>No sessions yet — your first one will show up here.</Text>
@@ -722,7 +776,6 @@ export default function TodayScreen() {
 const s = StyleSheet.create({
   c: { flex: 1, backgroundColor: C.bg },
 
-  // onboarding header / progress
   qh: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12 },
   bb: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   bt: { fontSize: 22, color: C.textSecondary },
@@ -730,66 +783,58 @@ const s = StyleSheet.create({
   pt: { height: 4, backgroundColor: C.surfaceBorder, borderRadius: 2, overflow: 'hidden' },
   pf: { height: 4, backgroundColor: C.primary, borderRadius: 2 },
 
-  // section + question
   sectionRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   sectionIconWrap: { width: 26, height: 26, borderRadius: 13, backgroundColor: C.iconBg, borderWidth: 1, borderColor: C.surfaceBorder, alignItems: 'center', justifyContent: 'center' },
-  qs: { fontSize: 11, fontWeight: '700', color: C.textSecondary, letterSpacing: 1.5 },
-  qq: { fontSize: 26, fontWeight: '700', color: C.textPrimary, lineHeight: 32, marginBottom: 8, letterSpacing: -0.8 },
+  qs:  { fontSize: 11, fontWeight: '700', color: C.textSecondary, letterSpacing: 1.5 },
+  qq:  { fontSize: 26, fontWeight: '700', color: C.textPrimary, lineHeight: 32, marginBottom: 8, letterSpacing: -0.8 },
   qsub: { fontSize: 14, color: C.textMuted, lineHeight: 20, marginBottom: 24, letterSpacing: -0.1 },
 
-  // options (icon + label + radio)
-  opt: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: C.surface, borderRadius: 16, borderWidth: 1, borderColor: C.surfaceBorder, paddingHorizontal: 16, paddingVertical: 14, marginBottom: 11 },
-  optSel: { borderColor: C.primary, backgroundColor: C.primarySoft },
-  optIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: C.iconBg, alignItems: 'center', justifyContent: 'center' },
+  opt:       { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: C.surface, borderRadius: 16, borderWidth: 1, borderColor: C.surfaceBorder, paddingHorizontal: 16, paddingVertical: 14, marginBottom: 11 },
+  optSel:    { borderColor: C.primary, backgroundColor: C.primarySoft },
+  optIcon:   { width: 38, height: 38, borderRadius: 12, backgroundColor: C.iconBg, alignItems: 'center', justifyContent: 'center' },
   optIconSel: { backgroundColor: 'rgba(255,255,255,0.12)' },
-  optTxt: { flex: 1, fontSize: 16, fontWeight: '600', color: C.textPrimary, letterSpacing: -0.2 },
+  optTxt:    { flex: 1, fontSize: 16, fontWeight: '600', color: C.textPrimary, letterSpacing: -0.2 },
   optTxtSel: { color: C.textPrimary },
-  radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: C.surfaceBorder, alignItems: 'center', justifyContent: 'center' },
-  radioSel: { backgroundColor: C.primary, borderColor: C.primary },
+  radio:     { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: C.surfaceBorder, alignItems: 'center', justifyContent: 'center' },
+  radioSel:  { backgroundColor: C.primary, borderColor: C.primary },
 
-  // bottom continue
-  bn: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 24, paddingBottom: 24, paddingTop: 16, backgroundColor: C.bg, borderTopWidth: 1, borderTopColor: C.surfaceBorder },
-  cb: { backgroundColor: C.primary, borderRadius: 100, paddingVertical: 18, alignItems: 'center' },
+  bn:        { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 24, paddingBottom: 24, paddingTop: 16, backgroundColor: C.bg, borderTopWidth: 1, borderTopColor: C.surfaceBorder },
+  cb:        { backgroundColor: C.primary, borderRadius: 100, paddingVertical: 18, alignItems: 'center' },
   cbDisabled: { backgroundColor: C.surface, borderWidth: 1, borderColor: C.surfaceBorder },
-  ct: { fontSize: 16, fontWeight: '700', color: C.bg, letterSpacing: 0.2 },
+  ct:        { fontSize: 16, fontWeight: '700', color: C.bg, letterSpacing: 0.2 },
   ctDisabled: { color: C.textMuted },
 
-  // welcome
-  logoDot: { width: 14, height: 14, borderRadius: 7, backgroundColor: C.primary, marginBottom: 20 },
-  wordmarkBig: { fontSize: 15, fontWeight: '700', color: C.textPrimary, textAlign: 'center', letterSpacing: 2, marginBottom: 28 },
+  logoDot:      { width: 14, height: 14, borderRadius: 7, backgroundColor: C.primary, marginBottom: 20 },
+  wordmarkBig:  { fontSize: 15, fontWeight: '700', color: C.textPrimary, textAlign: 'center', letterSpacing: 2, marginBottom: 28 },
   welcomeTitle: { fontSize: 30, fontWeight: '700', color: C.textPrimary, textAlign: 'center', lineHeight: 38, letterSpacing: -1, marginBottom: 14 },
-  welcomeSub: { fontSize: 15, color: C.textSecondary, textAlign: 'center', lineHeight: 22, marginBottom: 40, paddingHorizontal: 8 },
-  primaryBtn: { backgroundColor: C.primary, borderRadius: 100, paddingVertical: 18, alignItems: 'center' },
+  welcomeSub:   { fontSize: 15, color: C.textSecondary, textAlign: 'center', lineHeight: 22, marginBottom: 40, paddingHorizontal: 8 },
+  primaryBtn:    { backgroundColor: C.primary, borderRadius: 100, paddingVertical: 18, alignItems: 'center' },
   primaryBtnTxt: { fontSize: 16, fontWeight: '700', color: C.bg, letterSpacing: 0.2 },
 
-  // home top
-  homeTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 },
-  wordmark: { fontSize: 20, fontWeight: '800', color: C.textPrimary, letterSpacing: -0.5 },
+  homeTop:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 },
+  wordmark:  { fontSize: 20, fontWeight: '800', color: C.textPrimary, letterSpacing: -0.5 },
   streakPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: C.surface, borderWidth: 1, borderColor: C.surfaceBorder, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 100 },
   streakTxt: { fontSize: 14, fontWeight: '700', color: C.textPrimary },
-  greeting: { fontSize: 16, color: C.textSecondary, marginBottom: 18, lineHeight: 22 },
+  greeting:  { fontSize: 16, color: C.textSecondary, marginBottom: 18, lineHeight: 22 },
 
-  // hero workout card
-  heroCard: { backgroundColor: C.surface, borderRadius: 20, borderWidth: 1, borderColor: C.surfaceBorder, padding: 20, marginBottom: 16 },
+  heroCard:  { backgroundColor: C.surface, borderRadius: 20, borderWidth: 1, borderColor: C.surfaceBorder, padding: 20, marginBottom: 16 },
   heroLabel: { fontSize: 11, fontWeight: '700', color: C.textMuted, letterSpacing: 1.5, marginBottom: 6 },
   heroFocus: { fontSize: 24, fontWeight: '700', color: C.textPrimary, letterSpacing: -0.6, marginBottom: 16 },
-  exRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderTopWidth: 1, borderTopColor: C.surfaceBorder },
-  exName: { fontSize: 15, fontWeight: '600', color: C.textPrimary, letterSpacing: -0.2 },
-  exScheme: { fontSize: 13, color: C.textMuted, marginTop: 2 },
-  fcTag: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: C.iconBg, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 100 },
-  fcTxt: { fontSize: 11, fontWeight: '700', color: C.textSecondary, letterSpacing: 0.2 },
-  startBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: C.primary, borderRadius: 100, paddingVertical: 16, marginTop: 18 },
-  startTxt: { fontSize: 16, fontWeight: '700', color: C.bg, letterSpacing: 0.2 },
+  exRow:     { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderTopWidth: 1, borderTopColor: C.surfaceBorder },
+  exName:    { fontSize: 15, fontWeight: '600', color: C.textPrimary, letterSpacing: -0.2 },
+  exScheme:  { fontSize: 13, color: C.textMuted, marginTop: 2 },
+  fcTag:     { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: C.iconBg, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 100 },
+  fcTxt:     { fontSize: 11, fontWeight: '700', color: C.textSecondary, letterSpacing: 0.2 },
+  startBtn:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: C.primary, borderRadius: 100, paddingVertical: 16, marginTop: 18 },
+  startTxt:  { fontSize: 16, fontWeight: '700', color: C.bg, letterSpacing: 0.2 },
 
-  // this week strip
-  weekStrip: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.surface, borderRadius: 18, borderWidth: 1, borderColor: C.surfaceBorder, paddingVertical: 18, marginBottom: 24 },
-  weekItem: { flex: 1, alignItems: 'center' },
+  weekStrip:   { flexDirection: 'row', alignItems: 'center', backgroundColor: C.surface, borderRadius: 18, borderWidth: 1, borderColor: C.surfaceBorder, paddingVertical: 18, marginBottom: 24 },
+  weekItem:    { flex: 1, alignItems: 'center' },
   weekDivider: { width: 1, height: 32, backgroundColor: C.surfaceBorder },
-  weekNum: { fontSize: 22, fontWeight: '700', color: C.textPrimary, letterSpacing: -0.5 },
-  weekLbl: { fontSize: 12, color: C.textMuted, marginTop: 4 },
+  weekNum:     { fontSize: 22, fontWeight: '700', color: C.textPrimary, letterSpacing: -0.5 },
+  weekLbl:     { fontSize: 12, color: C.textMuted, marginTop: 4 },
 
-  // recent
   sectionHdr: { fontSize: 13, fontWeight: '700', color: C.textSecondary, letterSpacing: 0.5, marginBottom: 12 },
-  emptyCard: { backgroundColor: C.surface, borderRadius: 16, borderWidth: 1, borderColor: C.surfaceBorder, padding: 20, alignItems: 'center' },
-  emptyTxt: { fontSize: 14, color: C.textMuted, textAlign: 'center', lineHeight: 20 },
+  emptyCard:  { backgroundColor: C.surface, borderRadius: 16, borderWidth: 1, borderColor: C.surfaceBorder, padding: 20, alignItems: 'center' },
+  emptyTxt:   { fontSize: 14, color: C.textMuted, textAlign: 'center', lineHeight: 20 },
 });

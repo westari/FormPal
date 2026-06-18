@@ -1,3 +1,4 @@
+constants/api.ts
 node_modules/
 .expo/
 dist/
