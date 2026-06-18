@@ -1,0 +1,13 @@
+{
+  "platforms": ["apple"],
+  "apple": {
+    "modules": ["ATHLTCameraModule"],
+    "views": ["ATHLTCameraView"],
+    "podspecPath": "athlt-camera.podspec"
+  },
+  "ios": {
+    "modules": ["ATHLTCameraModule"],
+    "views": ["ATHLTCameraView"],
+    "podspecPath": "athlt-camera.podspec"
+  }
+}

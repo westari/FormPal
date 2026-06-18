@@ -1,0 +1,13 @@
+{
+  "name": "shot-detector",
+  "version": "0.0.1",
+  "description": "YOLOv11n CoreML shot-detection native module for ATHLT",
+  "main": "index",
+  "types": "index.d.ts",
+  "peerDependencies": {
+    "expo": "*",
+    "expo-modules-core": "*",
+    "react": "*",
+    "react-native": "*"
+  }
+}

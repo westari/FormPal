@@ -1,0 +1,6 @@
+{
+  "name": "athlt-camera",
+  "version": "1.0.0",
+  "description": "ATHLT native camera + CV module (AVCaptureSession + CoreML, no VisionCamera)",
+  "main": "src/index.ts"
+}
