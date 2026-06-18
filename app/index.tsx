@@ -6,24 +6,25 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Check, Flame, Target, TrendingUp, Dumbbell, User as UserIcon,
-  Calendar, Camera, Play,
+  Calendar, Camera, Play, Heart, Activity, Sprout, Award, Compass,
+  Repeat, Shield, Home as HomeIcon, Settings, Clock, Bell, BellOff, Zap,
 } from 'lucide-react-native';
 import { Picker } from '@react-native-picker/picker';
 import * as Haptics from 'expo-haptics';
 
 // ---------------------------------------------------------------------------
-// FormPal palette — grey/monochrome accent, kept local so this screen always
-// renders in the right colors regardless of the shared constants file.
+// FormPal palette — grey/monochrome accent, kept local.
 // ---------------------------------------------------------------------------
 const C = {
   bg: '#0A0B0C',
   surface: '#15161A',
   surfaceBorder: 'rgba(255,255,255,0.08)',
+  iconBg: 'rgba(255,255,255,0.06)',
   textPrimary: '#F0F0F2',
   textSecondary: '#9A9AA2',
   textMuted: '#62626A',
   primary: '#D6D7DC',                       // light cool grey accent
-  primarySoft: 'rgba(214,215,220,0.12)',
+  primarySoft: 'rgba(214,215,220,0.14)',
 };
 
 const haptic = (style: Haptics.ImpactFeedbackStyle = Haptics.ImpactFeedbackStyle.Light) => {
@@ -35,7 +36,7 @@ const AGE_OPTIONS = Array.from({ length: 73 }, (_, i) => String(i + 13)); // 13�
 // ---------------------------------------------------------------------------
 // Onboarding definition
 // ---------------------------------------------------------------------------
-interface OptionDef { label: string; subtitle?: string; }
+interface OptionDef { label: string; subtitle?: string; icon?: any; }
 interface Step {
   id: string;
   section: string;
@@ -57,17 +58,58 @@ const SECTION_ICONS: Record<string, any> = {
 };
 
 const STEPS: Step[] = [
-  { id: 'goal', section: 'Your Goal', type: 'select', question: "What's your main goal?", subtitle: "I'll shape your whole plan around this.", options: [{ label: 'Build muscle' }, { label: 'Get stronger' }, { label: 'Lose fat' }, { label: 'General fitness' }] },
-  { id: 'experience', section: 'Your Experience', type: 'select', question: 'How much lifting experience do you have?', subtitle: 'Sets where your plan starts.', options: [{ label: 'Brand new' }, { label: 'Some experience' }, { label: 'Experienced' }] },
-  { id: 'struggle', section: 'Your Experience', type: 'select', question: "What's your biggest struggle?", subtitle: 'So I focus where it actually counts.', options: [{ label: 'My form' }, { label: 'Knowing what to do' }, { label: 'Staying consistent' }, { label: 'Gym anxiety' }] },
-  { id: 'location', section: 'Your Training', type: 'select', question: 'Where do you train?', subtitle: 'Decides what equipment I plan around.', options: [{ label: 'Gym' }, { label: 'Home with equipment' }, { label: 'Home, bodyweight only' }] },
-  { id: 'equipment', section: 'Your Training', type: 'multiselect', question: 'What do you have access to?', subtitle: "I'll only pick moves you can actually do.", options: [{ label: 'Barbell' }, { label: 'Dumbbells' }, { label: 'Machines' }, { label: 'Resistance bands' }, { label: 'Bench' }], showIf: (a) => a.location !== 'Home, bodyweight only' },
-  { id: 'days', section: 'Your Training', type: 'select', question: 'How many days a week can you train?', subtitle: 'Sets your weekly split.', options: [{ label: '2' }, { label: '3' }, { label: '4' }, { label: '5+' }] },
-  { id: 'duration', section: 'Your Training', type: 'select', question: 'How long per session?', subtitle: "I'll size each workout to fit.", options: [{ label: '15 min' }, { label: '30 min' }, { label: '45 min' }, { label: '60 min' }] },
-  { id: 'sex', section: 'About You', type: 'select', question: "What's your sex?", subtitle: 'Helps me set the right starting weights.', options: [{ label: 'Male' }, { label: 'Female' }, { label: 'Prefer not to say' }] },
+  { id: 'goal', section: 'Your Goal', type: 'select', question: "What's your main goal?", subtitle: "I'll shape your whole plan around this.", options: [
+    { label: 'Build muscle', icon: Dumbbell },
+    { label: 'Get stronger', icon: TrendingUp },
+    { label: 'Lose fat', icon: Flame },
+    { label: 'General fitness', icon: Heart },
+  ] },
+  { id: 'experience', section: 'Your Experience', type: 'select', question: 'How much lifting experience do you have?', subtitle: 'Sets where your plan starts.', options: [
+    { label: 'Brand new', icon: Sprout },
+    { label: 'Some experience', icon: Activity },
+    { label: 'Experienced', icon: Award },
+  ] },
+  { id: 'struggle', section: 'Your Experience', type: 'select', question: "What's your biggest struggle?", subtitle: 'So I focus where it actually counts.', options: [
+    { label: 'My form', icon: Camera },
+    { label: 'Knowing what to do', icon: Compass },
+    { label: 'Staying consistent', icon: Repeat },
+    { label: 'Gym anxiety', icon: Shield },
+  ] },
+  { id: 'location', section: 'Your Training', type: 'select', question: 'Where do you train?', subtitle: 'Decides what equipment I plan around.', options: [
+    { label: 'Gym', icon: Dumbbell },
+    { label: 'Home with equipment', icon: HomeIcon },
+    { label: 'Home, bodyweight only', icon: UserIcon },
+  ] },
+  { id: 'equipment', section: 'Your Training', type: 'multiselect', question: 'What do you have access to?', subtitle: "I'll only pick moves you can actually do.", options: [
+    { label: 'Barbell', icon: Dumbbell },
+    { label: 'Dumbbells', icon: Dumbbell },
+    { label: 'Machines', icon: Settings },
+    { label: 'Resistance bands', icon: Zap },
+    { label: 'Bench', icon: Activity },
+  ], showIf: (a) => a.location !== 'Home, bodyweight only' },
+  { id: 'days', section: 'Your Training', type: 'select', question: 'How many days a week can you train?', subtitle: 'Sets your weekly split.', options: [
+    { label: '2 days', icon: Calendar },
+    { label: '3 days', icon: Calendar },
+    { label: '4 days', icon: Calendar },
+    { label: '5+ days', icon: Calendar },
+  ] },
+  { id: 'duration', section: 'Your Training', type: 'select', question: 'How long per session?', subtitle: "I'll size each workout to fit.", options: [
+    { label: '15 min', icon: Clock },
+    { label: '30 min', icon: Clock },
+    { label: '45 min', icon: Clock },
+    { label: '60 min', icon: Clock },
+  ] },
+  { id: 'sex', section: 'About You', type: 'select', question: "What's your sex?", subtitle: 'Helps me set the right starting weights.', options: [
+    { label: 'Male', icon: UserIcon },
+    { label: 'Female', icon: UserIcon },
+    { label: 'Prefer not to say', icon: UserIcon },
+  ] },
   { id: 'age', section: 'About You', type: 'wheel', wheelKind: 'age', question: 'How old are you?', subtitle: 'Helps me dial in the right pace.' },
   { id: 'weight', section: 'About You', type: 'text', question: 'What do you weigh?', subtitle: 'So weight suggestions actually fit you.', placeholder: '0' },
-  { id: 'notifications', section: 'Reminders', type: 'select', question: 'Want a reminder on training days?', subtitle: 'A quick nudge on the days you train.', options: [{ label: 'Yes, remind me' }, { label: 'No thanks' }] },
+  { id: 'notifications', section: 'Reminders', type: 'select', question: 'Want a reminder on training days?', subtitle: 'A quick nudge on the days you train.', options: [
+    { label: 'Yes, remind me', icon: Bell },
+    { label: 'No thanks', icon: BellOff },
+  ] },
 ];
 
 const LOADING_STEPS = [
@@ -108,21 +150,21 @@ function projectionLine(a: Record<string, any>): string {
     'Lose fat': 'leaning out',
     'General fitness': 'feeling fitter',
   };
-  const days = a.days || '3';
+  const days = (a.days || '3 days').replace(' days', '');
   const word = goalWord[a.goal] || 'hitting your goal';
   return `Training ${days} days a week, you're on track to start seeing real progress toward ${word} in about 8 weeks.`;
 }
 
 // ---------------------------------------------------------------------------
-// Animated option (fade + rise on mount)
+// Animated option (fade + rise on mount, staggered)
 // ---------------------------------------------------------------------------
 function AnimatedOption({ index, children, style, onPress }: { index: number; children: React.ReactNode; style: any; onPress: () => void; }) {
   const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(10)).current;
+  const translateY = useRef(new Animated.Value(12)).current;
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(opacity, { toValue: 1, duration: 300, delay: index * 60, useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: 0, duration: 300, delay: index * 60, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 1, duration: 320, delay: index * 70, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: 0, duration: 320, delay: index * 70, useNativeDriver: true }),
     ]).start();
   }, []);
   return (
@@ -184,16 +226,16 @@ export default function TodayScreen() {
   }, [appState]);
 
   const animTrans = (dir: 'forward' | 'back', cb: () => void) => {
-    const out = dir === 'forward' ? -30 : 30;
-    const inn = dir === 'forward' ? 30 : -30;
+    const out = dir === 'forward' ? -36 : 36;
+    const inn = dir === 'forward' ? 36 : -36;
     Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 0, duration: 140, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: out, duration: 140, useNativeDriver: true }),
+      Animated.timing(fadeAnim, { toValue: 0, duration: 130, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: out, duration: 130, useNativeDriver: true }),
     ]).start(() => {
       cb();
       slideAnim.setValue(inn);
       Animated.parallel([
-        Animated.timing(fadeAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
+        Animated.timing(fadeAnim, { toValue: 1, duration: 220, useNativeDriver: true }),
         Animated.spring(slideAnim, { toValue: 0, friction: 8, tension: 60, useNativeDriver: true }),
       ]).start();
     });
@@ -231,13 +273,12 @@ export default function TodayScreen() {
     } else {
       const next = { ...answers, [st.id]: opt };
       setAnswers(next);
-      setTimeout(() => advance(next), 280);
+      setTimeout(() => advance(next), 300);
     }
   };
 
   const startWorkout = () => {
     haptic(Haptics.ImpactFeedbackStyle.Medium);
-    // The live camera screen is the next thing we build — this is a placeholder.
     Alert.alert('Coming next', 'The live camera workout screen is what we build next.');
   };
 
@@ -280,7 +321,7 @@ export default function TodayScreen() {
     const sectionHeader = (
       <>
         <View style={s.sectionRow}>
-          <View style={s.sectionIconWrap}><SectionIcon size={14} color={C.primary} /></View>
+          <View style={s.sectionIconWrap}><SectionIcon size={14} color={C.textSecondary} /></View>
           <Text style={s.qs}>{st.section.toUpperCase()}</Text>
         </View>
         <Text style={s.qq}>{st.question}</Text>
@@ -367,20 +408,26 @@ export default function TodayScreen() {
         <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 12, paddingBottom: 140 }} showsVerticalScrollIndicator={false}>
           <Animated.View style={{ opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
             {sectionHeader}
-            {(st.options || []).map((o, i) => (
-              <AnimatedOption
-                key={`${st.id}-${o.label}`}
-                index={i}
-                style={[s.opt, isSel(o.label) && s.optSel]}
-                onPress={() => handleSelect(o.label)}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={[s.optTxt, isSel(o.label) && s.optTxtSel]}>{o.label}</Text>
-                  {o.subtitle ? <Text style={s.optSub}>{o.subtitle}</Text> : null}
-                </View>
-                {isSel(o.label) && <Check size={18} color={C.primary} />}
-              </AnimatedOption>
-            ))}
+            {(st.options || []).map((o, i) => {
+              const sel = isSel(o.label);
+              const Icon = o.icon || UserIcon;
+              return (
+                <AnimatedOption
+                  key={`${st.id}-${o.label}`}
+                  index={i}
+                  style={[s.opt, sel && s.optSel]}
+                  onPress={() => handleSelect(o.label)}
+                >
+                  <View style={[s.optIcon, sel && s.optIconSel]}>
+                    <Icon size={18} color={C.textPrimary} />
+                  </View>
+                  <Text style={[s.optTxt, sel && s.optTxtSel]}>{o.label}</Text>
+                  <View style={[s.radio, sel && s.radioSel]}>
+                    {sel && <Check size={13} color={C.bg} strokeWidth={3} />}
+                  </View>
+                </AnimatedOption>
+              );
+            })}
           </Animated.View>
         </ScrollView>
         {st.type === 'multiselect' && (
@@ -434,7 +481,7 @@ export default function TodayScreen() {
       <View style={[s.c, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         <ScrollView contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
           <View style={s.sectionRow}>
-            <View style={s.sectionIconWrap}><Check size={14} color={C.primary} /></View>
+            <View style={s.sectionIconWrap}><Check size={14} color={C.textSecondary} /></View>
             <Text style={s.qs}>YOUR PLAN IS READY</Text>
           </View>
           <Text style={s.qq}>Here's your starting point.</Text>
@@ -450,7 +497,7 @@ export default function TodayScreen() {
                   <Text style={s.exScheme}>{ex.scheme}</Text>
                 </View>
                 {ex.formCheck && (
-                  <View style={s.fcTag}><Camera size={11} color={C.primary} /><Text style={s.fcTxt}>form-check</Text></View>
+                  <View style={s.fcTag}><Camera size={11} color={C.textSecondary} /><Text style={s.fcTxt}>form-check</Text></View>
                 )}
               </View>
             ))}
@@ -498,7 +545,7 @@ export default function TodayScreen() {
                 <Text style={s.exScheme}>{ex.scheme}</Text>
               </View>
               {ex.formCheck && (
-                <View style={s.fcTag}><Camera size={11} color={C.primary} /><Text style={s.fcTxt}>form-check</Text></View>
+                <View style={s.fcTag}><Camera size={11} color={C.textSecondary} /><Text style={s.fcTxt}>form-check</Text></View>
               )}
             </View>
           ))}
@@ -549,17 +596,20 @@ const s = StyleSheet.create({
 
   // section + question
   sectionRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
-  sectionIconWrap: { width: 26, height: 26, borderRadius: 13, backgroundColor: C.primarySoft, borderWidth: 1, borderColor: C.surfaceBorder, alignItems: 'center', justifyContent: 'center' },
+  sectionIconWrap: { width: 26, height: 26, borderRadius: 13, backgroundColor: C.iconBg, borderWidth: 1, borderColor: C.surfaceBorder, alignItems: 'center', justifyContent: 'center' },
   qs: { fontSize: 11, fontWeight: '700', color: C.textSecondary, letterSpacing: 1.5 },
   qq: { fontSize: 26, fontWeight: '700', color: C.textPrimary, lineHeight: 32, marginBottom: 8, letterSpacing: -0.8 },
-  qsub: { fontSize: 14, color: C.textMuted, lineHeight: 20, marginBottom: 20, letterSpacing: -0.1 },
+  qsub: { fontSize: 14, color: C.textMuted, lineHeight: 20, marginBottom: 24, letterSpacing: -0.1 },
 
-  // options
-  opt: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.surface, borderRadius: 14, borderWidth: 1, borderColor: C.surfaceBorder, paddingHorizontal: 18, paddingVertical: 16, marginBottom: 10 },
+  // options (icon + label + radio)
+  opt: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: C.surface, borderRadius: 16, borderWidth: 1, borderColor: C.surfaceBorder, paddingHorizontal: 16, paddingVertical: 14, marginBottom: 11 },
   optSel: { borderColor: C.primary, backgroundColor: C.primarySoft },
-  optTxt: { fontSize: 15, fontWeight: '600', color: C.textPrimary, letterSpacing: -0.2 },
+  optIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: C.iconBg, alignItems: 'center', justifyContent: 'center' },
+  optIconSel: { backgroundColor: 'rgba(255,255,255,0.12)' },
+  optTxt: { flex: 1, fontSize: 16, fontWeight: '600', color: C.textPrimary, letterSpacing: -0.2 },
   optTxtSel: { color: C.textPrimary },
-  optSub: { fontSize: 12, color: C.textMuted, marginTop: 4 },
+  radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: C.surfaceBorder, alignItems: 'center', justifyContent: 'center' },
+  radioSel: { backgroundColor: C.primary, borderColor: C.primary },
 
   // bottom continue
   bn: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 24, paddingBottom: 24, paddingTop: 16, backgroundColor: C.bg, borderTopWidth: 1, borderTopColor: C.surfaceBorder },
@@ -590,7 +640,7 @@ const s = StyleSheet.create({
   exRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderTopWidth: 1, borderTopColor: C.surfaceBorder },
   exName: { fontSize: 15, fontWeight: '600', color: C.textPrimary, letterSpacing: -0.2 },
   exScheme: { fontSize: 13, color: C.textMuted, marginTop: 2 },
-  fcTag: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: C.primarySoft, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 100 },
+  fcTag: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: C.iconBg, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 100 },
   fcTxt: { fontSize: 11, fontWeight: '700', color: C.textSecondary, letterSpacing: 0.2 },
   startBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: C.primary, borderRadius: 100, paddingVertical: 16, marginTop: 18 },
   startTxt: { fontSize: 16, fontWeight: '700', color: C.bg, letterSpacing: 0.2 },
