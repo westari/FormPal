@@ -45,7 +45,11 @@
     "extra": {
       "router": {
         "origin": false
+      },
+      "eas": {
+        "projectId": "39e9e33d-1754-4b32-9c1d-bd6c0305b8c2"
       }
-    }
+    },
+    "owner": "1westari4"
   }
 }
