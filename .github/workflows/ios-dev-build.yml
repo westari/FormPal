@@ -6,11 +6,9 @@ on:
 jobs:
   build:
     name: EAS local build — iOS development
-    # macos-26 includes Xcode 26, required for iOS 26 liquid glass rendering.
-    # If GitHub rejects this runner label, change to macos-15 and add a manual
-    # sudo xcode-select -s /Applications/Xcode_26.app/Contents/Developer step.
+    # macos-26 provides Xcode 26, required for iOS 26 liquid glass rendering.
     runs-on: macos-26
-    timeout-minutes: 60
+    timeout-minutes: 90
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
@@ -20,8 +18,6 @@ jobs:
 
       - name: Select Xcode 26 (verify)
         run: |
-          # Explicitly select Xcode 26 in case the runner default isn't already 26.
-          # Tries common versioned bundle names; falls back to the system default.
           XCODE_26=""
           for path in /Applications/Xcode_26.app \
                       /Applications/Xcode_26.0.app \
@@ -39,6 +35,16 @@ jobs:
 
       - name: Confirm Xcode version
         run: xcodebuild -version
+
+      - name: Download iOS simulator runtime
+        # EAS local build's toolchain checks for an available iOS simulator runtime
+        # before invoking fastlane, even for device (non-simulator) builds.
+        # This downloads the iOS 26 runtime that matches the selected Xcode version.
+        # Can take 15-30 min on a cold runner — timeout bumped to 90 min above.
+        run: sudo xcodebuild -downloadPlatform iOS
+
+      - name: Confirm simulator runtimes available
+        run: xcrun simctl list runtimes
 
       - name: Set up Node 20
         uses: actions/setup-node@v4
