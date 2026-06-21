@@ -9,6 +9,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MOVES } from '../../constants/moves';
 import { LIBRARY } from '../../constants/exerciseLibrary';
+import GlassButton from '../../components/GlassButton';
 
 // ---------------------------------------------------------------------------
 // Palette (matches the rest of FormPal)
@@ -153,13 +154,12 @@ export default function MoveDetailScreen() {
       {/* ── Check my form — curated moves only ────────────────────── */}
       {isCurated && (
         <View style={[s.formBar, { paddingBottom: insets.bottom + 12 }]}>
-          <TouchableOpacity
-            style={s.formBtn}
+          <GlassButton
+            style={{ height: 56, alignSelf: 'stretch' }}
             onPress={() => Alert.alert('Form check', 'Form check coming soon.')}
-            activeOpacity={0.85}
           >
             <Text style={s.formBtnTxt}>Check my form</Text>
-          </TouchableOpacity>
+          </GlassButton>
         </View>
       )}
     </View>
@@ -311,11 +311,5 @@ const s = StyleSheet.create({
     borderTopWidth:  1,
     borderTopColor:  C.surfaceBorder,
   },
-  formBtn: {
-    backgroundColor: C.primary,
-    borderRadius:    100,
-    paddingVertical: 18,
-    alignItems:      'center',
-  },
-  formBtnTxt: { fontSize: 16, fontWeight: '700', color: C.bg, letterSpacing: 0.2 },
+  formBtnTxt: { fontSize: 16, fontWeight: '700', color: C.textPrimary, letterSpacing: 0.2 },
 });

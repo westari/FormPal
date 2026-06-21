@@ -11,12 +11,8 @@ import Svg, { Path as SvgPath, Text as SvgText, Circle as SvgCircle } from 'reac
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Shared with app/index.tsx — both must use the same string
 export const ONBOARDING_KEY = 'formpal_onboarding_complete';
 
-// ---------------------------------------------------------------------------
-// Palette
-// ---------------------------------------------------------------------------
 const C = {
   bg:            '#0A0B0C',
   surface:       '#15161A',
@@ -44,9 +40,6 @@ for (let ft = 4; ft <= 6; ft++) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Sym — thin wrapper so icon call sites stay concise
-// ---------------------------------------------------------------------------
 function Sym({ name, size, color }: { name: string; size: number; color: string }) {
   return (
     <SymbolView
@@ -62,78 +55,76 @@ function Sym({ name, size, color }: { name: string; size: number; color: string 
 // ---------------------------------------------------------------------------
 // Step definitions
 // ---------------------------------------------------------------------------
-interface OptionDef { label: string; subtitle?: string; sfSymbol?: string; }
+interface OptionDef { label: string; sfSymbol?: string; }
 interface Step {
   id: string;
   section: string;
   type: 'select' | 'multiselect' | 'wheel' | 'text';
   question: string;
-  subtitle?: string;
   options?: OptionDef[];
-  placeholder?: string;
   wheelKind?: 'age' | 'height';
   showIf?: (a: Record<string, any>) => boolean;
 }
 
-const SECTION_ICONS: Record<string, string> = {
-  'Your Goal':       'target',
-  'Your Experience': 'chart.line.uptrend.xyaxis',
-  'Your Training':   'dumbbell.fill',
-  'About You':       'person.fill',
-  'Reminders':       'calendar',
-};
-
 const STEPS: Step[] = [
-  { id: 'age',    section: 'About You', type: 'wheel', wheelKind: 'age',    question: 'How old are you?',    subtitle: 'Helps me dial in the right pace.' },
-  { id: 'height', section: 'About You', type: 'wheel', wheelKind: 'height', question: 'How tall are you?',   subtitle: 'Helps set the right benchmarks for your body.' },
-  { id: 'weight', section: 'About You', type: 'text',  question: 'What do you weigh?', subtitle: 'So weight suggestions actually fit you.', placeholder: '0' },
-  { id: 'sex',    section: 'About You', type: 'select', question: "What's your sex?", subtitle: 'Helps me set the right starting weights.', options: [
-    { label: 'Male',              sfSymbol: 'person.fill' },
-    { label: 'Female',            sfSymbol: 'person.fill' },
-    { label: 'Prefer not to say', sfSymbol: 'person.fill' },
+  { id: 'age',    section: 'About You', type: 'wheel', wheelKind: 'age',    question: 'How old are you?' },
+  { id: 'height', section: 'About You', type: 'wheel', wheelKind: 'height', question: 'How tall are you?' },
+  { id: 'weight', section: 'About You', type: 'text',  question: 'What do you weigh?' },
+  { id: 'sex', section: 'About You', type: 'select', question: "What's your sex?", options: [
+    { label: 'Male',   sfSymbol: 'person.fill' },
+    { label: 'Female', sfSymbol: 'person.fill' },
   ] },
-  { id: 'goal', section: 'Your Goal', type: 'select', question: "What's your main goal?", subtitle: "I'll shape your whole plan around this.", options: [
-    { label: 'Build muscle',    sfSymbol: 'dumbbell.fill'               },
-    { label: 'Get stronger',    sfSymbol: 'chart.line.uptrend.xyaxis'   },
-    { label: 'Lose fat',        sfSymbol: 'flame.fill'                  },
-    { label: 'General fitness', sfSymbol: 'heart.fill'                  },
+  { id: 'goal', section: 'Your Goal', type: 'select', question: "What's your main goal?", options: [
+    { label: 'Build muscle & get toned',        sfSymbol: 'dumbbell.fill'             },
+    { label: 'Lose fat / lose weight',           sfSymbol: 'flame.fill'                },
+    { label: 'Get stronger',                     sfSymbol: 'bolt.fill'                 },
+    { label: 'Learn proper form & technique',    sfSymbol: 'camera.fill'               },
+    { label: 'Build a consistent habit',         sfSymbol: 'repeat'                    },
+    { label: 'Improve athletic performance',     sfSymbol: 'figure.run'                },
   ] },
-  { id: 'experience', section: 'Your Experience', type: 'select', question: 'How much lifting experience do you have?', subtitle: 'Sets where your plan starts.', options: [
-    { label: 'Brand new',       sfSymbol: 'leaf.fill'  },
-    { label: 'Some experience', sfSymbol: 'waveform'   },
-    { label: 'Experienced',     sfSymbol: 'trophy.fill' },
+  { id: 'experience', section: 'Your Experience', type: 'select', question: 'How much lifting experience do you have?', options: [
+    { label: 'Total beginner — never really worked out', sfSymbol: '1.circle.fill' },
+    { label: 'Beginner — tried it, not consistent',      sfSymbol: '2.circle.fill' },
+    { label: 'Intermediate — train semi-regularly',      sfSymbol: '3.circle.fill' },
+    { label: 'Advanced — train consistently',            sfSymbol: '4.circle.fill' },
   ] },
-  { id: 'struggle', section: 'Your Experience', type: 'select', question: "What's your biggest struggle?", subtitle: 'So I focus where it actually counts.', options: [
-    { label: 'My form',            sfSymbol: 'camera.fill'           },
-    { label: 'Knowing what to do', sfSymbol: 'compass.drawing'       },
-    { label: 'Staying consistent', sfSymbol: 'repeat'                },
-    { label: 'Gym anxiety',        sfSymbol: 'shield.fill'           },
+  { id: 'struggle', section: 'Your Experience', type: 'select', question: "What's your biggest struggle?", options: [
+    { label: "My form — I don't know if I'm doing it right", sfSymbol: 'camera.fill'              },
+    { label: 'Knowing what exercises to do',                  sfSymbol: 'questionmark.circle.fill' },
+    { label: 'Staying consistent / motivation',               sfSymbol: 'repeat'                   },
+    { label: 'Gym anxiety / feeling judged',                  sfSymbol: 'shield.fill'              },
+    { label: 'Not seeing results',                            sfSymbol: 'minus.circle.fill'        },
+    { label: 'Finding time',                                  sfSymbol: 'clock.fill'               },
   ] },
-  { id: 'location', section: 'Your Training', type: 'select', question: 'Where do you train?', subtitle: 'Decides what equipment I plan around.', options: [
-    { label: 'Gym',                   sfSymbol: 'dumbbell.fill' },
-    { label: 'Home with equipment',   sfSymbol: 'house.fill'    },
-    { label: 'Home, bodyweight only', sfSymbol: 'person.fill'   },
+  { id: 'location', section: 'Your Training', type: 'select', question: 'Where do you train?', options: [
+    { label: 'At home — no equipment',   sfSymbol: 'house.fill'                       },
+    { label: 'At home — some equipment', sfSymbol: 'dumbbell.fill'                    },
+    { label: 'At the gym',               sfSymbol: 'figure.strengthtraining.traditional' },
+    { label: 'A mix of home and gym',    sfSymbol: 'shuffle'                          },
   ] },
-  { id: 'equipment', section: 'Your Training', type: 'multiselect', question: 'What do you have access to?', subtitle: "I'll only pick moves you can actually do.", options: [
-    { label: 'Barbell',          sfSymbol: 'dumbbell.fill'                     },
-    { label: 'Dumbbells',        sfSymbol: 'dumbbell.fill'                     },
-    { label: 'Machines',         sfSymbol: 'gearshape.fill'                    },
-    { label: 'Resistance bands', sfSymbol: 'bolt.fill'                         },
-    { label: 'Bench',            sfSymbol: 'figure.strengthtraining.traditional' },
-  ], showIf: (a) => a.location !== 'Home, bodyweight only' },
-  { id: 'days', section: 'Your Training', type: 'select', question: 'How many days a week can you train?', subtitle: 'Sets your weekly split.', options: [
-    { label: '2 days',  sfSymbol: 'calendar' },
-    { label: '3 days',  sfSymbol: 'calendar' },
-    { label: '4 days',  sfSymbol: 'calendar' },
-    { label: '5+ days', sfSymbol: 'calendar' },
+  { id: 'equipment', section: 'Your Training', type: 'multiselect', question: 'What do you have access to?',
+    showIf: (a) => a.location !== 'At home — no equipment',
+    options: [
+      { label: 'Dumbbells',        sfSymbol: 'dumbbell.fill'  },
+      { label: 'Resistance bands', sfSymbol: 'bolt.fill'      },
+      { label: 'Barbell & rack',   sfSymbol: 'dumbbell.fill'  },
+      { label: 'Gym machines',     sfSymbol: 'gearshape.fill' },
+      { label: 'Just a mat',       sfSymbol: 'rectangle.fill' },
+    ],
+  },
+  { id: 'days', section: 'Your Training', type: 'select', question: 'How many days a week can you train?', options: [
+    { label: '1-2 days',  sfSymbol: 'calendar'                },
+    { label: '3-4 days',  sfSymbol: 'calendar'                },
+    { label: '5-6 days',  sfSymbol: 'calendar'                },
+    { label: 'Every day', sfSymbol: 'calendar.badge.checkmark' },
   ] },
-  { id: 'duration', section: 'Your Training', type: 'select', question: 'How long per session?', subtitle: "I'll size each workout to fit.", options: [
-    { label: '15 min', sfSymbol: 'clock.fill' },
-    { label: '30 min', sfSymbol: 'clock.fill' },
-    { label: '45 min', sfSymbol: 'clock.fill' },
-    { label: '60 min', sfSymbol: 'clock.fill' },
+  { id: 'duration', section: 'Your Training', type: 'select', question: 'How long per session?', options: [
+    { label: '15-20 min', sfSymbol: 'clock.fill' },
+    { label: '30 min',    sfSymbol: 'clock.fill' },
+    { label: '45 min',    sfSymbol: 'clock.fill' },
+    { label: '60+ min',   sfSymbol: 'clock.fill' },
   ] },
-  { id: 'notifications', section: 'Reminders', type: 'select', question: 'Want a reminder on training days?', subtitle: 'A quick nudge on the days you train.', options: [
+  { id: 'notifications', section: 'Reminders', type: 'select', question: 'Want a reminder on training days?', options: [
     { label: 'Yes, remind me', sfSymbol: 'bell.fill'       },
     { label: 'No thanks',      sfSymbol: 'bell.slash.fill' },
   ] },
@@ -152,9 +143,10 @@ function getVisibleSteps(a: Record<string, any>): Step[] {
 }
 
 interface WorkoutExercise { name: string; scheme: string; formCheck: boolean; }
+
 function buildPlan(a: Record<string, any>): { focus: string; exercises: WorkoutExercise[] } {
-  const bodyweight = a.location === 'Home, bodyweight only';
-  const exercises: WorkoutExercise[] = bodyweight
+  const noEquip = a.location === 'At home — no equipment';
+  const exercises: WorkoutExercise[] = noEquip
     ? [
         { name: 'Bodyweight Squats', scheme: '3 × 12',      formCheck: true  },
         { name: 'Push-ups',          scheme: '3 × 10',      formCheck: false },
@@ -172,33 +164,39 @@ function buildPlan(a: Record<string, any>): { focus: string; exercises: WorkoutE
 
 function projectionLine(a: Record<string, any>): string {
   const goalWord: Record<string, string> = {
-    'Build muscle':    'building real muscle',
-    'Get stronger':    'getting noticeably stronger',
-    'Lose fat':        'leaning out',
-    'General fitness': 'feeling fitter',
+    'Build muscle & get toned':          'building muscle and getting toned',
+    'Lose fat / lose weight':            'losing fat and leaning out',
+    'Get stronger':                      'getting noticeably stronger',
+    'Learn proper form & technique':     'mastering your technique',
+    'Build a consistent habit':          'building a lasting habit',
+    'Improve athletic performance':      'leveling up your performance',
   };
-  const days = (a.days || '3 days').replace(' days', '');
-  const word = goalWord[a.goal] || 'hitting your goal';
-  return `Training ${days} days a week, you're on track to start seeing real progress toward ${word} in about 8 weeks.`;
+  const daysLabel: Record<string, string> = {
+    '1-2 days': '1-2 days', '3-4 days': '3-4 days',
+    '5-6 days': '5-6 days', 'Every day': 'every day',
+  };
+  const d    = daysLabel[a.days] ?? '3-4 days';
+  const word = goalWord[a.goal] ?? 'hitting your goal';
+  return `Training ${d} a week, you're on track to start seeing real progress toward ${word} in about 8 weeks.`;
 }
 
 // ---------------------------------------------------------------------------
 // AnimatedOption
 // ---------------------------------------------------------------------------
-function AnimatedOption({ index, children, style, onPress }: { index: number; children: React.ReactNode; style: any; onPress: () => void; }) {
+function AnimatedOption({ index, children, style, onPress }: {
+  index: number; children: React.ReactNode; style: any; onPress: () => void;
+}) {
   const opacity    = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(12)).current;
+  const translateY = useRef(new Animated.Value(10)).current;
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(opacity,    { toValue: 1, duration: 320, delay: index * 70, useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: 0, duration: 320, delay: index * 70, useNativeDriver: true }),
+      Animated.timing(opacity,    { toValue: 1, duration: 280, delay: index * 60, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: 0, duration: 280, delay: index * 60, useNativeDriver: true }),
     ]).start();
   }, []);
   return (
     <Animated.View style={{ opacity, transform: [{ translateY }] }}>
-      <TouchableOpacity style={style} onPress={onPress} activeOpacity={0.7}>
-        {children}
-      </TouchableOpacity>
+      <TouchableOpacity style={style} onPress={onPress} activeOpacity={0.7}>{children}</TouchableOpacity>
     </Animated.View>
   );
 }
@@ -208,7 +206,6 @@ function AnimatedOption({ index, children, style, onPress }: { index: number; ch
 // ---------------------------------------------------------------------------
 const AnimatedSvgPath   = Animated.createAnimatedComponent(SvgPath);
 const AnimatedSvgCircle = Animated.createAnimatedComponent(SvgCircle);
-
 const CURVE_LEN          = 330;
 const LINE_DRAW_DURATION = 1500;
 const LINE_DRAW_DELAY    = 350;
@@ -223,12 +220,10 @@ function ProjectionChart() {
       toValue: 1, duration: LINE_DRAW_DURATION, delay: LINE_DRAW_DELAY, useNativeDriver: false,
     }).start(() => {
       Animated.timing(dotOpacity, { toValue: 1, duration: 250, useNativeDriver: false }).start();
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseOpacity, { toValue: 0.55, duration: 850, useNativeDriver: false }),
-          Animated.timing(pulseOpacity, { toValue: 0,    duration: 850, useNativeDriver: false }),
-        ])
-      ).start();
+      Animated.loop(Animated.sequence([
+        Animated.timing(pulseOpacity, { toValue: 0.55, duration: 850, useNativeDriver: false }),
+        Animated.timing(pulseOpacity, { toValue: 0,    duration: 850, useNativeDriver: false }),
+      ])).start();
     });
   }, []);
 
@@ -249,15 +244,8 @@ function ProjectionChart() {
       </View>
       <Svg width="100%" height={150} viewBox="0 0 300 145">
         <SvgPath d="M 25,105 L 280,105" stroke={C.surfaceBorder} strokeWidth={1} fill="none" />
-        <AnimatedSvgPath
-          d="M 25,100 C 90,100 205,18 280,18 L 280,105 L 25,105 Z"
-          fill="white" opacity={fillOpacity} stroke="none"
-        />
-        <SvgPath
-          d="M 25,100 L 280,100"
-          stroke={C.textMuted} strokeWidth={1.5} strokeDasharray="6 4"
-          fill="none" strokeLinecap="round"
-        />
+        <AnimatedSvgPath d="M 25,100 C 90,100 205,18 280,18 L 280,105 L 25,105 Z" fill="white" opacity={fillOpacity} stroke="none" />
+        <SvgPath d="M 25,100 L 280,100" stroke={C.textMuted} strokeWidth={1.5} strokeDasharray="6 4" fill="none" strokeLinecap="round" />
         <AnimatedSvgPath
           d="M 25,100 C 90,100 205,18 280,18"
           stroke={C.textPrimary} strokeWidth={3}
@@ -269,9 +257,7 @@ function ProjectionChart() {
         <AnimatedSvgCircle cx="280" cy="18" r="4"  fill="white" opacity={dotOpacity}   />
         <SvgText x="25"  y="126" fill={C.textMuted} fontSize="11" textAnchor="middle">Week 1</SvgText>
         <SvgText x="280" y="126" fill={C.textMuted} fontSize="11" textAnchor="middle">Week 8</SvgText>
-        <SvgText x="8" y="60" fill={C.textMuted} fontSize="11" textAnchor="middle" transform="rotate(-90 8 60)">
-          Form score
-        </SvgText>
+        <SvgText x="8" y="60" fill={C.textMuted} fontSize="11" textAnchor="middle" transform="rotate(-90 8 60)">Form score</SvgText>
       </Svg>
     </View>
   );
@@ -350,13 +336,13 @@ export default function OnboardingScreen() {
     const out = dir === 'forward' ? -36 : 36;
     const inn = dir === 'forward' ? 36 : -36;
     Animated.parallel([
-      Animated.timing(fadeAnim,  { toValue: 0, duration: 130, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: out, duration: 130, useNativeDriver: true }),
+      Animated.timing(fadeAnim,  { toValue: 0, duration: 120, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: out, duration: 120, useNativeDriver: true }),
     ]).start(() => {
       cb();
       slideAnim.setValue(inn);
       Animated.parallel([
-        Animated.timing(fadeAnim,  { toValue: 1, duration: 220, useNativeDriver: true }),
+        Animated.timing(fadeAnim,  { toValue: 1, duration: 200, useNativeDriver: true }),
         Animated.spring(slideAnim, { toValue: 0, friction: 8, tension: 60, useNativeDriver: true }),
       ]).start();
     });
@@ -409,9 +395,7 @@ export default function OnboardingScreen() {
     return (
       <View style={[s.c, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         <ScrollView contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, justifyContent: 'center' }} showsVerticalScrollIndicator={false}>
-          <View style={{ alignItems: 'center', marginBottom: 8 }}>
-            <View style={s.logoDot} />
-          </View>
+          <View style={{ alignItems: 'center', marginBottom: 8 }}><View style={s.logoDot} /></View>
           <Text style={s.wordmarkBig}>FORMPAL</Text>
           <Text style={s.welcomeTitle}>Your AI form coach, plus a plan built for you.</Text>
           <Text style={s.welcomeSub}>Answer a few quick questions and I'll build your first workout — then I'll check every rep.</Text>
@@ -429,8 +413,7 @@ export default function OnboardingScreen() {
 
   // ── ONBOARDING ────────────────────────────────────────────────────────────
   if (appState === 'onboarding' && currentStep) {
-    const st         = currentStep;
-    const sectionSym = SECTION_ICONS[st.section] || 'person.fill';
+    const st = currentStep;
 
     const header = (
       <View style={s.qh}>
@@ -438,19 +421,6 @@ export default function OnboardingScreen() {
         <View style={s.pc}><View style={s.pt}><View style={[s.pf, { width: (progress * 100) + '%' }]} /></View></View>
         <View style={{ width: 44 }} />
       </View>
-    );
-
-    const sectionHeader = (
-      <>
-        <View style={s.sectionRow}>
-          <View style={s.sectionIconWrap}>
-            <Sym name={sectionSym} size={14} color={C.textSecondary} />
-          </View>
-          <Text style={s.qs}>{st.section.toUpperCase()}</Text>
-        </View>
-        <Text style={s.qq}>{st.question}</Text>
-        {st.subtitle ? <Text style={s.qsub}>{st.subtitle}</Text> : null}
-      </>
     );
 
     if (st.type === 'wheel') {
@@ -461,9 +431,9 @@ export default function OnboardingScreen() {
       return (
         <View style={[s.c, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
           {header}
-          <View style={{ paddingHorizontal: 24, paddingTop: 12, flex: 1 }}>
-            {sectionHeader}
-            <View style={{ marginTop: 16 }}>
+          <View style={{ paddingHorizontal: 24, paddingTop: 20, flex: 1 }}>
+            <Text style={s.qq}>{st.question}</Text>
+            <View style={{ marginTop: 8 }}>
               <Picker
                 selectedValue={wheelVal}
                 onValueChange={(v) => setAnswers({ ...answers, [st.id]: v as string })}
@@ -489,9 +459,9 @@ export default function OnboardingScreen() {
         <KeyboardAvoidingView style={s.c} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={[s.c, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
             {header}
-            <View style={{ paddingHorizontal: 24, paddingTop: 12, flex: 1 }}>
-              {sectionHeader}
-              <View style={{ alignItems: 'center', marginTop: 48, flexDirection: 'row', justifyContent: 'center', gap: 10 }}>
+            <View style={{ paddingHorizontal: 24, paddingTop: 20, flex: 1 }}>
+              <Text style={s.qq}>{st.question}</Text>
+              <View style={{ alignItems: 'center', marginTop: 40, flexDirection: 'row', justifyContent: 'center', gap: 10 }}>
                 <TextInput
                   value={val}
                   onChangeText={(v) => setTextInput(v.replace(/[^0-9]/g, ''))}
@@ -526,16 +496,16 @@ export default function OnboardingScreen() {
     return (
       <View style={[s.c, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         {header}
-        <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 12, paddingBottom: 140 }} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 20, paddingBottom: 140 }} showsVerticalScrollIndicator={false}>
           <Animated.View style={{ opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
-            {sectionHeader}
+            <Text style={s.qq}>{st.question}</Text>
             {(st.options || []).map((o, i) => {
               const sel = isSel(o.label);
               const sym = o.sfSymbol || 'person.fill';
               return (
                 <AnimatedOption key={`${st.id}-${o.label}`} index={i} style={[s.opt, sel && s.optSel]} onPress={() => handleSelect(o.label)}>
-                  <View style={[s.optIcon, sel && s.optIconSel]}>
-                    <Sym name={sym} size={18} color={C.textPrimary} />
+                  <View style={s.optIcon}>
+                    <Sym name={sym} size={20} color={sel ? C.textPrimary : C.textSecondary} />
                   </View>
                   <Text style={[s.optTxt, sel && s.optTxtSel]}>{o.label}</Text>
                   <View style={[s.radio, sel && s.radioSel]}>
@@ -593,17 +563,17 @@ export default function OnboardingScreen() {
 
   // ── PROJECTION ────────────────────────────────────────────────────────────
   if (appState === 'projection') {
-    const daysNum = (answers.days || '3 days').replace(' days', '');
+    const daysNum = answers.days ?? '3-4 days';
     return (
       <View style={[s.c, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
-          <View style={s.sectionRow}>
+          <View style={s.projRow}>
             <View style={s.sectionIconWrap}>
               <Sym name="chart.line.uptrend.xyaxis" size={14} color={C.textSecondary} />
             </View>
             <Text style={s.qs}>YOUR 8-WEEK PROJECTION</Text>
           </View>
-          <Text style={s.qq}>Here's what training {daysNum} days a week looks like.</Text>
+          <Text style={s.qq}>Here's what training {daysNum} a week looks like.</Text>
           <ProjectionChart />
           {BULLET_ITEMS.map((item, i) => <BulletItem key={item} text={item} index={i} />)}
         </ScrollView>
@@ -621,7 +591,7 @@ export default function OnboardingScreen() {
     return (
       <View style={[s.c, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         <ScrollView contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
-          <View style={s.sectionRow}>
+          <View style={s.projRow}>
             <View style={s.sectionIconWrap}>
               <Sym name="checkmark" size={14} color={C.textSecondary} />
             </View>
@@ -669,6 +639,7 @@ export default function OnboardingScreen() {
 const s = StyleSheet.create({
   c: { flex: 1, backgroundColor: C.bg },
 
+  // Progress bar header
   qh: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12 },
   bb: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   bt: { fontSize: 22, color: C.textSecondary },
@@ -676,27 +647,29 @@ const s = StyleSheet.create({
   pt: { height: 4, backgroundColor: C.surfaceBorder, borderRadius: 2, overflow: 'hidden' },
   pf: { height: 4, backgroundColor: C.primary, borderRadius: 2 },
 
-  sectionRow:      { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
-  sectionIconWrap: { width: 26, height: 26, borderRadius: 13, backgroundColor: C.iconBg, borderWidth: 1, borderColor: C.surfaceBorder, alignItems: 'center', justifyContent: 'center' },
-  qs:   { fontSize: 11, fontWeight: '700', color: C.textSecondary, letterSpacing: 1.5 },
-  qq:   { fontSize: 26, fontWeight: '700', color: C.textPrimary, lineHeight: 32, marginBottom: 8, letterSpacing: -0.8 },
-  qsub: { fontSize: 14, color: C.textMuted, lineHeight: 20, marginBottom: 24, letterSpacing: -0.1 },
+  // Question — big, thin, clean
+  qq: {
+    fontSize: 34, fontWeight: '400', color: C.textPrimary,
+    lineHeight: 42, marginBottom: 28, letterSpacing: -0.8,
+  },
 
-  opt:        { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: C.surface, borderRadius: 16, borderWidth: 1, borderColor: C.surfaceBorder, paddingHorizontal: 16, paddingVertical: 14, marginBottom: 11 },
-  optSel:     { borderColor: C.primary, backgroundColor: C.primarySoft },
-  optIcon:    { width: 38, height: 38, borderRadius: 12, backgroundColor: C.iconBg, alignItems: 'center', justifyContent: 'center' },
-  optIconSel: { backgroundColor: 'rgba(255,255,255,0.12)' },
-  optTxt:     { flex: 1, fontSize: 16, fontWeight: '600', color: C.textPrimary, letterSpacing: -0.2 },
-  optTxtSel:  { color: C.textPrimary },
-  radio:      { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: C.surfaceBorder, alignItems: 'center', justifyContent: 'center' },
-  radioSel:   { backgroundColor: C.primary, borderColor: C.primary },
+  // Option rows
+  opt:     { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: C.surface, borderRadius: 16, borderWidth: 1, borderColor: C.surfaceBorder, paddingHorizontal: 16, paddingVertical: 15, marginBottom: 10 },
+  optSel:  { borderColor: C.primary, backgroundColor: C.primarySoft },
+  optIcon: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
+  optTxt:    { flex: 1, fontSize: 16, fontWeight: '500', color: C.textPrimary, letterSpacing: -0.2 },
+  optTxtSel: { color: C.textPrimary },
+  radio:    { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: C.surfaceBorder, alignItems: 'center', justifyContent: 'center' },
+  radioSel: { backgroundColor: C.primary, borderColor: C.primary },
 
+  // Bottom button bar
   bn:         { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 24, paddingBottom: 24, paddingTop: 16, backgroundColor: C.bg, borderTopWidth: 1, borderTopColor: C.surfaceBorder },
   cb:         { backgroundColor: C.primary, borderRadius: 100, paddingVertical: 18, alignItems: 'center' },
   cbDisabled: { backgroundColor: C.surface, borderWidth: 1, borderColor: C.surfaceBorder },
   ct:         { fontSize: 16, fontWeight: '700', color: C.bg, letterSpacing: 0.2 },
   ctDisabled: { color: C.textMuted },
 
+  // Welcome screen
   logoDot:      { width: 14, height: 14, borderRadius: 7, backgroundColor: C.primary, marginBottom: 20 },
   wordmarkBig:  { fontSize: 15, fontWeight: '700', color: C.textPrimary, textAlign: 'center', letterSpacing: 2, marginBottom: 28 },
   welcomeTitle: { fontSize: 30, fontWeight: '700', color: C.textPrimary, textAlign: 'center', lineHeight: 38, letterSpacing: -1, marginBottom: 14 },
@@ -704,6 +677,13 @@ const s = StyleSheet.create({
   primaryBtn:    { backgroundColor: C.primary, borderRadius: 100, paddingVertical: 18, alignItems: 'center' },
   primaryBtnTxt: { fontSize: 16, fontWeight: '700', color: C.bg, letterSpacing: 0.2 },
 
+  // Projection / Payoff section rows (these screens keep their labels — they aren't question screens)
+  projRow:      { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  sectionIconWrap: { width: 26, height: 26, borderRadius: 13, backgroundColor: C.iconBg, borderWidth: 1, borderColor: C.surfaceBorder, alignItems: 'center', justifyContent: 'center' },
+  qs:   { fontSize: 11, fontWeight: '700', color: C.textSecondary, letterSpacing: 1.5 },
+  qsub: { fontSize: 14, color: C.textMuted, lineHeight: 20, marginBottom: 24, letterSpacing: -0.1 },
+
+  // Payoff card
   heroCard:  { backgroundColor: C.surface, borderRadius: 20, borderWidth: 1, borderColor: C.surfaceBorder, padding: 20, marginBottom: 16 },
   heroLabel: { fontSize: 11, fontWeight: '700', color: C.textMuted, letterSpacing: 1.5, marginBottom: 6 },
   heroFocus: { fontSize: 24, fontWeight: '700', color: C.textPrimary, letterSpacing: -0.6, marginBottom: 16 },

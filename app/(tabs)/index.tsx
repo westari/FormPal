@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView,
+  View, Text, StyleSheet, TouchableOpacity, Pressable, ScrollView,
   Animated, Alert, Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,6 +10,7 @@ import Svg, { Circle as SvgCircle } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { MOVES as CURATED_MOVES } from '../../constants/moves';
+import GlassButton from '../../components/GlassButton';
 
 // ---------------------------------------------------------------------------
 // Palette
@@ -231,8 +232,8 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Today's Workout hero card */}
-        <TouchableOpacity style={s.heroWorkoutCard} onPress={startWorkout} activeOpacity={0.95}>
+        {/* Today's Workout hero card — Pressable (not TouchableOpacity) to avoid opacity conflict with GlassView inside */}
+        <Pressable style={s.heroWorkoutCard} onPress={startWorkout}>
           <Image
             source={{ uri: 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=800&q=80' }}
             style={StyleSheet.absoluteFill}
@@ -253,11 +254,11 @@ export default function HomeScreen() {
             </View>
             <Text style={s.heroWorkoutName}>{DEFAULT_PLAN.focus.toUpperCase()}</Text>
             <Text style={s.heroWorkoutMeta}>Day 1 · 30 min · {DEFAULT_PLAN.exercises.length} exercises</Text>
-            <View style={s.heroStartBtn}>
+            <GlassButton style={{ height: 54, alignSelf: 'stretch' }} onPress={startWorkout}>
               <Text style={s.heroStartBtnTxt}>Start Workout</Text>
-            </View>
+            </GlassButton>
           </View>
-        </TouchableOpacity>
+        </Pressable>
 
         {/* Form score */}
         <FormScoreRing score={null} reps={0} play={true} />
@@ -321,8 +322,7 @@ const s = StyleSheet.create({
   heroFormBadgeTxt:   { fontSize: 11, fontWeight: '600', color: 'rgba(240,240,242,0.7)', letterSpacing: 0.2 },
   heroWorkoutName:    { fontSize: 36, fontWeight: '800', color: C.textPrimary, letterSpacing: -1, lineHeight: 40, marginBottom: 4 },
   heroWorkoutMeta:    { fontSize: 13, color: 'rgba(240,240,242,0.6)', marginBottom: 16 },
-  heroStartBtn:       { backgroundColor: C.primary, borderRadius: 12, paddingVertical: 16, alignItems: 'center' },
-  heroStartBtnTxt:    { fontSize: 15, fontWeight: '700', color: C.bg, letterSpacing: 0.1 },
+  heroStartBtnTxt:    { fontSize: 15, fontWeight: '700', color: C.textPrimary, letterSpacing: 0.1 },
 
   scoreCard:   { flexDirection: 'row', alignItems: 'center', gap: 16, backgroundColor: C.surface, borderRadius: 16, borderWidth: 1, borderColor: C.surfaceBorder, padding: 16, marginBottom: 14 },
   scoreNum:    { fontSize: 18, fontWeight: '700', color: C.textPrimary, letterSpacing: -0.5 },

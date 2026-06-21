@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Animated,
+  View, Text, StyleSheet, Animated,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, RefreshCw, Play, Square } from 'lucide-react-native';
+import { SymbolView } from 'expo-symbols';
+import GlassButton from '../components/GlassButton';
 import {
   ATHLTCameraView,
   startSession,
@@ -89,7 +90,6 @@ export default function FormCheckScreen() {
     const repSub = addRepListener((rep: RepEvent) => {
       setReps(rep.reps);
       setGoodReps(rep.goodReps);
-      // Flash the counter green on each rep
       flashAnim.setValue(1);
       Animated.timing(flashAnim, { toValue: 0, duration: 700, useNativeDriver: true }).start();
     });
@@ -151,15 +151,15 @@ export default function FormCheckScreen() {
 
       {/* ── Top bar ─────────────────────────────────────────────────────── */}
       <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity style={s.iconBtn} onPress={handleBack} activeOpacity={0.75}>
-          <ChevronLeft size={24} color={C.text} />
-        </TouchableOpacity>
+        <GlassButton circular={40} onPress={handleBack}>
+          <SymbolView name="chevron.left" size={18} tintColor={C.text} type="monochrome" style={{ width: 18, height: 18 }} />
+        </GlassButton>
 
         <Text style={s.title}>Form Check</Text>
 
-        <TouchableOpacity style={s.iconBtn} onPress={handleFlip} activeOpacity={0.75}>
-          <RefreshCw size={20} color={C.text} />
-        </TouchableOpacity>
+        <GlassButton circular={40} onPress={handleFlip}>
+          <SymbolView name="arrow.triangle.2.circlepath.camera.fill" size={18} tintColor={C.text} type="monochrome" style={{ width: 18, height: 18 }} />
+        </GlassButton>
       </View>
 
       {/* ── Error ───────────────────────────────────────────────────────── */}
@@ -206,17 +206,20 @@ export default function FormCheckScreen() {
         )}
 
         {canTrack && (
-          <TouchableOpacity
-            style={[s.trackBtn, isTracking && s.trackBtnActive]}
-            onPress={handleStartStop}
-            activeOpacity={0.8}
-          >
-            {isTracking
-              ? <Square size={18} color={C.bg} fill={C.bg} />
-              : <Play   size={18} color={C.bg} fill={C.bg} />
-            }
-            <Text style={s.trackLabel}>{isTracking ? 'Stop' : 'Start Tracking'}</Text>
-          </TouchableOpacity>
+          <GlassButton style={{ height: 56, width: 240 }} onPress={handleStartStop}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <SymbolView
+                name={isTracking ? 'stop.fill' : 'play.fill'}
+                size={18}
+                tintColor={isTracking ? C.warn : C.text}
+                type="monochrome"
+                style={{ width: 18, height: 18 }}
+              />
+              <Text style={[s.trackLabel, isTracking && s.trackLabelStop]}>
+                {isTracking ? 'Stop' : 'Start Tracking'}
+              </Text>
+            </View>
+          </GlassButton>
         )}
 
         {phase === 'done' && (
@@ -253,14 +256,6 @@ const s = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingBottom: 8,
-  },
-  iconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   title: {
     fontSize: 16,
@@ -328,22 +323,13 @@ const s = StyleSheet.create({
     color: C.muted,
     fontSize: 13,
   },
-  trackBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#F0F0F2',
-    paddingHorizontal: 36,
-    paddingVertical: 16,
-    borderRadius: 50,
-  },
-  trackBtnActive: {
-    backgroundColor: C.warn,
-  },
   trackLabel: {
     fontSize: 16,
     fontWeight: '600',
-    color: C.bg,
+    color: C.text,
+  },
+  trackLabelStop: {
+    color: C.warn,
   },
 });
 

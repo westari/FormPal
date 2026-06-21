@@ -1,99 +1,122 @@
 import React, { useRef, useCallback } from 'react';
 import {
-  View, Text, TouchableOpacity, TouchableWithoutFeedback,
+  View, Text, TouchableWithoutFeedback,
   StyleSheet, Animated, Alert,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Camera, Play, Edit3 } from 'lucide-react-native';
+import { BlurView } from 'expo-blur';
+import { SymbolView } from 'expo-symbols';
+import GlassButton from '../../components/GlassButton';
 
-const BG      = '#141518';
-const ACTIVE  = '#F2F2F4';
-const INACTIVE = '#6B6B72';
-const BORDER  = 'rgba(255,255,255,0.06)';
-const APP_BG  = '#0A0B0C';
+const C = {
+  bg:   '#0A0B0C',
+  text: '#F0F0F2',
+};
+
+// Bottom-to-top ordering: index 0 appears at the bottom of the stack
+const ACTIONS = [
+  { id: 'form',    symbol: 'camera.fill',     label: 'Quick Form Check' },
+  { id: 'workout', symbol: 'figure.run',       label: 'Start Workout'    },
+  { id: 'log',     symbol: 'square.and.pencil',label: 'Log a Session'    },
+] as const;
+
+const ICON_SIZE   = 54;
+const TAB_CLEAR   = 75; // extra padding above native tab bar
 
 export default function PlusScreen() {
-  const router    = useRouter();
-  const insets    = useSafeAreaInsets();
-  const slideAnim = useRef(new Animated.Value(320)).current;
+  const router  = useRouter();
+  const insets  = useSafeAreaInsets();
 
-  // Re-open the sheet every time this tab gains focus — handles first tap AND
-  // every subsequent tap without relying on component remounting.
+  // Scrim fades in/out. NOT a GlassView parent so opacity is fine.
+  const scrimAnim = useRef(new Animated.Value(0)).current;
+  // One translateY per action (indexed by ACTIONS order, bottom-first).
+  // Do NOT use opacity here — glass parents must stay at opacity 1.
+  const slideAnims = useRef(ACTIONS.map(() => new Animated.Value(80))).current;
+
   useFocusEffect(
     useCallback(() => {
-      slideAnim.setValue(320);
-      Animated.spring(slideAnim, {
-        toValue: 0, useNativeDriver: true, damping: 26, stiffness: 320,
-      }).start();
+      scrimAnim.setValue(0);
+      slideAnims.forEach(a => a.setValue(80));
+
+      Animated.timing(scrimAnim, { toValue: 1, duration: 220, useNativeDriver: true }).start();
+      slideAnims.forEach((anim, i) => {
+        Animated.spring(anim, {
+          toValue: 0, delay: i * 60,
+          damping: 22, stiffness: 280,
+          useNativeDriver: true,
+        }).start();
+      });
 
       return () => {
-        // Reset on blur so the next focus always starts from off-screen.
-        slideAnim.stopAnimation();
-        slideAnim.setValue(320);
+        scrimAnim.setValue(0);
+        slideAnims.forEach(a => a.setValue(80));
       };
-    }, [slideAnim])
+    }, [])
   );
 
-  // Slide sheet down then navigate to Home tab.
   const close = useCallback(() => {
-    Animated.timing(slideAnim, {
-      toValue: 320, duration: 180, useNativeDriver: true,
-    }).start(() => router.navigate('/(tabs)'));
-  }, [slideAnim, router]);
+    Animated.timing(scrimAnim, { toValue: 0, duration: 160, useNativeDriver: true }).start(() => {
+      router.navigate('/(tabs)');
+    });
+  }, [router]);
 
-  // Slide down then push a new screen.
-  const closeAndPush = useCallback((route: string) => {
-    Animated.timing(slideAnim, {
-      toValue: 320, duration: 180, useNativeDriver: true,
-    }).start(() => router.push(route as any));
-  }, [slideAnim, router]);
+  const handleAction = useCallback((id: string) => {
+    if (id === 'form') {
+      Animated.timing(scrimAnim, { toValue: 0, duration: 160, useNativeDriver: true }).start(() => {
+        router.push('/formcheck');
+      });
+    } else {
+      Alert.alert('Coming soon');
+    }
+  }, [router]);
 
-  const ACTIONS = [
-    {
-      id: 'form',
-      icon: Camera,
-      label: 'Quick Form Check',
-      onPress: () => closeAndPush('/formcheck'),
-    },
-    {
-      id: 'workout',
-      icon: Play,
-      label: 'Start Workout',
-      onPress: () => Alert.alert('Coming soon', 'Start Workout is coming soon.'),
-    },
-    {
-      id: 'log',
-      icon: Edit3,
-      label: 'Log a Session',
-      onPress: () => Alert.alert('Coming soon', 'Log a Session is coming soon.'),
-    },
-  ];
+  const bottomOffset = insets.bottom + TAB_CLEAR;
 
   return (
     <View style={s.root}>
-      {/* Semi-transparent backdrop — tapping anywhere outside the sheet closes it */}
+      {/* Scrim — NOT a GlassView, safe to animate opacity */}
       <TouchableWithoutFeedback onPress={close}>
-        <View style={s.backdrop} />
+        <Animated.View style={[StyleSheet.absoluteFill, { opacity: scrimAnim }]}>
+          <BlurView intensity={18} tint="dark" style={StyleSheet.absoluteFill} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.55)' }]} />
+        </Animated.View>
       </TouchableWithoutFeedback>
 
-      {/* Action sheet — slides up from bottom, rendered on top of backdrop */}
-      <Animated.View
-        style={[
-          s.sheet,
-          { paddingBottom: Math.max(insets.bottom, 24), transform: [{ translateY: slideAnim }] },
-        ]}
-      >
-        <View style={s.handle} />
-        {ACTIONS.map(({ id, icon: Icon, label, onPress }) => (
-          <TouchableOpacity key={id} style={s.action} activeOpacity={0.7} onPress={onPress}>
-            <View style={s.actionIcon}>
-              <Icon size={20} color={ACTIVE} />
-            </View>
-            <Text style={s.actionLabel}>{label}</Text>
-          </TouchableOpacity>
-        ))}
-      </Animated.View>
+      {/*
+        Action stack — bottom-to-top visual order.
+        Rendered top-to-bottom in DOM (reversed), so ACTIONS[2] (Log)
+        is first child (top), ACTIONS[0] (Form Check) is last (bottom).
+        Each Animated.View wraps the row so translateY animates position
+        without touching GlassView opacity.
+      */}
+      <View style={[s.col, { bottom: bottomOffset }]} pointerEvents="box-none">
+        {[...ACTIONS].reverse().map((action, renderIndex) => {
+          const origIndex = ACTIONS.length - 1 - renderIndex;
+          return (
+            <Animated.View
+              key={action.id}
+              style={{ transform: [{ translateY: slideAnims[origIndex] }] }}
+            >
+              <View style={s.row}>
+                <Text style={s.label}>{action.label}</Text>
+                <GlassButton
+                  circular={ICON_SIZE}
+                  onPress={() => handleAction(action.id)}
+                >
+                  <SymbolView
+                    name={action.symbol as any}
+                    size={22}
+                    tintColor="rgba(240,240,242,0.95)"
+                    type="monochrome"
+                    style={{ width: 22, height: 22 }}
+                  />
+                </GlassButton>
+              </View>
+            </Animated.View>
+          );
+        })}
+      </View>
     </View>
   );
 }
@@ -101,50 +124,25 @@ export default function PlusScreen() {
 const s = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: APP_BG,
-    justifyContent: 'flex-end',
+    backgroundColor: C.bg,
   },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.52)',
+  col: {
+    position:   'absolute',
+    right:      22,
+    alignItems: 'flex-end',
+    gap:        14,
   },
-  sheet: {
-    backgroundColor: BG,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingTop: 12,
-    paddingHorizontal: 20,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: BORDER,
-  },
-  handle: {
-    width: 36,
-    height: 4,
-    backgroundColor: INACTIVE,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: 20,
-    opacity: 0.35,
-  },
-  action: {
+  row: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    paddingVertical: 16,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: BORDER,
+    alignItems:    'center',
+    gap:           14,
   },
-  actionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 11,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  actionLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: ACTIVE,
+  label: {
+    fontSize:        15,
+    fontWeight:      '600',
+    color:           C.text,
+    textShadowColor: 'rgba(0,0,0,0.7)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 6,
   },
 });

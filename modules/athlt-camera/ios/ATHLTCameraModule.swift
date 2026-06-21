@@ -28,11 +28,17 @@ final class ATHLTSessionHolder {
 // Reads a Vision body-pose observation, computes knee angle (hip→knee→ankle),
 // and runs a standing↔descending state machine to count reps and judge depth.
 //
-// ✓ / ✗ is decided on DEPTH only for v1:
-//   - good rep  = knee angle reached ≤ goodDepthAngle (parallel-ish or below)
-//   - shallow ✗ = real rep but didn't get deep enough
+// Rep gates — BOTH must pass before a rep is counted:
+//   1. Depth:    knee angle reached ≤ minRepDepthAngle (120°)
+//                Filters knee-forward bobs and light hops that barely bend.
+//   2. Hip drop: hips dropped ≥ minHipDropFraction of hip-to-ankle distance.
+//                Normalised by body size so it works at any camera distance.
+//                Filters knee-forward bobs (hips barely move) and light jumps.
 //
-// Angles are geometric (invariant to coordinate origin), so no flip/convert needed.
+// Good vs shallow distinction (only after both gates pass):
+//   - ≤ goodDepthAngle (100°)  → good rep  ✓
+//   - 101°–120°                → counts but flagged "go deeper"
+//   - > 120°                   → rejected entirely (not counted)
 
 final class SquatAnalyzer {
 
@@ -50,100 +56,171 @@ final class SquatAnalyzer {
     /// Min knee angle (deg) for a GOOD rep — ~parallel is 90°, 100° gives margin.
     static let goodDepthAngle: Double = 100.0
 
-    /// A rep only counts if the knee bent past this (filters tiny bobs/noise).
-    static let minRepDepthAngle: Double = 140.0
+    /// A rep only counts if the knee angle reached this or below.
+    /// 120° requires a real squat; shallower bobs/hops are rejected outright.
+    static let minRepDepthAngle: Double = 120.0
+
+    /// Hip must drop at least this fraction of hip-to-ankle distance to count.
+    /// 0.12 = 12% — e.g. if hip-to-ankle span is 0.50 normalised units,
+    /// hips must lower by ≥ 0.06 units. Filters bobs (< 5%) and light hops.
+    static let minHipDropFraction: Double = 0.12
 
     // MARK: – Public state
+
     private(set) var reps: Int = 0
     private(set) var goodReps: Int = 0
     private(set) var lastKneeAngle: Double = 180.0
+    private(set) var lastHipDrop: Double   = 0.0   // normalised, updated each rep attempt
     private(set) var state: String = "waiting for person"
 
     struct RepResult {
         let good: Bool
         let reason: String
         let depthAngle: Double
+        let hipDrop: Double   // normalised hip drop at rep completion
     }
 
     // MARK: – Private state
+
     private enum Phase { case standing, descending }
     private var phase: Phase = .standing
     private var minAngleThisRep: Double = 180.0
 
+    // Vision coordinate system: Y=0 at bottom of image, Y=1 at top.
+    // Standing: hipY is high (~0.65–0.80). Squatting: hipY decreases.
+    // hip-to-ankle distance = standingHipY − ankleY (positive, ~0.45–0.65).
+    private var standingHipY: Double      = -1.0   // updated each standing frame
+    private var standingHipToAnkle: Double = 0.0   // updated each standing frame
+    private var minHipYThisRep: Double    = 1.0    // lowest hip Y seen during descent
+
     // MARK: – Session control
 
     func reset() {
-        reps = 0
-        goodReps = 0
-        lastKneeAngle = 180.0
-        state = "waiting for person"
-        phase = .standing
-        minAngleThisRep = 180.0
+        reps              = 0
+        goodReps          = 0
+        lastKneeAngle     = 180.0
+        lastHipDrop       = 0.0
+        state             = "waiting for person"
+        phase             = .standing
+        minAngleThisRep   = 180.0
+        standingHipY      = -1.0
+        standingHipToAnkle = 0.0
+        minHipYThisRep    = 1.0
     }
 
     func notePersonMissing() {
         state = "no person / legs not fully visible"
     }
 
-    // MARK: – Ingestion ────────────────────────────────────────────────────────
+    // MARK: – Ingestion ────────────────────────────────────────────────────────────
     //
     // Returns a RepResult on the frame a rep completes, nil otherwise.
 
     func ingest(pose: VNHumanBodyPoseObservation, timestamp: Double) -> RepResult? {
-        var angles: [Double] = []
-        if let h = point(pose, .leftHip), let k = point(pose, .leftKnee), let a = point(pose, .leftAnkle) {
-            angles.append(angleAt(vertex: k, h, a))
-        }
-        if let h = point(pose, .rightHip), let k = point(pose, .rightKnee), let a = point(pose, .rightAnkle) {
-            angles.append(angleAt(vertex: k, h, a))
-        }
-        guard !angles.isEmpty else {
+
+        // ── 1. Knee angle (average of both sides if available) ────────────────────
+
+        var kneeAngles: [Double] = []
+        if let h = point(pose, .leftHip),  let k = point(pose, .leftKnee),  let a = point(pose, .leftAnkle)  { kneeAngles.append(angleAt(vertex: k, h, a)) }
+        if let h = point(pose, .rightHip), let k = point(pose, .rightKnee), let a = point(pose, .rightAnkle) { kneeAngles.append(angleAt(vertex: k, h, a)) }
+
+        guard !kneeAngles.isEmpty else {
             state = "no person / legs not fully visible"
             return nil
         }
 
-        let kneeAngle = angles.reduce(0, +) / Double(angles.count)
+        let kneeAngle = kneeAngles.reduce(0, +) / Double(kneeAngles.count)
         lastKneeAngle = kneeAngle
 
+        // ── 2. Hip Y and hip-to-ankle distance (for hip-drop gate) ───────────────
+
+        var hipYVals: [Double]   = []
+        var ankleYVals: [Double] = []
+        if let h = point(pose, .leftHip)    { hipYVals.append(Double(h.y)) }
+        if let h = point(pose, .rightHip)   { hipYVals.append(Double(h.y)) }
+        if let a = point(pose, .leftAnkle)  { ankleYVals.append(Double(a.y)) }
+        if let a = point(pose, .rightAnkle) { ankleYVals.append(Double(a.y)) }
+
+        let hasHipAnkle   = !hipYVals.isEmpty && !ankleYVals.isEmpty
+        let currentHipY   = hasHipAnkle ? hipYVals.reduce(0, +)   / Double(hipYVals.count)   : -1.0
+        let currentAnkleY = hasHipAnkle ? ankleYVals.reduce(0, +) / Double(ankleYVals.count) : -1.0
+
+        // ── 3. State machine ──────────────────────────────────────────────────────
+
         switch phase {
+
         case .standing:
             state = String(format: "standing (knee %.0f°)", kneeAngle)
+
+            // Continuously refresh standing reference so it tracks the actual neutral
+            // position (handles camera repositioning between sets).
+            if hasHipAnkle && currentHipY > currentAnkleY {
+                standingHipY       = currentHipY
+                standingHipToAnkle = currentHipY - currentAnkleY
+            }
+
             if kneeAngle < Self.descentStartAngle {
-                phase = .descending
+                phase           = .descending
                 minAngleThisRep = kneeAngle
+                // Initialise minHipY to current hip position at descent start.
+                minHipYThisRep  = (currentHipY > 0) ? currentHipY : standingHipY
             }
 
         case .descending:
-            if kneeAngle < minAngleThisRep { minAngleThisRep = kneeAngle }
+            if kneeAngle    < minAngleThisRep { minAngleThisRep = kneeAngle }
+            if hasHipAnkle && currentHipY < minHipYThisRep { minHipYThisRep = currentHipY }
             state = String(format: "descending (min %.0f°)", minAngleThisRep)
 
             if kneeAngle > Self.standingKneeAngle {
-                // Returned to standing — was it a real rep?
-                if minAngleThisRep < Self.minRepDepthAngle {
+                // ── Person returned to standing — evaluate both gates ─────────────
+
+                // Gate 1: depth
+                let passedDepth = minAngleThisRep <= Self.minRepDepthAngle
+
+                // Gate 2: hip drop (normalised by body size)
+                let hipDrop: Double
+                if standingHipY > 0 && standingHipToAnkle > 0.01 && minHipYThisRep < standingHipY {
+                    hipDrop = (standingHipY - minHipYThisRep) / standingHipToAnkle
+                } else {
+                    // No valid standing reference yet — don't count
+                    hipDrop = 0.0
+                }
+                lastHipDrop = hipDrop
+                let passedHip = hipDrop >= Self.minHipDropFraction
+
+                if passedDepth && passedHip {
                     reps += 1
                     let good = minAngleThisRep <= Self.goodDepthAngle
                     if good { goodReps += 1 }
                     let result = RepResult(
-                        good: good,
-                        reason: good ? "good depth" : "too shallow — go deeper",
-                        depthAngle: minAngleThisRep
+                        good:       good,
+                        reason:     good ? "good depth" : "too shallow — go deeper",
+                        depthAngle: minAngleThisRep,
+                        hipDrop:    hipDrop
                     )
-                    NSLog("[SquatAnalyzer] REP %@ depth=%.0f° (%d good / %d total)",
-                          good ? "GOOD" : "SHALLOW", minAngleThisRep, goodReps, reps)
-                    phase = .standing
+                    NSLog("[SquatAnalyzer] REP %-6@ depth=%.0f° hipDrop=%.2f (%d good / %d total)",
+                          good ? "GOOD" : "SHAL", minAngleThisRep, hipDrop, goodReps, reps)
+                    phase           = .standing
                     minAngleThisRep = 180.0
+                    minHipYThisRep  = 1.0
                     return result
                 } else {
-                    // Didn't dip far enough to be a rep — ignore.
-                    phase = .standing
+                    NSLog("[SquatAnalyzer] REJECT depth=%.0f° (need≤%.0f°) hipDrop=%.2f (need≥%.2f) passDepth=%@ passHip=%@",
+                          minAngleThisRep, Self.minRepDepthAngle,
+                          hipDrop, Self.minHipDropFraction,
+                          passedDepth ? "YES" : "NO",
+                          passedHip   ? "YES" : "NO")
+                    phase           = .standing
                     minAngleThisRep = 180.0
+                    minHipYThisRep  = 1.0
                 }
             }
         }
+
         return nil
     }
 
-    // MARK: – Helpers ────────────────────────────────────────────────────────────
+    // MARK: – Helpers ─────────────────────────────────────────────────────────────
 
     private func point(_ pose: VNHumanBodyPoseObservation,
                        _ joint: VNHumanBodyPoseObservation.JointName) -> CGPoint? {
@@ -414,7 +491,7 @@ public class ATHLTCameraModule: Module {
         inferenceQueue.async { [weak self] in
             defer { CVPixelBufferUnlockBaseAddress(cap, .readOnly) }
             guard let self else { return }
-            guard self.isTracking else { return }   // only analyze while tracking
+            guard self.isTracking else { return }
             self.runPoseDetection(pixelBuffer: cap, timestamp: t)
         }
     }
@@ -458,13 +535,15 @@ public class ATHLTCameraModule: Module {
     // MARK: – Rep event ────────────────────────────────────────────────────────
 
     private func emitRepEvent(_ rep: SquatAnalyzer.RepResult) {
-        NSLog("[GymCamera] REP %@ — %d good / %d total (depth %.0f°)",
+        NSLog("[GymCamera] REP %@ — %d good / %d total (depth %.0f° hipDrop %.2f)",
               rep.good ? "GOOD ✓" : "SHALLOW ✗",
-              squatAnalyzer.goodReps, squatAnalyzer.reps, rep.depthAngle)
+              squatAnalyzer.goodReps, squatAnalyzer.reps,
+              rep.depthAngle, rep.hipDrop)
         sendEvent("onRepDetected", [
             "good":       rep.good,
             "reason":     rep.reason,
             "depthAngle": rep.depthAngle,
+            "hipDrop":    rep.hipDrop,
             "reps":       squatAnalyzer.reps,
             "goodReps":   squatAnalyzer.goodReps,
             "timestamp":  Date().timeIntervalSince1970 * 1000.0,
@@ -481,6 +560,7 @@ public class ATHLTCameraModule: Module {
         sendEvent("onDebugStats", [
             "personDetected":      personDetected,
             "kneeAngle":           squatAnalyzer.lastKneeAngle,
+            "hipDrop":             squatAnalyzer.lastHipDrop,
             "phase":               squatAnalyzer.state,
             "reps":                squatAnalyzer.reps,
             "goodReps":            squatAnalyzer.goodReps,
