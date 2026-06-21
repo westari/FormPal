@@ -1,86 +1,53 @@
-import React, { useState, createContext, useContext } from 'react';
-import { Platform } from 'react-native';
-import { Tabs } from 'expo-router';
+import React, { createContext, useContext, useState } from 'react';
 import { DarkTheme, ThemeProvider } from '@react-navigation/native';
-import { Home, TrendingUp, User } from 'lucide-react-native';
+import { NativeTabs, Icon, Label } from 'expo-router/unstable-native-tabs';
 
-export const TabBarContext = createContext<{ setTabsVisible: (v: boolean) => void }>({
-  setTabsVisible: () => {},
-});
+/**
+ * TabBarContext is kept for backward compat with index.tsx onboarding flow.
+ * NativeTabs wraps UITabBarController — the bar cannot be hidden from JS.
+ * During onboarding, index.tsx renders a full-screen overlay that visually
+ * covers the bar. setTabsVisible still tracks state so the rest of the logic
+ * (e.g. revealing the bar after onboarding) works without changes to index.tsx.
+ */
+export const TabBarContext = createContext<{
+  visible: boolean;
+  setTabsVisible: (v: boolean) => void;
+}>({ visible: false, setTabsVisible: () => {} });
 
 export const useTabBarVisibility = () => useContext(TabBarContext);
 
-// NativeTabs is only available in dev builds. Gracefully fall back to regular Tabs
-// in Expo Go or if the module isn't compiled in.
-let NativeTabs: any = null;
-try {
-  const m = require('expo-router/unstable-native-tabs');
-  NativeTabs = m.NativeTabs;
-} catch {}
-
-const USE_NATIVE = Platform.OS === 'ios' && NativeTabs !== null;
-
-const ACTIVE = '#F0F0F2';
-const INACTIVE = '#62626A';
-
-export default function TabsLayout() {
-  // Starts hidden — index.tsx drives visibility via context
-  const [tabsVisible, setTabsVisible] = useState(false);
+export default function TabLayout() {
+  const [visible, setTabsVisible] = useState(false);
 
   return (
-    <TabBarContext.Provider value={{ setTabsVisible }}>
+    <TabBarContext.Provider value={{ visible, setTabsVisible }}>
       <ThemeProvider value={DarkTheme}>
-        {USE_NATIVE ? (
-          // Real iOS system tab bar; liquid glass kicks in automatically on iOS 26+.
-          // Tab visibility during onboarding can't be controlled here — tabs show throughout.
-          <NativeTabs screenOptions={{ headerShown: false }}>
-            <NativeTabs.Screen
-              name="index"
-              options={{ title: 'Home', tabBarIcon: { sfSymbol: 'house.fill' } }}
-            />
-            <NativeTabs.Screen
-              name="progress"
-              options={{ title: 'Progress', tabBarIcon: { sfSymbol: 'chart.line.uptrend.xyaxis' } }}
-            />
-            <NativeTabs.Screen
-              name="profile"
-              options={{ title: 'Profile', tabBarIcon: { sfSymbol: 'person.crop.circle' } }}
-            />
-          </NativeTabs>
-        ) : (
-          <Tabs
-            screenOptions={{
-              headerShown: false,
-              tabBarActiveTintColor: ACTIVE,
-              tabBarInactiveTintColor: INACTIVE,
-              tabBarStyle: tabsVisible
-                ? { backgroundColor: '#0A0B0C', borderTopColor: 'rgba(255,255,255,0.08)' }
-                : { display: 'none' },
-            }}
-          >
-            <Tabs.Screen
-              name="index"
-              options={{
-                title: 'Home',
-                tabBarIcon: ({ color, size }) => <Home size={size} color={color} />,
-              }}
-            />
-            <Tabs.Screen
-              name="progress"
-              options={{
-                title: 'Progress',
-                tabBarIcon: ({ color, size }) => <TrendingUp size={size} color={color} />,
-              }}
-            />
-            <Tabs.Screen
-              name="profile"
-              options={{
-                title: 'Profile',
-                tabBarIcon: ({ color, size }) => <User size={size} color={color} />,
-              }}
-            />
-          </Tabs>
-        )}
+        <NativeTabs>
+          <NativeTabs.Trigger name="index">
+            <Icon sf="house.fill" />
+            <Label>Home</Label>
+          </NativeTabs.Trigger>
+
+          <NativeTabs.Trigger name="train">
+            <Icon sf="figure.strengthtraining.traditional" />
+            <Label>Train</Label>
+          </NativeTabs.Trigger>
+
+          <NativeTabs.Trigger name="plus">
+            <Icon sf="plus.circle.fill" />
+            <Label>Plus</Label>
+          </NativeTabs.Trigger>
+
+          <NativeTabs.Trigger name="progress">
+            <Icon sf="chart.line.uptrend.xyaxis" />
+            <Label>Progress</Label>
+          </NativeTabs.Trigger>
+
+          <NativeTabs.Trigger name="profile">
+            <Icon sf="person.fill" />
+            <Label>Profile</Label>
+          </NativeTabs.Trigger>
+        </NativeTabs>
       </ThemeProvider>
     </TabBarContext.Provider>
   );
