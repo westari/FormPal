@@ -160,7 +160,7 @@ export default function HomeScreen() {
   };
 
   return (
-    <View style={s.c}>
+    <View style={s.c} collapsable={false}>
       <ScrollView
         contentContainerStyle={{ paddingTop: insets.top + 16, paddingHorizontal: 20, paddingBottom: insets.bottom + 100 }}
         showsVerticalScrollIndicator={false}

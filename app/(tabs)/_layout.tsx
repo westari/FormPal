@@ -3,11 +3,8 @@ import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { NativeTabs, Icon, Label } from 'expo-router/unstable-native-tabs';
 
 /**
- * TabBarContext is kept for backward compat with index.tsx onboarding flow.
+ * TabBarContext is kept for backward compat with index.tsx.
  * NativeTabs wraps UITabBarController — the bar cannot be hidden from JS.
- * During onboarding, index.tsx renders a full-screen overlay that visually
- * covers the bar. setTabsVisible still tracks state so the rest of the logic
- * (e.g. revealing the bar after onboarding) works without changes to index.tsx.
  */
 export const TabBarContext = createContext<{
   visible: boolean;
@@ -22,7 +19,9 @@ export default function TabLayout() {
   return (
     <TabBarContext.Provider value={{ visible, setTabsVisible }}>
       <ThemeProvider value={DarkTheme}>
-        <NativeTabs>
+        <NativeTabs
+          disableTransparentOnScrollEdge={true}
+        >
           <NativeTabs.Trigger name="index">
             <Icon sf="house.fill" />
             <Label>Home</Label>

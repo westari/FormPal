@@ -6,12 +6,39 @@ on:
 jobs:
   build:
     name: EAS local build — iOS development
-    runs-on: macos-15
+    # macos-26 includes Xcode 26, required for iOS 26 liquid glass rendering.
+    # If GitHub rejects this runner label, change to macos-15 and add a manual
+    # sudo xcode-select -s /Applications/Xcode_26.app/Contents/Developer step.
+    runs-on: macos-26
     timeout-minutes: 60
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Select Xcode 26 (verify)
+        run: |
+          # Explicitly select Xcode 26 in case the runner default isn't already 26.
+          # Tries common versioned bundle names; falls back to the system default.
+          XCODE_26=""
+          for path in /Applications/Xcode_26.app \
+                      /Applications/Xcode_26.0.app \
+                      /Applications/Xcode_26.1.app \
+                      /Applications/Xcode_26.2.app; do
+            if [ -d "$path" ]; then XCODE_26="$path"; break; fi
+          done
+          if [ -n "$XCODE_26" ]; then
+            sudo xcode-select -s "$XCODE_26/Contents/Developer"
+            echo "Selected $XCODE_26"
+          else
+            echo "WARNING: no Xcode_26*.app found — using runner default"
+            ls /Applications/ | grep -i xcode || true
+          fi
+
+      - name: Confirm Xcode version
+        run: xcodebuild -version
 
       - name: Set up Node 20
         uses: actions/setup-node@v4
@@ -28,8 +55,6 @@ jobs:
 
       - name: Build iOS dev client (local)
         run: eas build --platform ios --profile development --local --non-interactive --output ./build.ipa
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4

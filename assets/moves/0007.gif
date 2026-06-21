@@ -1,0 +1,1 @@
+{"error":"Unauthorized","message":"API key required. Pass via X-WorkoutX-Key header or ?api-key= query param.","docs":"https://docs.workoutx.io"}

@@ -67,9 +67,10 @@ public class ATHLTCameraView: ExpoView {
     private func attachSession(_ session: AVCaptureSession?) {
         previewLayer.session = session
 
-        // Lock orientation — landscape-right for basketball court wide view
+        // Portrait: squatting body is taller than wide; portrait keeps the full
+        // person (head → ankles) in frame, which body-pose detection requires.
         if let conn = previewLayer.connection, conn.isVideoOrientationSupported {
-            conn.videoOrientation = .landscapeRight
+            conn.videoOrientation = .portrait
         }
     }
 

@@ -1,14 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Platform, ScrollView,
-  Animated, TextInput, KeyboardAvoidingView, ActivityIndicator, Alert,
+  Animated, TextInput, KeyboardAvoidingView, ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import {
-  Check, Flame, Target, TrendingUp, Dumbbell, User as UserIcon,
-  Calendar, Camera, Play, Heart, Activity, Sprout, Award, Compass,
-  Repeat, Shield, Home as HomeIcon, Settings, Clock, Bell, BellOff, Zap,
-} from 'lucide-react-native';
+import { SymbolView } from 'expo-symbols';
 import { Picker } from '@react-native-picker/picker';
 import * as Haptics from 'expo-haptics';
 import Svg, { Path as SvgPath, Text as SvgText, Circle as SvgCircle } from 'react-native-svg';
@@ -49,9 +45,24 @@ for (let ft = 4; ft <= 6; ft++) {
 }
 
 // ---------------------------------------------------------------------------
+// Sym — thin wrapper so icon call sites stay concise
+// ---------------------------------------------------------------------------
+function Sym({ name, size, color }: { name: string; size: number; color: string }) {
+  return (
+    <SymbolView
+      name={name as any}
+      size={size}
+      tintColor={color}
+      type="monochrome"
+      style={{ width: size, height: size }}
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Step definitions
 // ---------------------------------------------------------------------------
-interface OptionDef { label: string; subtitle?: string; icon?: any; }
+interface OptionDef { label: string; subtitle?: string; sfSymbol?: string; }
 interface Step {
   id: string;
   section: string;
@@ -64,12 +75,12 @@ interface Step {
   showIf?: (a: Record<string, any>) => boolean;
 }
 
-const SECTION_ICONS: Record<string, any> = {
-  'Your Goal':       Target,
-  'Your Experience': TrendingUp,
-  'Your Training':   Dumbbell,
-  'About You':       UserIcon,
-  'Reminders':       Calendar,
+const SECTION_ICONS: Record<string, string> = {
+  'Your Goal':       'target',
+  'Your Experience': 'chart.line.uptrend.xyaxis',
+  'Your Training':   'dumbbell.fill',
+  'About You':       'person.fill',
+  'Reminders':       'calendar',
 };
 
 const STEPS: Step[] = [
@@ -77,54 +88,54 @@ const STEPS: Step[] = [
   { id: 'height', section: 'About You', type: 'wheel', wheelKind: 'height', question: 'How tall are you?',   subtitle: 'Helps set the right benchmarks for your body.' },
   { id: 'weight', section: 'About You', type: 'text',  question: 'What do you weigh?', subtitle: 'So weight suggestions actually fit you.', placeholder: '0' },
   { id: 'sex',    section: 'About You', type: 'select', question: "What's your sex?", subtitle: 'Helps me set the right starting weights.', options: [
-    { label: 'Male',              icon: UserIcon },
-    { label: 'Female',            icon: UserIcon },
-    { label: 'Prefer not to say', icon: UserIcon },
+    { label: 'Male',              sfSymbol: 'person.fill' },
+    { label: 'Female',            sfSymbol: 'person.fill' },
+    { label: 'Prefer not to say', sfSymbol: 'person.fill' },
   ] },
   { id: 'goal', section: 'Your Goal', type: 'select', question: "What's your main goal?", subtitle: "I'll shape your whole plan around this.", options: [
-    { label: 'Build muscle',    icon: Dumbbell   },
-    { label: 'Get stronger',    icon: TrendingUp },
-    { label: 'Lose fat',        icon: Flame      },
-    { label: 'General fitness', icon: Heart      },
+    { label: 'Build muscle',    sfSymbol: 'dumbbell.fill'               },
+    { label: 'Get stronger',    sfSymbol: 'chart.line.uptrend.xyaxis'   },
+    { label: 'Lose fat',        sfSymbol: 'flame.fill'                  },
+    { label: 'General fitness', sfSymbol: 'heart.fill'                  },
   ] },
   { id: 'experience', section: 'Your Experience', type: 'select', question: 'How much lifting experience do you have?', subtitle: 'Sets where your plan starts.', options: [
-    { label: 'Brand new',       icon: Sprout   },
-    { label: 'Some experience', icon: Activity },
-    { label: 'Experienced',     icon: Award    },
+    { label: 'Brand new',       sfSymbol: 'leaf.fill'  },
+    { label: 'Some experience', sfSymbol: 'waveform'   },
+    { label: 'Experienced',     sfSymbol: 'trophy.fill' },
   ] },
   { id: 'struggle', section: 'Your Experience', type: 'select', question: "What's your biggest struggle?", subtitle: 'So I focus where it actually counts.', options: [
-    { label: 'My form',            icon: Camera  },
-    { label: 'Knowing what to do', icon: Compass },
-    { label: 'Staying consistent', icon: Repeat  },
-    { label: 'Gym anxiety',        icon: Shield  },
+    { label: 'My form',            sfSymbol: 'camera.fill'           },
+    { label: 'Knowing what to do', sfSymbol: 'compass.drawing'       },
+    { label: 'Staying consistent', sfSymbol: 'repeat'                },
+    { label: 'Gym anxiety',        sfSymbol: 'shield.fill'           },
   ] },
   { id: 'location', section: 'Your Training', type: 'select', question: 'Where do you train?', subtitle: 'Decides what equipment I plan around.', options: [
-    { label: 'Gym',                   icon: Dumbbell },
-    { label: 'Home with equipment',   icon: HomeIcon },
-    { label: 'Home, bodyweight only', icon: UserIcon },
+    { label: 'Gym',                   sfSymbol: 'dumbbell.fill' },
+    { label: 'Home with equipment',   sfSymbol: 'house.fill'    },
+    { label: 'Home, bodyweight only', sfSymbol: 'person.fill'   },
   ] },
   { id: 'equipment', section: 'Your Training', type: 'multiselect', question: 'What do you have access to?', subtitle: "I'll only pick moves you can actually do.", options: [
-    { label: 'Barbell',          icon: Dumbbell },
-    { label: 'Dumbbells',        icon: Dumbbell },
-    { label: 'Machines',         icon: Settings },
-    { label: 'Resistance bands', icon: Zap      },
-    { label: 'Bench',            icon: Activity },
+    { label: 'Barbell',          sfSymbol: 'dumbbell.fill'                     },
+    { label: 'Dumbbells',        sfSymbol: 'dumbbell.fill'                     },
+    { label: 'Machines',         sfSymbol: 'gearshape.fill'                    },
+    { label: 'Resistance bands', sfSymbol: 'bolt.fill'                         },
+    { label: 'Bench',            sfSymbol: 'figure.strengthtraining.traditional' },
   ], showIf: (a) => a.location !== 'Home, bodyweight only' },
   { id: 'days', section: 'Your Training', type: 'select', question: 'How many days a week can you train?', subtitle: 'Sets your weekly split.', options: [
-    { label: '2 days',  icon: Calendar },
-    { label: '3 days',  icon: Calendar },
-    { label: '4 days',  icon: Calendar },
-    { label: '5+ days', icon: Calendar },
+    { label: '2 days',  sfSymbol: 'calendar' },
+    { label: '3 days',  sfSymbol: 'calendar' },
+    { label: '4 days',  sfSymbol: 'calendar' },
+    { label: '5+ days', sfSymbol: 'calendar' },
   ] },
   { id: 'duration', section: 'Your Training', type: 'select', question: 'How long per session?', subtitle: "I'll size each workout to fit.", options: [
-    { label: '15 min', icon: Clock },
-    { label: '30 min', icon: Clock },
-    { label: '45 min', icon: Clock },
-    { label: '60 min', icon: Clock },
+    { label: '15 min', sfSymbol: 'clock.fill' },
+    { label: '30 min', sfSymbol: 'clock.fill' },
+    { label: '45 min', sfSymbol: 'clock.fill' },
+    { label: '60 min', sfSymbol: 'clock.fill' },
   ] },
   { id: 'notifications', section: 'Reminders', type: 'select', question: 'Want a reminder on training days?', subtitle: 'A quick nudge on the days you train.', options: [
-    { label: 'Yes, remind me', icon: Bell    },
-    { label: 'No thanks',      icon: BellOff },
+    { label: 'Yes, remind me', sfSymbol: 'bell.fill'       },
+    { label: 'No thanks',      sfSymbol: 'bell.slash.fill' },
   ] },
 ];
 
@@ -286,7 +297,7 @@ function BulletItem({ text, index }: { text: string; index: number }) {
   return (
     <Animated.View style={{ opacity, transform: [{ translateY }], flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16 }}>
       <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-        <Check size={12} color={C.bg} strokeWidth={3} />
+        <Sym name="checkmark" size={12} color={C.bg} />
       </View>
       <Text style={{ fontSize: 15, color: C.textPrimary, fontWeight: '500', flex: 1 }}>{text}</Text>
     </Animated.View>
@@ -418,8 +429,8 @@ export default function OnboardingScreen() {
 
   // ── ONBOARDING ────────────────────────────────────────────────────────────
   if (appState === 'onboarding' && currentStep) {
-    const st          = currentStep;
-    const SectionIcon = SECTION_ICONS[st.section] || UserIcon;
+    const st         = currentStep;
+    const sectionSym = SECTION_ICONS[st.section] || 'person.fill';
 
     const header = (
       <View style={s.qh}>
@@ -432,7 +443,9 @@ export default function OnboardingScreen() {
     const sectionHeader = (
       <>
         <View style={s.sectionRow}>
-          <View style={s.sectionIconWrap}><SectionIcon size={14} color={C.textSecondary} /></View>
+          <View style={s.sectionIconWrap}>
+            <Sym name={sectionSym} size={14} color={C.textSecondary} />
+          </View>
           <Text style={s.qs}>{st.section.toUpperCase()}</Text>
         </View>
         <Text style={s.qq}>{st.question}</Text>
@@ -517,16 +530,16 @@ export default function OnboardingScreen() {
           <Animated.View style={{ opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
             {sectionHeader}
             {(st.options || []).map((o, i) => {
-              const sel  = isSel(o.label);
-              const Icon = o.icon || UserIcon;
+              const sel = isSel(o.label);
+              const sym = o.sfSymbol || 'person.fill';
               return (
                 <AnimatedOption key={`${st.id}-${o.label}`} index={i} style={[s.opt, sel && s.optSel]} onPress={() => handleSelect(o.label)}>
                   <View style={[s.optIcon, sel && s.optIconSel]}>
-                    <Icon size={18} color={C.textPrimary} />
+                    <Sym name={sym} size={18} color={C.textPrimary} />
                   </View>
                   <Text style={[s.optTxt, sel && s.optTxtSel]}>{o.label}</Text>
                   <View style={[s.radio, sel && s.radioSel]}>
-                    {sel && <Check size={13} color={C.bg} strokeWidth={3} />}
+                    {sel && <Sym name="checkmark" size={13} color={C.bg} />}
                   </View>
                 </AnimatedOption>
               );
@@ -585,7 +598,9 @@ export default function OnboardingScreen() {
       <View style={[s.c, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
           <View style={s.sectionRow}>
-            <View style={s.sectionIconWrap}><TrendingUp size={14} color={C.textSecondary} /></View>
+            <View style={s.sectionIconWrap}>
+              <Sym name="chart.line.uptrend.xyaxis" size={14} color={C.textSecondary} />
+            </View>
             <Text style={s.qs}>YOUR 8-WEEK PROJECTION</Text>
           </View>
           <Text style={s.qq}>Here's what training {daysNum} days a week looks like.</Text>
@@ -607,7 +622,9 @@ export default function OnboardingScreen() {
       <View style={[s.c, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         <ScrollView contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
           <View style={s.sectionRow}>
-            <View style={s.sectionIconWrap}><Check size={14} color={C.textSecondary} /></View>
+            <View style={s.sectionIconWrap}>
+              <Sym name="checkmark" size={14} color={C.textSecondary} />
+            </View>
             <Text style={s.qs}>YOUR PLAN IS READY</Text>
           </View>
           <Text style={s.qq}>Here's your starting point.</Text>
@@ -622,7 +639,10 @@ export default function OnboardingScreen() {
                   <Text style={s.exScheme}>{ex.scheme}</Text>
                 </View>
                 {ex.formCheck && (
-                  <View style={s.fcTag}><Camera size={11} color={C.textSecondary} /><Text style={s.fcTxt}>form-check</Text></View>
+                  <View style={s.fcTag}>
+                    <Sym name="camera.fill" size={11} color={C.textSecondary} />
+                    <Text style={s.fcTxt}>form-check</Text>
+                  </View>
                 )}
               </View>
             ))}
