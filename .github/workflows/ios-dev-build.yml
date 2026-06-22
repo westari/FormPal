@@ -16,25 +16,39 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Select Xcode 26 (verify)
+      - name: List available Xcode installations
+        run: ls /Applications/ | grep -i xcode || true
+
+      - name: Select newest Xcode 26.x available
+        # Probe from newest to oldest so we land on the version whose iOS platform
+        # is most likely already installed on this runner image.
         run: |
           XCODE_26=""
-          for path in /Applications/Xcode_26.app \
-                      /Applications/Xcode_26.0.app \
+          for path in /Applications/Xcode_26.5.app \
+                      /Applications/Xcode_26.4.app \
+                      /Applications/Xcode_26.3.app \
+                      /Applications/Xcode_26.2.app \
                       /Applications/Xcode_26.1.app \
-                      /Applications/Xcode_26.2.app; do
+                      /Applications/Xcode_26.0.app \
+                      /Applications/Xcode_26.app; do
             if [ -d "$path" ]; then XCODE_26="$path"; break; fi
           done
           if [ -n "$XCODE_26" ]; then
             sudo xcode-select -s "$XCODE_26/Contents/Developer"
-            echo "Selected $XCODE_26"
+            echo "Selected: $XCODE_26"
           else
             echo "WARNING: no Xcode_26*.app found — using runner default"
-            ls /Applications/ | grep -i xcode || true
           fi
 
       - name: Confirm Xcode version
         run: xcodebuild -version
+
+      - name: Ensure iOS device platform is installed
+        # Downloads the iOS device platform SDK for the selected Xcode version.
+        # Required for xcodebuild to archive for generic/platform=iOS (real device).
+        # If the platform is already present this is a fast no-op (~30s).
+        # If missing this downloads ~8 GB — allowed by the 90-min timeout.
+        run: sudo xcodebuild -downloadPlatform iOS
 
       - name: Confirm simulator runtimes available
         run: xcrun simctl list runtimes
