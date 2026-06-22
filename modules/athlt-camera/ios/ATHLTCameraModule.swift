@@ -25,59 +25,69 @@ final class ATHLTSessionHolder {
 
 // ─── SquatAnalyzer ─────────────────────────────────────────────────────────────
 //
-// Expert 3-phase state machine: TOP → INTERMEDIATE → (optional) BOTTOM → TOP.
-// Adapted from the LearnOpenCV / MediaPipe fitness-trainer methodology.
+// Expert 3-phase state machine with ready gate and back-lean form check.
 //
-// Phase definitions
-//   TOP:          knee angle > topThreshold (~160°)   — person is standing.
-//   INTERMEDIATE: knee angle in (bottomThreshold … intermediateEntryAngle) (100°–150°).
-//   BOTTOM:       knee angle < bottomThreshold (~100°) — deep/parallel squat.
+// READY GATE
+//   Rep counting is suppressed until the person has been detected standing stably
+//   (knee angle ≥ topThreshold) for a continuous readyStandingDuration seconds.
+//   Walking into frame, partial visibility, or mid-movement during setup cannot
+//   trigger reps. If the person leaves frame for > inactivityTimeout, the gate
+//   resets and they must re-stabilise before counting resumes.
 //
-// Rep counting rules
-//   Any cycle that clears INTERMEDIATE entry (knee < 150°) and then returns to TOP
-//   counts as a rep, regardless of whether the person reached BOTTOM:
-//     • BOTTOM reached  → good=true  "good depth"
-//     • BOTTOM not reached → good=false "too shallow — go deeper"
-//   This fixes the silent-reject bug where shallow attempts were ignored entirely.
+// PHASE MACHINE  (only runs when isReady == true)
+//   TOP:          knee angle > topThreshold (~160°)
+//   INTERMEDIATE: knee angle in (bottomThreshold … intermediateEntryAngle) (100°–150°)
+//   BOTTOM:       knee angle < bottomThreshold (~100°)
 //
-// Movement gate
-//   enteredIntermediate must be set (knee crossed below 150°) before the return
-//   to TOP triggers evaluation. Tiny knee jitter that never clears 150° is ignored.
+//   Rep is counted on any INTERMEDIATE entry + return to TOP:
+//     • BOTTOM reached + back lean OK  → good=true  "good depth"
+//     • BOTTOM reached + back lean bad → good=false "chest up — keep your back straight"
+//     • BOTTOM not reached             → good=false "too shallow — go deeper"
+//       (if also bad lean → lean cue takes priority over depth cue)
 //
-// Inactivity reset
-//   If no valid body-pose is received for > inactivityTimeout seconds while a rep
-//   cycle is in progress, the cycle is silently discarded and phase resets to TOP.
-//   This handles the person leaving frame mid-rep, camera occlusion, etc.
+// BACK LEAN CHECK
+//   Computed as the angle between the shoulder→hip torso line and vertical.
+//   0° = perfectly upright; ~30-45° is normal squat forward lean; >backLeanThreshold
+//   is flagged. Max back angle is tracked from INTERMEDIATE entry to rep completion.
+//   NSLog prints back angle per rep for on-device threshold tuning.
 //
-// NOTE: All angle thresholds are heuristic starting points.
-//       On-device testing is required — expect to tune these per camera angle,
-//       body proportions, and lighting after initial deployment.
+// NOTE: All angle/time thresholds are heuristic starting points requiring on-device
+//       calibration — camera height, angle, and individual body proportions all affect
+//       the measured values.
 
 final class SquatAnalyzer {
 
     // MARK: – Tuning constants
 
-    static let jointConfidenceMin: Float    = 0.30
+    static let jointConfidenceMin: Float     = 0.30
     /// Knee angle (°) above which the person is in the TOP phase (standing).
-    static let topThreshold: Double         = 160.0
+    static let topThreshold: Double          = 160.0
     /// Knee angle (°) below which INTERMEDIATE entry is registered (descent start).
     static let intermediateEntryAngle: Double = 150.0
     /// Knee angle (°) below which the person is in the BOTTOM phase (good depth).
-    static let bottomThreshold: Double      = 100.0
+    static let bottomThreshold: Double       = 100.0
     /// Seconds without a valid pose while mid-cycle before the cycle is reset.
-    static let inactivityTimeout: Double    = 2.5
+    static let inactivityTimeout: Double     = 2.5
+    /// Continuous seconds in standing position required before reps are counted.
+    static let readyStandingDuration: Double = 1.5
+    /// Torso-vertical angle (°) above which a rep is flagged as excessive back lean.
+    /// ~30-45° is normal squat lean; 50° is conservative — tune down if too many false flags.
+    static let backLeanThreshold: Double     = 50.0
 
     // MARK: – Public read-only state
 
-    private(set) var reps: Int = 0
-    private(set) var goodReps: Int = 0
+    private(set) var reps: Int          = 0
+    private(set) var goodReps: Int      = 0
     private(set) var lastKneeAngle: Double = 180.0
-    private(set) var state: String = "waiting for person"
+    private(set) var lastBackAngle: Double = 0.0
+    private(set) var isReady: Bool      = false
+    private(set) var state: String      = "Get into frame"
 
     struct RepResult {
         let good: Bool
         let reason: String
         let depthAngle: Double   // min knee angle reached this rep
+        let backAngle:  Double   // max torso-vertical angle reached this rep
     }
 
     // MARK: – Private
@@ -85,33 +95,45 @@ final class SquatAnalyzer {
     private enum Phase { case top, intermediate, bottom }
     private var phase: Phase = .top
 
-    private var enteredIntermediate = false  // cleared to true when knee < 150° in this cycle
-    private var reachedBottom       = false  // cleared to true when knee < 100° in this cycle
-    private var minAngleThisRep: Double = 180.0
+    private var enteredIntermediate  = false
+    private var reachedBottom        = false
+    private var minAngleThisRep: Double  = 180.0
+    private var maxBackAngleThisRep: Double = 0.0
 
-    private var lastPoseTimestamp: Double = 0.0
+    private var lastPoseTimestamp: Double  = 0.0
+    private var stableStandingStart: Double? = nil
 
     // MARK: – Session control
 
     func reset() {
-        reps               = 0
-        goodReps           = 0
-        lastKneeAngle      = 180.0
-        state              = "waiting for person"
-        phase              = .top
-        lastPoseTimestamp  = 0.0
+        reps                  = 0
+        goodReps              = 0
+        lastKneeAngle         = 180.0
+        lastBackAngle         = 0.0
+        isReady               = false
+        stableStandingStart   = nil
+        state                 = "Get into frame"
+        phase                 = .top
+        lastPoseTimestamp     = 0.0
         resetCycle()
     }
 
     func notePersonMissing(timestamp: Double) {
         state = "no person / legs not fully visible"
-        guard lastPoseTimestamp > 0, enteredIntermediate else { return }
+        stableStandingStart = nil   // interrupt any in-progress ready accumulation
+        guard lastPoseTimestamp > 0 else { return }
         let elapsed = timestamp - lastPoseTimestamp
-        if elapsed > Self.inactivityTimeout {
-            NSLog("[SquatAnalyzer] INACTIVITY RESET after %.1fs (phase was %@)", elapsed, phaseLabel)
-            resetCycle()
-            phase = .top
+        guard elapsed > Self.inactivityTimeout else { return }
+
+        if enteredIntermediate {
+            NSLog("[SquatAnalyzer] INACTIVITY RESET — mid-cycle after %.1fs", elapsed)
         }
+        if isReady {
+            NSLog("[SquatAnalyzer] READY RESET — person absent %.1fs", elapsed)
+            isReady = false
+        }
+        resetCycle()
+        phase = .top
     }
 
     // MARK: – Ingestion — returns a RepResult on the frame a rep completes, nil otherwise.
@@ -133,6 +155,33 @@ final class SquatAnalyzer {
 
         let kneeAngle = kneeAngles.reduce(0, +) / Double(kneeAngles.count)
         lastKneeAngle = kneeAngle
+
+        // ── Back/torso angle ──────────────────────────────────────────────────
+        if let ba = torsoAngle(pose: pose) {
+            lastBackAngle = ba
+            // Only accumulate during active squat cycle (after descent begins)
+            if enteredIntermediate && ba > maxBackAngleThisRep { maxBackAngleThisRep = ba }
+        }
+
+        // ── Ready gate ────────────────────────────────────────────────────────
+        if !isReady {
+            if kneeAngle >= Self.topThreshold {
+                if stableStandingStart == nil { stableStandingStart = timestamp }
+                let elapsed = timestamp - (stableStandingStart ?? timestamp)
+                state = String(format: "Stand still… %.0f°  (%.1f s)", kneeAngle, elapsed)
+                if elapsed >= Self.readyStandingDuration {
+                    isReady = true
+                    stableStandingStart = nil
+                    NSLog("[SquatAnalyzer] → READY after %.1f s stable standing", elapsed)
+                }
+            } else {
+                stableStandingStart = nil
+                state = String(format: "Get into frame (knee %.0f°)", kneeAngle)
+            }
+            return nil  // no rep counting until ready
+        }
+
+        // ── Min knee angle (only while cycling) ──────────────────────────────
         if kneeAngle < minAngleThisRep { minAngleThisRep = kneeAngle }
 
         // ── 3-phase state machine ─────────────────────────────────────────────
@@ -149,23 +198,19 @@ final class SquatAnalyzer {
         case .intermediate:
             state = String(format: "INTERMEDIATE (%.0f°, min %.0f°)", kneeAngle, minAngleThisRep)
             if kneeAngle < Self.bottomThreshold {
-                // Reached full depth
                 phase = .bottom
                 reachedBottom = true
                 NSLog("[SquatAnalyzer] → BOTTOM (%.0f°)", kneeAngle)
             } else if kneeAngle > Self.topThreshold {
-                // Returned to standing without reaching bottom → shallow rep
                 return evaluateAndReset()
             }
 
         case .bottom:
             state = String(format: "BOTTOM (knee %.0f°)", kneeAngle)
             if kneeAngle > Self.bottomThreshold {
-                // Ascending back through intermediate range
                 phase = .intermediate
             }
             if kneeAngle > Self.topThreshold {
-                // Returned to standing — good rep (hit bottom)
                 return evaluateAndReset()
             }
         }
@@ -183,31 +228,62 @@ final class SquatAnalyzer {
         defer { resetCycle(); phase = .top }
 
         guard enteredIntermediate else {
-            // Noise: never crossed into intermediate — ignore
             NSLog("[SquatAnalyzer] REJECT — noise, never entered INTERMEDIATE (min=%.0f°)", minAngleThisRep)
             return nil
         }
 
         reps += 1
-        let good = reachedBottom
+        let badDepth = !reachedBottom
+        let badLean  = maxBackAngleThisRep > Self.backLeanThreshold
+        let good     = !badDepth && !badLean
         if good { goodReps += 1 }
 
-        NSLog("[SquatAnalyzer] REP %-6@ depth=%.0f° bottomReached=%@ (%d good / %d total)",
-              good ? "GOOD" : "SHAL", minAngleThisRep,
-              reachedBottom ? "YES" : "NO",
-              goodReps, reps)
+        // Lean takes priority over depth as a coaching cue
+        let reason: String
+        switch (badDepth, badLean) {
+        case (_, true):   reason = "chest up — keep your back straight"
+        case (true, _):   reason = "too shallow — go deeper"
+        default:          reason = "good depth"
+        }
+
+        NSLog("[SquatAnalyzer] REP %-6@ depth=%.0f° backAngle=%.0f° lean=%-3@ (%d good / %d total)",
+              good ? "GOOD" : "BAD", minAngleThisRep, maxBackAngleThisRep,
+              badLean ? "YES" : "NO", goodReps, reps)
 
         return RepResult(
             good:       good,
-            reason:     good ? "good depth" : "too shallow — go deeper",
-            depthAngle: minAngleThisRep
+            reason:     reason,
+            depthAngle: minAngleThisRep,
+            backAngle:  maxBackAngleThisRep
         )
     }
 
     private func resetCycle() {
-        enteredIntermediate = false
-        reachedBottom       = false
-        minAngleThisRep     = 180.0
+        enteredIntermediate  = false
+        reachedBottom        = false
+        minAngleThisRep      = 180.0
+        maxBackAngleThisRep  = 0.0
+    }
+
+    // ── Torso/back angle helpers ──────────────────────────────────────────────
+
+    /// Angle (°) between the torso line (hip → shoulder) and vertical.
+    /// Returns nil when neither shoulder+hip pair is visible.
+    /// 0° = perfectly upright, ~30-45° = normal squat lean, > backLeanThreshold = flag.
+    private func torsoAngle(pose: VNHumanBodyPoseObservation) -> Double? {
+        var angles: [Double] = []
+        if let s = point(pose, .leftShoulder),  let h = point(pose, .leftHip)  { angles.append(verticalAngle(from: h, to: s)) }
+        if let s = point(pose, .rightShoulder), let h = point(pose, .rightHip) { angles.append(verticalAngle(from: h, to: s)) }
+        guard !angles.isEmpty else { return nil }
+        return angles.reduce(0, +) / Double(angles.count)
+    }
+
+    /// Angle (°) between the vector (bottom → top) and straight vertical.
+    /// Uses atan2 for numerical stability. Ignores lean direction (abs of horizontal).
+    private func verticalAngle(from bottom: CGPoint, to top: CGPoint) -> Double {
+        let dx = abs(Double(top.x - bottom.x))
+        let dy = Double(top.y - bottom.y)       // positive = top is above bottom (Vision y-up)
+        return atan2(dx, max(dy, 0.001)) * 180.0 / .pi
     }
 
     private func point(_ pose: VNHumanBodyPoseObservation,
@@ -289,8 +365,6 @@ public class ATHLTCameraModule: Module {
     private let debugStatsThrottle: Double = 1.0
 
     // MARK: – Recording / stopTracking handshake
-    // stopTracking holds the promise here; it is resolved by handleMovieFinished()
-    // (or immediately if no recording was in progress).
     private var pendingStopPromise: Promise?
 
     // MARK: – Module definition ─────────────────────────────────────────────────
@@ -310,7 +384,6 @@ public class ATHLTCameraModule: Module {
 
         AsyncFunction("stopSession") { (promise: Promise) in
             self.sessionQueue.async {
-                // Abort any in-flight recording without waiting for its delegate
                 if let mov = self.movieOutput, mov.isRecording { mov.stopRecording() }
 
                 self.videoOutput?.setSampleBufferDelegate(nil, queue: nil)
@@ -324,7 +397,6 @@ public class ATHLTCameraModule: Module {
                 self.inferenceQueue.async {
                     self.isTracking  = false
                     self.currentMode = "idle"
-                    // Resolve any dangling stopTracking promise
                     if let p = self.pendingStopPromise {
                         let r = self.squatAnalyzer.reps; let gr = self.squatAnalyzer.goodReps
                         p.resolve(["reps": r, "goodReps": gr, "videoUri": NSNull()])
@@ -368,7 +440,6 @@ public class ATHLTCameraModule: Module {
                 self.personDetected      = false
                 NSLog("[GymCamera] tracking started")
 
-                // Begin video recording
                 self.sessionQueue.async {
                     guard let movieOut = self.movieOutput,
                           let movieDel = self.movieDelegate else {
@@ -391,7 +462,6 @@ public class ATHLTCameraModule: Module {
                 self.currentMode = "idle"
 
                 if let movieOut = self.movieOutput, movieOut.isRecording {
-                    // Hold promise; resolve in handleMovieFinished once file is written
                     self.pendingStopPromise = promise
                     self.sessionQueue.async { movieOut.stopRecording() }
                 } else {
@@ -414,7 +484,6 @@ public class ATHLTCameraModule: Module {
             if let err = error as NSError?,
                !(err.domain == AVFoundationErrorDomain &&
                  err.code   == AVError.Code.operationInterrupted.rawValue) {
-                // Real error (not just "recording was stopped")
                 NSLog("[GymCamera] recording error: %@", err.localizedDescription)
                 dict["videoUri"] = NSNull()
             } else {
@@ -471,7 +540,6 @@ public class ATHLTCameraModule: Module {
             return
         }
 
-        // ── Vision frame output ───────────────────────────────────────────────
         let dataOutput = AVCaptureVideoDataOutput()
         dataOutput.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
         dataOutput.alwaysDiscardsLateVideoFrames = true
@@ -487,7 +555,6 @@ public class ATHLTCameraModule: Module {
         }
         session.addOutput(dataOutput)
 
-        // ── Movie recording output ────────────────────────────────────────────
         let movieOut = AVCaptureMovieFileOutput()
         let movieDel = ATHLTMovieDelegate()
         movieDel.module = self
@@ -497,10 +564,9 @@ public class ATHLTCameraModule: Module {
         } else {
             NSLog("[GymCamera] WARNING: could not add movie output — recording disabled")
         }
-        movieOutput  = movieOut
+        movieOutput   = movieOut
         movieDelegate = movieDel
 
-        // ── Portrait orientation (keeps full body in frame for body-pose) ─────
         if let conn = dataOutput.connection(with: .video) {
             if conn.isVideoOrientationSupported { conn.videoOrientation = .portrait }
             if conn.isVideoMirroringSupported   { conn.isVideoMirrored  = (position == .front) }
@@ -605,12 +671,14 @@ public class ATHLTCameraModule: Module {
     // MARK: – Rep event ────────────────────────────────────────────────────────
 
     private func emitRepEvent(_ rep: SquatAnalyzer.RepResult) {
-        NSLog("[GymCamera] REP %@ — %d good / %d total (depth %.0f°)",
-              rep.good ? "GOOD ✓" : "SHALLOW ✗", squatAnalyzer.goodReps, squatAnalyzer.reps, rep.depthAngle)
+        NSLog("[GymCamera] REP %@ — %d good / %d total (depth %.0f° back %.0f°)",
+              rep.good ? "GOOD ✓" : "BAD ✗", squatAnalyzer.goodReps, squatAnalyzer.reps,
+              rep.depthAngle, rep.backAngle)
         sendEvent("onRepDetected", [
             "good":       rep.good,
             "reason":     rep.reason,
             "depthAngle": rep.depthAngle,
+            "backAngle":  rep.backAngle,
             "reps":       squatAnalyzer.reps,
             "goodReps":   squatAnalyzer.goodReps,
             "timestamp":  Date().timeIntervalSince1970 * 1000.0,
@@ -626,6 +694,8 @@ public class ATHLTCameraModule: Module {
         sendEvent("onDebugStats", [
             "personDetected":      personDetected,
             "kneeAngle":           squatAnalyzer.lastKneeAngle,
+            "backAngle":           squatAnalyzer.lastBackAngle,
+            "ready":               squatAnalyzer.isReady,
             "phase":               squatAnalyzer.state,
             "reps":                squatAnalyzer.reps,
             "goodReps":            squatAnalyzer.goodReps,

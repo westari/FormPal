@@ -1,9 +1,8 @@
 /**
- * athlt-camera — JS bridge for the (gutted) ATHLTCamera native module.
+ * athlt-camera — JS bridge for the ATHLTCamera native module.
  *
- * Now drives Vision body-pose squat detection. Hoop/ball/make-miss + CoreML model
- * are gone. loadModel/isModelLoaded are kept as JS no-ops so any copied screen that
- * still calls them keeps working — there is no model to load anymore.
+ * Drives Vision body-pose squat detection with 3-phase state machine,
+ * ready gate (stable standing before counting), and back-lean form check.
  */
 
 import { requireNativeModule, EventEmitter, requireNativeViewManager } from 'expo-modules-core';
@@ -14,9 +13,10 @@ import type { ViewStyle } from 'react-native';
 
 /** Emitted once per completed rep. */
 export interface RepEvent {
-  good: boolean;        // true = good depth, false = too shallow
-  reason: string;       // "good depth" | "too shallow — go deeper"
+  good: boolean;        // true = good form, false = too shallow or bad back lean
+  reason: string;       // "good depth" | "too shallow — go deeper" | "chest up — keep your back straight"
   depthAngle: number;   // min knee angle reached this rep (deg)
+  backAngle:  number;   // max torso-vertical angle reached this rep (deg); tune backLeanThreshold with this
   reps: number;         // total reps this session
   goodReps: number;     // good reps this session
   timestamp: number;    // ms
@@ -25,12 +25,14 @@ export interface RepEvent {
 /** Emitted ~once per second while tracking. */
 export interface DebugStatsEvent {
   personDetected: boolean;
-  kneeAngle: number;          // latest averaged knee angle (deg)
-  phase: string;             // human-readable state ("standing (knee 172°)", etc.)
+  kneeAngle: number;           // latest averaged knee angle (deg)
+  backAngle: number;           // latest torso-vertical angle (deg)
+  ready: boolean;              // true once person has stood stably for ~1.5s — reps counted only when true
+  phase: string;               // human-readable analyzer state
   reps: number;
   goodReps: number;
-  totalFramesReceived: number; // 0 = camera delegate not firing
-  totalFramesAnalyzed: number; // 0 + received>0 = analysis gate blocking
+  totalFramesReceived: number;
+  totalFramesAnalyzed: number;
 }
 
 export interface CameraStateEvent {

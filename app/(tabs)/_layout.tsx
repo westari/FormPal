@@ -15,6 +15,12 @@ export default function TabLayout() {
           <Label>Train</Label>
         </NativeTabs.Trigger>
 
+        {/* Center action tab — sf prop is the only reliable rendering path; no label */}
+        <NativeTabs.Trigger name="plus">
+          <Icon sf={'plus.circle.fill' as any} />
+          <Label hidden />
+        </NativeTabs.Trigger>
+
         <NativeTabs.Trigger name="progress">
           <Icon sf={'chart.line.uptrend.xyaxis' as any} />
           <Label>Progress</Label>
