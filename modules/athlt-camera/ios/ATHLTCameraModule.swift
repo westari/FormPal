@@ -28,17 +28,18 @@ final class ATHLTSessionHolder {
 // Reads a Vision body-pose observation, computes knee angle (hip→knee→ankle),
 // and runs a standing↔descending state machine to count reps and judge depth.
 //
-// Rep gates — BOTH must pass before a rep is counted:
-//   1. Depth:    knee angle reached ≤ minRepDepthAngle (120°)
-//                Filters knee-forward bobs and light hops that barely bend.
-//   2. Hip drop: hips dropped ≥ minHipDropFraction of hip-to-ankle distance.
-//                Normalised by body size so it works at any camera distance.
-//                Filters knee-forward bobs (hips barely move) and light jumps.
+// MOVEMENT GATE (both must pass to count anything — silence noise/bobs):
+//   1. Knee bend:  minAngleThisRep < descentStartAngle (150°)
+//                  Guaranteed by state machine entry but checked explicitly.
+//   2. Hip drop:   hips dropped ≥ minHipDropFraction of hip-to-ankle distance.
+//                  Normalised by body size; filters knee bobs (< 5%) and fidgets.
+//   If either fails → silent reject (no event emitted to JS).
 //
-// Good vs shallow distinction (only after both gates pass):
-//   - ≤ goodDepthAngle (100°)  → good rep  ✓
-//   - 101°–120°                → counts but flagged "go deeper"
-//   - > 120°                   → rejected entirely (not counted)
+// Rep quality (only after gate passes — every gate-pass counts as a rep):
+//   - minAngleThisRep ≤ goodDepthAngle (100°)  → good rep  ✓
+//   - minAngleThisRep > goodDepthAngle           → shallow / "go deeper"  ✗
+//
+// Both good AND shallow reps increment reps; only good increments goodReps.
 
 final class SquatAnalyzer {
 
@@ -51,16 +52,13 @@ final class SquatAnalyzer {
     static let standingKneeAngle: Double = 160.0
 
     /// Knee angle (deg) below which a descent has begun (hysteresis vs standing).
+    /// Also used as the movement-gate knee-bend threshold.
     static let descentStartAngle: Double = 150.0
 
     /// Min knee angle (deg) for a GOOD rep — ~parallel is 90°, 100° gives margin.
     static let goodDepthAngle: Double = 100.0
 
-    /// A rep only counts if the knee angle reached this or below.
-    /// 120° requires a real squat; shallower bobs/hops are rejected outright.
-    static let minRepDepthAngle: Double = 120.0
-
-    /// Hip must drop at least this fraction of hip-to-ankle distance to count.
+    /// Hip must drop at least this fraction of hip-to-ankle distance to pass gate.
     /// 0.12 = 12% — e.g. if hip-to-ankle span is 0.50 normalised units,
     /// hips must lower by ≥ 0.06 units. Filters bobs (< 5%) and light hops.
     static let minHipDropFraction: Double = 0.12
@@ -77,7 +75,7 @@ final class SquatAnalyzer {
         let good: Bool
         let reason: String
         let depthAngle: Double
-        let hipDrop: Double   // normalised hip drop at rep completion
+        let hipDrop: Double
     }
 
     // MARK: – Private state
@@ -86,26 +84,26 @@ final class SquatAnalyzer {
     private var phase: Phase = .standing
     private var minAngleThisRep: Double = 180.0
 
-    // Vision coordinate system: Y=0 at bottom of image, Y=1 at top.
+    // Vision coordinate system: Y=0 at bottom, Y=1 at top.
     // Standing: hipY is high (~0.65–0.80). Squatting: hipY decreases.
     // hip-to-ankle distance = standingHipY − ankleY (positive, ~0.45–0.65).
-    private var standingHipY: Double      = -1.0   // updated each standing frame
-    private var standingHipToAnkle: Double = 0.0   // updated each standing frame
-    private var minHipYThisRep: Double    = 1.0    // lowest hip Y seen during descent
+    private var standingHipY: Double       = -1.0
+    private var standingHipToAnkle: Double = 0.0
+    private var minHipYThisRep: Double     = 1.0
 
     // MARK: – Session control
 
     func reset() {
-        reps              = 0
-        goodReps          = 0
-        lastKneeAngle     = 180.0
-        lastHipDrop       = 0.0
-        state             = "waiting for person"
-        phase             = .standing
-        minAngleThisRep   = 180.0
-        standingHipY      = -1.0
+        reps               = 0
+        goodReps           = 0
+        lastKneeAngle      = 180.0
+        lastHipDrop        = 0.0
+        state              = "waiting for person"
+        phase              = .standing
+        minAngleThisRep    = 180.0
+        standingHipY       = -1.0
         standingHipToAnkle = 0.0
-        minHipYThisRep    = 1.0
+        minHipYThisRep     = 1.0
     }
 
     func notePersonMissing() {
@@ -152,8 +150,7 @@ final class SquatAnalyzer {
         case .standing:
             state = String(format: "standing (knee %.0f°)", kneeAngle)
 
-            // Continuously refresh standing reference so it tracks the actual neutral
-            // position (handles camera repositioning between sets).
+            // Continuously refresh standing reference (handles camera moves between sets).
             if hasHipAnkle && currentHipY > currentAnkleY {
                 standingHipY       = currentHipY
                 standingHipToAnkle = currentHipY - currentAnkleY
@@ -162,36 +159,38 @@ final class SquatAnalyzer {
             if kneeAngle < Self.descentStartAngle {
                 phase           = .descending
                 minAngleThisRep = kneeAngle
-                // Initialise minHipY to current hip position at descent start.
                 minHipYThisRep  = (currentHipY > 0) ? currentHipY : standingHipY
             }
 
         case .descending:
-            if kneeAngle    < minAngleThisRep { minAngleThisRep = kneeAngle }
+            if kneeAngle < minAngleThisRep   { minAngleThisRep = kneeAngle }
             if hasHipAnkle && currentHipY < minHipYThisRep { minHipYThisRep = currentHipY }
             state = String(format: "descending (min %.0f°)", minAngleThisRep)
 
             if kneeAngle > Self.standingKneeAngle {
-                // ── Person returned to standing — evaluate both gates ─────────────
+                // ── Person returned to standing — evaluate movement gate ───────────
 
-                // Gate 1: depth
-                let passedDepth = minAngleThisRep <= Self.minRepDepthAngle
+                // Gate 1: knee bent meaningfully (state machine already ensures this,
+                //         but we check explicitly so the reject log is accurate).
+                let passedKneeBend = minAngleThisRep < Self.descentStartAngle
 
-                // Gate 2: hip drop (normalised by body size)
+                // Gate 2: hip dropped by a meaningful fraction of leg length.
                 let hipDrop: Double
                 if standingHipY > 0 && standingHipToAnkle > 0.01 && minHipYThisRep < standingHipY {
                     hipDrop = (standingHipY - minHipYThisRep) / standingHipToAnkle
                 } else {
-                    // No valid standing reference yet — don't count
+                    // No valid standing reference yet — reject quietly.
                     hipDrop = 0.0
                 }
                 lastHipDrop = hipDrop
-                let passedHip = hipDrop >= Self.minHipDropFraction
+                let passedHipDrop = hipDrop >= Self.minHipDropFraction
 
-                if passedDepth && passedHip {
+                if passedKneeBend && passedHipDrop {
+                    // ── Real squat attempt — always count it, then judge depth ─────
                     reps += 1
                     let good = minAngleThisRep <= Self.goodDepthAngle
                     if good { goodReps += 1 }
+
                     let result = RepResult(
                         good:       good,
                         reason:     good ? "good depth" : "too shallow — go deeper",
@@ -200,16 +199,20 @@ final class SquatAnalyzer {
                     )
                     NSLog("[SquatAnalyzer] REP %-6@ depth=%.0f° hipDrop=%.2f (%d good / %d total)",
                           good ? "GOOD" : "SHAL", minAngleThisRep, hipDrop, goodReps, reps)
+
                     phase           = .standing
                     minAngleThisRep = 180.0
                     minHipYThisRep  = 1.0
                     return result
+
                 } else {
-                    NSLog("[SquatAnalyzer] REJECT depth=%.0f° (need≤%.0f°) hipDrop=%.2f (need≥%.2f) passDepth=%@ passHip=%@",
-                          minAngleThisRep, Self.minRepDepthAngle,
+                    // ── Movement gate failed — silent reject, no event to JS ───────
+                    NSLog("[SquatAnalyzer] REJECT kneeBend=%.0f° (need<%.0f°) hipDrop=%.2f (need≥%.2f) passKnee=%@ passHip=%@",
+                          minAngleThisRep, Self.descentStartAngle,
                           hipDrop, Self.minHipDropFraction,
-                          passedDepth ? "YES" : "NO",
-                          passedHip   ? "YES" : "NO")
+                          passedKneeBend ? "YES" : "NO",
+                          passedHipDrop  ? "YES" : "NO")
+
                     phase           = .standing
                     minAngleThisRep = 180.0
                     minHipYThisRep  = 1.0
@@ -280,10 +283,10 @@ public class ATHLTCameraModule: Module {
 
     // MARK: – Diagnostics
     private var diagnosticMode = false
-    private var totalFramesReceived: Int = 0   // sessionQueue — camera-alive indicator
-    private var totalFramesAnalyzed: Int = 0   // inferenceQueue — analysis-ran indicator
+    private var totalFramesReceived: Int = 0
+    private var totalFramesAnalyzed: Int = 0
     private var lastDebugStatsTime: Double = 0.0
-    private let debugStatsThrottle: Double = 1.0   // once per second
+    private let debugStatsThrottle: Double = 1.0
 
     // MARK: – Module definition ─────────────────────────────────────────────────
 
@@ -318,7 +321,6 @@ public class ATHLTCameraModule: Module {
             }
         }
 
-        // setMode kept as a thin control: "idle" stops analysis, "tracking" starts it.
         AsyncFunction("setMode") { (mode: String, promise: Promise) in
             self.inferenceQueue.async {
                 self.currentMode = mode
@@ -420,8 +422,7 @@ public class ATHLTCameraModule: Module {
         }
         session.addOutput(output)
 
-        // PORTRAIT: a standing/squatting body is taller than wide — portrait keeps the
-        // whole person (head → ankles) in frame, which body-pose needs.
+        // PORTRAIT: keeps head-to-ankles in frame, which body-pose needs.
         if let conn = output.connection(with: .video) {
             if conn.isVideoOrientationSupported { conn.videoOrientation = .portrait }
             if conn.isVideoMirroringSupported   { conn.isVideoMirrored  = (position == .front) }
