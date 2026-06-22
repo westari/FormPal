@@ -36,13 +36,6 @@ jobs:
       - name: Confirm Xcode version
         run: xcodebuild -version
 
-      - name: Download iOS simulator runtime
-        # EAS local build's toolchain checks for an available iOS simulator runtime
-        # before invoking fastlane, even for device (non-simulator) builds.
-        # This downloads the iOS 26 runtime that matches the selected Xcode version.
-        # Can take 15-30 min on a cold runner — timeout bumped to 90 min above.
-        run: sudo xcodebuild -downloadPlatform iOS
-
       - name: Confirm simulator runtimes available
         run: xcrun simctl list runtimes
 
@@ -60,6 +53,9 @@ jobs:
         run: npm install --legacy-peer-deps
 
       - name: Build iOS dev client (local)
+        env:
+          EAS_SKIP_AUTO_FINGERPRINT: "1"
+          NODE_OPTIONS: "--max-old-space-size=8192"
         run: eas build --platform ios --profile development --local --non-interactive --output ./build.ipa
 
       - name: Upload build artifact
