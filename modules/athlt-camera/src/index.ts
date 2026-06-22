@@ -46,6 +46,7 @@ export interface StartSessionResult {
 export interface SessionStats {
   reps: number;
   goodReps: number;
+  videoUri: string | null;
 }
 
 // ─── Native module resolution ─────────────────────────────────────────────────
@@ -120,7 +121,7 @@ export async function startTracking(): Promise<void> {
 }
 
 export async function stopTracking(): Promise<SessionStats> {
-  if (!ATHLTCameraNative) return { reps: 0, goodReps: 0 };
+  if (!ATHLTCameraNative) return { reps: 0, goodReps: 0, videoUri: null };
   return ATHLTCameraNative.stopTracking();
 }
 

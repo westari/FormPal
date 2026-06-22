@@ -36,20 +36,18 @@ const C = {
 };
 
 // ─── Rep feedback ─────────────────────────────────────────────────────────────
-// Good: dark green filled disc, lighter green ring sweep, white checkmark
 const FB_GOOD_FILL = '#15803D';
 const FB_GOOD_RING = '#4ADE80';
-// Bad: dark red filled disc, lighter red ring sweep, white X
 const FB_BAD_FILL  = '#B91C1C';
 const FB_BAD_RING  = '#F87171';
 
-// SVG layout: 200×200 canvas, filled disc r=72, sweep ring r=88
+// SVG canvas: 200×200, filled disc r=72, sweep ring r=88
 const SVG_SZ    = 200;
-const SVG_C     = SVG_SZ / 2;   // 100
+const SVG_C     = 100;
 const DISC_R    = 72;
 const RING_R    = 88;
 const RING_CIRC = 2 * Math.PI * RING_R;
-const PC        = 18;            // particle count
+const PC        = 24;   // particle count — more bubbles, bigger celebration
 
 const AnimatedSvgCircle = Animated.createAnimatedComponent(Circle);
 
@@ -62,7 +60,7 @@ function getCue(reason: string): string {
   return clean || 'FIX FORM';
 }
 
-// Remounted via key prop on each new rep — animation state always starts fresh
+// Remounted via key prop on each new rep — animation state always starts fresh.
 function RepFeedback({
   good,
   reason,
@@ -80,16 +78,16 @@ function RepFeedback({
   const scaleAnim     = useRef(new Animated.Value(0)).current;
   const ringProgress  = useRef(new Animated.Value(0)).current;
 
-  // Random particle props frozen at mount time — bigger, more of them
+  // Particle props frozen at mount; more of them, bigger, wider spread
   const particles = useRef(
     Array.from({ length: PC }, () => ({
       ty:     new Animated.Value(0),
       op:     new Animated.Value(0),
-      startX: (Math.random() - 0.5) * 140,
-      size:   5 + Math.random() * 14,        // 5–19 px
+      startX: (Math.random() - 0.5) * 170,        // ±85 px spread
+      size:   6 + Math.random() * 18,              // 6–24 px
       delay:  Math.random() * 450,
       dur:    700 + Math.random() * 450,
-      rise:   -(90 + Math.random() * 120),   // 90–210 px upward
+      rise:   -(100 + Math.random() * 140),        // 100–240 px upward
     }))
   ).current;
 
@@ -97,12 +95,12 @@ function RepFeedback({
   useEffect(() => {
     mounted.current = true;
 
-    // Badge pop-in — spring with a slight overshoot
+    // Badge pop-in
     Animated.spring(scaleAnim, {
       toValue: 1, damping: 12, stiffness: 200, useNativeDriver: true,
     }).start();
 
-    // Ring sweep (SVG property — JS driver only)
+    // Ring sweep (JS driver — SVG props not nativeDriver-compatible)
     Animated.timing(ringProgress, {
       toValue: 1, duration: 560, delay: 60, useNativeDriver: false,
     }).start();
@@ -141,7 +139,7 @@ function RepFeedback({
       style={[StyleSheet.absoluteFill, fb.overlay, { opacity: masterOpacity }]}
       pointerEvents="none"
     >
-      {/* Particles rising up from the badge area */}
+      {/* Particles */}
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
         {particles.map((p, i) => (
           <View
@@ -168,25 +166,23 @@ function RepFeedback({
         ))}
       </View>
 
-      {/* Badge (disc + ring + icon) scales in, text below for bad reps */}
+      {/* Badge: disc + ring + icon */}
       <Animated.View style={{ transform: [{ scale: scaleAnim }], alignItems: 'center' }}>
         <Svg width={SVG_SZ} height={SVG_SZ} viewBox={`0 0 ${SVG_SZ} ${SVG_SZ}`}>
-          {/* Filled solid disc — the main badge background */}
+          {/* Filled disc */}
           <Circle cx={SVG_C} cy={SVG_C} r={DISC_R} fill={fillColor} />
 
-          {/* Background track ring */}
+          {/* Track ring */}
           <Circle
             cx={SVG_C} cy={SVG_C} r={RING_R}
-            fill="none"
-            stroke="rgba(255,255,255,0.12)"
-            strokeWidth={4}
+            fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={4}
           />
-          {/* Animated sweep ring */}
+          {/* Animated sweep */}
           <AnimatedSvgCircle
             cx={SVG_C} cy={SVG_C} r={RING_R}
             fill="none"
             stroke={ringColor}
-            strokeWidth={4}
+            strokeWidth={5}
             strokeDasharray={`${RING_CIRC} ${RING_CIRC}`}
             strokeDashoffset={dashOffset}
             strokeLinecap="round"
@@ -196,11 +192,11 @@ function RepFeedback({
           />
 
           {good ? (
-            // Thick white checkmark — rounded ends and vertex
+            // Thick, bold, rounded white checkmark — clearly visible from 6 ft
             <Path
-              d={`M 67 100 L 88 122 L 134 72`}
+              d="M 62 102 L 88 128 L 140 68"
               stroke="white"
-              strokeWidth={9}
+              strokeWidth={12}
               strokeLinecap="round"
               strokeLinejoin="round"
               fill="none"
@@ -208,14 +204,8 @@ function RepFeedback({
           ) : (
             // Thick white X
             <>
-              <Line
-                x1={72} y1={72} x2={128} y2={128}
-                stroke="white" strokeWidth={9} strokeLinecap="round"
-              />
-              <Line
-                x1={128} y1={72} x2={72} y2={128}
-                stroke="white" strokeWidth={9} strokeLinecap="round"
-              />
+              <Line x1={70} y1={70} x2={130} y2={130} stroke="white" strokeWidth={12} strokeLinecap="round" />
+              <Line x1={130} y1={70} x2={70}  y2={130} stroke="white" strokeWidth={12} strokeLinecap="round" />
             </>
           )}
         </Svg>
@@ -231,10 +221,7 @@ function RepFeedback({
 }
 
 const fb = StyleSheet.create({
-  overlay: {
-    alignItems:     'center',
-    justifyContent: 'center',
-  },
+  overlay: { alignItems: 'center', justifyContent: 'center' },
   cuePill: {
     marginTop:         16,
     paddingHorizontal: 26,
@@ -245,24 +232,24 @@ const fb = StyleSheet.create({
     borderColor:       'rgba(255,255,255,0.22)',
   },
   cueText: {
-    fontSize:          26,
-    fontWeight:        '800',
-    color:             'white',
-    letterSpacing:     2,
-    textAlign:         'center',
-    textShadowColor:   'rgba(0,0,0,0.70)',
-    textShadowOffset:  { width: 0, height: 1 },
-    textShadowRadius:  3,
+    fontSize:         26,
+    fontWeight:       '800',
+    color:            'white',
+    letterSpacing:    2,
+    textAlign:        'center',
+    textShadowColor:  'rgba(0,0,0,0.70)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
 });
 
 // ─── Phase type ───────────────────────────────────────────────────────────────
-type Phase = 'idle' | 'starting' | 'ready' | 'tracking' | 'done';
+type Phase = 'idle' | 'starting' | 'ready' | 'tracking' | 'stopping';
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function FormCheckScreen() {
-  const router  = useRouter();
-  const insets  = useSafeAreaInsets();
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const [phase,    setPhase]    = useState<Phase>('idle');
   const [error,    setError]    = useState<string | null>(null);
@@ -270,12 +257,13 @@ export default function FormCheckScreen() {
   const [reps,     setReps]     = useState(0);
   const [goodReps, setGoodReps] = useState(0);
 
-  // Rep feedback overlay — key increment forces RepFeedback remount on each new rep
-  const [feedback,  setFeedback]  = useState<{ key: number; good: boolean; reason: string } | null>(null);
+  const [feedback, setFeedback] = useState<{ key: number; good: boolean; reason: string } | null>(null);
   const feedbackKey = useRef(0);
+  const flashAnim   = useRef(new Animated.Value(0)).current;
+  const notLinked   = !isNativeModuleLinked();
 
-  const flashAnim = useRef(new Animated.Value(0)).current;
-  const notLinked = !isNativeModuleLinked();
+  // Prevents the useEffect cleanup from calling stopSession if we already called it
+  const sessionStopped = useRef(false);
 
   // ── Session lifecycle ──────────────────────────────────────────────────────
 
@@ -286,10 +274,9 @@ export default function FormCheckScreen() {
     }
 
     let mounted = true;
+    sessionStopped.current = false;
 
-    const errSub = addErrorListener(e => {
-      if (mounted) setError(e.message);
-    });
+    const errSub = addErrorListener(e => { if (mounted) setError(e.message); });
     const camSub = addCameraStateListener(e => {
       if (mounted && e.running) setPhase(p => (p === 'starting' ? 'ready' : p));
     });
@@ -308,7 +295,7 @@ export default function FormCheckScreen() {
       mounted = false;
       errSub.remove();
       camSub.remove();
-      void stopSession();
+      if (!sessionStopped.current) void stopSession();
     };
   }, []);
 
@@ -320,10 +307,8 @@ export default function FormCheckScreen() {
     const repSub = addRepListener((rep: RepEvent) => {
       setReps(rep.reps);
       setGoodReps(rep.goodReps);
-      // Quick green flash
       flashAnim.setValue(1);
       Animated.timing(flashAnim, { toValue: 0, duration: 700, useNativeDriver: true }).start();
-      // New key remounts RepFeedback so animation always starts clean
       const k = ++feedbackKey.current;
       setFeedback({ key: k, good: rep.good, reason: rep.reason });
     });
@@ -334,38 +319,46 @@ export default function FormCheckScreen() {
       setGoodReps(e.goodReps);
     });
 
-    return () => {
-      repSub.remove();
-      dbgSub.remove();
-    };
+    return () => { repSub.remove(); dbgSub.remove(); };
   }, [phase]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
   const handleStartStop = useCallback(async () => {
-    if (phase === 'ready' || phase === 'done') {
+    if (phase === 'ready') {
       setStats(null);
       setReps(0);
       setGoodReps(0);
       setPhase('tracking');
       await startTracking();
     } else if (phase === 'tracking') {
+      setPhase('stopping');
       const final = await stopTracking();
-      setReps(final.reps);
-      setGoodReps(final.goodReps);
-      setPhase('done');
+      // Stop the session before navigating so the cleanup doesn't double-stop
+      sessionStopped.current = true;
+      await stopSession();
+      router.replace({
+        pathname: '/recap',
+        params: {
+          reps:     String(final.reps),
+          goodReps: String(final.goodReps),
+          videoUri: final.videoUri ?? '',
+        },
+      });
     }
-  }, [phase]);
+  }, [phase, router]);
 
   const handleFlip = useCallback(() => void flipCamera(), []);
 
   const handleBack = useCallback(async () => {
+    sessionStopped.current = true;
     await stopSession();
     router.back();
   }, [router]);
 
   const isTracking = phase === 'tracking';
-  const canTrack   = phase === 'ready' || phase === 'done' || phase === 'tracking';
+  const canTrack   = phase === 'ready' || phase === 'tracking';
+  const isStopping = phase === 'stopping';
 
   return (
     <View style={s.root}>
@@ -395,9 +388,7 @@ export default function FormCheckScreen() {
         <GlassButton circular={40} onPress={handleBack}>
           <SymbolView name="chevron.left" size={18} tintColor={C.text} type="monochrome" style={{ width: 18, height: 18 }} />
         </GlassButton>
-
         <Text style={s.title}>Form Check</Text>
-
         <GlassButton circular={40} onPress={handleFlip}>
           <SymbolView name="arrow.triangle.2.circlepath.camera.fill" size={18} tintColor={C.text} type="monochrome" style={{ width: 18, height: 18 }} />
         </GlassButton>
@@ -411,17 +402,12 @@ export default function FormCheckScreen() {
       )}
 
       {/* Rep counter */}
-      {(phase === 'tracking' || phase === 'done') && (
+      {(phase === 'tracking' || phase === 'stopping') && (
         <View style={s.repBlock}>
           <Animated.Text
             style={[
               s.repNum,
-              {
-                color: flashAnim.interpolate({
-                  inputRange:  [0, 1],
-                  outputRange: ['#ffffff', C.good],
-                }),
-              },
+              { color: flashAnim.interpolate({ inputRange: [0, 1], outputRange: ['#ffffff', C.good] }) },
             ]}
           >
             {reps}
@@ -442,9 +428,8 @@ export default function FormCheckScreen() {
 
       {/* Bottom controls */}
       <View style={[s.bottomBar, { paddingBottom: Math.max(insets.bottom + 16, 32) }]}>
-        {phase === 'starting' && (
-          <Text style={s.hint}>Starting camera…</Text>
-        )}
+        {phase === 'starting' && <Text style={s.hint}>Starting camera…</Text>}
+        {isStopping          && <Text style={s.hint}>Saving session…</Text>}
 
         {canTrack && (
           <GlassButton style={{ height: 56, width: 240 }} onPress={handleStartStop}>
@@ -462,10 +447,6 @@ export default function FormCheckScreen() {
             </View>
           </GlassButton>
         )}
-
-        {phase === 'done' && (
-          <Text style={s.hint}>Session ended · {reps} reps · {goodReps} good</Text>
-        )}
       </View>
     </View>
   );
@@ -476,100 +457,26 @@ function Row({ label, value, good }: { label: string; value: string; good?: bool
   return (
     <View style={d.row}>
       <Text style={d.key}>{label}</Text>
-      <Text style={[d.val, good === true && d.valGood, good === false && d.valDim]}>
-        {value}
-      </Text>
+      <Text style={[d.val, good === true && d.valGood, good === false && d.valDim]}>{value}</Text>
     </View>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: '#000',
-  },
-  topBar: {
-    flexDirection:     'row',
-    alignItems:        'center',
-    justifyContent:    'space-between',
-    paddingHorizontal: 16,
-    paddingBottom:     8,
-  },
-  title: {
-    fontSize:   16,
-    fontWeight: '600',
-    color:      C.text,
-  },
-  errorCard: {
-    position:        'absolute',
-    left:            24,
-    right:           24,
-    top:             '38%',
-    backgroundColor: C.glass,
-    borderRadius:    16,
-    padding:         24,
-    borderWidth:     1,
-    borderColor:     C.border,
-  },
-  errorText: {
-    color:      C.warn,
-    fontSize:   14,
-    lineHeight: 22,
-    textAlign:  'center',
-  },
-  repBlock: {
-    position:   'absolute',
-    top:        '18%',
-    left:       0,
-    right:      0,
-    alignItems: 'center',
-  },
-  repNum: {
-    fontSize:   100,
-    fontWeight: '700',
-    lineHeight: 104,
-    color:      '#fff',
-  },
-  repSub: {
-    fontSize:  15,
-    color:     C.muted,
-    marginTop: 4,
-  },
-  debugPanel: {
-    position:          'absolute',
-    bottom:            140,
-    left:              16,
-    backgroundColor:   C.glass,
-    borderRadius:      10,
-    paddingVertical:   8,
-    paddingHorizontal: 12,
-    minWidth:          210,
-    borderWidth:       1,
-    borderColor:       C.border,
-  },
-  bottomBar: {
-    position:          'absolute',
-    bottom:            0,
-    left:              0,
-    right:             0,
-    alignItems:        'center',
-    paddingTop:        12,
-    paddingHorizontal: 24,
-    gap:               12,
-  },
-  hint: {
-    color:    C.muted,
-    fontSize: 13,
-  },
-  trackLabel: {
-    fontSize:   16,
-    fontWeight: '600',
-    color:      C.text,
-  },
-  trackLabelStop: {
-    color: C.warn,
-  },
+  root:            { flex: 1, backgroundColor: '#000' },
+  topBar:          { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 8 },
+  title:           { fontSize: 16, fontWeight: '600', color: C.text },
+  errorCard:       { position: 'absolute', left: 24, right: 24, top: '38%', backgroundColor: C.glass, borderRadius: 16, padding: 24, borderWidth: 1, borderColor: C.border },
+  errorText:       { color: C.warn, fontSize: 14, lineHeight: 22, textAlign: 'center' },
+  repBlock:        { position: 'absolute', top: '18%', left: 0, right: 0, alignItems: 'center' },
+  repNum:          { fontSize: 100, fontWeight: '700', lineHeight: 104, color: '#fff' },
+  repSub:          { fontSize: 15, color: C.muted, marginTop: 4 },
+  debugPanel:      { position: 'absolute', bottom: 140, left: 16, backgroundColor: C.glass, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, minWidth: 210, borderWidth: 1, borderColor: C.border },
+  bottomBar:       { position: 'absolute', bottom: 0, left: 0, right: 0, alignItems: 'center', paddingTop: 12, paddingHorizontal: 24, gap: 12 },
+  hint:            { color: C.muted, fontSize: 13 },
+  trackLabel:      { fontSize: 16, fontWeight: '600', color: C.text },
+  trackLabelStop:  { color: C.warn },
 });
 
 const d = StyleSheet.create({
