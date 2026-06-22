@@ -567,13 +567,7 @@ export default function OnboardingScreen() {
     return (
       <View style={[s.c, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
-          <View style={s.projRow}>
-            <View style={s.sectionIconWrap}>
-              <Sym name="chart.line.uptrend.xyaxis" size={14} color={C.textSecondary} />
-            </View>
-            <Text style={s.qs}>YOUR 8-WEEK PROJECTION</Text>
-          </View>
-          <Text style={s.qq}>Here's what training {daysNum} a week looks like.</Text>
+          <Text style={s.qq}>Here's what training {daysNum.toLowerCase()} a week looks like.</Text>
           <ProjectionChart />
           {BULLET_ITEMS.map((item, i) => <BulletItem key={item} text={item} index={i} />)}
         </ScrollView>
