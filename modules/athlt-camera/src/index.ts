@@ -2,7 +2,8 @@
  * athlt-camera — JS bridge for the ATHLTCamera native module.
  *
  * Drives Vision body-pose squat detection with 3-phase state machine,
- * ready gate (stable standing before counting), and back-lean form check.
+ * ready gate (hip-stable standing before counting), 4-tier form cues,
+ * hysteresis + debounce for double-count prevention, and camera-angle warning.
  */
 
 import { requireNativeModule, EventEmitter, requireNativeViewManager } from 'expo-modules-core';
@@ -13,9 +14,9 @@ import type { ViewStyle } from 'react-native';
 
 /** Emitted once per completed rep. */
 export interface RepEvent {
-  good: boolean;        // true = good form, false = too shallow or bad back lean
-  reason: string;       // "good depth" | "too shallow — go deeper" | "chest up — keep your back straight"
-  depthAngle: number;   // min knee angle reached this rep (deg)
+  good: boolean;        // true = clean rep; false = form issue detected
+  reason: string;       // 2-3 word cue: "nice" | "GO DEEPER" | "CHEST UP" | "KEEP HEELS DOWN" | "WEIGHT ON HEELS"
+  depthAngle: number;   // min knee angle reached this rep (deg); tune bottomThreshold with this
   backAngle:  number;   // max torso-vertical angle reached this rep (deg); tune backLeanThreshold with this
   reps: number;         // total reps this session
   goodReps: number;     // good reps this session
@@ -27,7 +28,8 @@ export interface DebugStatsEvent {
   personDetected: boolean;
   kneeAngle: number;           // latest averaged knee angle (deg)
   backAngle: number;           // latest torso-vertical angle (deg)
-  ready: boolean;              // true once person has stood stably for ~1.5s — reps counted only when true
+  ready: boolean;              // true once person stood stably (hip-still) for ~1.5s
+  cameraAngleOk: boolean;      // false = person not in side view; prompt "Turn sideways"
   phase: string;               // human-readable analyzer state
   reps: number;
   goodReps: number;
