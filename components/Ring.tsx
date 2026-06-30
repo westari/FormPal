@@ -38,9 +38,8 @@ function makeArc(
   cx: number, cy: number, r: number,
   startDeg: number, sweepDeg: number,
 ) {
-  return Skia.PathBuilder.Make()
-    .addArc({ x: cx - r, y: cy - r, width: r * 2, height: r * 2 }, startDeg, sweepDeg)
-    .build();
+  return Skia.Path.Make()
+    .addArc({ x: cx - r, y: cy - r, width: r * 2, height: r * 2 }, startDeg, sweepDeg);
 }
 
 export default function Ring({

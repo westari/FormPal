@@ -21,13 +21,12 @@ const START_DEG = 135;   // 7:30 position — standard speedometer start (bottom
 const SWEEP_DEG = 270;   // 270° arc — bottom-left → top-right
 
 function makeArc(startDeg: number, sweepDeg: number) {
-  return Skia.PathBuilder.Make()
+  return Skia.Path.Make()
     .addArc(
       { x: CX - RADIUS, y: CY - RADIUS, width: RADIUS * 2, height: RADIUS * 2 },
       startDeg,
       sweepDeg,
-    )
-    .build();
+    );
 }
 
 interface SpeedoGaugeProps {
