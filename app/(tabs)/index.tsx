@@ -1,332 +1,616 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, Pressable, ScrollView,
-  Animated, Alert, Image,
+  View, Text, StyleSheet, ScrollView, Pressable,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Flame, Dumbbell, User as UserIcon, Camera } from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
-import Svg, { Circle as SvgCircle } from 'react-native-svg';
+import { useRouter, useFocusEffect } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import { MOVES as CURATED_MOVES } from '../../constants/moves';
-import GlassButton from '../../components/GlassButton';
+import { SymbolView } from 'expo-symbols';
+import { StatusBar } from 'expo-status-bar';
 
-// ---------------------------------------------------------------------------
-// Palette
-// ---------------------------------------------------------------------------
-const C = {
-  bg:            '#0A0B0C',
-  surface:       '#15161A',
-  surfaceBorder: 'rgba(255,255,255,0.08)',
-  iconBg:        'rgba(255,255,255,0.06)',
-  textPrimary:   '#F0F0F2',
-  textSecondary: '#9A9AA2',
-  textMuted:     '#62626A',
-  primary:       '#D6D7DC',
-};
+import { FONT, Col, Sp, Sz, W, R } from '../../constants/theme';
+import Card from '../../components/Card';
+import Ring from '../../components/Ring';
+import SpeedoGauge from '../../components/SpeedoGauge';
+import ScreenBackground from '../../components/ScreenBackground';
+import { MOVES } from '../../constants/moves';
 
-// ---------------------------------------------------------------------------
-// Default workout plan (shown until plan persistence is wired up)
-// ---------------------------------------------------------------------------
-const DEFAULT_PLAN = {
-  focus: 'Full Body',
-  exercises: [
-    { name: 'Goblet Squats',     scheme: '3 × 8',       formCheck: true  },
-    { name: 'Dumbbell Press',    scheme: '3 × 10',      formCheck: false },
-    { name: 'Romanian Deadlift', scheme: '3 × 10',      formCheck: false },
-    { name: 'Walking Lunges',    scheme: '3 × 12 each', formCheck: true  },
-  ],
-};
+// ─── Constants ────────────────────────────────────────────────────────────────
 
-// ---------------------------------------------------------------------------
-// Week strip
-// ---------------------------------------------------------------------------
-function getWeekDays() {
-  const now     = new Date();
-  const today   = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const dayOfWk = now.getDay();
-  const offset  = dayOfWk === 0 ? -6 : 1 - dayOfWk;
-  const monday  = new Date(today);
-  monday.setDate(today.getDate() + offset);
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
-    return {
-      label:   ['M', 'Tu', 'W', 'Th', 'F', 'Sa', 'Su'][i],
-      date:    d.getDate(),
-      isToday: d.getTime() === today.getTime(),
-      isPast:  d < today,
-    };
+const SESSION_LOG_KEY = 'formpal_session_log';
+const VIEWED_KEY      = 'formpal_viewed_moves';
+const THIRTY_DAYS_MS  = 30 * 24 * 60 * 60 * 1000;
+const SEVEN_DAYS_MS   =  7 * 24 * 60 * 60 * 1000;
+const WEEK_GOAL       = 5;
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatDate(d: Date) {
+  return d.toLocaleDateString('en-US', {
+    weekday: 'long', month: 'long', day: 'numeric',
   });
 }
+function formatShort(ts: number) {
+  return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
 
-// ---------------------------------------------------------------------------
-// Form score ring
-// ---------------------------------------------------------------------------
-const SCORE_R    = 26;
-const SCORE_CIRC = 2 * Math.PI * SCORE_R;
-const SCORE_SZ   = 68;
+// ─── SF Symbol map ────────────────────────────────────────────────────────────
 
-const AnimatedSvgCircle = Animated.createAnimatedComponent(SvgCircle);
+const MOVE_SYMBOL: Record<string, string> = {
+  'Bodyweight_Squat':         'figure.strengthtraining.traditional',
+  'Pushups':                  'figure.core.training',
+  'Pullups':                  'figure.gymnastics',
+  'Bodyweight_Walking_Lunge': 'figure.walk',
+  'Plank':                    'figure.pilates',
+  'Dumbbell_Bicep_Curl':      'dumbbell.fill',
+  'Dumbbell_Bench_Press':     'figure.strengthtraining.functional',
+  'Wide-Grip_Lat_Pulldown':   'figure.climbing',
+  'Leg_Press':                'figure.run',
+  'Cable_Shoulder_Press':     'figure.dance',
+  'Clean_Deadlift':           'figure.highintensityintervaltraining',
+  'Single_Leg_Glute_Bridge':  'figure.cooldown',
+};
 
-function FormScoreRing({ score, reps, play }: { score: number | null; reps: number; play: boolean }) {
-  const ringProg  = useRef(new Animated.Value(0)).current;
-  const numAnim   = useRef(new Animated.Value(0)).current;
-  const [displayNum, setDisplayNum] = useState(0);
+// ─── StatusPill ───────────────────────────────────────────────────────────────
 
-  useEffect(() => {
-    if (!play || !score) return;
-    ringProg.setValue(0);
-    numAnim.setValue(0);
-    setDisplayNum(0);
-    const id = numAnim.addListener(({ value }) => setDisplayNum(Math.round(value)));
-    Animated.timing(ringProg, { toValue: 1, duration: 1100, delay: 400, useNativeDriver: false }).start();
-    Animated.timing(numAnim,  { toValue: score, duration: 1100, delay: 400, useNativeDriver: false }).start();
-    return () => numAnim.removeListener(id);
-  }, [play]);
-
-  const dashOffset = ringProg.interpolate({
-    inputRange:  [0, 1],
-    outputRange: [SCORE_CIRC, SCORE_CIRC * (1 - (score ?? 0) / 100)],
-  });
-  const isEmpty = !score;
-
+function StatusPill({
+  icon, color, label,
+}: { icon: string; color: string; label: string }) {
   return (
-    <View style={s.scoreCard}>
-      <View style={{ width: SCORE_SZ, height: SCORE_SZ }}>
-        <Svg width={SCORE_SZ} height={SCORE_SZ} viewBox={`0 0 ${SCORE_SZ} ${SCORE_SZ}`}>
-          <SvgCircle cx={SCORE_SZ / 2} cy={SCORE_SZ / 2} r={SCORE_R} fill="none" stroke={C.surfaceBorder} strokeWidth={3} />
-          {!isEmpty && (
-            <AnimatedSvgCircle
-              cx={SCORE_SZ / 2} cy={SCORE_SZ / 2} r={SCORE_R}
-              fill="none" stroke={C.textPrimary} strokeWidth={3}
-              strokeDasharray={`${SCORE_CIRC} ${SCORE_CIRC}`}
-              strokeDashoffset={dashOffset}
-              strokeLinecap="round"
-              rotation="-90" originX={SCORE_SZ / 2} originY={SCORE_SZ / 2}
-            />
-          )}
-        </Svg>
-        <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
-          <Text style={s.scoreNum}>{isEmpty ? '—' : displayNum}</Text>
-        </View>
+    <View style={[pill.root, { backgroundColor: color + '1A' }]}>
+      <SymbolView
+        name={icon as any} type="monochrome"
+        style={pill.icon} tintColor={color}
+      />
+      <Text style={[pill.label, { color }]}>{label}</Text>
+    </View>
+  );
+}
+const pill = StyleSheet.create({
+  root:  { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: R.pill },
+  icon:  { width: 14, height: 14 },
+  label: { fontSize: Sz.caption, fontWeight: W.semi, letterSpacing: 0.1 },
+});
+
+// ─── ProgressBar — expo-linear-gradient horizontal fill ──────────────────────
+
+function ProgressBar({
+  progress, colors,
+}: { progress: number; colors: [string, string] }) {
+  const pct = Math.max(4, Math.round(Math.min(1, progress) * 100));
+  return (
+    <View style={pbar.track}>
+      <LinearGradient
+        colors={colors}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={[pbar.fill, { width: `${pct}%` as any }]}
+      />
+    </View>
+  );
+}
+const pbar = StyleSheet.create({
+  track: { height: 8, backgroundColor: Col.ringTrack, borderRadius: R.pill, overflow: 'hidden' },
+  fill:  { height: '100%' as any, borderRadius: R.pill },
+});
+
+// ─── MoveCircle ───────────────────────────────────────────────────────────────
+
+function MoveCircle({
+  id, viewed, onPress,
+}: { id: string; viewed: boolean; onPress: () => void }) {
+  const sym  = MOVE_SYMBOL[id] ?? 'figure.walk';
+  const name = MOVES.find(m => m.id === id)?.name ?? id;
+  return (
+    <Pressable onPress={onPress} style={mc.wrap}>
+      <View style={[mc.circle, viewed && mc.dimmed]}>
+        <SymbolView
+          name={sym as any} type="monochrome"
+          style={{ width: 26, height: 26 }}
+          tintColor={viewed ? Col.textDim : Col.text}
+        />
       </View>
-      <View style={{ flex: 1 }}>
-        <Text style={s.scoreLabel}>Form Score</Text>
-        <Text style={s.scoreChange}>{isEmpty ? 'Complete your first session' : '+6 this week'}</Text>
-        {!isEmpty && <Text style={s.scoreReps}>from {reps} reps</Text>}
+      <Text style={[mc.label, viewed && mc.dlabel]} numberOfLines={1}>{name}</Text>
+    </Pressable>
+  );
+}
+const mc = StyleSheet.create({
+  wrap:   { width: 66, alignItems: 'center', gap: Sp.xs + 2 },
+  circle: {
+    width: 54, height: 54, borderRadius: 27,
+    backgroundColor: Col.card,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2, borderColor: Col.ringC[0],
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07, shadowRadius: 5, elevation: 3,
+  },
+  dimmed: { borderColor: Col.textDim },
+  label:  { fontSize: 10, fontWeight: W.medium, color: Col.textSub, textAlign: 'center' },
+  dlabel: { color: Col.textDim },
+});
+
+// ─── SessionRow ───────────────────────────────────────────────────────────────
+
+type SessionEntry = { ts: number; reps: number; goodReps: number; pct: number };
+
+function SessionRow({ entry, last }: { entry: SessionEntry; last: boolean }) {
+  const col = entry.pct >= 80 ? Col.good : entry.pct >= 60 ? Col.ringC[0] : Col.mid;
+  return (
+    <View style={[ses.row, !last && ses.div]}>
+      <View style={ses.left}>
+        <Text style={ses.date}>{formatShort(entry.ts)}</Text>
+        <Text style={ses.meta}>{entry.reps} reps · {entry.goodReps} good</Text>
+      </View>
+      <View style={[ses.badge, { backgroundColor: col + '18' }]}>
+        <Text style={[ses.pct, { color: col }]}>{entry.pct}%</Text>
       </View>
     </View>
   );
 }
+const ses = StyleSheet.create({
+  row:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12 },
+  div:   { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(0,0,0,0.06)' },
+  left:  { gap: 2 },
+  date:  { fontSize: Sz.small, fontWeight: W.semi, color: Col.text, letterSpacing: -0.2 },
+  meta:  { fontSize: Sz.caption, fontWeight: W.regular, color: Col.textSub },
+  badge: { borderRadius: R.pill, paddingVertical: 5, paddingHorizontal: 12 },
+  pct:   { fontSize: Sz.small, fontWeight: W.bold },
+});
 
-// ---------------------------------------------------------------------------
-// Move circle
-// ---------------------------------------------------------------------------
-function MoveCircle({ move, onPress }: { move: typeof CURATED_MOVES[0]; onPress: () => void }) {
-  const [imgFailed, setImgFailed] = useState(false);
-  const imageUri = move.images?.[0] ?? null;
-  return (
-    <TouchableOpacity style={{ alignItems: 'center', gap: 7 }} onPress={onPress} activeOpacity={0.75}>
-      <View style={s.moveCircle}>
-        {imageUri && !imgFailed ? (
-          <Image
-            source={{ uri: imageUri }}
-            style={StyleSheet.absoluteFill}
-            resizeMode="cover"
-            onError={() => setImgFailed(true)}
-          />
-        ) : (
-          <Text style={s.moveAbbr}>{move.name.slice(0, 2).toUpperCase()}</Text>
-        )}
-      </View>
-      <Text style={s.moveLabel} numberOfLines={2}>{move.name}</Text>
-    </TouchableOpacity>
-  );
-}
+// ─── Screen ───────────────────────────────────────────────────────────────────
 
-// ---------------------------------------------------------------------------
-// Screen
-// ---------------------------------------------------------------------------
 export default function HomeScreen() {
-  const insets  = useSafeAreaInsets();
-  const router  = useRouter();
-  const streak  = 0;
-  const weekDays = getWeekDays();
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
 
-  const startWorkout = () => {
-    if (Haptics) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Alert.alert('Coming next', 'The live camera workout screen is what we build next.');
-  };
+  const [sessions,    setSessions]    = useState<SessionEntry[]>([]);
+  const [viewedMoves, setViewedMoves] = useState<Set<string>>(new Set());
+
+  // ── Derived metrics ──────────────────────────────────────────────────────────
+
+  const formScore = useMemo<number | null>(() => {
+    if (sessions.length === 0) return null;
+    const last5 = sessions.slice(-5);
+    return Math.round(last5.reduce((a, e) => a + e.pct, 0) / last5.length);
+  }, [sessions]);
+
+  const weekCount = useMemo(() => {
+    const cut = Date.now() - SEVEN_DAYS_MS;
+    return sessions.filter(e => e.ts >= cut).length;
+  }, [sessions]);
+
+  const avgGoodPct = useMemo<number | null>(() => {
+    if (sessions.length === 0) return null;
+    return Math.round(sessions.reduce((a, e) => a + e.pct, 0) / sessions.length);
+  }, [sessions]);
+
+  // ── Load data on focus ───────────────────────────────────────────────────────
+
+  useFocusEffect(useCallback(() => {
+    AsyncStorage.getItem(SESSION_LOG_KEY).then(raw => {
+      if (!raw) { setSessions([]); return; }
+      const parsed: SessionEntry[] = JSON.parse(raw);
+      const cut    = Date.now() - THIRTY_DAYS_MS;
+      const pruned = parsed.filter(e => e.ts >= cut);
+      if (pruned.length !== parsed.length) {
+        void AsyncStorage.setItem(SESSION_LOG_KEY, JSON.stringify(pruned));
+      }
+      setSessions(pruned);
+    }).catch(() => setSessions([]));
+
+    AsyncStorage.getItem(VIEWED_KEY).then(raw => {
+      setViewedMoves(new Set(raw ? JSON.parse(raw) : []));
+    }).catch(() => {});
+  }, []));
+
+  async function markViewed(id: string) {
+    const next = new Set(viewedMoves);
+    next.add(id);
+    setViewedMoves(next);
+    await AsyncStorage.setItem(VIEWED_KEY, JSON.stringify([...next]));
+    if (id === 'Bodyweight_Squat') {
+      router.push('/formcheck?exercise=squat' as any);
+    } else if (id === 'Dumbbell_Bicep_Curl') {
+      router.push('/formcheck?exercise=curl' as any);
+    } else {
+      router.push(`/move/${id}` as any);
+    }
+  }
+
+  const reversedSessions = useMemo(() => [...sessions].reverse(), [sessions]);
 
   return (
-    <View style={s.c} collapsable={false}>
-      <ScrollView
-        contentContainerStyle={{ paddingTop: insets.top + 16, paddingHorizontal: 20, paddingBottom: insets.bottom + 100 }}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Top row */}
-        <View style={s.topRow}>
-          <Text style={s.welcomeTxt}>Welcome back.</Text>
-          <View style={s.topRight}>
-            <View style={s.streakBadge}>
-              <Flame size={13} color={C.textMuted} />
-              <Text style={s.streakBadgeTxt}>{streak}</Text>
-            </View>
-            <View style={s.avatarCircle}>
-              <UserIcon size={15} color={C.textMuted} />
-            </View>
+    <>
+      <StatusBar style="dark" />
+      <ScreenBackground>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[
+            s.scroll,
+            { paddingTop: insets.top + Sp.md, paddingBottom: insets.bottom + 64 },
+          ]}
+        >
+
+          {/* ── 1. Header ────────────────────────────────────────────────── */}
+          <View style={s.header}>
+            <Text style={s.greeting}>Welcome back.</Text>
+            <Text style={s.dateLabel}>{formatDate(new Date())}</Text>
           </View>
-        </View>
 
-        {/* Week strip */}
-        <View style={s.weekRow}>
-          {weekDays.map((d, i) => (
-            <View key={i} style={s.weekDayCol}>
-              <Text style={[s.weekDayLbl, d.isToday && s.weekDayLblActive]}>{d.label}</Text>
-              <View style={[s.weekDayCircle, d.isToday && s.weekDayCircleActive]}>
-                <Text style={[s.weekDayNum, d.isToday && s.weekDayNumActive]}>{d.date}</Text>
+          {/* ── 2. Status pills ──────────────────────────────────────────── */}
+          <View style={s.pillRow}>
+            <StatusPill
+              icon="figure.run"
+              color={Col.good}
+              label="Ready to train"
+            />
+            <StatusPill
+              icon="figure.strengthtraining.traditional"
+              color={Col.mid}
+              label="Full Body"
+            />
+          </View>
+
+          {/*
+           * ── 3. HERO BLOCK ────────────────────────────────────────────────
+           *
+           * Only these TWO cards overlap. The rings card (elevation="high",
+           * zIndex:2) sits on top — its layered shadows fall onto the insight
+           * card. The insight card tucks 18px under rings (marginTop:-18,
+           * zIndex:1). Everything below uses normal Sp.md gaps, no overlap.
+           */}
+          <View>
+            {/* Rings card — hero, highest elevation */}
+            <Card elevation="high" style={s.ringsCard}>
+              <View style={s.ringsRow}>
+                <Ring
+                  progress={(formScore ?? 0) / 100}
+                  colors={Col.ringA}
+                  gradientId="gFormScore"
+                  value={formScore !== null ? String(formScore) : '--'}
+                  unit="%"
+                  label="Form Score"
+                  size={76}
+                  strokeWidth={9}
+                />
+                <View style={s.ringDivider} />
+                <Ring
+                  progress={Math.min(weekCount / WEEK_GOAL, 1)}
+                  colors={Col.ringB}
+                  gradientId="gWeek"
+                  value={String(weekCount)}
+                  unit={`/ ${WEEK_GOAL}`}
+                  label="This Week"
+                  size={76}
+                  strokeWidth={9}
+                />
+                <View style={s.ringDivider} />
+                <Ring
+                  progress={(avgGoodPct ?? 0) / 100}
+                  colors={Col.ringC}
+                  gradientId="gGoodReps"
+                  value={avgGoodPct !== null ? String(avgGoodPct) : '--'}
+                  unit="%"
+                  label="Good Reps"
+                  size={76}
+                  strokeWidth={9}
+                />
               </View>
-              <View style={{ height: 5 }} />
-            </View>
-          ))}
-        </View>
+            </Card>
 
-        {/* Learn the Moves */}
-        <View style={{ marginBottom: 22 }}>
-          <Text style={s.sectionTitle}>Learn the Moves</Text>
-          <Text style={s.sectionSub}>Tap any movement to see the form cues.</Text>
-          <View style={{ marginHorizontal: -20 }}>
+            {/* Insight card — tucks under rings, lower z-index */}
+            <Pressable onPress={() => router.push('/mypal' as any)}>
+              <Card elevation="medium" style={s.insightCard}>
+                <View style={s.insightHeader}>
+                  <View style={s.sparkBadge}>
+                    <SymbolView
+                      name={'sparkles' as any}
+                      type="monochrome"
+                      style={{ width: 13, height: 13 }}
+                      tintColor="#FFFFFF"
+                    />
+                  </View>
+                  <Text style={s.mypalLabel}>MyPal</Text>
+                  <SymbolView
+                    name={'chevron.right' as any}
+                    type="monochrome"
+                    style={{ width: 12, height: 12, marginLeft: 'auto' as any }}
+                    tintColor={Col.textDim}
+                  />
+                </View>
+                <Text style={s.mypalMsg}>
+                  Consistency is what builds lasting strength. Your form improves most with regular reps — tap to chat with your coach.
+                </Text>
+              </Card>
+            </Pressable>
+          </View>
+
+          {/* ── 4. Overall Form gauge + Week Goal ────────────────────────── */}
+          <Card elevation="medium" style={s.gaugeCard}>
+            {/* Left: rainbow speedometer */}
+            <View style={s.gaugeLeft}>
+              <Text style={s.statCaption}>Overall Form</Text>
+              <SpeedoGauge progress={(formScore ?? 0) / 100} />
+            </View>
+
+            <View style={s.vDivider} />
+
+            {/* Right: sessions this week + green bar */}
+            <View style={s.gaugeRight}>
+              <Text style={s.statCaption}>Week Goal</Text>
+              <View style={s.weekNumRow}>
+                <Text style={s.weekBig}>{weekCount}</Text>
+                <Text style={s.weekDenom}> / {WEEK_GOAL}</Text>
+              </View>
+              <Text style={s.weekUnit}>sessions</Text>
+              <View style={{ marginTop: Sp.sm, gap: Sp.xs }}>
+                <ProgressBar progress={weekCount / WEEK_GOAL} colors={Col.ringB} />
+                <Text style={s.weekHint}>
+                  {weekCount >= WEEK_GOAL ? 'Goal reached!' : `${WEEK_GOAL - weekCount} more to go`}
+                </Text>
+              </View>
+            </View>
+          </Card>
+
+          {/* ── 5. Full Body workout card ─────────────────────────────────── */}
+          <Pressable onPress={() => router.push('/formcheck' as any)}>
+            <Card elevation="medium" style={s.workoutCard}>
+              <View style={s.workoutTop}>
+                <View>
+                  <Text style={s.workoutTitle}>Full Body</Text>
+                  <Text style={s.workoutSub}>4 exercises · 30 min</Text>
+                </View>
+                <View style={s.startBtn}>
+                  <Text style={s.startTxt}>Start</Text>
+                </View>
+              </View>
+              <View style={s.chips}>
+                {['Squat', 'Push-up', 'Pull-up', 'Lunge'].map(ex => (
+                  <View key={ex} style={s.chip}>
+                    <Text style={s.chipTxt}>{ex}</Text>
+                  </View>
+                ))}
+              </View>
+            </Card>
+          </Pressable>
+
+          {/* ── 6. Learn the Moves ────────────────────────────────────────── */}
+          <Card elevation="low" style={s.movCard}>
+            <Text style={s.sectionHead}>Movements</Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: 20, gap: 14, paddingBottom: 4 }}
+              contentContainerStyle={s.movRow}
             >
-              {CURATED_MOVES.map(move => (
+              {MOVES.map(m => (
                 <MoveCircle
-                  key={move.id}
-                  move={move}
-                  onPress={() => router.push(`/move/${move.id}`)}
+                  key={m.id}
+                  id={m.id}
+                  viewed={viewedMoves.has(m.id)}
+                  onPress={() => markViewed(m.id)}
                 />
               ))}
             </ScrollView>
-          </View>
-        </View>
+          </Card>
 
-        {/* Coach chat bubble */}
-        <View style={s.coachRow}>
-          <View style={s.coachAvatar}>
-            <Dumbbell size={16} color={C.textMuted} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <View style={s.coachTail} />
-            <View style={s.coachBubble}>
-              <Text style={s.coachMark}>Coach</Text>
-              <Text style={s.coachNote}>
-                {streak === 0
-                  ? 'Form is your foundation. Take your time on each movement today.'
-                  : 'Your squat depth held all week. Push a little deeper today.'}
+          {/* ── 7. Past Sessions ──────────────────────────────────────────── */}
+          <Card elevation="low" style={s.sessCard}>
+            <Text style={s.sectionHead}>Recent Sessions</Text>
+            {reversedSessions.length === 0 ? (
+              <Text style={s.empty}>
+                No sessions yet. Start a session to begin tracking your form.
               </Text>
-            </View>
-          </View>
-        </View>
+            ) : (
+              reversedSessions.map((entry, i) => (
+                <SessionRow
+                  key={`${entry.ts}-${i}`}
+                  entry={entry}
+                  last={i === reversedSessions.length - 1}
+                />
+              ))
+            )}
+          </Card>
 
-        {/* Today's Workout hero card — Pressable (not TouchableOpacity) to avoid opacity conflict with GlassView inside */}
-        <Pressable style={s.heroWorkoutCard} onPress={startWorkout}>
-          <Image
-            source={{ uri: 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=800&q=80' }}
-            style={StyleSheet.absoluteFill}
-            resizeMode="cover"
-          />
-          <LinearGradient
-            colors={['transparent', 'rgba(10,11,12,0.45)', 'rgba(10,11,12,0.95)']}
-            locations={[0, 0.45, 1]}
-            style={StyleSheet.absoluteFill}
-          />
-          <View style={s.todayTag}>
-            <Text style={s.todayTagTxt}>Today</Text>
-          </View>
-          <View style={s.heroWorkoutContent}>
-            <View style={s.heroFormBadge}>
-              <Camera size={11} color="rgba(240,240,242,0.7)" />
-              <Text style={s.heroFormBadgeTxt}>form check</Text>
-            </View>
-            <Text style={s.heroWorkoutName}>{DEFAULT_PLAN.focus.toUpperCase()}</Text>
-            <Text style={s.heroWorkoutMeta}>Day 1 · 30 min · {DEFAULT_PLAN.exercises.length} exercises</Text>
-            <GlassButton style={{ height: 54, alignSelf: 'stretch' }} onPress={startWorkout}>
-              <Text style={s.heroStartBtnTxt}>Start Workout</Text>
-            </GlassButton>
-          </View>
-        </Pressable>
-
-        {/* Form score */}
-        <FormScoreRing score={null} reps={0} play={true} />
-      </ScrollView>
-    </View>
+        </ScrollView>
+      </ScreenBackground>
+    </>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const s = StyleSheet.create({
-  c: { flex: 1, backgroundColor: C.bg },
 
-  topRow:         { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
-  welcomeTxt:     { fontSize: 16, fontWeight: '500', color: C.textPrimary, letterSpacing: -0.3 },
-  topRight:       { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  streakBadge:    { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: C.surface, borderWidth: 1, borderColor: C.surfaceBorder, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 100 },
-  streakBadgeTxt: { fontSize: 13, fontWeight: '600', color: C.textSecondary },
-  avatarCircle:   { width: 32, height: 32, borderRadius: 16, backgroundColor: C.surface, borderWidth: 1, borderColor: C.surfaceBorder, alignItems: 'center', justifyContent: 'center' },
-
-  weekRow:             { flexDirection: 'row', marginBottom: 26 },
-  weekDayCol:          { flex: 1, alignItems: 'center', gap: 5 },
-  weekDayLbl:          { fontSize: 10, fontWeight: '500', color: C.textMuted, letterSpacing: 0.3 },
-  weekDayLblActive:    { color: C.textPrimary, fontWeight: '700' },
-  weekDayCircle:       { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
-  weekDayCircleActive: { backgroundColor: C.primary },
-  weekDayNum:          { fontSize: 13, fontWeight: '500', color: C.textMuted },
-  weekDayNumActive:    { color: C.bg, fontWeight: '700' },
-
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: C.textPrimary, letterSpacing: -0.3, marginBottom: 2 },
-  sectionSub:   { fontSize: 12, color: C.textMuted, marginBottom: 14 },
-
-  moveCircle: {
-    width: 64, height: 64, borderRadius: 32,
-    borderWidth: 1.5, borderColor: C.surfaceBorder,
-    backgroundColor: C.surface, overflow: 'hidden',
-    alignItems: 'center', justifyContent: 'center',
+  // ScrollView container — Sp.md gap between all top-level children
+  scroll: {
+    paddingHorizontal: Sp.lg,
+    gap: Sp.md,
   },
-  moveAbbr:  { fontSize: 14, fontWeight: '700', color: C.textPrimary, letterSpacing: 0.5 },
-  moveLabel: { fontSize: 10, color: C.textSecondary, fontWeight: '500', textAlign: 'center', maxWidth: 64 },
 
-  coachRow:    { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 14 },
-  coachAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: C.surface, borderWidth: 1, borderColor: C.surfaceBorder, alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 4 },
-  coachTail: {
-    position: 'absolute', left: -7, top: 14,
-    width: 0, height: 0, borderStyle: 'solid',
-    borderTopWidth: 7, borderBottomWidth: 7, borderRightWidth: 8, borderLeftWidth: 0,
-    borderTopColor: 'transparent', borderBottomColor: 'transparent',
-    borderRightColor: '#1B1C22', borderLeftColor: 'transparent',
+  // ── 1. Header ──────────────────────────────────────────────────────────────
+  header: { gap: Sp.xs },
+  greeting: {
+    fontFamily:    FONT.displayLight,   // Bricolage Grotesque 300 — premium light heading
+    fontSize:      Sz.h1,
+    color:         Col.text,
+    letterSpacing: -0.8,
+    lineHeight:    40,
   },
-  coachBubble: { backgroundColor: '#1B1C22', borderRadius: 16, borderTopLeftRadius: 4, padding: 14 },
-  coachMark:   { fontSize: 10, fontWeight: '700', color: C.textMuted, letterSpacing: 1.2, marginBottom: 6 },
-  coachNote:   { fontSize: 14, color: C.textSecondary, lineHeight: 20, letterSpacing: -0.1 },
+  dateLabel: {
+    fontSize:      Sz.small,
+    fontWeight:    W.regular,
+    color:         Col.textSub,
+    letterSpacing: 0.1,
+  },
 
-  heroWorkoutCard:    { height: 400, borderRadius: 20, overflow: 'hidden', backgroundColor: '#1A1B1F', marginBottom: 14, justifyContent: 'flex-end' },
-  todayTag:           { position: 'absolute', top: 16, left: 16, backgroundColor: 'rgba(255,255,255,0.12)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 100, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
-  todayTagTxt:        { fontSize: 11, fontWeight: '600', color: 'rgba(240,240,242,0.9)', letterSpacing: 0.3 },
-  heroWorkoutContent: { padding: 20 },
-  heroFormBadge:      { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(255,255,255,0.1)', alignSelf: 'flex-start', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 100, marginBottom: 10 },
-  heroFormBadgeTxt:   { fontSize: 11, fontWeight: '600', color: 'rgba(240,240,242,0.7)', letterSpacing: 0.2 },
-  heroWorkoutName:    { fontSize: 36, fontWeight: '800', color: C.textPrimary, letterSpacing: -1, lineHeight: 40, marginBottom: 4 },
-  heroWorkoutMeta:    { fontSize: 13, color: 'rgba(240,240,242,0.6)', marginBottom: 16 },
-  heroStartBtnTxt:    { fontSize: 15, fontWeight: '700', color: C.textPrimary, letterSpacing: 0.1 },
+  // ── 2. Status pills ────────────────────────────────────────────────────────
+  pillRow: { flexDirection: 'row', gap: Sp.sm },
 
-  scoreCard:   { flexDirection: 'row', alignItems: 'center', gap: 16, backgroundColor: C.surface, borderRadius: 16, borderWidth: 1, borderColor: C.surfaceBorder, padding: 16, marginBottom: 14 },
-  scoreNum:    { fontSize: 18, fontWeight: '700', color: C.textPrimary, letterSpacing: -0.5 },
-  scoreLabel:  { fontSize: 14, fontWeight: '600', color: C.textPrimary, letterSpacing: -0.2, marginBottom: 3 },
-  scoreChange: { fontSize: 12, color: C.textMuted, marginBottom: 2 },
-  scoreReps:   { fontSize: 11, color: C.textMuted, opacity: 0.7 },
+  // ── 3. Hero block — rings card ─────────────────────────────────────────────
+  ringsCard: {
+    paddingVertical:   Sp.lg,
+    paddingHorizontal: Sp.md,
+    zIndex:            2,               // must sit visually above the insight card
+  },
+  ringsRow: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    justifyContent: 'space-around',
+  },
+  ringDivider: {
+    width:           StyleSheet.hairlineWidth,
+    height:          60,
+    backgroundColor: 'rgba(0,0,0,0.07)',
+  },
+
+  // Insight card — 18px tuck; paddingTop clears the overlap region
+  insightCard: {
+    marginTop:         -18,
+    zIndex:            1,
+    paddingTop:        Sp.xl,           // 32px — content clears the rings card tuck
+    paddingBottom:     Sp.lg,
+    paddingHorizontal: Sp.lg,
+    gap:               Sp.sm,
+  },
+  insightHeader: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           Sp.sm,
+  },
+  sparkBadge: {
+    width:           24, height: 24,
+    borderRadius:    R.sm,
+    backgroundColor: Col.ringC[0],      // blue badge — matches Good Reps ring hue
+    alignItems:      'center', justifyContent: 'center',
+  },
+  mypalLabel: {
+    fontSize:      Sz.caption,
+    fontWeight:    W.bold,
+    color:         Col.ringC[0],
+    letterSpacing: 0.3,
+  },
+  mypalMsg: {
+    fontSize:      Sz.body,
+    fontWeight:    W.regular,
+    color:         Col.text,
+    lineHeight:    22,
+    letterSpacing: -0.1,
+  },
+
+  // ── 4. Gauge card ──────────────────────────────────────────────────────────
+  gaugeCard: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    paddingVertical:   Sp.lg,
+    paddingHorizontal: Sp.lg,
+    gap:               Sp.lg,
+  },
+  gaugeLeft:  { alignItems: 'center', gap: Sp.sm },
+  gaugeRight: { flex: 1, gap: 2 },
+  vDivider: {
+    width:           StyleSheet.hairlineWidth,
+    height:          80,
+    backgroundColor: 'rgba(0,0,0,0.07)',
+  },
+  statCaption: {
+    fontSize:      Sz.caption,
+    fontWeight:    W.semi,
+    color:         Col.textSub,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase' as const,
+  },
+  weekNumRow: {
+    flexDirection: 'row',
+    alignItems:    'baseline',
+    marginTop:     Sp.sm,
+  },
+  weekBig: {
+    fontSize:      Sz.h1,
+    fontWeight:    W.bold,
+    color:         Col.good,            // green = goal-state meaning
+    letterSpacing: -1,
+    lineHeight:    38,
+  },
+  weekDenom: {
+    fontSize:   Sz.h3,
+    fontWeight: W.regular,
+    color:      Col.textSub,
+  },
+  weekUnit: {
+    fontSize:   Sz.caption,
+    fontWeight: W.regular,
+    color:      Col.textSub,
+  },
+  weekHint: {
+    fontSize:   Sz.caption,
+    fontWeight: W.medium,
+    color:      Col.textSub,
+  },
+
+  // ── 5. Workout card ────────────────────────────────────────────────────────
+  workoutCard: { padding: Sp.lg, gap: Sp.md },
+  workoutTop:  {
+    flexDirection:  'row',
+    alignItems:     'center',
+    justifyContent: 'space-between',
+  },
+  workoutTitle: {
+    fontFamily:    FONT.displayBold,    // Bricolage Grotesque 700 — strong card heading
+    fontSize:      Sz.h2,
+    color:         Col.text,
+    letterSpacing: -0.5,
+  },
+  workoutSub: {
+    fontSize:   Sz.small,
+    fontWeight: W.regular,
+    color:      Col.textSub,
+    marginTop:  Sp.xs,
+  },
+  startBtn: {
+    backgroundColor: Col.text,
+    borderRadius:    R.pill,
+    paddingVertical:   10,
+    paddingHorizontal: Sp.lg,
+  },
+  startTxt: {
+    fontSize:   Sz.body,
+    fontWeight: W.bold,
+    color:      Col.card,
+  },
+  chips: { flexDirection: 'row', gap: Sp.xs + 2, flexWrap: 'wrap' },
+  chip: {
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    borderRadius:    R.chip,
+    paddingVertical:   Sp.xs,
+    paddingHorizontal: Sp.sm + 2,
+  },
+  chipTxt: {
+    fontSize:   Sz.caption,
+    fontWeight: W.medium,
+    color:      Col.textSub,
+  },
+
+  // ── 6. Moves card ──────────────────────────────────────────────────────────
+  movCard: { paddingTop: Sp.lg, paddingBottom: Sp.lg, gap: Sp.md },
+  movRow:  { paddingHorizontal: Sp.lg, gap: Sp.sm + 4, paddingBottom: Sp.xs },
+
+  // ── 7. Sessions card ───────────────────────────────────────────────────────
+  sessCard: { paddingTop: Sp.lg, paddingBottom: Sp.sm, paddingHorizontal: Sp.lg },
+  empty: {
+    fontSize:        Sz.body,
+    fontWeight:      W.regular,
+    color:           Col.textSub,
+    lineHeight:      22,
+    paddingVertical: Sp.lg,
+  },
+
+  // Shared section heading — Bricolage Grotesque Bold, used in movCard + sessCard
+  sectionHead: {
+    fontFamily:        FONT.displayBold,
+    fontSize:          Sz.h3,
+    color:             Col.text,
+    letterSpacing:     -0.3,
+    paddingHorizontal: Sp.lg,
+  },
 });

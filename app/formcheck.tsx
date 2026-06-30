@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, Animated,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -16,13 +16,14 @@ import {
   stopTracking,
   flipCamera,
   setDiagnosticMode,
+  setExercise,
   addRepListener,
   addDebugStatsListener,
   addCameraStateListener,
   addErrorListener,
   isNativeModuleLinked,
 } from '../modules/athlt-camera/src/index';
-import type { DebugStatsEvent, RepEvent } from '../modules/athlt-camera/src/index';
+import type { DebugStatsEvent, RepEvent, ExerciseType } from '../modules/athlt-camera/src/index';
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 const C = {
@@ -54,6 +55,8 @@ type Phase = 'idle' | 'starting' | 'ready' | 'tracking' | 'stopping';
 export default function FormCheckScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { exercise = 'squat' } = useLocalSearchParams<{ exercise?: string }>();
+  const exerciseType = (exercise === 'curl' ? 'curl' : 'squat') as ExerciseType;
 
   const [phase,    setPhase]    = useState<Phase>('idle');
   const [error,    setError]    = useState<string | null>(null);
@@ -146,6 +149,7 @@ export default function FormCheckScreen() {
       startTimestamp.current = Date.now();
       repEvents.current      = [];
       setPhase('tracking');
+      await setExercise(exerciseType);
       await startTracking();
     } else if (phase === 'tracking') {
       setPhase('stopping');
@@ -207,7 +211,7 @@ export default function FormCheckScreen() {
         <GlassButton circular={40} onPress={handleBack}>
           <SymbolView name="chevron.left" size={18} tintColor={C.text} type="monochrome" style={{ width: 18, height: 18 }} />
         </GlassButton>
-        <Text style={s.title}>Form Check</Text>
+        <Text style={s.title}>{exerciseType === 'curl' ? 'Bicep Curl' : 'Squat'} Form Check</Text>
         <GlassButton circular={40} onPress={handleFlip}>
           <SymbolView name="arrow.triangle.2.circlepath.camera.fill" size={18} tintColor={C.text} type="monochrome" style={{ width: 18, height: 18 }} />
         </GlassButton>
@@ -240,7 +244,7 @@ export default function FormCheckScreen() {
         <View style={s.debugPanel}>
           <Row label="person"  value={stats.personDetected ? 'yes' : 'no'} good={stats.personDetected} />
           <Row label="ready"   value={stats.ready ? 'yes' : 'no'} good={stats.ready} />
-          <Row label="knee°"   value={stats.kneeAngle.toFixed(1)} />
+          <Row label={exerciseType === 'curl' ? 'elbow°' : 'knee°'} value={stats.kneeAngle.toFixed(1)} />
           <Row label="back°"   value={stats.backAngle.toFixed(1)} />
           <Row label="phase"   value={stats.phase} />
           <Row label="frames"  value={`${stats.totalFramesAnalyzed} / ${stats.totalFramesReceived}`} />

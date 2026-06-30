@@ -16,8 +16,8 @@ import type { ViewStyle } from 'react-native';
 export interface RepEvent {
   good: boolean;        // true = clean rep; false = form issue detected
   reason: string;       // 2-3 word cue: "nice" | "GO DEEPER" | "CHEST UP" | "KEEP HEELS DOWN" | "WEIGHT ON HEELS"
-  depthAngle: number;   // min knee angle reached this rep (deg); tune bottomThreshold with this
-  backAngle:  number;   // max torso-vertical angle reached this rep (deg); tune backLeanThreshold with this
+  depthAngle: number;   // squat: min knee angle (deg) | curl: min elbow angle (deg)
+  backAngle:  number;   // squat: max torso-vertical angle (deg) | curl: extension angle at top (deg)
   reps: number;         // total reps this session
   goodReps: number;     // good reps this session
   timestamp: number;    // ms
@@ -94,6 +94,15 @@ export async function loadModel(): Promise<{ loaded: boolean }> {
 
 export function isModelLoaded(): boolean {
   return true;
+}
+
+// ─── Exercise type ────────────────────────────────────────────────────────────
+
+export type ExerciseType = 'squat' | 'curl';
+
+export async function setExercise(type: ExerciseType): Promise<void> {
+  if (!ATHLTCameraNative) return;
+  return ATHLTCameraNative.setExercise(type);
 }
 
 // ─── Mode control ─────────────────────────────────────────────────────────────
