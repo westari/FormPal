@@ -33,16 +33,16 @@ final class ATHLTSessionHolder {
 //   • readyStandingDuration: 1.0 s (was 1.5 s) — gate opens sooner
 //   • maxHipYVariance: 0.002 (was 0.0006) — standing still no longer blocked
 //     by normal micro-movement
-//   • topExitThreshold: 160° (was 165°) — no hysteresis gap; returning to
-//     standing reliably completes the rep
+//   • topExitThreshold: 155° (was 160°) — reps count when person doesn't fully
+//     extend between squats; 5° below topThreshold
 //   • minRepInterval: 0.5 s (was 0.8 s) — allows normal-paced squats
 //
 // FIX 2 — ONLY RELIABLE FORM CUES
 //   • DISABLED "KEEP HEELS DOWN" — ankle keypoints too low-confidence
 //   • DISABLED "WEIGHT ON HEELS" — knee-over-toes fires on good-form squats
 //   • KEPT "GO DEEPER" (knee never reached bottomThreshold)
-//   • KEPT "CHEST UP" with conservative backLeanThreshold: 60° (was 50°)
-//     so normal forward lean in a squat is NOT flagged; only extreme cases.
+//   • KEPT "CHEST UP"; backLeanThreshold tightened to 25° based on measured data
+//     (normal upright squat ≈ 3.7°, bad lean ≈ 47.2°) — catches real errors, not normal lean.
 //
 // Camera angle check (Fix 4) kept as a passive warning; never blocks counting.
 //
@@ -55,8 +55,9 @@ final class SquatAnalyzer {
     static let jointConfidenceMin: Float      = 0.30
     /// Knee angle (°) above which standing is confirmed (ready gate + ankle baseline).
     static let topThreshold: Double           = 160.0
-    /// Knee angle (°) above which a rep completes. Same as topThreshold — no hysteresis.
-    static let topExitThreshold: Double       = 160.0  // loosened from 165
+    /// Knee angle (°) above which a rep completes. Slightly below topThreshold so reps
+    /// count even when the person doesn't fully extend between squats.
+    static let topExitThreshold: Double       = 155.0
     /// Knee angle (°) below which descent (INTERMEDIATE entry) is registered.
     static let intermediateEntryAngle: Double = 150.0
     /// Knee angle (°) below which good depth is reached.
@@ -65,9 +66,10 @@ final class SquatAnalyzer {
     static let inactivityTimeout: Double      = 2.5
     /// Continuous seconds of hip-stable standing required before counting starts.
     static let readyStandingDuration: Double  = 1.0    // loosened from 1.5
-    /// Torso-vertical angle (°) flagged as excessive lean. Conservative — only catches
-    /// clearly bad form, not the natural lean every squat has.
-    static let backLeanThreshold: Double      = 60.0   // loosened from 50
+    /// Torso-vertical angle (°) above which "CHEST UP" fires. Measured on-device:
+    /// normal upright squat ≈ 3.7°, deliberately hunched ≈ 47.2°. 25° sits cleanly
+    /// between the two, catching bad lean without false-flagging good form.
+    static let backLeanThreshold: Double      = 25.0
     /// Minimum seconds between counted reps. Allows normal-paced squats.
     static let minRepInterval: Double         = 0.5    // loosened from 0.8
     /// Max hip-Y variance (Vision units) while accumulating stable-standing time.
@@ -205,14 +207,18 @@ final class SquatAnalyzer {
                     stableStandingStart = nil
                     NSLog("[SquatAnalyzer] → READY after %.1fs stable standing (knee %.0f°)",
                           elapsed, kneeAngle)
+                    // Fall through into the state machine on this same frame so
+                    // the very first descent isn't delayed by one extra frame.
+                } else {
+                    return nil
                 }
             } else {
                 stableStandingStart = nil
                 state = kneeAngle < Self.topThreshold
                     ? String(format: "Stand tall (knee %.0f°)", kneeAngle)
                     : "Hold still — don't move"
+                return nil
             }
-            return nil
         }
 
         // ── Min knee angle ────────────────────────────────────────────────────

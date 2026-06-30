@@ -230,14 +230,7 @@ export default function FormCheckScreen() {
       {/* Rep counter */}
       {(isTracking || isStopping) && (
         <View style={s.repBlock}>
-          <Animated.Text
-            style={[
-              s.repNum,
-              { color: flashAnim.interpolate({ inputRange: [0, 1], outputRange: ['#ffffff', C.good] }) },
-            ]}
-          >
-            {reps}
-          </Animated.Text>
+          <Text style={s.repNum}>{reps}</Text>
           <Text style={s.repSub}>{goodReps} good</Text>
         </View>
       )}
