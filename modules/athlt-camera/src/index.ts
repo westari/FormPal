@@ -98,6 +98,14 @@ export function isModelLoaded(): boolean {
 
 // ─── Exercise type ────────────────────────────────────────────────────────────
 
+// ─── Skeleton overlay ─────────────────────────────────────────────────────────
+
+/// Show or hide the real-time body-pose skeleton on the camera view. Defaults ON.
+export async function setSkeletonVisible(enabled: boolean): Promise<void> {
+  if (!ATHLTCameraNative) return;
+  return ATHLTCameraNative.setSkeletonVisible(enabled);
+}
+
 // Extending this list is the only TS change needed when adding a new exercise —
 // the engine, definitions, and registry are all on the Swift side.
 export type ExerciseType = 'squat' | 'curl' | 'pushup';

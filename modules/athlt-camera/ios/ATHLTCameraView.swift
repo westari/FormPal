@@ -2,21 +2,26 @@ import ExpoModulesCore
 import AVFoundation
 import UIKit
 
-/// ATHLTCameraView — renders the AVCaptureSession preview layer.
+/// ATHLTCameraView — renders the AVCaptureSession preview layer + skeleton overlay.
 ///
 /// This view does NOT own the session. It connects to ATHLTSessionHolder.shared
 /// which is set by ATHLTCameraModule.startSession(). Any number of views can
 /// observe the session (NotificationCenter broadcast), but we only ever render
 /// one at a time in practice.
 ///
-/// Exposed to React Native as the "ATHLTCameraView" native view manager.
-/// Usage in JS: import { ATHLTCameraView } from 'athlt-camera'
+/// The skeleton overlay is updated via .athltPoseUpdated notifications posted by
+/// ATHLTCameraModule once per analysed frame on the main queue.
 
 public class ATHLTCameraView: ExpoView {
 
     // MARK: – Preview layer
 
     private let previewLayer = AVCaptureVideoPreviewLayer()
+
+    // MARK: – Skeleton overlay
+
+    private let skeleton = SkeletonOverlayView()
+    private var skeletonVisible = true
 
     // MARK: – Init
 
@@ -26,23 +31,52 @@ public class ATHLTCameraView: ExpoView {
     }
 
     private func configure() {
-        // Fill parent view, clip to bounds (especially for rounded corners if used)
         clipsToBounds = true
         backgroundColor = .black
 
+        // Preview layer (fills view)
         previewLayer.videoGravity = .resizeAspectFill
         layer.addSublayer(previewLayer)
 
-        // Connect to existing session if the module already ran startSession()
+        // Skeleton overlay (covers full view, above preview)
+        skeleton.frame = bounds
+        skeleton.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        addSubview(skeleton)
+
+        // Connect to existing session if module already ran startSession()
         if let session = ATHLTSessionHolder.shared.session {
             attachSession(session)
         }
 
-        // Observe future session changes (module creates/destroys session)
+        // Observe session changes (module creates/destroys session)
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleSessionChanged(_:)),
             name: .athltSessionChanged,
+            object: nil
+        )
+
+        // Observe pose updates (posted by ATHLTCameraModule per analysed frame)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handlePoseUpdated(_:)),
+            name: .athltPoseUpdated,
+            object: nil
+        )
+
+        // Observe pose cleared (no person / skeleton disabled)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handlePoseCleared),
+            name: .athltPoseCleared,
+            object: nil
+        )
+
+        // Observe skeleton visibility toggle
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleSkeletonVisibility(_:)),
+            name: .athltSkeletonVisibilityChanged,
             object: nil
         )
     }
@@ -55,7 +89,6 @@ public class ATHLTCameraView: ExpoView {
 
     public override func layoutSubviews() {
         super.layoutSubviews()
-        // Keep preview layer perfectly in sync with the view's bounds
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         previewLayer.frame = bounds
@@ -66,18 +99,45 @@ public class ATHLTCameraView: ExpoView {
 
     private func attachSession(_ session: AVCaptureSession?) {
         previewLayer.session = session
-
-        // Portrait: squatting body is taller than wide; portrait keeps the full
-        // person (head → ankles) in frame, which body-pose detection requires.
+        // Portrait keeps the full person (head → ankles) in frame.
         if let conn = previewLayer.connection, conn.isVideoOrientationSupported {
             conn.videoOrientation = .portrait
         }
     }
 
+    // MARK: – Notification handlers
+
     @objc private func handleSessionChanged(_ notification: Notification) {
         let session = notification.object as? AVCaptureSession
         DispatchQueue.main.async { [weak self] in
-            self?.attachSession(session)
+            guard let self else { return }
+            self.attachSession(session)
+            if session == nil { self.skeleton.clear() }
         }
+    }
+
+    @objc private func handlePoseUpdated(_ notification: Notification) {
+        guard skeletonVisible,
+              let info       = notification.userInfo,
+              let pose       = info["pose"]        as? Pose,
+              let videoWidth  = info["videoWidth"]  as? CGFloat,
+              let videoHeight = info["videoHeight"] as? CGFloat,
+              let isMirrored  = info["isMirrored"]  as? Bool
+        else { return }
+
+        skeleton.update(pose: pose,
+                        videoWidth:  videoWidth,
+                        videoHeight: videoHeight,
+                        isMirrored:  isMirrored)
+    }
+
+    @objc private func handlePoseCleared() {
+        skeleton.clear()
+    }
+
+    @objc private func handleSkeletonVisibility(_ notification: Notification) {
+        let visible = notification.userInfo?["visible"] as? Bool ?? true
+        skeletonVisible = visible
+        if !visible { skeleton.clear() }
     }
 }

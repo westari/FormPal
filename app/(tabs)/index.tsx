@@ -658,37 +658,43 @@ export default function HomeScreen() {
             </Pressable>
           </View>
 
-          {/* ── 4. TODAY'S SESSION ────────────────────────────────────────── */}
-          <SectionHeader title="Today's session" />
-
-          <Pressable onPress={() => router.push('/formcheck' as any)}>
-            <View style={[s.workoutCard, SHADOW_HIGH]}>
-              <LinearGradient
-                colors={['#5AC0FF', '#0A6CFF']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={s.workoutIcon}
-              >
-                <SymbolView
-                  name="dumbbell.fill" type="monochrome"
-                  style={{ width: 28, height: 28 }} tintColor="#fff"
+          {/* ── 4. OVERALL FORM + WEEK GOAL ──────────────────────────────── */}
+          <View style={[s.goalsCard, SHADOW_MED]}>
+            <View style={s.goalHalf}>
+              <Text style={s.goalLabel}>Overall Form</Text>
+              <Text style={[
+                s.goalValue,
+                { color: formScore == null ? C.textDim
+                        : formScore >= 80   ? C.goodText
+                        : formScore >= 60   ? C.midText
+                        :                    C.lowText },
+              ]}>
+                {formScore != null ? `${formScore}%` : '--'}
+              </Text>
+              <View style={s.barBg}>
+                <LinearGradient
+                  colors={C.formGrad}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={[s.barFill, { width: `${formScore ?? 0}%` as any }]}
                 />
-              </LinearGradient>
-              <Text style={s.workoutTitle}>Full Body</Text>
-              <Text style={s.workoutSub}>4 exercises · ~30 min</Text>
-              <LinearGradient
-                colors={['#33363f', '#0b0d12']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-                style={s.startBtn}
-              >
-                <Svg width={15} height={15} viewBox="0 0 24 24">
-                  <SvgPath d="M7 4.5l13 7.5-13 7.5z" fill="#fff" />
-                </Svg>
-                <Text style={s.startTxt}>Start workout</Text>
-              </LinearGradient>
+              </View>
             </View>
-          </Pressable>
+
+            <View style={s.goalDivider} />
+
+            <View style={s.goalHalf}>
+              <Text style={s.goalLabel}>Week Goal</Text>
+              <Text style={s.goalValue}>
+                {weekCount}<Text style={s.goalUnit}> / {WEEK_GOAL}</Text>
+              </Text>
+              <View style={s.pipsRow}>
+                {Array.from({ length: WEEK_GOAL }).map((_, i) => (
+                  <View key={i} style={[s.pip, i < weekCount && s.pipFilled]} />
+                ))}
+              </View>
+            </View>
+          </View>
 
           {/* ── 5. YOUR PROGRESS ──────────────────────────────────────────── */}
           <SectionHeader title="Your progress" />
@@ -705,7 +711,7 @@ export default function HomeScreen() {
             <FormChart sessions={sessions} tab={progressTab} />
           </View>
 
-          {/* ── 6. LEARN THE MOVES ────────────────────────────────────────── */}
+          {/* ── 6. LEARN THE MOVES ───────────────────────────────────────── */}
           <View>
             <SectionHeader title="Learn the moves" action="See all" onAction={() => {}} />
             <ScrollView
@@ -730,7 +736,7 @@ export default function HomeScreen() {
             <View style={s.sessionsList}>
               {reversedSessions.length === 0 ? (
                 <Text style={s.emptyTxt}>
-                  No sessions yet. Tap "Start workout" to begin tracking your form.
+                  No sessions yet. Use "Learn the moves" to start tracking your form.
                 </Text>
               ) : (
                 reversedSessions.slice(0, 6).map((entry, i) => (
@@ -812,34 +818,40 @@ const s = StyleSheet.create({
   mypalBody:   { fontSize: 13.5, lineHeight: 20, color: '#454b58' },
   mypalCta:    { color: C.accent, fontWeight: W.semi },
 
-  // 4. Workout card
-  workoutCard: {
-    backgroundColor: C.card,
-    borderRadius:    28,
-    borderWidth:     1,
-    borderColor:     C.border,
-    paddingVertical:   26,
+  // 4. Goals card (Overall Form + Week Goal)
+  goalsCard: {
+    backgroundColor:  C.card,
+    borderRadius:     22,
+    borderWidth:      1,
+    borderColor:      C.border,
+    flexDirection:    'row',
+    paddingVertical:  18,
     paddingHorizontal: 20,
-    alignItems:      'center',
-    gap:             0,
+    gap:              0,
   },
-  workoutIcon: {
-    width: 58, height: 58, borderRadius: 18,
-    alignItems: 'center', justifyContent: 'center',
+  goalHalf:    { flex: 1, gap: 6 },
+  goalLabel:   { fontSize: 11.5, fontWeight: W.semi, letterSpacing: 0.2, color: C.textSub },
+  goalValue:   { fontSize: 24, fontWeight: W.bold, letterSpacing: -0.5, color: C.text },
+  goalUnit:    { fontSize: 15, fontWeight: W.medium, color: C.textSub },
+  barBg: {
+    height: 6, borderRadius: 4,
+    backgroundColor: '#eceef3',
+    overflow: 'hidden',
   },
-  workoutTitle: { fontSize: 23, fontWeight: W.bold, letterSpacing: -0.5, color: C.text, marginTop: 15 },
-  workoutSub:   { fontSize: 13.5, fontWeight: W.medium, color: C.textSub, marginTop: 4 },
-  startBtn: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    justifyContent: 'center',
-    gap:            8,
-    width:          '100%',
-    paddingVertical: 14,
-    borderRadius:   16,
-    marginTop:      20,
+  barFill:     { height: '100%', borderRadius: 4 },
+  goalDivider: {
+    width:           StyleSheet.hairlineWidth,
+    alignSelf:       'stretch',
+    backgroundColor: 'rgba(0,0,0,0.08)',
+    marginHorizontal: 18,
   },
-  startTxt: { fontSize: 15, fontWeight: W.semi, color: '#fff' },
+  pipsRow:     { flexDirection: 'row', gap: 5 },
+  pip: {
+    width: 9, height: 9, borderRadius: 5,
+    backgroundColor: '#eceef3',
+    borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)',
+  },
+  pipFilled:   { backgroundColor: '#12B59A', borderColor: '#12B59A' },
 
   // 5. Progress card
   progressCard: {

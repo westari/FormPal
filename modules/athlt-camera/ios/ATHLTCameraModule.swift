@@ -8,7 +8,10 @@ import UIKit
 // ─── Notification ─────────────────────────────────────────────────────────────
 
 extension Notification.Name {
-    static let athltSessionChanged = Notification.Name("com.athlt.camera.sessionChanged")
+    static let athltSessionChanged        = Notification.Name("com.athlt.camera.sessionChanged")
+    static let athltPoseUpdated           = Notification.Name("com.athlt.camera.poseUpdated")
+    static let athltPoseCleared           = Notification.Name("com.athlt.camera.poseCleared")
+    static let athltSkeletonVisibilityChanged = Notification.Name("com.athlt.camera.skeletonVisibility")
 }
 
 // ─── Shared session holder ─────────────────────────────────────────────────────
@@ -82,6 +85,9 @@ public class ATHLTCameraModule: Module {
     private var lastDebugReady:    Bool             = false
     private var lastDebugCameraOk: Bool             = true
 
+    // MARK: – Skeleton overlay
+    private var isSkeletonVisible = true
+
     // MARK: – Diagnostics
     private var diagnosticMode          = false
     private var totalFramesReceived: Int = 0
@@ -152,6 +158,23 @@ public class ATHLTCameraModule: Module {
             self.inferenceQueue.async {
                 self.diagnosticMode = enabled
                 NSLog("[GymCamera] diagnostic: %@", enabled ? "ON" : "OFF")
+                promise.resolve()
+            }
+        }
+
+        AsyncFunction("setSkeletonVisible") { (enabled: Bool, promise: Promise) in
+            self.inferenceQueue.async {
+                self.isSkeletonVisible = enabled
+                DispatchQueue.main.async {
+                    if !enabled {
+                        NotificationCenter.default.post(name: .athltPoseCleared, object: nil)
+                    }
+                    NotificationCenter.default.post(
+                        name: .athltSkeletonVisibilityChanged,
+                        object: nil,
+                        userInfo: ["visible": enabled]
+                    )
+                }
                 promise.resolve()
             }
         }
@@ -438,6 +461,12 @@ public class ATHLTCameraModule: Module {
             personDetected = false
             engine.notePersonMissing(timestamp: date)
             maybeEmitDebugStats()
+            // Clear skeleton overlay when no person
+            if isSkeletonVisible {
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(name: .athltPoseCleared, object: nil)
+                }
+            }
             return
         }
 
@@ -446,6 +475,26 @@ public class ATHLTCameraModule: Module {
         let pose = extractPose(obs)
         engine.ingest(pose: pose, timestamp: date)
         maybeEmitDebugStats()
+
+        // Post pose for skeleton overlay (main thread — ~10 fps, very cheap)
+        if isSkeletonVisible {
+            let vw = CGFloat(CVPixelBufferGetWidth(pixelBuffer))
+            let vh = CGFloat(CVPixelBufferGetHeight(pixelBuffer))
+            let mirrored = currentPosition == .front
+            let capturedPose = pose
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(
+                    name: .athltPoseUpdated,
+                    object: nil,
+                    userInfo: [
+                        "pose":        capturedPose,
+                        "videoWidth":  vw,
+                        "videoHeight": vh,
+                        "isMirrored":  mirrored,
+                    ]
+                )
+            }
+        }
     }
 
     // ─── Convert Vision observation to Pose dictionary ────────────────────────
