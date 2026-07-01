@@ -85,6 +85,10 @@ public class ATHLTCameraModule: Module {
     private var lastDebugReady:    Bool             = false
     private var lastDebugCameraOk: Bool             = true
 
+    // MARK: – Framing status (change-detected — only emits onFramingStatus when changed)
+    private var lastFramingOk:     Bool   = false
+    private var lastFramingReason: String = ""
+
     // MARK: – Skeleton overlay
     private var isSkeletonVisible = true
 
@@ -103,7 +107,7 @@ public class ATHLTCameraModule: Module {
     public func definition() -> ModuleDefinition {
         Name("ATHLTCamera")
 
-        Events("onRepDetected", "onError", "onCameraState", "onDebugStats")
+        Events("onRepDetected", "onError", "onCameraState", "onDebugStats", "onFramingStatus")
 
         View(ATHLTCameraView.self) {
             Prop("isActive") { (_: ATHLTCameraView, _: Bool) in }
@@ -270,7 +274,18 @@ public class ATHLTCameraModule: Module {
             self.lastDebugFormVals = stats.formMetrics
             self.lastDebugReady    = stats.isReady
             self.lastDebugCameraOk = stats.cameraOk
+            self.emitFramingStatusIfChanged(ok: stats.framingStatus.ok,
+                                            reason: stats.framingStatus.reason)
         }
+    }
+
+    // MARK: – Framing status emission (change-detected) ───────────────────────
+
+    private func emitFramingStatusIfChanged(ok: Bool, reason: String) {
+        guard ok != lastFramingOk || reason != lastFramingReason else { return }
+        lastFramingOk     = ok
+        lastFramingReason = reason
+        sendEvent("onFramingStatus", ["ok": ok, "reason": reason])
     }
 
     // MARK: – Recording callback ───────────────────────────────────────────────
@@ -416,6 +431,10 @@ public class ATHLTCameraModule: Module {
     }
 
     // MARK: – Frame handling ───────────────────────────────────────────────────
+    //
+    // Guard changed from `self.isTracking` → `self.captureSession != nil` so that
+    // pose detection (and framing guidance) runs during monitoring mode — before
+    // the user presses Start. The framing overlay is powered by this.
 
     func handleSampleBuffer(_ buffer: CMSampleBuffer) {
         totalFramesReceived += 1
@@ -434,12 +453,23 @@ public class ATHLTCameraModule: Module {
 
         inferenceQueue.async { [weak self] in
             defer { CVPixelBufferUnlockBaseAddress(cap, .readOnly) }
-            guard let self, self.isTracking else { return }
+            guard let self, self.captureSession != nil else { return }
             self.runPoseDetection(pixelBuffer: cap, timestamp: t)
         }
     }
 
     // MARK: – Vision body-pose ─────────────────────────────────────────────────
+    //
+    // Monitoring mode (captureSession running, not tracking):
+    //   - Run pose detection
+    //   - Call engine.checkFramingOnly() → emitFramingStatusIfChanged
+    //   - Show skeleton
+    //
+    // Tracking mode (isTracking = true):
+    //   - Run pose detection
+    //   - Call engine.ingest() → engine internally calls runFramingCheck
+    //     → onDebugStats callback → emitFramingStatusIfChanged
+    //   - Show skeleton
 
     private func runPoseDetection(pixelBuffer: CVPixelBuffer, timestamp: Double) {
         totalFramesAnalyzed += 1
@@ -460,9 +490,11 @@ public class ATHLTCameraModule: Module {
         guard let results = request.results as? [VNHumanBodyPoseObservation], !results.isEmpty else {
             personDetected = false
             engine.notePersonMissing(timestamp: date)
+            emitFramingStatusIfChanged(ok: false, reason: "STEP INTO FRAME")
             maybeEmitDebugStats()
-            // Clear skeleton overlay when no person
             if isSkeletonVisible {
+                // Clear the buffer so the display link stops showing a stale pose.
+                ATHLTPoseBuffer.shared.clear()
                 DispatchQueue.main.async {
                     NotificationCenter.default.post(name: .athltPoseCleared, object: nil)
                 }
@@ -473,27 +505,29 @@ public class ATHLTCameraModule: Module {
         personDetected = true
         let obs  = results.max(by: { $0.confidence < $1.confidence }) ?? results[0]
         let pose = extractPose(obs)
-        engine.ingest(pose: pose, timestamp: date)
+
+        if isTracking {
+            // Full tracking path: engine.ingest handles framing check internally
+            // and fires emitFramingStatusIfChanged via onDebugStats callback.
+            engine.ingest(pose: pose, timestamp: date)
+        } else {
+            // Monitoring mode: framing check only — no rep counting.
+            let framing = engine.checkFramingOnly(pose: pose)
+            emitFramingStatusIfChanged(ok: framing.ok, reason: framing.reason)
+        }
+
         maybeEmitDebugStats()
 
-        // Post pose for skeleton overlay (main thread — ~10 fps, very cheap)
+        // Skeleton overlay: write directly to the shared buffer.
+        // The CADisplayLink in ATHLTCameraView reads it on the next vsync (~60-120 fps).
+        // No main-thread dispatch, no dictionary allocation — eliminates per-frame overhead.
         if isSkeletonVisible {
-            let vw = CGFloat(CVPixelBufferGetWidth(pixelBuffer))
-            let vh = CGFloat(CVPixelBufferGetHeight(pixelBuffer))
-            let mirrored = currentPosition == .front
-            let capturedPose = pose
-            DispatchQueue.main.async {
-                NotificationCenter.default.post(
-                    name: .athltPoseUpdated,
-                    object: nil,
-                    userInfo: [
-                        "pose":        capturedPose,
-                        "videoWidth":  vw,
-                        "videoHeight": vh,
-                        "isMirrored":  mirrored,
-                    ]
-                )
-            }
+            ATHLTPoseBuffer.shared.post(PoseFrame(
+                pose:        pose,
+                videoWidth:  CGFloat(CVPixelBufferGetWidth(pixelBuffer)),
+                videoHeight: CGFloat(CVPixelBufferGetHeight(pixelBuffer)),
+                isMirrored:  currentPosition == .front
+            ))
         }
     }
 
@@ -526,6 +560,8 @@ public class ATHLTCameraModule: Module {
             "goodReps":            engine.goodReps,
             "totalFramesReceived": totalFramesReceived,
             "totalFramesAnalyzed": totalFramesAnalyzed,
+            "framingOk":           lastFramingOk,
+            "framingReason":       lastFramingReason,
         ])
     }
 }

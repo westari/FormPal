@@ -2,19 +2,22 @@ import UIKit
 
 /// Real-time skeleton overlay drawn over the camera preview during form-check.
 ///
-/// Receives poses via update(pose:) on the MAIN thread.
-/// Draws lines + filled dots using two CAShapeLayers for performance.
+/// Performance design:
+///   • Two CAShapeLayers (line + dot) created once in setup() — GPU-rendered.
+///   • Each frame: build a CGMutablePath (C-level, no ObjC bridge) and assign
+///     to layer.path inside a no-animation CATransaction. No setNeedsDisplay,
+///     no draw(rect:). Path assignment is O(n joints) on CPU; rendering is GPU.
+///   • Driven by a CADisplayLink in ATHLTCameraView at native refresh rate (60-120 Hz).
+///     Pose data arrives from ATHLTPoseBuffer — display link reads whatever is freshest.
 ///
 /// Coordinate transform (see visionToView):
-///   Vision returns normalised coords with origin at BOTTOM-LEFT (y up).
-///   The preview layer uses .resizeAspectFill, portrait orientation.
-///   We correct for both the y-flip and the aspect-fill crop offset.
+///   Vision returns normalised coords with origin BOTTOM-LEFT (y up).
+///   Preview layer uses .resizeAspectFill, portrait orientation.
+///   We correct for y-flip and aspect-fill crop offset.
 ///
 /// TUNING after first build:
-///   • If skeleton is flipped left-right on FRONT camera, set isMirrored = true
-///     in ATHLTCameraModule when posting .athltPoseUpdated.
-///   • If skeleton is offset, verify the buffer dimensions in the NSLog
-///     ("[GymCamera] pixel buffer WxH") and confirm h > w (portrait).
+///   • If skeleton is flipped on FRONT camera, verify isMirrored flag in ATHLTCameraModule.
+///   • If skeleton is offset, check NSLog "[GymCamera] pixel buffer WxH" and confirm h > w.
 
 final class SkeletonOverlayView: UIView {
 
@@ -136,11 +139,13 @@ final class SkeletonOverlayView: UIView {
         guard vSize.width > 0, vSize.height > 0,
               videoWidth > 0, videoHeight > 0 else { return }
 
-        let linePath = UIBezierPath()
-        let dotPath  = UIBezierPath()
+        // CGMutablePath is C-level — no ObjC bridging cost vs UIBezierPath.
+        let linePath = CGMutablePath()
+        let dotPath  = CGMutablePath()
         let dotR: CGFloat = 4.5
+        let twoPi: CGFloat = .pi * 2
 
-        // Helper: Vision normalised → view point (returns nil if joint not tracked)
+        // Helper: Vision normalised → view point (nil if joint not tracked)
         func pt(_ j: Joint) -> CGPoint? {
             guard let n = smoothed[j] else { return nil }
             return visionToView(nx: n.x, ny: n.y,
@@ -159,15 +164,16 @@ final class SkeletonOverlayView: UIView {
         // Dots (on top of lines)
         for joint in Joint.allCases {
             guard let p = pt(joint) else { continue }
-            dotPath.move(to: CGPoint(x: p.x + dotR, y: p.y))
-            dotPath.addArc(withCenter: p, radius: dotR,
-                           startAngle: 0, endAngle: .pi * 2, clockwise: true)
+            dotPath.addArc(center: p, radius: dotR,
+                           startAngle: 0, endAngle: twoPi, clockwise: false)
         }
 
+        // Disable implicit CALayer animations so skeleton snaps to each new pose
+        // without interpolating between frames (interpolation looks like 1fps lag).
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        lineLayer.path = linePath.cgPath
-        dotLayer.path  = dotPath.cgPath
+        lineLayer.path = linePath
+        dotLayer.path  = dotPath
         CATransaction.commit()
     }
 

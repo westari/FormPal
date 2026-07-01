@@ -111,3 +111,27 @@ func deviationFromLine(pose: Pose, point p: Joint, lineFrom a: Joint, lineTo b: 
     guard ab > 1e-6 else { return nil }
     return abs(abx * apy - aby * apx) / ab
 }
+
+/// Signed perpendicular deviation of joint P from the infinite line A→B, in Vision units.
+/// Positive = P is to the LEFT of the direction A→B (in Vision coordinates).
+/// Negative = P is to the RIGHT of the direction A→B.
+///
+/// Pushup convention (camera on person's left, shoulder→ankle goes left→right in frame):
+///   Negative = hip sag (hip below shoulder-ankle line) → "HIPS UP"
+///   Positive = hip pike (hip above line) → "LOWER HIPS"
+///
+/// NSLog signed values on-device to verify sign before setting thresholds:
+///   look for "[FormCheck] hip_sag=..." in the rep log.
+func signedDeviationFromLine(pose: Pose, point p: Joint, lineFrom a: Joint, lineTo b: Joint) -> Double? {
+    guard
+        let pp = pose[p], pp.confidence >= kMinConf,
+        let pa = pose[a], pa.confidence >= kMinConf,
+        let pb = pose[b], pb.confidence >= kMinConf
+    else { return nil }
+
+    let abx = Double(pb.x - pa.x), aby = Double(pb.y - pa.y)
+    let apx = Double(pp.x - pa.x), apy = Double(pp.y - pa.y)
+    let ab  = (abx*abx + aby*aby).squareRoot()
+    guard ab > 1e-6 else { return nil }
+    return (abx * apy - aby * apx) / ab   // no abs() — sign is the information
+}

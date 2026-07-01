@@ -11,14 +11,22 @@ struct RepResult {
     let formValues:   [String: Double]   // check.id → evaluated value (for event emission)
 }
 
+// ─── Framing status ───────────────────────────────────────────────────────────
+
+struct FramingStatus {
+    let ok:     Bool
+    let reason: String
+}
+
 // ─── Debug stats (emitted every frame) ────────────────────────────────────────
 
 struct EngineDebugStats {
-    let primaryAngle: Double
-    let phase:        String
-    let isReady:      Bool
-    let cameraOk:     Bool
-    let formMetrics:  [String: Double]   // check.id → current measured value
+    let primaryAngle:  Double
+    let phase:         String
+    let isReady:       Bool
+    let cameraOk:      Bool               // backward compat: mirrors framingStatus.ok
+    let formMetrics:   [String: Double]   // check.id → current measured value
+    let framingStatus: FramingStatus
 }
 
 // ─── Internal phase ───────────────────────────────────────────────────────────
@@ -39,6 +47,12 @@ private enum Phase { case waitingForReady, atTop, inRep }
 //   .atBottom   → value captured at the frame where repMinAngle updated
 //   .throughoutMax / .throughoutMin → accumulated across all inRep frames
 //   .primaryAngle metric → uses the primary angle value directly
+//
+// Framing gate (BLOCKING):
+//   runFramingCheck() runs every frame before the state machine.
+//   If framing goes bad mid-session, isReady is reset to false and phase
+//   returns to waitingForReady — rep counters are NOT reset (preserved).
+//   Rep counting resumes automatically when framing is restored.
 
 final class ExerciseEngine {
 
@@ -56,6 +70,14 @@ final class ExerciseEngine {
     private(set) var isReady:   Bool   = false
     private var readyStart:     Date?  = nil
 
+    // ── Framing ───────────────────────────────────────────────────────────────
+    private var lastFramingStatus = FramingStatus(ok: false, reason: "Setting up…")
+
+    // Tune via NSLog output on-device: look for "[Framing] shoulderSep=..." lines.
+    // Vision coords are normalized 0-1; shoulder sep for a true side-on person is ~0.05-0.15.
+    // 0.20 = conservative threshold — fire early if getting false positives, tighten if late.
+    private static let sideViewMaxShoulderSep: Double = 0.20
+
     // ── Form check accumulators (reset each rep) ──────────────────────────────
     private var accumMax:    [String: Double] = [:]   // throughoutMax
     private var accumMin:    [String: Double] = [:]   // throughoutMin
@@ -70,7 +92,7 @@ final class ExerciseEngine {
     private var activeSide: Side = .right
 
     // ── Callbacks ─────────────────────────────────────────────────────────────
-    var onRepDetected: ((RepResult)       -> Void)?
+    var onRepDetected: ((RepResult)        -> Void)?
     var onDebugStats:  ((EngineDebugStats) -> Void)?
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -80,11 +102,12 @@ final class ExerciseEngine {
     }
 
     func reset() {
-        phase      = .waitingForReady
-        isReady    = false
-        readyStart = nil
-        totalReps  = 0
-        goodReps   = 0
+        phase             = .waitingForReady
+        isReady           = false
+        readyStart        = nil
+        totalReps         = 0
+        goodReps          = 0
+        lastFramingStatus = FramingStatus(ok: false, reason: "Setting up…")
         resetRepState()
     }
 
@@ -92,29 +115,43 @@ final class ExerciseEngine {
 
     func ingest(pose: Pose, timestamp: Date) {
         guard let angle = computePrimaryAngle(pose: pose) else {
-            handleNoPose(timestamp: timestamp)
-            return
+            handleNoPose(timestamp: timestamp); return
         }
         lastValidPoseTime = timestamp
 
-        let cameraOk = checkCamera(pose: pose)
-        accumulate(pose: pose, primaryAngle: angle)
-
-        if !isReady {
-            updateReadyGate(pose: pose, angle: angle, timestamp: timestamp)
+        let framing = runFramingCheck(pose: pose)
+        if framing.ok != lastFramingStatus.ok {
+            NSLog("[Engine] [%@] framing → %@ (%@)",
+                  def.id, framing.ok ? "OK ✓" : "BAD ✗", framing.reason)
+            if !framing.ok && isReady {
+                isReady    = false
+                phase      = .waitingForReady
+                readyStart = nil
+            }
         }
-        if isReady {
-            runStateMachine(pose: pose, angle: angle, timestamp: timestamp)
+        lastFramingStatus = framing
+
+        if framing.ok {
+            accumulate(pose: pose, primaryAngle: angle)
+            if !isReady { updateReadyGate(pose: pose, angle: angle, timestamp: timestamp) }
+            if isReady  { runStateMachine(pose: pose, angle: angle, timestamp: timestamp) }
         }
 
         let snapshot = currentMetricSnapshot(pose: pose)
         onDebugStats?(EngineDebugStats(
-            primaryAngle: angle,
-            phase:        phaseLabel(),
-            isReady:      isReady,
-            cameraOk:     cameraOk,
-            formMetrics:  snapshot
+            primaryAngle:  angle,
+            phase:         phaseLabel(),
+            isReady:       isReady,
+            cameraOk:      framing.ok,
+            formMetrics:   snapshot,
+            framingStatus: framing
         ))
+    }
+
+    // Public stateless framing check — used by ATHLTCameraModule in monitoring
+    // mode (before startTracking) so the framing overlay works before rep counting starts.
+    func checkFramingOnly(pose: Pose) -> FramingStatus {
+        return runFramingCheck(pose: pose)
     }
 
     func notePersonMissing(timestamp: Date) {
@@ -153,6 +190,60 @@ final class ExerciseEngine {
             let t = activeSide == .left ? left : right
             return jointAngle(pose: pose, a: t.a, b: t.pivot, c: t.c)
         }
+    }
+
+    // ─── Framing check ────────────────────────────────────────────────────────
+    //
+    // Checks two things:
+    //   1. Required joints are visible at ≥ 0.35 confidence.
+    //   2. For side-view exercises: shoulder horizontal separation is small
+    //      (large separation → person is facing camera, not sideways).
+    //
+    // NSLog shoulder sep every frame for on-device threshold tuning.
+
+    private func runFramingCheck(pose: Pose) -> FramingStatus {
+        guard let setup = def.cameraSetup else { return FramingStatus(ok: true, reason: "") }
+
+        let minConf: Float = 0.35
+        var missingLegs = false
+        var missingHips = false
+        var missingArms = false
+
+        for joint in setup.requiredJoints {
+            let conf = pose[joint]?.confidence ?? 0
+            guard conf >= minConf else {
+                switch joint {
+                case .leftAnkle, .rightAnkle, .leftKnee, .rightKnee:
+                    missingLegs = true
+                case .leftHip, .rightHip:
+                    missingHips = true
+                case .leftWrist, .rightWrist, .leftElbow, .rightElbow:
+                    missingArms = true
+                default:
+                    break
+                }
+                continue
+            }
+        }
+
+        if missingLegs { return FramingStatus(ok: false, reason: "MOVE BACK — legs not visible") }
+        if missingHips { return FramingStatus(ok: false, reason: "MOVE BACK — hips not visible") }
+        if missingArms { return FramingStatus(ok: false, reason: "STEP INTO FRAME — arms not visible") }
+
+        if setup.requiredView == .side {
+            if let ls = pose[.leftShoulder], let rs = pose[.rightShoulder],
+               ls.confidence >= minConf, rs.confidence >= minConf {
+                let sep = abs(Double(ls.x) - Double(rs.x))
+                NSLog("[Framing] shoulderSep=%.3f threshold<%.2f side=%@",
+                      sep, Self.sideViewMaxShoulderSep,
+                      sep < Self.sideViewMaxShoulderSep ? "YES" : "NO")
+                if sep > Self.sideViewMaxShoulderSep {
+                    return FramingStatus(ok: false, reason: "TURN SIDEWAYS to the camera")
+                }
+            }
+        }
+
+        return FramingStatus(ok: true, reason: "")
     }
 
     // ─── Ready gate ───────────────────────────────────────────────────────────
@@ -310,26 +401,6 @@ final class ExerciseEngine {
             if let v = check.measure(pose: pose) { result[check.id] = v }
         }
         return result
-    }
-
-    // ─── Camera guidance ──────────────────────────────────────────────────────
-
-    private func checkCamera(pose: Pose) -> Bool {
-        guard let guidance = def.cameraGuidance,
-              guidance.expectedView == .side else { return true }
-        // Rough side-view check: nose should have meaningful horizontal offset from
-        // the mid-shoulder line. Small offset → person is facing camera (not side-on).
-        guard
-            let nose = pose[.nose],
-            let ls   = pose[.leftShoulder],
-            let rs   = pose[.rightShoulder],
-            nose.confidence > 0.3, ls.confidence > 0.3, rs.confidence > 0.3
-        else { return true }
-
-        let midX = Double(ls.x + rs.x) / 2.0
-        let dx   = abs(Double(nose.x) - midX)
-        let dy   = abs(Double(nose.y) - Double(ls.y + rs.y) / 2.0)
-        return dx >= 0.04 || dy > dx * 1.2   // heuristic — tune via NSLog if needed
     }
 
     // ─── Inactivity reset ─────────────────────────────────────────────────────

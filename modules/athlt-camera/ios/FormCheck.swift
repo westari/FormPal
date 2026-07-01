@@ -17,6 +17,11 @@ enum FormCheckMetric {
     /// Perpendicular deviation of `point` from the line `lineFrom`→`lineTo`.
     case deviationFromLine(point: Joint, lineFrom: Joint, lineTo: Joint)
 
+    /// Signed perpendicular deviation — positive = LEFT of direction lineFrom→lineTo.
+    /// Use with .throughoutMin to catch sag (negative) or .throughoutMax to catch pike (positive).
+    /// Sign depends on camera orientation — verify with NSLog on first device test.
+    case signedDeviationFromLine(point: Joint, lineFrom: Joint, lineTo: Joint)
+
     /// Tracks the exercise's own primary angle — handled by ExerciseEngine directly.
     /// Use with .throughoutMax or .throughoutMin to track peak extension / peak flexion.
     case primaryAngle
@@ -74,6 +79,9 @@ extension FormCheck {
 
         case let .deviationFromLine(p, a, b):
             return deviationFromLine(pose: pose, point: p, lineFrom: a, lineTo: b)
+
+        case let .signedDeviationFromLine(p, a, b):
+            return signedDeviationFromLine(pose: pose, point: p, lineFrom: a, lineTo: b)
 
         case .primaryAngle:
             return nil  // injected by ExerciseEngine from its tracked primary angle

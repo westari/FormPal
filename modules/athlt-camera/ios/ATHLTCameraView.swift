@@ -4,13 +4,17 @@ import UIKit
 
 /// ATHLTCameraView — renders the AVCaptureSession preview layer + skeleton overlay.
 ///
-/// This view does NOT own the session. It connects to ATHLTSessionHolder.shared
-/// which is set by ATHLTCameraModule.startSession(). Any number of views can
-/// observe the session (NotificationCenter broadcast), but we only ever render
-/// one at a time in practice.
+/// Session ownership: this view does NOT own the session. It connects to
+/// ATHLTSessionHolder.shared which is managed by ATHLTCameraModule.
 ///
-/// The skeleton overlay is updated via .athltPoseUpdated notifications posted by
-/// ATHLTCameraModule once per analysed frame on the main queue.
+/// Skeleton rendering pipeline:
+///   1. ATHLTCameraModule (inferenceQueue) writes pose to ATHLTPoseBuffer.shared
+///      once per analyzed frame (~10 fps). Zero main-thread work on the write path.
+///   2. CADisplayLink (main thread, 60-120 fps) calls tick() each vsync.
+///   3. tick() calls ATHLTPoseBuffer.shared.take() — O(1) NSLock read.
+///   4. If a new frame is available, skeleton.update() redraws two CAShapeLayers.
+///   This decouples inference rate from display rate and eliminates per-frame
+///   main-thread dispatch / dictionary allocation overhead.
 
 public class ATHLTCameraView: ExpoView {
 
@@ -20,8 +24,12 @@ public class ATHLTCameraView: ExpoView {
 
     // MARK: – Skeleton overlay
 
-    private let skeleton = SkeletonOverlayView()
+    private let skeleton     = SkeletonOverlayView()
     private var skeletonVisible = true
+
+    // MARK: – Display link (drives skeleton at screen refresh rate)
+
+    private var displayLink: CADisplayLink?
 
     // MARK: – Init
 
@@ -43,12 +51,20 @@ public class ATHLTCameraView: ExpoView {
         skeleton.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         addSubview(skeleton)
 
+        // CADisplayLink — fires at the native screen refresh rate (60/120 Hz).
+        // tick() reads ATHLTPoseBuffer and updates skeleton only when a new frame
+        // is available, so there's zero work on the 50+ "empty" ticks per second.
+        let link = CADisplayLink(target: self, selector: #selector(tick))
+        link.preferredFramesPerSecond = 0   // match native display refresh rate
+        link.add(to: .main, forMode: .common)
+        displayLink = link
+
         // Connect to existing session if module already ran startSession()
         if let session = ATHLTSessionHolder.shared.session {
             attachSession(session)
         }
 
-        // Observe session changes (module creates/destroys session)
+        // Session lifecycle
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleSessionChanged(_:)),
@@ -56,15 +72,7 @@ public class ATHLTCameraView: ExpoView {
             object: nil
         )
 
-        // Observe pose updates (posted by ATHLTCameraModule per analysed frame)
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handlePoseUpdated(_:)),
-            name: .athltPoseUpdated,
-            object: nil
-        )
-
-        // Observe pose cleared (no person / skeleton disabled)
+        // Pose cleared (no person / skeleton disabled)
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handlePoseCleared),
@@ -72,7 +80,7 @@ public class ATHLTCameraView: ExpoView {
             object: nil
         )
 
-        // Observe skeleton visibility toggle
+        // Skeleton visibility toggle
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleSkeletonVisibility(_:)),
@@ -82,6 +90,7 @@ public class ATHLTCameraView: ExpoView {
     }
 
     deinit {
+        displayLink?.invalidate()
         NotificationCenter.default.removeObserver(self)
     }
 
@@ -95,11 +104,21 @@ public class ATHLTCameraView: ExpoView {
         CATransaction.commit()
     }
 
+    // MARK: – CADisplayLink tick (main thread, ~60-120 fps)
+
+    @objc private func tick() {
+        guard skeletonVisible else { return }
+        guard let frame = ATHLTPoseBuffer.shared.take() else { return }
+        skeleton.update(pose:        frame.pose,
+                        videoWidth:  frame.videoWidth,
+                        videoHeight: frame.videoHeight,
+                        isMirrored:  frame.isMirrored)
+    }
+
     // MARK: – Session attachment
 
     private func attachSession(_ session: AVCaptureSession?) {
         previewLayer.session = session
-        // Portrait keeps the full person (head → ankles) in frame.
         if let conn = previewLayer.connection, conn.isVideoOrientationSupported {
             conn.videoOrientation = .portrait
         }
@@ -112,23 +131,11 @@ public class ATHLTCameraView: ExpoView {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.attachSession(session)
-            if session == nil { self.skeleton.clear() }
+            if session == nil {
+                ATHLTPoseBuffer.shared.clear()
+                self.skeleton.clear()
+            }
         }
-    }
-
-    @objc private func handlePoseUpdated(_ notification: Notification) {
-        guard skeletonVisible,
-              let info       = notification.userInfo,
-              let pose       = info["pose"]        as? Pose,
-              let videoWidth  = info["videoWidth"]  as? CGFloat,
-              let videoHeight = info["videoHeight"] as? CGFloat,
-              let isMirrored  = info["isMirrored"]  as? Bool
-        else { return }
-
-        skeleton.update(pose: pose,
-                        videoWidth:  videoWidth,
-                        videoHeight: videoHeight,
-                        isMirrored:  isMirrored)
     }
 
     @objc private func handlePoseCleared() {
@@ -138,6 +145,9 @@ public class ATHLTCameraView: ExpoView {
     @objc private func handleSkeletonVisibility(_ notification: Notification) {
         let visible = notification.userInfo?["visible"] as? Bool ?? true
         skeletonVisible = visible
-        if !visible { skeleton.clear() }
+        if !visible {
+            ATHLTPoseBuffer.shared.clear()
+            skeleton.clear()
+        }
     }
 }

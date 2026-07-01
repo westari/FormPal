@@ -35,6 +35,14 @@ export interface DebugStatsEvent {
   goodReps: number;
   totalFramesReceived: number;
   totalFramesAnalyzed: number;
+  framingOk: boolean;
+  framingReason: string;
+}
+
+/** Emitted (change-detected) when the framing check result changes. */
+export interface FramingStatusEvent {
+  ok:     boolean;
+  reason: string;
 }
 
 export interface CameraStateEvent {
@@ -178,6 +186,13 @@ export function addErrorListener(
 ): EventSubscription {
   if (!nativeEmitter) return { remove: () => {} };
   return nativeEmitter.addListener('onError', callback);
+}
+
+export function addFramingStatusListener(
+  callback: (event: FramingStatusEvent) => void
+): EventSubscription {
+  if (!nativeEmitter) return { remove: () => {} };
+  return nativeEmitter.addListener('onFramingStatus', callback);
 }
 
 // ─── Native View ──────────────────────────────────────────────────────────────
