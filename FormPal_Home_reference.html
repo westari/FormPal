@@ -1,0 +1,373 @@
+<!-- FormPal Home Screen — Claude Design reference (cleaned, fonts stripped) -->
+<!-- This is the VISUAL TARGET to rebuild in React Native. Contains exact gradients, -->
+<!-- dimensional SVG filters (bandShadow/dotGlow/bandGlow = the texture), colors, shadows, spacing. -->
+
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<style>/* vietnamese */
+
+/* latin-ext */
+
+/* latin */
+
+/* vietnamese */
+
+/* latin-ext */
+
+/* latin */
+
+/* vietnamese */
+
+/* latin-ext */
+
+/* latin */
+
+</style>
+<style>
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  .fp-scroll::-webkit-scrollbar,.fp-row::-webkit-scrollbar{display:none;}
+  .fp-scroll,.fp-row{-ms-overflow-style:none;scrollbar-width:none;}
+</style>
+</helmet>
+
+<div style="min-height:100%;display:flex;align-items:center;justify-content:center;padding:40px 20px;background:radial-gradient(120% 90% at 50% 0%,#eef0f4 0%,#e1e3e9 100%);font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display','Helvetica Neue',Helvetica,Arial,sans-serif;">
+
+  <!-- hidden defs: gradients + dimensional filters -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <linearGradient id="formGrad" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#FFC24B"></stop><stop offset="100%" stop-color="#FF7A2E"></stop>
+      </linearGradient>
+      <linearGradient id="weekGrad" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#48E08A"></stop><stop offset="100%" stop-color="#12B59A"></stop>
+      </linearGradient>
+      <linearGradient id="repsGrad" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#67CEFF"></stop><stop offset="100%" stop-color="#0A6CFF"></stop>
+      </linearGradient>
+      <linearGradient id="gaugeGrad" x1="0" y1="1" x2="1" y2="0">
+        <stop offset="0%" stop-color="#FF3B30"></stop><stop offset="48%" stop-color="#FFB23D"></stop><stop offset="100%" stop-color="#34C759"></stop>
+      </linearGradient>
+      <linearGradient id="trackGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#d4d7df"></stop><stop offset="55%" stop-color="#e7e9ee"></stop><stop offset="100%" stop-color="#f5f6f9"></stop>
+      </linearGradient>
+      <filter id="bandShadow" x="-50%" y="-50%" width="200%" height="200%">
+        <feDropShadow dx="0" dy="1.6" stdDeviation="1.4" flood-color="#0b1024" flood-opacity="0.22"></feDropShadow>
+      </filter>
+      <filter id="dotGlow" x="-160%" y="-160%" width="420%" height="420%">
+        <feDropShadow dx="0" dy="0" stdDeviation="3.4" flood-color="#FF5A3C" flood-opacity="0.75"></feDropShadow>
+      </filter>
+      <filter id="bandGlow" x="-60%" y="-60%" width="220%" height="220%">
+        <feGaussianBlur stdDeviation="3.6"></feGaussianBlur>
+      </filter>
+    </defs>
+  </svg>
+
+  <!-- PHONE FRAME -->
+  <div style="position:relative;width:414px;padding:13px;border-radius:58px;background:linear-gradient(155deg,#2b2d33 0%,#0a0b0d 46%,#000 100%);box-shadow:0 2px 4px rgba(0,0,0,.5),0 30px 60px -20px rgba(20,24,45,.55),0 50px 90px -40px rgba(20,24,45,.5),inset 0 1px 1px rgba(255,255,255,.18);">
+    <div style="position:relative;width:388px;height:840px;border-radius:46px;overflow:hidden;background:linear-gradient(180deg,#FBFBFD 0%,#F4F4F8 52%,#EEEEF3 100%);box-shadow:inset 0 0 0 1.5px rgba(0,0,0,.35);">
+
+      <!-- status bar -->
+      <div style="position:absolute;top:0;left:0;right:0;height:54px;z-index:30;display:flex;align-items:center;justify-content:space-between;padding:16px 30px 0;">
+        <div style="font-size:15px;font-weight:600;color:#0b1020;letter-spacing:.3px;">9:41</div>
+        <div style="display:flex;align-items:center;gap:6px;color:#0b1020;">
+          <svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"></rect><rect x="4.5" y="4.5" width="3" height="7.5" rx="1"></rect><rect x="9" y="2" width="3" height="10" rx="1"></rect><rect x="13.5" y="0" width="3" height="12" rx="1"></rect></svg>
+          <svg width="17" height="12" viewBox="0 0 17 12" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8.5 3.2c2 0 3.9.8 5.3 2.1M3.2 5.3A7.6 7.6 0 0 1 8.5 3.2"></path><path d="M5.6 7.6a4.2 4.2 0 0 1 5.8 0"></path><circle cx="8.5" cy="9.8" r="1" fill="currentColor" stroke="none"></circle></svg>
+          <svg width="26" height="13" viewBox="0 0 26 13" fill="none"><rect x="0.6" y="0.6" width="21" height="11.8" rx="3.3" stroke="currentColor" stroke-opacity="0.4"></rect><rect x="2.2" y="2.2" width="16.5" height="8.6" rx="2" fill="currentColor"></rect><rect x="23" y="4" width="1.8" height="5" rx="0.9" fill="currentColor" fill-opacity="0.5"></rect></svg>
+        </div>
+      </div>
+      <!-- dynamic island -->
+      <div style="position:absolute;top:13px;left:50%;transform:translateX(-50%);width:118px;height:33px;background:#000;border-radius:20px;z-index:40;box-shadow:inset 0 0 0 0.5px rgba(255,255,255,.06);"></div>
+
+      <!-- SCROLL AREA -->
+      <div class="fp-scroll" style="position:absolute;inset:0;overflow-y:auto;padding:64px 0 110px;">
+
+        <!-- HEADER -->
+        <div style="padding:10px 24px 0;">
+          <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:300;font-size:36px;line-height:1.02;letter-spacing:-1px;color:#0b1020;">Welcome back.</div>
+          <div style="margin-top:7px;font-size:13.5px;font-weight:500;letter-spacing:.2px;color:#9aa0ad;">Tuesday, June 30</div>
+        </div>
+
+        <!-- STATUS PILLS -->
+        <div style="display:flex;gap:9px;padding:16px 24px 0;flex-wrap:wrap;">
+          <div style="display:flex;align-items:center;gap:7px;padding:7px 13px 7px 9px;background:#fff;border-radius:999px;border:1px solid rgba(17,24,39,.05);box-shadow:0 1px 1px rgba(16,24,40,.05),0 4px 9px -3px rgba(28,40,90,.18),inset 0 1px 0 rgba(255,255,255,.9);">
+            <span style="display:flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:linear-gradient(160deg,#48E08A,#1FA85A);box-shadow:0 1px 2px rgba(26,140,70,.5),inset 0 1px 0 rgba(255,255,255,.45);">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="#fff"><path d="M13 2 5 13h5l-1 9 8-12h-5z"></path></svg>
+            </span>
+            <span style="font-size:12.5px;font-weight:600;color:#1a1d26;">Ready to train</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:7px;padding:7px 13px 7px 9px;background:#fff;border-radius:999px;border:1px solid rgba(17,24,39,.05);box-shadow:0 1px 1px rgba(16,24,40,.05),0 4px 9px -3px rgba(28,40,90,.18),inset 0 1px 0 rgba(255,255,255,.9);">
+            <span style="display:flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:linear-gradient(160deg,#5AC0FF,#0A6CFF);box-shadow:0 1px 2px rgba(10,108,255,.45),inset 0 1px 0 rgba(255,255,255,.45);">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><path d="M6.5 7.5v9M3.7 9.6v4.8M17.5 7.5v9M20.3 9.6v4.8M6.5 12h11"></path></svg>
+            </span>
+            <span style="font-size:12.5px;font-weight:600;color:#1a1d26;">Full Body</span>
+          </div>
+        </div>
+
+        <!-- HERO: RINGS + OVERLAPPING INSIGHT -->
+        <div style="position:relative;z-index:2;margin:16px 16px 0;padding:26px 14px 28px;background:#fff;border-radius:28px;border:1px solid rgba(17,24,39,.05);box-shadow:0 1px 1.5px rgba(16,24,40,.05),0 5px 12px rgba(16,24,40,.05),0 20px 36px -12px rgba(28,40,90,.22),inset 0 1px 0 rgba(255,255,255,.95);">
+          <div style="display:flex;justify-content:space-around;align-items:flex-start;">
+
+            <!-- ring: Form Score -->
+            <div style="display:flex;flex-direction:column;align-items:center;gap:13px;">
+              <div style="position:relative;width:96px;height:96px;">
+                <svg width="96" height="96" viewBox="0 0 96 96">
+                  <circle cx="48" cy="48" r="38" fill="none" stroke="url(#trackGrad)" stroke-width="10.5"></circle>
+                  <circle cx="48" cy="48" r="38" fill="none" stroke="#bfc4ce" stroke-width="0.6" opacity="0.5"></circle>
+                  <circle cx="48" cy="48" r="38" fill="none" stroke="url(#formGrad)" stroke-width="10.5" stroke-linecap="round" stroke-dasharray="238.76" stroke-dashoffset="171.91" transform="rotate(-90 48 48)" filter="url(#bandShadow)"></circle>
+                  <circle cx="48" cy="48" r="40.6" fill="none" stroke="rgba(255,255,255,.65)" stroke-width="2" stroke-linecap="round" stroke-dasharray="255.1" stroke-dashoffset="183.7" transform="rotate(-90 48 48)"></circle>
+                </svg>
+                <div style="position:absolute;inset:6px;border-radius:50%;background:radial-gradient(56% 44% at 50% 13%,rgba(255,255,255,.7),rgba(255,255,255,0) 72%);pointer-events:none;"></div>
+                <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">
+                  <span style="font-size:27px;font-weight:700;letter-spacing:-1px;color:#0b1020;">28</span><span style="font-size:12px;font-weight:700;color:#c0c5ce;margin-left:1px;">%</span>
+                </div>
+              </div>
+              <span style="font-size:11.5px;font-weight:600;color:#8a8f9c;letter-spacing:.2px;">Form Score</span>
+            </div>
+
+            <!-- ring: This Week -->
+            <div style="display:flex;flex-direction:column;align-items:center;gap:13px;">
+              <div style="position:relative;width:96px;height:96px;">
+                <svg width="96" height="96" viewBox="0 0 96 96">
+                  <circle cx="48" cy="48" r="38" fill="none" stroke="url(#trackGrad)" stroke-width="10.5"></circle>
+                  <circle cx="48" cy="48" r="38" fill="none" stroke="url(#weekGrad)" stroke-width="10.5" stroke-linecap="round" stroke-dasharray="238.76" stroke-dashoffset="47.75" transform="rotate(-90 48 48)" filter="url(#bandShadow)"></circle>
+                  <circle cx="48" cy="48" r="40.6" fill="none" stroke="rgba(255,255,255,.65)" stroke-width="2" stroke-linecap="round" stroke-dasharray="255.1" stroke-dashoffset="51.0" transform="rotate(-90 48 48)"></circle>
+                </svg>
+                <div style="position:absolute;inset:6px;border-radius:50%;background:radial-gradient(56% 44% at 50% 13%,rgba(255,255,255,.7),rgba(255,255,255,0) 72%);pointer-events:none;"></div>
+                <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">
+                  <span style="font-size:27px;font-weight:700;letter-spacing:-1px;color:#0b1020;">80</span><span style="font-size:12px;font-weight:700;color:#c0c5ce;margin-left:1px;">%</span>
+                </div>
+              </div>
+              <span style="font-size:11.5px;font-weight:600;color:#8a8f9c;letter-spacing:.2px;">This Week</span>
+            </div>
+
+            <!-- ring: Good Reps -->
+            <div style="display:flex;flex-direction:column;align-items:center;gap:13px;">
+              <div style="position:relative;width:96px;height:96px;">
+                <svg width="96" height="96" viewBox="0 0 96 96">
+                  <circle cx="48" cy="48" r="38" fill="none" stroke="url(#trackGrad)" stroke-width="10.5"></circle>
+                  <circle cx="48" cy="48" r="38" fill="none" stroke="url(#repsGrad)" stroke-width="10.5" stroke-linecap="round" stroke-dasharray="238.76" stroke-dashoffset="85.95" transform="rotate(-90 48 48)" filter="url(#bandShadow)"></circle>
+                  <circle cx="48" cy="48" r="40.6" fill="none" stroke="rgba(255,255,255,.65)" stroke-width="2" stroke-linecap="round" stroke-dasharray="255.1" stroke-dashoffset="91.8" transform="rotate(-90 48 48)"></circle>
+                </svg>
+                <div style="position:absolute;inset:6px;border-radius:50%;background:radial-gradient(56% 44% at 50% 13%,rgba(255,255,255,.7),rgba(255,255,255,0) 72%);pointer-events:none;"></div>
+                <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">
+                  <span style="font-size:27px;font-weight:700;letter-spacing:-1px;color:#0b1020;">64</span><span style="font-size:12px;font-weight:700;color:#c0c5ce;margin-left:1px;">%</span>
+                </div>
+              </div>
+              <span style="font-size:11.5px;font-weight:600;color:#8a8f9c;letter-spacing:.2px;">Good Reps</span>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- INSIGHT (tucked under rings card) -->
+        <div style="position:relative;z-index:1;margin:-30px 26px 0;padding:36px 18px 17px;background:#fff;border-radius:24px;border:1px solid rgba(17,24,39,.05);box-shadow:0 10px 22px -10px rgba(28,40,90,.2),0 2px 6px rgba(16,24,40,.05);">
+          <div style="display:flex;align-items:center;gap:7px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="#0a84ff"><path d="M12 2.5l1.7 5.3 5.3 1.7-5.3 1.7L12 16.5l-1.7-5.3L5 9.5l5.3-1.7z"></path><path d="M18.5 14l.8 2.4 2.4.8-2.4.8-.8 2.4-.8-2.4-2.4-.8 2.4-.8z"></path></svg>
+            <span style="font-size:11px;font-weight:700;letter-spacing:.7px;color:#0a84ff;text-transform:uppercase;">MyPal</span>
+          </div>
+          <div style="margin-top:7px;font-size:13.5px;line-height:1.5;color:#454b58;">Consistent reps build real strength — your form improves with every rep you log. <span style="color:#0a84ff;font-weight:600;">Tap to chat with your coach ›</span></div>
+        </div>
+
+        <!-- UP NEXT HEADING -->
+        <div style="padding:0 24px;margin-top:26px;">
+          <span style="font-size:17px;font-weight:700;letter-spacing:-.3px;color:#0b1020;">Today's session</span>
+        </div>
+        <!-- WORKOUT CARD -->
+        <div style="margin:11px 16px 0;padding:26px 20px 24px;background:#fff;border-radius:28px;border:1px solid rgba(17,24,39,.05);box-shadow:0 1px 1.5px rgba(16,24,40,.05),0 5px 12px rgba(16,24,40,.05),0 20px 36px -12px rgba(28,40,90,.22),inset 0 1px 0 rgba(255,255,255,.95);display:flex;flex-direction:column;align-items:center;text-align:center;">
+          <div style="display:flex;align-items:center;justify-content:center;width:58px;height:58px;border-radius:18px;background:linear-gradient(160deg,#5AC0FF,#0A6CFF);box-shadow:0 5px 13px -3px rgba(10,108,255,.55),inset 0 1px 0 rgba(255,255,255,.4);">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 7v10M3.7 9.5v5M17.5 7v10M20.3 9.5v5M6.5 12h11"></path></svg>
+          </div>
+          <div style="margin-top:15px;font-size:23px;font-weight:700;letter-spacing:-.5px;color:#0b1020;">Full Body</div>
+          <div style="margin-top:4px;font-size:13.5px;font-weight:500;color:#9aa0ad;">4 exercises · ~30 min</div>
+          <button style="margin-top:20px;width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;border:none;border-radius:16px;background:linear-gradient(175deg,#33363f,#0b0d12);color:#fff;font-size:15px;font-weight:600;font-family:inherit;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.3),0 10px 20px -6px rgba(11,16,36,.5),inset 0 1px 0 rgba(255,255,255,.16);">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="#fff"><path d="M7 4.5l13 7.5-13 7.5z"></path></svg>Start workout
+          </button>
+        </div>
+
+        <!-- YOUR PROGRESS HEADING -->
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:0 24px;margin-top:26px;">
+          <span style="font-size:17px;font-weight:700;letter-spacing:-.3px;color:#0b1020;">Your progress</span>
+          <span style="font-size:12.5px;font-weight:600;color:#0a84ff;">Details ›</span>
+        </div>
+        <!-- PROGRESS DATA CARD -->
+        <div style="margin:11px 16px 0;padding:18px 18px 14px;background:#fff;border-radius:28px;border:1px solid rgba(17,24,39,.05);box-shadow:0 1px 1.5px rgba(16,24,40,.05),0 5px 12px rgba(16,24,40,.05),0 20px 36px -12px rgba(28,40,90,.22),inset 0 1px 0 rgba(255,255,255,.95);">
+          <div style="display:flex;justify-content:flex-end;">
+            <div style="display:flex;gap:2px;padding:3px;background:#eceef3;border-radius:11px;box-shadow:inset 0 1px 2px rgba(11,16,36,.13);">
+              <span style="padding:5px 9px;font-size:11px;font-weight:600;color:#9aa0ad;border-radius:8px;">Week</span>
+              <span style="padding:5px 9px;font-size:11px;font-weight:600;color:#9aa0ad;border-radius:8px;">Month</span>
+              <span style="padding:5px 11px;font-size:11px;font-weight:700;color:#0b1020;background:#fff;border-radius:8px;box-shadow:0 1px 2px rgba(16,24,40,.13),inset 0 1px 0 rgba(255,255,255,.9);">All</span>
+            </div>
+          </div>
+          <div style="position:relative;margin-top:14px;">
+            <svg width="320" height="152" viewBox="0 0 320 152" style="display:block;overflow:visible;max-width:100%;">
+              <defs>
+                <linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#FF8A3D" stop-opacity="0.30"></stop>
+                  <stop offset="100%" stop-color="#FF8A3D" stop-opacity="0"></stop>
+                </linearGradient>
+                <linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stop-color="#FFC24B"></stop><stop offset="100%" stop-color="#FF7A2E"></stop>
+                </linearGradient>
+              </defs>
+              <line x1="0" y1="66" x2="320" y2="66" stroke="rgba(11,16,36,.05)" stroke-width="1"></line>
+              <line x1="0" y1="110" x2="320" y2="110" stroke="rgba(11,16,36,.05)" stroke-width="1"></line>
+              <path d="M12,108 C41.5,108 41.5,96 71,96 C100.5,96 100.5,102 130,102 C160,102 160,87 190,87 C219.5,87 219.5,77 249,77 C278.5,77 278.5,65 308,65 L308,140 L12,140 Z" fill="url(#areaFill)"></path>
+              <path d="M12,108 C41.5,108 41.5,96 71,96 C100.5,96 100.5,102 130,102 C160,102 160,87 190,87 C219.5,87 219.5,77 249,77 C278.5,77 278.5,65 308,65" fill="none" stroke="url(#lineGrad)" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" filter="url(#bandShadow)"></path>
+              <line x1="308" y1="65" x2="308" y2="140" stroke="rgba(255,122,46,.35)" stroke-width="1.3" stroke-dasharray="2 3"></line>
+              <circle cx="308" cy="65" r="8.5" fill="#FF7A2E" filter="url(#dotGlow)" opacity="0.9"></circle>
+              <circle cx="308" cy="65" r="5.5" fill="#fff" stroke="#FF7A2E" stroke-width="3"></circle>
+            </svg>
+            <div style="position:absolute;top:36px;right:8px;padding:3px 8px;background:#0b1020;color:#fff;font-size:11px;font-weight:700;border-radius:8px;box-shadow:0 5px 12px -3px rgba(11,16,36,.5);">64%</div>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:6px 6px 0;">
+            <span style="font-size:10.5px;font-weight:600;color:#b6bcc7;">Start</span>
+            <span style="font-size:10.5px;font-weight:600;color:#b6bcc7;">Wk 3</span>
+            <span style="font-size:10.5px;font-weight:600;color:#b6bcc7;">Wk 6</span>
+            <span style="font-size:10.5px;font-weight:600;color:#b6bcc7;">Now</span>
+          </div>
+          <div style="margin-top:15px;display:flex;align-items:center;justify-content:center;gap:6px;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="#0a84ff" style="flex:none;"><path d="M12 2.5l1.7 5.3 5.3 1.7-5.3 1.7L12 16.5l-1.7-5.3L5 9.5l5.3-1.7z"></path><path d="M18.5 14l.8 2.4 2.4.8-2.4.8-.8 2.4-.8-2.4-2.4-.8 2.4-.8z"></path></svg>
+            <span style="font-size:12.5px;font-weight:700;color:#0b1020;letter-spacing:-.2px;white-space:nowrap;">You're 64% better than when you started.</span>
+          </div>
+        </div>
+
+        <!-- LEARN THE MOVES -->
+        <div style="margin:24px 0 0;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:0 24px;">
+            <span style="font-size:17px;font-weight:700;letter-spacing:-.3px;color:#0b1020;">Learn the moves</span>
+            <span style="font-size:12.5px;font-weight:600;color:#0a84ff;">See all ›</span>
+          </div>
+          <div class="fp-row" style="display:flex;gap:18px;overflow-x:auto;padding:16px 24px 6px;">
+
+            <div style="display:flex;flex-direction:column;align-items:center;gap:9px;flex:none;">
+              <div style="width:66px;height:66px;border-radius:50%;padding:3px;background:linear-gradient(150deg,#FFC24B,#FF7A2E);box-shadow:0 4px 10px -3px rgba(255,122,46,.5);">
+                <div style="width:100%;height:100%;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 1px 2px rgba(0,0,0,.06);">
+                  <svg width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="#3a3f4b" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="16" cy="6.5" r="2.6"></circle><path d="M16 9.5v6M16 12.5h6.5"></path><path d="M16 15.5l-4 4v6M16 15.5l4 4v6"></path></svg>
+                </div>
+              </div>
+              <span style="font-size:11.5px;font-weight:600;color:#4a4f5b;">Squat</span>
+            </div>
+
+            <div style="display:flex;flex-direction:column;align-items:center;gap:9px;flex:none;">
+              <div style="width:66px;height:66px;border-radius:50%;padding:3px;background:linear-gradient(150deg,#67CEFF,#0A6CFF);box-shadow:0 4px 10px -3px rgba(10,108,255,.5);">
+                <div style="width:100%;height:100%;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 1px 2px rgba(0,0,0,.06);">
+                  <svg width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="#3a3f4b" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="12" r="2.4"></circle><path d="M9 13l16 5"></path><path d="M11.5 14.2V20M22 17.4V21"></path><path d="M25 18l3 1"></path></svg>
+                </div>
+              </div>
+              <span style="font-size:11.5px;font-weight:600;color:#4a4f5b;">Push-up</span>
+            </div>
+
+            <div style="display:flex;flex-direction:column;align-items:center;gap:9px;flex:none;">
+              <div style="width:66px;height:66px;border-radius:50%;padding:3px;background:linear-gradient(150deg,#48E08A,#12B59A);box-shadow:0 4px 10px -3px rgba(18,181,154,.5);">
+                <div style="width:100%;height:100%;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 1px 2px rgba(0,0,0,.06);">
+                  <svg width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="#3a3f4b" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6h22"></path><path d="M11 6v3M21 6v3"></path><circle cx="16" cy="13" r="2.6"></circle><path d="M16 16v8M13 26l3-2 3 2"></path></svg>
+                </div>
+              </div>
+              <span style="font-size:11.5px;font-weight:600;color:#4a4f5b;">Pull-up</span>
+            </div>
+
+            <div style="display:flex;flex-direction:column;align-items:center;gap:9px;flex:none;">
+              <div style="width:66px;height:66px;border-radius:50%;padding:3px;background:linear-gradient(150deg,#FFD36B,#E0A012);box-shadow:0 4px 10px -3px rgba(224,160,18,.45);">
+                <div style="width:100%;height:100%;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 1px 2px rgba(0,0,0,.06);">
+                  <svg width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="#3a3f4b" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="14" cy="6.5" r="2.6"></circle><path d="M14 9.5v5M14 11.5l-3.5-1.5"></path><path d="M14 14.5l-4 4v7M14 14.5l5 5.5 3 5.5"></path></svg>
+                </div>
+              </div>
+              <span style="font-size:11.5px;font-weight:600;color:#4a4f5b;">Lunge</span>
+            </div>
+
+            <div style="display:flex;flex-direction:column;align-items:center;gap:9px;flex:none;opacity:.5;">
+              <div style="width:66px;height:66px;border-radius:50%;padding:3px;background:#d4d7dd;">
+                <div style="width:100%;height:100%;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 1px 2px rgba(0,0,0,.06);">
+                  <svg width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="#9aa0ad" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="14" r="2.4"></circle><path d="M8 15l17 4"></path><path d="M8 16v4h-4M25 19v4"></path></svg>
+                </div>
+              </div>
+              <span style="font-size:11.5px;font-weight:600;color:#9aa0ad;">Plank</span>
+            </div>
+
+            <div style="display:flex;flex-direction:column;align-items:center;gap:9px;flex:none;opacity:.5;">
+              <div style="width:66px;height:66px;border-radius:50%;padding:3px;background:#d4d7dd;">
+                <div style="width:100%;height:100%;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 1px 2px rgba(0,0,0,.06);">
+                  <svg width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="#9aa0ad" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="16" cy="6.5" r="2.6"></circle><path d="M16 9.5v7M16 24l-3-7M16 24l3-7M10 11.5l6 1.5 6-1.5"></path></svg>
+                </div>
+              </div>
+              <span style="font-size:11.5px;font-weight:600;color:#9aa0ad;">Crunch</span>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- PAST SESSIONS -->
+        <div style="margin:22px 16px 0;">
+          <div style="padding:0 8px 2px;font-size:17px;font-weight:700;letter-spacing:-.3px;color:#0b1020;">Past sessions</div>
+          <div style="display:flex;flex-direction:column;gap:10px;margin-top:12px;">
+
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:#fff;border-radius:18px;border:1px solid rgba(17,24,39,.05);box-shadow:0 1px 1.5px rgba(16,24,40,.05),0 8px 18px -10px rgba(28,40,90,.2),inset 0 1px 0 rgba(255,255,255,.9);">
+              <div style="display:flex;align-items:center;gap:13px;">
+                <span style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:11px;background:#f4f5f8;box-shadow:inset 0 1px 2px rgba(0,0,0,.05);"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7180" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 6.5v9M3.7 9v4.5M17.5 6.5v9M20.3 9v4.5M6.5 11h11"></path></svg></span>
+                <div>
+                  <div style="font-size:14.5px;font-weight:600;color:#1a1d26;">Jun 29</div>
+                  <div style="margin-top:2px;font-size:12.5px;font-weight:500;color:#9aa0ad;">Full Body · 4 reps</div>
+                </div>
+              </div>
+              <span style="padding:6px 12px;border-radius:11px;font-size:13px;font-weight:700;background:rgba(52,199,89,.14);color:#1f9d4d;">82%</span>
+            </div>
+
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:#fff;border-radius:18px;border:1px solid rgba(17,24,39,.05);box-shadow:0 1px 1.5px rgba(16,24,40,.05),0 8px 18px -10px rgba(28,40,90,.2),inset 0 1px 0 rgba(255,255,255,.9);">
+              <div style="display:flex;align-items:center;gap:13px;">
+                <span style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:11px;background:#f4f5f8;box-shadow:inset 0 1px 2px rgba(0,0,0,.05);"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7180" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 6.5v9M3.7 9v4.5M17.5 6.5v9M20.3 9v4.5M6.5 11h11"></path></svg></span>
+                <div>
+                  <div style="font-size:14.5px;font-weight:600;color:#1a1d26;">Jun 27</div>
+                  <div style="margin-top:2px;font-size:12.5px;font-weight:500;color:#9aa0ad;">Upper Body · 6 reps</div>
+                </div>
+              </div>
+              <span style="padding:6px 12px;border-radius:11px;font-size:13px;font-weight:700;background:rgba(255,179,61,.2);color:#c47f12;">61%</span>
+            </div>
+
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:#fff;border-radius:18px;border:1px solid rgba(17,24,39,.05);box-shadow:0 1px 1.5px rgba(16,24,40,.05),0 8px 18px -10px rgba(28,40,90,.2),inset 0 1px 0 rgba(255,255,255,.9);">
+              <div style="display:flex;align-items:center;gap:13px;">
+                <span style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:11px;background:#f4f5f8;box-shadow:inset 0 1px 2px rgba(0,0,0,.05);"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7180" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 6.5v9M3.7 9v4.5M17.5 6.5v9M20.3 9v4.5M6.5 11h11"></path></svg></span>
+                <div>
+                  <div style="font-size:14.5px;font-weight:600;color:#1a1d26;">Jun 24</div>
+                  <div style="margin-top:2px;font-size:12.5px;font-weight:500;color:#9aa0ad;">Lower Body · 3 reps</div>
+                </div>
+              </div>
+              <span style="padding:6px 12px;border-radius:11px;font-size:13px;font-weight:700;background:rgba(255,59,48,.14);color:#e0352b;">38%</span>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+
+      <!-- TAB BAR -->
+      <div style="position:absolute;left:0;right:0;bottom:0;z-index:35;height:92px;padding:12px 26px 28px;display:flex;align-items:flex-start;justify-content:space-between;background:linear-gradient(180deg,rgba(248,248,251,.6),rgba(248,248,251,.95));backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-top:1px solid rgba(17,24,39,.06);box-shadow:0 -1px 0 rgba(255,255,255,.7);">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;width:48px;color:#0b1020;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"></path><path d="M5 9.5V20h14V9.5"></path></svg>
+          <span style="font-size:10px;font-weight:600;">Home</span>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;width:48px;color:#a3a8b3;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 7v10M3.7 9.5v5M17.5 7v10M20.3 9.5v5M6.5 12h11"></path></svg>
+          <span style="font-size:10px;font-weight:600;">Train</span>
+        </div>
+        <div style="width:48px;display:flex;justify-content:center;">
+          <button style="margin-top:-16px;width:56px;height:56px;border:none;border-radius:50%;background:linear-gradient(165deg,#0A84FF,#0A5BD6);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 4px rgba(10,91,214,.4),0 10px 22px -6px rgba(10,132,255,.65),inset 0 1px 0 rgba(255,255,255,.35);">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>
+          </button>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;width:48px;color:#a3a8b3;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19V11M12 19V5M19 19v-5"></path></svg>
+          <span style="font-size:10px;font-weight:600;">Progress</span>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;width:48px;color:#a3a8b3;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.4"></circle><path d="M5 20c0-3.6 3.1-5.6 7-5.6s7 2 7 5.6"></path></svg>
+          <span style="font-size:10px;font-weight:600;">Profile</span>
+        </div>
+      </div>
+      <!-- home indicator -->
+      <div style="position:absolute;bottom:9px;left:50%;transform:translateX(-50%);width:128px;height:5px;border-radius:3px;background:#0b1020;opacity:.25;z-index:40;"></div>
+
+    </div>
+  </div>
+</div>
