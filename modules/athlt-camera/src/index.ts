@@ -98,7 +98,9 @@ export function isModelLoaded(): boolean {
 
 // ─── Exercise type ────────────────────────────────────────────────────────────
 
-export type ExerciseType = 'squat' | 'curl';
+// Extending this list is the only TS change needed when adding a new exercise —
+// the engine, definitions, and registry are all on the Swift side.
+export type ExerciseType = 'squat' | 'curl' | 'pushup';
 
 export async function setExercise(type: ExerciseType): Promise<void> {
   if (!ATHLTCameraNative) return;

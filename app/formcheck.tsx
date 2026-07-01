@@ -56,7 +56,8 @@ export default function FormCheckScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { exercise = 'squat' } = useLocalSearchParams<{ exercise?: string }>();
-  const exerciseType = (exercise === 'curl' ? 'curl' : 'squat') as ExerciseType;
+  const exerciseType = (['squat', 'curl', 'pushup'].includes(exercise)
+    ? exercise : 'squat') as ExerciseType;
 
   const [phase,    setPhase]    = useState<Phase>('idle');
   const [error,    setError]    = useState<string | null>(null);
@@ -211,7 +212,9 @@ export default function FormCheckScreen() {
         <GlassButton circular={40} onPress={handleBack}>
           <SymbolView name="chevron.left" size={18} tintColor={C.text} type="monochrome" style={{ width: 18, height: 18 }} />
         </GlassButton>
-        <Text style={s.title}>{exerciseType === 'curl' ? 'Bicep Curl' : 'Squat'} Form Check</Text>
+        <Text style={s.title}>
+          {exerciseType === 'curl' ? 'Bicep Curl' : exerciseType === 'pushup' ? 'Push-up' : 'Squat'} Form Check
+        </Text>
         <GlassButton circular={40} onPress={handleFlip}>
           <SymbolView name="arrow.triangle.2.circlepath.camera.fill" size={18} tintColor={C.text} type="monochrome" style={{ width: 18, height: 18 }} />
         </GlassButton>
@@ -244,7 +247,7 @@ export default function FormCheckScreen() {
         <View style={s.debugPanel}>
           <Row label="person"  value={stats.personDetected ? 'yes' : 'no'} good={stats.personDetected} />
           <Row label="ready"   value={stats.ready ? 'yes' : 'no'} good={stats.ready} />
-          <Row label={exerciseType === 'curl' ? 'elbow°' : 'knee°'} value={stats.kneeAngle.toFixed(1)} />
+          <Row label={exerciseType === 'curl' || exerciseType === 'pushup' ? 'elbow°' : 'knee°'} value={stats.kneeAngle.toFixed(1)} />
           <Row label="back°"   value={stats.backAngle.toFixed(1)} />
           <Row label="phase"   value={stats.phase} />
           <Row label="frames"  value={`${stats.totalFramesAnalyzed} / ${stats.totalFramesReceived}`} />

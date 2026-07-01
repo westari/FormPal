@@ -23,608 +23,6 @@ final class ATHLTSessionHolder {
     }
 }
 
-// ─── SquatAnalyzer ─────────────────────────────────────────────────────────────
-//
-// 3-phase state machine (TOP → INTERMEDIATE → BOTTOM → count on ascent).
-//
-// Tuning changes from on-device testing:
-//
-// FIX 1 — RELIABLE COUNTING (err toward counting, not dropping)
-//   • readyStandingDuration: 1.0 s (was 1.5 s) — gate opens sooner
-//   • maxHipYVariance: 0.002 (was 0.0006) — standing still no longer blocked
-//     by normal micro-movement
-//   • topExitThreshold: 155° (was 160°) — reps count when person doesn't fully
-//     extend between squats; 5° below topThreshold
-//   • minRepInterval: 0.5 s (was 0.8 s) — allows normal-paced squats
-//
-// FIX 2 — ONLY RELIABLE FORM CUES
-//   • DISABLED "KEEP HEELS DOWN" — ankle keypoints too low-confidence
-//   • DISABLED "WEIGHT ON HEELS" — knee-over-toes fires on good-form squats
-//   • KEPT "GO DEEPER" (knee never reached bottomThreshold)
-//   • KEPT "CHEST UP"; backLeanThreshold tightened to 25° based on measured data
-//     (normal upright squat ≈ 3.7°, bad lean ≈ 47.2°) — catches real errors, not normal lean.
-//
-// Camera angle check (Fix 4) kept as a passive warning; never blocks counting.
-//
-// NOTE: All thresholds are heuristic starting points — tune via NSLog output.
-
-final class SquatAnalyzer {
-
-    // MARK: – Tuning constants
-
-    static let jointConfidenceMin: Float      = 0.30
-    /// Knee angle (°) above which standing is confirmed (ready gate + ankle baseline).
-    static let topThreshold: Double           = 160.0
-    /// Knee angle (°) above which a rep completes. Slightly below topThreshold so reps
-    /// count even when the person doesn't fully extend between squats.
-    static let topExitThreshold: Double       = 155.0
-    /// Knee angle (°) below which descent (INTERMEDIATE entry) is registered.
-    static let intermediateEntryAngle: Double = 150.0
-    /// Knee angle (°) below which good depth is reached.
-    static let bottomThreshold: Double        = 100.0
-    /// Seconds absent mid-cycle before cycle + ready-gate are reset.
-    static let inactivityTimeout: Double      = 2.5
-    /// Continuous seconds of hip-stable standing required before counting starts.
-    static let readyStandingDuration: Double  = 1.0    // loosened from 1.5
-    /// Torso-vertical angle (°) above which "CHEST UP" fires. Measured on-device:
-    /// normal upright squat ≈ 3.7°, deliberately hunched ≈ 47.2°. 25° sits cleanly
-    /// between the two, catching bad lean without false-flagging good form.
-    static let backLeanThreshold: Double      = 25.0
-    /// Minimum seconds between counted reps. Allows normal-paced squats.
-    static let minRepInterval: Double         = 0.5    // loosened from 0.8
-    /// Max hip-Y variance (Vision units) while accumulating stable-standing time.
-    /// Walking produces far higher variance.
-    static let maxHipYVariance: Double        = 0.002  // loosened from 0.0006
-    /// Number of recent hip-Y samples used (~1 s at 10 fps).
-    static let hipYBufferSize: Int            = 10
-    /// Nose-shoulder-midpoint X offset below which a bad camera angle is warned.
-    static let minSideViewOffset: Double      = 0.04
-
-    // MARK: – Public read-only state
-
-    private(set) var reps:          Int    = 0
-    private(set) var goodReps:      Int    = 0
-    private(set) var lastKneeAngle: Double = 180.0
-    private(set) var lastBackAngle: Double = 0.0
-    private(set) var isReady:       Bool   = false
-    private(set) var cameraAngleOk: Bool   = true
-    private(set) var state:         String = "Get into frame"
-
-    struct RepResult {
-        let good:       Bool
-        let reason:     String   // "nice" | "GO DEEPER" | "CHEST UP"
-        let depthAngle: Double   // min knee angle reached (°)
-        let backAngle:  Double   // max torso-vertical angle (°)
-    }
-
-    // MARK: – Private phase machine
-
-    private enum Phase { case top, intermediate, bottom }
-    private var phase: Phase = .top
-
-    private var enteredIntermediate: Bool   = false
-    private var reachedBottom:       Bool   = false
-    private var minAngleThisRep:     Double = 180.0
-    private var maxBackAngleThisRep: Double = 0.0
-
-    private var lastPoseTimestamp:   Double  = 0.0
-    private var lastRepTimestamp:    Double  = 0.0
-    private var stableStandingStart: Double? = nil
-
-    // Rolling hip-Y samples for walking-detection during ready gate
-    private var hipYBuffer: [Double] = []
-
-    // MARK: – Session control
-
-    func reset() {
-        reps                = 0
-        goodReps            = 0
-        lastKneeAngle       = 180.0
-        lastBackAngle       = 0.0
-        isReady             = false
-        cameraAngleOk       = true
-        stableStandingStart = nil
-        state               = "Get into frame"
-        phase               = .top
-        lastPoseTimestamp   = 0.0
-        lastRepTimestamp    = 0.0
-        hipYBuffer.removeAll()
-        resetCycle()
-    }
-
-    func notePersonMissing(timestamp: Double) {
-        state           = "no person / legs not fully visible"
-        cameraAngleOk   = true
-        stableStandingStart = nil
-        hipYBuffer.removeAll()
-
-        guard lastPoseTimestamp > 0 else { return }
-        let elapsed = timestamp - lastPoseTimestamp
-        guard elapsed > Self.inactivityTimeout else { return }
-
-        if enteredIntermediate {
-            NSLog("[SquatAnalyzer] INACTIVITY RESET — mid-cycle after %.1fs", elapsed)
-        }
-        if isReady {
-            NSLog("[SquatAnalyzer] READY RESET — person absent %.1fs", elapsed)
-            isReady = false
-        }
-        resetCycle()
-        phase = .top
-    }
-
-    // MARK: – Ingestion
-
-    func ingest(pose: VNHumanBodyPoseObservation, timestamp: Double) -> RepResult? {
-        lastPoseTimestamp = timestamp
-
-        // ── Knee angle ────────────────────────────────────────────────────────
-        var kneeAngles: [Double] = []
-        if let h = point(pose, .leftHip),  let k = point(pose, .leftKnee),
-           let a = point(pose, .leftAnkle)  { kneeAngles.append(angleAt(b: k, a: h, c: a)) }
-        if let h = point(pose, .rightHip), let k = point(pose, .rightKnee),
-           let a = point(pose, .rightAnkle) { kneeAngles.append(angleAt(b: k, a: h, c: a)) }
-
-        guard !kneeAngles.isEmpty else {
-            state = "no person / legs not fully visible"
-            return nil
-        }
-
-        let kneeAngle = kneeAngles.reduce(0, +) / Double(kneeAngles.count)
-        lastKneeAngle = kneeAngle
-
-        // ── Back/torso angle ──────────────────────────────────────────────────
-        if let ba = torsoAngle(pose: pose) {
-            lastBackAngle = ba
-            if enteredIntermediate && ba > maxBackAngleThisRep { maxBackAngleThisRep = ba }
-        }
-
-        // ── Camera angle (passive warning, never blocks counting) ─────────────
-        cameraAngleOk = isSideView(pose: pose)
-
-        // ── Hip Y buffer — detect walking vs standing still ───────────────────
-        if let lh = point(pose, .leftHip), let rh = point(pose, .rightHip) {
-            let midHipY = (Double(lh.y) + Double(rh.y)) / 2.0
-            hipYBuffer.append(midHipY)
-            if hipYBuffer.count > Self.hipYBufferSize { hipYBuffer.removeFirst() }
-        }
-        var hipStable = false
-        if hipYBuffer.count >= 5 {
-            let mean = hipYBuffer.reduce(0, +) / Double(hipYBuffer.count)
-            let variance = hipYBuffer.map { ($0 - mean) * ($0 - mean) }.reduce(0, +)
-                           / Double(hipYBuffer.count)
-            hipStable = variance < Self.maxHipYVariance
-        }
-
-        // ── Ready gate ────────────────────────────────────────────────────────
-        if !isReady {
-            if kneeAngle >= Self.topThreshold && hipStable {
-                if stableStandingStart == nil { stableStandingStart = timestamp }
-                let elapsed = timestamp - (stableStandingStart ?? timestamp)
-                state = String(format: "Hold still… (%.1f s)", elapsed)
-                if elapsed >= Self.readyStandingDuration {
-                    isReady = true
-                    stableStandingStart = nil
-                    NSLog("[SquatAnalyzer] → READY after %.1fs stable standing (knee %.0f°)",
-                          elapsed, kneeAngle)
-                    // Fall through into the state machine on this same frame so
-                    // the very first descent isn't delayed by one extra frame.
-                } else {
-                    return nil
-                }
-            } else {
-                stableStandingStart = nil
-                state = kneeAngle < Self.topThreshold
-                    ? String(format: "Stand tall (knee %.0f°)", kneeAngle)
-                    : "Hold still — don't move"
-                return nil
-            }
-        }
-
-        // ── Min knee angle ────────────────────────────────────────────────────
-        if kneeAngle < minAngleThisRep { minAngleThisRep = kneeAngle }
-
-        // ── 3-phase state machine ─────────────────────────────────────────────
-        switch phase {
-
-        case .top:
-            state = String(format: "TOP (knee %.0f°)", kneeAngle)
-            if kneeAngle < Self.intermediateEntryAngle {
-                phase = .intermediate
-                enteredIntermediate = true
-                NSLog("[SquatAnalyzer] → INTERMEDIATE (%.0f°)", kneeAngle)
-            }
-
-        case .intermediate:
-            state = String(format: "INTERMEDIATE (%.0f°, min %.0f°)", kneeAngle, minAngleThisRep)
-            if kneeAngle < Self.bottomThreshold {
-                phase = .bottom
-                reachedBottom = true
-                NSLog("[SquatAnalyzer] → BOTTOM (%.0f°)", kneeAngle)
-            } else if kneeAngle >= Self.topExitThreshold {
-                return evaluateAndReset()
-            }
-
-        case .bottom:
-            state = String(format: "BOTTOM (knee %.0f°)", kneeAngle)
-            if kneeAngle > Self.bottomThreshold { phase = .intermediate }
-            if kneeAngle >= Self.topExitThreshold {
-                return evaluateAndReset()
-            }
-        }
-
-        return nil
-    }
-
-    // MARK: – Evaluate rep & reset cycle
-
-    private func evaluateAndReset() -> RepResult? {
-        defer { resetCycle(); phase = .top }
-
-        guard enteredIntermediate else {
-            NSLog("[SquatAnalyzer] REJECT — noise, never entered INTERMEDIATE (min=%.0f°)",
-                  minAngleThisRep)
-            return nil
-        }
-
-        // Debounce
-        let timeSinceLast = lastRepTimestamp > 0
-            ? lastPoseTimestamp - lastRepTimestamp
-            : Double.infinity
-        if timeSinceLast < Self.minRepInterval {
-            NSLog("[SquatAnalyzer] DEBOUNCE — %.2fs since last rep, skipping", timeSinceLast)
-            return nil
-        }
-        lastRepTimestamp = lastPoseTimestamp
-
-        reps += 1
-
-        // Only two reliable cues: depth and lean
-        let badDepth = !reachedBottom
-        let badLean  = maxBackAngleThisRep > Self.backLeanThreshold
-
-        let good:   Bool
-        let reason: String
-        if badDepth {
-            good = false; reason = "GO DEEPER"
-        } else if badLean {
-            good = false; reason = "CHEST UP"
-        } else {
-            good = true;  reason = "nice"
-        }
-        if good { goodReps += 1 }
-
-        NSLog("[SquatAnalyzer] REP %-5@ depth=%.0f°(bot:%@) back=%.0f°(lean:%@) → \"%@\" (%d good/%d total)",
-              good ? "GOOD" : "BAD",
-              minAngleThisRep,    reachedBottom              ? "Y" : "N",
-              maxBackAngleThisRep, badLean                   ? "Y" : "N",
-              reason, goodReps, reps)
-
-        return RepResult(good: good, reason: reason,
-                         depthAngle: minAngleThisRep, backAngle: maxBackAngleThisRep)
-    }
-
-    private func resetCycle() {
-        enteredIntermediate = false
-        reachedBottom       = false
-        minAngleThisRep     = 180.0
-        maxBackAngleThisRep = 0.0
-    }
-
-    // MARK: – Camera angle check (passive warning only)
-
-    private func isSideView(pose: VNHumanBodyPoseObservation) -> Bool {
-        guard let nose = point(pose, .nose),
-              let ls   = point(pose, .leftShoulder),
-              let rs   = point(pose, .rightShoulder) else { return true }
-        let midX = (Double(ls.x) + Double(rs.x)) / 2.0
-        return abs(Double(nose.x) - midX) >= Self.minSideViewOffset
-    }
-
-    // MARK: – Geometry helpers
-
-    private func torsoAngle(pose: VNHumanBodyPoseObservation) -> Double? {
-        var angles: [Double] = []
-        if let s = point(pose, .leftShoulder),  let h = point(pose, .leftHip)  { angles.append(verticalAngle(from: h, to: s)) }
-        if let s = point(pose, .rightShoulder), let h = point(pose, .rightHip) { angles.append(verticalAngle(from: h, to: s)) }
-        guard !angles.isEmpty else { return nil }
-        return angles.reduce(0, +) / Double(angles.count)
-    }
-
-    private func verticalAngle(from bottom: CGPoint, to top: CGPoint) -> Double {
-        let dx = abs(Double(top.x - bottom.x))
-        let dy = Double(top.y - bottom.y)
-        return atan2(dx, max(dy, 0.001)) * 180.0 / .pi
-    }
-
-    private func point(_ pose: VNHumanBodyPoseObservation,
-                       _ joint: VNHumanBodyPoseObservation.JointName) -> CGPoint? {
-        guard let p = try? pose.recognizedPoint(joint),
-              p.confidence >= Self.jointConfidenceMin else { return nil }
-        return p.location
-    }
-
-    private func angleAt(b: CGPoint, a: CGPoint, c: CGPoint) -> Double {
-        let v1x = Double(a.x - b.x), v1y = Double(a.y - b.y)
-        let v2x = Double(c.x - b.x), v2y = Double(c.y - b.y)
-        let dot = v1x * v2x + v1y * v2y
-        let m1  = (v1x * v1x + v1y * v1y).squareRoot()
-        let m2  = (v2x * v2x + v2y * v2y).squareRoot()
-        guard m1 > 1e-6, m2 > 1e-6 else { return 180.0 }
-        return acos(max(-1.0, min(1.0, dot / (m1 * m2)))) * 180.0 / .pi
-    }
-}
-
-// ─── CurlAnalyzer ──────────────────────────────────────────────────────────────
-//
-// 3-phase state machine (ARM_DOWN → CURLING → ARM_UP → count on return).
-//
-// Tracks elbow angle (shoulder-elbow-wrist). Uses the most-flexed arm so
-// single-arm curls are tracked correctly without averaging with the static arm.
-//
-// Thresholds are heuristic starting points — tune via NSLog output on-device.
-
-final class CurlAnalyzer {
-
-    // MARK: – Tuning constants
-
-    static let jointConfidenceMin: Float   = 0.30
-    /// Elbow angle (°) above which arm is confirmed extended (ready gate).
-    static let topThreshold: Double        = 160.0
-    /// Elbow angle (°) above which a rep completes (return to extension).
-    static let exitThreshold: Double       = 145.0
-    /// Elbow angle (°) below which the curling phase begins.
-    static let entryAngle: Double          = 145.0
-    /// Elbow angle (°) below which "full curl" is reached (good form).
-    static let fullCurlThreshold: Double   = 50.0
-    /// Minimum extension angle (°) at top of rep — below this fires "FULL EXTENSION".
-    static let minExtensionAngle: Double   = 140.0
-    /// Seconds absent mid-cycle before cycle + ready-gate are reset.
-    static let inactivityTimeout: Double   = 2.5
-    /// Continuous seconds of stable arm extension required before counting starts.
-    static let readyDuration: Double       = 1.0
-    /// Minimum seconds between counted reps.
-    static let minRepInterval: Double      = 0.5
-    /// Max elbow-Y variance while accumulating ready time.
-    static let maxElbowYVariance: Double   = 0.003
-    static let elbowYBufferSize: Int       = 10
-
-    // MARK: – Public read-only state
-
-    private(set) var reps:           Int    = 0
-    private(set) var goodReps:       Int    = 0
-    private(set) var lastElbowAngle: Double = 180.0
-    private(set) var isReady:        Bool   = false
-    private(set) var state:          String = "Get into frame"
-
-    struct RepResult {
-        let good:       Bool
-        let reason:     String   // "nice" | "CURL HIGHER" | "FULL EXTENSION"
-        let depthAngle: Double   // min elbow angle reached (°)
-        let backAngle:  Double   // extension angle at top of rep (°)
-    }
-
-    // MARK: – Private phase machine
-
-    private enum Phase { case armDown, curling, armUp }
-    private var phase: Phase = .armDown
-
-    private var enteredCurling:  Bool   = false
-    private var reachedFullCurl: Bool   = false
-    private var minAngleThisRep: Double = 180.0
-
-    private var lastPoseTimestamp: Double  = 0.0
-    private var lastRepTimestamp:  Double  = 0.0
-    private var stableExtendStart: Double? = nil
-    private var elbowYBuffer: [Double] = []
-
-    // MARK: – Session control
-
-    func reset() {
-        reps              = 0
-        goodReps          = 0
-        lastElbowAngle    = 180.0
-        isReady           = false
-        stableExtendStart = nil
-        state             = "Get into frame"
-        phase             = .armDown
-        lastPoseTimestamp = 0.0
-        lastRepTimestamp  = 0.0
-        elbowYBuffer.removeAll()
-        resetCycle()
-    }
-
-    func notePersonMissing(timestamp: Double) {
-        state             = "no person / arms not visible"
-        stableExtendStart = nil
-        elbowYBuffer.removeAll()
-
-        guard lastPoseTimestamp > 0 else { return }
-        let elapsed = timestamp - lastPoseTimestamp
-        guard elapsed > Self.inactivityTimeout else { return }
-
-        if enteredCurling {
-            NSLog("[CurlAnalyzer] INACTIVITY RESET — mid-cycle after %.1fs", elapsed)
-        }
-        if isReady {
-            NSLog("[CurlAnalyzer] READY RESET — person absent %.1fs", elapsed)
-            isReady = false
-        }
-        resetCycle()
-        phase = .armDown
-    }
-
-    // MARK: – Ingestion
-
-    func ingest(pose: VNHumanBodyPoseObservation, timestamp: Double) -> RepResult? {
-        lastPoseTimestamp = timestamp
-
-        // ── Elbow angles ───────────────────────────────────────────────────────
-        var elbowAngles:   [Double] = []
-        var elbowYSamples: [Double] = []
-
-        if let s = point(pose, .leftShoulder),  let e = point(pose, .leftElbow),
-           let w = point(pose, .leftWrist) {
-            elbowAngles.append(angleAt(b: e, a: s, c: w))
-            elbowYSamples.append(Double(e.y))
-        }
-        if let s = point(pose, .rightShoulder), let e = point(pose, .rightElbow),
-           let w = point(pose, .rightWrist) {
-            elbowAngles.append(angleAt(b: e, a: s, c: w))
-            elbowYSamples.append(Double(e.y))
-        }
-
-        guard !elbowAngles.isEmpty else {
-            state = "no person / arms not visible"
-            return nil
-        }
-
-        // Use the most-flexed arm so single-arm curls are tracked correctly
-        let elbowAngle = elbowAngles.min()!
-        lastElbowAngle = elbowAngle
-
-        // ── Elbow Y stability (for ready gate) ────────────────────────────────
-        if let ey = elbowYSamples.first {
-            elbowYBuffer.append(ey)
-            if elbowYBuffer.count > Self.elbowYBufferSize { elbowYBuffer.removeFirst() }
-        }
-        var elbowStable = false
-        if elbowYBuffer.count >= 5 {
-            let mean = elbowYBuffer.reduce(0, +) / Double(elbowYBuffer.count)
-            let variance = elbowYBuffer.map { ($0 - mean) * ($0 - mean) }.reduce(0, +)
-                           / Double(elbowYBuffer.count)
-            elbowStable = variance < Self.maxElbowYVariance
-        }
-
-        // ── Ready gate ────────────────────────────────────────────────────────
-        if !isReady {
-            if elbowAngle >= Self.topThreshold && elbowStable {
-                if stableExtendStart == nil { stableExtendStart = timestamp }
-                let elapsed = timestamp - (stableExtendStart ?? timestamp)
-                state = String(format: "Hold arm straight… (%.1f s)", elapsed)
-                if elapsed >= Self.readyDuration {
-                    isReady = true
-                    stableExtendStart = nil
-                    NSLog("[CurlAnalyzer] → READY after %.1fs stable extension (elbow %.0f°)",
-                          elapsed, elbowAngle)
-                } else {
-                    return nil
-                }
-            } else {
-                stableExtendStart = nil
-                state = elbowAngle < Self.topThreshold
-                    ? String(format: "Extend arm (elbow %.0f°)", elbowAngle)
-                    : "Hold still — don't move"
-                return nil
-            }
-        }
-
-        // ── Track min angle ───────────────────────────────────────────────────
-        if elbowAngle < minAngleThisRep { minAngleThisRep = elbowAngle }
-
-        // ── 3-phase state machine ─────────────────────────────────────────────
-        switch phase {
-
-        case .armDown:
-            state = String(format: "ARM DOWN (elbow %.0f°)", elbowAngle)
-            if elbowAngle < Self.entryAngle {
-                phase = .curling
-                enteredCurling = true
-                NSLog("[CurlAnalyzer] → CURLING (%.0f°)", elbowAngle)
-            }
-
-        case .curling:
-            state = String(format: "CURLING (%.0f°, min %.0f°)", elbowAngle, minAngleThisRep)
-            if elbowAngle < Self.fullCurlThreshold {
-                phase = .armUp
-                reachedFullCurl = true
-                NSLog("[CurlAnalyzer] → ARM_UP peak (%.0f°)", elbowAngle)
-            } else if elbowAngle >= Self.exitThreshold {
-                return evaluateAndReset(extensionAngle: elbowAngle)
-            }
-
-        case .armUp:
-            state = String(format: "ARM_UP (%.0f°)", elbowAngle)
-            if elbowAngle > Self.fullCurlThreshold { phase = .curling }
-            if elbowAngle >= Self.exitThreshold {
-                return evaluateAndReset(extensionAngle: elbowAngle)
-            }
-        }
-
-        return nil
-    }
-
-    // MARK: – Evaluate rep & reset cycle
-
-    private func evaluateAndReset(extensionAngle: Double) -> RepResult? {
-        defer { resetCycle(); phase = .armDown }
-
-        guard enteredCurling else {
-            NSLog("[CurlAnalyzer] REJECT — noise, never entered CURLING (min=%.0f°)", minAngleThisRep)
-            return nil
-        }
-
-        let timeSinceLast = lastRepTimestamp > 0
-            ? lastPoseTimestamp - lastRepTimestamp
-            : Double.infinity
-        if timeSinceLast < Self.minRepInterval {
-            NSLog("[CurlAnalyzer] DEBOUNCE — %.2fs since last rep", timeSinceLast)
-            return nil
-        }
-        lastRepTimestamp = lastPoseTimestamp
-
-        reps += 1
-
-        let badCurl      = !reachedFullCurl
-        let badExtension = extensionAngle < Self.minExtensionAngle
-
-        let good:   Bool
-        let reason: String
-        if badCurl {
-            good = false; reason = "CURL HIGHER"
-        } else if badExtension {
-            good = false; reason = "FULL EXTENSION"
-        } else {
-            good = true;  reason = "nice"
-        }
-        if good { goodReps += 1 }
-
-        NSLog("[CurlAnalyzer] REP %-5@ min=%.0f°(curl:%@) ext=%.0f°(ok:%@) → \"%@\" (%d good/%d total)",
-              good ? "GOOD" : "BAD",
-              minAngleThisRep, reachedFullCurl  ? "Y" : "N",
-              extensionAngle,  !badExtension    ? "Y" : "N",
-              reason, goodReps, reps)
-
-        return RepResult(good: good, reason: reason,
-                         depthAngle: minAngleThisRep, backAngle: extensionAngle)
-    }
-
-    private func resetCycle() {
-        enteredCurling  = false
-        reachedFullCurl = false
-        minAngleThisRep = 180.0
-    }
-
-    // MARK: – Geometry helpers
-
-    private func point(_ pose: VNHumanBodyPoseObservation,
-                       _ joint: VNHumanBodyPoseObservation.JointName) -> CGPoint? {
-        guard let p = try? pose.recognizedPoint(joint),
-              p.confidence >= Self.jointConfidenceMin else { return nil }
-        return p.location
-    }
-
-    private func angleAt(b: CGPoint, a: CGPoint, c: CGPoint) -> Double {
-        let v1x = Double(a.x - b.x), v1y = Double(a.y - b.y)
-        let v2x = Double(c.x - b.x), v2y = Double(c.y - b.y)
-        let dot = v1x * v2x + v1y * v2y
-        let m1  = (v1x * v1x + v1y * v1y).squareRoot()
-        let m2  = (v2x * v2x + v2y * v2y).squareRoot()
-        guard m1 > 1e-6, m2 > 1e-6 else { return 180.0 }
-        return acos(max(-1.0, min(1.0, dot / (m1 * m2)))) * 180.0 / .pi
-    }
-}
-
 // ─── Video frame capture delegate ─────────────────────────────────────────────
 
 private final class ATHLTCaptureDelegate: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
@@ -673,11 +71,16 @@ public class ATHLTCameraModule: Module {
     private var frameCounter = 0
     private let frameSkip    = 3
 
-    // MARK: – Analysis
+    // MARK: – Analysis (config-driven; swap definition via setExercise to change exercise)
     private var currentExercise = "squat"
-    private let squatAnalyzer   = SquatAnalyzer()
-    private let curlAnalyzer    = CurlAnalyzer()
+    private var engine: ExerciseEngine = ExerciseEngine(definition: ExerciseRegistry.squat)
     private var personDetected  = false
+
+    // MARK: – Latest debug values (cached for 1-second throttled emission)
+    private var lastDebugAngle:    Double          = 180.0
+    private var lastDebugFormVals: [String: Double] = [:]
+    private var lastDebugReady:    Bool             = false
+    private var lastDebugCameraOk: Bool             = true
 
     // MARK: – Diagnostics
     private var diagnosticMode          = false
@@ -720,12 +123,12 @@ public class ATHLTCameraModule: Module {
                     self.isTracking  = false
                     self.currentMode = "idle"
                     if let p = self.pendingStopPromise {
-                        let (r, gr) = self.activeStats()
-                        p.resolve(["reps": r, "goodReps": gr, "videoUri": NSNull()])
+                        p.resolve(["reps":     self.engine.totalReps,
+                                   "goodReps": self.engine.goodReps,
+                                   "videoUri": NSNull()])
                         self.pendingStopPromise = nil
                     }
-                    self.squatAnalyzer.reset()
-                    self.curlAnalyzer.reset()
+                    self.engine.reset()
                 }
                 NSLog("[GymCamera] session stopped")
                 promise.resolve(["success": true])
@@ -755,24 +158,28 @@ public class ATHLTCameraModule: Module {
 
         AsyncFunction("setExercise") { (exerciseType: String, promise: Promise) in
             self.inferenceQueue.async {
+                guard let def = ExerciseRegistry.definition(for: exerciseType) else {
+                    NSLog("[GymCamera] unknown exercise '%@' — ignoring", exerciseType)
+                    promise.resolve()
+                    return
+                }
                 self.currentExercise = exerciseType
-                self.squatAnalyzer.reset()
-                self.curlAnalyzer.reset()
-                NSLog("[GymCamera] exercise → %@", exerciseType)
+                self.engine          = ExerciseEngine(definition: def)
+                self.wireEngineCallbacks()
+                NSLog("[GymCamera] exercise → %@ (%@)", exerciseType, def.displayName)
                 promise.resolve()
             }
         }
 
         AsyncFunction("startTracking") { (promise: Promise) in
             self.inferenceQueue.async {
-                self.squatAnalyzer.reset()
-                self.curlAnalyzer.reset()
+                self.engine.reset()
                 self.isTracking          = true
                 self.currentMode         = "tracking"
                 self.totalFramesAnalyzed = 0
                 self.lastDebugStatsTime  = 0.0
                 self.personDetected      = false
-                NSLog("[GymCamera] tracking started")
+                NSLog("[GymCamera] tracking started (%@)", self.currentExercise)
 
                 self.sessionQueue.async {
                     guard let movieOut = self.movieOutput,
@@ -799,20 +206,48 @@ public class ATHLTCameraModule: Module {
                     self.pendingStopPromise = promise
                     self.sessionQueue.async { movieOut.stopRecording() }
                 } else {
-                    let (r, gr) = self.activeStats()
-                    NSLog("[GymCamera] tracking stopped — %d good / %d reps (no recording)", gr, r)
-                    promise.resolve(["reps": r, "goodReps": gr, "videoUri": NSNull()])
+                    NSLog("[GymCamera] tracking stopped — %d good / %d reps (no recording)",
+                          self.engine.goodReps, self.engine.totalReps)
+                    promise.resolve(["reps":     self.engine.totalReps,
+                                     "goodReps": self.engine.goodReps,
+                                     "videoUri": NSNull()])
                 }
             }
         }
     }
 
-    // MARK: – Active analyzer stats helper ────────────────────────────────────
+    // MARK: – Engine callback wiring ──────────────────────────────────────────
 
-    private func activeStats() -> (reps: Int, goodReps: Int) {
-        currentExercise == "curl"
-            ? (curlAnalyzer.reps, curlAnalyzer.goodReps)
-            : (squatAnalyzer.reps, squatAnalyzer.goodReps)
+    private func wireEngineCallbacks() {
+        engine.onRepDetected = { [weak self] result in
+            guard let self else { return }
+            // backAngle: kept for TS event shape compat.
+            // Squat: max torso-lean angle; curl: full_extension primary max; others: 0.
+            let secondaryAngle = result.formValues["back_lean"]
+                              ?? result.formValues["full_extension"]
+                              ?? 0.0
+            NSLog("[GymCamera] REP %@ — %d good / %d total (peak %.0f° secondary %.0f°)",
+                  result.good ? "GOOD ✓" : "BAD ✗",
+                  result.goodReps, result.totalReps,
+                  result.primaryAngle, secondaryAngle)
+            self.sendEvent("onRepDetected", [
+                "good":       result.good,
+                "reason":     result.cue,
+                "depthAngle": result.primaryAngle,
+                "backAngle":  secondaryAngle,
+                "reps":       result.totalReps,
+                "goodReps":   result.goodReps,
+                "timestamp":  Date().timeIntervalSince1970 * 1000.0,
+            ])
+        }
+
+        engine.onDebugStats = { [weak self] stats in
+            guard let self else { return }
+            self.lastDebugAngle    = stats.primaryAngle
+            self.lastDebugFormVals = stats.formMetrics
+            self.lastDebugReady    = stats.isReady
+            self.lastDebugCameraOk = stats.cameraOk
+        }
     }
 
     // MARK: – Recording callback ───────────────────────────────────────────────
@@ -820,9 +255,10 @@ public class ATHLTCameraModule: Module {
     func handleMovieFinished(url: URL, error: Error?) {
         inferenceQueue.async { [weak self] in
             guard let self else { return }
-            let (r, gr) = self.activeStats()
-            var dict: [String: Any] = ["reps": r, "goodReps": gr]
-
+            var dict: [String: Any] = [
+                "reps":     self.engine.totalReps,
+                "goodReps": self.engine.goodReps,
+            ]
             if let err = error as NSError?,
                !(err.domain == AVFoundationErrorDomain &&
                  err.code   == AVError.Code.operationInterrupted.rawValue) {
@@ -832,8 +268,8 @@ public class ATHLTCameraModule: Module {
                 NSLog("[GymCamera] recording saved: %@", url.lastPathComponent)
                 dict["videoUri"] = url.absoluteString
             }
-
-            NSLog("[GymCamera] tracking stopped — %d good / %d reps", gr, r)
+            NSLog("[GymCamera] tracking stopped — %d good / %d reps",
+                  self.engine.goodReps, self.engine.totalReps)
             self.pendingStopPromise?.resolve(dict)
             self.pendingStopPromise = nil
         }
@@ -842,6 +278,8 @@ public class ATHLTCameraModule: Module {
     // MARK: – startSession ─────────────────────────────────────────────────────
 
     private func doStartSession(promise: Promise) {
+        inferenceQueue.sync { wireEngineCallbacks() }
+
         let status = AVCaptureDevice.authorizationStatus(for: .video)
         switch status {
         case .authorized:
@@ -994,86 +432,51 @@ public class ATHLTCameraModule: Module {
             NSLog("[GymCamera] pose error: %@", error.localizedDescription); return
         }
 
+        let date = Date(timeIntervalSince1970: timestamp > 0 ? timestamp : CACurrentMediaTime())
+
         guard let results = request.results as? [VNHumanBodyPoseObservation], !results.isEmpty else {
             personDetected = false
-            if currentExercise == "curl" {
-                curlAnalyzer.notePersonMissing(timestamp: timestamp)
-            } else {
-                squatAnalyzer.notePersonMissing(timestamp: timestamp)
-            }
+            engine.notePersonMissing(timestamp: date)
             maybeEmitDebugStats()
             return
         }
 
         personDetected = true
-        let pose = results.max(by: { $0.confidence < $1.confidence }) ?? results[0]
-
-        if currentExercise == "curl" {
-            if let rep = curlAnalyzer.ingest(pose: pose, timestamp: timestamp) {
-                emitRepEvent(good: rep.good, reason: rep.reason,
-                             depthAngle: rep.depthAngle, backAngle: rep.backAngle,
-                             reps: curlAnalyzer.reps, goodReps: curlAnalyzer.goodReps)
-            }
-        } else {
-            if let rep = squatAnalyzer.ingest(pose: pose, timestamp: timestamp) {
-                emitRepEvent(good: rep.good, reason: rep.reason,
-                             depthAngle: rep.depthAngle, backAngle: rep.backAngle,
-                             reps: squatAnalyzer.reps, goodReps: squatAnalyzer.goodReps)
-            }
-        }
+        let obs  = results.max(by: { $0.confidence < $1.confidence }) ?? results[0]
+        let pose = extractPose(obs)
+        engine.ingest(pose: pose, timestamp: date)
         maybeEmitDebugStats()
     }
 
-    // MARK: – Rep event ────────────────────────────────────────────────────────
+    // ─── Convert Vision observation to Pose dictionary ────────────────────────
 
-    private func emitRepEvent(good: Bool, reason: String, depthAngle: Double, backAngle: Double,
-                              reps: Int, goodReps: Int) {
-        NSLog("[GymCamera] REP %@ — %d good / %d total (depth %.0f° back %.0f°)",
-              good ? "GOOD ✓" : "BAD ✗", goodReps, reps, depthAngle, backAngle)
-        sendEvent("onRepDetected", [
-            "good":       good,
-            "reason":     reason,
-            "depthAngle": depthAngle,
-            "backAngle":  backAngle,
-            "reps":       reps,
-            "goodReps":   goodReps,
-            "timestamp":  Date().timeIntervalSince1970 * 1000.0,
-        ])
+    private func extractPose(_ obs: VNHumanBodyPoseObservation) -> Pose {
+        var pose = Pose()
+        for joint in Joint.allCases {
+            guard let p = try? obs.recognizedPoint(joint.visionName), p.confidence > 0 else { continue }
+            pose[joint] = PosePoint(x: p.location.x, y: p.location.y, confidence: p.confidence)
+        }
+        return pose
     }
 
-    // MARK: – Debug stats ──────────────────────────────────────────────────────
+    // MARK: – Debug stats (throttled to ~1 fps) ───────────────────────────────
 
     private func maybeEmitDebugStats() {
         let now = Date().timeIntervalSinceReferenceDate
         guard now - lastDebugStatsTime >= debugStatsThrottle else { return }
         lastDebugStatsTime = now
 
-        if currentExercise == "curl" {
-            sendEvent("onDebugStats", [
-                "personDetected":      personDetected,
-                "kneeAngle":           curlAnalyzer.lastElbowAngle,  // reuse field for compat
-                "backAngle":           0.0,
-                "ready":               curlAnalyzer.isReady,
-                "cameraAngleOk":       true,
-                "phase":               curlAnalyzer.state,
-                "reps":                curlAnalyzer.reps,
-                "goodReps":            curlAnalyzer.goodReps,
-                "totalFramesReceived": totalFramesReceived,
-                "totalFramesAnalyzed": totalFramesAnalyzed,
-            ])
-        } else {
-            sendEvent("onDebugStats", [
-                "personDetected":      personDetected,
-                "kneeAngle":           squatAnalyzer.lastKneeAngle,
-                "backAngle":           squatAnalyzer.lastBackAngle,
-                "ready":               squatAnalyzer.isReady,
-                "cameraAngleOk":       squatAnalyzer.cameraAngleOk,
-                "phase":               squatAnalyzer.state,
-                "reps":                squatAnalyzer.reps,
-                "goodReps":            squatAnalyzer.goodReps,
-                "totalFramesReceived": totalFramesReceived,
-                "totalFramesAnalyzed": totalFramesAnalyzed,
-            ])
-        }
+        sendEvent("onDebugStats", [
+            "personDetected":      personDetected,
+            "kneeAngle":           lastDebugAngle,         // field kept for TS compat
+            "backAngle":           lastDebugFormVals["back_lean"] ?? 0.0,
+            "ready":               lastDebugReady,
+            "cameraAngleOk":       lastDebugCameraOk,
+            "phase":               lastDebugReady ? "active" : "waiting",
+            "reps":                engine.totalReps,
+            "goodReps":            engine.goodReps,
+            "totalFramesReceived": totalFramesReceived,
+            "totalFramesAnalyzed": totalFramesAnalyzed,
+        ])
     }
 }
