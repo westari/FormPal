@@ -1,9 +1,9 @@
 /**
  * athlt-camera — JS bridge for the ATHLTCamera native module.
  *
- * Drives Vision body-pose squat detection with 3-phase state machine,
- * ready gate (hip-stable standing before counting), 4-tier form cues,
- * hysteresis + debounce for double-count prevention, and camera-angle warning.
+ * Drives Vision body-pose exercise detection with a two-phase design:
+ *   SETUP phase: one-time joint-visibility calibration (~2s hold).
+ *   ACTIVE phase: pure rep counting with zero framing interference.
  */
 
 import { requireNativeModule, EventEmitter, requireNativeViewManager } from 'expo-modules-core';
@@ -15,7 +15,7 @@ import type { ViewStyle } from 'react-native';
 /** Emitted once per completed rep. */
 export interface RepEvent {
   good: boolean;        // true = clean rep; false = form issue detected
-  reason: string;       // 2-3 word cue: "nice" | "GO DEEPER" | "CHEST UP" | "KEEP HEELS DOWN" | "WEIGHT ON HEELS"
+  reason: string;       // 2-3 word cue: "GOOD" | "GO DEEPER" | "CHEST UP" | ...
   depthAngle: number;   // squat: min knee angle (deg) | curl: min elbow angle (deg)
   backAngle:  number;   // squat: max torso-vertical angle (deg) | curl: extension angle at top (deg)
   reps: number;         // total reps this session
@@ -26,23 +26,22 @@ export interface RepEvent {
 /** Emitted ~once per second while tracking. */
 export interface DebugStatsEvent {
   personDetected: boolean;
-  kneeAngle: number;           // latest averaged knee angle (deg)
+  kneeAngle: number;           // latest primary angle (deg)
   backAngle: number;           // latest torso-vertical angle (deg)
-  ready: boolean;              // true once person stood stably (hip-still) for ~1.5s
-  cameraAngleOk: boolean;      // false = person not in side view; prompt "Turn sideways"
+  ready: boolean;              // true once person held start position for ~1s
   phase: string;               // human-readable analyzer state
   reps: number;
   goodReps: number;
   totalFramesReceived: number;
   totalFramesAnalyzed: number;
-  framingOk: boolean;
-  framingReason: string;
 }
 
-/** Emitted (change-detected) when the framing check result changes. */
-export interface FramingStatusEvent {
-  ok:     boolean;
-  reason: string;
+/** Emitted every frame during the SETUP phase (calibration). */
+export interface SetupStatusEvent {
+  allJointsVisible: boolean;
+  holdProgress:     number;   // 0.0 to 1.0 during the 2s hold
+  passed:           boolean;  // true once calibration is complete (fired once)
+  hint:             string;   // "" when joints visible; guidance text when not
 }
 
 export interface CameraStateEvent {
@@ -106,14 +105,6 @@ export function isModelLoaded(): boolean {
 
 // ─── Exercise type ────────────────────────────────────────────────────────────
 
-// ─── Skeleton overlay ─────────────────────────────────────────────────────────
-
-/// Show or hide the real-time body-pose skeleton on the camera view. Defaults ON.
-export async function setSkeletonVisible(enabled: boolean): Promise<void> {
-  if (!ATHLTCameraNative) return;
-  return ATHLTCameraNative.setSkeletonVisible(enabled);
-}
-
 // Extending this list is the only TS change needed when adding a new exercise —
 // the engine, definitions, and registry are all on the Swift side.
 export type ExerciseType = 'squat' | 'curl' | 'pushup';
@@ -121,6 +112,13 @@ export type ExerciseType = 'squat' | 'curl' | 'pushup';
 export async function setExercise(type: ExerciseType): Promise<void> {
   if (!ATHLTCameraNative) return;
   return ATHLTCameraNative.setExercise(type);
+}
+
+// ─── Skeleton overlay ─────────────────────────────────────────────────────────
+
+export async function setSkeletonVisible(enabled: boolean): Promise<void> {
+  if (!ATHLTCameraNative) return;
+  return ATHLTCameraNative.setSkeletonVisible(enabled);
 }
 
 // ─── Mode control ─────────────────────────────────────────────────────────────
@@ -188,11 +186,11 @@ export function addErrorListener(
   return nativeEmitter.addListener('onError', callback);
 }
 
-export function addFramingStatusListener(
-  callback: (event: FramingStatusEvent) => void
+export function addSetupStatusListener(
+  callback: (event: SetupStatusEvent) => void
 ): EventSubscription {
   if (!nativeEmitter) return { remove: () => {} };
-  return nativeEmitter.addListener('onFramingStatus', callback);
+  return nativeEmitter.addListener('onSetupStatus', callback);
 }
 
 // ─── Native View ──────────────────────────────────────────────────────────────

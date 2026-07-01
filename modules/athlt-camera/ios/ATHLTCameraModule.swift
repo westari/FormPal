@@ -80,14 +80,9 @@ public class ATHLTCameraModule: Module {
     private var personDetected  = false
 
     // MARK: – Latest debug values (cached for 1-second throttled emission)
-    private var lastDebugAngle:    Double          = 180.0
+    private var lastDebugAngle:    Double           = 180.0
     private var lastDebugFormVals: [String: Double] = [:]
     private var lastDebugReady:    Bool             = false
-    private var lastDebugCameraOk: Bool             = true
-
-    // MARK: – Framing status (change-detected — only emits onFramingStatus when changed)
-    private var lastFramingOk:     Bool   = false
-    private var lastFramingReason: String = ""
 
     // MARK: – Skeleton overlay
     private var isSkeletonVisible = true
@@ -107,7 +102,7 @@ public class ATHLTCameraModule: Module {
     public func definition() -> ModuleDefinition {
         Name("ATHLTCamera")
 
-        Events("onRepDetected", "onError", "onCameraState", "onDebugStats", "onFramingStatus")
+        Events("onRepDetected", "onError", "onCameraState", "onDebugStats", "onSetupStatus")
 
         View(ATHLTCameraView.self) {
             Prop("isActive") { (_: ATHLTCameraView, _: Bool) in }
@@ -200,7 +195,9 @@ public class ATHLTCameraModule: Module {
 
         AsyncFunction("startTracking") { (promise: Promise) in
             self.inferenceQueue.async {
-                self.engine.reset()
+                // resetForTracking: resets rep counters but preserves isSetupComplete
+                // so calibration is not re-run after the user already passed it.
+                self.engine.resetForTracking()
                 self.isTracking          = true
                 self.currentMode         = "tracking"
                 self.totalFramesAnalyzed = 0
@@ -248,8 +245,6 @@ public class ATHLTCameraModule: Module {
     private func wireEngineCallbacks() {
         engine.onRepDetected = { [weak self] result in
             guard let self else { return }
-            // backAngle: kept for TS event shape compat.
-            // Squat: max torso-lean angle; curl: full_extension primary max; others: 0.
             let secondaryAngle = result.formValues["back_lean"]
                               ?? result.formValues["full_extension"]
                               ?? 0.0
@@ -273,19 +268,17 @@ public class ATHLTCameraModule: Module {
             self.lastDebugAngle    = stats.primaryAngle
             self.lastDebugFormVals = stats.formMetrics
             self.lastDebugReady    = stats.isReady
-            self.lastDebugCameraOk = stats.cameraOk
-            self.emitFramingStatusIfChanged(ok: stats.framingStatus.ok,
-                                            reason: stats.framingStatus.reason)
         }
-    }
 
-    // MARK: – Framing status emission (change-detected) ───────────────────────
-
-    private func emitFramingStatusIfChanged(ok: Bool, reason: String) {
-        guard ok != lastFramingOk || reason != lastFramingReason else { return }
-        lastFramingOk     = ok
-        lastFramingReason = reason
-        sendEvent("onFramingStatus", ["ok": ok, "reason": reason])
+        engine.onSetupUpdate = { [weak self] status in
+            guard let self else { return }
+            self.sendEvent("onSetupStatus", [
+                "allJointsVisible": status.allJointsVisible,
+                "holdProgress":     status.holdProgress,
+                "passed":           status.passed,
+                "hint":             status.hint,
+            ])
+        }
     }
 
     // MARK: – Recording callback ───────────────────────────────────────────────
@@ -432,9 +425,9 @@ public class ATHLTCameraModule: Module {
 
     // MARK: – Frame handling ───────────────────────────────────────────────────
     //
-    // Guard changed from `self.isTracking` → `self.captureSession != nil` so that
-    // pose detection (and framing guidance) runs during monitoring mode — before
-    // the user presses Start. The framing overlay is powered by this.
+    // Guard is `captureSession != nil` (not `isTracking`) so that pose detection
+    // runs during the SETUP phase — before the user presses Start. The engine
+    // handles SETUP vs ACTIVE internally; both paths go through engine.ingest().
 
     func handleSampleBuffer(_ buffer: CMSampleBuffer) {
         totalFramesReceived += 1
@@ -460,16 +453,10 @@ public class ATHLTCameraModule: Module {
 
     // MARK: – Vision body-pose ─────────────────────────────────────────────────
     //
-    // Monitoring mode (captureSession running, not tracking):
-    //   - Run pose detection
-    //   - Call engine.checkFramingOnly() → emitFramingStatusIfChanged
-    //   - Show skeleton
-    //
-    // Tracking mode (isTracking = true):
-    //   - Run pose detection
-    //   - Call engine.ingest() → engine internally calls runFramingCheck
-    //     → onDebugStats callback → emitFramingStatusIfChanged
-    //   - Show skeleton
+    // Both monitoring and tracking modes call engine.ingest().
+    // The engine internally handles SETUP vs ACTIVE:
+    //   - SETUP (isSetupComplete = false): runs calibration check, emits onSetupStatus
+    //   - ACTIVE (isSetupComplete = true): runs rep counting, emits onRepDetected
 
     private func runPoseDetection(pixelBuffer: CVPixelBuffer, timestamp: Double) {
         totalFramesAnalyzed += 1
@@ -490,10 +477,8 @@ public class ATHLTCameraModule: Module {
         guard let results = request.results as? [VNHumanBodyPoseObservation], !results.isEmpty else {
             personDetected = false
             engine.notePersonMissing(timestamp: date)
-            emitFramingStatusIfChanged(ok: false, reason: "STEP INTO FRAME")
             maybeEmitDebugStats()
             if isSkeletonVisible {
-                // Clear the buffer so the display link stops showing a stale pose.
                 ATHLTPoseBuffer.shared.clear()
                 DispatchQueue.main.async {
                     NotificationCenter.default.post(name: .athltPoseCleared, object: nil)
@@ -506,21 +491,9 @@ public class ATHLTCameraModule: Module {
         let obs  = results.max(by: { $0.confidence < $1.confidence }) ?? results[0]
         let pose = extractPose(obs)
 
-        if isTracking {
-            // Full tracking path: engine.ingest handles framing check internally
-            // and fires emitFramingStatusIfChanged via onDebugStats callback.
-            engine.ingest(pose: pose, timestamp: date)
-        } else {
-            // Monitoring mode: framing check only — no rep counting.
-            let framing = engine.checkFramingOnly(pose: pose)
-            emitFramingStatusIfChanged(ok: framing.ok, reason: framing.reason)
-        }
-
+        engine.ingest(pose: pose, timestamp: date)
         maybeEmitDebugStats()
 
-        // Skeleton overlay: write directly to the shared buffer.
-        // The CADisplayLink in ATHLTCameraView reads it on the next vsync (~60-120 fps).
-        // No main-thread dispatch, no dictionary allocation — eliminates per-frame overhead.
         if isSkeletonVisible {
             ATHLTPoseBuffer.shared.post(PoseFrame(
                 pose:        pose,
@@ -551,17 +524,14 @@ public class ATHLTCameraModule: Module {
 
         sendEvent("onDebugStats", [
             "personDetected":      personDetected,
-            "kneeAngle":           lastDebugAngle,         // field kept for TS compat
+            "kneeAngle":           lastDebugAngle,
             "backAngle":           lastDebugFormVals["back_lean"] ?? 0.0,
             "ready":               lastDebugReady,
-            "cameraAngleOk":       lastDebugCameraOk,
             "phase":               lastDebugReady ? "active" : "waiting",
             "reps":                engine.totalReps,
             "goodReps":            engine.goodReps,
             "totalFramesReceived": totalFramesReceived,
             "totalFramesAnalyzed": totalFramesAnalyzed,
-            "framingOk":           lastFramingOk,
-            "framingReason":       lastFramingReason,
         ])
     }
 }

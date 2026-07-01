@@ -39,34 +39,28 @@ struct ReadyGateConfig {
     let stableDuration: TimeInterval
 }
 
-// ─── Camera setup — framing check + UI guidance ───────────────────────────────
+// ─── Camera setup — one-time calibration config ───────────────────────────────
 //
-// BLOCKING: the framing check uses this config to gate rep counting.
-// If any requiredJoints are low-confidence or the view angle is wrong,
-// the engine will NOT count reps until framing is corrected.
+// Drives the SETUP phase shown before rep counting begins.
+// The engine checks that requiredJoints are visible + stable for ~2 seconds.
+// Once passed, ALL calibration stops forever (until the session ends).
+// Rep counting then runs with zero interference from setup checks.
 //
-// Adding a new exercise = set its cameraSetup in ExerciseRegistry.
-// Zero engine code changes.
-
-enum RequiredView { case side, front }
+// Design: we INSTRUCT, we don't auto-detect angle.
+// Tell the user how to place the phone; then verify joints are visible.
+// No shoulder-separation math — just joint visibility + edge clipping.
+//
+// Adding a new exercise = set its cameraSetup in ExerciseRegistry. Zero engine changes.
 
 struct CameraSetupConfig {
-    /// Which camera angle is needed for this exercise.
-    /// .side: squat / pushup / curl (need side profile for angle measurement).
-    /// .front: future exercises (facing camera, e.g. overhead press with barbell).
-    let requiredView: RequiredView
+    /// Short, clear instruction shown to the user during setup.
+    /// Example: "Stand sideways to the camera — full body in frame"
+    let setupInstruction: String
 
-    /// Joints that MUST be visible at ≥ framingConfidenceThreshold for framing to be ok.
-    /// Missing any of these blocks rep counting with an appropriate cue.
+    /// Joints that must be visible (confidence ≥ threshold, not edge-clipped)
+    /// for the 2-second calibration hold to pass.
+    /// Keep this minimal — only joints the exercise actually measures.
     let requiredJoints: [Joint]
-
-    /// Short user-facing instruction shown LARGE in the framing overlay.
-    /// Example: "Stand SIDEWAYS — full body in frame"
-    let framingInstruction: String
-
-    /// General phone placement hint shown below the instruction.
-    /// Example: "Prop your phone ~7 ft away so your whole body is visible."
-    let setupHint: String
 }
 
 // ─── Exercise definition — the COMPLETE spec for one exercise ─────────────────
@@ -94,10 +88,8 @@ struct CameraSetupConfig {
 //       requiredJoints: [.leftShoulder, .leftElbow, .rightShoulder, .rightElbow],
 //       minConfidence: 0.35, stableDuration: 0.8),
 //     cameraSetup: CameraSetupConfig(
-//       requiredView: .front,
-//       requiredJoints: [.leftShoulder, .rightShoulder, .leftElbow, .rightElbow],
-//       framingInstruction: "Face the camera — upper body in frame",
-//       setupHint: "Prop your phone ~6 ft away so your upper body is visible."
+//       setupInstruction: "Face the camera — upper body in frame",
+//       requiredJoints: [.leftShoulder, .rightShoulder, .leftElbow, .rightElbow]
 //     ),
 //     minRepInterval: 0.6
 //   )
@@ -129,8 +121,7 @@ struct ExerciseDefinition {
     //
     // When adding a new exercise:
     //   1. Cover ROM, alignment, and movement-quality faults each as a separate FormCheck.
-    //   2. Set enabled: false for checks that are noisy on the current camera angle
-    //      (define them anyway so they can be re-enabled with future improvements).
+    //   2. Set enabled: false for checks that are noisy on the current camera angle.
     //   3. All thresholds are heuristic starting points — tune on-device via NSLog.
     //      The rep log "[Engine] [<id>] Rep #N ... | check=value[FAIL/ok]" shows
     //      every metric value for every rep.
@@ -139,8 +130,8 @@ struct ExerciseDefinition {
     // ── Ready gate ────────────────────────────────────────────────────────────
     let readyGate:      ReadyGateConfig
 
-    // ── Camera setup (BLOCKING framing check + UI guidance) ──────────────────
-    // If nil, framing is always considered ok (for exercises without a camera requirement).
+    // ── Camera setup (one-time calibration before rep counting begins) ────────
+    // If nil, calibration is skipped and the engine starts in ACTIVE phase immediately.
     let cameraSetup:    CameraSetupConfig?
 
     // ── Debounce ──────────────────────────────────────────────────────────────

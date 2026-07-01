@@ -11,34 +11,50 @@ struct RepResult {
     let formValues:   [String: Double]   // check.id → evaluated value (for event emission)
 }
 
-// ─── Framing status ───────────────────────────────────────────────────────────
+// ─── Setup status (emitted during SETUP phase) ────────────────────────────────
 
-struct FramingStatus {
-    let ok:     Bool
-    let reason: String
+struct SetupStatus {
+    let allJointsVisible: Bool
+    let holdProgress:     Double   // 0.0–1.0 during the 2s hold
+    let passed:           Bool
+    let hint:             String   // "" when all joints visible; guidance text when not
 }
 
 // ─── Debug stats (emitted every frame) ────────────────────────────────────────
 
 struct EngineDebugStats {
-    let primaryAngle:  Double
-    let phase:         String
-    let isReady:       Bool
-    let cameraOk:      Bool               // backward compat: mirrors framingStatus.ok
-    let formMetrics:   [String: Double]   // check.id → current measured value
-    let framingStatus: FramingStatus
+    let primaryAngle: Double
+    let phase:        String
+    let isReady:      Bool
+    let formMetrics:  [String: Double]   // check.id → current measured value
 }
 
 // ─── Internal phase ───────────────────────────────────────────────────────────
 
 private enum Phase { case waitingForReady, atTop, inRep }
 
+private enum SetupPhaseState {
+    case pending
+    case holding(startTime: Date)
+}
+
 // ─── The shared exercise analysis engine ─────────────────────────────────────
 //
-// Drives any exercise defined by an ExerciseDefinition.
-// Swap the definition to change exercises — no if-exercise-equals branches here.
+// Two-phase design:
 //
-// Rep logic:
+//   SETUP phase (isSetupComplete = false):
+//     Runs runSetupCheck() every frame.
+//     Checks requiredJoints visibility + edge margin.
+//     Requires a continuous 2-second hold before passing.
+//     Emits onSetupUpdate every frame.
+//     Rep counting does NOT run.
+//
+//   ACTIVE phase (isSetupComplete = true):
+//     Zero calibration checks — reps count with no interference.
+//     Only returns to SETUP if ALL required joints missing for ≥ 3 seconds
+//     (person left / phone knocked over). Normal movement never re-triggers it.
+//
+// Rep logic (ACTIVE only):
 //   atTop  → angle < repEnterThreshold  → inRep  (start tracking)
 //   inRep  → track min primary angle
 //           → angle > repExitThreshold  → count rep → atTop
@@ -46,13 +62,6 @@ private enum Phase { case waitingForReady, atTop, inRep }
 // Form evaluation at rep completion:
 //   .atBottom   → value captured at the frame where repMinAngle updated
 //   .throughoutMax / .throughoutMin → accumulated across all inRep frames
-//   .primaryAngle metric → uses the primary angle value directly
-//
-// Framing gate (BLOCKING):
-//   runFramingCheck() runs every frame before the state machine.
-//   If framing goes bad mid-session, isReady is reset to false and phase
-//   returns to waitingForReady — rep counters are NOT reset (preserved).
-//   Rep counting resumes automatically when framing is restored.
 
 final class ExerciseEngine {
 
@@ -67,21 +76,23 @@ final class ExerciseEngine {
     private(set) var goodReps  = 0
 
     // ── Ready gate ───────────────────────────────────────────────────────────
-    private(set) var isReady:   Bool   = false
-    private var readyStart:     Date?  = nil
+    private(set) var isReady: Bool  = false
+    private var readyStart:   Date? = nil
 
-    // ── Framing ───────────────────────────────────────────────────────────────
-    private var lastFramingStatus = FramingStatus(ok: false, reason: "Setting up…")
+    // ── Setup / calibration ───────────────────────────────────────────────────
+    private(set) var isSetupComplete = false
+    private var setupPhaseState: SetupPhaseState = .pending
+    private var setupLossStart:  Date? = nil
 
-    // Tune via NSLog output on-device: look for "[Framing] shoulderSep=..." lines.
-    // Vision coords are normalized 0-1; shoulder sep for a true side-on person is ~0.05-0.15.
-    // 0.20 = conservative threshold — fire early if getting false positives, tighten if late.
-    private static let sideViewMaxShoulderSep: Double = 0.20
+    private static let SETUP_HOLD_DURATION:   TimeInterval = 2.0
+    private static let LEAVE_TIMEOUT:         TimeInterval = 3.0
+    private static let SETUP_JOINT_MIN_CONF:  Float        = 0.30
+    private static let SETUP_EDGE_MARGIN:     Double       = 0.05
 
     // ── Form check accumulators (reset each rep) ──────────────────────────────
-    private var accumMax:    [String: Double] = [:]   // throughoutMax
-    private var accumMin:    [String: Double] = [:]   // throughoutMin
-    private var atBottomVal: [String: Double] = [:]   // atBottom snapshot
+    private var accumMax:    [String: Double] = [:]
+    private var accumMin:    [String: Double] = [:]
+    private var atBottomVal: [String: Double] = [:]
 
     // ── Debounce / inactivity ─────────────────────────────────────────────────
     private var lastRepTime:       Date = .distantPast
@@ -92,8 +103,9 @@ final class ExerciseEngine {
     private var activeSide: Side = .right
 
     // ── Callbacks ─────────────────────────────────────────────────────────────
-    var onRepDetected: ((RepResult)        -> Void)?
-    var onDebugStats:  ((EngineDebugStats) -> Void)?
+    var onRepDetected:  ((RepResult)      -> Void)?
+    var onDebugStats:   ((EngineDebugStats) -> Void)?
+    var onSetupUpdate:  ((SetupStatus)    -> Void)?
 
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -101,61 +113,171 @@ final class ExerciseEngine {
         self.def = definition
     }
 
+    // Full reset — clears everything including setup. Used when session ends.
     func reset() {
         phase             = .waitingForReady
         isReady           = false
         readyStart        = nil
         totalReps         = 0
         goodReps          = 0
-        lastFramingStatus = FramingStatus(ok: false, reason: "Setting up…")
+        isSetupComplete   = false
+        setupPhaseState   = .pending
+        setupLossStart    = nil
+        lastValidPoseTime = .distantPast
+        resetRepState()
+    }
+
+    // Partial reset — resets rep counters but keeps isSetupComplete.
+    // Used when startTracking() is called after calibration already passed.
+    func resetForTracking() {
+        phase             = .waitingForReady
+        isReady           = false
+        readyStart        = nil
+        totalReps         = 0
+        goodReps          = 0
+        setupLossStart    = nil
+        lastValidPoseTime = .distantPast
         resetRepState()
     }
 
     // ─── Per-frame entry point ────────────────────────────────────────────────
 
     func ingest(pose: Pose, timestamp: Date) {
+        // Person is back in frame — cancel any "person left" countdown
+        if isSetupComplete { setupLossStart = nil }
+
         guard let angle = computePrimaryAngle(pose: pose) else {
-            handleNoPose(timestamp: timestamp); return
+            handleNoPose(timestamp: timestamp)
+            return
         }
+
+        if !isSetupComplete {
+            // SETUP phase: one-time calibration check, no rep counting
+            runSetupCheck(pose: pose, timestamp: timestamp)
+            onDebugStats?(EngineDebugStats(primaryAngle: angle, phase: "setup",
+                                           isReady: false, formMetrics: [:]))
+            return
+        }
+
+        // ACTIVE phase: pure rep counting, zero calibration checks
         lastValidPoseTime = timestamp
-
-        let framing = runFramingCheck(pose: pose)
-        if framing.ok != lastFramingStatus.ok {
-            NSLog("[Engine] [%@] framing → %@ (%@)",
-                  def.id, framing.ok ? "OK ✓" : "BAD ✗", framing.reason)
-            if !framing.ok && isReady {
-                isReady    = false
-                phase      = .waitingForReady
-                readyStart = nil
-            }
-        }
-        lastFramingStatus = framing
-
-        if framing.ok {
-            accumulate(pose: pose, primaryAngle: angle)
-            if !isReady { updateReadyGate(pose: pose, angle: angle, timestamp: timestamp) }
-            if isReady  { runStateMachine(pose: pose, angle: angle, timestamp: timestamp) }
-        }
+        accumulate(pose: pose, primaryAngle: angle)
+        if !isReady { updateReadyGate(pose: pose, angle: angle, timestamp: timestamp) }
+        if isReady  { runStateMachine(pose: pose, angle: angle, timestamp: timestamp) }
 
         let snapshot = currentMetricSnapshot(pose: pose)
-        onDebugStats?(EngineDebugStats(
-            primaryAngle:  angle,
-            phase:         phaseLabel(),
-            isReady:       isReady,
-            cameraOk:      framing.ok,
-            formMetrics:   snapshot,
-            framingStatus: framing
-        ))
-    }
-
-    // Public stateless framing check — used by ATHLTCameraModule in monitoring
-    // mode (before startTracking) so the framing overlay works before rep counting starts.
-    func checkFramingOnly(pose: Pose) -> FramingStatus {
-        return runFramingCheck(pose: pose)
+        onDebugStats?(EngineDebugStats(primaryAngle: angle, phase: phaseLabel(),
+                                       isReady: isReady, formMetrics: snapshot))
     }
 
     func notePersonMissing(timestamp: Date) {
+        if isSetupComplete {
+            // ACTIVE phase: track how long person has been gone
+            if setupLossStart == nil { setupLossStart = timestamp }
+            let gone = timestamp.timeIntervalSince(setupLossStart!)
+            if gone >= Self.LEAVE_TIMEOUT {
+                NSLog("[Engine] [%@] Person gone %.1fs — returning to SETUP", def.id, gone)
+                isSetupComplete = false
+                setupPhaseState = .pending
+                setupLossStart  = nil
+                isReady         = false
+                phase           = .waitingForReady
+                onSetupUpdate?(SetupStatus(allJointsVisible: false, holdProgress: 0.0,
+                                           passed: false, hint: "Step back into view to continue"))
+            }
+            // else: person hasn't been gone long enough — don't interrupt active workout
+        } else {
+            // SETUP phase: person left, reset the hold timer
+            if case .holding = setupPhaseState {
+                NSLog("[Engine] [%@] Setup: person left — hold reset", def.id)
+                setupPhaseState = .pending
+            }
+            onSetupUpdate?(SetupStatus(allJointsVisible: false, holdProgress: 0.0,
+                                       passed: false, hint: "Step into frame to start"))
+        }
         handleNoPose(timestamp: timestamp)
+    }
+
+    // ─── Setup calibration ────────────────────────────────────────────────────
+    //
+    // Checks: confidence ≥ SETUP_JOINT_MIN_CONF AND not edge-clipped (≥ 5% from edges).
+    // On pass: logs confidence for each required joint (useful for tuning min conf).
+    // On hold reset: logs which joints were lost.
+    // Hold duration and leave timeout are constants at the top of this file.
+
+    private func runSetupCheck(pose: Pose, timestamp: Date) {
+        guard let setup = def.cameraSetup else {
+            // No setup required — pass immediately
+            isSetupComplete = true
+            onSetupUpdate?(SetupStatus(allJointsVisible: true, holdProgress: 1.0,
+                                       passed: true, hint: ""))
+            return
+        }
+
+        var missingJoints: [Joint] = []
+        for joint in setup.requiredJoints {
+            guard let p = pose[joint], p.confidence >= Self.SETUP_JOINT_MIN_CONF else {
+                missingJoints.append(joint)
+                continue
+            }
+            let x = Double(p.x), y = Double(p.y)
+            if x < Self.SETUP_EDGE_MARGIN || x > 1 - Self.SETUP_EDGE_MARGIN ||
+               y < Self.SETUP_EDGE_MARGIN || y > 1 - Self.SETUP_EDGE_MARGIN {
+                missingJoints.append(joint)
+            }
+        }
+
+        let allVisible   = missingJoints.isEmpty
+        var holdProgress: Double = 0.0
+
+        if allVisible {
+            switch setupPhaseState {
+            case .pending:
+                NSLog("[Engine] [%@] Setup: all joints visible — starting %.0fs hold", def.id, Self.SETUP_HOLD_DURATION)
+                for joint in setup.requiredJoints {
+                    let conf = pose[joint]?.confidence ?? 0
+                    NSLog("[Engine] [%@]   %@: conf=%.2f x=%.2f y=%.2f",
+                          def.id, "\(joint)", conf,
+                          Double(pose[joint]?.x ?? 0), Double(pose[joint]?.y ?? 0))
+                }
+                setupPhaseState = .holding(startTime: timestamp)
+                holdProgress    = 0.0
+
+            case .holding(let start):
+                let elapsed = timestamp.timeIntervalSince(start)
+                holdProgress = min(1.0, elapsed / Self.SETUP_HOLD_DURATION)
+                if elapsed >= Self.SETUP_HOLD_DURATION {
+                    isSetupComplete = true
+                    NSLog("[Engine] [%@] Setup PASSED", def.id)
+                    onSetupUpdate?(SetupStatus(allJointsVisible: true, holdProgress: 1.0,
+                                               passed: true, hint: ""))
+                    return
+                }
+            }
+        } else {
+            if case .holding = setupPhaseState {
+                NSLog("[Engine] [%@] Setup: hold broken — missing [%@]",
+                      def.id, missingJoints.map { "\($0)" }.joined(separator: ","))
+            }
+            setupPhaseState = .pending
+            holdProgress    = 0.0
+        }
+
+        onSetupUpdate?(SetupStatus(allJointsVisible: allVisible, holdProgress: holdProgress,
+                                   passed: false, hint: hintForMissingJoints(missingJoints)))
+    }
+
+    private func hintForMissingJoints(_ joints: [Joint]) -> String {
+        if joints.isEmpty { return "" }
+        let hasLeg = joints.contains(.leftAnkle)  || joints.contains(.rightAnkle) ||
+                     joints.contains(.leftKnee)   || joints.contains(.rightKnee)
+        let hasHip = joints.contains(.leftHip)    || joints.contains(.rightHip)
+        let hasArm = joints.contains(.leftWrist)  || joints.contains(.rightWrist) ||
+                     joints.contains(.leftElbow)  || joints.contains(.rightElbow)
+        if hasLeg  { return "Move back — feet not in frame" }
+        if hasHip  { return "Move back — hips not visible" }
+        if hasArm  { return "Step sideways — arms not visible" }
+        return "Adjust so your body fills the frame"
     }
 
     // ─── Primary angle ────────────────────────────────────────────────────────
@@ -192,60 +314,6 @@ final class ExerciseEngine {
         }
     }
 
-    // ─── Framing check ────────────────────────────────────────────────────────
-    //
-    // Checks two things:
-    //   1. Required joints are visible at ≥ 0.35 confidence.
-    //   2. For side-view exercises: shoulder horizontal separation is small
-    //      (large separation → person is facing camera, not sideways).
-    //
-    // NSLog shoulder sep every frame for on-device threshold tuning.
-
-    private func runFramingCheck(pose: Pose) -> FramingStatus {
-        guard let setup = def.cameraSetup else { return FramingStatus(ok: true, reason: "") }
-
-        let minConf: Float = 0.35
-        var missingLegs = false
-        var missingHips = false
-        var missingArms = false
-
-        for joint in setup.requiredJoints {
-            let conf = pose[joint]?.confidence ?? 0
-            guard conf >= minConf else {
-                switch joint {
-                case .leftAnkle, .rightAnkle, .leftKnee, .rightKnee:
-                    missingLegs = true
-                case .leftHip, .rightHip:
-                    missingHips = true
-                case .leftWrist, .rightWrist, .leftElbow, .rightElbow:
-                    missingArms = true
-                default:
-                    break
-                }
-                continue
-            }
-        }
-
-        if missingLegs { return FramingStatus(ok: false, reason: "MOVE BACK — legs not visible") }
-        if missingHips { return FramingStatus(ok: false, reason: "MOVE BACK — hips not visible") }
-        if missingArms { return FramingStatus(ok: false, reason: "STEP INTO FRAME — arms not visible") }
-
-        if setup.requiredView == .side {
-            if let ls = pose[.leftShoulder], let rs = pose[.rightShoulder],
-               ls.confidence >= minConf, rs.confidence >= minConf {
-                let sep = abs(Double(ls.x) - Double(rs.x))
-                NSLog("[Framing] shoulderSep=%.3f threshold<%.2f side=%@",
-                      sep, Self.sideViewMaxShoulderSep,
-                      sep < Self.sideViewMaxShoulderSep ? "YES" : "NO")
-                if sep > Self.sideViewMaxShoulderSep {
-                    return FramingStatus(ok: false, reason: "TURN SIDEWAYS to the camera")
-                }
-            }
-        }
-
-        return FramingStatus(ok: true, reason: "")
-    }
-
     // ─── Ready gate ───────────────────────────────────────────────────────────
 
     private func updateReadyGate(pose: Pose, angle: Double, timestamp: Date) {
@@ -259,7 +327,7 @@ final class ExerciseEngine {
                 isReady    = true
                 phase      = .atTop
                 readyStart = nil
-                NSLog("[Engine] [\(def.id)] READY — angle=\(String(format: "%.1f°", angle))")
+                NSLog("[Engine] [%@] READY — angle=%.1f°", def.id, angle)
             }
         } else {
             readyStart = nil
@@ -279,7 +347,7 @@ final class ExerciseEngine {
                 phase       = .inRep
                 repMinAngle = angle
                 resetRepAccumulators()
-                NSLog("[Engine] [\(def.id)] Rep entered at \(String(format: "%.1f°", angle))")
+                NSLog("[Engine] [%@] Rep entered at %.1f°", def.id, angle)
             }
 
         case .inRep:
@@ -289,7 +357,7 @@ final class ExerciseEngine {
             }
             if angle > def.repExitThreshold {
                 guard timestamp.timeIntervalSince(lastRepTime) >= def.minRepInterval else {
-                    NSLog("[Engine] [\(def.id)] Debounce — skip")
+                    NSLog("[Engine] [%@] Debounce — skip", def.id)
                     phase = .atTop
                     return
                 }
@@ -307,7 +375,6 @@ final class ExerciseEngine {
 
         let goodROM = peakAngle <= def.goodROMThreshold
 
-        // Evaluate enabled form checks; collect failures by priority
         var failed: [FormCheck] = []
         var evaluated: [String: Double] = [:]
 
@@ -317,7 +384,6 @@ final class ExerciseEngine {
             if check.fails(value: value) { failed.append(check) }
         }
 
-        // ROM failure takes precedence over form failures
         let topFormFail = failed.sorted { $0.priority > $1.priority }.first
         let cue:    String
         let isGood: Bool
@@ -334,14 +400,15 @@ final class ExerciseEngine {
         }
         if isGood { goodReps += 1 }
 
-        // NSLog the full picture for on-device tuning
         let checkLog = def.formChecks.filter(\.enabled).map { ch -> String in
             let v   = evaluated[ch.id].map { String(format: "%.1f", $0) } ?? "nil"
             let tag = failed.contains { $0.id == ch.id } ? "FAIL" : "ok"
             return "\(ch.id)=\(v)[\(tag)]"
         }.joined(separator: " ")
 
-        NSLog("[Engine] [\(def.id)] Rep #\(totalReps) peak=\(String(format: "%.1f°", peakAngle)) ROM=\(goodROM) cue=\(cue) \(totalReps)/\(goodReps) | \(checkLog)")
+        NSLog("[Engine] [%@] Rep #%d peak=%.1f° ROM=%@ cue=%@ %d/%d | %@",
+              def.id, totalReps, peakAngle, goodROM ? "ok" : "short", cue,
+              totalReps, goodReps, checkLog)
 
         onRepDetected?(RepResult(
             good:         isGood,
@@ -411,7 +478,7 @@ final class ExerciseEngine {
               elapsed > inactivityTimeout else { return }
 
         if phase == .inRep {
-            NSLog("[Engine] [\(def.id)] Inactivity reset after \(String(format: "%.1f", elapsed))s")
+            NSLog("[Engine] [%@] Inactivity reset after %.1fs", def.id, elapsed)
         }
         phase = isReady ? .atTop : .waitingForReady
         resetRepState()

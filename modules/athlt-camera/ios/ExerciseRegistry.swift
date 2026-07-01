@@ -106,15 +106,13 @@ enum ExerciseRegistry {
         ),
 
         cameraSetup: CameraSetupConfig(
-            requiredView:  .side,
+            setupInstruction: "Stand sideways to the camera — full body in frame",
             requiredJoints: [
                 .leftShoulder, .rightShoulder,
                 .leftHip,  .rightHip,
                 .leftKnee, .rightKnee,
                 .leftAnkle, .rightAnkle,
-            ],
-            framingInstruction: "Stand SIDEWAYS — full body in frame",
-            setupHint: "Prop your phone ~7 ft away so your whole body is visible."
+            ]
         ),
 
         minRepInterval: 0.5
@@ -212,14 +210,12 @@ enum ExerciseRegistry {
         ),
 
         cameraSetup: CameraSetupConfig(
-            requiredView:  .side,
+            setupInstruction: "Stand sideways to the camera — upper body in frame",
             requiredJoints: [
                 .leftShoulder, .rightShoulder,
                 .leftElbow,    .rightElbow,
                 .leftWrist,    .rightWrist,
-            ],
-            framingInstruction: "Stand SIDEWAYS — upper body in frame",
-            setupHint: "Prop your phone ~6 ft away so your upper body is visible."
+            ]
         ),
 
         minRepInterval: 0.5
@@ -314,16 +310,14 @@ enum ExerciseRegistry {
         ),
 
         cameraSetup: CameraSetupConfig(
-            requiredView:  .side,
+            setupInstruction: "Get into position sideways to the camera — full body in frame",
             requiredJoints: [
                 .leftShoulder, .rightShoulder,
                 .leftElbow,    .rightElbow,
                 .leftWrist,    .rightWrist,
                 .leftHip,      .rightHip,
                 .leftAnkle,    .rightAnkle,
-            ],
-            framingInstruction: "Camera at floor level — SIDE view, full body in frame",
-            setupHint: "Prop your phone ~7 ft away so your whole body is visible."
+            ]
         ),
 
         minRepInterval: 0.5

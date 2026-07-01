@@ -21,7 +21,7 @@ import {
   addDebugStatsListener,
   addCameraStateListener,
   addErrorListener,
-  addFramingStatusListener,
+  addSetupStatusListener,
   isNativeModuleLinked,
 } from '../modules/athlt-camera/src/index';
 import type { DebugStatsEvent, RepEvent, ExerciseType } from '../modules/athlt-camera/src/index';
@@ -49,24 +49,15 @@ async function logSessionVideo(uri: string) {
   } catch {}
 }
 
-// ─── Camera setup guidance (mirrors ExerciseRegistry.swift cameraSetup values) ─
-const EXERCISE_SETUP: Record<ExerciseType, { instruction: string; hint: string }> = {
-  squat:  {
-    instruction: 'Stand SIDEWAYS — full body in frame',
-    hint:        'Prop your phone ~7 ft away so your whole body is visible.',
-  },
-  pushup: {
-    instruction: 'Camera at floor level — SIDE view, full body in frame',
-    hint:        'Prop your phone ~7 ft away so your whole body is visible.',
-  },
-  curl:   {
-    instruction: 'Stand SIDEWAYS — upper body in frame',
-    hint:        'Prop your phone ~6 ft away so your upper body is visible.',
-  },
+// ─── Per-exercise setup instructions (mirrors Swift ExerciseRegistry setupInstruction) ─
+const SETUP_INSTRUCTION: Record<ExerciseType, string> = {
+  squat:  'Stand sideways to the camera — full body in frame',
+  curl:   'Stand sideways to the camera — upper body in frame',
+  pushup: 'Get into position sideways to the camera — full body in frame',
 };
 
 // ─── Phase type ───────────────────────────────────────────────────────────────
-type Phase = 'idle' | 'starting' | 'ready' | 'tracking' | 'stopping';
+type Phase = 'idle' | 'starting' | 'setup' | 'setup-done' | 'tracking' | 'stopping';
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function FormCheckScreen() {
@@ -82,12 +73,10 @@ export default function FormCheckScreen() {
   const [reps,     setReps]     = useState(0);
   const [goodReps, setGoodReps] = useState(0);
 
-  // ── Framing ───────────────────────────────────────────────────────────────
-  const [framingOk,     setFramingOk]     = useState<boolean | null>(null);
-  const [framingReason, setFramingReason] = useState('');
-  const [framingJustOk, setFramingJustOk] = useState(false);
-  const framingJustOkTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const prevFramingOk      = useRef<boolean | null>(null);
+  // ── Setup calibration state ───────────────────────────────────────────────
+  const [setupAllVisible,   setSetupAllVisible]   = useState(false);
+  const [setupHoldProgress, setSetupHoldProgress] = useState(0);
+  const [setupHint,         setSetupHint]         = useState('');
 
   const [feedback, setFeedback] = useState<{ key: number; good: boolean; reason: string } | null>(null);
   const feedbackKey    = useRef(0);
@@ -101,6 +90,13 @@ export default function FormCheckScreen() {
   // Prevents the useEffect cleanup from calling stopSession if we already called it
   const sessionStopped = useRef(false);
 
+  // Whether startTracking() has been called (stays true even during setup re-check)
+  const isTrackingRef = useRef(false);
+
+  // Timer refs
+  const hintTimer      = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const setupDoneTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // ── Session lifecycle ──────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -111,22 +107,65 @@ export default function FormCheckScreen() {
 
     let mounted = true;
     sessionStopped.current = false;
+    isTrackingRef.current  = false;
 
     const errSub = addErrorListener(e => { if (mounted) setError(e.message); });
+
     const camSub = addCameraStateListener(e => {
-      if (mounted && e.running) setPhase(p => (p === 'starting' ? 'ready' : p));
+      if (mounted && e.running) setPhase(p => (p === 'starting' ? 'setup' : p));
     });
-    // Framing status active from session start so overlay works during monitoring mode.
-    const framingSub = addFramingStatusListener(event => {
+
+    const setupSub = addSetupStatusListener(event => {
       if (!mounted) return;
-      setFramingOk(event.ok);
-      setFramingReason(event.reason);
-      if (event.ok && prevFramingOk.current !== true) {
-        setFramingJustOk(true);
-        if (framingJustOkTimer.current) clearTimeout(framingJustOkTimer.current);
-        framingJustOkTimer.current = setTimeout(() => setFramingJustOk(false), 2000);
+
+      setSetupAllVisible(event.allJointsVisible);
+      setSetupHoldProgress(event.holdProgress);
+
+      // Debounce hint text so it doesn't flash when joints briefly disappear
+      if (event.hint) {
+        if (hintTimer.current) clearTimeout(hintTimer.current);
+        hintTimer.current = setTimeout(() => {
+          if (mounted) setSetupHint(event.hint);
+        }, 400);
+      } else {
+        if (hintTimer.current) { clearTimeout(hintTimer.current); hintTimer.current = null; }
+        if (mounted) setSetupHint('');
       }
-      prevFramingOk.current = event.ok;
+
+      if (event.passed) {
+        if (!isTrackingRef.current) {
+          // First calibration pass — auto-start tracking after brief "You're all set!"
+          isTrackingRef.current = true;
+          setPhase('setup-done');
+          if (setupDoneTimer.current) clearTimeout(setupDoneTimer.current);
+          setupDoneTimer.current = setTimeout(async () => {
+            if (!mounted) return;
+            setStats(null);
+            setReps(0);
+            setGoodReps(0);
+            startTimestamp.current = Date.now();
+            repEvents.current      = [];
+            setPhase('tracking');
+            await startTracking();
+            setupDoneTimer.current = null;
+          }, 1500);
+        } else {
+          // Re-passed after being lost during tracking — just resume display
+          setPhase('tracking');
+        }
+      } else {
+        // Not passed
+        if (setupDoneTimer.current) {
+          // Cancel any pending auto-start (user moved during setup-done phase)
+          clearTimeout(setupDoneTimer.current);
+          setupDoneTimer.current = null;
+          isTrackingRef.current = false;
+        }
+        if (isTrackingRef.current) {
+          // Setup lost during active workout (person left 3s) — show setup UI again
+          setPhase('setup');
+        }
+      }
     });
 
     setPhase('starting');
@@ -137,7 +176,7 @@ export default function FormCheckScreen() {
         setError(result.error ?? 'Camera failed to start. Check camera permission in Settings.');
         setPhase('idle');
       } else {
-        // Set exercise early so monitoring-mode framing check uses the right cameraSetup.
+        // Set exercise early so SETUP phase uses the right requiredJoints.
         void setExercise(exerciseType);
       }
     });
@@ -146,13 +185,14 @@ export default function FormCheckScreen() {
       mounted = false;
       errSub.remove();
       camSub.remove();
-      framingSub.remove();
-      if (framingJustOkTimer.current) clearTimeout(framingJustOkTimer.current);
+      setupSub.remove();
+      if (hintTimer.current)      { clearTimeout(hintTimer.current);      hintTimer.current = null; }
+      if (setupDoneTimer.current) { clearTimeout(setupDoneTimer.current); setupDoneTimer.current = null; }
       if (!sessionStopped.current) void stopSession();
     };
   }, []);
 
-  // ── Tracking listeners ─────────────────────────────────────────────────────
+  // ── Tracking listeners (only when actively tracking) ──────────────────────
 
   useEffect(() => {
     if (phase !== 'tracking') return;
@@ -165,7 +205,6 @@ export default function FormCheckScreen() {
       const k = ++feedbackKey.current;
       setFeedback({ key: k, good: rep.good, reason: rep.reason });
 
-      // Record timestamp relative to tracking start
       const timeSec = startTimestamp.current != null
         ? (Date.now() - startTimestamp.current) / 1000
         : 0;
@@ -183,52 +222,38 @@ export default function FormCheckScreen() {
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
-  const handleStartStop = useCallback(async () => {
-    if (phase === 'ready') {
-      setStats(null);
-      setReps(0);
-      setGoodReps(0);
-      startTimestamp.current = Date.now();
-      repEvents.current      = [];
-      setPhase('tracking');
-      // setExercise already called at session start — engine is pre-configured.
-      await startTracking();
-    } else if (phase === 'tracking') {
-      setPhase('stopping');
-      const final = await stopTracking();
-      sessionStopped.current = true;
-      await stopSession();
-      if (final.videoUri) void logSessionVideo(final.videoUri);
-      router.replace({
-        pathname: '/recap',
-        params: {
-          reps:     String(final.reps),
-          goodReps: String(final.goodReps),
-          videoUri: final.videoUri ?? '',
-          events:   JSON.stringify(repEvents.current),
-        },
-      });
-    }
-  }, [phase, router]);
+  const handleStop = useCallback(async () => {
+    setPhase('stopping');
+    isTrackingRef.current = false;
+    const final = await stopTracking();
+    sessionStopped.current = true;
+    await stopSession();
+    if (final.videoUri) void logSessionVideo(final.videoUri);
+    router.replace({
+      pathname: '/recap',
+      params: {
+        reps:     String(final.reps),
+        goodReps: String(final.goodReps),
+        videoUri: final.videoUri ?? '',
+        events:   JSON.stringify(repEvents.current),
+      },
+    });
+  }, [router]);
 
   const handleFlip = useCallback(() => void flipCamera(), []);
 
   const handleBack = useCallback(async () => {
     sessionStopped.current = true;
+    isTrackingRef.current  = false;
+    if (setupDoneTimer.current) { clearTimeout(setupDoneTimer.current); setupDoneTimer.current = null; }
     await stopSession();
     router.back();
   }, [router]);
 
   const isTracking = phase === 'tracking';
-  const canTrack   = phase === 'ready' || phase === 'tracking';
   const isStopping = phase === 'stopping';
-
-  // Framing overlay: shown in monitoring (ready) and tracking when camera not set up correctly.
-  const showFramingOverlay = (phase === 'ready' || phase === 'tracking') && framingOk !== true;
-  // Rep counter: always visible while stopping; during tracking only when framing is ok or unknown.
-  const showRepCounter     = isStopping || (isTracking && framingOk !== false);
-  // Ready gate hint: only relevant when framing is good (no point if camera isn't set up).
-  const needsReady         = isTracking && framingOk === true && stats != null && !stats.ready;
+  const showRepCounter = isStopping || isTracking;
+  const needsReady = isTracking && stats != null && !stats.ready;
 
   return (
     <View style={s.root}>
@@ -253,37 +278,58 @@ export default function FormCheckScreen() {
         />
       )}
 
-      {/* Framing overlay — shown when camera setup is not correct */}
-      {showFramingOverlay && (
-        <View style={s.framingOverlay} pointerEvents="none">
-          <View style={s.framingScrim} />
-          <View style={s.framingCard}>
+      {/* SETUP overlay — shown until calibration passes */}
+      {phase === 'setup' && (
+        <View style={s.setupOverlay} pointerEvents="none">
+          <View style={s.setupScrim} />
+          <View style={s.setupCard}>
             <SymbolView
-              name="figure.walk"
-              size={44}
+              name="viewfinder.rectangular"
+              size={36}
               tintColor={C.text}
               type="hierarchical"
-              style={{ width: 44, height: 44, marginBottom: 18 }}
+              style={{ width: 36, height: 36, marginBottom: 16 }}
             />
-            <Text style={s.framingTitle}>
-              {EXERCISE_SETUP[exerciseType].instruction}
+            <Text style={s.setupInstruction}>
+              {SETUP_INSTRUCTION[exerciseType]}
             </Text>
-            {framingReason.length > 0 && (
-              <View style={s.framingReasonPill}>
-                <Text style={s.framingReasonText}>{framingReason}</Text>
-              </View>
-            )}
-            <Text style={s.framingHint}>
-              {EXERCISE_SETUP[exerciseType].hint}
-            </Text>
+            <View style={s.setupStatusRow}>
+              {setupAllVisible ? (
+                <View style={s.holdContainer}>
+                  <Text style={s.statusGood}>Hold still…</Text>
+                  <View style={s.progressTrack}>
+                    <View
+                      style={[
+                        s.progressFill,
+                        { width: `${Math.round(setupHoldProgress * 100)}%` as any },
+                      ]}
+                    />
+                  </View>
+                </View>
+              ) : (
+                <Text style={s.statusHint}>
+                  {setupHint || 'Position yourself so your body is in frame'}
+                </Text>
+              )}
+            </View>
           </View>
         </View>
       )}
 
-      {/* "You're in frame" transient banner — appears for 2s when framing becomes ok */}
-      {framingJustOk && (
-        <View style={s.framingOkBanner} pointerEvents="none">
-          <Text style={s.framingOkText}>You're in frame</Text>
+      {/* "You're all set!" — brief success pill after calibration passes */}
+      {phase === 'setup-done' && (
+        <View style={s.setupDoneOverlay} pointerEvents="none">
+          <View style={s.setupScrim} />
+          <View style={s.setupSuccessCard}>
+            <SymbolView
+              name="checkmark.circle.fill"
+              size={36}
+              tintColor={C.good}
+              type="monochrome"
+              style={{ width: 36, height: 36, marginBottom: 10 }}
+            />
+            <Text style={s.setupSuccessText}>You're all set!</Text>
+          </View>
         </View>
       )}
 
@@ -330,7 +376,6 @@ export default function FormCheckScreen() {
           <Row label={exerciseType === 'curl' || exerciseType === 'pushup' ? 'elbow°' : 'knee°'} value={stats.kneeAngle.toFixed(1)} />
           <Row label="back°"   value={stats.backAngle.toFixed(1)} />
           <Row label="phase"   value={stats.phase} />
-          <Row label="framing" value={framingOk === null ? '?' : framingOk ? 'ok' : 'bad'} good={framingOk ?? undefined} />
           <Row label="frames"  value={`${stats.totalFramesAnalyzed} / ${stats.totalFramesReceived}`} />
         </View>
       )}
@@ -340,19 +385,17 @@ export default function FormCheckScreen() {
         {phase === 'starting' && <Text style={s.hint}>Starting camera…</Text>}
         {isStopping          && <Text style={s.hint}>Saving session…</Text>}
 
-        {canTrack && (
-          <GlassButton style={{ height: 56, width: 240 }} onPress={handleStartStop}>
+        {isTracking && (
+          <GlassButton style={{ height: 56, width: 240 }} onPress={handleStop}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               <SymbolView
-                name={isTracking ? 'stop.fill' : 'play.fill'}
+                name="stop.fill"
                 size={18}
-                tintColor={isTracking ? C.warn : C.text}
+                tintColor={C.warn}
                 type="monochrome"
                 style={{ width: 18, height: 18 }}
               />
-              <Text style={[s.trackLabel, isTracking && s.trackLabelStop]}>
-                {isTracking ? 'Stop' : 'Start Tracking'}
-              </Text>
+              <Text style={[s.trackLabel, s.trackLabelStop]}>Stop</Text>
             </View>
           </GlassButton>
         )}
@@ -400,68 +443,77 @@ const s = StyleSheet.create({
   trackLabel:     { fontSize: 16, fontWeight: '600', color: C.text },
   trackLabelStop: { color: C.warn },
 
-  // ── Framing overlay ──────────────────────────────────────────────────────
-  framingOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
-  framingScrim:   { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.72)' },
-  framingCard: {
+  // ── Setup overlay (SETUP phase) ───────────────────────────────────────────
+  setupOverlay:   { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
+  setupDoneOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
+  setupScrim:     { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.65)' },
+  setupCard: {
     alignItems:        'center',
     paddingHorizontal: 32,
     paddingVertical:   36,
-    marginHorizontal:  24,
-    backgroundColor:   'rgba(21,22,26,0.88)',
+    marginHorizontal:  28,
+    backgroundColor:   'rgba(18,19,22,0.92)',
     borderRadius:      24,
     borderWidth:       1,
-    borderColor:       'rgba(255,255,255,0.10)',
+    borderColor:       'rgba(255,255,255,0.09)',
   },
-  framingTitle: {
-    fontSize:     22,
-    fontWeight:   '700',
+  setupInstruction: {
+    fontSize:     20,
+    fontWeight:   '600',
     color:        C.text,
     textAlign:    'center',
-    lineHeight:   30,
-    marginBottom: 16,
+    lineHeight:   28,
+    marginBottom: 24,
   },
-  framingReasonPill: {
-    backgroundColor:   C.warn + '22',
-    borderRadius:      100,
-    paddingHorizontal: 16,
-    paddingVertical:   6,
-    marginBottom:      16,
-    borderWidth:       1,
-    borderColor:       C.warn + '55',
+  setupStatusRow: {
+    alignItems: 'center',
+    minHeight:  44,
+    width:      '100%',
   },
-  framingReasonText: {
+  holdContainer: {
+    alignItems: 'center',
+    width:      '100%',
+    gap:        10,
+  },
+  statusGood: {
+    fontSize:   14,
+    fontWeight: '500',
+    color:      C.good,
+  },
+  progressTrack: {
+    width:           '100%',
+    height:          4,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderRadius:    2,
+    overflow:        'hidden',
+  },
+  progressFill: {
+    height:          4,
+    backgroundColor: C.good,
+    borderRadius:    2,
+  },
+  statusHint: {
     fontSize:   13,
-    fontWeight: '600',
-    color:      C.warn,
-    textAlign:  'center',
-  },
-  framingHint: {
-    fontSize:   13,
+    fontWeight: '400',
     color:      C.muted,
     textAlign:  'center',
     lineHeight: 20,
   },
 
-  // ── "You're in frame" transient banner ───────────────────────────────────
-  framingOkBanner: {
-    position:   'absolute',
-    top:        '42%',
-    left:       0,
-    right:      0,
-    alignItems: 'center',
-  },
-  framingOkText: {
-    fontSize:          15,
-    fontWeight:        '700',
-    color:             C.good,
-    backgroundColor:   'rgba(74,222,128,0.15)',
-    paddingHorizontal: 20,
-    paddingVertical:   10,
-    borderRadius:      100,
+  // ── "You're all set!" card ────────────────────────────────────────────────
+  setupSuccessCard: {
+    alignItems:        'center',
+    paddingHorizontal: 40,
+    paddingVertical:   32,
+    backgroundColor:   'rgba(18,19,22,0.92)',
+    borderRadius:      24,
     borderWidth:       1,
-    borderColor:       C.good + '55',
-    overflow:          'hidden',
+    borderColor:       'rgba(74,222,128,0.20)',
+  },
+  setupSuccessText: {
+    fontSize:   20,
+    fontWeight: '700',
+    color:      C.good,
   },
 });
 
