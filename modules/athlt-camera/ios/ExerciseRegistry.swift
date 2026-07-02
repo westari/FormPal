@@ -319,10 +319,10 @@ enum ExerciseRegistry {
         cameraSetup: CameraSetupConfig(
             setupInstruction: "Place your phone on the floor a couple feet to your side, camera facing you. Get in push-up position so your head, shoulders, arms and hips are in view.",
             requiredJoints: [
-                .leftShoulder, .leftElbow, .leftWrist, .leftHip,
+                Joint.leftShoulder, .leftElbow, .leftWrist, .leftHip,
             ],
             requiredJointsAlt: [
-                .rightShoulder, .rightElbow, .rightWrist, .rightHip,
+                Joint.rightShoulder, .rightElbow, .rightWrist, .rightHip,
             ]
         ),
 

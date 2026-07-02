@@ -474,10 +474,10 @@ public class ATHLTCameraModule: Module {
         let cap = pixelBuffer
         let t   = timestamp
 
-        inferenceQueue.async { [weak self] in
-            defer { CVPixelBufferUnlockBaseAddress(cap, .readOnly) }
+        inferenceQueue.async { [weak self, pixelBuffer = cap] in
+            defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
             guard let self, self.captureSession != nil else { return }
-            self.runPoseDetection(pixelBuffer: cap, timestamp: t)
+            self.runPoseDetection(pixelBuffer: pixelBuffer, timestamp: t)
         }
     }
 
