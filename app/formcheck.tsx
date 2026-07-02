@@ -62,7 +62,15 @@ type Phase = 'idle' | 'starting' | 'setup' | 'setup-done' | 'tracking' | 'stoppi
 export default function FormCheckScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { exercise = 'squat' } = useLocalSearchParams<{ exercise?: string }>();
+  const {
+    exercise = 'squat',
+    returnTo,
+    workoutExerciseId,
+  } = useLocalSearchParams<{
+    exercise?:          string;
+    returnTo?:          string;
+    workoutExerciseId?: string;
+  }>();
   const exerciseType = (['squat', 'curl', 'pushup'].includes(exercise)
     ? exercise : 'squat') as ExerciseType;
 
@@ -228,16 +236,29 @@ export default function FormCheckScreen() {
     sessionStopped.current = true;
     await stopSession();
     if (final.videoUri) void logSessionVideo(final.videoUri);
-    router.replace({
-      pathname: '/recap',
-      params: {
-        reps:     String(final.reps),
-        goodReps: String(final.goodReps),
-        videoUri: final.videoUri ?? '',
-        events:   JSON.stringify(repEvents.current),
-      },
-    });
-  }, [router]);
+
+    if (returnTo) {
+      // Workout mode — return results to the run screen
+      router.replace({
+        pathname: returnTo as any,
+        params:   {
+          exerciseId: workoutExerciseId ?? exerciseType,
+          reps:       String(final.reps),
+          goodReps:   String(final.goodReps),
+        },
+      });
+    } else {
+      router.replace({
+        pathname: '/recap',
+        params:   {
+          reps:     String(final.reps),
+          goodReps: String(final.goodReps),
+          videoUri: final.videoUri ?? '',
+          events:   JSON.stringify(repEvents.current),
+        },
+      });
+    }
+  }, [router, returnTo, workoutExerciseId, exerciseType]);
 
   const handleFlip = useCallback(() => void flipCamera(), []);
 
