@@ -152,7 +152,7 @@ enum ExerciseRegistry {
         topAngle:           160,
         repEnterThreshold:  145,
         repExitThreshold:   145,
-        goodROMThreshold:    50,
+        goodROMThreshold:    60,  // relaxed for front-view elbow measurement (was 50)
         insufficientROMCue: "CURL HIGHER",
 
         formChecks: [
@@ -194,23 +194,23 @@ enum ExerciseRegistry {
                     rightFrom: .rightHip, rightTo: .rightShoulder
                 ),
                 evaluateAt: .throughoutMax,
-                condition:  .greaterThan(15),
+                condition:  .greaterThan(20),  // was 15; front-view measures lateral sway
                 priority:   3,
                 enabled:    true
             ),
         ],
 
         readyGate: ReadyGateConfig(
-            readyAngleMin:  155,
+            readyAngleMin:  140,  // was 155; front-view arms-at-sides angle is smaller
             readyAngleMax:  190,
             requiredJoints: [.leftShoulder, .leftElbow, .leftWrist,
                               .rightShoulder, .rightElbow, .rightWrist],
             minConfidence:  0.30,
-            stableDuration: 1.0
+            stableDuration: 0.3   // was 1.0; short gate so first rep isn't missed
         ),
 
         cameraSetup: CameraSetupConfig(
-            setupInstruction: "Stand sideways to the camera — upper body in frame",
+            setupInstruction: "Face the camera — stand back so both arms are fully in frame",
             requiredJoints: [
                 .leftShoulder, .rightShoulder,
                 .leftElbow,    .rightElbow,
@@ -303,20 +303,20 @@ enum ExerciseRegistry {
         readyGate: ReadyGateConfig(
             readyAngleMin:  145,
             readyAngleMax:  190,
-            requiredJoints: [.leftShoulder, .leftElbow, .leftWrist, .leftHip, .leftAnkle,
+            requiredJoints: [.leftShoulder, .leftElbow, .leftWrist, .leftHip,
                               .rightShoulder, .rightElbow, .rightWrist],
             minConfidence:  0.30,
             stableDuration: 1.0
         ),
 
         cameraSetup: CameraSetupConfig(
-            setupInstruction: "Get into position sideways to the camera — full body in frame",
+            setupInstruction: "Place phone on the floor to your side — frame head to hips, upper body only",
             requiredJoints: [
                 .leftShoulder, .rightShoulder,
                 .leftElbow,    .rightElbow,
                 .leftWrist,    .rightWrist,
                 .leftHip,      .rightHip,
-                .leftAnkle,    .rightAnkle,
+                // No knees/ankles — upper-body side-on frame; hips are needed for sag check
             ]
         ),
 

@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+// Force Node.js runtime — the Anthropic SDK uses Node APIs and cannot run on the Vercel Edge runtime.
+export const config = { runtime: 'nodejs' };
 
 const SYSTEM = `You are MyPal, a friendly fitness coach inside the FormPal app. You help beginners with training questions — form cues, muscle soreness, recovery, plan adjustments, motivation.
 
@@ -13,9 +14,19 @@ Rules:
 type Message = { role: 'user' | 'assistant'; content: string };
 
 export default async function handler(req: any, res: any) {
+  // ── Env guard — catches missing key before any SDK call ────────────────────
+  if (!process.env.ANTHROPIC_API_KEY) {
+    console.error('[MyPal] ANTHROPIC_API_KEY is not set');
+    return res.status(500).json({ error: 'API key not configured on server. Set ANTHROPIC_API_KEY in Vercel → Settings → Environment Variables, then redeploy.' });
+  }
+
+  // ── Method guard ───────────────────────────────────────────────────────────
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
+
+  // ── Client created inside handler so a missing key returns a clean error ───
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
   const { message, history, userContext } = req.body ?? {};
 
@@ -33,7 +44,7 @@ export default async function handler(req: any, res: any) {
     if (lines.length > 0) system += `\n\nUser context:\n${lines.join('\n')}`;
   }
 
-  // Sanitise history — cap at last 20 messages (10 exchanges) to limit cost
+  // Sanitise history — cap at last 20 messages to limit cost
   const safeHistory: Message[] = Array.isArray(history)
     ? (history as any[])
         .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
@@ -50,12 +61,12 @@ export default async function handler(req: any, res: any) {
       messages,
     });
 
-    const reply =
-      response.content[0]?.type === 'text' ? response.content[0].text.trim() : '';
-
+    const reply = response.content[0]?.type === 'text' ? response.content[0].text.trim() : '';
     return res.status(200).json({ reply });
   } catch (err: any) {
-    console.error('[MyPal] Anthropic error:', err?.message ?? err);
-    return res.status(500).json({ error: 'MyPal is unavailable right now. Try again in a moment.' });
+    // Expose the real error message so we can diagnose — tighten this up after confirming it works
+    const msg = err?.message ?? String(err);
+    console.error('[MyPal] Anthropic error:', msg);
+    return res.status(500).json({ error: `MyPal error: ${msg}` });
   }
 }

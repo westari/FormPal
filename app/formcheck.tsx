@@ -49,11 +49,10 @@ async function logSessionVideo(uri: string) {
   } catch {}
 }
 
-// ─── Per-exercise setup instructions (mirrors Swift ExerciseRegistry setupInstruction) ─
 const SETUP_INSTRUCTION: Record<ExerciseType, string> = {
   squat:  'Stand sideways to the camera — full body in frame',
-  curl:   'Stand sideways to the camera — upper body in frame',
-  pushup: 'Get into position sideways to the camera — full body in frame',
+  curl:   'Face the camera — stand back so both arms are fully in frame',
+  pushup: 'Phone on the floor to your side — frame head to hips (upper body only)',
 };
 
 // ─── Phase type ───────────────────────────────────────────────────────────────
@@ -278,55 +277,57 @@ export default function FormCheckScreen() {
         />
       )}
 
-      {/* SETUP overlay — shown until calibration passes */}
+      {/* SETUP overlay — camera stays fully visible, guide + card at bottom */}
       {phase === 'setup' && (
         <View style={s.setupOverlay} pointerEvents="none">
-          <View style={s.setupScrim} />
-          <View style={s.setupCard}>
-            <SymbolView
-              name="viewfinder.rectangular"
-              size={36}
-              tintColor={C.text}
-              type="hierarchical"
-              style={{ width: 36, height: 36, marginBottom: 16 }}
-            />
-            <Text style={s.setupInstruction}>
-              {SETUP_INSTRUCTION[exerciseType]}
-            </Text>
-            <View style={s.setupStatusRow}>
-              {setupAllVisible ? (
-                <View style={s.holdContainer}>
-                  <Text style={s.statusGood}>Hold still…</Text>
-                  <View style={s.progressTrack}>
-                    <View
-                      style={[
-                        s.progressFill,
-                        { width: `${Math.round(setupHoldProgress * 100)}%` as any },
-                      ]}
-                    />
-                  </View>
+          {/* Corner bracket framing guide */}
+          <View style={s.bracketGuide}>
+            <View style={[s.bc, s.bcTL, setupAllVisible ? s.bcGreen : s.bcDim]} />
+            <View style={[s.bc, s.bcTR, setupAllVisible ? s.bcGreen : s.bcDim]} />
+            <View style={[s.bc, s.bcBL, setupAllVisible ? s.bcGreen : s.bcDim]} />
+            <View style={[s.bc, s.bcBR, setupAllVisible ? s.bcGreen : s.bcDim]} />
+          </View>
+
+          {/* Status + instruction panel at bottom */}
+          <View style={s.setupPanel}>
+            {/* Live status pill */}
+            <View style={[s.statusPill, setupAllVisible && s.statusPillGood]}>
+              <View style={[s.statusDot, setupAllVisible && s.statusDotGood]} />
+              <Text style={[s.statusPillTxt, setupAllVisible && s.statusPillTxtGood]}>
+                {setupAllVisible
+                  ? 'In frame — hold still'
+                  : (setupHint || 'Get your body in frame')}
+              </Text>
+            </View>
+
+            {/* Instruction card */}
+            <View style={s.setupCard}>
+              <Text style={s.setupInstruction}>{SETUP_INSTRUCTION[exerciseType]}</Text>
+              {setupAllVisible && (
+                <View style={s.progressTrack}>
+                  <View
+                    style={[
+                      s.progressFill,
+                      { width: `${Math.round(setupHoldProgress * 100)}%` as any },
+                    ]}
+                  />
                 </View>
-              ) : (
-                <Text style={s.statusHint}>
-                  {setupHint || 'Position yourself so your body is in frame'}
-                </Text>
               )}
             </View>
           </View>
         </View>
       )}
 
-      {/* "You're all set!" — brief success pill after calibration passes */}
+      {/* "You're all set!" — brief success pill, no full scrim */}
       {phase === 'setup-done' && (
         <View style={s.setupDoneOverlay} pointerEvents="none">
-          <View style={s.setupScrim} />
           <View style={s.setupSuccessCard}>
             <SymbolView
               name="checkmark.circle.fill"
-              size={36}
+              size={32}
               tintColor={C.good}
               type="monochrome"
-              style={{ width: 36, height: 36, marginBottom: 10 }}
+              style={{ width: 32, height: 32 }}
             />
             <Text style={s.setupSuccessText}>You're all set!</Text>
           </View>
@@ -444,46 +445,73 @@ const s = StyleSheet.create({
   trackLabelStop: { color: C.warn },
 
   // ── Setup overlay (SETUP phase) ───────────────────────────────────────────
-  setupOverlay:   { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
+  setupOverlay:     { ...StyleSheet.absoluteFillObject },
   setupDoneOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
-  setupScrim:     { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.65)' },
-  setupCard: {
+
+  // Corner bracket framing guide
+  bracketGuide: {
+    position: 'absolute',
+    top: 88, left: 24, right: 24, bottom: 200,
+  },
+  bc: { position: 'absolute', width: 48, height: 48 },
+  bcTL: { top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3, borderTopLeftRadius: 5 },
+  bcTR: { top: 0, right: 0, borderTopWidth: 3, borderRightWidth: 3, borderTopRightRadius: 5 },
+  bcBL: { bottom: 0, left: 0, borderBottomWidth: 3, borderLeftWidth: 3, borderBottomLeftRadius: 5 },
+  bcBR: { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 5 },
+  bcDim:   { borderColor: 'rgba(255,255,255,0.55)' },
+  bcGreen: { borderColor: C.good },
+
+  // Status pill + instruction panel (bottom of screen)
+  setupPanel: {
+    position:  'absolute',
+    bottom:    100,
+    left:      16,
+    right:     16,
+    gap:       10,
+  },
+  statusPill: {
+    flexDirection:     'row',
     alignItems:        'center',
-    paddingHorizontal: 32,
-    paddingVertical:   36,
-    marginHorizontal:  28,
-    backgroundColor:   'rgba(18,19,22,0.92)',
-    borderRadius:      24,
+    gap:               8,
+    alignSelf:         'center',
+    paddingHorizontal: 16,
+    paddingVertical:   9,
+    borderRadius:      100,
+    backgroundColor:   'rgba(14,15,18,0.78)',
+    borderWidth:       StyleSheet.hairlineWidth,
+    borderColor:       'rgba(255,255,255,0.14)',
+  },
+  statusPillGood: {
+    backgroundColor: 'rgba(74,222,128,0.14)',
+    borderColor:     'rgba(74,222,128,0.32)',
+  },
+  statusDot: {
+    width: 7, height: 7, borderRadius: 4,
+    backgroundColor: C.muted,
+  },
+  statusDotGood: { backgroundColor: C.good },
+  statusPillTxt: {
+    fontSize: 13.5, fontWeight: '500', color: C.muted,
+  },
+  statusPillTxtGood: { color: C.good },
+  setupCard: {
+    backgroundColor:   'rgba(10,11,12,0.88)',
+    borderRadius:      20,
     borderWidth:       1,
-    borderColor:       'rgba(255,255,255,0.09)',
+    borderColor:       'rgba(255,255,255,0.10)',
+    padding:           20,
+    gap:               14,
   },
   setupInstruction: {
-    fontSize:     20,
-    fontWeight:   '600',
-    color:        C.text,
-    textAlign:    'center',
-    lineHeight:   28,
-    marginBottom: 24,
-  },
-  setupStatusRow: {
-    alignItems: 'center',
-    minHeight:  44,
-    width:      '100%',
-  },
-  holdContainer: {
-    alignItems: 'center',
-    width:      '100%',
-    gap:        10,
-  },
-  statusGood: {
-    fontSize:   14,
-    fontWeight: '500',
-    color:      C.good,
+    fontSize:   17,
+    fontWeight: '600',
+    color:      C.text,
+    textAlign:  'center',
+    lineHeight: 25,
   },
   progressTrack: {
-    width:           '100%',
     height:          4,
-    backgroundColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
     borderRadius:    2,
     overflow:        'hidden',
   },
@@ -492,26 +520,21 @@ const s = StyleSheet.create({
     backgroundColor: C.good,
     borderRadius:    2,
   },
-  statusHint: {
-    fontSize:   13,
-    fontWeight: '400',
-    color:      C.muted,
-    textAlign:  'center',
-    lineHeight: 20,
-  },
 
-  // ── "You're all set!" card ────────────────────────────────────────────────
+  // ── "You're all set!" card (no scrim) ────────────────────────────────────
   setupSuccessCard: {
+    flexDirection:     'row',
     alignItems:        'center',
-    paddingHorizontal: 40,
-    paddingVertical:   32,
-    backgroundColor:   'rgba(18,19,22,0.92)',
-    borderRadius:      24,
+    gap:               12,
+    paddingHorizontal: 28,
+    paddingVertical:   18,
+    backgroundColor:   'rgba(10,11,12,0.90)',
+    borderRadius:      100,
     borderWidth:       1,
-    borderColor:       'rgba(74,222,128,0.20)',
+    borderColor:       'rgba(74,222,128,0.28)',
   },
   setupSuccessText: {
-    fontSize:   20,
+    fontSize:   18,
     fontWeight: '700',
     color:      C.good,
   },

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Image, Alert,
+  Image,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
@@ -156,7 +156,19 @@ export default function MoveDetailScreen() {
         <View style={[s.formBar, { paddingBottom: insets.bottom + 12 }]}>
           <GlassButton
             style={{ height: 56, alignSelf: 'stretch' }}
-            onPress={() => Alert.alert('Form check', 'Form check coming soon.')}
+            onPress={() => {
+              const FORM_CHECK_MAP: Record<string, string> = {
+                Bodyweight_Squat: 'squat',
+                Pushups: 'pushup',
+                Dumbbell_Bicep_Curl: 'curl',
+              };
+              const exerciseType = resolvedId ? FORM_CHECK_MAP[resolvedId] : undefined;
+              if (exerciseType) {
+                router.push(`/formcheck?exercise=${exerciseType}` as any);
+              } else {
+                router.push('/exercise-picker' as any);
+              }
+            }}
           >
             <Text style={s.formBtnTxt}>Check my form</Text>
           </GlassButton>

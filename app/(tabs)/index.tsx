@@ -540,15 +540,7 @@ export default function HomeScreen() {
     next.add(id);
     setViewedMoves(next);
     await AsyncStorage.setItem(VIEWED_KEY, JSON.stringify([...next]));
-    if (id === 'Bodyweight_Squat') {
-      router.push('/formcheck?exercise=squat' as any);
-    } else if (id === 'Dumbbell_Bicep_Curl') {
-      router.push('/formcheck?exercise=curl' as any);
-    } else if (id === 'Pushups') {
-      router.push('/formcheck?exercise=pushup' as any);
-    } else {
-      router.push(`/move/${id}` as any);
-    }
+    router.push(`/move/${id}` as any);
   }
 
   // ─── Render ─────────────────────────────────────────────────────────────────
@@ -697,7 +689,7 @@ export default function HomeScreen() {
           </View>
 
           {/* ── 5. YOUR PROGRESS ──────────────────────────────────────────── */}
-          <SectionHeader title="Your progress" />
+          <SectionHeader title="Your progress" action="View all" onAction={() => router.push('/(tabs)/progress' as any)} />
           <View style={[s.progressCard, SHADOW_HIGH]}>
             <View style={s.segPicker}>
               {(['week', 'month', 'all'] as const).map(tab => (
@@ -712,7 +704,7 @@ export default function HomeScreen() {
           </View>
 
           {/* ── 6. LEARN THE MOVES ───────────────────────────────────────── */}
-          <View>
+          <View style={{ gap: 4 }}>
             <SectionHeader title="Learn the moves" action="See all" onAction={() => {}} />
             <ScrollView
               horizontal
@@ -731,21 +723,19 @@ export default function HomeScreen() {
           </View>
 
           {/* ── 7. PAST SESSIONS ──────────────────────────────────────────── */}
-          <View>
-            <SectionHeader title="Past sessions" />
+          <View style={{ gap: 10 }}>
+            <SectionHeader
+              title="Past sessions"
+              action={reversedSessions.length > 0 ? 'View all' : undefined}
+              onAction={() => router.push('/(tabs)/progress' as any)}
+            />
             <View style={s.sessionsList}>
               {reversedSessions.length === 0 ? (
                 <Text style={s.emptyTxt}>
                   No sessions yet. Use "Learn the moves" to start tracking your form.
                 </Text>
               ) : (
-                reversedSessions.slice(0, 6).map((entry, i) => (
-                  <SessionCard
-                    key={`${entry.ts}-${i}`}
-                    entry={entry}
-                    last={i === Math.min(reversedSessions.length, 6) - 1}
-                  />
-                ))
+                <SessionCard entry={reversedSessions[0]} last={true} />
               )}
             </View>
           </View>

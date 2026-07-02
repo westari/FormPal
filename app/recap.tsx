@@ -5,7 +5,10 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useVideoPlayer, VideoView } from 'expo-video';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import RepFeedback from '../components/RepFeedback';
+
+const SESSION_LOG_KEY = 'formpal_session_log';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface RepEventData {
@@ -87,6 +90,17 @@ export default function RecapScreen() {
 
     return () => clearInterval(id);
   }, [hasVideo, repEvents, player]);
+
+  // Save session record once on mount (skip if no reps detected)
+  useEffect(() => {
+    if (reps === 0) return;
+    AsyncStorage.getItem(SESSION_LOG_KEY).then(raw => {
+      const log: { ts: number; reps: number; goodReps: number; pct: number }[] =
+        raw ? JSON.parse(raw) : [];
+      log.push({ ts: Date.now(), reps, goodReps, pct });
+      return AsyncStorage.setItem(SESSION_LOG_KEY, JSON.stringify(log));
+    }).catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDone = useCallback(() => {
     router.replace('/(tabs)/');
