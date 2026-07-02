@@ -52,7 +52,7 @@ async function logSessionVideo(uri: string) {
 const SETUP_INSTRUCTION: Record<ExerciseType, string> = {
   squat:  'Stand sideways to the camera — full body in frame',
   curl:   'Face the camera — stand back so both arms are fully in frame',
-  pushup: 'Phone on the floor to your side — frame head to hips (upper body only)',
+  pushup: 'Place your phone on the floor a couple feet to your side, camera facing you. Get in push-up position so your head, shoulders, arms and hips are in view.',
 };
 
 // ─── Phase type ───────────────────────────────────────────────────────────────

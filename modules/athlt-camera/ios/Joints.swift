@@ -135,3 +135,14 @@ func signedDeviationFromLine(pose: Pose, point p: Joint, lineFrom a: Joint, line
     guard ab > 1e-6 else { return nil }
     return (abx * apy - aby * apx) / ab   // no abs() — sign is the information
 }
+
+/// Vertical gap: upper.y - lower.y in Vision normalised units (y=0 bottom, y=1 top).
+/// Positive = upper joint is higher in the frame than lower joint.
+/// Returns nil if either joint is below kMinConf.
+func verticalGap(pose: Pose, upper: Joint, lower: Joint) -> Double? {
+    guard
+        let pu = pose[upper], pu.confidence >= kMinConf,
+        let pl = pose[lower], pl.confidence >= kMinConf
+    else { return nil }
+    return Double(pu.y - pl.y)
+}

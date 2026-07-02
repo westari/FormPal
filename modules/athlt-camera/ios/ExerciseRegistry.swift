@@ -223,103 +223,109 @@ enum ExerciseRegistry {
 
     // ── PUSH-UP ───────────────────────────────────────────────────────────────
     //
-    // Primary: shoulder → elbow → wrist, most-flexed arm.
-    // Thresholds are heuristic starting points — tune on-device via NSLog output.
+    // Primary: shoulder-vs-elbow vertical position (Vision Y).
+    //   UP position:   shoulderY > elbowY → gap positive (shoulder above elbow)
+    //   DOWN position: shoulderY ≈ elbowY → gap near zero or negative
     //
-    // Form checks:
-    //   hip_sag:   hips drop below the shoulder-hip-ankle line → "HIPS UP"
-    //   hip_pike:  hips rise above the line → "LOWER HIPS"
-    //   elbow_flare: defined-but-disabled (noisy from side view)
+    // ALL thresholds are in Vision units (0–1). Tune on-device:
+    //   read "[Engine] [pushup] frame: gap=X.XXXX" NSLog at ~1fps.
+    //   Current starting values assume camera flat on floor, person side-on
+    //   with ~30–50% of frame height from floor to shoulder.
     //
-    // Priority: hip_sag (2) > hip_pike (1) — sag is more injury-prone, wins if both fire.
+    // Form checks use .verticalGap (camera-side-agnostic):
+    //   hip_sag:  verticalGap(shoulder, hip) > threshold → shoulder much higher than hip
+    //   hip_pike: verticalGap(hip, shoulder) > threshold → hip much higher than shoulder
+    //   Four checks (L+R each) so whichever side is visible contributes.
     //
-    // SIGN CONVENTION WARNING for hip_sag / hip_pike:
-    //   signedDeviationFromLine positive = hip LEFT of shoulder→ankle direction.
-    //   Expected with camera on person's left side:
-    //     sag → negative (hip.lessThan(-0.05)), pike → positive (hip.greaterThan(0.05))
-    //   If your NSLog shows sag as positive, swap the threshold signs.
-    //   Tune thresholds from rep log: "[Engine] [pushup] Rep #N ... hip_sag=X.XX"
+    // Priority: hip_sag (2) > hip_pike (1).
+    // Tune thresholds from rep log: "[Engine] [pushup] Rep #N ... hip_sag_l=X.XX"
 
     static let pushup = ExerciseDefinition(
         id:          "pushup",
         displayName: "Push-up",
 
-        primaryAngle: .mostFlexed(
-            left:  JointTriplet(a: .leftShoulder,  pivot: .leftElbow,  c: .leftWrist),
-            right: JointTriplet(a: .rightShoulder, pivot: .rightElbow, c: .rightWrist)
+        // Vision Y: 0=bottom, 1=top. UP = shoulder above elbow = positive gap.
+        // Picks whichever side has better joint confidence (side-on: one side faces camera).
+        primaryAngle: .verticalGapBestSide(
+            leftUpper:  .leftShoulder,  leftLower:  .leftElbow,
+            rightUpper: .rightShoulder, rightLower: .rightElbow
         ),
 
-        topAngle:           160,
-        repEnterThreshold:  120,
-        repExitThreshold:   150,
-        goodROMThreshold:    90,
+        // TUNE: read "[Engine] [pushup] frame:" NSLog before relying on these.
+        topAngle:           0.12,   // approximate gap in UP position
+        repEnterThreshold:  0.05,   // shoulder drops within 5% of elbow → going down
+        repExitThreshold:   0.09,   // shoulder rises back to 9% above elbow → rep done
+        goodROMThreshold:   0.02,   // shoulder must reach within 2% of elbow for full depth
         insufficientROMCue: "GO LOWER",
 
         formChecks: [
-            // Hip pike: hips rise above shoulder-ankle line.
-            // throughoutMax catches worst-case upward deviation during the rep.
-            // Heuristic: 0.05 Vision units — tune on-device.
+            // Hip sag — left side: shoulder much higher than hip = hip dropped.
+            // verticalGap(shoulder, hip) > 0.08 → hip sagging > 8% below shoulder.
+            // TUNE on-device — returns nil if left joints not visible (right-side-to-camera).
             FormCheck(
-                id:         "hip_pike",
-                cue:        "LOWER HIPS",
-                metric:     .signedDeviationFromLine(
-                    point:    .leftHip,
-                    lineFrom: .leftShoulder,
-                    lineTo:   .leftAnkle
-                ),
-                evaluateAt: .throughoutMax,
-                condition:  .greaterThan(0.05),
-                priority:   1,
-                enabled:    true
-            ),
-            // Hip sag: hips drop below shoulder-ankle line.
-            // throughoutMin catches worst-case downward deviation.
-            // Condition: value < -0.05 (negative = below line, per sign convention above).
-            FormCheck(
-                id:         "hip_sag",
+                id:         "hip_sag_l",
                 cue:        "HIPS UP",
-                metric:     .signedDeviationFromLine(
-                    point:    .leftHip,
-                    lineFrom: .leftShoulder,
-                    lineTo:   .leftAnkle
-                ),
-                evaluateAt: .throughoutMin,
-                condition:  .lessThan(-0.05),
+                metric:     .verticalGap(upper: .leftShoulder, lower: .leftHip),
+                evaluateAt: .throughoutMax,
+                condition:  .greaterThan(0.08),
                 priority:   2,
                 enabled:    true
             ),
-            // Elbow flare: disabled — hard to measure reliably from side view.
+            // Hip pike — left side: hip higher than shoulder = butt in air.
             FormCheck(
-                id:         "elbow_flare",
-                cue:        "TUCK YOUR ELBOWS",
-                metric:     .lineFromVertical(from: .leftShoulder, to: .leftElbow),
-                evaluateAt: .atBottom,
-                condition:  .greaterThan(40),
-                priority:   3,
-                enabled:    false
+                id:         "hip_pike_l",
+                cue:        "LOWER HIPS",
+                metric:     .verticalGap(upper: .leftHip, lower: .leftShoulder),
+                evaluateAt: .throughoutMax,
+                condition:  .greaterThan(0.08),
+                priority:   1,
+                enabled:    true
+            ),
+            // Hip sag — right side (fires when right shoulder/hip are the visible pair).
+            FormCheck(
+                id:         "hip_sag_r",
+                cue:        "HIPS UP",
+                metric:     .verticalGap(upper: .rightShoulder, lower: .rightHip),
+                evaluateAt: .throughoutMax,
+                condition:  .greaterThan(0.08),
+                priority:   2,
+                enabled:    true
+            ),
+            // Hip pike — right side.
+            FormCheck(
+                id:         "hip_pike_r",
+                cue:        "LOWER HIPS",
+                metric:     .verticalGap(upper: .rightHip, lower: .rightShoulder),
+                evaluateAt: .throughoutMax,
+                condition:  .greaterThan(0.08),
+                priority:   1,
+                enabled:    true
             ),
         ],
 
+        // Ready gate: shoulder must be clearly above elbow (in UP push-up position).
+        // TUNE: readyAngleMin may need raising if gate opens too easily while standing.
         readyGate: ReadyGateConfig(
-            readyAngleMin:  145,
-            readyAngleMax:  190,
-            requiredJoints: [.leftShoulder, .leftElbow, .leftWrist, .leftHip,
-                              .rightShoulder, .rightElbow, .rightWrist],
-            minConfidence:  0.30,
-            stableDuration: 1.0
+            readyAngleMin:  0.04,   // shoulder at least 4% above elbow = in UP position
+            readyAngleMax:  0.50,   // sanity cap
+            requiredJoints: [.leftShoulder, .leftElbow, .rightShoulder, .rightElbow],
+            minConfidence:  0.15,   // low enough to accept Vision's inferred hidden side
+            stableDuration: 0.5
         ),
 
+        // Camera setup: upper body + hips, either side to camera.
+        // Left-side joints in requiredJoints, right-side in requiredJointsAlt —
+        // passes when EITHER set is fully in frame so the user can face either way.
         cameraSetup: CameraSetupConfig(
-            setupInstruction: "Place phone on the floor to your side — frame head to hips, upper body only",
+            setupInstruction: "Place your phone on the floor a couple feet to your side, camera facing you. Get in push-up position so your head, shoulders, arms and hips are in view.",
             requiredJoints: [
-                .leftShoulder, .rightShoulder,
-                .leftElbow,    .rightElbow,
-                .leftWrist,    .rightWrist,
-                .leftHip,      .rightHip,
-                // No knees/ankles — upper-body side-on frame; hips are needed for sag check
+                .leftShoulder, .leftElbow, .leftWrist, .leftHip,
+            ],
+            requiredJointsAlt: [
+                .rightShoulder, .rightElbow, .rightWrist, .rightHip,
             ]
         ),
 
-        minRepInterval: 0.5
+        minRepInterval: 0.8
     )
 }

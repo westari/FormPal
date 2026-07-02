@@ -25,6 +25,12 @@ enum FormCheckMetric {
     /// Tracks the exercise's own primary angle — handled by ExerciseEngine directly.
     /// Use with .throughoutMax or .throughoutMin to track peak extension / peak flexion.
     case primaryAngle
+
+    /// Vertical gap: upper.y - lower.y in Vision normalised units (y=0 bottom, y=1 top).
+    /// Positive = upper joint is higher in frame. Camera-side-agnostic — does NOT depend
+    /// on which side faces the camera. Returns nil if either joint is below min confidence.
+    /// Typical use: push-up hip sag/pike relative to shoulder height.
+    case verticalGap(upper: Joint, lower: Joint)
 }
 
 // ─── When to evaluate ────────────────────────────────────────────────────────
@@ -85,6 +91,9 @@ extension FormCheck {
 
         case .primaryAngle:
             return nil  // injected by ExerciseEngine from its tracked primary angle
+
+        case let .verticalGap(u, l):
+            return verticalGap(pose: pose, upper: u, lower: l)
         }
     }
 

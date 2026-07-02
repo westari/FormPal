@@ -23,6 +23,22 @@ enum PrimaryAngleConfig {
     /// Best when only one body side is in frame.
     case bestSide(left: JointTriplet, right: JointTriplet,
                   leftJoints: [Joint], rightJoints: [Joint])
+
+    /// Vertical gap (upperJoint.y - lowerJoint.y) in Vision normalised units.
+    /// y=0 = bottom of frame, y=1 = top. Positive = upper is higher.
+    ///
+    /// Picks whichever side (left/right) has better combined joint confidence —
+    /// correct for side-on exercises where only one side faces the camera (push-up).
+    ///
+    /// Rep detection (all values in Vision units 0–1 — TUNE ON-DEVICE via NSLog):
+    ///   topAngle           ≈ gap in UP position (shoulder above elbow)
+    ///   repEnterThreshold  = gap drops below → going DOWN, rep starts
+    ///   repExitThreshold   = gap rises above → rep complete
+    ///   goodROMThreshold   = gap must reach BELOW this at bottom for full-depth rep
+    case verticalGapBestSide(
+        leftUpper:  Joint, leftLower:  Joint,
+        rightUpper: Joint, rightLower: Joint
+    )
 }
 
 // ─── Ready gate ───────────────────────────────────────────────────────────────
@@ -61,6 +77,12 @@ struct CameraSetupConfig {
     /// for the 2-second calibration hold to pass.
     /// Keep this minimal — only joints the exercise actually measures.
     let requiredJoints: [Joint]
+
+    /// Alternate joint set — if set, setup passes when ALL joints in `requiredJoints`
+    /// OR ALL joints in `requiredJointsAlt` are visible.
+    /// Use for exercises where the user can face either side of the camera (e.g. push-up:
+    /// left side or right side to camera). Defaults to nil (primary set only).
+    let requiredJointsAlt: [Joint]? = nil
 }
 
 // ─── Exercise definition — the COMPLETE spec for one exercise ─────────────────

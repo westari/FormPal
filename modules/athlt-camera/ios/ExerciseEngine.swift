@@ -102,6 +102,9 @@ final class ExerciseEngine {
     // ── Active side (for bestSide exercises) ──────────────────────────────────
     private var activeSide: Side = .right
 
+    // ── Per-frame debug log throttle (verticalGapBestSide exercises only) ─────
+    private var lastFrameLogTime: Double = 0
+
     // ── Callbacks ─────────────────────────────────────────────────────────────
     var onRepDetected:  ((RepResult)      -> Void)?
     var onDebugStats:   ((EngineDebugStats) -> Void)?
@@ -149,6 +152,24 @@ final class ExerciseEngine {
         guard let angle = computePrimaryAngle(pose: pose) else {
             handleNoPose(timestamp: timestamp)
             return
+        }
+
+        // Per-frame tuning log for verticalGapBestSide (push-up) — ~1 fps rate.
+        // Read "[Engine] [pushup] frame:" NSLog to calibrate repEnterThreshold,
+        // repExitThreshold, and goodROMThreshold before shipping.
+        if case let .verticalGapBestSide(lu, ll, ru, rl) = def.primaryAngle {
+            let now = timestamp.timeIntervalSinceReferenceDate
+            if now - lastFrameLogTime >= 1.0 {
+                lastFrameLogTime = now
+                let lShY = pose[lu].map { Double($0.y) } ?? -1
+                let lElY = pose[ll].map { Double($0.y) } ?? -1
+                let rShY = pose[ru].map { Double($0.y) } ?? -1
+                let rElY = pose[rl].map { Double($0.y) } ?? -1
+                NSLog("[Engine] [%@] frame: gap=%.4f phase=%@ | L sh=%.3f el=%.3f gap=%.4f | R sh=%.3f el=%.3f gap=%.4f",
+                      def.id, angle, phaseLabel(),
+                      lShY, lElY, lShY - lElY,
+                      rShY, rElY, rShY - rElY)
+            }
         }
 
         if !isSetupComplete {
@@ -214,27 +235,30 @@ final class ExerciseEngine {
             return
         }
 
-        var missingJoints: [Joint] = []
-        for joint in setup.requiredJoints {
-            guard let p = pose[joint], p.confidence >= Self.SETUP_JOINT_MIN_CONF else {
-                missingJoints.append(joint)
-                continue
-            }
-            let x = Double(p.x), y = Double(p.y)
-            if x < Self.SETUP_EDGE_MARGIN || x > 1 - Self.SETUP_EDGE_MARGIN ||
-               y < Self.SETUP_EDGE_MARGIN || y > 1 - Self.SETUP_EDGE_MARGIN {
-                missingJoints.append(joint)
+        let missingMain = missingSetupJoints(setup.requiredJoints, pose: pose)
+        var missingJoints = missingMain
+        var allVisible = missingMain.isEmpty
+
+        if !allVisible, let altJoints = setup.requiredJointsAlt {
+            let missingAlt = missingSetupJoints(altJoints, pose: pose)
+            if missingAlt.isEmpty {
+                allVisible = true
+                missingJoints = []
+            } else if missingAlt.count < missingMain.count {
+                missingJoints = missingAlt
             }
         }
 
-        let allVisible   = missingJoints.isEmpty
         var holdProgress: Double = 0.0
 
         if allVisible {
             switch setupPhaseState {
             case .pending:
                 NSLog("[Engine] [%@] Setup: all joints visible — starting %.0fs hold", def.id, Self.SETUP_HOLD_DURATION)
-                for joint in setup.requiredJoints {
+                // Log whichever joint set is the one that passed
+                let logJoints: [Joint] = (!missingMain.isEmpty && setup.requiredJointsAlt != nil)
+                    ? (setup.requiredJointsAlt ?? []) : setup.requiredJoints
+                for joint in logJoints {
                     let conf = pose[joint]?.confidence ?? 0
                     NSLog("[Engine] [%@]   %@: conf=%.2f x=%.2f y=%.2f",
                           def.id, "\(joint)", conf,
@@ -265,6 +289,21 @@ final class ExerciseEngine {
 
         onSetupUpdate?(SetupStatus(allJointsVisible: allVisible, holdProgress: holdProgress,
                                    passed: false, hint: hintForMissingJoints(missingJoints)))
+    }
+
+    private func missingSetupJoints(_ joints: [Joint], pose: Pose) -> [Joint] {
+        var missing: [Joint] = []
+        for joint in joints {
+            guard let p = pose[joint], p.confidence >= Self.SETUP_JOINT_MIN_CONF else {
+                missing.append(joint); continue
+            }
+            let x = Double(p.x), y = Double(p.y)
+            if x < Self.SETUP_EDGE_MARGIN || x > 1 - Self.SETUP_EDGE_MARGIN ||
+               y < Self.SETUP_EDGE_MARGIN || y > 1 - Self.SETUP_EDGE_MARGIN {
+                missing.append(joint)
+            }
+        }
+        return missing
     }
 
     private func hintForMissingJoints(_ joints: [Joint]) -> String {
@@ -311,6 +350,14 @@ final class ExerciseEngine {
             activeSide = rConf >= lConf ? .right : .left
             let t = activeSide == .left ? left : right
             return jointAngle(pose: pose, a: t.a, b: t.pivot, c: t.c)
+
+        case let .verticalGapBestSide(lu, ll, ru, rl):
+            let lGap  = verticalGap(pose: pose, upper: lu, lower: ll)
+            let rGap  = verticalGap(pose: pose, upper: ru, lower: rl)
+            let lConf = (pose[lu]?.confidence ?? 0) + (pose[ll]?.confidence ?? 0)
+            let rConf = (pose[ru]?.confidence ?? 0) + (pose[rl]?.confidence ?? 0)
+            if lConf >= rConf { return lGap ?? rGap }
+            return rGap ?? lGap
         }
     }
 
