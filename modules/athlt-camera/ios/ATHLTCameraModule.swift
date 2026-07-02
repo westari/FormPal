@@ -1,8 +1,8 @@
 import ExpoModulesCore
 import AVFoundation
 import Vision
-import CoreMedia
-import CoreVideo
+@preconcurrency import CoreMedia
+@preconcurrency import CoreVideo
 import UIKit
 
 // ─── Notification ─────────────────────────────────────────────────────────────

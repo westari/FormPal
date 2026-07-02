@@ -82,7 +82,15 @@ struct CameraSetupConfig {
     /// OR ALL joints in `requiredJointsAlt` are visible.
     /// Use for exercises where the user can face either side of the camera (e.g. push-up:
     /// left side or right side to camera). Defaults to nil (primary set only).
-    let requiredJointsAlt: [Joint]? = nil
+    let requiredJointsAlt: [Joint]?
+
+    init(setupInstruction: String,
+         requiredJoints: [Joint],
+         requiredJointsAlt: [Joint]? = nil) {
+        self.setupInstruction  = setupInstruction
+        self.requiredJoints    = requiredJoints
+        self.requiredJointsAlt = requiredJointsAlt
+    }
 }
 
 // ─── Exercise definition — the COMPLETE spec for one exercise ─────────────────
