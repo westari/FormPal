@@ -243,8 +243,13 @@ export default function FormCheckScreen() {
 
   const handleBack = useCallback(async () => {
     sessionStopped.current = true;
+    const wasTracking = isTrackingRef.current;
     isTrackingRef.current  = false;
     if (setupDoneTimer.current) { clearTimeout(setupDoneTimer.current); setupDoneTimer.current = null; }
+    // Stop tracking first if active — ensures pendingStopPromise is resolved
+    // before stopSession() tears everything down, preventing a dangling promise
+    // that would leave the native module in a broken state for the next session.
+    if (wasTracking) await stopTracking().catch(() => {});
     await stopSession();
     router.back();
   }, [router]);

@@ -122,11 +122,25 @@ public class ATHLTCameraModule: Module {
                 self.videoOutput     = nil
                 self.movieOutput     = nil
                 self.captureDelegate = nil
+                self.movieDelegate   = nil
                 ATHLTSessionHolder.shared.set(nil)
 
-                self.inferenceQueue.async {
-                    self.isTracking  = false
-                    self.currentMode = "idle"
+                // Drain inferenceQueue SYNCHRONOUSLY so the engine is fully reset
+                // before the promise resolves. Prevents the second startSession()
+                // from racing against leftover frame tasks or a stale engine state
+                // (the async version let the promise resolve before engine.reset()
+                // ran, so the next startSession's inferenceQueue.sync could block
+                // waiting for those tasks — causing the observed freeze).
+                self.inferenceQueue.sync {
+                    self.isTracking          = false
+                    self.currentMode         = "idle"
+                    self.frameCounter        = 0
+                    self.totalFramesReceived = 0
+                    self.totalFramesAnalyzed = 0
+                    self.personDetected      = false
+                    self.lastDebugStatsTime  = 0.0
+                    // If stopTracking() was never called (e.g. back button during
+                    // tracking), resolve its dangling promise now so nothing leaks.
                     if let p = self.pendingStopPromise {
                         p.resolve(["reps":     self.engine.totalReps,
                                    "goodReps": self.engine.goodReps,
@@ -309,6 +323,22 @@ public class ATHLTCameraModule: Module {
     // MARK: – startSession ─────────────────────────────────────────────────────
 
     private func doStartSession(promise: Promise) {
+        // Guard: tear down any stale session before creating a new one.
+        // Normally stopSession() handles this, but defensive in case of fast
+        // re-navigation or an unexpected code path.
+        if captureSession != nil {
+            NSLog("[GymCamera] startSession: found active session — stopping first")
+            videoOutput?.setSampleBufferDelegate(nil, queue: nil)
+            captureSession?.stopRunning()
+            captureSession  = nil
+            videoOutput     = nil
+            movieOutput     = nil
+            captureDelegate = nil
+            movieDelegate   = nil
+            ATHLTSessionHolder.shared.set(nil)
+            inferenceQueue.sync { self.engine.reset() }
+        }
+
         inferenceQueue.sync { wireEngineCallbacks() }
 
         let status = AVCaptureDevice.authorizationStatus(for: .video)

@@ -710,11 +710,14 @@ const ebd = StyleSheet.create({
 
 // ─── ProgressScreen ───────────────────────────────────────────────────────────
 
+const SESSIONS_PREVIEW = 3;
+
 export default function ProgressScreen() {
   const insets = useSafeAreaInsets();
 
-  const [sessions,    setSessions]    = useState<SessionEntry[]>([]);
-  const [progressTab, setProgressTab] = useState<'week' | 'month' | 'all'>('all');
+  const [sessions,          setSessions]          = useState<SessionEntry[]>([]);
+  const [progressTab,       setProgressTab]       = useState<'week' | 'month' | 'all'>('all');
+  const [sessionsExpanded,  setSessionsExpanded]  = useState(false);
 
   useFocusEffect(useCallback(() => {
     AsyncStorage.getItem(SESSION_LOG_KEY).then(raw => {
@@ -786,10 +789,26 @@ export default function ProgressScreen() {
 
           {/* ── SESSION HISTORY ───────────────────────────────────────── */}
           <View style={{ gap: 10 }}>
-            <SectionHeader
-              title="All sessions"
-              sub={sessions.length > 0 ? `${sessions.length} logged` : undefined}
-            />
+            {/* Header row with "View all / Show less" action */}
+            <View style={s.sessionHeader}>
+              <View>
+                <Text style={sh.title}>All sessions</Text>
+                {sessions.length > 0 && (
+                  <Text style={sh.sub}>{sessions.length} logged</Text>
+                )}
+              </View>
+              {reversedSessions.length > SESSIONS_PREVIEW && (
+                <Pressable
+                  onPress={() => setSessionsExpanded(v => !v)}
+                  hitSlop={10}
+                >
+                  <Text style={s.viewAll}>
+                    {sessionsExpanded ? 'Show less' : `View all ${reversedSessions.length}`}
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+
             <View style={s.sessionList}>
               {reversedSessions.length === 0 ? (
                 <View style={[s.emptyCard, SHADOW_MED]}>
@@ -801,7 +820,10 @@ export default function ProgressScreen() {
                   </Text>
                 </View>
               ) : (
-                reversedSessions.map((entry, i) => (
+                (sessionsExpanded
+                  ? reversedSessions
+                  : reversedSessions.slice(0, SESSIONS_PREVIEW)
+                ).map((entry, i) => (
                   <SessionCard key={`${entry.ts}-${i}`} entry={entry} />
                 ))
               )}
@@ -849,6 +871,13 @@ const s = StyleSheet.create({
   segTxtActive: { fontWeight: W.bold, color: C.text },
 
   // Sessions
+  sessionHeader: {
+    flexDirection: 'row', alignItems: 'flex-end',
+    justifyContent: 'space-between', paddingHorizontal: 8,
+  },
+  viewAll: {
+    fontSize: 13, fontWeight: W.semi, color: C.accent,
+  },
   sessionList: { gap: 10 },
   emptyCard: {
     backgroundColor: C.card, borderRadius: 22,

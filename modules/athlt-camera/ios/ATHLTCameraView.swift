@@ -2,6 +2,16 @@ import ExpoModulesCore
 import AVFoundation
 import UIKit
 
+// Weak proxy breaks the retain cycle between CADisplayLink (which strongly retains
+// its target) and ATHLTCameraView (which holds the display link). Without this,
+// ATHLTCameraView.deinit never runs, so NotificationCenter observers are never
+// removed — causing stale listeners to accumulate across form-check sessions.
+private final class DisplayLinkProxy: NSObject {
+    weak var view: ATHLTCameraView?
+    init(_ view: ATHLTCameraView) { self.view = view }
+    @objc func tick() { view?.onDisplayLinkTick() }
+}
+
 /// ATHLTCameraView — renders the AVCaptureSession preview layer + skeleton overlay.
 ///
 /// Session ownership: this view does NOT own the session. It connects to
@@ -52,9 +62,11 @@ public class ATHLTCameraView: ExpoView {
         addSubview(skeleton)
 
         // CADisplayLink — fires at the native screen refresh rate (60/120 Hz).
-        // tick() reads ATHLTPoseBuffer and updates skeleton only when a new frame
-        // is available, so there's zero work on the 50+ "empty" ticks per second.
-        let link = CADisplayLink(target: self, selector: #selector(tick))
+        // Uses DisplayLinkProxy so the display link doesn't retain ATHLTCameraView
+        // (CADisplayLink strongly retains its target — without the proxy, deinit
+        // never runs and NotificationCenter observers accumulate across sessions).
+        let proxy = DisplayLinkProxy(self)
+        let link  = CADisplayLink(target: proxy, selector: #selector(DisplayLinkProxy.tick))
         link.preferredFramesPerSecond = 0   // match native display refresh rate
         link.add(to: .main, forMode: .common)
         displayLink = link
@@ -105,8 +117,9 @@ public class ATHLTCameraView: ExpoView {
     }
 
     // MARK: – CADisplayLink tick (main thread, ~60-120 fps)
+    // Called via DisplayLinkProxy.tick() — not @objc so the proxy is the only caller.
 
-    @objc private func tick() {
+    fileprivate func onDisplayLinkTick() {
         guard skeletonVisible else { return }
         guard let frame = ATHLTPoseBuffer.shared.take() else { return }
         skeleton.update(pose:        frame.pose,

@@ -3,21 +3,19 @@ import UIKit
 /// Real-time skeleton overlay drawn over the camera preview during form-check.
 ///
 /// Performance design:
-///   • Two CAShapeLayers (line + dot) created once in setup() — GPU-rendered.
-///   • Each frame: build a CGMutablePath (C-level, no ObjC bridge) and assign
-///     to layer.path inside a no-animation CATransaction. No setNeedsDisplay,
-///     no draw(rect:). Path assignment is O(n joints) on CPU; rendering is GPU.
+///   • Two CAShapeLayers (lineLayer + dotLayer) created once in setup() — GPU-rendered.
+///   • Each frame: build two CGMutablePaths (C-level, no ObjC bridge cost) and assign
+///     to layer.path inside a no-animation CATransaction. No setNeedsDisplay, no draw(rect:).
 ///   • Driven by a CADisplayLink in ATHLTCameraView at native refresh rate (60-120 Hz).
-///     Pose data arrives from ATHLTPoseBuffer — display link reads whatever is freshest.
 ///
 /// Coordinate transform (see visionToView):
-///   Vision returns normalised coords with origin BOTTOM-LEFT (y up).
+///   Vision returns normalised coords with origin BOTTOM-LEFT (y-up).
 ///   Preview layer uses .resizeAspectFill, portrait orientation.
 ///   We correct for y-flip and aspect-fill crop offset.
 ///
 /// TUNING after first build:
-///   • If skeleton is flipped on FRONT camera, verify isMirrored flag in ATHLTCameraModule.
-///   • If skeleton is offset, check NSLog "[GymCamera] pixel buffer WxH" and confirm h > w.
+///   • If skeleton is flipped on FRONT camera, check isMirrored flag in ATHLTCameraModule.
+///   • If skeleton is offset, check NSLog "[GymCamera] pixel buffer WxH" (h > w = portrait ✓).
 
 final class SkeletonOverlayView: UIView {
 
@@ -30,10 +28,10 @@ final class SkeletonOverlayView: UIView {
 
     /// Smoothed joint positions in Vision normalised space [0,1].
     private var smoothed: [Joint: CGPoint] = [:]
-    /// EMA factor: 1.0 = no smoothing, 0.3 = heavy smoothing.
+    /// EMA factor: 1.0 = no smoothing, 0.5 = moderate smoothing.
     private let ema: CGFloat = 0.50
 
-    // MARK: – Skeleton connections
+    // MARK: – Skeleton connections (bone pairs)
 
     private static let connections: [(Joint, Joint)] = [
         // Head → shoulders
@@ -60,9 +58,11 @@ final class SkeletonOverlayView: UIView {
         (.rightKnee,     .rightAnkle),
     ]
 
-    private static let minConfidence: Float = 0.30
+    private static let minConfidence: Float  = 0.30
+    private static let dotRadius:     CGFloat = 5.0
+    private static let lineWidth:     CGFloat = 2.5
 
-    // #0A6CFF — matches FormPal's blue accent
+    // #0A6CFF — FormPal accent blue
     private static let blue = UIColor(red: 0.04, green: 0.42, blue: 1.00, alpha: 1.0)
 
     // MARK: – Init
@@ -74,18 +74,20 @@ final class SkeletonOverlayView: UIView {
         backgroundColor          = .clear
         isUserInteractionEnabled = false
 
-        // Lines: vivid blue, semi-transparent, rounded caps
+        // Bone lines — thin, rounded, semi-transparent blue
         lineLayer.fillColor   = UIColor.clear.cgColor
-        lineLayer.strokeColor = Self.blue.withAlphaComponent(0.70).cgColor
-        lineLayer.lineWidth   = 2.5
+        lineLayer.strokeColor = Self.blue.withAlphaComponent(0.75).cgColor
+        lineLayer.lineWidth   = Self.lineWidth
         lineLayer.lineCap     = .round
         lineLayer.lineJoin    = .round
         layer.addSublayer(lineLayer)
 
-        // Dots: white fill + blue border (reads well on any background)
-        dotLayer.fillColor   = UIColor.white.cgColor
-        dotLayer.strokeColor = Self.blue.withAlphaComponent(0.90).cgColor
-        dotLayer.lineWidth   = 2.0
+        // Joint dots — solid blue fill, thin white outline for contrast on any background.
+        // NOTE: dotLayer.strokeColor is white so the outline reads against both
+        //       the blue skeleton lines and the camera feed.
+        dotLayer.fillColor   = Self.blue.cgColor
+        dotLayer.strokeColor = UIColor.white.withAlphaComponent(0.85).cgColor
+        dotLayer.lineWidth   = 1.5
         layer.addSublayer(dotLayer)
     }
 
@@ -98,10 +100,10 @@ final class SkeletonOverlayView: UIView {
         CATransaction.commit()
     }
 
-    // MARK: – Public API (call on MAIN thread)
+    // MARK: – Public API (call on MAIN thread only)
 
-    /// Update with the latest pose. Call from main thread only.
     func update(pose: Pose, videoWidth: CGFloat, videoHeight: CGFloat, isMirrored: Bool) {
+        // Update smoothed positions with EMA
         var visible = Set<Joint>()
         for (joint, p) in pose where p.confidence >= Self.minConfidence {
             visible.insert(joint)
@@ -112,17 +114,16 @@ final class SkeletonOverlayView: UIView {
                     y: prev.y + ema * (raw.y - prev.y)
                 )
             } else {
-                smoothed[joint] = raw  // snap on first appearance (no lag)
+                smoothed[joint] = raw   // snap on first appearance — no lag
             }
         }
-        // Drop joints that are no longer visible
+        // Drop joints that dropped below confidence
         for joint in Array(smoothed.keys) where !visible.contains(joint) {
             smoothed.removeValue(forKey: joint)
         }
         redraw(videoWidth: videoWidth, videoHeight: videoHeight, isMirrored: isMirrored)
     }
 
-    /// Clear the overlay (person left frame or skeleton disabled).
     func clear() {
         smoothed = [:]
         CATransaction.begin()
@@ -139,11 +140,9 @@ final class SkeletonOverlayView: UIView {
         guard vSize.width > 0, vSize.height > 0,
               videoWidth > 0, videoHeight > 0 else { return }
 
-        // CGMutablePath is C-level — no ObjC bridging cost vs UIBezierPath.
         let linePath = CGMutablePath()
         let dotPath  = CGMutablePath()
-        let dotR: CGFloat = 4.5
-        let twoPi: CGFloat = .pi * 2
+        let r = Self.dotRadius
 
         // Helper: Vision normalised → view point (nil if joint not tracked)
         func pt(_ j: Joint) -> CGPoint? {
@@ -154,22 +153,35 @@ final class SkeletonOverlayView: UIView {
                                 isMirrored: isMirrored)
         }
 
-        // Lines
+        // ── Bone lines ──────────────────────────────────────────────────────
+        // Both endpoints must be confident — don't draw a bone to an unknown joint.
         for (a, b) in Self.connections {
             guard let pa = pt(a), let pb = pt(b) else { continue }
             linePath.move(to: pa)
             linePath.addLine(to: pb)
         }
 
-        // Dots (on top of lines)
+        // ── Joint dots ──────────────────────────────────────────────────────
+        // KEY FIX: use addEllipse(in:) instead of addArc.
+        //
+        // addArc on a CGMutablePath WITHOUT a preceding move(to:) inserts a
+        // straight line from the current point to the arc's start point before
+        // drawing the arc. With multiple arcs and a fill colour, those implicit
+        // connecting segments create filled triangles/polygons between the circles
+        // — exactly the "orbs/triangles" artefact the user sees.
+        //
+        // addEllipse(in:) creates each ellipse as its OWN closed subpath
+        // (implicit moveTo at entry, no line from previous subpath), so the
+        // circles are always isolated — clean dots, nothing else.
         for joint in Joint.allCases {
             guard let p = pt(joint) else { continue }
-            dotPath.addArc(center: p, radius: dotR,
-                           startAngle: 0, endAngle: twoPi, clockwise: false)
+            dotPath.addEllipse(in: CGRect(x: p.x - r, y: p.y - r,
+                                          width: r * 2, height: r * 2))
         }
 
-        // Disable implicit CALayer animations so skeleton snaps to each new pose
-        // without interpolating between frames (interpolation looks like 1fps lag).
+        // Disable CALayer implicit animations so the skeleton snaps to each new
+        // pose frame without interpolating between positions (interpolation at
+        // 10 fps inference looks like 1-fps lag on a 60 Hz display).
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         lineLayer.path = linePath
@@ -181,26 +193,26 @@ final class SkeletonOverlayView: UIView {
 
     /// Convert Vision normalised (nx, ny) — origin bottom-left, y-up —
     /// to view coordinates — origin top-left, y-down — accounting for
-    /// .resizeAspectFill cropping and optional horizontal mirroring.
+    /// .resizeAspectFill cropping and optional horizontal mirroring (front cam).
     private func visionToView(nx: CGFloat, ny: CGFloat,
                                vSize: CGSize,
                                videoWidth: CGFloat, videoHeight: CGFloat,
                                isMirrored: Bool) -> CGPoint {
-        // resizeAspectFill: choose scale that fills BOTH dimensions
+        // .resizeAspectFill: pick the scale that fills BOTH view dimensions
         let s = max(vSize.width / videoWidth, vSize.height / videoHeight)
 
-        // Scaled video dimensions in view space
         let scaledW = videoWidth  * s
         let scaledH = videoHeight * s
 
-        // Centering offsets (negative = video is cropped on that axis)
+        // Centering offsets (will be negative on the axis that overflows)
         let ox = (vSize.width  - scaledW) / 2
         let oy = (vSize.height - scaledH) / 2
 
-        // Pixel coords in video space (Vision: bottom-left origin → flip Y)
+        // Vision origin is bottom-left; view origin is top-left → flip Y
         var vx = nx       * scaledW + ox
         let vy = (1 - ny) * scaledH + oy
 
+        // Front camera mirror correction
         if isMirrored { vx = vSize.width - vx }
 
         return CGPoint(x: vx, y: vy)
