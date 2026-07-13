@@ -49,10 +49,10 @@ async function logSessionVideo(uri: string) {
   } catch {}
 }
 
-const SETUP_INSTRUCTION: Record<ExerciseType, string> = {
-  squat:  'Stand sideways to the camera — full body in frame',
-  curl:   'Face the camera — stand back so both arms are fully in frame',
-  pushup: 'Place your phone on the floor a couple feet to your side, camera facing you. Get in push-up position so your head, shoulders, arms and hips are in view.',
+const SETUP_INFO: Record<ExerciseType, { icon: string; title: string; sub: string }> = {
+  squat:  { icon: 'arrow.left.and.right', title: 'Stand sideways',              sub: 'Full body in frame — ankle to shoulder' },
+  curl:   { icon: 'camera.fill',          title: 'Face the camera',             sub: 'Stand back — both arms and hands in view' },
+  pushup: { icon: 'iphone',              title: 'Phone on the floor, to your side', sub: 'Get in position — full body in frame' },
 };
 
 // ─── Phase type ───────────────────────────────────────────────────────────────
@@ -328,7 +328,21 @@ export default function FormCheckScreen() {
 
             {/* Instruction card */}
             <View style={s.setupCard}>
-              <Text style={s.setupInstruction}>{SETUP_INSTRUCTION[exerciseType]}</Text>
+              <View style={s.setupRow}>
+                <View style={s.setupIconWrap}>
+                  <SymbolView
+                    name={SETUP_INFO[exerciseType].icon as any}
+                    size={16}
+                    tintColor={C.text}
+                    type="monochrome"
+                    style={{ width: 16, height: 16 }}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.setupTitle}>{SETUP_INFO[exerciseType].title}</Text>
+                  <Text style={s.setupSub}>{SETUP_INFO[exerciseType].sub}</Text>
+                </View>
+              </View>
               {setupAllVisible && (
                 <View style={s.progressTrack}>
                   <View
@@ -528,12 +542,34 @@ const s = StyleSheet.create({
     padding:           20,
     gap:               14,
   },
-  setupInstruction: {
-    fontSize:   17,
+  setupRow: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           14,
+  },
+  setupIconWrap: {
+    width:           34,
+    height:          34,
+    borderRadius:    10,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth:     StyleSheet.hairlineWidth,
+    borderColor:     C.border,
+    alignItems:      'center',
+    justifyContent:  'center',
+    flexShrink:      0,
+  },
+  setupTitle: {
+    fontSize:   16,
     fontWeight: '600',
     color:      C.text,
-    textAlign:  'center',
-    lineHeight: 25,
+    lineHeight: 21,
+  },
+  setupSub: {
+    fontSize:   13,
+    fontWeight: '400',
+    color:      C.muted,
+    lineHeight: 18,
+    marginTop:  2,
   },
   progressTrack: {
     height:          4,

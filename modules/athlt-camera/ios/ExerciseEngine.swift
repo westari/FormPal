@@ -99,6 +99,14 @@ final class ExerciseEngine {
     private var lastValidPoseTime: Date = .distantPast
     private let inactivityTimeout: TimeInterval = 2.5
 
+    // ── Form-over-ROM priority threshold ──────────────────────────────────────
+    //
+    // Form checks with priority >= this value override the insufficientROMCue even
+    // when goodROM is false. This handles cases where bad body position distorts the
+    // 2D-projected angle (e.g. elbow drift makes a full curl look shallow on camera).
+    // Curl: elbow_drift=4, lean_back=5 → both override "CURL HIGHER".
+    private static let FORM_OVERRIDE_ROM_PRIORITY: Int = 4
+
     // ── Active side (for bestSide exercises) ──────────────────────────────────
     private var activeSide: Side = .right
 
@@ -432,12 +440,24 @@ final class ExerciseEngine {
         }
 
         let topFormFail = failed.sorted { $0.priority > $1.priority }.first
+        // Checks at priority >= FORM_OVERRIDE_ROM_PRIORITY beat the ROM cue.
+        // Handles drifted-arm curls: 2D projection makes a high curl look shallow,
+        // but elbow_drift (p=4) should win over "CURL HIGHER".
+        let topOverride = failed.filter { $0.priority >= Self.FORM_OVERRIDE_ROM_PRIORITY }
+                                .sorted { $0.priority > $1.priority }
+                                .first
+
         let cue:    String
         let isGood: Bool
 
         if !goodROM {
-            cue    = def.insufficientROMCue
-            isGood = false
+            if let override = topOverride {
+                cue    = override.cue   // position cue beats ROM miss
+                isGood = false
+            } else {
+                cue    = def.insufficientROMCue
+                isGood = false
+            }
         } else if let f = topFormFail {
             cue    = f.cue
             isGood = false
@@ -448,14 +468,16 @@ final class ExerciseEngine {
         if isGood { goodReps += 1 }
 
         let checkLog = def.formChecks.filter(\.enabled).map { ch -> String in
-            let v   = evaluated[ch.id].map { String(format: "%.1f", $0) } ?? "nil"
+            let v   = evaluated[ch.id].map { String(format: "%.3f", $0) } ?? "nil"
             let tag = failed.contains { $0.id == ch.id } ? "FAIL" : "ok"
             return "\(ch.id)=\(v)[\(tag)]"
         }.joined(separator: " ")
 
-        NSLog("[Engine] [%@] Rep #%d peak=%.1f° ROM=%@ cue=%@ %d/%d | %@",
+        // peak uses %g so squat/curl show degrees (e.g. 52.3) and push-up shows
+        // Vision units (e.g. 0.003) without truncation from %.1f
+        NSLog("[Engine] [%@] Rep #%d peak=%g ROM=%@ cue=%@ %d/%d | %@",
               def.id, totalReps, peakAngle, goodROM ? "ok" : "short", cue,
-              totalReps, goodReps, checkLog)
+              goodReps, totalReps, checkLog)
 
         onRepDetected?(RepResult(
             good:         isGood,
