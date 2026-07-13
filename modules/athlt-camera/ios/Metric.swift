@@ -67,7 +67,7 @@ extension Metric {
         switch self {
 
         case let .jointAngle(a, pivot, c):
-            return jointAngle(pose: pose, a: a, b: pivot, c: c)
+            return computeJointAngle(pose: pose, a: a, b: pivot, c: c)
 
         case let .lineVsVertical(from, to):
             return lineAngleFromVertical(pose: pose, from: from, to: to)
@@ -76,23 +76,18 @@ extension Metric {
             return lineAngleFromVertical(pose: pose, from: from, to: to).map { 90.0 - $0 }
 
         case let .verticalGap(upper, lower):
-            // Inline to avoid naming collision with the .verticalGap enum case.
-            guard let pu = pose[upper], pu.confidence >= kMinConf,
-                  let pl = pose[lower], pl.confidence >= kMinConf else { return nil }
-            return Double(pu.y - pl.y)
+            return computeVerticalGap(pose: pose, upper: upper, lower: lower)
 
         case let .normalizedVerticalGap(upper, lower):
-            // Inline verticalGap computation — same naming-collision reason as above.
-            guard let pu = pose[upper], pu.confidence >= kMinConf,
-                  let pl = pose[lower], pl.confidence >= kMinConf,
+            guard let gap = computeVerticalGap(pose: pose, upper: upper, lower: lower),
                   let ref = torsoReference(pose: pose), ref > 0 else { return nil }
-            return Double(pu.y - pl.y) / ref
+            return gap / ref
 
         case let .deviationFromLine(p, a, b):
-            return deviationFromLine(pose: pose, point: p, lineFrom: a, lineTo: b)
+            return computeDeviationFromLine(pose: pose, point: p, lineFrom: a, lineTo: b)
 
         case let .signedDeviationFromLine(p, a, b):
-            return signedDeviationFromLine(pose: pose, point: p, lineFrom: a, lineTo: b)
+            return computeSignedDeviationFromLine(pose: pose, point: p, lineFrom: a, lineTo: b)
 
         case let .distanceRatio(a, b):
             return measureDistanceRatio(pose: pose, a: a, b: b)

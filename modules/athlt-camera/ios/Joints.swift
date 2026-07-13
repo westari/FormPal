@@ -49,7 +49,7 @@ let kMinConf: Float = 0.25
 
 /// Angle at joint B formed by A → B → C, in degrees [0, 180].
 /// Returns nil if any joint falls below confidence threshold.
-func jointAngle(pose: Pose, a: Joint, b: Joint, c: Joint) -> Double? {
+func computeJointAngle(pose: Pose, a: Joint, b: Joint, c: Joint) -> Double? {
     guard
         let pa = pose[a], pa.confidence >= kMinConf,
         let pb = pose[b], pb.confidence >= kMinConf,
@@ -98,7 +98,7 @@ func biLateralLineAngleFromVertical(pose: Pose,
 
 /// Perpendicular deviation of joint P from the infinite line A→B, in Vision units.
 /// Useful for body-sag checks (hip deviation from shoulder–ankle line).
-func deviationFromLine(pose: Pose, point p: Joint, lineFrom a: Joint, lineTo b: Joint) -> Double? {
+func computeDeviationFromLine(pose: Pose, point p: Joint, lineFrom a: Joint, lineTo b: Joint) -> Double? {
     guard
         let pp = pose[p], pp.confidence >= kMinConf,
         let pa = pose[a], pa.confidence >= kMinConf,
@@ -122,7 +122,7 @@ func deviationFromLine(pose: Pose, point p: Joint, lineFrom a: Joint, lineTo b: 
 ///
 /// NSLog signed values on-device to verify sign before setting thresholds:
 ///   look for "[FormCheck] hip_sag=..." in the rep log.
-func signedDeviationFromLine(pose: Pose, point p: Joint, lineFrom a: Joint, lineTo b: Joint) -> Double? {
+func computeSignedDeviationFromLine(pose: Pose, point p: Joint, lineFrom a: Joint, lineTo b: Joint) -> Double? {
     guard
         let pp = pose[p], pp.confidence >= kMinConf,
         let pa = pose[a], pa.confidence >= kMinConf,
@@ -139,7 +139,7 @@ func signedDeviationFromLine(pose: Pose, point p: Joint, lineFrom a: Joint, line
 /// Vertical gap: upper.y - lower.y in Vision normalised units (y=0 bottom, y=1 top).
 /// Positive = upper joint is higher in the frame than lower joint.
 /// Returns nil if either joint is below kMinConf.
-func verticalGap(pose: Pose, upper: Joint, lower: Joint) -> Double? {
+func computeVerticalGap(pose: Pose, upper: Joint, lower: Joint) -> Double? {
     guard
         let pu = pose[upper], pu.confidence >= kMinConf,
         let pl = pose[lower], pl.confidence >= kMinConf
