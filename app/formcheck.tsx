@@ -22,6 +22,7 @@ import {
   addCameraStateListener,
   addErrorListener,
   addSetupStatusListener,
+  addCalibrationStatusListener,
   isNativeModuleLinked,
 } from '../modules/athlt-camera/src/index';
 import type { DebugStatsEvent, RepEvent, ExerciseType } from '../modules/athlt-camera/src/index';
@@ -50,9 +51,10 @@ async function logSessionVideo(uri: string) {
 }
 
 const SETUP_INFO: Record<ExerciseType, { icon: string; title: string; sub: string }> = {
-  squat:  { icon: 'arrow.left.and.right', title: 'Stand sideways',              sub: 'Full body in frame — ankle to shoulder' },
-  curl:   { icon: 'camera.fill',          title: 'Face the camera',             sub: 'Stand back — both arms and hands in view' },
-  pushup: { icon: 'iphone',              title: 'Phone on the floor, to your side', sub: 'Get in position — full body in frame' },
+  squat:  { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame — ankle to shoulder' },
+  curl:   { icon: 'camera.fill',          title: 'Face the camera',                  sub: 'Stand back — both arms and hands in view' },
+  pushup: { icon: 'iphone',               title: 'Phone on the floor, to your side', sub: 'Get in position — full body in frame' },
+  lunge:  { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame — ankle to shoulder' },
 };
 
 // ─── Phase type ───────────────────────────────────────────────────────────────
@@ -71,7 +73,7 @@ export default function FormCheckScreen() {
     returnTo?:          string;
     workoutExerciseId?: string;
   }>();
-  const exerciseType = (['squat', 'curl', 'pushup'].includes(exercise)
+  const exerciseType = (['squat', 'curl', 'pushup', 'lunge'].includes(exercise)
     ? exercise : 'squat') as ExerciseType;
 
   const [phase,    setPhase]    = useState<Phase>('idle');
@@ -84,6 +86,9 @@ export default function FormCheckScreen() {
   const [setupAllVisible,   setSetupAllVisible]   = useState(false);
   const [setupHoldProgress, setSetupHoldProgress] = useState(0);
   const [setupHint,         setSetupHint]         = useState('');
+
+  // ── Calibration state ─────────────────────────────────────────────────────
+  const [calibStatus, setCalibStatus] = useState<{ repsCompleted: number; repsNeeded: number } | null>(null);
 
   const [feedback, setFeedback] = useState<{ key: number; good: boolean; reason: string } | null>(null);
   const feedbackKey    = useRef(0);
@@ -120,6 +125,15 @@ export default function FormCheckScreen() {
 
     const camSub = addCameraStateListener(e => {
       if (mounted && e.running) setPhase(p => (p === 'starting' ? 'setup' : p));
+    });
+
+    const calibSub = addCalibrationStatusListener(event => {
+      if (!mounted) return;
+      if (event.passed) {
+        setCalibStatus(null);
+      } else {
+        setCalibStatus({ repsCompleted: event.repsCompleted, repsNeeded: event.repsNeeded });
+      }
     });
 
     const setupSub = addSetupStatusListener(event => {
@@ -192,6 +206,7 @@ export default function FormCheckScreen() {
       mounted = false;
       errSub.remove();
       camSub.remove();
+      calibSub.remove();
       setupSub.remove();
       if (hintTimer.current)      { clearTimeout(hintTimer.current);      hintTimer.current = null; }
       if (setupDoneTimer.current) { clearTimeout(setupDoneTimer.current); setupDoneTimer.current = null; }
@@ -358,6 +373,26 @@ export default function FormCheckScreen() {
         </View>
       )}
 
+      {/* Calibration overlay — shown during tracking while engine runs CALIBRATION phase */}
+      {isTracking && calibStatus !== null && (
+        <View style={s.calibOverlay} pointerEvents="none">
+          <View style={s.calibCard}>
+            <Text style={s.calibTitle}>Calibrating to you</Text>
+            <Text style={s.calibSub}>
+              Do {calibStatus.repsNeeded} slow full reps
+            </Text>
+            <View style={s.calibDots}>
+              {Array.from({ length: calibStatus.repsNeeded }).map((_, i) => (
+                <View
+                  key={i}
+                  style={[s.calibDot, i < calibStatus.repsCompleted && s.calibDotDone]}
+                />
+              ))}
+            </View>
+          </View>
+        </View>
+      )}
+
       {/* "You're all set!" — brief success pill, no full scrim */}
       {phase === 'setup-done' && (
         <View style={s.setupDoneOverlay} pointerEvents="none">
@@ -380,7 +415,10 @@ export default function FormCheckScreen() {
           <SymbolView name="chevron.left" size={18} tintColor={C.text} type="monochrome" style={{ width: 18, height: 18 }} />
         </GlassButton>
         <Text style={s.title}>
-          {exerciseType === 'curl' ? 'Bicep Curl' : exerciseType === 'pushup' ? 'Push-up' : 'Squat'} Form Check
+          {exerciseType === 'curl' ? 'Bicep Curl'
+            : exerciseType === 'pushup' ? 'Push-up'
+            : exerciseType === 'lunge'  ? 'Lunge'
+            : 'Squat'} Form Check
         </Text>
         <GlassButton circular={40} onPress={handleFlip}>
           <SymbolView name="arrow.triangle.2.circlepath.camera.fill" size={18} tintColor={C.text} type="monochrome" style={{ width: 18, height: 18 }} />
@@ -581,6 +619,50 @@ const s = StyleSheet.create({
     height:          4,
     backgroundColor: C.good,
     borderRadius:    2,
+  },
+
+  // ── Calibration overlay (shown during tracking while engine calibrates) ──
+  calibOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'flex-end',
+    alignItems:     'center',
+    paddingBottom:  160,
+  },
+  calibCard: {
+    backgroundColor: 'rgba(10,11,12,0.92)',
+    borderRadius:    20,
+    borderWidth:     1,
+    borderColor:     'rgba(255,255,255,0.12)',
+    padding:         24,
+    gap:             10,
+    alignItems:      'center',
+    minWidth:        270,
+  },
+  calibTitle: {
+    fontSize:   17,
+    fontWeight: '700',
+    color:      C.text,
+  },
+  calibSub: {
+    fontSize: 13,
+    color:    C.muted,
+  },
+  calibDots: {
+    flexDirection: 'row',
+    gap:           10,
+    marginTop:     4,
+  },
+  calibDot: {
+    width:           14,
+    height:          14,
+    borderRadius:    7,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderWidth:     1,
+    borderColor:     'rgba(255,255,255,0.25)',
+  },
+  calibDotDone: {
+    backgroundColor: C.good,
+    borderColor:     C.good,
   },
 
   // ── "You're all set!" card (no scrim) ────────────────────────────────────

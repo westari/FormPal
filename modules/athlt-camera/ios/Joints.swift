@@ -45,7 +45,7 @@ enum Joint: CaseIterable {
 
 // ─── Geometry helpers ─────────────────────────────────────────────────────────
 
-private let kMinConf: Float = 0.25
+let kMinConf: Float = 0.25
 
 /// Angle at joint B formed by A → B → C, in degrees [0, 180].
 /// Returns nil if any joint falls below confidence threshold.

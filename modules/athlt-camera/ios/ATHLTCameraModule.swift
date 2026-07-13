@@ -116,7 +116,7 @@ public class ATHLTCameraModule: Module {
     public func definition() -> ModuleDefinition {
         Name("ATHLTCamera")
 
-        Events("onRepDetected", "onError", "onCameraState", "onDebugStats", "onSetupStatus")
+        Events("onRepDetected", "onError", "onCameraState", "onDebugStats", "onSetupStatus", "onCalibrationStatus")
 
         View(ATHLTCameraView.self) {
             Prop("isActive") { (_: ATHLTCameraView, _: Bool) in }
@@ -305,6 +305,15 @@ public class ATHLTCameraModule: Module {
                 "holdProgress":     status.holdProgress,
                 "passed":           status.passed,
                 "hint":             status.hint,
+            ])
+        }
+
+        engine.onCalibrationUpdate = { [weak self] status in
+            guard let self else { return }
+            self.sendEvent("onCalibrationStatus", [
+                "repsCompleted": status.repsCompleted,
+                "repsNeeded":    status.repsNeeded,
+                "passed":        status.passed,
             ])
         }
     }

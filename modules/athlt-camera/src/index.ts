@@ -44,6 +44,13 @@ export interface SetupStatusEvent {
   hint:             string;   // "" when joints visible; guidance text when not
 }
 
+/** Emitted during the CALIBRATION phase (if exercise has calibration configured). */
+export interface CalibrationStatusEvent {
+  repsCompleted: number;   // how many calibration reps done so far
+  repsNeeded:    number;   // total needed (e.g. 2)
+  passed:        boolean;  // true once calibration completes
+}
+
 export interface CameraStateEvent {
   running: boolean;
   position: 'front' | 'back';
@@ -107,7 +114,7 @@ export function isModelLoaded(): boolean {
 
 // Extending this list is the only TS change needed when adding a new exercise —
 // the engine, definitions, and registry are all on the Swift side.
-export type ExerciseType = 'squat' | 'curl' | 'pushup';
+export type ExerciseType = 'squat' | 'curl' | 'pushup' | 'lunge';
 
 export async function setExercise(type: ExerciseType): Promise<void> {
   if (!ATHLTCameraNative) return;
@@ -191,6 +198,13 @@ export function addSetupStatusListener(
 ): EventSubscription {
   if (!nativeEmitter) return { remove: () => {} };
   return nativeEmitter.addListener('onSetupStatus', callback);
+}
+
+export function addCalibrationStatusListener(
+  callback: (event: CalibrationStatusEvent) => void
+): EventSubscription {
+  if (!nativeEmitter) return { remove: () => {} };
+  return nativeEmitter.addListener('onCalibrationStatus', callback);
 }
 
 // ─── Native View ──────────────────────────────────────────────────────────────
