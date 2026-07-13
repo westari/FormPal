@@ -76,12 +76,17 @@ extension Metric {
             return lineAngleFromVertical(pose: pose, from: from, to: to).map { 90.0 - $0 }
 
         case let .verticalGap(upper, lower):
-            return verticalGap(pose: pose, upper: upper, lower: lower)
+            // Inline to avoid naming collision with the .verticalGap enum case.
+            guard let pu = pose[upper], pu.confidence >= kMinConf,
+                  let pl = pose[lower], pl.confidence >= kMinConf else { return nil }
+            return Double(pu.y - pl.y)
 
         case let .normalizedVerticalGap(upper, lower):
-            guard let gap = verticalGap(pose: pose, upper: upper, lower: lower),
+            // Inline verticalGap computation — same naming-collision reason as above.
+            guard let pu = pose[upper], pu.confidence >= kMinConf,
+                  let pl = pose[lower], pl.confidence >= kMinConf,
                   let ref = torsoReference(pose: pose), ref > 0 else { return nil }
-            return gap / ref
+            return Double(pu.y - pl.y) / ref
 
         case let .deviationFromLine(p, a, b):
             return deviationFromLine(pose: pose, point: p, lineFrom: a, lineTo: b)
@@ -96,15 +101,18 @@ extension Metric {
             return combine(l.measure(pose: pose), r.measure(pose: pose)) { ($0 + $1) / 2 }
 
         case let .minimum(l, r):
-            return combine(l.measure(pose: pose), r.measure(pose: pose), Swift.min)
+            // Use closure instead of Swift.min function reference — avoids overload
+            // ambiguity with the multi-arg min(_:_:_:rest:) overload in Swift 6.
+            return combine(l.measure(pose: pose), r.measure(pose: pose)) { $0 < $1 ? $0 : $1 }
 
         case let .maximum(l, r):
-            return combine(l.measure(pose: pose), r.measure(pose: pose), Swift.max)
+            return combine(l.measure(pose: pose), r.measure(pose: pose)) { $0 > $1 ? $0 : $1 }
 
         case let .bestSide(left, right, leftJoints, rightJoints):
             let lConf = leftJoints.compactMap  { pose[$0]?.confidence }.reduce(0, +)
             let rConf = rightJoints.compactMap { pose[$0]?.confidence }.reduce(0, +)
-            let (preferred, fallback) = lConf >= rConf ? (left, right) : (right, left)
+            let preferred: Metric  = lConf >= rConf ? left  : right
+            let fallback:  Metric  = lConf >= rConf ? right : left
             return preferred.measure(pose: pose) ?? fallback.measure(pose: pose)
         }
     }
