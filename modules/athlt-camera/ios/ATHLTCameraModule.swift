@@ -14,6 +14,20 @@ extension Notification.Name {
     static let athltSkeletonVisibilityChanged = Notification.Name("com.athlt.camera.skeletonVisibility")
 }
 
+// ─── Sendable wrapper for a locked CVPixelBuffer ──────────────────────────────
+//
+// CVPixelBuffer / CVImageBuffer is a C reference type with no Sendable conformance.
+// @preconcurrency import CoreVideo cannot help because there is nothing to retroact.
+// We wrap it manually and assert @unchecked Sendable — safe here because:
+//   • CVPixelBufferLockBaseAddress is called BEFORE the wrapper is created.
+//   • CVPixelBufferUnlockBaseAddress is called inside the async consumer via defer.
+//   • The lock/unlock pair brackets the entire dispatch; no other thread touches the
+//     buffer between those two calls.
+
+private struct LockedPixelBuffer: @unchecked Sendable {
+    let buffer: CVPixelBuffer
+}
+
 // ─── Shared session holder ─────────────────────────────────────────────────────
 
 final class ATHLTSessionHolder {
@@ -466,18 +480,20 @@ public class ATHLTCameraModule: Module {
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(buffer) else { return }
 
         let ts = CMSampleBufferGetPresentationTimeStamp(buffer)
-        let timestamp: Double = ts.timescale > 0
+        let t: Double = ts.timescale > 0
             ? Double(ts.value) / Double(ts.timescale)
             : CACurrentMediaTime()
 
+        // Lock before handing off to inferenceQueue; unlock inside the async block.
+        // LockedPixelBuffer: @unchecked Sendable wraps the non-Sendable CVPixelBuffer —
+        // safe because the lock/unlock pair brackets the entire dispatch lifetime.
         CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
-        let cap = pixelBuffer
-        let t   = timestamp
+        let locked = LockedPixelBuffer(buffer: pixelBuffer)
 
-        inferenceQueue.async { [weak self, pixelBuffer = cap] in
-            defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
+        inferenceQueue.async { [weak self] in
+            defer { CVPixelBufferUnlockBaseAddress(locked.buffer, .readOnly) }
             guard let self, self.captureSession != nil else { return }
-            self.runPoseDetection(pixelBuffer: pixelBuffer, timestamp: t)
+            self.runPoseDetection(pixelBuffer: locked.buffer, timestamp: t)
         }
     }
 
