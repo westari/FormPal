@@ -124,7 +124,7 @@ public class ATHLTCameraModule: Module {
     public func definition() -> ModuleDefinition {
         Name("ATHLTCamera")
 
-        Events("onRepDetected", "onError", "onCameraState", "onDebugStats", "onSetupStatus", "onCalibrationStatus")
+        Events("onRepDetected", "onError", "onCameraState", "onDebugStats", "onSetupStatus", "onCalibrationStatus", "onDebugLog")
 
         View(ATHLTCameraView.self) {
             Prop("isActive") { (_: ATHLTCameraView, _: Bool) in }
@@ -299,6 +299,16 @@ public class ATHLTCameraModule: Module {
                 "goodReps":   result.goodReps,
                 "timestamp":  Date().timeIntervalSince1970 * 1000.0,
             ])
+            // Per-rep debug log — emitted as onDebugLog so JS/Metro can display it on Windows.
+            let formEntries = result.formValues.sorted(by: { $0.key < $1.key })
+                .map { "\($0.key)=\(String(format: "%.3f", $0.value))" }
+                .joined(separator: "  ")
+            let repLog =
+                "[REP #\(result.totalReps)] \(result.good ? "GOOD ✓" : "BAD ✗")" +
+                "  peak=\(String(format: "%.1f", result.primaryAngle))°\n" +
+                "  \(formEntries.isEmpty ? "(no form checks)" : formEntries)\n" +
+                "  cue=\(result.cue)"
+            self.sendEvent("onDebugLog", ["message": repLog])
             // 3D experiment: dispatch on background queue — zero effect on live path
             if self.enable3DExperiment, let buf = self.peakFrameBuffer {
                 let capturedBuf      = buf
@@ -742,10 +752,12 @@ public class ATHLTCameraModule: Module {
                 "  3D request duration = \(String(format: "%.0f", elapsedMs))ms\n" +
                 "  2D verdict = \"\(verdict2D)\""
             NSLog("%@", msg)
+            self.sendEvent("onDebugLog", ["message": msg])
 
         } catch {
-            NSLog("[3D-EXPERIMENT] exercise=%@ rep=#%d joint extraction failed: %@",
-                  exercise, repNumber, error.localizedDescription)
+            let errMsg = "[3D-EXPERIMENT] exercise=\(exercise) rep=#\(repNumber) joint extraction failed: \(error.localizedDescription)"
+            NSLog("%@", errMsg)
+            self.sendEvent("onDebugLog", ["message": errMsg])
         }
     }
 

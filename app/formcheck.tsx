@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, Animated,
+  View, Text, StyleSheet, Animated, Pressable, ScrollView, Share,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,6 +23,7 @@ import {
   addErrorListener,
   addSetupStatusListener,
   addCalibrationStatusListener,
+  addDebugLogListener,
   isNativeModuleLinked,
 } from '../modules/athlt-camera/src/index';
 import type { DebugStatsEvent, RepEvent, ExerciseType } from '../modules/athlt-camera/src/index';
@@ -57,6 +58,9 @@ const SETUP_INFO: Record<ExerciseType, { icon: string; title: string; sub: strin
   lunge:         { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame — ankle to shoulder' },
   shoulderPress: { icon: 'camera.fill',          title: 'Face the camera',                  sub: 'Stand back — arms and shoulders in frame' },
 };
+
+// ─── Debug log panel — set false to hide without removing code ────────────────
+const DEBUG_LOG_ENABLED = true;
 
 // ─── Phase type ───────────────────────────────────────────────────────────────
 type Phase = 'idle' | 'starting' | 'setup' | 'setup-done' | 'tracking' | 'stopping';
@@ -109,6 +113,22 @@ export default function FormCheckScreen() {
   // Timer refs
   const hintTimer      = useRef<ReturnType<typeof setTimeout> | null>(null);
   const setupDoneTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Debug log panel state
+  const [debugLogs,    setDebugLogs]    = useState<string[]>([]);
+  const [showDebugLog, setShowDebugLog] = useState(true);
+  const debugScrollRef = useRef<ScrollView | null>(null);
+
+  // ── Debug log listener ────────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (!DEBUG_LOG_ENABLED || notLinked) return;
+    const sub = addDebugLogListener(e => {
+      console.log('[DEBUG]', e.message);
+      setDebugLogs(prev => [...prev.slice(-19), e.message]);
+    });
+    return () => sub.remove();
+  }, []);
 
   // ── Session lifecycle ──────────────────────────────────────────────────────
 
@@ -461,6 +481,53 @@ export default function FormCheckScreen() {
         </View>
       )}
 
+      {/* Debug log panel — shows onDebugLog events (rep metrics + 3D experiment) */}
+      {DEBUG_LOG_ENABLED && (
+        <>
+          {/* Re-open button when panel is hidden */}
+          {!showDebugLog && debugLogs.length > 0 && (
+            <Pressable
+              style={[s.dbgToggle, { top: insets.top + 58 }]}
+              onPress={() => setShowDebugLog(true)}
+            >
+              <Text style={s.dbgToggleTxt}>DBG</Text>
+            </Pressable>
+          )}
+
+          {/* Log panel */}
+          {showDebugLog && debugLogs.length > 0 && (
+            <View style={[s.dbgPanel, { top: insets.top + 58 }]}>
+              {/* Header row */}
+              <View style={s.dbgHeader}>
+                <Text style={s.dbgHeaderTxt}>DEBUG LOG</Text>
+                <Pressable
+                  onPress={() =>
+                    Share.share({ message: debugLogs.join('\n\n---\n\n') })
+                  }
+                >
+                  <Text style={s.dbgShare}>Share</Text>
+                </Pressable>
+                <Pressable onPress={() => setShowDebugLog(false)}>
+                  <Text style={s.dbgClose}>✕</Text>
+                </Pressable>
+              </View>
+              {/* Scrollable log */}
+              <ScrollView
+                ref={debugScrollRef}
+                style={s.dbgScroll}
+                onContentSizeChange={() =>
+                  debugScrollRef.current?.scrollToEnd({ animated: false })
+                }
+              >
+                {debugLogs.map((msg, i) => (
+                  <Text key={i} style={s.dbgMsg}>{msg}</Text>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+        </>
+      )}
+
       {/* Bottom controls */}
       <View style={[s.bottomBar, { paddingBottom: Math.max(insets.bottom + 16, 32) }]}>
         {phase === 'starting' && <Text style={s.hint}>Starting camera…</Text>}
@@ -665,6 +732,72 @@ const s = StyleSheet.create({
   calibDotDone: {
     backgroundColor: C.good,
     borderColor:     C.good,
+  },
+
+  // ── Debug log panel ───────────────────────────────────────────────────────
+  dbgPanel: {
+    position:        'absolute',
+    right:           8,
+    width:           220,
+    maxHeight:       260,
+    backgroundColor: 'rgba(0,0,0,0.84)',
+    borderRadius:    10,
+    borderWidth:     StyleSheet.hairlineWidth,
+    borderColor:     'rgba(255,255,255,0.15)',
+    overflow:        'hidden',
+  },
+  dbgHeader: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    paddingHorizontal: 8,
+    paddingVertical:   5,
+    gap:               6,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.10)',
+  },
+  dbgHeaderTxt: {
+    flex:          1,
+    fontSize:      9,
+    fontWeight:    '700',
+    color:         '#9A9AA2',
+    letterSpacing: 0.8,
+  },
+  dbgShare: {
+    fontSize:      10,
+    color:         '#67CEFF',
+    paddingHorizontal: 3,
+  },
+  dbgClose: {
+    fontSize:      11,
+    color:         '#9A9AA2',
+    paddingHorizontal: 3,
+  },
+  dbgScroll: {
+    maxHeight: 235,
+    padding:   6,
+  },
+  dbgMsg: {
+    fontFamily: 'Menlo',
+    fontSize:   8.5,
+    color:      '#C8C8CC',
+    lineHeight: 13,
+    marginBottom: 5,
+  },
+  dbgToggle: {
+    position:        'absolute',
+    right:           8,
+    backgroundColor: 'rgba(0,0,0,0.60)',
+    borderRadius:    6,
+    paddingHorizontal: 6,
+    paddingVertical:   3,
+    borderWidth:     StyleSheet.hairlineWidth,
+    borderColor:     'rgba(255,255,255,0.15)',
+  },
+  dbgToggleTxt: {
+    fontSize:      9,
+    fontWeight:    '700',
+    color:         '#9A9AA2',
+    letterSpacing: 0.5,
   },
 
   // ── "You're all set!" card (no scrim) ────────────────────────────────────

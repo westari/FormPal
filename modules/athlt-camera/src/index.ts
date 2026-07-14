@@ -207,6 +207,18 @@ export function addCalibrationStatusListener(
   return nativeEmitter.addListener('onCalibrationStatus', callback);
 }
 
+/** Emitted after each rep (form values) and after each 3D experiment run. */
+export interface DebugLogEvent {
+  message: string;
+}
+
+export function addDebugLogListener(
+  callback: (event: DebugLogEvent) => void
+): EventSubscription {
+  if (!nativeEmitter) return { remove: () => {} };
+  return nativeEmitter.addListener('onDebugLog', callback);
+}
+
 // ─── Native View ──────────────────────────────────────────────────────────────
 
 export interface ATHLTCameraViewProps {
