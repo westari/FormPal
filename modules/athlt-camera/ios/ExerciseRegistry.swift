@@ -123,7 +123,16 @@ enum ExerciseRegistry {
             exitFraction:  0.25
         ),
 
-        minRepInterval: 0.5
+        minRepInterval: 0.5,
+
+        planarityChecks: [
+            // Squat is side-on: thigh and shin must appear nearly full-length.
+            // Fails when user faces camera instead of turning sideways.
+            PlanarityCheck(id: "thigh_l", jointA: .leftHip,  jointB: .leftKnee,
+                           minRatio: 0.75, cue: "TURN SIDE-ON", fallbackReferenceRatio: 0.80),
+            PlanarityCheck(id: "shin_l",  jointA: .leftKnee, jointB: .leftAnkle,
+                           minRatio: 0.75, cue: "TURN SIDE-ON", fallbackReferenceRatio: 0.72),
+        ]
     )
 
     // ── CURL ──────────────────────────────────────────────────────────────────
@@ -235,7 +244,17 @@ enum ExerciseRegistry {
             exitFraction:  0.25
         ),
 
-        minRepInterval: 0.5
+        minRepInterval: 0.5,
+
+        planarityChecks: [
+            // Curl is front-facing: forearm must appear near full-length.
+            // Fails when elbow drifts toward/away from camera (arm goes out-of-plane).
+            // Check both arms — repMetric uses .minimum of left/right, so either can be measured.
+            PlanarityCheck(id: "forearm_l", jointA: .leftElbow,  jointB: .leftWrist,
+                           minRatio: 0.75, cue: "KEEP ELBOW IN", fallbackReferenceRatio: 0.56),
+            PlanarityCheck(id: "forearm_r", jointA: .rightElbow, jointB: .rightWrist,
+                           minRatio: 0.75, cue: "KEEP ELBOW IN", fallbackReferenceRatio: 0.56),
+        ]
     )
 
     // ── PUSH-UP ───────────────────────────────────────────────────────────────
@@ -335,7 +354,15 @@ enum ExerciseRegistry {
 
         calibration: nil,   // body-relative thresholds are stable across users and camera distances
 
-        minRepInterval: 0.8
+        minRepInterval: 0.8,
+
+        planarityChecks: [
+            // Push-up is side-on: upper arm check disabled until tuned from real data.
+            // Body-relative metrics already handle orientation, so this gate is low-priority.
+            PlanarityCheck(id: "uarm_l", jointA: .leftShoulder, jointB: .leftElbow,
+                           minRatio: 0.75, cue: "TURN SIDE-ON", fallbackReferenceRatio: 0.64,
+                           enabled: false),
+        ]
     )
 
     // ── LUNGE ─────────────────────────────────────────────────────────────────
@@ -426,7 +453,15 @@ enum ExerciseRegistry {
             exitFraction:  0.25
         ),
 
-        minRepInterval: 0.5
+        minRepInterval: 0.5,
+
+        planarityChecks: [
+            // Lunge is side-on: same thigh/shin check as squat.
+            PlanarityCheck(id: "thigh_l", jointA: .leftHip,  jointB: .leftKnee,
+                           minRatio: 0.75, cue: "TURN SIDE-ON", fallbackReferenceRatio: 0.80),
+            PlanarityCheck(id: "shin_l",  jointA: .leftKnee, jointB: .leftAnkle,
+                           minRatio: 0.75, cue: "TURN SIDE-ON", fallbackReferenceRatio: 0.72),
+        ]
     )
 
     // ── SHOULDER PRESS ────────────────────────────────────────────────────────
@@ -545,6 +580,15 @@ enum ExerciseRegistry {
             exitFraction:  0.25
         ),
 
-        minRepInterval: 0.5
+        minRepInterval: 0.5,
+
+        planarityChecks: [
+            // Shoulder press: upper arm both sides must be in-plane.
+            // Fails when user stands at an angle to the camera instead of facing it.
+            PlanarityCheck(id: "uarm_l", jointA: .leftShoulder,  jointB: .leftElbow,
+                           minRatio: 0.75, cue: "TURN SIDE-ON", fallbackReferenceRatio: 0.64),
+            PlanarityCheck(id: "uarm_r", jointA: .rightShoulder, jointB: .rightElbow,
+                           minRatio: 0.75, cue: "TURN SIDE-ON", fallbackReferenceRatio: 0.64),
+        ]
     )
 }

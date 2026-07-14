@@ -54,6 +54,12 @@ indirect enum Metric {
     /// Body-scale normalised: 0.30 = "30% of torso height".
     case distanceRatio(a: Joint, b: Joint)
 
+    /// 2D image distance between `jointA` and `jointB`, normalised by the torso reference
+    /// (shoulder→hip). Semantically identical to distanceRatio but reserved exclusively for
+    /// the foreshortening gate: the value is near its calibrated maximum when the limb is
+    /// in-plane, and shrinks when the limb points toward or away from the camera.
+    case segmentLengthRatio(jointA: Joint, jointB: Joint)
+
     // ── Combinators ──────────────────────────────────────────────────────────────
 
     /// Average of two metrics. Falls back to whichever is non-nil if one side is missing.
@@ -124,6 +130,9 @@ extension Metric {
             return computeSignedDeviationFromLine(pose: pose, point: p, lineFrom: a, lineTo: b)
 
         case let .distanceRatio(a, b):
+            return measureDistanceRatio(pose: pose, a: a, b: b)
+
+        case let .segmentLengthRatio(a, b):
             return measureDistanceRatio(pose: pose, a: a, b: b)
 
         case let .average(l, r):

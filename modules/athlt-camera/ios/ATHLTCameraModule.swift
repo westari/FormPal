@@ -4,8 +4,6 @@ import Vision
 @preconcurrency import CoreMedia
 @preconcurrency import CoreVideo
 import UIKit
-import simd
-
 // ─── Notification ─────────────────────────────────────────────────────────────
 
 extension Notification.Name {
@@ -98,6 +96,7 @@ public class ATHLTCameraModule: Module {
     private var lastDebugAngle:    Double           = 180.0
     private var lastDebugFormVals: [String: Double] = [:]
     private var lastDebugReady:    Bool             = false
+    private var lastOutOfPlaneCue: String?          = nil
 
     // MARK: – Skeleton overlay
     private var isSkeletonVisible = true
@@ -111,13 +110,6 @@ public class ATHLTCameraModule: Module {
 
     // MARK: – Recording / stopTracking handshake
     private var pendingStopPromise: Promise?
-
-    // MARK: – 3D experiment (silent background; NSLog only; no user-facing effect)
-    // Set enable3DExperiment = false to disable without removing any other code.
-    private let enable3DExperiment     = true
-    private var currentFrameBufferRef: CVPixelBuffer? = nil  // live pool buffer, set/cleared per-frame on inferenceQueue
-    private var peakFrameBuffer:       CVPixelBuffer? = nil  // deep-copied at each new rep peak, owned by us
-    private var peakFrame2DAngle:      Double         = 0.0
 
     // MARK: – Module definition ─────────────────────────────────────────────────
 
@@ -161,8 +153,6 @@ public class ATHLTCameraModule: Module {
                     self.totalFramesAnalyzed   = 0
                     self.personDetected        = false
                     self.lastDebugStatsTime    = 0.0
-                    self.peakFrameBuffer       = nil
-                    self.currentFrameBufferRef = nil
                     // If stopTracking() was never called (e.g. back button during
                     // tracking), resolve its dangling promise now so nothing leaks.
                     if let p = self.pendingStopPromise {
@@ -307,31 +297,9 @@ public class ATHLTCameraModule: Module {
                 "[REP #\(result.totalReps)] \(result.good ? "GOOD ✓" : "BAD ✗")" +
                 "  peak=\(String(format: "%.1f", result.primaryAngle))°\n" +
                 "  \(formEntries.isEmpty ? "(no form checks)" : formEntries)\n" +
+                "  \(result.planarityLog)\n" +
                 "  cue=\(result.cue)"
             self.sendEvent("onDebugLog", ["message": repLog])
-            // 3D experiment: dispatch on background queue — zero effect on live path
-            if self.enable3DExperiment, let buf = self.peakFrameBuffer {
-                let capturedBuf      = buf
-                let capturedAngle    = self.peakFrame2DAngle
-                let capturedExercise = self.currentExercise
-                let capturedRepNum   = result.totalReps
-                let capturedCue      = result.cue
-                self.peakFrameBuffer = nil
-                DispatchQueue.global(qos: .background).async {
-                    self.run3DAnalysis(buffer: capturedBuf,
-                                       exercise: capturedExercise,
-                                       repNumber: capturedRepNum,
-                                       angle2DAtPeak: capturedAngle,
-                                       verdict2D: capturedCue)
-                }
-            }
-        }
-
-        engine.onNewPeakDetected = { [weak self] peakAngle in
-            guard let self, self.enable3DExperiment else { return }
-            guard let src = self.currentFrameBufferRef else { return }
-            self.peakFrameBuffer  = self.deepCopyPixelBuffer(src)
-            self.peakFrame2DAngle = peakAngle
         }
 
         engine.onDebugStats = { [weak self] stats in
@@ -339,6 +307,7 @@ public class ATHLTCameraModule: Module {
             self.lastDebugAngle    = stats.primaryAngle
             self.lastDebugFormVals = stats.formMetrics
             self.lastDebugReady    = stats.isReady
+            self.lastOutOfPlaneCue = stats.outOfPlaneCue
         }
 
         engine.onSetupUpdate = { [weak self] status in
@@ -358,6 +327,12 @@ public class ATHLTCameraModule: Module {
                 "repsNeeded":    status.repsNeeded,
                 "passed":        status.passed,
             ])
+            if status.passed, !self.engine.calibratedSegmentRefs.isEmpty {
+                let segLog = self.engine.calibratedSegmentRefs.sorted { $0.key < $1.key }
+                    .map { "\($0.key)=\(String(format: "%.3f", $0.value))" }
+                    .joined(separator: "  ")
+                self.sendEvent("onDebugLog", ["message": "[CALIB DONE] Planarity refs: \(segLog)"])
+            }
         }
     }
 
@@ -589,10 +564,7 @@ public class ATHLTCameraModule: Module {
         let obs  = results.max(by: { $0.confidence < $1.confidence }) ?? results[0]
         let pose = extractPose(obs)
 
-        // Stash current buffer so onNewPeakDetected (fired synchronously inside ingest) can deep-copy it.
-        currentFrameBufferRef = pixelBuffer
         engine.ingest(pose: pose, timestamp: date)
-        currentFrameBufferRef = nil  // clear immediately — never outlive this call
         maybeEmitDebugStats()
 
         if isSkeletonVisible {
@@ -616,151 +588,6 @@ public class ATHLTCameraModule: Module {
         return pose
     }
 
-    // MARK: – 3D experiment helpers ───────────────────────────────────────────
-
-    /// Deep-copy a (locked) pool CVPixelBuffer into a fresh allocation we own.
-    /// Supports both packed (BGRA) and planar (YUV) formats.
-    private func deepCopyPixelBuffer(_ src: CVPixelBuffer) -> CVPixelBuffer? {
-        let w   = CVPixelBufferGetWidth(src)
-        let h   = CVPixelBufferGetHeight(src)
-        let fmt = CVPixelBufferGetPixelFormatType(src)
-
-        var copy: CVPixelBuffer?
-        guard CVPixelBufferCreate(kCFAllocatorDefault, w, h, fmt, nil, &copy) == kCVReturnSuccess,
-              let dst = copy else { return nil }
-
-        CVPixelBufferLockBaseAddress(src, .readOnly)
-        CVPixelBufferLockBaseAddress(dst, [])
-        defer {
-            CVPixelBufferUnlockBaseAddress(dst, [])
-            CVPixelBufferUnlockBaseAddress(src, .readOnly)
-        }
-
-        let planeCount = CVPixelBufferGetPlaneCount(src)
-        if planeCount == 0 {
-            guard let srcBase = CVPixelBufferGetBaseAddress(src),
-                  let dstBase = CVPixelBufferGetBaseAddress(dst) else { return nil }
-            let srcStride = CVPixelBufferGetBytesPerRow(src)
-            let dstStride = CVPixelBufferGetBytesPerRow(dst)
-            for row in 0..<h {
-                memcpy(dstBase.advanced(by: row * dstStride),
-                       srcBase.advanced(by: row * srcStride),
-                       min(srcStride, dstStride))
-            }
-        } else {
-            for plane in 0..<planeCount {
-                guard let srcBase = CVPixelBufferGetBaseAddressOfPlane(src, plane),
-                      let dstBase = CVPixelBufferGetBaseAddressOfPlane(dst, plane) else { continue }
-                let ph        = CVPixelBufferGetHeightOfPlane(src, plane)
-                let srcStride = CVPixelBufferGetBytesPerRowOfPlane(src, plane)
-                let dstStride = CVPixelBufferGetBytesPerRowOfPlane(dst, plane)
-                for row in 0..<ph {
-                    memcpy(dstBase.advanced(by: row * dstStride),
-                           srcBase.advanced(by: row * srcStride),
-                           min(srcStride, dstStride))
-                }
-            }
-        }
-        return dst
-    }
-
-    /// Run VNDetectHumanBodyPose3DRequest on a saved peak frame and NSLog the comparison.
-    /// Runs on a background queue; has zero effect on rep counting or UI.
-    private func run3DAnalysis(buffer: CVPixelBuffer,
-                                exercise: String,
-                                repNumber: Int,
-                                angle2DAtPeak: Double,
-                                verdict2D: String) {
-        guard #available(iOS 17.0, *) else {
-            NSLog("[3D-EXPERIMENT] iOS < 17 — 3D request not available")
-            return
-        }
-
-        let start   = CACurrentMediaTime()
-        let request = VNDetectHumanBodyPose3DRequest()
-        let handler = VNImageRequestHandler(cvPixelBuffer: buffer, orientation: .up, options: [:])
-
-        do { try handler.perform([request]) } catch {
-            NSLog("[3D-EXPERIMENT] exercise=%@ rep=#%d request error: %@",
-                  exercise, repNumber, error.localizedDescription)
-            return
-        }
-
-        guard let obs = request.results?.first else {
-            NSLog("[3D-EXPERIMENT] exercise=%@ rep=#%d — no 3D body detected", exercise, repNumber)
-            return
-        }
-
-        let elapsedMs = (CACurrentMediaTime() - start) * 1000.0
-
-        // Map exercise → (proximal, midpoint, distal) joint triple for primary angle
-        typealias JN = VNHumanBodyPose3DObservation.JointName
-        let triple: (JN, JN, JN)?
-        switch exercise {
-        case "curl", "pushup", "shoulderPress":
-            triple = (.leftShoulder, .leftElbow, .leftWrist)
-        case "squat", "lunge":
-            triple = (.leftHip, .leftKnee, .leftAnkle)
-        default:
-            triple = nil
-        }
-
-        guard let (jA, jB, jC) = triple else {
-            NSLog("[3D-EXPERIMENT] exercise=%@ — no joint mapping defined", exercise)
-            return
-        }
-
-        // JointName.rawValue → VNRecognizedPointKey (not CVarArg).
-        // Pull the underlying String now so nothing non-CVarArg ever enters a format call.
-        let nameA = jA.rawValue.rawValue
-        let nameB = jB.rawValue.rawValue
-        let nameC = jC.rawValue.rawValue
-
-        do {
-            let pA = try obs.recognizedPoint(jA)
-            let pB = try obs.recognizedPoint(jB)
-            let pC = try obs.recognizedPoint(jC)
-
-            // Extract world-space position from the 4×4 transform (translation = column 3)
-            let posA = simd_float3(pA.position.columns.3.x, pA.position.columns.3.y, pA.position.columns.3.z)
-            let posB = simd_float3(pB.position.columns.3.x, pB.position.columns.3.y, pB.position.columns.3.z)
-            let posC = simd_float3(pC.position.columns.3.x, pC.position.columns.3.y, pC.position.columns.3.z)
-
-            let vBA = posA - posB
-            let vBC = posC - posB
-            guard simd_length(vBA) > 1e-5, simd_length(vBC) > 1e-5 else {
-                NSLog("[3D-EXPERIMENT] exercise=%@ rep=#%d — degenerate 3D joint positions", exercise, repNumber)
-                return
-            }
-
-            let cosTheta = simd_dot(simd_normalize(vBA), simd_normalize(vBC))
-            let angle3D  = acos(max(-1.0, min(1.0, Double(cosTheta)))) * 180.0 / .pi
-
-            // Build entire message via Swift interpolation — no non-CVarArg types in varargs.
-            // VNHumanBodyRecognizedPoint3D has no .confidence; log positions + bodyHeight instead.
-            func fmt3(_ v: Float) -> String { String(format: "%.3f", v) }
-            let posLine = "\(nameA)=(\(fmt3(posA.x)),\(fmt3(posA.y)),\(fmt3(posA.z)))" +
-                         "  \(nameB)=(\(fmt3(posB.x)),\(fmt3(posB.y)),\(fmt3(posB.z)))" +
-                         "  \(nameC)=(\(fmt3(posC.x)),\(fmt3(posC.y)),\(fmt3(posC.z)))"
-            let msg =
-                "[3D-EXPERIMENT] exercise=\(exercise) rep=#\(repNumber)\n" +
-                "  2D primary angle at peak = \(String(format: "%.1f", angle2DAtPeak))°\n" +
-                "  3D primary angle at peak = \(String(format: "%.1f", angle3D))°" +
-                    " (delta = \(String(format: "%+.1f", angle3D - angle2DAtPeak))°)\n" +
-                "  3D positions m: \(posLine)\n" +
-                "  3D body height est = \(String(format: "%.2f", obs.bodyHeight))m\n" +
-                "  3D request duration = \(String(format: "%.0f", elapsedMs))ms\n" +
-                "  2D verdict = \"\(verdict2D)\""
-            NSLog("%@", msg)
-            self.sendEvent("onDebugLog", ["message": msg])
-
-        } catch {
-            let errMsg = "[3D-EXPERIMENT] exercise=\(exercise) rep=#\(repNumber) joint extraction failed: \(error.localizedDescription)"
-            NSLog("%@", errMsg)
-            self.sendEvent("onDebugLog", ["message": errMsg])
-        }
-    }
-
     // MARK: – Debug stats (throttled to ~1 fps) ───────────────────────────────
 
     private func maybeEmitDebugStats() {
@@ -772,6 +599,7 @@ public class ATHLTCameraModule: Module {
             "personDetected":      personDetected,
             "kneeAngle":           lastDebugAngle,
             "backAngle":           lastDebugFormVals["back_lean"] ?? 0.0,
+            "outOfPlaneCue":       lastOutOfPlaneCue ?? "",
             "ready":               lastDebugReady,
             "phase":               lastDebugReady ? "active" : "waiting",
             "reps":                engine.totalReps,

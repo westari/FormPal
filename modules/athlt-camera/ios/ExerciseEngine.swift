@@ -3,12 +3,14 @@ import Foundation
 // ─── Rep result ───────────────────────────────────────────────────────────────
 
 struct RepResult {
-    let good:         Bool
-    let cue:          String
-    let primaryAngle: Double
-    let totalReps:    Int
-    let goodReps:     Int
-    let formValues:   [String: Double]
+    let good:            Bool
+    let cue:             String
+    let primaryAngle:    Double
+    let totalReps:       Int
+    let goodReps:        Int
+    let formValues:      [String: Double]
+    let planarityLog:    String   // one-liner: ratio/reference/pass per check
+    let planarityPassed: Bool
 }
 
 // ─── Setup status (emitted during SETUP phase) ────────────────────────────────
@@ -31,10 +33,11 @@ struct CalibrationStatus {
 // ─── Debug stats (emitted every frame in ACTIVE phase) ───────────────────────
 
 struct EngineDebugStats {
-    let primaryAngle: Double
-    let phase:        String
-    let isReady:      Bool
-    let formMetrics:  [String: Double]
+    let primaryAngle:  Double
+    let phase:         String
+    let isReady:       Bool
+    let formMetrics:   [String: Double]
+    let outOfPlaneCue: String?   // nil = in-plane; non-nil = foreshortening hint
 }
 
 // ─── Internal phases ──────────────────────────────────────────────────────────
@@ -134,6 +137,12 @@ final class ExerciseEngine {
     private var accumMin:    [String: Double] = [:]
     private var atBottomVal: [String: Double] = [:]
 
+    // ── Planarity / foreshortening gate ───────────────────────────────────────
+    // calibratedSegmentRefs: max segmentLengthRatio per check learned during calibration.
+    // planarityMinRatios: minimum ratio observed during the current rep (most foreshortened).
+    private(set) var calibratedSegmentRefs: [String: Double] = [:]
+    private var planarityMinRatios:         [String: Double] = [:]
+
     // ── Debounce / inactivity ─────────────────────────────────────────────────
     private var lastRepTime:       Date = .distantPast
     private var lastValidPoseTime: Date = .distantPast
@@ -147,8 +156,6 @@ final class ExerciseEngine {
     var onDebugStats:        ((EngineDebugStats) -> Void)?
     var onSetupUpdate:       ((SetupStatus)      -> Void)?
     var onCalibrationUpdate: ((CalibrationStatus) -> Void)?
-    var onNewPeakDetected:   ((Double)           -> Void)?  // fires each time repMinAngle improves; arg = new peak metric
-
     // ─────────────────────────────────────────────────────────────────────────
 
     init(definition: ExerciseDefinition) {
@@ -204,14 +211,14 @@ final class ExerciseEngine {
         case .setup:
             runSetupCheck(pose: pose, timestamp: timestamp)
             onDebugStats?(EngineDebugStats(primaryAngle: angle, phase: "setup",
-                                           isReady: false, formMetrics: [:]))
+                                           isReady: false, formMetrics: [:], outOfPlaneCue: nil))
             return
 
         case .calibration:
             lastValidPoseTime = timestamp
             runCalibration(pose: pose, angle: angle, timestamp: timestamp)
             onDebugStats?(EngineDebugStats(primaryAngle: angle, phase: "calibration",
-                                           isReady: false, formMetrics: [:]))
+                                           isReady: false, formMetrics: [:], outOfPlaneCue: nil))
             return
 
         case .active:
@@ -224,9 +231,11 @@ final class ExerciseEngine {
         if !isReady { updateReadyGate(pose: pose, angle: angle, timestamp: timestamp) }
         if isReady  { runStateMachine(pose: pose, angle: angle, timestamp: timestamp) }
 
-        let snapshot = currentMetricSnapshot(pose: pose)
+        let snapshot      = currentMetricSnapshot(pose: pose)
+        let outOfPlaneCue = isReady ? currentOutOfPlaneCue(pose: pose) : nil
         onDebugStats?(EngineDebugStats(primaryAngle: angle, phase: phaseLabel(),
-                                       isReady: isReady, formMetrics: snapshot))
+                                       isReady: isReady, formMetrics: snapshot,
+                                       outOfPlaneCue: outOfPlaneCue))
     }
 
     func notePersonMissing(timestamp: Date) {
@@ -376,6 +385,14 @@ final class ExerciseEngine {
     private func runCalibration(pose: Pose, angle: Double, timestamp: Date) {
         guard let config = def.calibration else { return }
 
+        // Track max segment ratio throughout calibration — max = limb most in-plane = reference.
+        for check in def.planarityChecks where check.enabled {
+            if let v = Metric.segmentLengthRatio(jointA: check.jointA, jointB: check.jointB)
+                             .measure(pose: pose) {
+                calibratedSegmentRefs[check.id] = max(calibratedSegmentRefs[check.id] ?? 0, v)
+            }
+        }
+
         if !calibInRep {
             calibRestBuf.append(angle)
             if calibRestBuf.count > 40 { calibRestBuf.removeFirst() }
@@ -440,6 +457,13 @@ final class ExerciseEngine {
               def.id, avgRest, avgPeak, range,
               calibDerivedEnter!, calibDerivedExit!, def.goodROMThreshold)
 
+        if !calibratedSegmentRefs.isEmpty {
+            let segLog = calibratedSegmentRefs.sorted { $0.key < $1.key }
+                .map { "\($0.key)=\(String(format: "%.3f", $0.value))" }
+                .joined(separator: "  ")
+            NSLog("[Engine] [%@] Calib planarity refs: %@", def.id, segLog)
+        }
+
         enginePhase = .active
         onCalibrationUpdate?(CalibrationStatus(repsCompleted: calibRepCount,
                                                repsNeeded: config.repsNeeded,
@@ -453,8 +477,9 @@ final class ExerciseEngine {
         calibPeakAngles = []
         calibRepCount   = 0
         if !keepDerived {
-            calibDerivedEnter = nil
-            calibDerivedExit  = nil
+            calibDerivedEnter   = nil
+            calibDerivedExit    = nil
+            calibratedSegmentRefs = [:]
         }
     }
 
@@ -501,7 +526,6 @@ final class ExerciseEngine {
             if angle < repMinAngle {
                 repMinAngle = angle
                 snapshotAtBottom(pose: pose)
-                onNewPeakDetected?(angle)
             }
             if angle > effectiveExitThreshold {
                 guard timestamp.timeIntervalSince(lastRepTime) >= def.minRepInterval else {
@@ -526,7 +550,42 @@ final class ExerciseEngine {
             NSLog("[Engine] [%@] Rep #%d — invalid data (low joint confidence)", def.id, totalReps)
             onRepDetected?(RepResult(good: false, cue: "ADJUST POSITION",
                                      primaryAngle: peakAngle, totalReps: totalReps,
-                                     goodReps: goodReps, formValues: [:]))
+                                     goodReps: goodReps, formValues: [:],
+                                     planarityLog: "planarity=n/a", planarityPassed: false))
+            return
+        }
+
+        // ── Planarity gate ────────────────────────────────────────────────────────
+        // If any segment was foreshortened during this rep the 2D angles are unreliable.
+        // Suppress ROM verdict and GOOD status; emit the planarity cue instead.
+        let enabledPlanarity = def.planarityChecks.filter { $0.enabled }
+        var planarityFailCue: String? = nil
+        var planParts: [String] = []
+
+        for check in enabledPlanarity {
+            let minR  = planarityMinRatios[check.id] ?? 999
+            let ref   = calibratedSegmentRefs[check.id] ?? check.fallbackReferenceRatio
+            let thr   = check.minRatio * ref
+            let pass  = minR >= thr
+            planParts.append(
+                "\(check.id)=\(String(format: "%.3f", minR))" +
+                "(ref=\(String(format: "%.3f", ref)) thr=\(String(format: "%.3f", thr)) \(pass ? "OK" : "FAIL"))"
+            )
+            if !pass && planarityFailCue == nil { planarityFailCue = check.cue }
+        }
+
+        let planarityPassed = planarityFailCue == nil
+        let planDetail = planParts.isEmpty ? "n/a" : planParts.joined(separator: "  ")
+        let planarityLog = (planarityPassed ? "planarity=PASS" : "planarity=FAIL") + "  " + planDetail
+
+        if let planCue = planarityFailCue {
+            NSLog("[Engine] [%@] Rep #%d PLANARITY FAIL — cue=%@ %@",
+                  def.id, totalReps, planCue, planDetail)
+            onRepDetected?(RepResult(
+                good: false, cue: planCue, primaryAngle: peakAngle,
+                totalReps: totalReps, goodReps: goodReps,
+                formValues: [:], planarityLog: planarityLog, planarityPassed: false
+            ))
             return
         }
 
@@ -577,12 +636,14 @@ final class ExerciseEngine {
               goodReps, totalReps, checkLog)
 
         onRepDetected?(RepResult(
-            good:         isGood,
-            cue:          cue,
-            primaryAngle: peakAngle,
-            totalReps:    totalReps,
-            goodReps:     goodReps,
-            formValues:   evaluated
+            good:            isGood,
+            cue:             cue,
+            primaryAngle:    peakAngle,
+            totalReps:       totalReps,
+            goodReps:        goodReps,
+            formValues:      evaluated,
+            planarityLog:    planarityLog,
+            planarityPassed: true
         ))
     }
 
@@ -597,9 +658,10 @@ final class ExerciseEngine {
     // ─── Form metric accumulation ─────────────────────────────────────────────
 
     private func resetRepAccumulators() {
-        accumMax    = [:]
-        accumMin    = [:]
-        atBottomVal = [:]
+        accumMax           = [:]
+        accumMin           = [:]
+        atBottomVal        = [:]
+        planarityMinRatios = [:]
     }
 
     private func accumulate(pose: Pose) {
@@ -608,6 +670,13 @@ final class ExerciseEngine {
             guard let v = check.measure(pose: pose) else { continue }
             accumMax[check.id] = max(accumMax[check.id] ?? -999, v)
             accumMin[check.id] = min(accumMin[check.id] ??  999, v)
+        }
+        // Track minimum segment ratio (most foreshortened moment) during rep.
+        for check in def.planarityChecks where check.enabled {
+            if let v = Metric.segmentLengthRatio(jointA: check.jointA, jointB: check.jointB)
+                             .measure(pose: pose) {
+                planarityMinRatios[check.id] = min(planarityMinRatios[check.id] ?? 999, v)
+            }
         }
     }
 
@@ -653,6 +722,17 @@ final class ExerciseEngine {
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
+
+    // Returns the cue of the first foreshortened segment, or nil if all in-plane.
+    private func currentOutOfPlaneCue(pose: Pose) -> String? {
+        for check in def.planarityChecks where check.enabled {
+            guard let current = Metric.segmentLengthRatio(jointA: check.jointA, jointB: check.jointB)
+                                      .measure(pose: pose) else { continue }
+            let reference = calibratedSegmentRefs[check.id] ?? check.fallbackReferenceRatio
+            if current < check.minRatio * reference { return check.cue }
+        }
+        return nil
+    }
 
     private func phaseLabel() -> String {
         switch enginePhase {

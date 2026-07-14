@@ -34,6 +34,7 @@ export interface DebugStatsEvent {
   goodReps: number;
   totalFramesReceived: number;
   totalFramesAnalyzed: number;
+  outOfPlaneCue: string;       // "" = in-plane; non-empty = live foreshortening hint
 }
 
 /** Emitted every frame during the SETUP phase (calibration). */
@@ -207,7 +208,7 @@ export function addCalibrationStatusListener(
   return nativeEmitter.addListener('onCalibrationStatus', callback);
 }
 
-/** Emitted after each rep (form values) and after each 3D experiment run. */
+/** Emitted after each rep (form + planarity values) and after calibration. */
 export interface DebugLogEvent {
   message: string;
 }

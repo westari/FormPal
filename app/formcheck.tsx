@@ -469,6 +469,13 @@ export default function FormCheckScreen() {
         </View>
       )}
 
+      {/* Live planarity hint — gentle nudge when engine detects foreshortening */}
+      {isTracking && !!stats?.outOfPlaneCue && (
+        <View style={s.outOfPlaneHint} pointerEvents="none">
+          <Text style={s.outOfPlaneText}>{stats.outOfPlaneCue}</Text>
+        </View>
+      )}
+
       {/* Debug stats */}
       {stats && isTracking && (
         <View style={s.debugPanel}>
@@ -481,7 +488,7 @@ export default function FormCheckScreen() {
         </View>
       )}
 
-      {/* Debug log panel — shows onDebugLog events (rep metrics + 3D experiment) */}
+      {/* Debug log panel — shows onDebugLog events (rep metrics + planarity data) */}
       {DEBUG_LOG_ENABLED && (
         <>
           {/* Re-open button when panel is hidden */}
@@ -580,6 +587,25 @@ const s = StyleSheet.create({
     borderRadius:      100,
     borderWidth:       StyleSheet.hairlineWidth,
     borderColor:       C.border,
+    overflow:          'hidden',
+  },
+  outOfPlaneHint: {
+    position:    'absolute',
+    top:         '43%',
+    left:        0,
+    right:       0,
+    alignItems:  'center',
+  },
+  outOfPlaneText: {
+    fontSize:          14,
+    fontWeight:        '600',
+    color:             C.warn,
+    backgroundColor:   'rgba(10,11,12,0.80)',
+    paddingHorizontal: 18,
+    paddingVertical:   8,
+    borderRadius:      100,
+    borderWidth:       StyleSheet.hairlineWidth,
+    borderColor:       'rgba(251,146,60,0.35)',
     overflow:          'hidden',
   },
   repBlock:  { position: 'absolute', top: '18%', left: 0, right: 0, alignItems: 'center' },

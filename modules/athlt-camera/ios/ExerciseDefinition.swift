@@ -55,6 +55,49 @@ struct CalibrationConfig {
     let exitFraction:  Double  // typically 0.25 (< enterFraction for hysteresis)
 }
 
+// ─── Planarity check (foreshortening gate) ────────────────────────────────────
+//
+// Declares one body segment whose apparent 2D length must not be too far below
+// its calibrated reference before the rep's joint angles can be trusted.
+//
+// HOW IT WORKS
+//   Vision body-pose tracks 2D projections. When a limb points toward or away from
+//   the camera its projected length SHRINKS (foreshortening). segmentLengthRatio
+//   measures that shrinkage (segment / torso). The gate suppresses the ROM verdict
+//   when the ratio drops below (minRatio × reference).
+//
+// CALIBRATION
+//   During calibration reps the engine records the per-frame MAXIMUM segmentLengthRatio
+//   for each check. That max = limb most in-plane = true reference length. Without
+//   calibration the fallbackReferenceRatio (anatomical estimate) is used.
+//
+// THRESHOLD
+//   minRatio = 0.75 (start): gate fails when segment appears < 75 % of reference.
+//   Tune from onDebugLog data — look at ratio= values in good vs bad reps.
+
+struct PlanarityCheck {
+    let id:                     String
+    let jointA:                 Joint
+    let jointB:                 Joint
+    let minRatio:               Double   // fraction of reference below which = foreshortened
+    let cue:                    String   // shown when gate fails
+    let fallbackReferenceRatio: Double   // anatomical estimate used without calibration
+    let enabled:                Bool
+
+    init(id: String, jointA: Joint, jointB: Joint,
+         minRatio: Double = 0.75, cue: String,
+         fallbackReferenceRatio: Double,
+         enabled: Bool = true) {
+        self.id                     = id
+        self.jointA                 = jointA
+        self.jointB                 = jointB
+        self.minRatio               = minRatio
+        self.cue                    = cue
+        self.fallbackReferenceRatio = fallbackReferenceRatio
+        self.enabled                = enabled
+    }
+}
+
 // ─── Exercise definition ──────────────────────────────────────────────────────
 //
 // To add a new exercise: write one ExerciseDefinition in ExerciseRegistry.
@@ -122,6 +165,9 @@ struct ExerciseDefinition {
     // ── Debounce ──────────────────────────────────────────────────────────────
     let minRepInterval: TimeInterval
 
+    // ── Planarity checks (foreshortening gate) ────────────────────────────────
+    let planarityChecks: [PlanarityCheck]
+
     init(id: String, displayName: String,
          repMetric: Metric,
          topAngle: Double, repEnterThreshold: Double, repExitThreshold: Double,
@@ -130,7 +176,8 @@ struct ExerciseDefinition {
          readyGate: ReadyGateConfig,
          cameraSetup: CameraSetupConfig? = nil,
          calibration: CalibrationConfig? = nil,
-         minRepInterval: TimeInterval) {
+         minRepInterval: TimeInterval,
+         planarityChecks: [PlanarityCheck] = []) {
         self.id                 = id
         self.displayName        = displayName
         self.repMetric          = repMetric
@@ -144,5 +191,6 @@ struct ExerciseDefinition {
         self.cameraSetup        = cameraSetup
         self.calibration        = calibration
         self.minRepInterval     = minRepInterval
+        self.planarityChecks    = planarityChecks
     }
 }
