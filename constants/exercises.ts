@@ -145,21 +145,24 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     isFormCheckable: true,
   },
 
+  {
+    id:              'shoulderPress',
+    displayName:     'Shoulder Press',
+    muscleGroups:    [MuscleGroup.Shoulders, MuscleGroup.Arms],
+    splitCategories: [SplitCategory.Upper, SplitCategory.Push],
+    difficulty:      Difficulty.Intermediate,
+    equipment:       [Equipment.Dumbbell],
+    defaultReps:     8,
+    defaultSets:     3,
+    progression: {
+      repRange: [6, 15],
+      setRange: [2, 4],
+    },
+    isFormCheckable: true,
+  },
+
   // ─────────────────────────────────────────────────────────────────────────
   // ADD NEW FORM-CHECKABLE EXERCISES HERE.
-  // Template:
-  // {
-  //   id:              'exercise_id',   // must match CV ExerciseType string
-  //   displayName:     'Display Name',
-  //   muscleGroups:    [MuscleGroup.X],
-  //   splitCategories: [SplitCategory.Y],
-  //   difficulty:      Difficulty.Beginner,
-  //   equipment:       [],
-  //   defaultReps:     10,
-  //   defaultSets:     3,
-  //   progression:     { repRange: [8, 15], setRange: [2, 4] },
-  //   isFormCheckable: true,
-  // },
   // ─────────────────────────────────────────────────────────────────────────
 ];
 

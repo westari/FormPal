@@ -20,11 +20,12 @@ enum ExerciseRegistry {
 
     static func definition(for id: String) -> ExerciseDefinition? {
         switch id {
-        case "squat":  return squat
-        case "curl":   return curl
-        case "pushup": return pushup
-        case "lunge":  return lunge
-        default:       return nil
+        case "squat":         return squat
+        case "curl":          return curl
+        case "pushup":        return pushup
+        case "lunge":         return lunge
+        case "shoulderPress": return shoulderPress
+        default:              return nil
         }
     }
 
@@ -134,7 +135,7 @@ enum ExerciseRegistry {
     // Static thresholds (fallback): enter=145, exit=145, ROM=60.
     //
     // Form checks:
-    //   full_extension: didn't fully extend arm (throughoutMax < 140°) — priority 1
+    //   full_extension: didn't fully extend arm (throughoutMax < 120°) — priority 1
     //   elbow_drift:    upper arm drifted forward (throughoutMax > 30°) — priority 4
     //   lean_back:      torso leaned back for momentum (throughoutMax > 20°) — priority 5
     //
@@ -164,7 +165,10 @@ enum ExerciseRegistry {
 
         formChecks: [
             // ROM: didn't fully extend arm at the bottom of the movement.
-            // throughoutMax of the rep metric = peak extension (most-straightened) reached.
+            // throughoutMax = most-extended angle reached during inRep.
+            // Threshold 120° (not 140°): calibrated exit threshold often lands ~135–142°,
+            // which undercuts a 140° check and causes false fires on every rep.
+            // 120° still catches genuine non-extension while clearing normal anatomy variation.
             FormCheck(
                 id:         "full_extension",
                 cue:        "FULL EXTENSION",
@@ -173,7 +177,7 @@ enum ExerciseRegistry {
                     .jointAngle(a: .rightShoulder, pivot: .rightElbow, c: .rightWrist)
                 ),
                 evaluateAt: .throughoutMax,
-                condition:  .lessThan(140),
+                condition:  .lessThan(120),
                 priority:   1,
                 enabled:    true
             ),
@@ -236,156 +240,91 @@ enum ExerciseRegistry {
 
     // ── PUSH-UP ───────────────────────────────────────────────────────────────
     //
-    // repMetric: shoulder-vs-elbow vertical gap on best-visible side, normalised
-    // by torso length (shoulder→hip). Body-scale independent of camera distance.
-    //   UP position:   shoulder above elbow → gap/torso > 0 (≈ 0.27–0.50)
-    //   BOTTOM of rep: shoulder near elbow  → gap/torso ≈ 0 or negative
+    // repMetric: bodyRelativeGap(shoulder, elbow, shoulder→hip axis).
+    //   Measures shoulder-vs-elbow displacement projected onto the CCW-perp of the
+    //   shoulder→hip axis, normalised by shoulder→hip length. Orientation-agnostic —
+    //   works with phone on floor in landscape because it uses the BODY's own frame,
+    //   not the image's vertical axis.
+    //   UP position:   shoulder above elbow in body frame → ≈ +0.30 to +0.65
+    //   BOTTOM of rep: shoulder drops below elbow          → ≈ −0.10 to −0.30
     //
-    // ALL thresholds are torso-relative (normalised). Tune via NSLog at ~1fps.
-    // Old raw Vision-unit values noted in comments (raw ÷ typical torso ~0.30).
+    // ALL thresholds are body-relative fractions. Tune via per-frame NSLog:
+    //   "[Engine] [pushup] frame: metric=X.XXX phase=..." in Xcode console.
     //
-    // No calibration — normalised thresholds are stable across users and distances.
+    // No calibration — body-relative thresholds are stable across users and distances.
     //
-    // Form checks — two layers:
-    //   Layer 1 (normalizedVerticalGap, camera-side-agnostic):
-    //     hip_sag_l/r:  (shoulder.y − hip.y) / torso > threshold
-    //     hip_pike_l/r: (hip.y − shoulder.y) / torso > threshold
-    //     TUNE: "hip_sag_l=X.XXX" in rep NSLog. Flat plank ≈ 0.0–0.10; sag ≈ 0.40+.
-    //
-    //   Layer 2 (signedDeviationFromLine — more precise, camera-side-dependent):
-    //     Disabled by default. Enable after confirming sign direction on device.
-    //     TUNE: read "body_align_l=X.XXX" in rep NSLog.
-    //
-    // Priority: hip_sag (2) > hip_pike (1).
+    // Form checks (bodyRelativeDeviation — orientation-agnostic):
+    //   hip_align_l/r: hip deviation from shoulder→ankle plank line, as fraction of
+    //                  body length. 0 = perfect plank; 0.07 ≈ 3–4 inches off line.
+    //                  Catches both sag AND pike with a single unsigned check.
+    //   TUNE: "hip_align_l=X.XXX" in rep NSLog. Perfect plank ≈ 0.00–0.03; noticeable sag ≈ 0.07+.
 
     static let pushup = ExerciseDefinition(
         id:          "pushup",
         displayName: "Push-up",
 
         repMetric: .bestSide(
-            left:        .normalizedVerticalGap(upper: .leftShoulder,  lower: .leftElbow),
-            right:       .normalizedVerticalGap(upper: .rightShoulder, lower: .rightElbow),
-            leftJoints:  [.leftShoulder,  .leftElbow],
-            rightJoints: [.rightShoulder, .rightElbow]
+            left: .bodyRelativeGap(
+                a: .leftShoulder,  b: .leftElbow,
+                axisFrom: .leftShoulder, axisTo: .leftHip
+            ),
+            right: .bodyRelativeGap(
+                a: .rightShoulder, b: .rightElbow,
+                axisFrom: .rightShoulder, axisTo: .rightHip
+            ),
+            leftJoints:  [.leftShoulder,  .leftElbow,  .leftHip],
+            rightJoints: [.rightShoulder, .rightElbow, .rightHip]
         ),
 
-        topAngle:           0.40,    // was 0.12 (raw Vision units)
-        repEnterThreshold:  0.17,    // was 0.05 (raw Vision units)
-        repExitThreshold:   0.30,    // was 0.09 (raw Vision units)
-        goodROMThreshold:   0.07,    // was 0.02 (raw Vision units)
+        topAngle:           0.40,    // up-position value ≈ 0.35–0.65; generous ceiling
+        repEnterThreshold:  0.17,    // rep starts when gap drops below here (descending)
+        repExitThreshold:   0.30,    // rep completes when gap rises above here (ascending)
+        goodROMThreshold:   0.07,    // must reach below here for full ROM (goes negative at bottom)
         insufficientROMCue: "GO LOWER",
 
         formChecks: [
 
-            // ── Layer 1: normalizedVerticalGap — camera-side-agnostic ────────
+            // bodyRelativeDeviation: hip off the shoulder→ankle plank line.
+            // Unsigned — catches sag and pike equally. Camera-side-agnostic.
+            // TUNE: flat plank ≈ 0.00–0.03; 3-inch sag ≈ 0.07.
             FormCheck(
-                id:         "hip_sag_l",
-                cue:        "HIPS UP",
-                metric:     .normalizedVerticalGap(upper: .leftShoulder, lower: .leftHip),
-                evaluateAt: .throughoutMax,
-                condition:  .greaterThan(0.40),    // was 0.12 (raw Vision units)
-                priority:   2,
-                enabled:    true
-            ),
-            FormCheck(
-                id:         "hip_pike_l",
-                cue:        "LOWER HIPS",
-                metric:     .normalizedVerticalGap(upper: .leftHip, lower: .leftShoulder),
-                evaluateAt: .throughoutMax,
-                condition:  .greaterThan(0.33),    // was 0.10 (raw Vision units)
-                priority:   1,
-                enabled:    true
-            ),
-            FormCheck(
-                id:         "hip_sag_r",
-                cue:        "HIPS UP",
-                metric:     .normalizedVerticalGap(upper: .rightShoulder, lower: .rightHip),
-                evaluateAt: .throughoutMax,
-                condition:  .greaterThan(0.40),    // was 0.12 (raw Vision units)
-                priority:   2,
-                enabled:    true
-            ),
-            FormCheck(
-                id:         "hip_pike_r",
-                cue:        "LOWER HIPS",
-                metric:     .normalizedVerticalGap(upper: .rightHip, lower: .rightShoulder),
-                evaluateAt: .throughoutMax,
-                condition:  .greaterThan(0.33),    // was 0.10 (raw Vision units)
-                priority:   1,
-                enabled:    true
-            ),
-
-            // ── Layer 2: signedDeviationFromLine — disable until sign verified ──
-            //
-            // Sign convention (camera on person's LEFT, head→feet = left→right in frame):
-            //   negative = hip BELOW shoulder-ankle line → SAG → "HIPS UP"
-            //   positive = hip ABOVE line → PIKE → "LOWER HIPS"
-            // Sign FLIPS if camera is on the RIGHT — verify via NSLog first.
-
-            FormCheck(
-                id:         "body_align_l",
-                cue:        "HIPS UP",
-                metric:     .signedDeviationFromLine(
+                id:         "hip_align_l",
+                cue:        "HIPS LEVEL",
+                metric:     .bodyRelativeDeviation(
                     point:    .leftHip,
-                    lineFrom: .leftShoulder,
-                    lineTo:   .leftAnkle
-                ),
-                evaluateAt: .throughoutMin,
-                condition:  .lessThan(-0.05),
-                priority:   3,
-                enabled:    false
-            ),
-            FormCheck(
-                id:         "body_pike_l",
-                cue:        "LOWER HIPS",
-                metric:     .signedDeviationFromLine(
-                    point:    .leftHip,
-                    lineFrom: .leftShoulder,
-                    lineTo:   .leftAnkle
+                    axisFrom: .leftShoulder,
+                    axisTo:   .leftAnkle
                 ),
                 evaluateAt: .throughoutMax,
-                condition:  .greaterThan(0.05),
+                condition:  .greaterThan(0.07),
                 priority:   2,
-                enabled:    false
+                enabled:    true
             ),
             FormCheck(
-                id:         "body_align_r",
-                cue:        "HIPS UP",
-                metric:     .signedDeviationFromLine(
+                id:         "hip_align_r",
+                cue:        "HIPS LEVEL",
+                metric:     .bodyRelativeDeviation(
                     point:    .rightHip,
-                    lineFrom: .rightShoulder,
-                    lineTo:   .rightAnkle
+                    axisFrom: .rightShoulder,
+                    axisTo:   .rightAnkle
                 ),
                 evaluateAt: .throughoutMax,
-                condition:  .greaterThan(0.05),
-                priority:   3,
-                enabled:    false
-            ),
-            FormCheck(
-                id:         "body_pike_r",
-                cue:        "LOWER HIPS",
-                metric:     .signedDeviationFromLine(
-                    point:    .rightHip,
-                    lineFrom: .rightShoulder,
-                    lineTo:   .rightAnkle
-                ),
-                evaluateAt: .throughoutMin,
-                condition:  .lessThan(-0.05),
+                condition:  .greaterThan(0.07),
                 priority:   2,
-                enabled:    false
+                enabled:    true
             ),
         ],
 
         readyGate: ReadyGateConfig(
-            readyAngleMin:  0.13,    // was 0.04 (raw Vision units) — arms extended at top
-            readyAngleMax:  1.50,    // was 0.50 (raw Vision units)
+            readyAngleMin:  0.13,    // bodyRelativeGap at top ≈ 0.30–0.65; 0.13 allows entry
+            readyAngleMax:  1.50,
             requiredJoints: [.leftShoulder, .leftElbow, .rightShoulder, .rightElbow],
             minConfidence:  0.15,
             stableDuration: 0.5
         ),
 
         cameraSetup: CameraSetupConfig(
-            setupInstruction: "Phone on the floor to your side — full body in view",
+            setupInstruction: "Lay your phone on its side on the floor, a few feet to your side",
             requiredJoints: [
                 Joint.leftShoulder, .leftElbow, .leftHip, .leftAnkle,
             ],
@@ -394,7 +333,7 @@ enum ExerciseRegistry {
             ]
         ),
 
-        calibration: nil,   // normalised thresholds are stable across users and camera distances
+        calibration: nil,   // body-relative thresholds are stable across users and camera distances
 
         minRepInterval: 0.8
     )
@@ -478,6 +417,125 @@ enum ExerciseRegistry {
                 .leftHip,  .rightHip,
                 .leftKnee, .rightKnee,
                 .leftAnkle, .rightAnkle,
+            ]
+        ),
+
+        calibration: CalibrationConfig(
+            repsNeeded:    2,
+            enterFraction: 0.50,
+            exitFraction:  0.25
+        ),
+
+        minRepInterval: 0.5
+    )
+
+    // ── SHOULDER PRESS ────────────────────────────────────────────────────────
+    //
+    // repMetric: lineVsVertical(shoulder→elbow) on bestSide.
+    //   Angle of the upper arm from vertical. 0° = arm straight up overhead,
+    //   90° = arm horizontal at shoulder height.
+    //
+    //   DIRECTION: the angle DECREASES as arms press overhead — matches the
+    //   engine's standard direction (metric drops during rep, rises on return).
+    //
+    //   The elbow jointAngle (90°→165°) also tracks the press but INCREASES —
+    //   wrong direction without a complement/invert Metric case. Not used here.
+    //
+    //   Works from FRONT or SIDE: bestSide picks the more-visible arm.
+    //
+    // Thresholds:
+    //   topAngle 84° — upper arm near-horizontal at shoulder height (≈80–88°)
+    //   repEnterThreshold 68° — arm is 22° above horizontal, press beginning
+    //   repExitThreshold 72° — arm has returned to 18° above horizontal (~shoulder height)
+    //   goodROMThreshold 20° — must press arm to within 20° of vertical (lockout)
+    //
+    // TUNE via per-frame NSLog: "[Engine] [shoulderPress] frame: metric=X.X phase=..."
+    //   arms at shoulder height  ≈ 82–88°
+    //   fully pressed overhead   ≈ 0–15°
+    //
+    // Form checks:
+    //   lean_back (priority 4): torso angle from vertical. Overrides "PRESS HIGHER"
+    //     via FORM_OVERRIDE_ROM_PRIORITY. TUNE: "lean_back=X.X[FAIL/ok]" in rep NSLog.
+    //     Upright ≈ 3–8°; visible arch ≈ 20°+.
+    //
+    //   lower_more (disabled): rep exit threshold (72°) enforces return to shoulder
+    //     height implicitly — the rep doesn't complete until the arm reaches 72°.
+    //     An explicit post-rep form check needs evaluateAt: .atReturn, which the
+    //     framework doesn't have. throughoutMax is always ≈ repExitThreshold, so
+    //     any threshold above it never fires and any threshold below always fires.
+    //     Framework gap: no "at-return" evaluateAt phase exists.
+    //
+    // CONFIG ONLY — zero engine or Metric.swift changes needed.
+
+    static let shoulderPress = ExerciseDefinition(
+        id:          "shoulderPress",
+        displayName: "Shoulder Press",
+
+        repMetric: .bestSide(
+            left:  .lineVsVertical(from: .leftShoulder,  to: .leftElbow),
+            right: .lineVsVertical(from: .rightShoulder, to: .rightElbow),
+            leftJoints:  [.leftShoulder, .leftElbow],
+            rightJoints: [.rightShoulder, .rightElbow]
+        ),
+
+        topAngle:           84,
+        repEnterThreshold:  68,    // arm 22° above horizontal — press has begun
+        repExitThreshold:   72,    // arm back to 18° above horizontal — rep done
+        goodROMThreshold:   20,    // must reach within 20° of vertical overhead
+        insufficientROMCue: "PRESS HIGHER",
+
+        formChecks: [
+
+            // Torso lean-back: hip→shoulder angle from vertical.
+            // Priority 4 → overrides "PRESS HIGHER" via FORM_OVERRIDE_ROM_PRIORITY.
+            // TUNE: "lean_back=X.X" in rep NSLog. Upright: 3–8°; arching: 20°+.
+            FormCheck(
+                id:         "lean_back",
+                cue:        "STAY UPRIGHT",
+                metric:     .average(
+                    .lineVsVertical(from: .leftHip,  to: .leftShoulder),
+                    .lineVsVertical(from: .rightHip, to: .rightShoulder)
+                ),
+                evaluateAt: .throughoutMax,
+                condition:  .greaterThan(20),
+                priority:   4,
+                enabled:    true
+            ),
+
+            // "LOWER MORE" — disabled; repExitThreshold enforces return to shoulder
+            // height. Framework gap: throughoutMax is always clipped at repExitThreshold,
+            // so no threshold can distinguish "returned far enough" from "barely met exit."
+            // Enable if a future engine adds evaluateAt: .atReturn.
+            FormCheck(
+                id:         "lower_more",
+                cue:        "LOWER MORE",
+                metric:     .bestSide(
+                    left:  .lineVsVertical(from: .leftShoulder,  to: .leftElbow),
+                    right: .lineVsVertical(from: .rightShoulder, to: .rightElbow),
+                    leftJoints:  [.leftShoulder, .leftElbow],
+                    rightJoints: [.rightShoulder, .rightElbow]
+                ),
+                evaluateAt: .throughoutMax,
+                condition:  .lessThan(80),    // always true with exitThreshold=72 — disabled
+                priority:   2,
+                enabled:    false
+            ),
+        ],
+
+        readyGate: ReadyGateConfig(
+            readyAngleMin:  65,    // upper arm at most 25° above horizontal (shoulder level)
+            readyAngleMax:  90,    // upper arm at or below horizontal
+            requiredJoints: [.leftShoulder, .leftElbow, .leftHip,
+                              .rightShoulder, .rightElbow, .rightHip],
+            minConfidence:  0.30,
+            stableDuration: 0.8
+        ),
+
+        cameraSetup: CameraSetupConfig(
+            setupInstruction: "Face the camera — arms and shoulders in frame",
+            requiredJoints: [
+                .leftShoulder, .leftElbow, .leftWrist,
+                .rightShoulder, .rightElbow, .rightWrist,
             ]
         ),
 

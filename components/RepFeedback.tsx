@@ -16,14 +16,6 @@ const PC        = 24;
 
 const AnimatedSvgCircle = Animated.createAnimatedComponent(Circle);
 
-function getCue(reason: string): string {
-  const r = reason.toLowerCase();
-  if (r.includes('shallow') || r.includes('deeper')) return 'GO DEEPER';
-  if (r.includes('hip'))                              return 'SIT BACK';
-  if (r.includes('form'))                             return 'FIX FORM';
-  const clean = reason.replace(/[^a-zA-Z\s]/g, '').toUpperCase().slice(0, 12).trim();
-  return clean || 'FIX FORM';
-}
 
 export default function RepFeedback({
   good,
@@ -162,7 +154,14 @@ export default function RepFeedback({
 
         {!good && (
           <View style={fb.cuePill}>
-            <Text style={fb.cueText}>{getCue(reason)}</Text>
+            <Text
+              style={fb.cueText}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.65}
+            >
+              {reason}
+            </Text>
           </View>
         )}
       </Animated.View>

@@ -32,6 +32,17 @@ indirect enum Metric {
     /// Body-scale normalised: value is independent of camera distance and user height.
     case normalizedVerticalGap(upper: Joint, lower: Joint)
 
+    /// Component of `(a − b)` projected onto the CCW-perpendicular of axis `(axisFrom → axisTo)`,
+    /// normalised by axis length. Positive when `a` is "above" `b` relative to the body's own
+    /// longitudinal axis — orientation-agnostic for exercises where the body is non-upright.
+    /// Use for push-up repMetric: axis = shoulder→hip, measures shoulder vs elbow in body frame.
+    case bodyRelativeGap(a: Joint, b: Joint, axisFrom: Joint, axisTo: Joint)
+
+    /// Perpendicular distance of `point` from line `axisFrom → axisTo`, normalised by axis length.
+    /// Returns a body-scale fraction ≥ 0: 0 = on the line, 0.07 = 7% of axis length off the line.
+    /// Orientation-agnostic and camera-distance independent — use for push-up hip alignment.
+    case bodyRelativeDeviation(point: Joint, axisFrom: Joint, axisTo: Joint)
+
     /// Perpendicular distance (unsigned) of `point` from line `lineFrom`→`lineTo` (Vision units).
     case deviationFromLine(point: Joint, lineFrom: Joint, lineTo: Joint)
 
@@ -82,6 +93,29 @@ extension Metric {
             guard let gap = computeVerticalGap(pose: pose, upper: upper, lower: lower),
                   let ref = torsoReference(pose: pose), ref > 0 else { return nil }
             return gap / ref
+
+        case let .bodyRelativeGap(a, b, axisFrom, axisTo):
+            guard let pa  = pose[a],       pa.confidence  >= kMinConf,
+                  let pb  = pose[b],       pb.confidence  >= kMinConf,
+                  let pfm = pose[axisFrom], pfm.confidence >= kMinConf,
+                  let pto = pose[axisTo],   pto.confidence >= kMinConf else { return nil }
+            let ax   = Double(pto.x - pfm.x), ay   = Double(pto.y - pfm.y)
+            let aLen = (ax*ax + ay*ay).squareRoot()
+            guard aLen > 1e-6 else { return nil }
+            let vx = Double(pa.x - pb.x), vy = Double(pa.y - pb.y)
+            // dot(v, CCW-unit-perp-of-axis) / aLen  =  (vy*ax - vx*ay) / aLen²
+            return (vy * ax - vx * ay) / (aLen * aLen)
+
+        case let .bodyRelativeDeviation(p, axisFrom, axisTo):
+            guard let pp  = pose[p],       pp.confidence  >= kMinConf,
+                  let pfm = pose[axisFrom], pfm.confidence >= kMinConf,
+                  let pto = pose[axisTo],   pto.confidence >= kMinConf else { return nil }
+            let ax  = Double(pto.x - pfm.x), ay  = Double(pto.y - pfm.y)
+            let apx = Double(pp.x  - pfm.x), apy = Double(pp.y  - pfm.y)
+            let ab  = (ax*ax + ay*ay).squareRoot()
+            guard ab > 1e-6 else { return nil }
+            // |cross| / ab² = perp_distance / axis_length = body-fraction
+            return abs(ax * apy - ay * apx) / (ab * ab)
 
         case let .deviationFromLine(p, a, b):
             return computeDeviationFromLine(pose: pose, point: p, lineFrom: a, lineTo: b)

@@ -51,10 +51,11 @@ async function logSessionVideo(uri: string) {
 }
 
 const SETUP_INFO: Record<ExerciseType, { icon: string; title: string; sub: string }> = {
-  squat:  { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame — ankle to shoulder' },
-  curl:   { icon: 'camera.fill',          title: 'Face the camera',                  sub: 'Stand back — both arms and hands in view' },
-  pushup: { icon: 'iphone',               title: 'Phone on the floor, to your side', sub: 'Get in position — full body in frame' },
-  lunge:  { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame — ankle to shoulder' },
+  squat:         { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame — ankle to shoulder' },
+  curl:          { icon: 'camera.fill',          title: 'Face the camera',                  sub: 'Stand back — both arms and hands in view' },
+  pushup:        { icon: 'iphone',               title: 'Phone on the floor, to your side', sub: 'Get in position — full body in frame' },
+  lunge:         { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame — ankle to shoulder' },
+  shoulderPress: { icon: 'camera.fill',          title: 'Face the camera',                  sub: 'Stand back — arms and shoulders in frame' },
 };
 
 // ─── Phase type ───────────────────────────────────────────────────────────────
@@ -73,7 +74,7 @@ export default function FormCheckScreen() {
     returnTo?:          string;
     workoutExerciseId?: string;
   }>();
-  const exerciseType = (['squat', 'curl', 'pushup', 'lunge'].includes(exercise)
+  const exerciseType = (['squat', 'curl', 'pushup', 'lunge', 'shoulderPress'].includes(exercise)
     ? exercise : 'squat') as ExerciseType;
 
   const [phase,    setPhase]    = useState<Phase>('idle');
@@ -415,9 +416,10 @@ export default function FormCheckScreen() {
           <SymbolView name="chevron.left" size={18} tintColor={C.text} type="monochrome" style={{ width: 18, height: 18 }} />
         </GlassButton>
         <Text style={s.title}>
-          {exerciseType === 'curl' ? 'Bicep Curl'
-            : exerciseType === 'pushup' ? 'Push-up'
-            : exerciseType === 'lunge'  ? 'Lunge'
+          {exerciseType === 'curl'          ? 'Bicep Curl'
+            : exerciseType === 'pushup'        ? 'Push-up'
+            : exerciseType === 'lunge'         ? 'Lunge'
+            : exerciseType === 'shoulderPress' ? 'Shoulder Press'
             : 'Squat'} Form Check
         </Text>
         <GlassButton circular={40} onPress={handleFlip}>
