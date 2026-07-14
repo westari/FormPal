@@ -720,19 +720,23 @@ public class ATHLTCameraModule: Module {
             let cosTheta = simd_dot(simd_normalize(vBA), simd_normalize(vBC))
             let angle3D  = acos(max(-1.0, min(1.0, Double(cosTheta)))) * 180.0 / .pi
 
+            // VNHumanBodyRecognizedPoint3D has no .confidence — log 3D positions (meters)
+            // and bodyHeight so we can sanity-check the skeleton is plausible.
             let msg = String(format:
                 "[3D-EXPERIMENT] exercise=%@ rep=#%d\n" +
                 "  2D primary angle at peak = %.1f°\n" +
                 "  3D primary angle at peak = %.1f° (delta = %+.1f°)\n" +
-                "  3D joint confidences: %@=%.2f  %@=%.2f  %@=%.2f\n" +
+                "  3D positions m: %@=(%.3f,%.3f,%.3f)  %@=(%.3f,%.3f,%.3f)  %@=(%.3f,%.3f,%.3f)\n" +
+                "  3D body height est = %.2fm\n" +
                 "  3D request duration = %.0fms\n" +
                 "  2D verdict = \"%@\"",
                 exercise, repNumber,
                 angle2DAtPeak,
                 angle3D, angle3D - angle2DAtPeak,
-                jA.rawValue, pA.confidence,
-                jB.rawValue, pB.confidence,
-                jC.rawValue, pC.confidence,
+                jA.rawValue, posA.x, posA.y, posA.z,
+                jB.rawValue, posB.x, posB.y, posB.z,
+                jC.rawValue, posC.x, posC.y, posC.z,
+                obs.bodyHeight,
                 elapsedMs,
                 verdict2D)
             NSLog("%@", msg)
