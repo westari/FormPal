@@ -7,9 +7,11 @@ import { SymbolView } from 'expo-symbols';
 import { EXERCISE_CATALOG } from '../constants/exercises';
 
 const EXERCISE_UI: Record<string, { symbol: string; grad: [string, string] }> = {
-  squat:  { symbol: 'figure.strengthtraining.traditional', grad: ['#FFC24B', '#FF7A2E'] },
-  pushup: { symbol: 'figure.core.training',               grad: ['#67CEFF', '#0A6CFF'] },
-  curl:   { symbol: 'dumbbell.fill',                      grad: ['#48E08A', '#12B59A'] },
+  squat:         { symbol: 'figure.strengthtraining.traditional', grad: ['#FFC24B', '#FF7A2E'] },
+  pushup:        { symbol: 'figure.core.training',               grad: ['#67CEFF', '#0A6CFF'] },
+  curl:          { symbol: 'dumbbell.fill',                      grad: ['#48E08A', '#12B59A'] },
+  lunge:         { symbol: 'figure.step.training',               grad: ['#C084FC', '#7C3AED'] },
+  shoulderPress: { symbol: 'figure.arms.open',                   grad: ['#F97316', '#DC2626'] },
 };
 
 export default function ExercisePickerScreen() {

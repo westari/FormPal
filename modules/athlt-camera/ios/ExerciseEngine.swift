@@ -147,6 +147,7 @@ final class ExerciseEngine {
     var onDebugStats:        ((EngineDebugStats) -> Void)?
     var onSetupUpdate:       ((SetupStatus)      -> Void)?
     var onCalibrationUpdate: ((CalibrationStatus) -> Void)?
+    var onNewPeakDetected:   ((Double)           -> Void)?  // fires each time repMinAngle improves; arg = new peak metric
 
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -500,6 +501,7 @@ final class ExerciseEngine {
             if angle < repMinAngle {
                 repMinAngle = angle
                 snapshotAtBottom(pose: pose)
+                onNewPeakDetected?(angle)
             }
             if angle > effectiveExitThreshold {
                 guard timestamp.timeIntervalSince(lastRepTime) >= def.minRepInterval else {

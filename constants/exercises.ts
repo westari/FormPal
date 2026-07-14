@@ -146,6 +146,21 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
   },
 
   {
+    id:              'lunge',
+    displayName:     'Lunge',
+    muscleGroups:    [MuscleGroup.Legs],
+    splitCategories: [SplitCategory.Lower],
+    difficulty:      Difficulty.Beginner,
+    equipment:       [],
+    defaultReps:     10,
+    defaultSets:     3,
+    progression: {
+      repRange: [8, 20],
+      setRange: [2, 5],
+    },
+    isFormCheckable: true,
+  },
+  {
     id:              'shoulderPress',
     displayName:     'Shoulder Press',
     muscleGroups:    [MuscleGroup.Shoulders, MuscleGroup.Arms],

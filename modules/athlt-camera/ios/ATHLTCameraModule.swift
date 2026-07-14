@@ -4,6 +4,7 @@ import Vision
 @preconcurrency import CoreMedia
 @preconcurrency import CoreVideo
 import UIKit
+import simd
 
 // ─── Notification ─────────────────────────────────────────────────────────────
 
@@ -111,6 +112,13 @@ public class ATHLTCameraModule: Module {
     // MARK: – Recording / stopTracking handshake
     private var pendingStopPromise: Promise?
 
+    // MARK: – 3D experiment (silent background; NSLog only; no user-facing effect)
+    // Set enable3DExperiment = false to disable without removing any other code.
+    private let enable3DExperiment     = true
+    private var currentFrameBufferRef: CVPixelBuffer? = nil  // live pool buffer, set/cleared per-frame on inferenceQueue
+    private var peakFrameBuffer:       CVPixelBuffer? = nil  // deep-copied at each new rep peak, owned by us
+    private var peakFrame2DAngle:      Double         = 0.0
+
     // MARK: – Module definition ─────────────────────────────────────────────────
 
     public func definition() -> ModuleDefinition {
@@ -146,13 +154,15 @@ public class ATHLTCameraModule: Module {
                 // ran, so the next startSession's inferenceQueue.sync could block
                 // waiting for those tasks — causing the observed freeze).
                 self.inferenceQueue.sync {
-                    self.isTracking          = false
-                    self.currentMode         = "idle"
-                    self.frameCounter        = 0
-                    self.totalFramesReceived = 0
-                    self.totalFramesAnalyzed = 0
-                    self.personDetected      = false
-                    self.lastDebugStatsTime  = 0.0
+                    self.isTracking            = false
+                    self.currentMode           = "idle"
+                    self.frameCounter          = 0
+                    self.totalFramesReceived   = 0
+                    self.totalFramesAnalyzed   = 0
+                    self.personDetected        = false
+                    self.lastDebugStatsTime    = 0.0
+                    self.peakFrameBuffer       = nil
+                    self.currentFrameBufferRef = nil
                     // If stopTracking() was never called (e.g. back button during
                     // tracking), resolve its dangling promise now so nothing leaks.
                     if let p = self.pendingStopPromise {
@@ -289,6 +299,29 @@ public class ATHLTCameraModule: Module {
                 "goodReps":   result.goodReps,
                 "timestamp":  Date().timeIntervalSince1970 * 1000.0,
             ])
+            // 3D experiment: dispatch on background queue — zero effect on live path
+            if self.enable3DExperiment, let buf = self.peakFrameBuffer {
+                let capturedBuf      = buf
+                let capturedAngle    = self.peakFrame2DAngle
+                let capturedExercise = self.currentExercise
+                let capturedRepNum   = result.totalReps
+                let capturedCue      = result.cue
+                self.peakFrameBuffer = nil
+                DispatchQueue.global(qos: .background).async {
+                    self.run3DAnalysis(buffer: capturedBuf,
+                                       exercise: capturedExercise,
+                                       repNumber: capturedRepNum,
+                                       angle2DAtPeak: capturedAngle,
+                                       verdict2D: capturedCue)
+                }
+            }
+        }
+
+        engine.onNewPeakDetected = { [weak self] peakAngle in
+            guard let self, self.enable3DExperiment else { return }
+            guard let src = self.currentFrameBufferRef else { return }
+            self.peakFrameBuffer  = self.deepCopyPixelBuffer(src)
+            self.peakFrame2DAngle = peakAngle
         }
 
         engine.onDebugStats = { [weak self] stats in
@@ -546,7 +579,10 @@ public class ATHLTCameraModule: Module {
         let obs  = results.max(by: { $0.confidence < $1.confidence }) ?? results[0]
         let pose = extractPose(obs)
 
+        // Stash current buffer so onNewPeakDetected (fired synchronously inside ingest) can deep-copy it.
+        currentFrameBufferRef = pixelBuffer
         engine.ingest(pose: pose, timestamp: date)
+        currentFrameBufferRef = nil  // clear immediately — never outlive this call
         maybeEmitDebugStats()
 
         if isSkeletonVisible {
@@ -568,6 +604,143 @@ public class ATHLTCameraModule: Module {
             pose[joint] = PosePoint(x: p.location.x, y: p.location.y, confidence: p.confidence)
         }
         return pose
+    }
+
+    // MARK: – 3D experiment helpers ───────────────────────────────────────────
+
+    /// Deep-copy a (locked) pool CVPixelBuffer into a fresh allocation we own.
+    /// Supports both packed (BGRA) and planar (YUV) formats.
+    private func deepCopyPixelBuffer(_ src: CVPixelBuffer) -> CVPixelBuffer? {
+        let w   = CVPixelBufferGetWidth(src)
+        let h   = CVPixelBufferGetHeight(src)
+        let fmt = CVPixelBufferGetPixelFormatType(src)
+
+        var copy: CVPixelBuffer?
+        guard CVPixelBufferCreate(kCFAllocatorDefault, w, h, fmt, nil, &copy) == kCVReturnSuccess,
+              let dst = copy else { return nil }
+
+        CVPixelBufferLockBaseAddress(src, .readOnly)
+        CVPixelBufferLockBaseAddress(dst, [])
+        defer {
+            CVPixelBufferUnlockBaseAddress(dst, [])
+            CVPixelBufferUnlockBaseAddress(src, .readOnly)
+        }
+
+        let planeCount = CVPixelBufferGetPlaneCount(src)
+        if planeCount == 0 {
+            guard let srcBase = CVPixelBufferGetBaseAddress(src),
+                  let dstBase = CVPixelBufferGetBaseAddress(dst) else { return nil }
+            let srcStride = CVPixelBufferGetBytesPerRow(src)
+            let dstStride = CVPixelBufferGetBytesPerRow(dst)
+            for row in 0..<h {
+                memcpy(dstBase.advanced(by: row * dstStride),
+                       srcBase.advanced(by: row * srcStride),
+                       min(srcStride, dstStride))
+            }
+        } else {
+            for plane in 0..<planeCount {
+                guard let srcBase = CVPixelBufferGetBaseAddressOfPlane(src, plane),
+                      let dstBase = CVPixelBufferGetBaseAddressOfPlane(dst, plane) else { continue }
+                let ph        = CVPixelBufferGetHeightOfPlane(src, plane)
+                let srcStride = CVPixelBufferGetBytesPerRowOfPlane(src, plane)
+                let dstStride = CVPixelBufferGetBytesPerRowOfPlane(dst, plane)
+                for row in 0..<ph {
+                    memcpy(dstBase.advanced(by: row * dstStride),
+                           srcBase.advanced(by: row * srcStride),
+                           min(srcStride, dstStride))
+                }
+            }
+        }
+        return dst
+    }
+
+    /// Run VNDetectHumanBodyPose3DRequest on a saved peak frame and NSLog the comparison.
+    /// Runs on a background queue; has zero effect on rep counting or UI.
+    private func run3DAnalysis(buffer: CVPixelBuffer,
+                                exercise: String,
+                                repNumber: Int,
+                                angle2DAtPeak: Double,
+                                verdict2D: String) {
+        guard #available(iOS 17.0, *) else {
+            NSLog("[3D-EXPERIMENT] iOS < 17 — 3D request not available")
+            return
+        }
+
+        let start   = CACurrentMediaTime()
+        let request = VNDetectHumanBodyPose3DRequest()
+        let handler = VNImageRequestHandler(cvPixelBuffer: buffer, orientation: .up, options: [:])
+
+        do { try handler.perform([request]) } catch {
+            NSLog("[3D-EXPERIMENT] exercise=%@ rep=#%d request error: %@",
+                  exercise, repNumber, error.localizedDescription)
+            return
+        }
+
+        guard let obs = request.results?.first else {
+            NSLog("[3D-EXPERIMENT] exercise=%@ rep=#%d — no 3D body detected", exercise, repNumber)
+            return
+        }
+
+        let elapsedMs = (CACurrentMediaTime() - start) * 1000.0
+
+        // Map exercise → (proximal, midpoint, distal) joint triple for primary angle
+        typealias JN = VNHumanBodyPose3DObservation.JointName
+        let triple: (JN, JN, JN)?
+        switch exercise {
+        case "curl", "pushup", "shoulderPress":
+            triple = (.leftShoulder, .leftElbow, .leftWrist)
+        case "squat", "lunge":
+            triple = (.leftHip, .leftKnee, .leftAnkle)
+        default:
+            triple = nil
+        }
+
+        guard let (jA, jB, jC) = triple else {
+            NSLog("[3D-EXPERIMENT] exercise=%@ — no joint mapping defined", exercise)
+            return
+        }
+
+        do {
+            let pA = try obs.recognizedPoint(jA)
+            let pB = try obs.recognizedPoint(jB)
+            let pC = try obs.recognizedPoint(jC)
+
+            // Extract world-space position from the 4×4 transform (translation = column 3)
+            let posA = simd_float3(pA.position.columns.3.x, pA.position.columns.3.y, pA.position.columns.3.z)
+            let posB = simd_float3(pB.position.columns.3.x, pB.position.columns.3.y, pB.position.columns.3.z)
+            let posC = simd_float3(pC.position.columns.3.x, pC.position.columns.3.y, pC.position.columns.3.z)
+
+            let vBA = posA - posB
+            let vBC = posC - posB
+            guard simd_length(vBA) > 1e-5, simd_length(vBC) > 1e-5 else {
+                NSLog("[3D-EXPERIMENT] exercise=%@ rep=#%d — degenerate 3D joint positions", exercise, repNumber)
+                return
+            }
+
+            let cosTheta = simd_dot(simd_normalize(vBA), simd_normalize(vBC))
+            let angle3D  = acos(max(-1.0, min(1.0, Double(cosTheta)))) * 180.0 / .pi
+
+            let msg = String(format:
+                "[3D-EXPERIMENT] exercise=%@ rep=#%d\n" +
+                "  2D primary angle at peak = %.1f°\n" +
+                "  3D primary angle at peak = %.1f° (delta = %+.1f°)\n" +
+                "  3D joint confidences: %@=%.2f  %@=%.2f  %@=%.2f\n" +
+                "  3D request duration = %.0fms\n" +
+                "  2D verdict = \"%@\"",
+                exercise, repNumber,
+                angle2DAtPeak,
+                angle3D, angle3D - angle2DAtPeak,
+                jA.rawValue, pA.confidence,
+                jB.rawValue, pB.confidence,
+                jC.rawValue, pC.confidence,
+                elapsedMs,
+                verdict2D)
+            NSLog("%@", msg)
+
+        } catch {
+            NSLog("[3D-EXPERIMENT] exercise=%@ rep=#%d joint extraction failed: %@",
+                  exercise, repNumber, error.localizedDescription)
+        }
     }
 
     // MARK: – Debug stats (throttled to ~1 fps) ───────────────────────────────
