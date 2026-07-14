@@ -19,11 +19,13 @@ Pod::Spec.new do |s|
   # System frameworks — all available without additional pods
   s.frameworks     = 'AVFoundation', 'CoreML', 'Vision', 'CoreMedia', 'CoreVideo', 'UIKit'
 
-  # Only ExpoModulesCore — no VisionCamera, no worklets
   s.dependency 'ExpoModulesCore'
+  # MediaPipe Tasks — BlazePose 3D world landmarks (guarded by ENABLE_BLAZEPOSE flag)
+  s.dependency 'MediaPipeTasksVision', '~> 0.10'
 
   s.pod_target_xcconfig = {
     'DEFINES_MODULE'          => 'YES',
     'SWIFT_COMPILATION_MODE'  => 'wholemodule',
+    'OTHER_LDFLAGS'           => '$(inherited)',
   }
 end

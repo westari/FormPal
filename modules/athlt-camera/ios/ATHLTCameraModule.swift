@@ -98,6 +98,11 @@ public class ATHLTCameraModule: Module {
     private var lastDebugReady:    Bool             = false
     private var lastOutOfPlaneCue: String?          = nil
 
+    // MARK: – BlazePose (parallel 3D engine, guarded by ENABLE_BLAZEPOSE)
+    private var blazePoseEngine      = BlazePoseEngine()
+    private var lastBlazePoseResult: BlazePoseResult? = nil
+    private var lastVisionMs:        Double            = 0
+
     // MARK: – Skeleton overlay
     private var isSkeletonVisible = true
 
@@ -300,6 +305,25 @@ public class ATHLTCameraModule: Module {
                 "  \(result.planarityLog)\n" +
                 "  cue=\(result.cue)"
             self.sendEvent("onDebugLog", ["message": repLog])
+
+            // Three-way comparison: Apple Vision 2D | foreshortening gate | BlazePose 3D
+            let av2D    = String(format: "%.1f", result.primaryAngle)
+            let gated   = result.planarityPassed
+                ? "boneGated=\(av2D)°"
+                : "boneGated=n/a(foreshort)"
+            let bpPart: String
+            let bpTail: String
+            if let bp = self.lastBlazePoseResult {
+                let a3D  = bp.primaryAngle3D.map { String(format: "%.1f", $0) + "°" } ?? "n/a"
+                bpPart   = "blazePose3D=\(a3D)"
+                bpTail   = "| \(bp.jointDebug) | AV=\(String(format: "%.0f", self.lastVisionMs))ms BP=\(String(format: "%.0f", bp.inferenceMs))ms"
+            } else {
+                bpPart   = "blazePose3D=not_ready"
+                bpTail   = "| AV=\(String(format: "%.0f", self.lastVisionMs))ms BP=—"
+            }
+            let compareLine = "[COMPARE] \(self.currentExercise) rep#\(result.totalReps)" +
+                "  2D=\(av2D)°  \(gated)  \(bpPart)  \(bpTail)"
+            self.sendEvent("onDebugLog", ["message": compareLine])
         }
 
         engine.onDebugStats = { [weak self] stats in
@@ -381,6 +405,7 @@ public class ATHLTCameraModule: Module {
         }
 
         inferenceQueue.sync { wireEngineCallbacks() }
+        Task { [weak self] in await self?.blazePoseEngine.setup() }
 
         let status = AVCaptureDevice.authorizationStatus(for: .video)
         switch status {
@@ -541,8 +566,15 @@ public class ATHLTCameraModule: Module {
 
         let request = VNDetectHumanBodyPoseRequest()
         let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .up, options: [:])
+        let avT0 = CACurrentMediaTime()
         do { try handler.perform([request]) } catch {
             NSLog("[GymCamera] pose error: %@", error.localizedDescription); return
+        }
+        lastVisionMs = (CACurrentMediaTime() - avT0) * 1000.0
+
+        if ENABLE_BLAZEPOSE {
+            lastBlazePoseResult = blazePoseEngine.detect(pixelBuffer: pixelBuffer,
+                                                         exerciseId: currentExercise)
         }
 
         let date = Date(timeIntervalSince1970: timestamp > 0 ? timestamp : CACurrentMediaTime())
