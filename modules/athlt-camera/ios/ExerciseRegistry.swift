@@ -25,6 +25,7 @@ enum ExerciseRegistry {
         case "pushup":        return pushup
         case "lunge":         return lunge
         case "shoulderPress": return shoulderPress
+        case "jumpingJack":   return jumpingJack
         default:              return nil
         }
     }
@@ -461,6 +462,116 @@ enum ExerciseRegistry {
                            minRatio: 0.75, cue: "TURN SIDE-ON", fallbackReferenceRatio: 0.80),
             PlanarityCheck(id: "shin_l",  jointA: .leftKnee, jointB: .leftAnkle,
                            minRatio: 0.75, cue: "TURN SIDE-ON", fallbackReferenceRatio: 0.72),
+        ]
+    )
+
+    // ── JUMPING JACK ──────────────────────────────────────────────────────────
+    //
+    // CONFIG-ONLY PROOF: zero engine or Metric.swift changes.
+    // Primitives reused:
+    //   Rep detection:     normalizedVerticalGap + average  (both existing)
+    //   "ARMS HIGHER" cue: goodROMThreshold + insufficientROMCue (ROM system, no new FormCheck)
+    //   "JUMP WIDER" cue:  distanceRatio + throughoutMax    (both existing)
+    //
+    // repMetric: average(normalizedVerticalGap(shoulder, wrist)) both arms.
+    //   = (shoulder.y − wrist.y) / torso_length. y=0 bottom, y=1 top.
+    //   CLOSED (arms at sides):  shoulder above wrist → POSITIVE  (~+0.7 to +1.1)
+    //   OPEN   (arms overhead):  wrist above shoulder → NEGATIVE  (~−0.3 to −0.6)
+    //   Engine direction: metric DROPS entering OPEN, RISES returning. ✓
+    //
+    // THRESHOLDS: tune via "[Engine] [jumpingJack] frame: metric=X.X phase=..."
+    //   Arms at sides (CLOSED rest):       metric ≈ +0.7 to +1.1
+    //   Arms at shoulder height (midpoint): metric ≈  0.0 to +0.2
+    //   Arms fully overhead (OPEN peak):   metric ≈ −0.3 to −0.6
+    //
+    // CALIBRATION: 2 slow reps derive per-user enter/exit thresholds.
+    //   Static thresholds (below) only need to bracket the true values — calibration fixes them.
+    //
+    // FORM CHECKS:
+    //   "ARMS HIGHER": goodROMThreshold (−0.25). Wrist must reach ≥25% of torso above shoulder.
+    //   "JUMP WIDER":  distanceRatio(leftAnkle, rightAnkle) throughoutMax < 0.50.
+    //                  TUNE: "feet_wide=X.XXX" in rep NSLog. Good jack: ~0.8–1.5; lazy: ~0.2–0.4.
+    //
+    // ANKLE CONFIDENCE NOTE:
+    //   Ankles excluded from readyGate.requiredJoints. Including them would block every rep
+    //   via the validity gate when front-facing ankle confidence is low. Low-confidence frames
+    //   return nil for distanceRatio → feet_wide check is gracefully skipped for that rep.
+    //
+    // REP COUNTING RISK: At fast pace (>90/min, period <0.67s), Vision at 30fps may miss
+    //   the full arm arc if it spends only 2–3 frames below enterThreshold. minRepInterval
+    //   debounces double-counts. Lower calibration enterFraction to 0.40 if reps are missed.
+
+    static let jumpingJack = ExerciseDefinition(
+        id:          "jumpingJack",
+        displayName: "Jumping Jack",
+
+        repMetric: .average(
+            .normalizedVerticalGap(upper: .leftShoulder,  lower: .leftWrist),
+            .normalizedVerticalGap(upper: .rightShoulder, lower: .rightWrist)
+        ),
+
+        topAngle:           0.90,
+        repEnterThreshold:  0.30,   // arms have risen above shoulder height = rep entering
+        repExitThreshold:   0.50,   // arms have returned below shoulder height = rep done
+        goodROMThreshold:  -0.25,   // wrists must reach ≥25% of torso above shoulder = overhead
+        insufficientROMCue: "ARMS HIGHER",
+
+        formChecks: [
+            // Feet-wide check: maximum ankle spread while arms are in the OPEN phase (inRep).
+            // distanceRatio: 2D ankle-to-ankle distance / torso length. Body-scale normalised.
+            // throughoutMax: captures max spread across the entire inRep window — more robust
+            //   than atBottom if arm peak and foot peak are slightly asynchronous.
+            // TUNE: "feet_wide=X.XXX" in rep NSLog. Good jack: ~0.8–1.5; lazy: ~0.2–0.4.
+            FormCheck(
+                id:         "feet_wide",
+                cue:        "JUMP WIDER",
+                metric:     .distanceRatio(a: .leftAnkle, b: .rightAnkle),
+                evaluateAt: .throughoutMax,
+                condition:  .lessThan(0.50),
+                priority:   2,
+                enabled:    true
+            ),
+        ],
+
+        readyGate: ReadyGateConfig(
+            readyAngleMin:  0.55,   // arms clearly at sides; CLOSED metric ≈ 0.7–1.1
+            readyAngleMax:  2.00,
+            requiredJoints: [.leftShoulder, .leftWrist,
+                              .rightShoulder, .rightWrist,
+                              .leftHip, .rightHip],
+            minConfidence:  0.30,
+            stableDuration: 0.5
+        ),
+
+        cameraSetup: CameraSetupConfig(
+            setupInstruction: "Face the camera — stand back so head to feet are fully in frame",
+            requiredJoints: [
+                .leftShoulder,  .rightShoulder,
+                .leftWrist,     .rightWrist,
+                .leftHip,       .rightHip,
+                .leftAnkle,     .rightAnkle,
+            ]
+        ),
+
+        calibration: CalibrationConfig(
+            repsNeeded:    2,
+            enterFraction: 0.50,
+            exitFraction:  0.25
+        ),
+
+        minRepInterval: 0.45,
+
+        planarityChecks: [
+            // Jumping jacks are front-facing; arm motion stays in the frontal plane.
+            // normalizedVerticalGap measures shoulder.y and wrist.y coordinates directly,
+            // which are robust to foreshortening (unlike joint-angle metrics).
+            // Disabled until tuned from real device data.
+            PlanarityCheck(id: "uarm_l", jointA: .leftShoulder,  jointB: .leftElbow,
+                           minRatio: 0.75, cue: "FACE CAMERA", fallbackReferenceRatio: 0.64,
+                           enabled: false),
+            PlanarityCheck(id: "uarm_r", jointA: .rightShoulder, jointB: .rightElbow,
+                           minRatio: 0.75, cue: "FACE CAMERA", fallbackReferenceRatio: 0.64,
+                           enabled: false),
         ]
     )
 

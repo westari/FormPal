@@ -12,6 +12,7 @@ const EXERCISE_UI: Record<string, { symbol: string; grad: [string, string] }> = 
   curl:          { symbol: 'dumbbell.fill',                      grad: ['#48E08A', '#12B59A'] },
   lunge:         { symbol: 'figure.step.training',               grad: ['#C084FC', '#7C3AED'] },
   shoulderPress: { symbol: 'figure.arms.open',                   grad: ['#F97316', '#DC2626'] },
+  jumpingJack:   { symbol: 'figure.jumprope',                    grad: ['#FF6B35', '#FF2D55'] },
 };
 
 export default function ExercisePickerScreen() {

@@ -176,6 +176,22 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     isFormCheckable: true,
   },
 
+  {
+    id:              'jumpingJack',
+    displayName:     'Jumping Jack',
+    muscleGroups:    [MuscleGroup.Legs, MuscleGroup.Shoulders, MuscleGroup.Core],
+    splitCategories: [SplitCategory.Upper, SplitCategory.Lower],
+    difficulty:      Difficulty.Beginner,
+    equipment:       [],
+    defaultReps:     20,
+    defaultSets:     3,
+    progression: {
+      repRange: [15, 50],
+      setRange:  [2, 5],
+    },
+    isFormCheckable: true,
+  },
+
   // ─────────────────────────────────────────────────────────────────────────
   // ADD NEW FORM-CHECKABLE EXERCISES HERE.
   // ─────────────────────────────────────────────────────────────────────────
