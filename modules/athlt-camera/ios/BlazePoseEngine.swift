@@ -98,7 +98,7 @@ final class BlazePoseEngine {
             let result  = try lm.detect(image: mpImage)
             let elapsed = (CACurrentMediaTime() - t0) * 1000.0
 
-            guard let worldLMs = result.poseWorldLandmarks.first,
+            guard let worldLMs = result.worldLandmarks.first,
                   worldLMs.count > BPIdx.rightAnkle else {
                 return BlazePoseResult(primaryAngle3D: nil,
                                        jointDebug: "no pose", inferenceMs: elapsed)
