@@ -60,15 +60,23 @@ final class BlazePoseEngine {
             NSLog("[BlazePose] model unavailable — disabled for this session")
             return
         }
+
+        // Build options outside the do block — none of these assignments throw.
+        // Fix: BaseOptions is an ObjC class; use default init() then set modelAssetPath.
+        let base = BaseOptions()
+        base.modelAssetPath = path
+
+        let options = PoseLandmarkerOptions()
+        options.baseOptions                = base
+        options.runningMode                = .image
+        options.numPoses                   = 1
+        options.minPoseDetectionConfidence = 0.5
+        options.minPosePresenceConfidence  = 0.5
+        options.minTrackingConfidence      = 0.5
+
+        // Only the throwing initializer lives in do/catch so the catch is reachable.
         do {
-            var opts = PoseLandmarkerOptions()
-            opts.baseOptions                  = BaseOptions(modelAssetPath: path)
-            opts.runningMode                  = .image
-            opts.numPoses                     = 1
-            opts.minPoseDetectionConfidence   = 0.5
-            opts.minPosePresenceConfidence    = 0.5
-            opts.minTrackingConfidence        = 0.5
-            landmarker = try PoseLandmarker(options: opts)
+            landmarker = try PoseLandmarker(options: options)
             isReady    = true
             NSLog("[BlazePose] ready — %@", path)
         } catch {
@@ -85,7 +93,8 @@ final class BlazePoseEngine {
         guard ENABLE_BLAZEPOSE, isReady, let lm = landmarker else { return nil }
         let t0 = CACurrentMediaTime()
         do {
-            let mpImage = try MPImage(pixelBuffer: pixelBuffer)
+            // Fix: MPImage(pixelBuffer:orientation:) — orientation is required, no default.
+            let mpImage = try MPImage(pixelBuffer: pixelBuffer, orientation: .up)
             let result  = try lm.detect(image: mpImage)
             let elapsed = (CACurrentMediaTime() - t0) * 1000.0
 
@@ -106,28 +115,26 @@ final class BlazePoseEngine {
     // ── 3D angle from world landmarks ─────────────────────────────────────────
 
     private func primaryAngle(worldLMs: [Landmark], exerciseId: String) -> Double? {
-        // Returns (proximal, pivot, distal) indices for the primary joint angle.
         let triple: (Int, Int, Int)?
         switch exerciseId {
         case "curl", "shoulderPress":
-            // Pick arm with higher elbow visibility
-            let lv = worldLMs[BPIdx.leftElbow].visibility  ?? 0
-            let rv = worldLMs[BPIdx.rightElbow].visibility ?? 0
+            // Fix: Landmark.visibility is NSNumber? (ObjC bridge). Use .floatValue to get Float.
+            let lv = worldLMs[BPIdx.leftElbow].visibility?.floatValue  ?? 0
+            let rv = worldLMs[BPIdx.rightElbow].visibility?.floatValue ?? 0
             if lv >= rv {
                 triple = (BPIdx.leftShoulder,  BPIdx.leftElbow,  BPIdx.leftWrist)
             } else {
                 triple = (BPIdx.rightShoulder, BPIdx.rightElbow, BPIdx.rightWrist)
             }
         case "squat", "lunge":
-            let lv = worldLMs[BPIdx.leftKnee].visibility  ?? 0
-            let rv = worldLMs[BPIdx.rightKnee].visibility ?? 0
+            let lv = worldLMs[BPIdx.leftKnee].visibility?.floatValue  ?? 0
+            let rv = worldLMs[BPIdx.rightKnee].visibility?.floatValue ?? 0
             if lv >= rv {
                 triple = (BPIdx.leftHip,  BPIdx.leftKnee,  BPIdx.leftAnkle)
             } else {
                 triple = (BPIdx.rightHip, BPIdx.rightKnee, BPIdx.rightAnkle)
             }
         default:
-            // pushup uses body-relative metric; no simple joint angle maps cleanly
             return nil
         }
         guard let (a, pivot, c) = triple else { return nil }
@@ -138,7 +145,6 @@ final class BlazePoseEngine {
     private func angle3D(lms: [Landmark], a: Int, pivot: Int, c: Int) -> Double? {
         guard lms.count > max(a, pivot, c) else { return nil }
         let pA = lms[a]; let pB = lms[pivot]; let pC = lms[c]
-        // Vectors from pivot outward
         let ax = Double(pA.x - pB.x), ay = Double(pA.y - pB.y), az = Double(pA.z - pB.z)
         let cx = Double(pC.x - pB.x), cy = Double(pC.y - pB.y), cz = Double(pC.z - pB.z)
         let lenA = (ax*ax + ay*ay + az*az).squareRoot()
@@ -167,7 +173,8 @@ final class BlazePoseEngine {
         return indices.compactMap { (name, idx) -> String? in
             guard idx < worldLMs.count else { return nil }
             let lm  = worldLMs[idx]
-            let vis = lm.visibility.map { String(format: "%.2f", $0) } ?? "?"
+            // Fix: visibility is NSNumber?, not Float? — extract floatValue for formatting.
+            let vis = lm.visibility.map { String(format: "%.2f", $0.floatValue) } ?? "?"
             return "\(name)(z=\(String(format: "%+.2f", lm.z)) v=\(vis))"
         }.joined(separator: " ")
     }
