@@ -340,6 +340,12 @@ export default function ProfileScreen() {
               label="Reset Onboarding"
               onPress={resetOnboarding}
               danger
+            />
+            <SettingRow
+              icon="camera.metering.matrix"
+              colors={['#5E5CE6', '#3634A3']}
+              label="ARKit Body Experiment (DEV)"
+              onPress={() => router.push('/ar-experiment')}
               last
             />
           </SettingsCard>

@@ -17,7 +17,7 @@ Pod::Spec.new do |s|
   s.source_files   = 'ios/**/*.{swift,h,m,mm}'
 
   # System frameworks — all available without additional pods
-  s.frameworks     = 'AVFoundation', 'CoreML', 'Vision', 'CoreMedia', 'CoreVideo', 'UIKit'
+  s.frameworks     = 'AVFoundation', 'CoreML', 'Vision', 'CoreMedia', 'CoreVideo', 'UIKit', 'ARKit', 'SceneKit'
 
   s.dependency 'ExpoModulesCore'
   # MediaPipe Tasks — BlazePose 3D world landmarks (guarded by ENABLE_BLAZEPOSE flag)
