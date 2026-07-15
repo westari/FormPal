@@ -3,13 +3,14 @@ import ARKit
 import SceneKit
 import UIKit
 
-// ARSkeleton.JointName raw value strings for reference:
-//   .leftShoulder  = "left_arm_joint"
-//   .leftElbow     = "left_forearm_joint"
-//   .leftWrist     = "left_hand_joint"
-//   .rightShoulder = "right_arm_joint"
-//   .rightElbow    = "right_forearm_joint"
-//   .rightWrist    = "right_hand_joint"
+// Joint raw value strings for ARSkeleton.JointName(rawValue:)
+// ARSkeleton.JointName has no static dot-syntax members — always use rawValue init.
+private let jLeftShoulder  = ARSkeleton.JointName(rawValue: "left_arm_joint")
+private let jLeftElbow     = ARSkeleton.JointName(rawValue: "left_forearm_joint")
+private let jLeftWrist     = ARSkeleton.JointName(rawValue: "left_hand_joint")
+private let jRightShoulder = ARSkeleton.JointName(rawValue: "right_arm_joint")
+private let jRightElbow    = ARSkeleton.JointName(rawValue: "right_forearm_joint")
+private let jRightWrist    = ARSkeleton.JointName(rawValue: "right_hand_joint")
 
 public final class ARBodyExperimentView: ExpoView, ARSessionDelegate {
 
@@ -17,7 +18,6 @@ public final class ARBodyExperimentView: ExpoView, ARSessionDelegate {
     let onDebugLog = EventDispatcher()
 
     // ── Static handle so ARBodyExperimentModule.mark() can reach the live view.
-    // Weak — no retain cycle. One view instance at a time.
     static weak var activeInstance: ARBodyExperimentView?
 
     // ── AR scene view (shows camera feed) ─────────────────────────────────────
@@ -147,26 +147,27 @@ public final class ARBodyExperimentView: ExpoView, ARSessionDelegate {
         let t0 = CACurrentMediaTime()
         let sk = bodyAnchor.skeleton
 
-        // Joint positions in model space (meters, root = hip origin)
-        let lSh = jointPos(sk, .leftShoulder)
-        let lEl = jointPos(sk, .leftElbow)
-        let lWr = jointPos(sk, .leftWrist)
-        let rSh = jointPos(sk, .rightShoulder)
-        let rEl = jointPos(sk, .rightElbow)
-        let rWr = jointPos(sk, .rightWrist)
+        // Joint positions in model space (meters, root = hip origin).
+        // modelTransform(for:) returns nil when the joint is not tracked — handled gracefully.
+        let lSh = jointPos(sk, jLeftShoulder,  name: "lSh")
+        let lEl = jointPos(sk, jLeftElbow,     name: "lEl")
+        let lWr = jointPos(sk, jLeftWrist,     name: "lWr")
+        let rSh = jointPos(sk, jRightShoulder, name: "rSh")
+        let rEl = jointPos(sk, jRightElbow,    name: "rEl")
+        let rWr = jointPos(sk, jRightWrist,    name: "rWr")
 
-        // 3D elbow angles
+        // 3D elbow angles — nil if any joint in the triple is not tracked
         let lAng = elbowAngle(lSh, lEl, lWr)
         let rAng = elbowAngle(rSh, rEl, rWr)
 
-        // Drift signal: how far forward the elbow is from the shoulder in model space.
+        // Drift: how far forward the elbow is vs the shoulder in model space.
         // Positive = elbow in front of shoulder (toward camera when person faces forward).
-        let lFwd: Float? = { guard let e = lEl, let s = lSh else { return nil }; return e.z - s.z }()
-        let rFwd: Float? = { guard let e = rEl, let s = rSh else { return nil }; return e.z - s.z }()
+        let lFwd: Float? = lEl.flatMap { e in lSh.map { s in e.z - s.z } }
+        let rFwd: Float? = rEl.flatMap { e in rSh.map { s in e.z - s.z } }
 
-        // Elbow−shoulder vector (shows drift direction as xyz components)
-        let lVec: simd_float3? = { guard let e = lEl, let s = lSh else { return nil }; return e - s }()
-        let rVec: simd_float3? = { guard let e = rEl, let s = rSh else { return nil }; return e - s }()
+        // Elbow−shoulder vector (shows drift direction as xyz)
+        let lVec: simd_float3? = lEl.flatMap { e in lSh.map { s in e - s } }
+        let rVec: simd_float3? = rEl.flatMap { e in rSh.map { s in e - s } }
 
         let dt      = Int((CACurrentMediaTime() - t0) * 1000)
         let tracked = bodyAnchor.isTracked
@@ -178,19 +179,19 @@ public final class ARBodyExperimentView: ExpoView, ARSessionDelegate {
         markRequested = false
         markLock.unlock()
 
-        // Live angle overlay — update on every body anchor (no throttle)
+        // Live angle overlay — every body anchor, no throttle
         let lStr = lAng.map { String(format: "%.1f", $0) } ?? "—"
         let rStr = rAng.map { String(format: "%.1f", $0) } ?? "—"
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            self.angleLabel.text = "L: \(lStr)°    R: \(rStr)°"
+            self.angleLabel.text       = "L: \(lStr)°    R: \(rStr)°"
             self.statusLabel.text      = tracked ? "● TRACKING" : "○ NO BODY"
             self.statusLabel.textColor = tracked
                 ? UIColor(red: 0.18, green: 0.80, blue: 0.44, alpha: 1)
                 : UIColor(red: 1.00, green: 0.23, blue: 0.19, alpha: 1)
         }
 
-        // Throttled debug log
+        // Throttled debug log (~3fps) or immediately on mark
         let now = CACurrentMediaTime()
         guard doMark || (now - lastLogTime) >= 0.333 else { return }
         lastLogTime = now
@@ -209,7 +210,7 @@ public final class ARBodyExperimentView: ExpoView, ARSessionDelegate {
         guard anchors.contains(where: { $0 is ARBodyAnchor }) else { return }
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            self.angleLabel.text      = "L: —    R: —"
+            self.angleLabel.text       = "L: —    R: —"
             self.statusLabel.text      = "○ NO BODY"
             self.statusLabel.textColor = UIColor(red: 1, green: 0.23, blue: 0.19, alpha: 1)
         }
@@ -230,17 +231,24 @@ public final class ARBodyExperimentView: ExpoView, ARSessionDelegate {
         onDebugLog(["message": msg])
     }
 
-    private func jointPos(_ sk: ARSkeleton3D, _ name: ARSkeleton.JointName) -> simd_float3? {
-        guard let t = sk.modelTransform(for: name) else { return nil }
+    private func jointPos(_ sk: ARSkeleton3D,
+                          _ name: ARSkeleton.JointName,
+                          name debugName: String) -> simd_float3? {
+        guard let t = sk.modelTransform(for: name) else {
+            // Joint not currently tracked — not an error, just no data this frame.
+            return nil
+        }
         return simd_float3(t.columns.3.x, t.columns.3.y, t.columns.3.z)
     }
 
-    private func elbowAngle(_ shoulder: simd_float3?, _ elbow: simd_float3?,
-                             _ wrist: simd_float3?) -> Float? {
+    private func elbowAngle(_ shoulder: simd_float3?,
+                             _ elbow:   simd_float3?,
+                             _ wrist:   simd_float3?) -> Float? {
         guard let s = shoulder, let e = elbow, let w = wrist else { return nil }
         let va = s - e   // shoulder direction from elbow
         let vb = w - e   // wrist direction from elbow
-        let la = simd_length(va); let lb = simd_length(vb)
+        let la = simd_length(va)
+        let lb = simd_length(vb)
         guard la > 0.001, lb > 0.001 else { return nil }
         let cosA = simd_dot(va, vb) / (la * lb)
         return acos(max(-1, min(1, cosA))) * (180 / .pi)
