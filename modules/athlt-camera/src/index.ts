@@ -122,6 +122,15 @@ export async function setExercise(type: ExerciseType): Promise<void> {
   return ATHLTCameraNative.setExercise(type);
 }
 
+// Passes the exercise standard (from constants/exerciseStandards.ts) to the
+// native engine as a JSON string. Must be called after setExercise() — the
+// setExercise call resets the engine baseline; this sets the standard floor on top.
+// Pass null for exercises that have no defined standard (Layer 2 will be inactive).
+export async function setExerciseStandard(standard: Record<string, unknown> | null): Promise<void> {
+  if (!ATHLTCameraNative) return;
+  return ATHLTCameraNative.setExerciseStandard(standard !== null ? JSON.stringify(standard) : null);
+}
+
 // ─── Skeleton overlay ─────────────────────────────────────────────────────────
 
 export async function setSkeletonVisible(enabled: boolean): Promise<void> {

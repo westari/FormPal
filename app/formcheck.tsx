@@ -17,6 +17,7 @@ import {
   flipCamera,
   setDiagnosticMode,
   setExercise,
+  setExerciseStandard,
   addRepListener,
   addDebugStatsListener,
   addCameraStateListener,
@@ -26,6 +27,7 @@ import {
   addDebugLogListener,
   isNativeModuleLinked,
 } from '../modules/athlt-camera/src/index';
+import { EXERCISE_STANDARDS } from '../constants/exerciseStandards';
 import type { DebugStatsEvent, RepEvent, ExerciseType } from '../modules/athlt-camera/src/index';
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
@@ -212,14 +214,18 @@ export default function FormCheckScreen() {
 
     setPhase('starting');
     void setDiagnosticMode(true);
-    startSession().then(result => {
+    startSession().then(async result => {
       if (!mounted) return;
       if (!result.success) {
         setError(result.error ?? 'Camera failed to start. Check camera permission in Settings.');
         setPhase('idle');
       } else {
         // Set exercise early so SETUP phase uses the right requiredJoints.
-        void setExercise(exerciseType);
+        // Await setExercise (resets engine + baseline) before calling
+        // setExerciseStandard — both go to the native inferenceQueue in order,
+        // so the standard is guaranteed set before calibration can complete.
+        await setExercise(exerciseType);
+        void setExerciseStandard(EXERCISE_STANDARDS[exerciseType] ?? null);
       }
     });
 

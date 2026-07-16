@@ -228,8 +228,95 @@ public class ATHLTCameraModule: Module {
                 self.wireEngineCallbacks()
                 self.currentDef = def
                 self.universalEngine.reset()
-                self.universalEngine.setStandard(ExerciseStandards.standard(for: exerciseType))
                 NSLog("[GymCamera] exercise → %@ (%@)", exerciseType, def.displayName)
+                promise.resolve()
+            }
+        }
+
+        // Receives the exercise standard as a JSON string from JS.
+        // Passing a string (not a dict) avoids Expo Modules NSNumber/Bool bridging edge
+        // cases — JSONSerialization gives clean Swift types for all fields.
+        // Called by the JS setExercise wrapper immediately after setExercise().
+        AsyncFunction("setExerciseStandard") { (standardJson: String?, promise: Promise) in
+            self.inferenceQueue.async {
+                guard let jsonStr = standardJson,
+                      let data    = jsonStr.data(using: .utf8),
+                      let raw     = try? JSONSerialization.jsonObject(with: data),
+                      let dict    = raw as? [String: Any] else {
+                    // nil JSON = exercise has no standard — Layer 2 inactive.
+                    self.universalEngine.setStandard(nil)
+                    promise.resolve()
+                    return
+                }
+
+                func fail(_ reason: String) {
+                    self.sendEvent("onDebugLog", ["message":
+                        "[STD-LOAD] ERROR: \(reason) — engine running WITHOUT standard"])
+                    self.universalEngine.setStandard(nil)
+                }
+
+                guard let exerciseId    = dict["exerciseId"]            as? String,
+                      let peakAngleMax  = dict["standardPeakAngleMax"]  as? Double,
+                      let startAngleMin = dict["standardStartAngleMin"] as? Double,
+                      let romCue        = dict["romCue"]                as? String,
+                      let extendCue     = dict["extendCue"]             as? String,
+                      let reviewed      = dict["reviewed"]              as? Bool else {
+                    fail("missing required fields (exerciseId / standardPeakAngleMax / standardStartAngleMin / romCue / extendCue / reviewed)")
+                    promise.resolve()
+                    return
+                }
+
+                var checks: [JointAngleCheck] = []
+                if let rawChecks = dict["staticChecks"] as? [[String: Any]] {
+                    for (idx, rawCheck) in rawChecks.enumerated() {
+                        guard let description = rawCheck["description"] as? String,
+                              let aStr        = rawCheck["a"]           as? String,
+                              let bStr        = rawCheck["b"]           as? String,
+                              let cStr        = rawCheck["c"]           as? String,
+                              let maxRange    = rawCheck["maxRangeDeg"] as? Double,
+                              let cue         = rawCheck["cue"]         as? String else {
+                            self.sendEvent("onDebugLog", ["message":
+                                "[STD-LOAD] ERROR: staticChecks[\(idx)] missing field — check skipped"])
+                            continue
+                        }
+                        guard let a = Joint(string: aStr),
+                              let b = Joint(string: bStr),
+                              let c = Joint(string: cStr) else {
+                            self.sendEvent("onDebugLog", ["message":
+                                "[STD-LOAD] ERROR: staticChecks[\(idx)] unknown joint (a='\(aStr)' b='\(bStr)' c='\(cStr)') — check skipped"])
+                            continue
+                        }
+                        checks.append(JointAngleCheck(description: description,
+                                                      a: a, b: b, c: c,
+                                                      maxRangeDeg: maxRange, cue: cue))
+                    }
+                }
+
+                let tempoMin  = dict["tempoMinSec"]  as? Double ?? 1.5
+                let tempoMax  = dict["tempoMaxSec"]  as? Double ?? 5.0
+                let topFaults = dict["topFaults"]    as? [String] ?? []
+
+                let standard = ExerciseStandard(
+                    exerciseId:            exerciseId,
+                    reviewed:              reviewed,
+                    standardPeakAngleMax:  peakAngleMax,
+                    standardStartAngleMin: startAngleMin,
+                    romCue:                romCue,
+                    extendCue:             extendCue,
+                    staticChecks:          checks,
+                    tempoMinSec:           tempoMin,
+                    tempoMaxSec:           tempoMax,
+                    topFaults:             topFaults
+                )
+
+                self.sendEvent("onDebugLog", ["message":
+                    "[STD-LOAD] received standard for '\(exerciseId)': " +
+                    "peak=\(String(format: "%.1f", peakAngleMax)) " +
+                    "start=\(String(format: "%.1f", startAngleMin)) " +
+                    "minRange=\(String(format: "%.1f", startAngleMin - peakAngleMax)) " +
+                    "staticChecks=\(checks.count) reviewed=\(reviewed)"])
+
+                self.universalEngine.setStandard(standard)
                 promise.resolve()
             }
         }
@@ -425,7 +512,6 @@ public class ATHLTCameraModule: Module {
             self.universalEngine.log = { [weak self] msg in
                 self?.sendEvent("onDebugLog", ["message": msg])
             }
-            self.universalEngine.setStandard(ExerciseStandards.standard(for: self.currentExercise))
         }
         Task { [weak self] in await self?.blazePoseEngine.setup() }
 
