@@ -1,38 +1,44 @@
 import Foundation
 
-// ─── Universal Movement-Quality Engine ───────────────────────────────────────
+// ─── Universal Movement-Quality Engine (Layer 1 + Layer 2) ───────────────────
 //
-// Detects degradation in movement quality by comparing each rep to the user's
-// OWN first N reps (their personal baseline for this set). No exercise-specific
-// definitions, no absolute angle thresholds, no ML inference beyond Vision.
+// LAYER 1 — relative signals (vs user's own first 3 reps):
+//   1. Range shrink:       current range < 85% of baseline range
+//   2. L/R symmetry:       bilateral joint angle difference > 20% at rep peak
+//   3. Smoothness/jerk:    velocity variance > 2× baseline (catches swinging)
+//   4. Anchor stability:   auto-detected still joints move > 2.2× baseline
 //
-// SIGNALS (all relative or within-frame — no depth dependency):
-//   1. Self-baseline consistency: range shrink + duration deviation
-//   2. Left/right symmetry: bilateral joint angles at the rep's peak pose
-//   3. Smoothness/jerk: variance of metric velocity during the rep
-//   4. Stability: auto-detected anchor joints, flags compensation in later reps
+// LAYER 2 — form standard floor (vs ExerciseStandard, pre-cached):
+//   5. Static-joint violation: torso/anchor angle range exceeds standard limit
+//      (fires even during the 3 reference reps — catches swinging from rep 1)
+//   6. Below-standard ROM: peak angle doesn't reach standard target
+//      (prevents beginners locking in a bad baseline as "consistent")
 //
-// DESIGN CONTRACT:
-//   • Never flags until nBaseline clean reps are recorded.
-//   • Emits "[UNIV] CALIBRATING (n/N)" during baseline collection.
-//   • All output goes through `log` closure → routes to onDebugLog.
-//   • Confidence-gated: joints below kMinConf are skipped.
-//   • One cue per rep, highest priority wins.
-//   • Call reset() on exercise change or new tracking session.
+// CUE PRIORITY (one per rep, highest wins):
+//   static-violation > swinging > uneven > below-standard-ROM >
+//   range-shrink > compensation > rushing/slowing
+//
+// DESIGN RULES:
+//   • Angle-based only — rotation/translation invariant, no depth dependency.
+//   • Never flags Layer 1 until nBaseline clean reps are recorded.
+//   • Layer 2 static violations fire immediately in reference reps.
+//   • All output via `log` closure → onDebugLog (readable on Windows via Metro).
+//   • reset() clears baseline state but NOT the active standard.
+//   • setStandard() called once per exercise change (from ATHLTCameraModule).
 
 final class UniversalQualityEngine {
 
-    // MARK: – Tuning constants
+    // MARK: – Tuning
 
-    private let nBaseline:              Int    = 3     // reps needed to establish baseline
-    private let rangeShrinkLimit:       Double = 0.85  // flag if range < 85% of baseline
-    private let durDeviationLimit:      Double = 0.40  // flag if duration outside ±40% of baseline
-    private let symmetryRelDiffLimit:   Double = 0.20  // flag if L/R relative diff > 20%
-    private let jerkSpikeMultiple:      Double = 2.0   // flag if jerk-proxy > baseline × 2.0
-    private let anchorBreachMultiple:   Double = 2.2   // flag if anchor joint moves > baseline × 2.2
-    private let anchorCutoffFraction:   Double = 0.25  // joints below 25% of max displacement = anchor
-    private let frameBufferSeconds:     Double = 30.0  // rolling buffer length
-    private let bufferTrimInterval:     Int    = 30    // trim buffer every N frames
+    private let nBaseline:              Int    = 3
+    private let rangeShrinkLimit:       Double = 0.85
+    private let durDeviationLimit:      Double = 0.40
+    private let symmetryRelDiffLimit:   Double = 0.20
+    private let jerkSpikeMultiple:      Double = 2.0
+    private let anchorBreachMultiple:   Double = 2.2
+    private let anchorCutoffFraction:   Double = 0.25
+    private let frameBufferSeconds:     Double = 30.0
+    private let bufferTrimInterval:     Int    = 30
 
     // MARK: – Frame record
 
@@ -45,30 +51,51 @@ final class UniversalQualityEngine {
     // MARK: – Per-rep statistics
 
     private struct RepStats {
-        let range:     Double           // max − min of repMetric in the effective window
-        let duration:  Double           // seconds from rep-top to rep completion
-        let jerk:      Double           // variance of frame-to-frame metric velocity (higher = less smooth)
-        let peakPose:  Pose             // pose at the metric minimum (most-contracted position)
-        let jointDisp: [Joint: Double]  // total 2-D displacement per joint during the rep window
+        let range:        Double           // max − min of repMetric in effective window
+        let duration:     Double           // seconds from rep-top to rep completion
+        let jerk:         Double           // velocity variance proxy (higher = less smooth)
+        let peakValue:    Double           // minimum repMetric value (most contracted)
+        let startValue:   Double           // local max repMetric (most extended position)
+        let peakPose:     Pose             // pose at metric minimum
+        let jointDisp:    [Joint: Double]  // total 2-D displacement per joint (for anchors)
+        let staticAngVar: [Int: Double]    // staticChecks index → angle range (°) in this rep
     }
 
-    // MARK: – State
+    // MARK: – Baseline state
 
-    private var frameBuffer:    [FrameRecord]   = []
-    private var frameCount:     Int             = 0
-
-    private var referenceStats: [RepStats]      = []
-    private var baselineRange:    Double?
-    private var baselineDuration: Double?
-    private var baselineJerk:     Double?
+    private var referenceStats:    [RepStats]      = []
+    private var baselineRange:     Double?
+    private var baselineDuration:  Double?
+    private var baselineJerk:      Double?
     private var baselineJointDisp: [Joint: Double] = [:]
     private var anchorJoints:      [Joint]         = []
 
-    private var lastRepTime: Date = .distantPast
+    // MARK: – Frame buffer
+
+    private var frameBuffer: [FrameRecord] = []
+    private var frameCount:  Int           = 0
+    private var lastRepTime: Date          = .distantPast
+
+    // MARK: – Layer 2 standard
+
+    private(set) var activeStandard: ExerciseStandard? = nil
+
+    /// Call once per exercise change (before any reps are counted).
+    func setStandard(_ standard: ExerciseStandard?) {
+        activeStandard = standard
+        if let std = standard {
+            if !std.reviewed {
+                log?("[STD] ⚠ '\(std.exerciseId)' standard NOT YET HUMAN-REVIEWED — verify numbers on-device")
+            }
+            log?("[STD] standard loaded: peak≤\(f1(std.standardPeakAngleMax))°  start≥\(f1(std.standardStartAngleMin))°  minRange≥\(f1(std.standardMinRange))°")
+        } else {
+            log?("[STD] no standard for this exercise — Layer 2 inactive, relative signals only")
+        }
+    }
 
     // MARK: – Output channel
 
-    /// Wire this to `sendEvent("onDebugLog", ["message": msg])` before the first frame.
+    /// Wire to `sendEvent("onDebugLog", ["message": msg])` before the first frame.
     var log: ((String) -> Void)?
 
     // MARK: – Per-frame ingestion
@@ -86,15 +113,13 @@ final class UniversalQualityEngine {
 
     // MARK: – Rep completion
 
-    /// Call once per rep (fired by the existing engine's onRepDetected callback).
     func onRepCompleted(repNumber: Int, peakValue: Double, repEndTime: Date) {
-        // Determine lookback window. Before baseline: generous 8s. After: 2.5× learned duration.
         let lookback: TimeInterval = baselineDuration.map { $0 * 2.5 } ?? 8.0
         let windowStart = repEndTime.addingTimeInterval(-min(lookback, frameBufferSeconds - 1))
-        let rawWindow = frameBuffer.filter { $0.timestamp >= windowStart && $0.timestamp <= repEndTime }
+        let rawWindow   = frameBuffer.filter { $0.timestamp >= windowStart && $0.timestamp <= repEndTime }
 
         guard rawWindow.count >= 5 else {
-            log?("[UNIV] rep #\(repNumber): only \(rawWindow.count) frames — skipped")
+            log?("[UNIV] rep #\(repNumber): only \(rawWindow.count) frames in window — skipped")
             lastRepTime = repEndTime
             return
         }
@@ -106,6 +131,17 @@ final class UniversalQualityEngine {
         if referenceStats.count < nBaseline {
             referenceStats.append(stats)
             let n = referenceStats.count
+
+            // Layer 2: static-joint check fires immediately, even in reference reps.
+            if let std = activeStandard {
+                log?("[STD] rep #\(repNumber) ref: peak=\(f1(stats.peakValue))° start=\(f1(stats.startValue))°  (standard: peak≤\(f1(std.standardPeakAngleMax))° start≥\(f1(std.standardStartAngleMin))°)")
+                for (i, check) in std.staticChecks.enumerated() {
+                    if let angVar = stats.staticAngVar[i], angVar > check.maxRangeDeg {
+                        log?("[STD] rep #\(repNumber) ref: static '\(check.description)' range=\(f1(angVar))° > limit \(f1(check.maxRangeDeg))° → \(check.cue)")
+                    }
+                }
+            }
+
             log?("[UNIV] rep #\(repNumber): CALIBRATING (\(n)/\(nBaseline))  range=\(f3(stats.range))  dur=\(f2(stats.duration))s  jerk=\(f5(stats.jerk))")
             if n == nBaseline { buildBaseline() }
             lastRepTime = repEndTime
@@ -119,53 +155,81 @@ final class UniversalQualityEngine {
             return
         }
 
-        // ── Compute all signals ───────────────────────────────────────────────
+        // ── Layer 2a: static-joint violation from standard ────────────────────
 
-        // Signal 3: smoothness / jerk-proxy
+        var staticViolationCue: String? = nil
+        if let std = activeStandard {
+            for (i, check) in std.staticChecks.enumerated() {
+                if let angVar = stats.staticAngVar[i], angVar > check.maxRangeDeg {
+                    log?("[STD] rep #\(repNumber) static '\(check.description)' range=\(f1(angVar))° > limit \(f1(check.maxRangeDeg))°")
+                    staticViolationCue = check.cue
+                    break   // first violation wins; priority picks the single cue
+                }
+            }
+        }
+
+        // ── Layer 2b: below-standard ROM ─────────────────────────────────────
+
+        var belowStandardCue: String? = nil
+        if let std = activeStandard {
+            if stats.peakValue > std.standardPeakAngleMax {
+                log?("[STD] rep #\(repNumber) peak=\(f1(stats.peakValue))° > standard \(f1(std.standardPeakAngleMax))°")
+                belowStandardCue = std.romCue
+            } else if stats.startValue < std.standardStartAngleMin {
+                log?("[STD] rep #\(repNumber) start=\(f1(stats.startValue))° < standard \(f1(std.standardStartAngleMin))°")
+                belowStandardCue = std.extendCue
+            }
+        }
+
+        // ── Layer 1: relative signals ─────────────────────────────────────────
+
+        // Smoothness / jerk-proxy
         let jerkRatio  = bJerk > 1e-9 ? stats.jerk / bJerk : 1.0
         let isSwinging = jerkRatio >= jerkSpikeMultiple
 
-        // Signal 1a: range shrink
+        // Range shrink vs user's own baseline
         let rangeRatio    = bRange > 1e-9 ? stats.range / bRange : 1.0
         let isRangeShrink = rangeRatio < rangeShrinkLimit
 
-        // Signal 1b: duration deviation
-        let durRatio      = bDur > 1e-9 ? stats.duration / bDur : 1.0
-        let isDurOff      = durRatio < (1.0 - durDeviationLimit) || durRatio > (1.0 + durDeviationLimit)
+        // Duration deviation
+        let durRatio = bDur > 1e-9 ? stats.duration / bDur : 1.0
+        let isDurOff = durRatio < (1.0 - durDeviationLimit) || durRatio > (1.0 + durDeviationLimit)
 
-        // Signal 2: bilateral symmetry
+        // Bilateral symmetry at rep peak
         let symResult = computeBilateralSymmetry(pose: stats.peakPose)
 
-        // Signal 4: anchor stability
+        // Anchor stability (auto-detected still joints)
         let anchorResult = findAnchorViolation(jointDisp: stats.jointDisp)
 
-        // ── Log all values ────────────────────────────────────────────────────
+        // ── Log all signal values ─────────────────────────────────────────────
 
         log?("[UNIV] rep #\(repNumber) | range=\(f3(stats.range)) baseline=\(f3(bRange)) ratio=\(f2(rangeRatio))\(isRangeShrink ? " ← SHORT" : "")")
         log?("[UNIV] rep #\(repNumber) | dur=\(f2(stats.duration))s baseline=\(f2(bDur))s ratio=\(f2(durRatio))\(isDurOff ? " ← OFF" : "")")
         log?("[UNIV] rep #\(repNumber) | jerk=\(f5(stats.jerk)) baseline=\(f5(bJerk)) ratio=\(f2(jerkRatio))\(isSwinging ? " ← SPIKE" : "")")
-
         if let (lA, rA, relDiff) = symResult {
-            let flag = relDiff >= symmetryRelDiffLimit ? " ← UNEVEN" : ""
-            log?("[UNIV] rep #\(repNumber) | symmetry L=\(f1(lA))° R=\(f1(rA))° diff=\(f0(relDiff * 100))%\(flag)")
+            log?("[UNIV] rep #\(repNumber) | symmetry L=\(f1(lA))° R=\(f1(rA))° diff=\(f0(relDiff * 100))%\(relDiff >= symmetryRelDiffLimit ? " ← UNEVEN" : "")")
         } else {
-            log?("[UNIV] rep #\(repNumber) | symmetry n/a (low joint confidence)")
+            log?("[UNIV] rep #\(repNumber) | symmetry n/a (low confidence)")
         }
-
         if let (joint, ratio) = anchorResult {
             log?("[UNIV] rep #\(repNumber) | anchor \(joint) moved \(f2(ratio))× baseline ← COMPENSATION")
         } else {
             log?("[UNIV] rep #\(repNumber) | anchors stable")
         }
 
-        // ── Pick highest-priority cue ─────────────────────────────────────────
-        // Priority: swinging > uneven > range-shrink > compensation > rushing/slowing
+        // ── Single cue: highest priority wins ────────────────────────────────
+        // static-violation > swinging > uneven > below-standard-ROM >
+        // range-shrink > compensation > rushing/slowing
 
         let cue: String
-        if isSwinging {
+        if let sv = staticViolationCue {
+            cue = sv
+        } else if isSwinging {
             cue = "SWINGING — control the weight"
         } else if let (_, _, relDiff) = symResult, relDiff >= symmetryRelDiffLimit {
             cue = "UNEVEN — one side lagging"
+        } else if let bc = belowStandardCue {
+            cue = bc
         } else if isRangeShrink {
             cue = "CUTTING SHORT — range dropped vs your start"
         } else if let (joint, _) = anchorResult {
@@ -179,12 +243,13 @@ final class UniversalQualityEngine {
         }
 
         log?("[UNIV] rep #\(repNumber) | → \(cue)")
-
         lastRepTime = repEndTime
     }
 
     // MARK: – Reset
 
+    /// Clears baseline state. Does NOT clear activeStandard (standard persists
+    /// across tracking sessions for the same exercise).
     func reset() {
         frameBuffer.removeAll()
         frameCount = 0
@@ -221,19 +286,80 @@ final class UniversalQualityEngine {
         log?("[UNIV] ─── BASELINE SET ───")
         log?("[UNIV] range=\(f3(baselineRange!))  dur=\(f2(baselineDuration!))s  jerk=\(f5(baselineJerk!))")
         log?("[UNIV] anchors: \(anchorJoints.isEmpty ? "none" : anchorJoints.map{"\($0)"}.joined(separator: ", "))")
+
+        // Layer 2: validate baseline against the form standard.
+        if let std = activeStandard {
+            validateBaseline(standard: std)
+        } else {
+            log?("[UNIV] no standard set — Layer 1 relative signals are the only floor")
+        }
+
         log?("[UNIV] flagging begins next rep")
+    }
+
+    // MARK: – Layer 2 baseline validation
+
+    private func validateBaseline(standard: ExerciseStandard) {
+        let n = Double(referenceStats.count)
+        let avgPeak  = referenceStats.map(\.peakValue).reduce(0,+) / n
+        let avgStart = referenceStats.map(\.startValue).reduce(0,+) / n
+
+        log?("[STD] ─── BASELINE vs STANDARD ('\(standard.exerciseId)') ───")
+        log?("[STD] avg peak=\(f1(avgPeak))° (standard: ≤\(f1(standard.standardPeakAngleMax))°)  avg start=\(f1(avgStart))° (standard: ≥\(f1(standard.standardStartAngleMin))°)")
+
+        var standardMet = true
+
+        // Check peak ROM
+        if avgPeak > standard.standardPeakAngleMax {
+            standardMet = false
+            log?("[STD] BELOW STANDARD ROM: baseline peak=\(f1(avgPeak))° > standard \(f1(standard.standardPeakAngleMax))°")
+            log?("[STD] → will cue '\(standard.romCue)' until peak reaches ≤\(f1(standard.standardPeakAngleMax))°")
+        } else {
+            log?("[STD] peak ROM ✓ (\(f1(avgPeak))° ≤ \(f1(standard.standardPeakAngleMax))°)")
+        }
+
+        // Check start position
+        if avgStart < standard.standardStartAngleMin {
+            standardMet = false
+            log?("[STD] NOT FULLY EXTENDING: baseline start=\(f1(avgStart))° < standard \(f1(standard.standardStartAngleMin))°")
+            log?("[STD] → will cue '\(standard.extendCue)' until start reaches ≥\(f1(standard.standardStartAngleMin))°")
+        } else {
+            log?("[STD] start position ✓ (\(f1(avgStart))° ≥ \(f1(standard.standardStartAngleMin))°)")
+        }
+
+        // Summarise static-check history from reference reps
+        for (i, check) in standard.staticChecks.enumerated() {
+            let allVars = referenceStats.compactMap { $0.staticAngVar[i] }
+            let avgVar  = allVars.isEmpty ? 0.0 : allVars.reduce(0,+) / Double(allVars.count)
+            let maxVar  = allVars.max() ?? 0.0
+            if maxVar > check.maxRangeDeg {
+                log?("[STD] static '\(check.description)': avg=\(f1(avgVar))° max=\(f1(maxVar))° > limit \(f1(check.maxRangeDeg))° — already violating in baseline")
+            } else {
+                log?("[STD] static '\(check.description)': avg=\(f1(avgVar))° ✓")
+            }
+        }
+
+        if standardMet {
+            log?("[STD] baseline meets standard ✓ — relative (Layer 1) signals are the active floor")
+        } else {
+            log?("[STD] baseline BELOW standard — standard acts as coaching floor for ROM cues")
+        }
+
+        if !standard.reviewed {
+            log?("[STD] ⚠ verify these numbers on-device before trusting cues (reviewed=false)")
+        }
     }
 
     // MARK: – Rep stats computation
 
     private func computeRepStats(frames: [FrameRecord], peakValue: Double) -> RepStats {
-        // Find the frame closest to peakValue (the actual trough of the rep metric).
+        // Find the frame closest to the passed peakValue (the actual trough).
         let peakIdx = frames.indices.min {
             abs(frames[$0].metricValue - peakValue) < abs(frames[$1].metricValue - peakValue)
         } ?? 0
 
-        // Walk back from peakIdx to find the local maximum before the descent started.
-        // That max is the "at-rest top" position where this rep began.
+        // Walk back from peakIdx to find the local max before the descent.
+        // That is the "at-rest top" where this rep began.
         var localMaxIdx = 0
         var localMax    = frames[0].metricValue
         for i in 1..<peakIdx {
@@ -243,16 +369,13 @@ final class UniversalQualityEngine {
             }
         }
 
-        // Effective window: from the local max to the end of the look-back.
-        let eff = localMaxIdx < frames.count ? Array(frames[localMaxIdx...]) : frames
-
+        let eff      = localMaxIdx < frames.count ? Array(frames[localMaxIdx...]) : frames
         let vals     = eff.map(\.metricValue)
         let range    = (vals.max() ?? 0) - (vals.min() ?? 0)
         let duration = eff.count >= 2
             ? eff.last!.timestamp.timeIntervalSince(eff.first!.timestamp)
             : 0.0
 
-        // Peak pose: frame with metric closest to peakValue inside the effective window.
         let effPeakIdx = eff.indices.min {
             abs(eff[$0].metricValue - peakValue) < abs(eff[$1].metricValue - peakValue)
         } ?? 0
@@ -267,29 +390,50 @@ final class UniversalQualityEngine {
         }
         let jerk = varianceOf(velocities)
 
-        // Joint displacement: sum of consecutive 2-D distances for each joint.
+        // Joint displacement (2-D Euclidean, for anchor detection).
         var jointDisp: [Joint: Double] = [:]
         for joint in Joint.allCases {
             var disp = 0.0
             for i in 1..<eff.count {
                 guard let p0 = eff[i-1].pose[joint], p0.confidence >= kMinConf,
                       let p1 = eff[i].pose[joint],   p1.confidence >= kMinConf else { continue }
-                let dx = Double(p1.x - p0.x)
-                let dy = Double(p1.y - p0.y)
+                let dx = Double(p1.x - p0.x), dy = Double(p1.y - p0.y)
                 disp += sqrt(dx*dx + dy*dy)
             }
             if disp > 0 { jointDisp[joint] = disp }
         }
 
-        return RepStats(range: range, duration: duration, jerk: jerk,
-                        peakPose: peakPose, jointDisp: jointDisp)
+        // Static angle variance for Layer 2 standard checks.
+        var staticAngVar: [Int: Double] = [:]
+        if let std = activeStandard {
+            for (i, check) in std.staticChecks.enumerated() {
+                var angles: [Double] = []
+                for record in eff {
+                    if let angle = computeJointAngle(pose: record.pose, a: check.a, b: check.b, c: check.c) {
+                        angles.append(angle)
+                    }
+                }
+                if angles.count >= 2, let hi = angles.max(), let lo = angles.min() {
+                    staticAngVar[i] = hi - lo
+                }
+            }
+        }
+
+        return RepStats(
+            range:        range,
+            duration:     duration,
+            jerk:         jerk,
+            peakValue:    vals.min() ?? peakValue,
+            startValue:   localMax,
+            peakPose:     peakPose,
+            jointDisp:    jointDisp,
+            staticAngVar: staticAngVar
+        )
     }
 
     // MARK: – Bilateral symmetry
 
-    // Returns (leftAngle°, rightAngle°, relativeDiff) for the most-active bilateral limb pair.
-    // "Most active" = the pair with the greatest average deviation from 180° (straight).
-    // Returns nil if neither pair has sufficient joint confidence.
+    // Returns (leftAngle°, rightAngle°, relativeDiff) for the most-active bilateral pair.
     private func computeBilateralSymmetry(pose: Pose) -> (Double, Double, Double)? {
         let candidates: [(Joint, Joint, Joint, Joint, Joint, Joint)] = [
             (.leftShoulder, .leftElbow,  .leftWrist,
@@ -305,18 +449,17 @@ final class UniversalQualityEngine {
             guard let lA = computeJointAngle(pose: pose, a: la, b: lp, c: lc),
                   let rA = computeJointAngle(pose: pose, a: ra, b: rp, c: rc) else { continue }
             let activity = (abs(180.0 - lA) + abs(180.0 - rA)) / 2.0
-            guard activity > 10.0 else { continue }   // must show meaningful flexion
+            guard activity > 10.0 else { continue }
             if activity > bestActivity {
                 bestActivity = activity
-                let maxA     = max(lA, rA)
-                let relDiff  = maxA > 0 ? abs(lA - rA) / maxA : 0.0
+                let relDiff  = max(lA, rA) > 0 ? abs(lA - rA) / max(lA, rA) : 0.0
                 best = (lA, rA, relDiff)
             }
         }
         return best
     }
 
-    // MARK: – Anchor stability check
+    // MARK: – Anchor violation
 
     private func findAnchorViolation(jointDisp: [Joint: Double]) -> (Joint, Double)? {
         var worst: (Joint, Double)? = nil

@@ -228,6 +228,7 @@ public class ATHLTCameraModule: Module {
                 self.wireEngineCallbacks()
                 self.currentDef = def
                 self.universalEngine.reset()
+                self.universalEngine.setStandard(ExerciseStandards.standard(for: exerciseType))
                 NSLog("[GymCamera] exercise → %@ (%@)", exerciseType, def.displayName)
                 promise.resolve()
             }
@@ -424,6 +425,7 @@ public class ATHLTCameraModule: Module {
             self.universalEngine.log = { [weak self] msg in
                 self?.sendEvent("onDebugLog", ["message": msg])
             }
+            self.universalEngine.setStandard(ExerciseStandards.standard(for: self.currentExercise))
         }
         Task { [weak self] in await self?.blazePoseEngine.setup() }
 
