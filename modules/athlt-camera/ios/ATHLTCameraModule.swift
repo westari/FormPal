@@ -620,7 +620,10 @@ public class ATHLTCameraModule: Module {
 
         engine.ingest(pose: pose, timestamp: date)
         if let univMetric = currentDef.repMetric.measure(pose: pose) {
-            universalEngine.ingestFrame(metricValue: univMetric, pose: pose, timestamp: date)
+            // Must pass Date() (wallclock), NOT `date` (camera CMTime timebase).
+            // `date` = Date(timeIntervalSince1970: cameraUptime) ≈ Jan 1970.
+            // onRepCompleted filters with Date() ≈ 2026 — mismatched epochs = 0 frames.
+            universalEngine.ingestFrame(metricValue: univMetric, pose: pose, timestamp: Date())
         }
         maybeEmitDebugStats()
 
