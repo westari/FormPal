@@ -247,15 +247,14 @@ enum ExerciseRegistry {
 
         minRepInterval: 0.5,
 
-        planarityChecks: [
-            // Curl is front-facing: forearm must appear near full-length.
-            // Fails when elbow drifts toward/away from camera (arm goes out-of-plane).
-            // Check both arms — repMetric uses .minimum of left/right, so either can be measured.
-            PlanarityCheck(id: "forearm_l", jointA: .leftElbow,  jointB: .leftWrist,
-                           minRatio: 0.75, cue: "KEEP ELBOW IN", fallbackReferenceRatio: 0.56),
-            PlanarityCheck(id: "forearm_r", jointA: .rightElbow, jointB: .rightWrist,
-                           minRatio: 0.75, cue: "KEEP ELBOW IN", fallbackReferenceRatio: 0.56),
-        ]
+        // "KEEP ELBOW IN" forearm planarity checks removed (forearm_l / forearm_r).
+        // They measured the 2D projected forearm length (elbow→wrist) vs a reference.
+        // False-positive: when elbows are at the user's sides the forearm is edge-on
+        // to the camera, so the projected bone looks short even with perfect form.
+        // Genuine elbow drift is now caught by UniversalQualityEngine anchor-stability
+        // (Layer 1), which compares per-rep elbow displacement vs the user's own
+        // calibration baseline and is immune to 2D foreshortening.
+        planarityChecks: []
     )
 
     // ── PUSH-UP ───────────────────────────────────────────────────────────────
