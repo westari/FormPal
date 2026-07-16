@@ -103,6 +103,10 @@ public class ATHLTCameraModule: Module {
     private var lastBlazePoseResult: BlazePoseResult? = nil
     private var lastVisionMs:        Double            = 0
 
+    // MARK: – Universal quality engine (isolated add-on — no exercise defs needed)
+    private var universalEngine = UniversalQualityEngine()
+    private var currentDef: ExerciseDefinition = ExerciseRegistry.squat
+
     // MARK: – Skeleton overlay
     private var isSkeletonVisible = true
 
@@ -167,6 +171,7 @@ public class ATHLTCameraModule: Module {
                         self.pendingStopPromise = nil
                     }
                     self.engine.reset()
+                    self.universalEngine.reset()
                 }
                 NSLog("[GymCamera] session stopped")
                 promise.resolve(["success": true])
@@ -221,6 +226,8 @@ public class ATHLTCameraModule: Module {
                 self.currentExercise = exerciseType
                 self.engine          = ExerciseEngine(definition: def)
                 self.wireEngineCallbacks()
+                self.currentDef = def
+                self.universalEngine.reset()
                 NSLog("[GymCamera] exercise → %@ (%@)", exerciseType, def.displayName)
                 promise.resolve()
             }
@@ -231,6 +238,7 @@ public class ATHLTCameraModule: Module {
                 // resetForTracking: resets rep counters but preserves isSetupComplete
                 // so calibration is not re-run after the user already passed it.
                 self.engine.resetForTracking()
+                self.universalEngine.reset()
                 self.isTracking          = true
                 self.currentMode         = "tracking"
                 self.totalFramesAnalyzed = 0
@@ -324,6 +332,13 @@ public class ATHLTCameraModule: Module {
             let compareLine = "[COMPARE] \(self.currentExercise) rep#\(result.totalReps)" +
                 "  2D=\(av2D)°  \(gated)  \(bpPart)  \(bpTail)"
             self.sendEvent("onDebugLog", ["message": compareLine])
+
+            // Universal quality engine — emits [UNIV] lines via its own log closure
+            self.universalEngine.onRepCompleted(
+                repNumber:  result.totalReps,
+                peakValue:  result.primaryAngle,
+                repEndTime: Date()
+            )
         }
 
         engine.onDebugStats = { [weak self] stats in
@@ -401,10 +416,15 @@ public class ATHLTCameraModule: Module {
             captureDelegate = nil
             movieDelegate   = nil
             ATHLTSessionHolder.shared.set(nil)
-            inferenceQueue.sync { self.engine.reset() }
+            inferenceQueue.sync { self.engine.reset(); self.universalEngine.reset() }
         }
 
-        inferenceQueue.sync { wireEngineCallbacks() }
+        inferenceQueue.sync {
+            wireEngineCallbacks()
+            self.universalEngine.log = { [weak self] msg in
+                self?.sendEvent("onDebugLog", ["message": msg])
+            }
+        }
         Task { [weak self] in await self?.blazePoseEngine.setup() }
 
         let status = AVCaptureDevice.authorizationStatus(for: .video)
@@ -597,6 +617,9 @@ public class ATHLTCameraModule: Module {
         let pose = extractPose(obs)
 
         engine.ingest(pose: pose, timestamp: date)
+        if let univMetric = currentDef.repMetric.measure(pose: pose) {
+            universalEngine.ingestFrame(metricValue: univMetric, pose: pose, timestamp: date)
+        }
         maybeEmitDebugStats()
 
         if isSkeletonVisible {
