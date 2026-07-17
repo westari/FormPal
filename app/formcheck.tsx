@@ -17,6 +17,7 @@ import {
   flipCamera,
   setDiagnosticMode,
   setExercise,
+  setExerciseDefinition,
   setExerciseStandard,
   addRepListener,
   addDebugStatsListener,
@@ -28,6 +29,7 @@ import {
   isNativeModuleLinked,
 } from '../modules/athlt-camera/src/index';
 import { EXERCISE_STANDARDS } from '../constants/exerciseStandards';
+import { EXERCISE_DEFINITIONS } from '../constants/exerciseDefinitions';
 import type { DebugStatsEvent, RepEvent, ExerciseType } from '../modules/athlt-camera/src/index';
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
@@ -220,11 +222,13 @@ export default function FormCheckScreen() {
         setError(result.error ?? 'Camera failed to start. Check camera permission in Settings.');
         setPhase('idle');
       } else {
-        // Set exercise early so SETUP phase uses the right requiredJoints.
-        // Await setExercise (resets engine + baseline) before calling
-        // setExerciseStandard — both go to the native inferenceQueue in order,
-        // so the standard is guaranteed set before calibration can complete.
+        // setExercise → setExerciseDefinition → setExerciseStandard, all
+        // dispatched to the same serial inferenceQueue. Order is guaranteed.
+        // setExercise: resets engine with Swift fallback definition.
+        // setExerciseDefinition: replaces with JSON definition (if exercise is in JS registry).
+        // setExerciseStandard: sets Layer 2 standard floor on universalEngine.
         await setExercise(exerciseType);
+        await setExerciseDefinition(EXERCISE_DEFINITIONS[exerciseType] ?? null);
         void setExerciseStandard(EXERCISE_STANDARDS[exerciseType] ?? null);
       }
     });

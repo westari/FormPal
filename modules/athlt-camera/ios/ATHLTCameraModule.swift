@@ -321,6 +321,41 @@ public class ATHLTCameraModule: Module {
             }
         }
 
+        // Receives the full exercise definition as a JSON string from JS.
+        // Replaces the Swift-registry definition that setExercise() loaded, so JS
+        // owns the exercise config. Falls back silently if the JSON is nil or fails
+        // to parse — the Swift registry definition from setExercise() remains active.
+        // Must be called on the same inferenceQueue as setExercise(); the serial
+        // queue guarantees execution order even when both calls are fire-and-forget.
+        AsyncFunction("setExerciseDefinition") { (defJson: String?, promise: Promise) in
+            self.inferenceQueue.async {
+                guard let jsonStr = defJson,
+                      let data    = jsonStr.data(using: .utf8),
+                      let raw     = try? JSONSerialization.jsonObject(with: data),
+                      let dict    = raw as? [String: Any] else {
+                    // nil = exercise not yet in JS definitions; Swift registry stays active.
+                    promise.resolve()
+                    return
+                }
+
+                guard let (def, summary) = ExerciseDefinition.parse(from: dict) else {
+                    let exerciseId = dict["id"] as? String ?? "?"
+                    self.sendEvent("onDebugLog", ["message":
+                        "[DEF-LOAD] ERROR: failed to parse '\(exerciseId)' definition — falling back to Swift registry"])
+                    promise.resolve()
+                    return
+                }
+
+                self.engine = ExerciseEngine(definition: def)
+                self.wireEngineCallbacks()
+                self.currentDef = def
+
+                self.sendEvent("onDebugLog", ["message":
+                    "[DEF-LOAD] loaded '\(def.id)' from JSON: \(summary) source=JSON"])
+                promise.resolve()
+            }
+        }
+
         AsyncFunction("startTracking") { (promise: Promise) in
             self.inferenceQueue.async {
                 // resetForTracking: resets rep counters but preserves isSetupComplete

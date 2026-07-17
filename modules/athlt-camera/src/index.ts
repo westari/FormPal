@@ -131,6 +131,17 @@ export async function setExerciseStandard(standard: Record<string, unknown> | nu
   return ATHLTCameraNative.setExerciseStandard(standard !== null ? JSON.stringify(standard) : null);
 }
 
+// Passes the full exercise definition (from constants/exerciseDefinitions.ts) to
+// the native engine as a JSON string. Replaces the Swift-registry definition that
+// setExercise() loaded — after this call, thresholds, cues, and form checks are
+// driven entirely from JS (no EAS rebuild needed for future edits to those values).
+// Call order: setExercise → setExerciseDefinition → setExerciseStandard.
+// Pass null for exercises not yet in EXERCISE_DEFINITIONS; Swift fallback stays active.
+export async function setExerciseDefinition(definition: Record<string, unknown> | null): Promise<void> {
+  if (!ATHLTCameraNative) return;
+  return ATHLTCameraNative.setExerciseDefinition(definition !== null ? JSON.stringify(definition) : null);
+}
+
 // ─── Skeleton overlay ─────────────────────────────────────────────────────────
 
 export async function setSkeletonVisible(enabled: boolean): Promise<void> {
