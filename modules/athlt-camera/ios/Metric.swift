@@ -176,6 +176,39 @@ extension Metric {
     }
 }
 
+// ─── Referenced joints ────────────────────────────────────────────────────────
+//
+// Returns all joints that this metric reads from the Pose.
+// Used by ExerciseEngine.dataIsValid() so the validity gate checks exactly the
+// joints the repMetric needs — not readyGate.requiredJoints, which are optimised
+// for starting-position detection and can include joints irrelevant to rep quality
+// (e.g. hips in a front-facing shoulderPress readyGate, ankles that lose confidence
+// at the bottom of a squat).
+
+extension Metric {
+    func referencedJoints() -> [Joint] {
+        switch self {
+        case let .jointAngle(a, pivot, c):             return [a, pivot, c]
+        case let .lineVsVertical(from, to):            return [from, to]
+        case let .lineVsHorizontal(from, to):          return [from, to]
+        case let .verticalGap(upper, lower):           return [upper, lower]
+        case let .normalizedVerticalGap(upper, lower): return [upper, lower]
+        case let .bodyRelativeGap(a, b, af, at):       return [a, b, af, at]
+        case let .bodyRelativeDeviation(p, af, at):    return [p, af, at]
+        case let .deviationFromLine(p, lf, lt):        return [p, lf, lt]
+        case let .signedDeviationFromLine(p, lf, lt):  return [p, lf, lt]
+        case let .distanceRatio(a, b):                 return [a, b]
+        case let .segmentLengthRatio(a, b):            return [a, b]
+        case let .average(l, r),
+             let .minimum(l, r),
+             let .maximum(l, r):
+            return l.referencedJoints() + r.referencedJoints()
+        case let .bestSide(left, right, _, _):
+            return left.referencedJoints() + right.referencedJoints()
+        }
+    }
+}
+
 // ─── Torso reference length ────────────────────────────────────────────────────
 //
 // Shoulder→hip distance on the higher-confidence side, in Vision units.

@@ -75,8 +75,15 @@ private enum SetupPhaseState {
 //   inRep  → metric > repExitThreshold  → count rep → atTop
 //
 // Validity gate:
-//   Before evaluating form: checks required joint confidence.
+//   Before evaluating form: checks that repMetric can be measured on the exit frame.
+//   Uses kMinConf (0.25) via repMetric.measure(), not readyGate.minConfidence (0.30).
 //   Low-confidence rep → emits "ADJUST POSITION", not counted as good.
+//   Logs [VALID] FAIL with which joints dropped below kMinConf.
+//
+// Phantom-rep guard:
+//   Requires repEnterValue − peakAngle > 30% of (repEnterValue − goodROMThreshold).
+//   Rejects pose-noise dips that immediately pop back above exitThreshold.
+//   Logs [REP] rejected for any phantom.
 //
 // Form-over-ROM priority:
 //   Checks with priority ≥ FORM_OVERRIDE_ROM_PRIORITY override the insufficientROMCue
@@ -91,6 +98,8 @@ final class ExerciseEngine {
     private var enginePhase: EnginePhase = .setup
     private var repPhase:    RepPhase    = .waitingForReady
     private var repMinAngle: Double      = 999
+    // Metric value at the moment we entered inRep — used for phantom-rep guard.
+    private var repEnterValue: Double    = 0
 
     // Backward compat: modules that check isSetupComplete still work.
     var isSetupComplete: Bool { enginePhase != .setup }
@@ -102,6 +111,8 @@ final class ExerciseEngine {
     // ── Ready gate ───────────────────────────────────────────────────────────
     private(set) var isReady: Bool  = false
     private var readyStart:   Date? = nil
+    // Throttle for [GATE] diagnostic log (at most once per 3s while failing).
+    private var lastGateLogTime: Double = 0
 
     // ── Setup ────────────────────────────────────────────────────────────────
     private var setupPhaseState: SetupPhaseState = .pending
@@ -156,6 +167,9 @@ final class ExerciseEngine {
     var onDebugStats:        ((EngineDebugStats) -> Void)?
     var onSetupUpdate:       ((SetupStatus)      -> Void)?
     var onCalibrationUpdate: ((CalibrationStatus) -> Void)?
+    // Arbitrary diagnostic message — wired to sendEvent("onDebugLog") in ATHLTCameraModule.
+    // Used for [VALID], [GATE], [REP] logs so they reach JS/Metro on Windows (no Xcode needed).
+    var onDebugLog:          ((String) -> Void)?
     // ─────────────────────────────────────────────────────────────────────────
 
     init(definition: ExerciseDefinition) {
@@ -173,6 +187,7 @@ final class ExerciseEngine {
         setupPhaseState = .pending
         setupLossStart  = nil
         lastValidPoseTime = .distantPast
+        lastGateLogTime = 0
         resetCalibrationState(keepDerived: false)
         resetRepState()
     }
@@ -187,6 +202,7 @@ final class ExerciseEngine {
         goodReps          = 0
         setupLossStart    = nil
         lastValidPoseTime = .distantPast
+        lastGateLogTime   = 0
         resetRepState()
     }
 
@@ -493,7 +509,12 @@ final class ExerciseEngine {
         }
 
         if angleOk && jointsOk {
-            if readyStart == nil { readyStart = timestamp }
+            if readyStart == nil {
+                readyStart = timestamp
+                let msg = "[GATE] conditions met — starting \(String(format: "%.1f", gate.stableDuration))s hold  angle=\(String(format: "%.1f", angle))"
+                NSLog("[Engine] [%@] %@", def.id, msg)
+                onDebugLog?(msg)
+            }
             if timestamp.timeIntervalSince(readyStart!) >= gate.stableDuration {
                 isReady    = true
                 repPhase   = .atTop
@@ -501,7 +522,36 @@ final class ExerciseEngine {
                 NSLog("[Engine] [%@] READY — metric=%g", def.id, angle)
             }
         } else {
-            readyStart = nil
+            if readyStart != nil { readyStart = nil }
+
+            // Throttled [GATE] diagnostic — at most once per 3s while gate is failing.
+            let now = timestamp.timeIntervalSinceReferenceDate
+            if now - lastGateLogTime >= 3.0 {
+                lastGateLogTime = now
+                var parts: [String] = []
+                if !angleOk {
+                    parts.append(
+                        "angle=\(String(format: "%.1f", angle)) " +
+                        "not in [\(String(format: "%.1f", gate.readyAngleMin)), " +
+                        "\(String(format: "%.1f", gate.readyAngleMax))]"
+                    )
+                }
+                if !jointsOk {
+                    let failing = gate.requiredJoints.filter {
+                        (pose[$0]?.confidence ?? 0) < gate.minConfidence
+                    }
+                    let detail = failing.map {
+                        "\($0)=\(String(format: "%.2f", pose[$0]?.confidence ?? 0))"
+                    }.joined(separator: " ")
+                    parts.append(
+                        "joints=FAIL(\(detail.isEmpty ? "all" : detail)) " +
+                        "need≥\(String(format: "%.2f", gate.minConfidence))"
+                    )
+                }
+                let msg = "[GATE] FAIL — \(parts.joined(separator: "  "))"
+                NSLog("[Engine] [%@] %@", def.id, msg)
+                onDebugLog?(msg)
+            }
         }
     }
 
@@ -515,8 +565,9 @@ final class ExerciseEngine {
 
         case .atTop:
             if angle < effectiveEnterThreshold {
-                repPhase    = .inRep
-                repMinAngle = angle
+                repPhase      = .inRep
+                repMinAngle   = angle
+                repEnterValue = angle
                 resetRepAccumulators()
                 NSLog("[Engine] [%@] Rep entered — metric=%g (enter=%.4f)",
                       def.id, angle, effectiveEnterThreshold)
@@ -533,6 +584,22 @@ final class ExerciseEngine {
                     repPhase = .atTop
                     return
                 }
+
+                // ─ Phantom-rep guard ──────────────────────────────────────────────────
+                // Rejects noise dips: a real rep must travel at least 30% of the range
+                // between the entry point and the goodROM target. Without this, a brief
+                // pose-noise dip below enterThreshold immediately exits as a phantom rep.
+                let movement = repEnterValue - repMinAngle
+                let required = max(abs(repEnterValue - effectiveROMThreshold) * 0.30, 0.01)
+                guard movement >= required else {
+                    let msg = "[REP] rejected — movement=\(String(format: "%.4f", movement)) " +
+                              "required=\(String(format: "%.4f", required)) (phantom)"
+                    NSLog("[Engine] [%@] %@", def.id, msg)
+                    onDebugLog?(msg)
+                    repPhase = .atTop
+                    return
+                }
+
                 completeRep(pose: pose, peakAngle: repMinAngle, timestamp: timestamp)
                 repPhase = .atTop
             }
@@ -545,9 +612,11 @@ final class ExerciseEngine {
         totalReps   += 1
         lastRepTime  = timestamp
 
-        // Validity gate: if key joints are low-confidence, don't evaluate form.
+        // Validity gate: data is valid if the repMetric can be measured on this frame.
+        // Uses kMinConf (0.25) via Metric.measure(), NOT readyGate.minConfidence (0.30).
+        // This avoids "ADJUST POSITION" from joints irrelevant to the exercise metric
+        // (e.g. hips in shoulderPress readyGate, ankles at bottom of squat).
         guard dataIsValid(pose: pose) else {
-            NSLog("[Engine] [%@] Rep #%d — invalid data (low joint confidence)", def.id, totalReps)
             onRepDetected?(RepResult(good: false, cue: "ADJUST POSITION",
                                      primaryAngle: peakAngle, totalReps: totalReps,
                                      goodReps: goodReps, formValues: [:],
@@ -648,11 +717,26 @@ final class ExerciseEngine {
     }
 
     // ─── Data validity gate ───────────────────────────────────────────────────
+    //
+    // ROOT CAUSE A fix: was checking def.readyGate.requiredJoints at minConf=0.30,
+    // but metric functions use kMinConf=0.25. Joints irrelevant to the repMetric
+    // (hips in shoulderPress, ankles at squat bottom) caused constant false failures.
+    // Now: valid iff repMetric.measure() returns non-nil (same gate the metric uses).
 
     private func dataIsValid(pose: Pose) -> Bool {
-        def.readyGate.requiredJoints.allSatisfy {
-            (pose[$0]?.confidence ?? 0) >= def.readyGate.minConfidence
+        guard def.repMetric.measure(pose: pose) != nil else {
+            // Log which joints dropped below kMinConf — helps diagnose false invalids.
+            let joints = def.repMetric.referencedJoints()
+            let low = joints.filter { (pose[$0]?.confidence ?? 0) < kMinConf }
+            let failStr = low.map {
+                "\($0)=\(String(format: "%.2f", pose[$0]?.confidence ?? 0))"
+            }.joined(separator: " ")
+            let msg = "[VALID] FAIL — repMetric nil; low-conf: \(failStr.isEmpty ? "n/a" : failStr)"
+            NSLog("[Engine] [%@] %@", def.id, msg)
+            onDebugLog?(msg)
+            return false
         }
+        return true
     }
 
     // ─── Form metric accumulation ─────────────────────────────────────────────
@@ -717,7 +801,8 @@ final class ExerciseEngine {
     }
 
     private func resetRepState() {
-        repMinAngle = 999
+        repMinAngle   = 999
+        repEnterValue = 0
         resetRepAccumulators()
     }
 

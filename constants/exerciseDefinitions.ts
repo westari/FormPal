@@ -93,104 +93,203 @@ export interface ExerciseDefinitionDef {
   planarityChecks?:   PlanarityCheckDef[];
 }
 
+// ─── Shared curl building-blocks ──────────────────────────────────────────────
+//
+// All bicep-curl variants share the same joints, rep signal, thresholds,
+// form checks, readyGate, and calibration config. Only id, displayName,
+// and cameraSetup.setupInstruction differ.
+//
+// Extract the shared parts once so variants are one-liners that can't drift
+// out of sync with the verified curl values.
+
+const CURL_REP_METRIC: MetricDef = {
+  type:  'minimum',
+  left:  { type: 'jointAngle', a: 'leftShoulder',  pivot: 'leftElbow',  c: 'leftWrist'  },
+  right: { type: 'jointAngle', a: 'rightShoulder', pivot: 'rightElbow', c: 'rightWrist' },
+};
+
+const CURL_FORM_CHECKS: FormCheckDef[] = [
+  // Priority 1: didn't fully extend arm at the bottom.
+  // 120° (not 140°): calibrated exit often lands ~135-142°, which would
+  // false-fire a 140° check on every rep.
+  {
+    id:         'full_extension',
+    cue:        'FULL EXTENSION',
+    metric: {
+      type:  'minimum',
+      left:  { type: 'jointAngle', a: 'leftShoulder',  pivot: 'leftElbow',  c: 'leftWrist'  },
+      right: { type: 'jointAngle', a: 'rightShoulder', pivot: 'rightElbow', c: 'rightWrist' },
+    },
+    evaluateAt: 'throughoutMax',
+    condition:  { type: 'lessThan', value: 120 },
+    priority:   1,
+    enabled:    true,
+  },
+  // Priority 4: shoulder→elbow drifted forward from vertical (>30°).
+  {
+    id:         'elbow_drift',
+    cue:        'KEEP ELBOW STILL',
+    metric: {
+      type:  'average',
+      left:  { type: 'lineVsVertical', from: 'leftShoulder',  to: 'leftElbow' },
+      right: { type: 'lineVsVertical', from: 'rightShoulder', to: 'rightElbow' },
+    },
+    evaluateAt: 'throughoutMax',
+    condition:  { type: 'greaterThan', value: 30 },
+    priority:   4,
+    enabled:    true,
+  },
+  // Priority 5: torso (hip→shoulder) leaned back for momentum (>20°).
+  {
+    id:         'lean_back',
+    cue:        'STOP SWINGING',
+    metric: {
+      type:  'average',
+      left:  { type: 'lineVsVertical', from: 'leftHip',  to: 'leftShoulder' },
+      right: { type: 'lineVsVertical', from: 'rightHip', to: 'rightShoulder' },
+    },
+    evaluateAt: 'throughoutMax',
+    condition:  { type: 'greaterThan', value: 20 },
+    priority:   5,
+    enabled:    true,
+  },
+];
+
+const CURL_READY_GATE: ReadyGateDef = {
+  readyAngleMin:  140,
+  readyAngleMax:  190,
+  requiredJoints: ['leftShoulder', 'leftElbow', 'leftWrist',
+                    'rightShoulder', 'rightElbow', 'rightWrist'],
+  minConfidence:  0.30,
+  stableDuration: 0.3,
+};
+
+const CURL_CAMERA_REQUIRED_JOINTS = [
+  'leftShoulder', 'rightShoulder', 'leftElbow', 'rightElbow', 'leftWrist', 'rightWrist',
+];
+
+const CURL_CALIBRATION: CalibrationDef = {
+  repsNeeded:    2,
+  enterFraction: 0.50,
+  exitFraction:  0.25,
+};
+
+// Helper that builds a complete curl-family ExerciseDefinitionDef.
+function curlVariant(
+  id: string,
+  displayName: string,
+  setupInstruction: string,
+): ExerciseDefinitionDef {
+  return {
+    id,
+    displayName,
+
+    repMetric:          CURL_REP_METRIC,
+    topAngle:           160,
+    repEnterThreshold:  145,
+    repExitThreshold:   145,
+    goodROMThreshold:    60,
+    insufficientROMCue: 'CURL HIGHER',
+
+    formChecks: CURL_FORM_CHECKS,
+    readyGate:  CURL_READY_GATE,
+
+    cameraSetup: {
+      setupInstruction,
+      requiredJoints: CURL_CAMERA_REQUIRED_JOINTS,
+    },
+
+    calibration:    CURL_CALIBRATION,
+    minRepInterval: 0.5,
+    planarityChecks: [],
+  };
+}
+
 // ─── Registry ─────────────────────────────────────────────────────────────────
 // Missing key → setExerciseDefinition(null) → Swift registry fallback used.
 
 export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
 
-  // ─── Bicep Curl ─────────────────────────────────────────────────────────────
+  // ─── Squat ──────────────────────────────────────────────────────────────────
   //
-  // Values carried verbatim from ExerciseRegistry.swift (post planarity-removal).
-  // Swift source:
-  //   topAngle: 160, repEnterThreshold: 145, repExitThreshold: 145
-  //   goodROMThreshold: 60, insufficientROMCue: "CURL HIGHER"
-  //   formChecks: full_extension (lessThan 120, p=1), elbow_drift (greaterThan 30, p=4),
-  //               lean_back (greaterThan 20, p=5)
-  //   readyGate: min=140, max=190, minConfidence=0.30, stableDuration=0.3
-  //   cameraSetup: "Face the camera — stand back so both arms are fully in frame"
-  //   calibration: repsNeeded=2, enterFraction=0.50, exitFraction=0.25
-  //   minRepInterval: 0.5
-  //   planarityChecks: []  ← forearm_l/r removed (false positives when arms at sides)
-  curl: {
-    id:          'curl',
-    displayName: 'Bicep Curl',
+  // VALUES VERBATIM from ExerciseRegistry.swift.
+  // repMetric: average knee angle both legs (hip→knee→ankle).
+  // Camera: side view, full body in frame.
+  squat: {
+    id:          'squat',
+    displayName: 'Squat',
 
-    // repMetric: minimum elbow angle of both arms (shoulder→elbow→wrist).
-    // HIGH (~155-165°) at rest, LOW (~35-45°) at peak contraction.
     repMetric: {
-      type:  'minimum',
-      left:  { type: 'jointAngle', a: 'leftShoulder',  pivot: 'leftElbow',  c: 'leftWrist'  },
-      right: { type: 'jointAngle', a: 'rightShoulder', pivot: 'rightElbow', c: 'rightWrist' },
+      type:  'average',
+      left:  { type: 'jointAngle', a: 'leftHip',  pivot: 'leftKnee',  c: 'leftAnkle'  },
+      right: { type: 'jointAngle', a: 'rightHip', pivot: 'rightKnee', c: 'rightAnkle' },
     },
 
-    topAngle:           160,   // metric at rest / top of movement
-    repEnterThreshold:  145,   // metric must drop below here to enter rep
-    repExitThreshold:   145,   // metric must rise above here to complete rep
-    goodROMThreshold:    60,   // metric must reach below here for good ROM
-    insufficientROMCue: 'CURL HIGHER',
+    topAngle:           160,
+    repEnterThreshold:  150,
+    repExitThreshold:   155,
+    goodROMThreshold:   100,
+    insufficientROMCue: 'GO DEEPER',
 
     formChecks: [
-      // Priority 1: didn't fully extend arm at the bottom.
-      // Threshold 120° (not 140°): calibrated exit often lands ~135-142°,
-      // which would false-fire a 140° check on every rep.
       {
-        id:         'full_extension',
-        cue:        'FULL EXTENSION',
-        metric: {
-          type:  'minimum',
-          left:  { type: 'jointAngle', a: 'leftShoulder',  pivot: 'leftElbow',  c: 'leftWrist'  },
-          right: { type: 'jointAngle', a: 'rightShoulder', pivot: 'rightElbow', c: 'rightWrist' },
-        },
-        evaluateAt: 'throughoutMax',
-        condition:  { type: 'lessThan', value: 120 },
-        priority:   1,
-        enabled:    true,
-      },
-      // Priority 4: shoulder→elbow drifted forward from vertical (>30°).
-      // Overrides "CURL HIGHER" ROM cue — drift makes angle look smaller than reality.
-      {
-        id:         'elbow_drift',
-        cue:        'KEEP ELBOW STILL',
+        id:         'back_lean',
+        cue:        'CHEST UP',
         metric: {
           type:  'average',
-          left:  { type: 'lineVsVertical', from: 'leftShoulder',  to: 'leftElbow' },
-          right: { type: 'lineVsVertical', from: 'rightShoulder', to: 'rightElbow' },
-        },
-        evaluateAt: 'throughoutMax',
-        condition:  { type: 'greaterThan', value: 30 },
-        priority:   4,
-        enabled:    true,
-      },
-      // Priority 5: torso (hip→shoulder) leaned back for momentum (>20°).
-      // Overrides "CURL HIGHER" and elbow_drift.
-      {
-        id:         'lean_back',
-        cue:        'STOP SWINGING',
-        metric: {
-          type:  'average',
-          left:  { type: 'lineVsVertical', from: 'leftHip',  to: 'leftShoulder' },
+          left:  { type: 'lineVsVertical', from: 'leftHip',  to: 'leftShoulder'  },
           right: { type: 'lineVsVertical', from: 'rightHip', to: 'rightShoulder' },
         },
         evaluateAt: 'throughoutMax',
-        condition:  { type: 'greaterThan', value: 20 },
-        priority:   5,
+        condition:  { type: 'greaterThan', value: 25 },
+        priority:   1,
         enabled:    true,
+      },
+      {
+        id:         'heel_rise',
+        cue:        'KEEP HEELS DOWN',
+        metric: {
+          type:  'average',
+          left:  { type: 'lineVsVertical', from: 'leftAnkle',  to: 'leftKnee'  },
+          right: { type: 'lineVsVertical', from: 'rightAnkle', to: 'rightKnee' },
+        },
+        evaluateAt: 'throughoutMax',
+        condition:  { type: 'greaterThan', value: 20 },
+        priority:   2,
+        enabled:    false,
+      },
+      {
+        id:         'knee_cave',
+        cue:        'KNEES OUT',
+        metric: {
+          type:  'average',
+          left:  { type: 'lineVsVertical', from: 'leftHip',  to: 'leftKnee'  },
+          right: { type: 'lineVsVertical', from: 'rightHip', to: 'rightKnee' },
+        },
+        evaluateAt: 'throughoutMax',
+        condition:  { type: 'greaterThan', value: 20 },
+        priority:   3,
+        enabled:    false,
       },
     ],
 
     readyGate: {
-      readyAngleMin:  140,
+      readyAngleMin:  155,
       readyAngleMax:  190,
-      requiredJoints: ['leftShoulder', 'leftElbow', 'leftWrist',
-                        'rightShoulder', 'rightElbow', 'rightWrist'],
+      requiredJoints: ['leftHip', 'leftKnee', 'leftAnkle',
+                        'rightHip', 'rightKnee', 'rightAnkle'],
       minConfidence:  0.30,
-      stableDuration: 0.3,
+      stableDuration: 1.0,
     },
 
     cameraSetup: {
-      setupInstruction: 'Face the camera — stand back so both arms are fully in frame',
-      requiredJoints:   ['leftShoulder', 'rightShoulder', 'leftElbow',
-                          'rightElbow', 'leftWrist', 'rightWrist'],
+      setupInstruction: 'Stand sideways to the camera — full body in frame',
+      requiredJoints: [
+        'leftShoulder', 'rightShoulder',
+        'leftHip',      'rightHip',
+        'leftKnee',     'rightKnee',
+        'leftAnkle',    'rightAnkle',
+      ],
     },
 
     calibration: {
@@ -201,9 +300,345 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
 
     minRepInterval: 0.5,
 
-    // Forearm planarity checks (forearm_l / forearm_r) removed.
-    // They caused false positives when elbows were at the user's sides.
-    // UniversalQualityEngine anchor-stability catches genuine elbow drift instead.
-    planarityChecks: [],
+    planarityChecks: [
+      // Disabled: false-positive on correctly side-on users because fallback reference
+      // ratios are higher than what Vision observes in practice. Calibrated refs are
+      // only learned during reps, but planarity was blocking reps before they started
+      // (chicken-and-egg). Re-enable after collecting [PLANARITY] logs on-device to
+      // find real ratio values for side-on squat (thigh_l, shin_l).
+      { id: 'thigh_l', jointA: 'leftHip',  jointB: 'leftKnee',
+        minRatio: 0.75, cue: 'TURN SIDE-ON', fallbackReferenceRatio: 0.80, enabled: false },
+      { id: 'shin_l',  jointA: 'leftKnee', jointB: 'leftAnkle',
+        minRatio: 0.75, cue: 'TURN SIDE-ON', fallbackReferenceRatio: 0.72, enabled: false },
+    ],
   },
+
+  // ─── Push-up ────────────────────────────────────────────────────────────────
+  //
+  // VALUES VERBATIM from ExerciseRegistry.swift.
+  // repMetric: bodyRelativeGap(shoulder, elbow, shoulder→hip axis). Orientation-agnostic.
+  // Camera: phone on its side on the floor, a few feet to your side.
+  // No calibration — body-relative thresholds are stable across users and distances.
+  pushup: {
+    id:          'pushup',
+    displayName: 'Push-up',
+
+    repMetric: {
+      type: 'bestSide',
+      left: {
+        type: 'bodyRelativeGap',
+        a: 'leftShoulder', b: 'leftElbow',
+        axisFrom: 'leftShoulder', axisTo: 'leftHip',
+      },
+      right: {
+        type: 'bodyRelativeGap',
+        a: 'rightShoulder', b: 'rightElbow',
+        axisFrom: 'rightShoulder', axisTo: 'rightHip',
+      },
+      leftJoints:  ['leftShoulder',  'leftElbow',  'leftHip'],
+      rightJoints: ['rightShoulder', 'rightElbow', 'rightHip'],
+    },
+
+    topAngle:           0.40,
+    repEnterThreshold:  0.17,
+    repExitThreshold:   0.30,
+    goodROMThreshold:   0.07,
+    insufficientROMCue: 'GO LOWER',
+
+    formChecks: [
+      {
+        id:         'hip_align_l',
+        cue:        'HIPS LEVEL',
+        metric: {
+          type: 'bodyRelativeDeviation',
+          point: 'leftHip',
+          axisFrom: 'leftShoulder', axisTo: 'leftAnkle',
+        },
+        evaluateAt: 'throughoutMax',
+        condition:  { type: 'greaterThan', value: 0.07 },
+        priority:   2,
+        enabled:    true,
+      },
+      {
+        id:         'hip_align_r',
+        cue:        'HIPS LEVEL',
+        metric: {
+          type: 'bodyRelativeDeviation',
+          point: 'rightHip',
+          axisFrom: 'rightShoulder', axisTo: 'rightAnkle',
+        },
+        evaluateAt: 'throughoutMax',
+        condition:  { type: 'greaterThan', value: 0.07 },
+        priority:   2,
+        enabled:    true,
+      },
+    ],
+
+    readyGate: {
+      readyAngleMin:  0.13,
+      readyAngleMax:  1.50,
+      requiredJoints: ['leftShoulder', 'leftElbow', 'rightShoulder', 'rightElbow'],
+      minConfidence:  0.15,
+      stableDuration: 0.5,
+    },
+
+    cameraSetup: {
+      setupInstruction: 'Lay your phone on its side on the floor, a few feet to your side',
+      // Ankles removed: repMetric (bestSide bodyRelativeGap) only needs shoulder+elbow+hip.
+      // Requiring ankles forced full-body framing and blocked setup in landscape.
+      // hip_align form checks still use ankles but return nil gracefully when off-screen.
+      requiredJoints:    ['leftShoulder',  'leftElbow',  'leftHip'],
+      requiredJointsAlt: ['rightShoulder', 'rightElbow', 'rightHip'],
+    },
+
+    // No calibration — body-relative thresholds stable across users and distances.
+
+    minRepInterval: 0.8,
+
+    planarityChecks: [
+      { id: 'uarm_l', jointA: 'leftShoulder', jointB: 'leftElbow',
+        minRatio: 0.75, cue: 'TURN SIDE-ON', fallbackReferenceRatio: 0.64,
+        enabled: false },
+    ],
+  },
+
+  // ─── Lunge ──────────────────────────────────────────────────────────────────
+  //
+  // VALUES VERBATIM from ExerciseRegistry.swift.
+  // repMetric: minimum front-knee angle (hip→knee→ankle) — tracks the more-bent leg.
+  // Camera: side view, full body in frame.
+  lunge: {
+    id:          'lunge',
+    displayName: 'Lunge',
+
+    repMetric: {
+      type:  'minimum',
+      left:  { type: 'jointAngle', a: 'leftHip',  pivot: 'leftKnee',  c: 'leftAnkle'  },
+      right: { type: 'jointAngle', a: 'rightHip', pivot: 'rightKnee', c: 'rightAnkle' },
+    },
+
+    topAngle:           165,
+    repEnterThreshold:  145,
+    repExitThreshold:   150,
+    goodROMThreshold:   105,
+    insufficientROMCue: 'LUNGE DEEPER',
+
+    formChecks: [
+      {
+        id:         'torso_lean',
+        cue:        'CHEST UP',
+        metric: {
+          type:  'average',
+          left:  { type: 'lineVsVertical', from: 'leftHip',  to: 'leftShoulder'  },
+          right: { type: 'lineVsVertical', from: 'rightHip', to: 'rightShoulder' },
+        },
+        evaluateAt: 'throughoutMax',
+        condition:  { type: 'greaterThan', value: 20 },
+        priority:   2,
+        enabled:    true,
+      },
+      {
+        id:         'knee_drive',
+        cue:        'DRIVE KNEE DOWN',
+        metric: {
+          type:  'minimum',
+          left:  { type: 'jointAngle', a: 'leftHip',  pivot: 'leftKnee',  c: 'leftAnkle'  },
+          right: { type: 'jointAngle', a: 'rightHip', pivot: 'rightKnee', c: 'rightAnkle' },
+        },
+        evaluateAt: 'atBottom',
+        condition:  { type: 'greaterThan', value: 115 },
+        priority:   1,
+        enabled:    false,
+      },
+    ],
+
+    readyGate: {
+      readyAngleMin:  155,
+      readyAngleMax:  190,
+      requiredJoints: ['leftHip', 'leftKnee', 'leftAnkle',
+                        'rightHip', 'rightKnee', 'rightAnkle'],
+      minConfidence:  0.30,
+      stableDuration: 1.0,
+    },
+
+    cameraSetup: {
+      setupInstruction: 'Stand sideways to the camera — full body in frame',
+      requiredJoints: [
+        'leftShoulder', 'rightShoulder',
+        'leftHip',      'rightHip',
+        'leftKnee',     'rightKnee',
+        'leftAnkle',    'rightAnkle',
+      ],
+    },
+
+    calibration: {
+      repsNeeded:    2,
+      enterFraction: 0.50,
+      exitFraction:  0.25,
+    },
+
+    minRepInterval: 0.5,
+
+    planarityChecks: [
+      // Disabled: same false-positive issue as squat planarity checks.
+      // Re-enable after collecting [PLANARITY] logs on-device.
+      { id: 'thigh_l', jointA: 'leftHip',  jointB: 'leftKnee',
+        minRatio: 0.75, cue: 'TURN SIDE-ON', fallbackReferenceRatio: 0.80, enabled: false },
+      { id: 'shin_l',  jointA: 'leftKnee', jointB: 'leftAnkle',
+        minRatio: 0.75, cue: 'TURN SIDE-ON', fallbackReferenceRatio: 0.72, enabled: false },
+    ],
+  },
+
+  // ─── Shoulder Press ─────────────────────────────────────────────────────────
+  //
+  // VALUES VERBATIM from ExerciseRegistry.swift.
+  // repMetric: lineVsVertical(shoulder→elbow) on bestSide.
+  //   Angle of the upper arm from vertical. 0° = arm overhead, 90° = arm horizontal.
+  //   Metric DECREASES as arms press overhead (enters rep), INCREASES on return.
+  // Camera: face the camera, arms and shoulders in frame.
+  shoulderPress: {
+    id:          'shoulderPress',
+    displayName: 'Shoulder Press',
+
+    repMetric: {
+      type: 'bestSide',
+      left:  { type: 'lineVsVertical', from: 'leftShoulder',  to: 'leftElbow'  },
+      right: { type: 'lineVsVertical', from: 'rightShoulder', to: 'rightElbow' },
+      leftJoints:  ['leftShoulder',  'leftElbow'],
+      rightJoints: ['rightShoulder', 'rightElbow'],
+    },
+
+    topAngle:           84,
+    repEnterThreshold:  68,
+    repExitThreshold:   72,
+    goodROMThreshold:   20,
+    insufficientROMCue: 'PRESS HIGHER',
+
+    formChecks: [
+      {
+        id:         'lean_back',
+        cue:        'STAY UPRIGHT',
+        metric: {
+          type:  'average',
+          left:  { type: 'lineVsVertical', from: 'leftHip',  to: 'leftShoulder'  },
+          right: { type: 'lineVsVertical', from: 'rightHip', to: 'rightShoulder' },
+        },
+        evaluateAt: 'throughoutMax',
+        condition:  { type: 'greaterThan', value: 20 },
+        priority:   4,
+        enabled:    true,
+      },
+      {
+        id:         'lower_more',
+        cue:        'LOWER MORE',
+        metric: {
+          type: 'bestSide',
+          left:  { type: 'lineVsVertical', from: 'leftShoulder',  to: 'leftElbow'  },
+          right: { type: 'lineVsVertical', from: 'rightShoulder', to: 'rightElbow' },
+          leftJoints:  ['leftShoulder',  'leftElbow'],
+          rightJoints: ['rightShoulder', 'rightElbow'],
+        },
+        evaluateAt: 'throughoutMax',
+        condition:  { type: 'lessThan', value: 80 },
+        priority:   2,
+        enabled:    false,
+      },
+    ],
+
+    readyGate: {
+      readyAngleMin:  65,
+      readyAngleMax:  90,
+      // Hips removed: repMetric only uses shoulders+elbows. Hips can be at the
+      // frame edge when the phone is at chest height, causing the gate to never
+      // trigger (ROOT CAUSE A was the validity gate; this fixes the ready gate).
+      requiredJoints: ['leftShoulder', 'leftElbow', 'rightShoulder', 'rightElbow'],
+      minConfidence:  0.30,
+      stableDuration: 0.8,
+    },
+
+    cameraSetup: {
+      // Shoulder press is FRONT-FACING: both arms move symmetrically overhead.
+      // bestSide repMetric picks whichever arm gives a cleaner reading.
+      // Wrists removed from requiredJoints: repMetric doesn't use wrists; requiring
+      // them makes setup fail if wrists are cropped at top of frame.
+      setupInstruction: 'Face the camera — arms and shoulders in frame',
+      requiredJoints: [
+        'leftShoulder', 'leftElbow',
+        'rightShoulder', 'rightElbow',
+      ],
+    },
+
+    calibration: {
+      repsNeeded:    2,
+      enterFraction: 0.50,
+      exitFraction:  0.25,
+    },
+
+    minRepInterval: 0.5,
+
+    planarityChecks: [
+      // Disabled: shoulder press is FRONT-FACING. A foreshortened upper arm would
+      // mean the user turned side-on (wrong), not that they're in a bad position.
+      // The cue "TURN SIDE-ON" is backwards for this exercise. Disable until
+      // a "FACE THE CAMERA" variant is needed and tuned from on-device data.
+      { id: 'uarm_l', jointA: 'leftShoulder',  jointB: 'leftElbow',
+        minRatio: 0.75, cue: 'FACE THE CAMERA', fallbackReferenceRatio: 0.64, enabled: false },
+      { id: 'uarm_r', jointA: 'rightShoulder', jointB: 'rightElbow',
+        minRatio: 0.75, cue: 'FACE THE CAMERA', fallbackReferenceRatio: 0.64, enabled: false },
+    ],
+  },
+
+  // ─── Bicep Curl ─────────────────────────────────────────────────────────────
+  //
+  // VALUES VERBATIM from ExerciseRegistry.swift (post planarity-removal).
+  // This is the verified source template for all curl-family variants below.
+  curl: curlVariant(
+    'curl',
+    'Bicep Curl',
+    'Face the camera — stand back so both arms are fully in frame',
+  ),
+
+  // ─── Curl-family variants ─────────────────────────────────────────────────
+  //
+  // All variants share curl's thresholds, form checks, and joint config.
+  // Grip differs (neutral / overhand / braced / cable) but Vision tracks the
+  // same shoulder→elbow→wrist joints regardless of grip — angles are identical.
+  // Only id, displayName, and cameraSetup instruction differ from curl.
+  // Set reviewed:false — they inherit curl's verified numbers but haven't been
+  // separately validated on-device.
+
+  hammerCurl: curlVariant(
+    'hammerCurl',
+    'Hammer Curl',
+    'Face the camera — stand back so both arms are fully in frame',
+    // Neutral grip (thumbs up). Pose-identical to curl from Vision's perspective.
+  ),
+
+  concentrationCurl: curlVariant(
+    'concentrationCurl',
+    'Concentration Curl',
+    'Film your working arm clearly — both shoulders and elbows in frame',
+    // Seated single-arm. Film side-on or facing camera; same elbow joints tracked.
+  ),
+
+  preacherCurl: curlVariant(
+    'preacherCurl',
+    'Preacher Curl',
+    'Face the camera — upper arms and both elbows clearly in frame',
+    // Arm braced on preacher pad. Same shoulder→elbow→wrist landmarks tracked.
+  ),
+
+  reverseCurl: curlVariant(
+    'reverseCurl',
+    'Reverse Curl',
+    'Face the camera — stand back so both arms are fully in frame',
+    // Overhand (pronated) grip. Elbow angles are identical to standard curl.
+  ),
+
+  cableCurl: curlVariant(
+    'cableCurl',
+    'Cable Curl',
+    'Face the cable machine — stand back so both arms are fully in frame',
+    // Low cable pulley. Same joint angles; constant tension vs free weight.
+  ),
 };

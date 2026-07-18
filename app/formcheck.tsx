@@ -56,11 +56,18 @@ async function logSessionVideo(uri: string) {
 }
 
 const SETUP_INFO: Record<ExerciseType, { icon: string; title: string; sub: string }> = {
-  squat:         { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame — ankle to shoulder' },
-  curl:          { icon: 'camera.fill',          title: 'Face the camera',                  sub: 'Stand back — both arms and hands in view' },
-  pushup:        { icon: 'iphone',               title: 'Phone on the floor, to your side', sub: 'Get in position — full body in frame' },
-  lunge:         { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame — ankle to shoulder' },
-  shoulderPress: { icon: 'camera.fill',          title: 'Face the camera',                  sub: 'Stand back — arms and shoulders in frame' },
+  squat:             { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame — ankle to shoulder' },
+  curl:              { icon: 'camera.fill',          title: 'Face the camera',                  sub: 'Stand back — both arms and hands in view' },
+  pushup:            { icon: 'iphone',               title: 'Phone on the floor, to your side', sub: 'Get in position — full body in frame' },
+  lunge:             { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame — ankle to shoulder' },
+  shoulderPress:     { icon: 'camera.fill',          title: 'Face the camera',                  sub: 'Stand back — arms and shoulders in frame' },
+  jumpingJack:       { icon: 'camera.fill',          title: 'Face the camera',                  sub: 'Full body in frame — arms and legs visible' },
+  // Curl-family variants
+  hammerCurl:        { icon: 'camera.fill',          title: 'Face the camera',                  sub: 'Stand back — both arms and hands in view' },
+  concentrationCurl: { icon: 'camera.fill',          title: 'Face the camera',                  sub: 'Working arm and elbow clearly visible' },
+  preacherCurl:      { icon: 'camera.fill',          title: 'Face the camera',                  sub: 'Both arms and elbows fully in frame' },
+  reverseCurl:       { icon: 'camera.fill',          title: 'Face the camera',                  sub: 'Stand back — both arms and hands in view' },
+  cableCurl:         { icon: 'camera.fill',          title: 'Face the cable machine',            sub: 'Stand back — both arms and hands in view' },
 };
 
 // ─── Debug log panel — set false to hide without removing code ────────────────
@@ -82,8 +89,10 @@ export default function FormCheckScreen() {
     returnTo?:          string;
     workoutExerciseId?: string;
   }>();
-  const exerciseType = (['squat', 'curl', 'pushup', 'lunge', 'shoulderPress'].includes(exercise)
-    ? exercise : 'squat') as ExerciseType;
+  const exerciseType = ([
+    'squat', 'curl', 'pushup', 'lunge', 'shoulderPress',
+    'hammerCurl', 'concentrationCurl', 'preacherCurl', 'reverseCurl', 'cableCurl',
+  ].includes(exercise) ? exercise : 'squat') as ExerciseType;
 
   const [phase,    setPhase]    = useState<Phase>('idle');
   const [error,    setError]    = useState<string | null>(null);
@@ -228,7 +237,11 @@ export default function FormCheckScreen() {
         // setExerciseDefinition: replaces with JSON definition (if exercise is in JS registry).
         // setExerciseStandard: sets Layer 2 standard floor on universalEngine.
         await setExercise(exerciseType);
-        await setExerciseDefinition(EXERCISE_DEFINITIONS[exerciseType] ?? null);
+        const defEntry = EXERCISE_DEFINITIONS[exerciseType] ?? null;
+        const defMsg = `[DEF-LOOKUP] id=${exerciseType} found=${defEntry !== null ? 'yes' : 'no'}`;
+        console.log(defMsg);
+        if (DEBUG_LOG_ENABLED) setDebugLogs(prev => [...prev.slice(-19), defMsg]);
+        await setExerciseDefinition(defEntry);
         void setExerciseStandard(EXERCISE_STANDARDS[exerciseType] ?? null);
       }
     });
@@ -446,10 +459,15 @@ export default function FormCheckScreen() {
           <SymbolView name="chevron.left" size={18} tintColor={C.text} type="monochrome" style={{ width: 18, height: 18 }} />
         </GlassButton>
         <Text style={s.title}>
-          {exerciseType === 'curl'          ? 'Bicep Curl'
-            : exerciseType === 'pushup'        ? 'Push-up'
-            : exerciseType === 'lunge'         ? 'Lunge'
-            : exerciseType === 'shoulderPress' ? 'Shoulder Press'
+          {exerciseType === 'curl'              ? 'Bicep Curl'
+            : exerciseType === 'hammerCurl'        ? 'Hammer Curl'
+            : exerciseType === 'concentrationCurl' ? 'Concentration Curl'
+            : exerciseType === 'preacherCurl'      ? 'Preacher Curl'
+            : exerciseType === 'reverseCurl'       ? 'Reverse Curl'
+            : exerciseType === 'cableCurl'         ? 'Cable Curl'
+            : exerciseType === 'pushup'            ? 'Push-up'
+            : exerciseType === 'lunge'             ? 'Lunge'
+            : exerciseType === 'shoulderPress'     ? 'Shoulder Press'
             : 'Squat'} Form Check
         </Text>
         <GlassButton circular={40} onPress={handleFlip}>
@@ -491,7 +509,7 @@ export default function FormCheckScreen() {
         <View style={s.debugPanel}>
           <Row label="person"  value={stats.personDetected ? 'yes' : 'no'} good={stats.personDetected} />
           <Row label="ready"   value={stats.ready ? 'yes' : 'no'} good={stats.ready} />
-          <Row label={exerciseType === 'curl' || exerciseType === 'pushup' ? 'elbow°' : 'knee°'} value={stats.kneeAngle.toFixed(1)} />
+          <Row label={['curl','pushup','hammerCurl','concentrationCurl','preacherCurl','reverseCurl','cableCurl'].includes(exerciseType) ? 'elbow°' : 'knee°'} value={stats.kneeAngle.toFixed(1)} />
           <Row label="back°"   value={stats.backAngle.toFixed(1)} />
           <Row label="phase"   value={stats.phase} />
           <Row label="frames"  value={`${stats.totalFramesAnalyzed} / ${stats.totalFramesReceived}`} />

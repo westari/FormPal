@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -7,12 +7,18 @@ import { SymbolView } from 'expo-symbols';
 import { EXERCISE_CATALOG } from '../constants/exercises';
 
 const EXERCISE_UI: Record<string, { symbol: string; grad: [string, string] }> = {
-  squat:         { symbol: 'figure.strengthtraining.traditional', grad: ['#FFC24B', '#FF7A2E'] },
-  pushup:        { symbol: 'figure.core.training',               grad: ['#67CEFF', '#0A6CFF'] },
-  curl:          { symbol: 'dumbbell.fill',                      grad: ['#48E08A', '#12B59A'] },
-  lunge:         { symbol: 'figure.step.training',               grad: ['#C084FC', '#7C3AED'] },
-  shoulderPress: { symbol: 'figure.arms.open',                   grad: ['#F97316', '#DC2626'] },
-  jumpingJack:   { symbol: 'figure.jumprope',                    grad: ['#FF6B35', '#FF2D55'] },
+  squat:             { symbol: 'figure.strengthtraining.traditional', grad: ['#FFC24B', '#FF7A2E'] },
+  pushup:            { symbol: 'figure.core.training',               grad: ['#67CEFF', '#0A6CFF'] },
+  curl:              { symbol: 'dumbbell.fill',                      grad: ['#48E08A', '#12B59A'] },
+  lunge:             { symbol: 'figure.step.training',               grad: ['#C084FC', '#7C3AED'] },
+  shoulderPress:     { symbol: 'figure.arms.open',                   grad: ['#F97316', '#DC2626'] },
+  jumpingJack:       { symbol: 'figure.jumprope',                    grad: ['#FF6B35', '#FF2D55'] },
+  // Curl-family variants — same dumbbell icon, distinct greens/teals to group visually
+  hammerCurl:        { symbol: 'dumbbell.fill', grad: ['#4ADE80', '#059669'] },
+  concentrationCurl: { symbol: 'dumbbell.fill', grad: ['#22D3EE', '#0E7490'] },
+  preacherCurl:      { symbol: 'dumbbell.fill', grad: ['#A3E635', '#4D7C0F'] },
+  reverseCurl:       { symbol: 'dumbbell.fill', grad: ['#818CF8', '#4338CA'] },
+  cableCurl:         { symbol: 'dumbbell.fill', grad: ['#FACC15', '#B45309'] },
 };
 
 export default function ExercisePickerScreen() {
@@ -20,7 +26,11 @@ export default function ExercisePickerScreen() {
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[s.root, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 32 }]}>
+    <ScrollView
+      style={s.root}
+      contentContainerStyle={{ paddingTop: insets.top + 20, paddingBottom: insets.bottom + 32 }}
+      showsVerticalScrollIndicator={false}
+    >
       <View style={s.header}>
         <Pressable onPress={() => router.back()} style={s.backBtn}>
           <SymbolView
@@ -75,7 +85,7 @@ export default function ExercisePickerScreen() {
           );
         })}
       </View>
-    </View>
+    </ScrollView>
   );
 }
 

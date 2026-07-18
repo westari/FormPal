@@ -496,6 +496,10 @@ public class ATHLTCameraModule: Module {
                 self.sendEvent("onDebugLog", ["message": "[CALIB DONE] Planarity refs: \(segLog)"])
             }
         }
+
+        engine.onDebugLog = { [weak self] msg in
+            self?.sendEvent("onDebugLog", ["message": msg])
+        }
     }
 
     // MARK: – Recording callback ───────────────────────────────────────────────
