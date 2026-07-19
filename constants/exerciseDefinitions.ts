@@ -241,7 +241,7 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
           right: { type: 'lineVsVertical', from: 'rightHip', to: 'rightShoulder' },
         },
         evaluateAt: 'throughoutMax',
-        condition:  { type: 'greaterThan', value: 25 },
+        condition:  { type: 'greaterThan', value: 30 },
         priority:   1,
         enabled:    true,
       },
@@ -348,7 +348,7 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
     formChecks: [
       {
         id:         'hip_align_l',
-        cue:        'HIPS LEVEL',
+        cue:        'HIPS UP — keep body in a straight line',
         metric: {
           type: 'bodyRelativeDeviation',
           point: 'leftHip',
@@ -361,7 +361,7 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
       },
       {
         id:         'hip_align_r',
-        cue:        'HIPS LEVEL',
+        cue:        'HIPS UP — keep body in a straight line',
         metric: {
           type: 'bodyRelativeDeviation',
           point: 'rightHip',
@@ -433,7 +433,7 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
           right: { type: 'lineVsVertical', from: 'rightHip', to: 'rightShoulder' },
         },
         evaluateAt: 'throughoutMax',
-        condition:  { type: 'greaterThan', value: 20 },
+        condition:  { type: 'greaterThan', value: 35 },
         priority:   2,
         enabled:    true,
       },
@@ -511,7 +511,7 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
     topAngle:           84,
     repEnterThreshold:  68,
     repExitThreshold:   72,
-    goodROMThreshold:   20,
+    goodROMThreshold:   35,
     insufficientROMCue: 'PRESS HIGHER',
 
     formChecks: [
@@ -543,6 +543,34 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
         priority:   2,
         enabled:    false,
       },
+      {
+        id:         'wrist_track_l',
+        cue:        'ARMS STRAIGHT OVERHEAD — elbows crossing',
+        metric: {
+          type:     'bodyRelativeDeviation',
+          point:    'leftWrist',
+          axisFrom: 'leftShoulder',
+          axisTo:   'leftHip',
+        },
+        evaluateAt: 'atBottom',
+        condition:  { type: 'greaterThan', value: 0.25 },
+        priority:   3,
+        enabled:    true,
+      },
+      {
+        id:         'wrist_track_r',
+        cue:        'ARMS STRAIGHT OVERHEAD — elbows crossing',
+        metric: {
+          type:     'bodyRelativeDeviation',
+          point:    'rightWrist',
+          axisFrom: 'rightShoulder',
+          axisTo:   'rightHip',
+        },
+        evaluateAt: 'atBottom',
+        condition:  { type: 'greaterThan', value: 0.25 },
+        priority:   3,
+        enabled:    true,
+      },
     ],
 
     readyGate: {
@@ -561,7 +589,7 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
       // bestSide repMetric picks whichever arm gives a cleaner reading.
       // Wrists removed from requiredJoints: repMetric doesn't use wrists; requiring
       // them makes setup fail if wrists are cropped at top of frame.
-      setupInstruction: 'Face the camera — arms and shoulders in frame',
+      setupInstruction: 'Stand FACING the camera directly — do NOT turn sideways — both arms and shoulders clearly visible',
       requiredJoints: [
         'leftShoulder', 'leftElbow',
         'rightShoulder', 'rightElbow',

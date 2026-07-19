@@ -109,10 +109,25 @@ final class ExerciseEngine {
     private(set) var goodReps  = 0
 
     // ── Ready gate ───────────────────────────────────────────────────────────
-    private(set) var isReady: Bool  = false
-    private var readyStart:   Date? = nil
-    // Throttle for [GATE] diagnostic log (at most once per 3s while failing).
+    //
+    // FIX 2 root cause: the old time-based readyStart approach reset on any
+    // single bad frame. At 30fps, one low-confidence Vision reading restarted
+    // the 0.8s hold timer from zero — making the gate feel random.
+    //
+    // Fix: consecutive-frame counters with entry hysteresis (8 pass frames) and
+    // exit hysteresis (20 fail frames, before first rep only). Once totalReps>0,
+    // isReady never drops — mid-set camera jitter can't break the count.
+    private(set) var isReady:              Bool = false
+    private var consecutivePassFrames:     Int  = 0
+    private var consecutiveFailFrames:     Int  = 0
+    // Throttle for [GATE] diagnostic log (~3/sec).
     private var lastGateLogTime: Double = 0
+
+    // Frames of consecutive agreement required to enter ready (~0.27s @ 30fps).
+    private static let READY_ENTER_FRAMES: Int = 8
+    // Frames of consecutive disagreement required to exit ready (~0.67s @ 30fps).
+    // Exit only applies before first rep — once a set is underway, isReady is permanent.
+    private static let READY_EXIT_FRAMES:  Int = 20
 
     // ── Setup ────────────────────────────────────────────────────────────────
     private var setupPhaseState: SetupPhaseState = .pending
@@ -168,7 +183,7 @@ final class ExerciseEngine {
     var onSetupUpdate:       ((SetupStatus)      -> Void)?
     var onCalibrationUpdate: ((CalibrationStatus) -> Void)?
     // Arbitrary diagnostic message — wired to sendEvent("onDebugLog") in ATHLTCameraModule.
-    // Used for [VALID], [GATE], [REP] logs so they reach JS/Metro on Windows (no Xcode needed).
+    // Used for [METRIC], [VALID], [GATE], [REP] logs so they reach JS/Metro on Windows.
     var onDebugLog:          ((String) -> Void)?
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -178,16 +193,18 @@ final class ExerciseEngine {
 
     // Full reset — clears everything including setup and calibration.
     func reset() {
-        enginePhase     = .setup
-        repPhase        = .waitingForReady
-        isReady         = false
-        readyStart      = nil
-        totalReps       = 0
-        goodReps        = 0
-        setupPhaseState = .pending
-        setupLossStart  = nil
-        lastValidPoseTime = .distantPast
-        lastGateLogTime = 0
+        enginePhase           = .setup
+        repPhase              = .waitingForReady
+        isReady               = false
+        consecutivePassFrames = 0
+        consecutiveFailFrames = 0
+        totalReps             = 0
+        goodReps              = 0
+        setupPhaseState       = .pending
+        setupLossStart        = nil
+        lastValidPoseTime     = .distantPast
+        lastGateLogTime       = 0
+        lastFrameLogTime      = 0
         resetCalibrationState(keepDerived: false)
         resetRepState()
     }
@@ -195,14 +212,16 @@ final class ExerciseEngine {
     // Partial reset — resets rep counters but keeps enginePhase and calibration-derived thresholds.
     // Used when startTracking() is called after setup/calibration already passed.
     func resetForTracking() {
-        repPhase          = .waitingForReady
-        isReady           = false
-        readyStart        = nil
-        totalReps         = 0
-        goodReps          = 0
-        setupLossStart    = nil
-        lastValidPoseTime = .distantPast
-        lastGateLogTime   = 0
+        repPhase              = .waitingForReady
+        isReady               = false
+        consecutivePassFrames = 0
+        consecutiveFailFrames = 0
+        totalReps             = 0
+        goodReps              = 0
+        setupLossStart        = nil
+        lastValidPoseTime     = .distantPast
+        lastGateLogTime       = 0
+        lastFrameLogTime      = 0
         resetRepState()
     }
 
@@ -216,11 +235,27 @@ final class ExerciseEngine {
             return
         }
 
-        // Generic per-frame log (~1 fps) for threshold tuning on-device.
+        // FIX 3: throttled per-frame metric log via onDebugLog (~3/sec).
+        // Replaces the old NSLog-only frame log that was invisible on Windows.
+        // Shows live metric value vs thresholds — essential for diagnosing exercises
+        // (like push-up) where zero reps suggests the metric never crosses the
+        // enter threshold. Compare value vs enter: if value stays well above enter,
+        // the geometry or thresholds are wrong.
         let now = timestamp.timeIntervalSinceReferenceDate
-        if now - lastFrameLogTime >= 1.0 {
+        if now - lastFrameLogTime >= 0.33 {
             lastFrameLogTime = now
-            NSLog("[Engine] [%@] frame: metric=%g phase=%@", def.id, angle, phaseLabel())
+            let stateLabel: String
+            switch repPhase {
+            case .waitingForReady: stateLabel = "waiting"
+            case .atTop:           stateLabel = "up"
+            case .inRep:           stateLabel = "down"
+            }
+            let msg = "[METRIC] \(def.id) value=\(String(format: "%.4f", angle)) " +
+                      "enter=\(String(format: "%.4f", effectiveEnterThreshold)) " +
+                      "exit=\(String(format: "%.4f", effectiveExitThreshold)) " +
+                      "top=\(def.topAngle) " +
+                      "state=\(stateLabel) phase=\(phaseLabel())"
+            onDebugLog?(msg)
         }
 
         switch enginePhase {
@@ -244,8 +279,10 @@ final class ExerciseEngine {
         // ── ACTIVE phase ──────────────────────────────────────────────────────
         lastValidPoseTime = timestamp
         accumulate(pose: pose)
-        if !isReady { updateReadyGate(pose: pose, angle: angle, timestamp: timestamp) }
-        if isReady  { runStateMachine(pose: pose, angle: angle, timestamp: timestamp) }
+        // FIX 2: always evaluate gate so exit hysteresis can also run.
+        // Old: `if !isReady { updateReadyGate }` — gate was never evaluated after firing.
+        updateReadyGate(pose: pose, angle: angle, timestamp: timestamp)
+        if isReady { runStateMachine(pose: pose, angle: angle, timestamp: timestamp) }
 
         let snapshot      = currentMetricSnapshot(pose: pose)
         let outOfPlaneCue = isReady ? currentOutOfPlaneCue(pose: pose) : nil
@@ -260,11 +297,13 @@ final class ExerciseEngine {
             let gone = timestamp.timeIntervalSince(setupLossStart!)
             if gone >= Self.LEAVE_TIMEOUT {
                 NSLog("[Engine] [%@] Person gone %.1fs — returning to SETUP", def.id, gone)
-                enginePhase     = .setup
-                setupPhaseState = .pending
-                setupLossStart  = nil
-                isReady         = false
-                repPhase        = .waitingForReady
+                enginePhase           = .setup
+                setupPhaseState       = .pending
+                setupLossStart        = nil
+                isReady               = false
+                consecutivePassFrames = 0
+                consecutiveFailFrames = 0
+                repPhase              = .waitingForReady
                 resetCalibrationState(keepDerived: false)
                 onSetupUpdate?(SetupStatus(allJointsVisible: false, holdProgress: 0.0,
                                            passed: false, hint: "Step back into view to continue"))
@@ -500,58 +539,80 @@ final class ExerciseEngine {
     }
 
     // ─── Ready gate ───────────────────────────────────────────────────────────
+    //
+    // FIX 2: frame-counter hysteresis replaces the time-based readyStart approach.
+    //
+    // ROOT CAUSE of random gate: readyStart was reset to nil on any single bad frame.
+    // At 30fps, a single Vision confidence flicker below gate.minConfidence reset
+    // the 0.8s timer to zero. The gate appeared non-deterministic because it was
+    // extremely sensitive to per-frame pose noise.
+    //
+    // NEW BEHAVIOR:
+    //   ENTER: READY_ENTER_FRAMES consecutive pass frames → isReady = true.
+    //          Bad frames during accumulation decay the counter by 1 (not reset to 0),
+    //          providing grace for single-frame noise.
+    //   EXIT:  READY_EXIT_FRAMES consecutive fail frames → isReady = false.
+    //          Only applied before first rep. Once totalReps > 0, isReady is permanent
+    //          — mid-set camera jitter, brief position changes, and angle oscillation
+    //          during the set can no longer break the rep counter.
+    //
+    // Diagnostic: [GATE] log emitted via onDebugLog ~3/sec (reaches JS/Metro on Windows).
+    //   Format: [GATE] metric=<v> range=<min>-<max> conf=<minConf> consecutivePass=<n> ready=<bool>
 
     private func updateReadyGate(pose: Pose, angle: Double, timestamp: Date) {
-        let gate     = def.readyGate
-        let angleOk  = angle >= gate.readyAngleMin && angle <= gate.readyAngleMax
-        let jointsOk = gate.requiredJoints.allSatisfy {
+        let gate      = def.readyGate
+        let angleOk   = angle >= gate.readyAngleMin && angle <= gate.readyAngleMax
+        let jointsOk  = gate.requiredJoints.allSatisfy {
             (pose[$0]?.confidence ?? 0) >= gate.minConfidence
         }
+        let conditionsMet = angleOk && jointsOk
 
-        if angleOk && jointsOk {
-            if readyStart == nil {
-                readyStart = timestamp
-                let msg = "[GATE] conditions met — starting \(String(format: "%.1f", gate.stableDuration))s hold  angle=\(String(format: "%.1f", angle))"
-                NSLog("[Engine] [%@] %@", def.id, msg)
-                onDebugLog?(msg)
-            }
-            if timestamp.timeIntervalSince(readyStart!) >= gate.stableDuration {
-                isReady    = true
-                repPhase   = .atTop
-                readyStart = nil
-                NSLog("[Engine] [%@] READY — metric=%g", def.id, angle)
+        if conditionsMet {
+            consecutiveFailFrames = 0
+            if !isReady {
+                consecutivePassFrames = min(consecutivePassFrames + 1, Self.READY_ENTER_FRAMES + 5)
+                if consecutivePassFrames >= Self.READY_ENTER_FRAMES {
+                    isReady  = true
+                    repPhase = .atTop
+                    let msg = "[GATE] READY after \(Self.READY_ENTER_FRAMES) pass frames — metric=\(String(format: "%.3f", angle))"
+                    NSLog("[Engine] [%@] %@", def.id, msg)
+                    onDebugLog?(msg)
+                }
             }
         } else {
-            if readyStart != nil { readyStart = nil }
-
-            // Throttled [GATE] diagnostic — at most once per 3s while gate is failing.
-            let now = timestamp.timeIntervalSinceReferenceDate
-            if now - lastGateLogTime >= 3.0 {
-                lastGateLogTime = now
-                var parts: [String] = []
-                if !angleOk {
-                    parts.append(
-                        "angle=\(String(format: "%.1f", angle)) " +
-                        "not in [\(String(format: "%.1f", gate.readyAngleMin)), " +
-                        "\(String(format: "%.1f", gate.readyAngleMax))]"
-                    )
+            if !isReady {
+                // Graceful decay — single bad frames don't fully reset progress.
+                consecutivePassFrames = max(0, consecutivePassFrames - 1)
+            } else if totalReps == 0 {
+                // Exit hysteresis: only lose ready before the first rep.
+                consecutiveFailFrames += 1
+                if consecutiveFailFrames >= Self.READY_EXIT_FRAMES {
+                    isReady               = false
+                    consecutivePassFrames = 0
+                    consecutiveFailFrames = 0
+                    let msg = "[GATE] LOST READY — \(Self.READY_EXIT_FRAMES) fail frames (no reps yet)"
+                    NSLog("[Engine] [%@] %@", def.id, msg)
+                    onDebugLog?(msg)
                 }
-                if !jointsOk {
-                    let failing = gate.requiredJoints.filter {
-                        (pose[$0]?.confidence ?? 0) < gate.minConfidence
-                    }
-                    let detail = failing.map {
-                        "\($0)=\(String(format: "%.2f", pose[$0]?.confidence ?? 0))"
-                    }.joined(separator: " ")
-                    parts.append(
-                        "joints=FAIL(\(detail.isEmpty ? "all" : detail)) " +
-                        "need≥\(String(format: "%.2f", gate.minConfidence))"
-                    )
-                }
-                let msg = "[GATE] FAIL — \(parts.joined(separator: "  "))"
-                NSLog("[Engine] [%@] %@", def.id, msg)
-                onDebugLog?(msg)
             }
+            // If totalReps > 0: set is underway — isReady stays true regardless of position.
+        }
+
+        // Throttled [GATE] diagnostic ~3/sec. Always emitted so you can see gate state
+        // whether passing or failing. conf= shows the weakest required joint.
+        let now = timestamp.timeIntervalSinceReferenceDate
+        if now - lastGateLogTime >= 0.33 {
+            lastGateLogTime = now
+            let minConf = gate.requiredJoints
+                .map { pose[$0]?.confidence ?? 0 }
+                .min() ?? 0
+            let msg = "[GATE] metric=\(String(format: "%.3f", angle)) " +
+                      "range=\(String(format: "%.2f", gate.readyAngleMin))-\(String(format: "%.2f", gate.readyAngleMax)) " +
+                      "conf=\(String(format: "%.2f", minConf)) " +
+                      "consecutivePass=\(consecutivePassFrames) " +
+                      "ready=\(isReady)"
+            NSLog("[Engine] [%@] %@", def.id, msg)
+            onDebugLog?(msg)
         }
     }
 
@@ -796,6 +857,8 @@ final class ExerciseEngine {
         if repPhase == .inRep {
             NSLog("[Engine] [%@] Inactivity reset after %.1fs", def.id, elapsed)
         }
+        consecutivePassFrames = 0
+        consecutiveFailFrames = 0
         repPhase = isReady ? .atTop : .waitingForReady
         resetRepState()
     }
