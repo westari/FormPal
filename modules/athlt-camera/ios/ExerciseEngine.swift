@@ -98,7 +98,13 @@ final class ExerciseEngine {
     private var enginePhase: EnginePhase = .setup
     private var repPhase:    RepPhase    = .waitingForReady
     private var repMinAngle: Double      = 999
-    // Metric value at the moment we entered inRep — used for phantom-rep guard.
+    // Peak metric value seen while in .atTop — used as the movement baseline for the
+    // phantom-rep guard. Using the actual top position (not the entry-threshold crossing)
+    // makes the guard robust to frames where the metric returns nil at the bottom of the
+    // rep (elbow confidence drops below kMinConf), which would otherwise leave repMinAngle
+    // equal to repEnterValue and produce movement=0 on every rep.
+    private var repTopValue:  Double     = 0
+    // Kept for log only — the metric value at the moment we crossed enterThreshold.
     private var repEnterValue: Double    = 0
 
     // Backward compat: modules that check isSetupComplete still work.
@@ -625,13 +631,14 @@ final class ExerciseEngine {
             repPhase = .atTop
 
         case .atTop:
+            repTopValue = max(repTopValue, angle)
             if angle < effectiveEnterThreshold {
                 repPhase      = .inRep
                 repMinAngle   = angle
                 repEnterValue = angle
                 resetRepAccumulators()
-                NSLog("[Engine] [%@] Rep entered — metric=%g (enter=%.4f)",
-                      def.id, angle, effectiveEnterThreshold)
+                NSLog("[Engine] [%@] Rep entered — metric=%g top=%g (enter=%.4f)",
+                      def.id, angle, repTopValue, effectiveEnterThreshold)
             }
 
         case .inRep:
@@ -648,12 +655,19 @@ final class ExerciseEngine {
 
                 // ─ Phantom-rep guard ──────────────────────────────────────────────────
                 // Rejects noise dips: a real rep must travel at least 30% of the range
-                // between the entry point and the goodROM target. Without this, a brief
-                // pose-noise dip below enterThreshold immediately exits as a phantom rep.
-                let movement = repEnterValue - repMinAngle
-                let required = max(abs(repEnterValue - effectiveROMThreshold) * 0.30, 0.01)
+                // from the pre-rep top to the goodROM target.
+                //
+                // Uses repTopValue (max seen in .atTop) not repEnterValue (crossing point)
+                // because at the BOTTOM of the rep the pose metric often returns nil (elbow
+                // confidence < kMinConf while close to the floor), so runStateMachine never
+                // runs and repMinAngle stays equal to repEnterValue. repTopValue is always
+                // well above enterThreshold (~0.40 vs 0.17), giving a real movement reading
+                // even when nil frames swallow the bottom of the rep.
+                let movement = repTopValue - repMinAngle
+                let required = max(abs(repTopValue - effectiveROMThreshold) * 0.30, 0.01)
                 guard movement >= required else {
                     let msg = "[REP] rejected — movement=\(String(format: "%.4f", movement)) " +
+                              "(start=\(String(format: "%.4f", repTopValue)) peak=\(String(format: "%.4f", repMinAngle))) " +
                               "required=\(String(format: "%.4f", required)) (phantom)"
                     NSLog("[Engine] [%@] %@", def.id, msg)
                     onDebugLog?(msg)
@@ -865,6 +879,7 @@ final class ExerciseEngine {
 
     private func resetRepState() {
         repMinAngle   = 999
+        repTopValue   = 0
         repEnterValue = 0
         resetRepAccumulators()
     }
