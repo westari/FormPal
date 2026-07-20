@@ -342,13 +342,13 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
     topAngle:           0.40,
     repEnterThreshold:  0.17,
     repExitThreshold:   0.30,
-    goodROMThreshold:   0.07,
+    goodROMThreshold:   -0.15,
     insufficientROMCue: 'GO LOWER',
 
     formChecks: [
       {
         id:         'hip_align_l',
-        cue:        'HIPS UP — keep body in a straight line',
+        cue:        'HIPS UP',
         metric: {
           type: 'bodyRelativeDeviation',
           point: 'leftHip',
@@ -361,7 +361,7 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
       },
       {
         id:         'hip_align_r',
-        cue:        'HIPS UP — keep body in a straight line',
+        cue:        'HIPS UP',
         metric: {
           type: 'bodyRelativeDeviation',
           point: 'rightHip',
@@ -545,7 +545,7 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
       },
       {
         id:         'wrist_track_l',
-        cue:        'ARMS STRAIGHT OVERHEAD — elbows crossing',
+        cue:        'ARMS STRAIGHT UP',
         metric: {
           type:     'bodyRelativeDeviation',
           point:    'leftWrist',
@@ -559,7 +559,7 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
       },
       {
         id:         'wrist_track_r',
-        cue:        'ARMS STRAIGHT OVERHEAD — elbows crossing',
+        cue:        'ARMS STRAIGHT UP',
         metric: {
           type:     'bodyRelativeDeviation',
           point:    'rightWrist',

@@ -228,6 +228,8 @@ public class ATHLTCameraModule: Module {
                 self.wireEngineCallbacks()
                 self.currentDef = def
                 self.universalEngine.reset()
+                let relevantJoints = Array(Set(def.repMetric.referencedJoints()))
+                self.universalEngine.setRelevantJoints(relevantJoints)
                 NSLog("[GymCamera] exercise → %@ (%@)", exerciseType, def.displayName)
                 promise.resolve()
             }
@@ -349,6 +351,8 @@ public class ATHLTCameraModule: Module {
                 self.engine = ExerciseEngine(definition: def)
                 self.wireEngineCallbacks()
                 self.currentDef = def
+                let relevantJoints = Array(Set(def.repMetric.referencedJoints()))
+                self.universalEngine.setRelevantJoints(relevantJoints)
 
                 self.sendEvent("onDebugLog", ["message":
                     "[DEF-LOAD] loaded '\(def.id)' from JSON: \(summary) source=JSON"])

@@ -18,6 +18,15 @@ import Foundation
 //   static-violation > swinging > uneven > below-standard-ROM >
 //   range-shrink > compensation > rushing/slowing
 //
+// JOINT SCOPE:
+//   setRelevantJoints() restricts anchor detection and joint-displacement signals
+//   to only the joints the exercise's repMetric actually reads. Without this,
+//   Joint.allCases includes ankles, knees, head — joints that are irrelevant for
+//   e.g. push-ups — which get classified as "anchors" and then incorrectly trigger
+//   "KEEP ANKLES STILL — compensation" when feet shift normally during a rep.
+//   Must be called whenever the exercise changes (from ATHLTCameraModule).
+//   Defaults to all joints when not set (safe fallback for exercises without a filter).
+//
 // TIMESTAMP NOTE:
 //   ingestFrame MUST be called with Date() (wallclock), NOT with the
 //   CMSampleBuffer camera timestamp. Camera time is a Mach absolute (uptime)
@@ -87,6 +96,28 @@ final class UniversalQualityEngine {
             log?("[STD] standard loaded: peak≤\(f1(std.standardPeakAngleMax))°  start≥\(f1(std.standardStartAngleMin))°  minRange≥\(f1(std.standardMinRange))°")
         } else {
             log?("[STD] no standard for this exercise — Layer 2 inactive, relative signals only")
+        }
+    }
+
+    // MARK: – Relevant joints (anchor + displacement scope)
+    //
+    // When set, joint displacement tracking and anchor detection are restricted
+    // to these joints only. Prevents irrelevant joints (e.g. ankles for push-ups,
+    // head for squats) from being classified as anchors and generating false
+    // "KEEP X STILL — compensation" cues.
+    //
+    // Set by ATHLTCameraModule using def.repMetric.referencedJoints() whenever the
+    // exercise changes. Persists across reset() (like activeStandard) — it is
+    // exercise config, not session state. Nil = use all joints (safe fallback).
+
+    private var relevantJoints: Set<Joint>? = nil
+
+    func setRelevantJoints(_ joints: [Joint]?) {
+        relevantJoints = joints.map { Set($0) }
+        if let js = joints {
+            log?("[UNIV] relevant joints: \(js.map{"\($0)"}.sorted().joined(separator: ", "))")
+        } else {
+            log?("[UNIV] relevant joints: all (no filter)")
         }
     }
 
@@ -249,6 +280,10 @@ final class UniversalQualityEngine {
     }
 
     // MARK: – Reset
+    //
+    // Clears session state (frame buffer, baseline, anchors) but NOT exercise config
+    // (relevantJoints, activeStandard). These persist across tracking sessions for
+    // the same exercise — same as how activeStandard behaves.
 
     func reset() {
         // Diagnostic: confirm reset() is only called on stopSession/startTracking/setExercise.
@@ -264,7 +299,8 @@ final class UniversalQualityEngine {
         baselineJointDisp.removeAll()
         anchorJoints.removeAll()
         lastRepTime = .distantPast
-        // activeStandard NOT cleared — persists for the same exercise across tracking sessions
+        // activeStandard and relevantJoints NOT cleared — they are exercise config,
+        // not session state, and persist across startTracking/stopTracking calls.
     }
 
     // MARK: – Baseline construction
@@ -275,7 +311,12 @@ final class UniversalQualityEngine {
         baselineDuration = referenceStats.map(\.duration).reduce(0,+) / n
         baselineJerk     = referenceStats.map(\.jerk).reduce(0,+)     / n
 
-        for joint in Joint.allCases {
+        // Restrict anchor construction to relevant joints only.
+        // Using Joint.allCases here would include irrelevant joints (ankles for push-ups,
+        // knees for shoulder press) which move little during reference reps, become anchors,
+        // then get flagged when they shift naturally mid-set.
+        let jointsToTrack = relevantJoints.map(Array.init) ?? Array(Joint.allCases)
+        for joint in jointsToTrack {
             let vals = referenceStats.compactMap { $0.jointDisp[joint] }
             if !vals.isEmpty { baselineJointDisp[joint] = vals.reduce(0,+) / Double(vals.count) }
         }
@@ -387,8 +428,12 @@ final class UniversalQualityEngine {
         }
         let jerk = varianceOf(velocities)
 
+        // Restrict joint displacement tracking to relevant joints only.
+        // This prevents irrelevant joints (e.g. ankles during push-ups) from being
+        // classified as anchors in buildBaseline() and generating false compensation cues.
         var jointDisp: [Joint: Double] = [:]
-        for joint in Joint.allCases {
+        let jointsToTrack = relevantJoints.map(Array.init) ?? Array(Joint.allCases)
+        for joint in jointsToTrack {
             var disp = 0.0
             for i in 1..<eff.count {
                 guard let p0 = eff[i-1].pose[joint], p0.confidence >= kMinConf,

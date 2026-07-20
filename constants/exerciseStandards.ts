@@ -212,7 +212,7 @@ export const EXERCISE_STANDARDS: Record<string, ExerciseStandardDef> = {
     exerciseId: 'shoulderPress',
     reviewed:   false,
 
-    standardPeakAngleMax:  30.0,    // must press close to overhead
+    standardPeakAngleMax:  45.0,    // must press close to overhead
     standardStartAngleMin: 65.0,    // must lower arms to shoulder height
 
     romCue:    'PRESS HIGHER — not reaching overhead',
