@@ -335,48 +335,63 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
       rightJoints: ['rightShoulder', 'rightElbow', 'rightWrist'],
     },
 
-    // Top (arms extended): ~160°. Enter rep when angle drops below 115° (~halfway down).
-    // Exit rep when angle rises back above 130° — 15° hysteresis prevents double-count.
-    // Good ROM: must reach ≤100° (elbows near right-angle); cue "GO LOWER" if not.
+    // Top (arms extended): ~160°.
+    // repEnterThreshold is LENIENT (140°) so even a shallow push-up attempt (~20° bend
+    // from top) registers as a counted rep. This is the rep-COUNTING threshold.
+    // repExitThreshold (150°) is 10° above enter — hysteresis prevents double-count.
+    // goodROMThreshold is the SEPARATE depth-quality check: if repMinAngle didn't reach
+    // ≤100° the rep counts but is marked BAD with cue "GO DEEPER". Reps that reach ≤100°
+    // pass the depth check and can be marked GOOD. These are two independent thresholds.
     topAngle:           160,
-    repEnterThreshold:  115,
-    repExitThreshold:   130,
-    goodROMThreshold:   100,
-    insufficientROMCue: 'GO LOWER',
+    repEnterThreshold:  140,
+    repExitThreshold:   150,
+    goodROMThreshold:    90,   // was 100 — tightened so elbows must reach near right-angle
+    insufficientROMCue: 'GO DEEPER',
 
     formChecks: [
-      // hip_align: bodyRelativeDeviation returns nil gracefully if ankles off-screen.
+      // Hip sagging: hips drop below the body line (shoulder appears above hip in image).
+      // normalizedVerticalGap(shoulder, hip) > 0 when shoulder.y > hip.y = hips are low.
+      // maximum() picks whichever side is more deviated, falls back to the visible side
+      // if the far arm is occluded (camera on floor, side view).
+      // Replaces bodyRelativeDeviation which was unsigned (abs()) and fired "HIPS UP" for
+      // BOTH sagging and piking — it had no direction awareness.
       {
-        id:         'hip_align_l',
+        id:         'hip_sag',
         cue:        'HIPS UP',
         metric: {
-          type: 'bodyRelativeDeviation',
-          point: 'leftHip',
-          axisFrom: 'leftShoulder', axisTo: 'leftAnkle',
+          type:  'maximum',
+          left:  { type: 'normalizedVerticalGap', upper: 'leftShoulder',  lower: 'leftHip'  },
+          right: { type: 'normalizedVerticalGap', upper: 'rightShoulder', lower: 'rightHip' },
         },
         evaluateAt: 'throughoutMax',
-        condition:  { type: 'greaterThan', value: 0.07 },
+        condition:  { type: 'greaterThan', value: 0.15 },
         priority:   2,
         enabled:    true,
       },
+      // Hip piking: hips rise above the body line (hip appears above shoulder in image).
+      // normalizedVerticalGap(hip, shoulder) > 0 when hip.y > shoulder.y = hips are high.
+      // These two checks together give directional coaching: sag → HIPS UP, pike → HIPS DOWN.
       {
-        id:         'hip_align_r',
-        cue:        'HIPS UP',
+        id:         'hip_pike',
+        cue:        'HIPS DOWN',
         metric: {
-          type: 'bodyRelativeDeviation',
-          point: 'rightHip',
-          axisFrom: 'rightShoulder', axisTo: 'rightAnkle',
+          type:  'maximum',
+          left:  { type: 'normalizedVerticalGap', upper: 'leftHip',  lower: 'leftShoulder'  },
+          right: { type: 'normalizedVerticalGap', upper: 'rightHip', lower: 'rightShoulder' },
         },
         evaluateAt: 'throughoutMax',
-        condition:  { type: 'greaterThan', value: 0.07 },
+        condition:  { type: 'greaterThan', value: 0.15 },
         priority:   2,
         enabled:    true,
       },
     ],
 
     readyGate: {
-      // User must be at top position (arms ~extended) before counting starts.
-      readyAngleMin:  140,
+      // readyAngleMin set 10° below repEnterThreshold (140°) so the gate condition doesn't
+      // start accumulating exit-frames the instant the first rep starts. Gate stays passing
+      // until angle < 130° — well into the rep, giving the 20-frame exit buffer plenty of
+      // headroom before the rep completes. After the first rep, isReady is permanent.
+      readyAngleMin:  130,
       readyAngleMax:  185,
       requiredJoints: ['leftShoulder', 'leftElbow', 'rightShoulder', 'rightElbow'],
       minConfidence:  0.15,
