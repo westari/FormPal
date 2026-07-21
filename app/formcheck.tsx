@@ -76,13 +76,17 @@ const DEBUG_LOG_ENABLED = true;
 type Phase = 'idle' | 'starting' | 'setup' | 'setup-done' | 'tracking' | 'stopping' | 'review';
 
 // ─── Rep summary parsed from [REP] log lines ─────────────────────────────────
-// Format: [REP] #N top=X.X bottom=Y.Y swing=Z.Z ROM=ok/short cue=CUE
+// Format: [REP] #N top=X.X bottom=Y.Y swing=Z.Z ROM=ok/short cue=CUE [ | key=val ...]
+// The optional " | key=val ..." suffix carries raw form check values. Parse cue from the
+// main section only (before the pipe) so `cue === 'GOOD'` comparison works correctly.
 type RepSummary = { num: number; good: boolean; peak: string; cue: string };
 
 function parseRepSummaries(lines: string[]): RepSummary[] {
   const result: RepSummary[] = [];
   for (const line of lines) {
-    const m = line.match(/^\[REP\] #(\d+) .*?bottom=([-\d.]+) .*?cue=(.+)/);
+    const pipeIdx = line.indexOf(' | ');
+    const main = pipeIdx >= 0 ? line.slice(0, pipeIdx) : line;
+    const m = main.match(/^\[REP\] #(\d+) .*?bottom=([-\d.]+) .*?cue=(.+)/);
     if (!m) continue;
     const cue = m[3].trim();
     result.push({ num: parseInt(m[1]), good: cue === 'GOOD', peak: m[2], cue });

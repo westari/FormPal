@@ -349,39 +349,61 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
     insufficientROMCue: 'GO DEEPER',
 
     formChecks: [
-      // Hip sagging: hips drop below the body line (shoulder appears above hip in image).
-      // normalizedVerticalGap(shoulder, hip) > 0 when shoulder.y > hip.y = hips are low.
-      // maximum() picks whichever side is more deviated, falls back to the visible side
-      // if the far arm is occluded (camera on floor, side view).
-      // Replaces bodyRelativeDeviation which was unsigned (abs()) and fired "HIPS UP" for
-      // BOTH sagging and piking — it had no direction awareness.
+      // Hip piking: hip ABOVE the shoulder→ankle plank line.
+      // signedDeviationFromLine reads ≈ 0 when hip is on the line (straight plank), and
+      // deviates when the hip bends away. This is the correct primitive — NOT normalizedVerticalGap,
+      // which measures raw Vision-space y-distance between shoulder and hip (≈ 0.95 for ANY
+      // horizontal push-up body because the phone is rotated 90° on its side, making Vision y
+      // the real-world horizontal axis, not vertical).
+      //
+      // Sign convention: "positive = LEFT of lineFrom→lineTo direction."
+      // For shoulder→ankle direction in the rotated camera: LEFT = upward in real world (for the
+      // common setup where head is to the left in the camera frame). So positive = piking.
+      // If cues fire backwards (HIPS DOWN on a sagging rep), swap the condition values
+      // (change greaterThan → lessThan and lessThan → greaterThan on all four checks).
+      //
+      // Ankle visibility: if ankle confidence < 0.25, the check returns nil → no cue (silent).
+      // Use [REP] log hip values to verify ankles are being seen.
+      //
+      // Priority = 4 (≥ FORM_OVERRIDE_ROM_PRIORITY) so hip cue overrides "GO DEEPER" even
+      // when the elbow angle is short — piking reduces ROM so both faults often co-occur.
+      //
+      // Threshold 0.05 = 5% of shoulder→ankle distance ≈ 7cm for a 140cm body axis. Loose
+      // intentionally for first test — tune from the hip_pike_l / hip_sag_l values in [REP] log.
       {
-        id:         'hip_sag',
-        cue:        'HIPS UP',
-        metric: {
-          type:  'maximum',
-          left:  { type: 'normalizedVerticalGap', upper: 'leftShoulder',  lower: 'leftHip'  },
-          right: { type: 'normalizedVerticalGap', upper: 'rightShoulder', lower: 'rightHip' },
-        },
+        id:         'hip_pike_l',
+        cue:        'HIPS DOWN',
+        metric: { type: 'signedDeviationFromLine', point: 'leftHip', lineFrom: 'leftShoulder', lineTo: 'leftAnkle' },
         evaluateAt: 'throughoutMax',
-        condition:  { type: 'greaterThan', value: 0.15 },
-        priority:   2,
+        condition:  { type: 'greaterThan', value: 0.05 },
+        priority:   4,
         enabled:    true,
       },
-      // Hip piking: hips rise above the body line (hip appears above shoulder in image).
-      // normalizedVerticalGap(hip, shoulder) > 0 when hip.y > shoulder.y = hips are high.
-      // These two checks together give directional coaching: sag → HIPS UP, pike → HIPS DOWN.
       {
-        id:         'hip_pike',
+        id:         'hip_sag_l',
+        cue:        'HIPS UP',
+        metric: { type: 'signedDeviationFromLine', point: 'leftHip', lineFrom: 'leftShoulder', lineTo: 'leftAnkle' },
+        evaluateAt: 'throughoutMin',
+        condition:  { type: 'lessThan', value: -0.05 },
+        priority:   4,
+        enabled:    true,
+      },
+      {
+        id:         'hip_pike_r',
         cue:        'HIPS DOWN',
-        metric: {
-          type:  'maximum',
-          left:  { type: 'normalizedVerticalGap', upper: 'leftHip',  lower: 'leftShoulder'  },
-          right: { type: 'normalizedVerticalGap', upper: 'rightHip', lower: 'rightShoulder' },
-        },
+        metric: { type: 'signedDeviationFromLine', point: 'rightHip', lineFrom: 'rightShoulder', lineTo: 'rightAnkle' },
         evaluateAt: 'throughoutMax',
-        condition:  { type: 'greaterThan', value: 0.15 },
-        priority:   2,
+        condition:  { type: 'greaterThan', value: 0.05 },
+        priority:   4,
+        enabled:    true,
+      },
+      {
+        id:         'hip_sag_r',
+        cue:        'HIPS UP',
+        metric: { type: 'signedDeviationFromLine', point: 'rightHip', lineFrom: 'rightShoulder', lineTo: 'rightAnkle' },
+        evaluateAt: 'throughoutMin',
+        condition:  { type: 'lessThan', value: -0.05 },
+        priority:   4,
         enabled:    true,
       },
     ],

@@ -772,11 +772,18 @@ final class ExerciseEngine {
 
         // [REP] log to onDebugLog → visible in JS session review.
         // top = repTopValue (max in .atTop before this rep), bottom = repMinAngle.
+        // Appends raw form check values after " | " so hip deviation can be read directly
+        // (e.g. "| hip_pike_l=0.021 hip_sag_l=-0.018") without NSLog access on Windows.
         let swing = repTopValue - repMinAngle
+        let formLog = evaluated.keys.sorted().compactMap { id -> String? in
+            guard let v = evaluated[id] else { return nil }
+            return "\(id)=\(String(format: "%.3f", v))"
+        }.joined(separator: " ")
         onDebugLog?("[REP] #\(totalReps) top=\(String(format: "%.1f", repTopValue)) " +
                     "bottom=\(String(format: "%.1f", repMinAngle)) " +
                     "swing=\(String(format: "%.1f", swing)) " +
-                    "ROM=\(goodROM ? "ok" : "short") cue=\(cue)")
+                    "ROM=\(goodROM ? "ok" : "short") cue=\(cue)" +
+                    (formLog.isEmpty ? "" : " | \(formLog)"))
 
         let checkLog = def.formChecks.filter(\.enabled).map { ch -> String in
             let v   = evaluated[ch.id].map { String(format: "%.3f", $0) } ?? "nil"
