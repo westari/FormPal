@@ -315,37 +315,37 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
 
   // ─── Push-up ────────────────────────────────────────────────────────────────
   //
-  // VALUES VERBATIM from ExerciseRegistry.swift.
-  // repMetric: bodyRelativeGap(shoulder, elbow, shoulder→hip axis). Orientation-agnostic.
+  // repMetric: bestSide(jointAngle(shoulder→elbow→wrist)) — elbow flexion angle.
+  // Industry-standard method: angle DECREASES as user lowers (arms extended ~160°,
+  // elbows bent at bottom ~70-100°). Large clean swing (~70°) reliably separates
+  // up from down with no ambiguity. Orientation-agnostic: 2D joint angle is
+  // invariant to body orientation when the arm is in the camera's plane of view,
+  // which is guaranteed by side camera placement.
   // Camera: phone on its side on the floor, a few feet to your side.
-  // No calibration — body-relative thresholds are stable across users and distances.
+  // No calibration — joint angle thresholds are stable across users and distances.
   pushup: {
     id:          'pushup',
     displayName: 'Push-up',
 
     repMetric: {
       type: 'bestSide',
-      left: {
-        type: 'bodyRelativeGap',
-        a: 'leftShoulder', b: 'leftElbow',
-        axisFrom: 'leftShoulder', axisTo: 'leftHip',
-      },
-      right: {
-        type: 'bodyRelativeGap',
-        a: 'rightShoulder', b: 'rightElbow',
-        axisFrom: 'rightShoulder', axisTo: 'rightHip',
-      },
-      leftJoints:  ['leftShoulder',  'leftElbow',  'leftHip'],
-      rightJoints: ['rightShoulder', 'rightElbow', 'rightHip'],
+      left:  { type: 'jointAngle', a: 'leftShoulder',  pivot: 'leftElbow',  c: 'leftWrist'  },
+      right: { type: 'jointAngle', a: 'rightShoulder', pivot: 'rightElbow', c: 'rightWrist' },
+      leftJoints:  ['leftShoulder',  'leftElbow',  'leftWrist'],
+      rightJoints: ['rightShoulder', 'rightElbow', 'rightWrist'],
     },
 
-    topAngle:           0.40,
-    repEnterThreshold:  0.17,
-    repExitThreshold:   0.30,
-    goodROMThreshold:   -0.15,
+    // Top (arms extended): ~160°. Enter rep when angle drops below 115° (~halfway down).
+    // Exit rep when angle rises back above 130° — 15° hysteresis prevents double-count.
+    // Good ROM: must reach ≤100° (elbows near right-angle); cue "GO LOWER" if not.
+    topAngle:           160,
+    repEnterThreshold:  115,
+    repExitThreshold:   130,
+    goodROMThreshold:   100,
     insufficientROMCue: 'GO LOWER',
 
     formChecks: [
+      // hip_align: bodyRelativeDeviation returns nil gracefully if ankles off-screen.
       {
         id:         'hip_align_l',
         cue:        'HIPS UP',
@@ -375,8 +375,9 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
     ],
 
     readyGate: {
-      readyAngleMin:  0.13,
-      readyAngleMax:  1.50,
+      // User must be at top position (arms ~extended) before counting starts.
+      readyAngleMin:  140,
+      readyAngleMax:  185,
       requiredJoints: ['leftShoulder', 'leftElbow', 'rightShoulder', 'rightElbow'],
       minConfidence:  0.15,
       stableDuration: 0.5,
@@ -384,14 +385,12 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
 
     cameraSetup: {
       setupInstruction: 'Lay your phone on its side on the floor, a few feet to your side',
-      // Ankles removed: repMetric (bestSide bodyRelativeGap) only needs shoulder+elbow+hip.
-      // Requiring ankles forced full-body framing and blocked setup in landscape.
-      // hip_align form checks still use ankles but return nil gracefully when off-screen.
-      requiredJoints:    ['leftShoulder',  'leftElbow',  'leftHip'],
-      requiredJointsAlt: ['rightShoulder', 'rightElbow', 'rightHip'],
+      // repMetric now uses shoulder+elbow+wrist (jointAngle). Hip removed.
+      requiredJoints:    ['leftShoulder',  'leftElbow',  'leftWrist'],
+      requiredJointsAlt: ['rightShoulder', 'rightElbow', 'rightWrist'],
     },
 
-    // No calibration — body-relative thresholds stable across users and distances.
+    // No calibration — joint angle thresholds stable across users and distances.
 
     minRepInterval: 0.8,
 

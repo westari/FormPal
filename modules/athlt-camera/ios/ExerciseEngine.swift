@@ -259,6 +259,7 @@ final class ExerciseEngine {
             let msg = "[METRIC] \(def.id) value=\(String(format: "%.4f", angle)) " +
                       "enter=\(String(format: "%.4f", effectiveEnterThreshold)) " +
                       "exit=\(String(format: "%.4f", effectiveExitThreshold)) " +
+                      "rom=\(String(format: "%.4f", effectiveROMThreshold)) " +
                       "top=\(def.topAngle) " +
                       "state=\(stateLabel) phase=\(phaseLabel())"
             onDebugLog?(msg)
@@ -768,6 +769,14 @@ final class ExerciseEngine {
             isGood = true
         }
         if isGood { goodReps += 1 }
+
+        // [REP] log to onDebugLog → visible in JS session review.
+        // top = repTopValue (max in .atTop before this rep), bottom = repMinAngle.
+        let swing = repTopValue - repMinAngle
+        onDebugLog?("[REP] #\(totalReps) top=\(String(format: "%.1f", repTopValue)) " +
+                    "bottom=\(String(format: "%.1f", repMinAngle)) " +
+                    "swing=\(String(format: "%.1f", swing)) " +
+                    "ROM=\(goodROM ? "ok" : "short") cue=\(cue)")
 
         let checkLog = def.formChecks.filter(\.enabled).map { ch -> String in
             let v   = evaluated[ch.id].map { String(format: "%.3f", $0) } ?? "nil"
