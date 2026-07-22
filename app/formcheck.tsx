@@ -55,18 +55,39 @@ async function logSessionVideo(uri: string) {
   } catch {}
 }
 
-const SETUP_INFO: Record<ExerciseType, { icon: string; title: string; sub: string }> = {
-  squat:             { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame — ankle to shoulder' },
-  curl:              { icon: 'camera.fill',          title: 'Face the camera',                  sub: 'Stand back — both arms and hands in view' },
-  pushup:            { icon: 'iphone',               title: 'Phone on the floor, to your side', sub: 'Get in position — full body in frame' },
-  lunge:             { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame — ankle to shoulder' },
-  shoulderPress:     { icon: 'camera.fill',          title: 'Face the camera',                  sub: 'Stand back — arms and shoulders in frame' },
-  jumpingJack:       { icon: 'camera.fill',          title: 'Face the camera',                  sub: 'Full body in frame — arms and legs visible' },
-  hammerCurl:        { icon: 'camera.fill',          title: 'Face the camera',                  sub: 'Stand back — both arms and hands in view' },
-  concentrationCurl: { icon: 'camera.fill',          title: 'Face the camera',                  sub: 'Working arm and elbow clearly visible' },
-  preacherCurl:      { icon: 'camera.fill',          title: 'Face the camera',                  sub: 'Both arms and elbows fully in frame' },
-  reverseCurl:       { icon: 'camera.fill',          title: 'Face the camera',                  sub: 'Stand back — both arms and hands in view' },
-  cableCurl:         { icon: 'camera.fill',          title: 'Face the cable machine',            sub: 'Stand back — both arms and hands in view' },
+const SETUP_INFO: Record<string, { icon: string; title: string; sub: string }> = {
+  // Side-view exercises
+  squat:               { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame — ankle to shoulder' },
+  lunge:               { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame — ankle to shoulder' },
+  gobletSquat:         { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame — ankle to shoulder' },
+  airSquat:            { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame — ankle to shoulder' },
+  frontSquat:          { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame — ankle to shoulder' },
+  backSquat:           { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame — ankle to shoulder' },
+  sumoSquat:           { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame — ankle to shoulder' },
+  splitSquat:          { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame — ankle to shoulder' },
+  reverseLunge:        { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame — ankle to shoulder' },
+  stepUp:              { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body and box in frame' },
+  bulgarianSplitSquat: { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body and bench in frame' },
+  // Phone-on-floor exercises (push-up family)
+  pushup:              { icon: 'iphone', title: 'Phone on the floor, to your side',               sub: 'Get in position — full body in frame' },
+  kneePushup:          { icon: 'iphone', title: 'Phone on the floor, to your side',               sub: 'Get in position — knees and hands in frame' },
+  inclinePushup:       { icon: 'iphone', title: 'Phone on the floor, to your side',               sub: 'Get in position — shoulders and hands in frame' },
+  widePushup:          { icon: 'iphone', title: 'Phone on the floor, to your side',               sub: 'Get in position — full body in frame' },
+  diamondPushup:       { icon: 'iphone', title: 'Phone on the floor, to your side',               sub: 'Get in position — full body in frame' },
+  declinePushup:       { icon: 'iphone', title: 'Phone on the floor, to your side',               sub: 'Get in position — shoulders and hands in frame' },
+  // Face-camera exercises (curl + shoulder press families)
+  curl:                { icon: 'camera.fill', title: 'Face the camera',                           sub: 'Stand back — both arms and hands in view' },
+  hammerCurl:          { icon: 'camera.fill', title: 'Face the camera',                           sub: 'Stand back — both arms and hands in view' },
+  concentrationCurl:   { icon: 'camera.fill', title: 'Face the camera',                           sub: 'Working arm and elbow clearly visible' },
+  preacherCurl:        { icon: 'camera.fill', title: 'Face the camera',                           sub: 'Both arms and elbows fully in frame' },
+  reverseCurl:         { icon: 'camera.fill', title: 'Face the camera',                           sub: 'Stand back — both arms and hands in view' },
+  cableCurl:           { icon: 'camera.fill', title: 'Face the cable machine',                    sub: 'Stand back — both arms and hands in view' },
+  shoulderPress:         { icon: 'camera.fill', title: 'Face the camera',                         sub: 'Stand back — arms and shoulders in frame' },
+  overheadPress:         { icon: 'camera.fill', title: 'Face the camera',                         sub: 'Stand back — arms and shoulders in frame' },
+  arnoldPress:           { icon: 'camera.fill', title: 'Face the camera',                         sub: 'Stand back — arms and shoulders in frame' },
+  dumbbellShoulderPress: { icon: 'camera.fill', title: 'Face the camera',                         sub: 'Stand back — arms and shoulders in frame' },
+  machineShoulderPress:  { icon: 'camera.fill', title: 'Face the camera',                         sub: 'Stand back — arms and shoulders in frame' },
+  jumpingJack:           { icon: 'camera.fill', title: 'Face the camera',                         sub: 'Full body in frame — arms and legs visible' },
 };
 
 // ─── Debug log panel — set false to hide without removing code ────────────────
@@ -107,10 +128,7 @@ export default function FormCheckScreen() {
     returnTo?:          string;
     workoutExerciseId?: string;
   }>();
-  const exerciseType = ([
-    'squat', 'curl', 'pushup', 'lunge', 'shoulderPress',
-    'hammerCurl', 'concentrationCurl', 'preacherCurl', 'reverseCurl', 'cableCurl',
-  ].includes(exercise) ? exercise : 'squat') as ExerciseType;
+  const exerciseType = (exercise in SETUP_INFO ? exercise : 'squat') as ExerciseType;
 
   const [phase,    setPhase]    = useState<Phase>('idle');
   const [error,    setError]    = useState<string | null>(null);
@@ -379,7 +397,8 @@ export default function FormCheckScreen() {
   const isStopping     = phase === 'stopping';
   const showRepCounter = isStopping || isTracking;
   const needsReady     = isTracking && stats != null && !stats.ready;
-  const showPushupMetric = exerciseType === 'pushup' && isTracking && liveMetric != null;
+  const isPushupFamily = ['pushup','kneePushup','inclinePushup','widePushup','diamondPushup','declinePushup'].includes(exerciseType);
+  const showPushupMetric = isPushupFamily && isTracking && liveMetric != null;
 
   return (
     <View style={s.root}>
@@ -463,16 +482,7 @@ export default function FormCheckScreen() {
           <SymbolView name="chevron.left" size={18} tintColor={C.text} type="monochrome" style={{ width: 18, height: 18 }} />
         </GlassButton>
         <Text style={s.title}>
-          {exerciseType === 'curl'              ? 'Bicep Curl'
-            : exerciseType === 'hammerCurl'        ? 'Hammer Curl'
-            : exerciseType === 'concentrationCurl' ? 'Concentration Curl'
-            : exerciseType === 'preacherCurl'      ? 'Preacher Curl'
-            : exerciseType === 'reverseCurl'       ? 'Reverse Curl'
-            : exerciseType === 'cableCurl'         ? 'Cable Curl'
-            : exerciseType === 'pushup'            ? 'Push-up'
-            : exerciseType === 'lunge'             ? 'Lunge'
-            : exerciseType === 'shoulderPress'     ? 'Shoulder Press'
-            : 'Squat'} Form Check
+          {EXERCISE_DEFINITIONS[exerciseType]?.displayName ?? exerciseType} Form Check
         </Text>
         <GlassButton circular={40} onPress={handleFlip}>
           <SymbolView name="arrow.triangle.2.circlepath.camera.fill" size={18} tintColor={C.text} type="monochrome" style={{ width: 18, height: 18 }} />
@@ -530,7 +540,7 @@ export default function FormCheckScreen() {
         <View style={s.debugPanel}>
           <Row label="person"  value={stats.personDetected ? 'yes' : 'no'} good={stats.personDetected} />
           <Row label="ready"   value={stats.ready ? 'yes' : 'no'} good={stats.ready} />
-          <Row label={['curl','pushup','hammerCurl','concentrationCurl','preacherCurl','reverseCurl','cableCurl'].includes(exerciseType) ? 'elbow°' : 'knee°'} value={stats.kneeAngle.toFixed(1)} />
+          <Row label={['curl','hammerCurl','concentrationCurl','preacherCurl','reverseCurl','cableCurl','pushup','kneePushup','inclinePushup','widePushup','diamondPushup','declinePushup'].includes(exerciseType) ? 'elbow°' : 'knee°'} value={stats.kneeAngle.toFixed(1)} />
           <Row label="back°"   value={stats.backAngle.toFixed(1)} />
           <Row label="phase"   value={stats.phase} />
           <Row label="frames"  value={`${stats.totalFramesAnalyzed} / ${stats.totalFramesReceived}`} />
