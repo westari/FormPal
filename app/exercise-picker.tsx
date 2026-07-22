@@ -19,6 +19,28 @@ const EXERCISE_UI: Record<string, { symbol: string; grad: [string, string] }> = 
   preacherCurl:      { symbol: 'dumbbell.fill', grad: ['#A3E635', '#4D7C0F'] },
   reverseCurl:       { symbol: 'dumbbell.fill', grad: ['#818CF8', '#4338CA'] },
   cableCurl:         { symbol: 'dumbbell.fill', grad: ['#FACC15', '#B45309'] },
+  // Squat-family variants — same lower-body icon, amber-orange family
+  gobletSquat:       { symbol: 'figure.strengthtraining.traditional', grad: ['#FCD34D', '#F59E0B'] },
+  airSquat:          { symbol: 'figure.strengthtraining.traditional', grad: ['#FDE68A', '#D97706'] },
+  frontSquat:        { symbol: 'figure.strengthtraining.traditional', grad: ['#FB923C', '#EA580C'] },
+  backSquat:         { symbol: 'figure.strengthtraining.traditional', grad: ['#FDBA74', '#C2410C'] },
+  sumoSquat:         { symbol: 'figure.strengthtraining.traditional', grad: ['#FCA5A5', '#DC2626'] },
+  // Push-up-family variants — same core icon, blue family
+  kneePushup:        { symbol: 'figure.core.training', grad: ['#BAE6FD', '#0284C7'] },
+  inclinePushup:     { symbol: 'figure.core.training', grad: ['#7DD3FC', '#0369A1'] },
+  widePushup:        { symbol: 'figure.core.training', grad: ['#38BDF8', '#075985'] },
+  diamondPushup:     { symbol: 'figure.core.training', grad: ['#0EA5E9', '#1E3A5F'] },
+  declinePushup:     { symbol: 'figure.core.training', grad: ['#60A5FA', '#1D4ED8'] },
+  // Shoulder-press-family variants — same arms icon, orange-red family
+  overheadPress:          { symbol: 'figure.arms.open', grad: ['#FDBA74', '#EA580C'] },
+  arnoldPress:            { symbol: 'figure.arms.open', grad: ['#FCA5A5', '#DC2626'] },
+  dumbbellShoulderPress:  { symbol: 'figure.arms.open', grad: ['#FCD34D', '#F97316'] },
+  machineShoulderPress:   { symbol: 'figure.arms.open', grad: ['#FB923C', '#B91C1C'] },
+  // Lunge-family variants — same step icon, purple family
+  splitSquat:          { symbol: 'figure.step.training', grad: ['#D8B4FE', '#7C3AED'] },
+  reverseLunge:        { symbol: 'figure.step.training', grad: ['#C084FC', '#6D28D9'] },
+  stepUp:              { symbol: 'figure.step.training', grad: ['#A78BFA', '#5B21B6'] },
+  bulgarianSplitSquat: { symbol: 'figure.step.training', grad: ['#8B5CF6', '#4C1D95'] },
 };
 
 export default function ExercisePickerScreen() {

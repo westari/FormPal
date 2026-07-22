@@ -267,6 +267,248 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     isFormCheckable: true,
   },
 
+  // ─── Squat-family variants ────────────────────────────────────────────────
+
+  {
+    id:              'gobletSquat',
+    displayName:     'Goblet Squat',
+    muscleGroups:    [MuscleGroup.Legs, MuscleGroup.Core],
+    splitCategories: [SplitCategory.Lower],
+    difficulty:      Difficulty.Beginner,
+    equipment:       [Equipment.Dumbbell],
+    defaultReps:     10,
+    defaultSets:     3,
+    progression:     { repRange: [8, 15], setRange: [2, 4] },
+    isFormCheckable: true,
+  },
+
+  {
+    id:              'airSquat',
+    displayName:     'Air Squat',
+    muscleGroups:    [MuscleGroup.Legs, MuscleGroup.Core],
+    splitCategories: [SplitCategory.Lower],
+    difficulty:      Difficulty.Beginner,
+    equipment:       [Equipment.None],
+    defaultReps:     15,
+    defaultSets:     3,
+    progression:     { repRange: [10, 25], setRange: [2, 5] },
+    isFormCheckable: true,
+  },
+
+  {
+    id:              'frontSquat',
+    displayName:     'Front Squat',
+    muscleGroups:    [MuscleGroup.Legs, MuscleGroup.Core],
+    splitCategories: [SplitCategory.Lower],
+    difficulty:      Difficulty.Advanced,
+    equipment:       [Equipment.Barbell],
+    defaultReps:     6,
+    defaultSets:     4,
+    progression:     { repRange: [4, 10], setRange: [3, 5] },
+    isFormCheckable: true,
+  },
+
+  {
+    id:              'backSquat',
+    displayName:     'Back Squat',
+    muscleGroups:    [MuscleGroup.Legs, MuscleGroup.Core],
+    splitCategories: [SplitCategory.Lower],
+    difficulty:      Difficulty.Intermediate,
+    equipment:       [Equipment.Barbell],
+    defaultReps:     8,
+    defaultSets:     4,
+    progression:     { repRange: [4, 12], setRange: [3, 5] },
+    isFormCheckable: true,
+  },
+
+  {
+    id:              'sumoSquat',
+    displayName:     'Sumo Squat',
+    muscleGroups:    [MuscleGroup.Legs, MuscleGroup.Core],
+    splitCategories: [SplitCategory.Lower],
+    difficulty:      Difficulty.Beginner,
+    equipment:       [Equipment.Dumbbell],
+    defaultReps:     10,
+    defaultSets:     3,
+    progression:     { repRange: [8, 15], setRange: [2, 4] },
+    isFormCheckable: true,
+  },
+
+  // ─── Push-up-family variants ──────────────────────────────────────────────
+
+  {
+    id:              'kneePushup',
+    displayName:     'Knee Push-up',
+    muscleGroups:    [MuscleGroup.Chest, MuscleGroup.Arms, MuscleGroup.Core],
+    splitCategories: [SplitCategory.Upper, SplitCategory.Push],
+    difficulty:      Difficulty.Beginner,
+    equipment:       [Equipment.None],
+    defaultReps:     12,
+    defaultSets:     3,
+    progression:     { repRange: [8, 20], setRange: [2, 4] },
+    isFormCheckable: true,
+  },
+
+  {
+    id:              'inclinePushup',
+    displayName:     'Incline Push-up',
+    muscleGroups:    [MuscleGroup.Chest, MuscleGroup.Arms, MuscleGroup.Core],
+    splitCategories: [SplitCategory.Upper, SplitCategory.Push],
+    difficulty:      Difficulty.Beginner,
+    equipment:       [Equipment.None],
+    defaultReps:     12,
+    defaultSets:     3,
+    progression:     { repRange: [8, 20], setRange: [2, 4] },
+    isFormCheckable: true,
+  },
+
+  {
+    id:              'widePushup',
+    displayName:     'Wide Push-up',
+    muscleGroups:    [MuscleGroup.Chest, MuscleGroup.Arms, MuscleGroup.Core],
+    splitCategories: [SplitCategory.Upper, SplitCategory.Push],
+    difficulty:      Difficulty.Intermediate,
+    equipment:       [Equipment.None],
+    defaultReps:     10,
+    defaultSets:     3,
+    progression:     { repRange: [8, 15], setRange: [2, 4] },
+    isFormCheckable: true,
+  },
+
+  {
+    id:              'diamondPushup',
+    displayName:     'Diamond Push-up',
+    muscleGroups:    [MuscleGroup.Chest, MuscleGroup.Arms, MuscleGroup.Core],
+    splitCategories: [SplitCategory.Upper, SplitCategory.Push],
+    difficulty:      Difficulty.Advanced,
+    equipment:       [Equipment.None],
+    defaultReps:     8,
+    defaultSets:     3,
+    progression:     { repRange: [5, 15], setRange: [2, 4] },
+    isFormCheckable: true,
+  },
+
+  {
+    id:              'declinePushup',
+    displayName:     'Decline Push-up',
+    muscleGroups:    [MuscleGroup.Chest, MuscleGroup.Arms, MuscleGroup.Core],
+    splitCategories: [SplitCategory.Upper, SplitCategory.Push],
+    difficulty:      Difficulty.Advanced,
+    equipment:       [Equipment.None],
+    defaultReps:     8,
+    defaultSets:     3,
+    progression:     { repRange: [5, 15], setRange: [2, 4] },
+    isFormCheckable: true,
+  },
+
+  // ─── Shoulder-press-family variants ──────────────────────────────────────
+
+  {
+    id:              'overheadPress',
+    displayName:     'Overhead Press',
+    muscleGroups:    [MuscleGroup.Shoulders, MuscleGroup.Arms],
+    splitCategories: [SplitCategory.Upper, SplitCategory.Push],
+    difficulty:      Difficulty.Intermediate,
+    equipment:       [Equipment.Barbell],
+    defaultReps:     6,
+    defaultSets:     4,
+    progression:     { repRange: [4, 10], setRange: [3, 5] },
+    isFormCheckable: true,
+  },
+
+  {
+    id:              'arnoldPress',
+    displayName:     'Arnold Press',
+    muscleGroups:    [MuscleGroup.Shoulders, MuscleGroup.Arms],
+    splitCategories: [SplitCategory.Upper, SplitCategory.Push],
+    difficulty:      Difficulty.Intermediate,
+    equipment:       [Equipment.Dumbbell],
+    defaultReps:     8,
+    defaultSets:     3,
+    progression:     { repRange: [6, 12], setRange: [2, 4] },
+    isFormCheckable: true,
+  },
+
+  {
+    id:              'dumbbellShoulderPress',
+    displayName:     'Dumbbell Shoulder Press',
+    muscleGroups:    [MuscleGroup.Shoulders, MuscleGroup.Arms],
+    splitCategories: [SplitCategory.Upper, SplitCategory.Push],
+    difficulty:      Difficulty.Beginner,
+    equipment:       [Equipment.Dumbbell],
+    defaultReps:     10,
+    defaultSets:     3,
+    progression:     { repRange: [6, 15], setRange: [2, 4] },
+    isFormCheckable: true,
+  },
+
+  {
+    id:              'machineShoulderPress',
+    displayName:     'Machine Shoulder Press',
+    muscleGroups:    [MuscleGroup.Shoulders, MuscleGroup.Arms],
+    splitCategories: [SplitCategory.Upper, SplitCategory.Push],
+    difficulty:      Difficulty.Beginner,
+    equipment:       [Equipment.Machine],
+    defaultReps:     10,
+    defaultSets:     3,
+    progression:     { repRange: [6, 15], setRange: [2, 4] },
+    isFormCheckable: true,
+  },
+
+  // ─── Lunge-family variants ────────────────────────────────────────────────
+
+  {
+    id:              'splitSquat',
+    displayName:     'Split Squat',
+    muscleGroups:    [MuscleGroup.Legs, MuscleGroup.Core],
+    splitCategories: [SplitCategory.Lower],
+    difficulty:      Difficulty.Beginner,
+    equipment:       [Equipment.None],
+    defaultReps:     10,
+    defaultSets:     3,
+    progression:     { repRange: [8, 15], setRange: [2, 4] },
+    isFormCheckable: true,
+  },
+
+  {
+    id:              'reverseLunge',
+    displayName:     'Reverse Lunge',
+    muscleGroups:    [MuscleGroup.Legs, MuscleGroup.Core],
+    splitCategories: [SplitCategory.Lower],
+    difficulty:      Difficulty.Beginner,
+    equipment:       [Equipment.None],
+    defaultReps:     10,
+    defaultSets:     3,
+    progression:     { repRange: [8, 15], setRange: [2, 4] },
+    isFormCheckable: true,
+  },
+
+  {
+    id:              'stepUp',
+    displayName:     'Step-up',
+    muscleGroups:    [MuscleGroup.Legs, MuscleGroup.Core],
+    splitCategories: [SplitCategory.Lower],
+    difficulty:      Difficulty.Beginner,
+    equipment:       [Equipment.None],
+    defaultReps:     10,
+    defaultSets:     3,
+    progression:     { repRange: [8, 15], setRange: [2, 4] },
+    isFormCheckable: true,
+  },
+
+  {
+    id:              'bulgarianSplitSquat',
+    displayName:     'Bulgarian Split Squat',
+    muscleGroups:    [MuscleGroup.Legs, MuscleGroup.Core],
+    splitCategories: [SplitCategory.Lower],
+    difficulty:      Difficulty.Advanced,
+    equipment:       [Equipment.None],
+    defaultReps:     8,
+    defaultSets:     3,
+    progression:     { repRange: [6, 12], setRange: [3, 4] },
+    isFormCheckable: true,
+  },
+
   // ─────────────────────────────────────────────────────────────────────────
   // ADD NEW FORM-CHECKABLE EXERCISES HERE.
   // ─────────────────────────────────────────────────────────────────────────

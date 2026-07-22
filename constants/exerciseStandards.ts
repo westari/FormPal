@@ -98,6 +98,140 @@ function curlStandard(exerciseId: string): ExerciseStandardDef {
   };
 }
 
+// ─── Shared squat standard building-blocks ───────────────────────────────────
+//
+// Values mirror the verified squat standard VERBATIM. All squat-family variants
+// share the same knee-angle floors and static checks. reviewed: false for all
+// variants — they inherit squat's numbers but haven't been separately confirmed.
+
+const SQUAT_STATIC_CHECKS: JointAngleCheckDef[] = [
+  {
+    description: 'Left torso upright — hip→knee→ankle lateral lean range',
+    a: 'leftHip',
+    b: 'leftKnee',
+    c: 'leftAnkle',
+    maxRangeDeg: 15.0,
+    cue: 'KNEES TRACKING — lateral knee drift',
+  },
+  {
+    description: 'Right torso upright — hip→knee→ankle lateral lean range',
+    a: 'rightHip',
+    b: 'rightKnee',
+    c: 'rightAnkle',
+    maxRangeDeg: 15.0,
+    cue: 'KNEES TRACKING — lateral knee drift',
+  },
+];
+
+const SQUAT_TOP_FAULTS = [
+  'SHALLOW SQUAT — not reaching parallel depth',
+  'CAVING KNEES — knees collapsing inward',
+  'FORWARD LEAN — excessive torso lean forward',
+];
+
+function squatStandard(exerciseId: string): ExerciseStandardDef {
+  return {
+    exerciseId,
+    reviewed: false,
+    standardPeakAngleMax:  110.0,
+    standardStartAngleMin: 155.0,
+    romCue:    'GO DEEPER — not reaching parallel',
+    extendCue: 'STAND FULLY — not returning to standing',
+    staticChecks: SQUAT_STATIC_CHECKS,
+    tempoMinSec: 2.0,
+    tempoMaxSec: 6.0,
+    topFaults: SQUAT_TOP_FAULTS,
+  };
+}
+
+// ─── Shared shoulder-press standard building-blocks ──────────────────────────
+//
+// Values mirror the verified shoulderPress standard VERBATIM.
+
+const SHOULDER_PRESS_STATIC_CHECKS: JointAngleCheckDef[] = [
+  {
+    description: 'Left torso upright — shoulder–hip–knee angle range',
+    a: 'leftShoulder',
+    b: 'leftHip',
+    c: 'leftKnee',
+    maxRangeDeg: 15.0,
+    cue: 'STAY UPRIGHT — arching lower back',
+  },
+  {
+    description: 'Right torso upright — shoulder–hip–knee angle range',
+    a: 'rightShoulder',
+    b: 'rightHip',
+    c: 'rightKnee',
+    maxRangeDeg: 15.0,
+    cue: 'STAY UPRIGHT — arching lower back',
+  },
+];
+
+const SHOULDER_PRESS_TOP_FAULTS = [
+  'HALF REP — not pressing fully overhead',
+  'BACK ARCH — excessive lumbar extension during press',
+  'FORWARD HEAD — neck jutting forward at lockout',
+];
+
+function shoulderPressStandard(exerciseId: string): ExerciseStandardDef {
+  return {
+    exerciseId,
+    reviewed: false,
+    standardPeakAngleMax:  45.0,
+    standardStartAngleMin: 65.0,
+    romCue:    'PRESS HIGHER — not reaching overhead',
+    extendCue: 'LOWER MORE — not returning to shoulder height',
+    staticChecks: SHOULDER_PRESS_STATIC_CHECKS,
+    tempoMinSec: 1.5,
+    tempoMaxSec: 5.0,
+    topFaults: SHOULDER_PRESS_TOP_FAULTS,
+  };
+}
+
+// ─── Shared lunge standard building-blocks ────────────────────────────────────
+//
+// Values mirror the verified lunge standard VERBATIM.
+
+const LUNGE_STATIC_CHECKS: JointAngleCheckDef[] = [
+  {
+    description: 'Left torso upright — shoulder–hip–knee angle range',
+    a: 'leftShoulder',
+    b: 'leftHip',
+    c: 'leftKnee',
+    maxRangeDeg: 15.0,
+    cue: 'CHEST UP — excessive forward lean',
+  },
+  {
+    description: 'Right torso upright — shoulder–hip–knee angle range',
+    a: 'rightShoulder',
+    b: 'rightHip',
+    c: 'rightKnee',
+    maxRangeDeg: 15.0,
+    cue: 'CHEST UP — excessive forward lean',
+  },
+];
+
+const LUNGE_TOP_FAULTS = [
+  'SHALLOW LUNGE — front knee not bending enough',
+  'FORWARD LEAN — torso leaning too far forward',
+  'KNEE COLLAPSE — front knee caving inward',
+];
+
+function lungeStandard(exerciseId: string): ExerciseStandardDef {
+  return {
+    exerciseId,
+    reviewed: false,
+    standardPeakAngleMax:  120.0,
+    standardStartAngleMin: 155.0,
+    romCue:    'LUNGE DEEPER — not reaching depth',
+    extendCue: 'STAND FULLY — not returning upright',
+    staticChecks: LUNGE_STATIC_CHECKS,
+    tempoMinSec: 2.0,
+    tempoMaxSec: 6.0,
+    topFaults: LUNGE_TOP_FAULTS,
+  };
+}
+
 // ─── Registry ────────────────────────────────────────────────────────────────
 // Add new standards here as more exercises gain Layer 2 support.
 // Missing key → Layer 2 inactive for that exercise (Layer 1 relative signals only).
@@ -279,4 +413,23 @@ export const EXERCISE_STANDARDS: Record<string, ExerciseStandardDef> = {
   preacherCurl:      curlStandard('preacherCurl'),
   reverseCurl:       curlStandard('reverseCurl'),
   cableCurl:         curlStandard('cableCurl'),
+
+  // ─── Squat-family variants ─────────────────────────────────────────────────
+  gobletSquat:  squatStandard('gobletSquat'),
+  airSquat:     squatStandard('airSquat'),
+  frontSquat:   squatStandard('frontSquat'),
+  backSquat:    squatStandard('backSquat'),
+  sumoSquat:    squatStandard('sumoSquat'),
+
+  // ─── Shoulder-press-family variants ───────────────────────────────────────
+  overheadPress:          shoulderPressStandard('overheadPress'),
+  arnoldPress:            shoulderPressStandard('arnoldPress'),
+  dumbbellShoulderPress:  shoulderPressStandard('dumbbellShoulderPress'),
+  machineShoulderPress:   shoulderPressStandard('machineShoulderPress'),
+
+  // ─── Lunge-family variants ─────────────────────────────────────────────────
+  splitSquat:          lungeStandard('splitSquat'),
+  reverseLunge:        lungeStandard('reverseLunge'),
+  stepUp:              lungeStandard('stepUp'),
+  bulgarianSplitSquat: lungeStandard('bulgarianSplitSquat'),
 };

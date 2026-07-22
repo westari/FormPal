@@ -117,8 +117,16 @@ export function isModelLoaded(): boolean {
 // the engine, definitions, and registry are all on the Swift side.
 export type ExerciseType =
   | 'squat' | 'curl' | 'pushup' | 'lunge' | 'shoulderPress' | 'jumpingJack'
-  // Curl-family variants — JS-definition-only (no Swift registry entry needed)
-  | 'hammerCurl' | 'concentrationCurl' | 'preacherCurl' | 'reverseCurl' | 'cableCurl';
+  // Curl-family variants
+  | 'hammerCurl' | 'concentrationCurl' | 'preacherCurl' | 'reverseCurl' | 'cableCurl'
+  // Squat-family variants
+  | 'gobletSquat' | 'airSquat' | 'frontSquat' | 'backSquat' | 'sumoSquat'
+  // Push-up-family variants
+  | 'kneePushup' | 'inclinePushup' | 'widePushup' | 'diamondPushup' | 'declinePushup'
+  // Shoulder-press-family variants
+  | 'overheadPress' | 'arnoldPress' | 'dumbbellShoulderPress' | 'machineShoulderPress'
+  // Lunge-family variants
+  | 'splitSquat' | 'reverseLunge' | 'stepUp' | 'bulgarianSplitSquat';
 
 export async function setExercise(type: ExerciseType): Promise<void> {
   if (!ATHLTCameraNative) return;

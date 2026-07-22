@@ -205,6 +205,430 @@ function curlVariant(
   };
 }
 
+// ─── Shared squat building-blocks ────────────────────────────────────────────
+//
+// Values mirror the verified squat definition VERBATIM — do not change these
+// independently of the squat template or the two will drift.
+// Squat-family variants share all joints, repMetric, thresholds, form checks,
+// readyGate, calibration, and camera setup. Only id, displayName, and
+// setupInstruction differ.
+
+const SQUAT_REP_METRIC: MetricDef = {
+  type:  'average',
+  left:  { type: 'jointAngle', a: 'leftHip',  pivot: 'leftKnee',  c: 'leftAnkle'  },
+  right: { type: 'jointAngle', a: 'rightHip', pivot: 'rightKnee', c: 'rightAnkle' },
+};
+
+const SQUAT_FORM_CHECKS: FormCheckDef[] = [
+  {
+    id: 'back_lean', cue: 'CHEST UP',
+    metric: {
+      type:  'average',
+      left:  { type: 'lineVsVertical', from: 'leftHip',  to: 'leftShoulder'  },
+      right: { type: 'lineVsVertical', from: 'rightHip', to: 'rightShoulder' },
+    },
+    evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 30 },
+    priority: 1, enabled: true,
+  },
+  {
+    id: 'heel_rise', cue: 'KEEP HEELS DOWN',
+    metric: {
+      type:  'average',
+      left:  { type: 'lineVsVertical', from: 'leftAnkle',  to: 'leftKnee'  },
+      right: { type: 'lineVsVertical', from: 'rightAnkle', to: 'rightKnee' },
+    },
+    evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 20 },
+    priority: 2, enabled: false,
+  },
+  {
+    id: 'knee_cave', cue: 'KNEES OUT',
+    metric: {
+      type:  'average',
+      left:  { type: 'lineVsVertical', from: 'leftHip',  to: 'leftKnee'  },
+      right: { type: 'lineVsVertical', from: 'rightHip', to: 'rightKnee' },
+    },
+    evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 20 },
+    priority: 3, enabled: false,
+  },
+];
+
+const SQUAT_READY_GATE: ReadyGateDef = {
+  readyAngleMin:  155,
+  readyAngleMax:  190,
+  requiredJoints: ['leftHip', 'leftKnee', 'leftAnkle',
+                   'rightHip', 'rightKnee', 'rightAnkle'],
+  minConfidence:  0.30,
+  stableDuration: 1.0,
+};
+
+const SQUAT_CAMERA_JOINTS = [
+  'leftShoulder', 'rightShoulder',
+  'leftHip',      'rightHip',
+  'leftKnee',     'rightKnee',
+  'leftAnkle',    'rightAnkle',
+];
+
+const SQUAT_PLANARITY: PlanarityCheckDef[] = [
+  { id: 'thigh_l', jointA: 'leftHip',  jointB: 'leftKnee',
+    minRatio: 0.75, cue: 'TURN SIDE-ON', fallbackReferenceRatio: 0.80, enabled: false },
+  { id: 'shin_l',  jointA: 'leftKnee', jointB: 'leftAnkle',
+    minRatio: 0.75, cue: 'TURN SIDE-ON', fallbackReferenceRatio: 0.72, enabled: false },
+];
+
+function squatVariant(
+  id:               string,
+  displayName:      string,
+  setupInstruction: string,
+): ExerciseDefinitionDef {
+  return {
+    id,
+    displayName,
+    repMetric:          SQUAT_REP_METRIC,
+    topAngle:           160,
+    repEnterThreshold:  150,
+    repExitThreshold:   155,
+    goodROMThreshold:   100,
+    insufficientROMCue: 'GO DEEPER',
+    formChecks:      SQUAT_FORM_CHECKS,
+    readyGate:       SQUAT_READY_GATE,
+    cameraSetup:     { setupInstruction, requiredJoints: SQUAT_CAMERA_JOINTS },
+    calibration:     { repsNeeded: 2, enterFraction: 0.50, exitFraction: 0.25 },
+    minRepInterval:  0.5,
+    planarityChecks: SQUAT_PLANARITY,
+  };
+}
+
+// ─── Shared push-up building-blocks ──────────────────────────────────────────
+//
+// Values mirror the verified pushup definition VERBATIM.
+// Hip form checks come in two flavours:
+//   PUSHUP_HIP_CHECKS      — shoulder→ankle plank line (feet on floor).
+//   PUSHUP_HIP_CHECKS_KNEE — shoulder→knee plank line (knee push-up: ankles raised).
+
+const PUSHUP_REP_METRIC: MetricDef = {
+  type: 'bestSide',
+  left:  { type: 'jointAngle', a: 'leftShoulder',  pivot: 'leftElbow',  c: 'leftWrist'  },
+  right: { type: 'jointAngle', a: 'rightShoulder', pivot: 'rightElbow', c: 'rightWrist' },
+  leftJoints:  ['leftShoulder',  'leftElbow',  'leftWrist'],
+  rightJoints: ['rightShoulder', 'rightElbow', 'rightWrist'],
+};
+
+const PUSHUP_HIP_CHECKS: FormCheckDef[] = [
+  {
+    id: 'hip_pike_l', cue: 'HIPS DOWN',
+    metric: { type: 'signedDeviationFromLine', point: 'leftHip',
+              lineFrom: 'leftShoulder', lineTo: 'leftAnkle' },
+    evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 0.05 },
+    priority: 4, enabled: true,
+  },
+  {
+    id: 'hip_sag_l', cue: 'HIPS UP',
+    metric: { type: 'signedDeviationFromLine', point: 'leftHip',
+              lineFrom: 'leftShoulder', lineTo: 'leftAnkle' },
+    evaluateAt: 'throughoutMin', condition: { type: 'lessThan', value: -0.08 },
+    priority: 4, enabled: true,
+  },
+  {
+    id: 'hip_pike_r', cue: 'HIPS DOWN',
+    metric: { type: 'signedDeviationFromLine', point: 'rightHip',
+              lineFrom: 'rightShoulder', lineTo: 'rightAnkle' },
+    evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 0.05 },
+    priority: 4, enabled: true,
+  },
+  {
+    id: 'hip_sag_r', cue: 'HIPS UP',
+    metric: { type: 'signedDeviationFromLine', point: 'rightHip',
+              lineFrom: 'rightShoulder', lineTo: 'rightAnkle' },
+    evaluateAt: 'throughoutMin', condition: { type: 'lessThan', value: -0.08 },
+    priority: 4, enabled: true,
+  },
+];
+
+// Knee push-up: ankles are raised off the floor — use shoulder→knee as plank line.
+const PUSHUP_HIP_CHECKS_KNEE: FormCheckDef[] = [
+  {
+    id: 'hip_pike_l', cue: 'HIPS DOWN',
+    metric: { type: 'signedDeviationFromLine', point: 'leftHip',
+              lineFrom: 'leftShoulder', lineTo: 'leftKnee' },
+    evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 0.05 },
+    priority: 4, enabled: true,
+  },
+  {
+    id: 'hip_sag_l', cue: 'HIPS UP',
+    metric: { type: 'signedDeviationFromLine', point: 'leftHip',
+              lineFrom: 'leftShoulder', lineTo: 'leftKnee' },
+    evaluateAt: 'throughoutMin', condition: { type: 'lessThan', value: -0.08 },
+    priority: 4, enabled: true,
+  },
+  {
+    id: 'hip_pike_r', cue: 'HIPS DOWN',
+    metric: { type: 'signedDeviationFromLine', point: 'rightHip',
+              lineFrom: 'rightShoulder', lineTo: 'rightKnee' },
+    evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 0.05 },
+    priority: 4, enabled: true,
+  },
+  {
+    id: 'hip_sag_r', cue: 'HIPS UP',
+    metric: { type: 'signedDeviationFromLine', point: 'rightHip',
+              lineFrom: 'rightShoulder', lineTo: 'rightKnee' },
+    evaluateAt: 'throughoutMin', condition: { type: 'lessThan', value: -0.08 },
+    priority: 4, enabled: true,
+  },
+];
+
+const PUSHUP_READY_GATE: ReadyGateDef = {
+  readyAngleMin:  130,
+  readyAngleMax:  185,
+  requiredJoints: ['leftShoulder', 'leftElbow', 'rightShoulder', 'rightElbow'],
+  minConfidence:  0.15,
+  stableDuration: 0.5,
+};
+
+const PUSHUP_PLANARITY: PlanarityCheckDef[] = [
+  { id: 'uarm_l', jointA: 'leftShoulder', jointB: 'leftElbow',
+    minRatio: 0.75, cue: 'TURN SIDE-ON', fallbackReferenceRatio: 0.64, enabled: false },
+];
+
+function pushupVariant(
+  id:               string,
+  displayName:      string,
+  setupInstruction: string,
+): ExerciseDefinitionDef {
+  return {
+    id,
+    displayName,
+    repMetric:          PUSHUP_REP_METRIC,
+    topAngle:           160,
+    repEnterThreshold:  140,
+    repExitThreshold:   150,
+    goodROMThreshold:    90,
+    insufficientROMCue: 'GO DEEPER',
+    formChecks:      PUSHUP_HIP_CHECKS,
+    readyGate:       PUSHUP_READY_GATE,
+    cameraSetup: {
+      setupInstruction,
+      requiredJoints:    ['leftShoulder',  'leftElbow',  'leftWrist'],
+      requiredJointsAlt: ['rightShoulder', 'rightElbow', 'rightWrist'],
+    },
+    minRepInterval:  0.8,
+    planarityChecks: PUSHUP_PLANARITY,
+  };
+}
+
+// Knee push-up: identical to pushupVariant except hip checks use shoulder→knee line.
+function kneePushupVariant(
+  id:               string,
+  displayName:      string,
+  setupInstruction: string,
+): ExerciseDefinitionDef {
+  return {
+    id,
+    displayName,
+    repMetric:          PUSHUP_REP_METRIC,
+    topAngle:           160,
+    repEnterThreshold:  140,
+    repExitThreshold:   150,
+    goodROMThreshold:    90,
+    insufficientROMCue: 'GO DEEPER',
+    formChecks:      PUSHUP_HIP_CHECKS_KNEE,
+    readyGate:       PUSHUP_READY_GATE,
+    cameraSetup: {
+      setupInstruction,
+      requiredJoints:    ['leftShoulder',  'leftElbow',  'leftWrist'],
+      requiredJointsAlt: ['rightShoulder', 'rightElbow', 'rightWrist'],
+    },
+    minRepInterval:  0.8,
+    planarityChecks: PUSHUP_PLANARITY,
+  };
+}
+
+// ─── Shared shoulder-press building-blocks ────────────────────────────────────
+//
+// Values mirror the verified shoulderPress definition VERBATIM.
+// All variants are front-facing with the same arm/elbow repMetric.
+
+const SHOULDER_PRESS_REP_METRIC: MetricDef = {
+  type: 'bestSide',
+  left:  { type: 'lineVsVertical', from: 'leftShoulder',  to: 'leftElbow'  },
+  right: { type: 'lineVsVertical', from: 'rightShoulder', to: 'rightElbow' },
+  leftJoints:  ['leftShoulder',  'leftElbow'],
+  rightJoints: ['rightShoulder', 'rightElbow'],
+};
+
+const SHOULDER_PRESS_FORM_CHECKS: FormCheckDef[] = [
+  {
+    id: 'lean_back', cue: 'STAY UPRIGHT',
+    metric: {
+      type:  'average',
+      left:  { type: 'lineVsVertical', from: 'leftHip',  to: 'leftShoulder'  },
+      right: { type: 'lineVsVertical', from: 'rightHip', to: 'rightShoulder' },
+    },
+    evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 20 },
+    priority: 4, enabled: true,
+  },
+  {
+    id: 'lower_more', cue: 'LOWER MORE',
+    metric: {
+      type: 'bestSide',
+      left:  { type: 'lineVsVertical', from: 'leftShoulder',  to: 'leftElbow'  },
+      right: { type: 'lineVsVertical', from: 'rightShoulder', to: 'rightElbow' },
+      leftJoints:  ['leftShoulder',  'leftElbow'],
+      rightJoints: ['rightShoulder', 'rightElbow'],
+    },
+    evaluateAt: 'throughoutMax', condition: { type: 'lessThan', value: 80 },
+    priority: 2, enabled: false,
+  },
+  {
+    id: 'wrist_track_l', cue: 'ARMS STRAIGHT UP',
+    metric: {
+      type:     'bodyRelativeDeviation',
+      point:    'leftWrist',
+      axisFrom: 'leftShoulder',
+      axisTo:   'leftHip',
+    },
+    evaluateAt: 'atBottom', condition: { type: 'greaterThan', value: 0.25 },
+    priority: 3, enabled: true,
+  },
+  {
+    id: 'wrist_track_r', cue: 'ARMS STRAIGHT UP',
+    metric: {
+      type:     'bodyRelativeDeviation',
+      point:    'rightWrist',
+      axisFrom: 'rightShoulder',
+      axisTo:   'rightHip',
+    },
+    evaluateAt: 'atBottom', condition: { type: 'greaterThan', value: 0.25 },
+    priority: 3, enabled: true,
+  },
+];
+
+const SHOULDER_PRESS_READY_GATE: ReadyGateDef = {
+  readyAngleMin:  65,
+  readyAngleMax:  90,
+  requiredJoints: ['leftShoulder', 'leftElbow', 'rightShoulder', 'rightElbow'],
+  minConfidence:  0.30,
+  stableDuration: 0.8,
+};
+
+const SHOULDER_PRESS_PLANARITY: PlanarityCheckDef[] = [
+  { id: 'uarm_l', jointA: 'leftShoulder',  jointB: 'leftElbow',
+    minRatio: 0.75, cue: 'FACE THE CAMERA', fallbackReferenceRatio: 0.64, enabled: false },
+  { id: 'uarm_r', jointA: 'rightShoulder', jointB: 'rightElbow',
+    minRatio: 0.75, cue: 'FACE THE CAMERA', fallbackReferenceRatio: 0.64, enabled: false },
+];
+
+function shoulderPressVariant(
+  id:               string,
+  displayName:      string,
+  setupInstruction: string,
+): ExerciseDefinitionDef {
+  return {
+    id,
+    displayName,
+    repMetric:          SHOULDER_PRESS_REP_METRIC,
+    topAngle:           84,
+    repEnterThreshold:  68,
+    repExitThreshold:   72,
+    goodROMThreshold:   35,
+    insufficientROMCue: 'PRESS HIGHER',
+    formChecks:      SHOULDER_PRESS_FORM_CHECKS,
+    readyGate:       SHOULDER_PRESS_READY_GATE,
+    cameraSetup: {
+      setupInstruction,
+      requiredJoints: ['leftShoulder', 'leftElbow', 'rightShoulder', 'rightElbow'],
+    },
+    calibration:     { repsNeeded: 2, enterFraction: 0.50, exitFraction: 0.25 },
+    minRepInterval:  0.5,
+    planarityChecks: SHOULDER_PRESS_PLANARITY,
+  };
+}
+
+// ─── Shared lunge building-blocks ────────────────────────────────────────────
+//
+// Values mirror the verified lunge definition VERBATIM.
+// Lunge-family variants share all joints, repMetric, thresholds, form checks,
+// readyGate, calibration, and camera setup. Only id, displayName, and
+// setupInstruction differ.
+// Note: stepUp works correctly — the minimum(knee) metric tracks the stepping
+// leg as it bends to place the foot on the box and counts the rep when the user
+// stands fully on the box (knee extends past exitThreshold). Calibration derives
+// the per-user box-height thresholds automatically.
+
+const LUNGE_REP_METRIC: MetricDef = {
+  type:  'minimum',
+  left:  { type: 'jointAngle', a: 'leftHip',  pivot: 'leftKnee',  c: 'leftAnkle'  },
+  right: { type: 'jointAngle', a: 'rightHip', pivot: 'rightKnee', c: 'rightAnkle' },
+};
+
+const LUNGE_FORM_CHECKS: FormCheckDef[] = [
+  {
+    id: 'torso_lean', cue: 'CHEST UP',
+    metric: {
+      type:  'average',
+      left:  { type: 'lineVsVertical', from: 'leftHip',  to: 'leftShoulder'  },
+      right: { type: 'lineVsVertical', from: 'rightHip', to: 'rightShoulder' },
+    },
+    evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 35 },
+    priority: 2, enabled: true,
+  },
+  {
+    id: 'knee_drive', cue: 'DRIVE KNEE DOWN',
+    metric: {
+      type:  'minimum',
+      left:  { type: 'jointAngle', a: 'leftHip',  pivot: 'leftKnee',  c: 'leftAnkle'  },
+      right: { type: 'jointAngle', a: 'rightHip', pivot: 'rightKnee', c: 'rightAnkle' },
+    },
+    evaluateAt: 'atBottom', condition: { type: 'greaterThan', value: 115 },
+    priority: 1, enabled: false,
+  },
+];
+
+const LUNGE_READY_GATE: ReadyGateDef = {
+  readyAngleMin:  155,
+  readyAngleMax:  190,
+  requiredJoints: ['leftHip', 'leftKnee', 'leftAnkle',
+                   'rightHip', 'rightKnee', 'rightAnkle'],
+  minConfidence:  0.30,
+  stableDuration: 1.0,
+};
+
+const LUNGE_CAMERA_JOINTS = [
+  'leftShoulder', 'rightShoulder',
+  'leftHip',      'rightHip',
+  'leftKnee',     'rightKnee',
+  'leftAnkle',    'rightAnkle',
+];
+
+const LUNGE_PLANARITY: PlanarityCheckDef[] = [
+  { id: 'thigh_l', jointA: 'leftHip',  jointB: 'leftKnee',
+    minRatio: 0.75, cue: 'TURN SIDE-ON', fallbackReferenceRatio: 0.80, enabled: false },
+  { id: 'shin_l',  jointA: 'leftKnee', jointB: 'leftAnkle',
+    minRatio: 0.75, cue: 'TURN SIDE-ON', fallbackReferenceRatio: 0.72, enabled: false },
+];
+
+function lungeVariant(
+  id:               string,
+  displayName:      string,
+  setupInstruction: string,
+): ExerciseDefinitionDef {
+  return {
+    id,
+    displayName,
+    repMetric:          LUNGE_REP_METRIC,
+    topAngle:           165,
+    repEnterThreshold:  145,
+    repExitThreshold:   150,
+    goodROMThreshold:   105,
+    insufficientROMCue: 'LUNGE DEEPER',
+    formChecks:      LUNGE_FORM_CHECKS,
+    readyGate:       LUNGE_READY_GATE,
+    cameraSetup:     { setupInstruction, requiredJoints: LUNGE_CAMERA_JOINTS },
+    calibration:     { repsNeeded: 2, enterFraction: 0.50, exitFraction: 0.25 },
+    minRepInterval:  0.5,
+    planarityChecks: LUNGE_PLANARITY,
+  };
+}
+
 // ─── Registry ─────────────────────────────────────────────────────────────────
 // Missing key → setExerciseDefinition(null) → Swift registry fallback used.
 
@@ -704,5 +1128,155 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
     'Cable Curl',
     'Face the cable machine — stand back so both arms are fully in frame',
     // Low cable pulley. Same joint angles; constant tension vs free weight.
+  ),
+
+  // ─── Squat-family variants ──────────────────────────────────────────────────
+  //
+  // All clone the squat template VERBATIM — same repMetric, thresholds, form
+  // checks, readyGate, calibration, and camera setup. reviewed: false.
+
+  gobletSquat: squatVariant(
+    'gobletSquat',
+    'Goblet Squat',
+    'Stand side-on to the camera — full body in frame',
+    // Weight held at chest. Side camera gives clean knee-angle read.
+  ),
+
+  airSquat: squatVariant(
+    'airSquat',
+    'Air Squat',
+    'Stand side-on to the camera — full body in frame',
+    // Bodyweight only. Identical movement to barbell back squat.
+  ),
+
+  frontSquat: squatVariant(
+    'frontSquat',
+    'Front Squat',
+    'Stand side-on to the camera — full body in frame',
+    // Bar front-racked; more upright torso but same knee-angle metric.
+  ),
+
+  backSquat: squatVariant(
+    'backSquat',
+    'Back Squat',
+    'Stand side-on to the camera — full body in frame',
+    // Bar on traps. Canonical squat pattern.
+  ),
+
+  sumoSquat: squatVariant(
+    'sumoSquat',
+    'Sumo Squat',
+    'Stand side-on to the camera — full body in frame',
+    // Wide stance, toes out. Knee-angle metric is the same; stance width
+    // affects WHICH knee Vision tracks but both are measured.
+  ),
+
+  // ─── Push-up-family variants ────────────────────────────────────────────────
+  //
+  // All clone the push-up template. reviewed: false.
+  // kneePushup uses PUSHUP_HIP_CHECKS_KNEE (shoulder→knee line) because ankles
+  // are raised off the floor. All others use the standard ankle-based hip checks.
+
+  kneePushup: kneePushupVariant(
+    'kneePushup',
+    'Knee Push-up',
+    'Place phone on floor to your side — knees and hands in frame',
+    // Knees on floor. Hip checks use shoulder→knee line instead of shoulder→ankle.
+  ),
+
+  inclinePushup: pushupVariant(
+    'inclinePushup',
+    'Incline Push-up',
+    'Place phone on floor to your side — shoulders and hands in frame',
+    // Hands elevated on a bench or box. Same elbow-angle metric.
+  ),
+
+  widePushup: pushupVariant(
+    'widePushup',
+    'Wide Push-up',
+    'Place phone on floor to your side — shoulders and hands in frame',
+    // Hands wider than shoulder-width. Same movement plane.
+  ),
+
+  diamondPushup: pushupVariant(
+    'diamondPushup',
+    'Diamond Push-up',
+    'Place phone on floor to your side — shoulders and hands in frame',
+    // Hands form a diamond. Narrow grip; same elbow-angle metric.
+  ),
+
+  declinePushup: pushupVariant(
+    'declinePushup',
+    'Decline Push-up',
+    'Place phone on floor to your side — shoulders and hands in frame',
+    // Feet elevated on a bench. Same shoulder→elbow→wrist metric.
+  ),
+
+  // ─── Shoulder-press-family variants ────────────────────────────────────────
+  //
+  // All clone the shoulderPress template VERBATIM. reviewed: false.
+
+  overheadPress: shoulderPressVariant(
+    'overheadPress',
+    'Overhead Press',
+    'Face the camera — stand back so both arms are clearly in frame',
+    // Barbell or EZ-bar. Same upper-arm lineVsVertical metric.
+  ),
+
+  arnoldPress: shoulderPressVariant(
+    'arnoldPress',
+    'Arnold Press',
+    'Face the camera — stand back so both arms are clearly in frame',
+    // Rotating press. Vision tracks the end positions; rotation is invisible.
+  ),
+
+  dumbbellShoulderPress: shoulderPressVariant(
+    'dumbbellShoulderPress',
+    'Dumbbell Shoulder Press',
+    'Face the camera — stand back so both arms are clearly in frame',
+    // Independent dumbbells. Same joint landmarks.
+  ),
+
+  machineShoulderPress: shoulderPressVariant(
+    'machineShoulderPress',
+    'Machine Shoulder Press',
+    'Face the camera — stand back so both arms are clearly in frame',
+    // Fixed path. Same upper-arm metric applies.
+  ),
+
+  // ─── Lunge-family variants ──────────────────────────────────────────────────
+  //
+  // All clone the lunge template VERBATIM. reviewed: false.
+  // stepUp note: the minimum-knee metric naturally tracks the stepping leg as it
+  // bends to place the foot on the box, and the rep completes when the user
+  // stands on the box (knee extends past exitThreshold). Calibration derives
+  // per-user box-height thresholds automatically — no extra primitives needed.
+
+  splitSquat: lungeVariant(
+    'splitSquat',
+    'Split Squat',
+    'Stand side-on to the camera — full body in frame',
+    // Static split stance. Front-leg knee angle is what the metric tracks.
+  ),
+
+  reverseLunge: lungeVariant(
+    'reverseLunge',
+    'Reverse Lunge',
+    'Stand side-on to the camera — full body in frame',
+    // Step back instead of forward. Same front-knee angle metric.
+  ),
+
+  stepUp: lungeVariant(
+    'stepUp',
+    'Step-up',
+    'Stand side-on to the camera — full body and box in frame',
+    // Foot placed on a box; knee angle tracks the stepping leg.
+  ),
+
+  bulgarianSplitSquat: lungeVariant(
+    'bulgarianSplitSquat',
+    'Bulgarian Split Squat',
+    'Stand side-on to the camera — full body and bench in frame',
+    // Rear foot elevated. Front-leg knee is the metric joint.
   ),
 };
