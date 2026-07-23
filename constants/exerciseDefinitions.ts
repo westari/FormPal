@@ -629,6 +629,158 @@ function lungeVariant(
   };
 }
 
+// ─── Shared tricep building-blocks ───────────────────────────────────────────
+//
+// Rep metric: lineVsVertical(from: wrist, to: elbow) — the forearm segment's
+// angle from vertical. DECREASES as the elbow EXTENDS (forearm swings from
+// horizontal → vertical), matching the engine's hardwired decreasing-metric
+// state machine.
+//
+//   REST   (elbow bent, forearm ~horizontal): metric ≈ 80-85°
+//   BOTTOM (elbow extended, forearm ~vertical): metric ≈ 0-15°
+//
+// Why not jointAngle(shoulder, elbow, wrist)?
+//   That angle INCREASES during extension. The engine's state machine only
+//   handles a DECREASING metric (enters rep on drop below enterThreshold, exits
+//   on rise above exitThreshold, tracks the minimum). Using lineVsVertical(wrist→elbow)
+//   gives a geometrically equivalent signal that decreases in the right direction.
+//
+// STOP — tricepKickback is EXCLUDED from this family:
+//   For a kickback (bent-over, side view), the forearm goes from roughly vertical
+//   (forearm hanging down, metric ≈ 0-10°) to horizontal at full extension (≈ 80-90°).
+//   lineVsVertical INCREASES during extension regardless of which joint is 'from'.
+//   No existing primitive can express a decreasing signal for kickback without
+//   knowing the per-user bent-over torso angle. Fix requires either a repDirection
+//   flag in the engine or a lineVsBodyAxis primitive — both are native changes.
+//
+// closegripPushup is added under the PUSH-UP family below (pushupVariant) —
+//   its repMetric is the elbow jointAngle(shoulder,elbow,wrist), identical to
+//   the push-up template. It does NOT belong in this family.
+//
+// reviewed: false for all — verify forearm angles on-device per variant.
+// The workaround metric reads the correct direction for pushdown, overhead
+// extension, and skullcrusher but exact thresholds need on-device confirmation.
+
+const TRICEP_REP_METRIC: MetricDef = {
+  type: 'bestSide',
+  left:  { type: 'lineVsVertical', from: 'leftWrist',  to: 'leftElbow'  },
+  right: { type: 'lineVsVertical', from: 'rightWrist', to: 'rightElbow' },
+  leftJoints:  ['leftWrist',  'leftElbow'],
+  rightJoints: ['rightWrist', 'rightElbow'],
+};
+
+// Elbow drift check: upper arm (shoulder→elbow) should stay near-vertical.
+//   lineVsVertical(shoulder→elbow) ≈ 0° when upper arm is vertical (correct).
+//   Increases when upper arm tilts forward/sideways (elbow drifting).
+//   Separate L/R checks so the in-view side fires even when the other is occluded.
+const TRICEP_ELBOW_DRIFT_L: FormCheckDef = {
+  id: 'elbow_drift_l', cue: 'KEEP ELBOWS IN',
+  metric: { type: 'lineVsVertical', from: 'leftShoulder', to: 'leftElbow' },
+  evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 30 },
+  priority: 4, enabled: true,
+};
+const TRICEP_ELBOW_DRIFT_R: FormCheckDef = {
+  id: 'elbow_drift_r', cue: 'KEEP ELBOWS IN',
+  metric: { type: 'lineVsVertical', from: 'rightShoulder', to: 'rightElbow' },
+  evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 30 },
+  priority: 4, enabled: true,
+};
+const TRICEP_TORSO_LEAN: FormCheckDef = {
+  id: 'torso_lean', cue: 'STAY UPRIGHT',
+  metric: {
+    type:  'average',
+    left:  { type: 'lineVsVertical', from: 'leftHip',  to: 'leftShoulder'  },
+    right: { type: 'lineVsVertical', from: 'rightHip', to: 'rightShoulder' },
+  },
+  evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 20 },
+  priority: 2, enabled: true,
+};
+
+// Standing exercises: all three checks enabled.
+const TRICEP_FORM_CHECKS_STANDING: FormCheckDef[] = [
+  TRICEP_ELBOW_DRIFT_L,
+  TRICEP_ELBOW_DRIFT_R,
+  TRICEP_TORSO_LEAN,
+];
+
+// Skullcrusher: person lies flat — torso lean is meaningless, disable it.
+const TRICEP_FORM_CHECKS_LYING: FormCheckDef[] = [
+  TRICEP_ELBOW_DRIFT_L,
+  TRICEP_ELBOW_DRIFT_R,
+  { ...TRICEP_TORSO_LEAN, enabled: false },
+];
+
+// Ready gate: expect the user to start with elbows bent (forearm ~horizontal).
+// lineVsVertical(wrist→elbow) ≈ 65-92° for a horizontal forearm.
+const TRICEP_READY_GATE: ReadyGateDef = {
+  readyAngleMin:  60,
+  readyAngleMax:  92,
+  requiredJoints: ['leftWrist', 'leftElbow', 'rightWrist', 'rightElbow'],
+  minConfidence:  0.15,
+  stableDuration: 0.5,
+};
+
+const TRICEP_PLANARITY: PlanarityCheckDef[] = [
+  { id: 'forearm_l', jointA: 'leftWrist',  jointB: 'leftElbow',
+    minRatio: 0.75, cue: 'TURN SIDE-ON', fallbackReferenceRatio: 0.70, enabled: false },
+  { id: 'forearm_r', jointA: 'rightWrist', jointB: 'rightElbow',
+    minRatio: 0.75, cue: 'TURN SIDE-ON', fallbackReferenceRatio: 0.70, enabled: false },
+];
+
+// Standing tricep variants (pushdown, overhead extension).
+function tricepVariant(
+  id:               string,
+  displayName:      string,
+  setupInstruction: string,
+): ExerciseDefinitionDef {
+  return {
+    id,
+    displayName,
+    repMetric:          TRICEP_REP_METRIC,
+    topAngle:           85,
+    repEnterThreshold:  72,
+    repExitThreshold:   77,
+    goodROMThreshold:   25,
+    insufficientROMCue: 'EXTEND FULLY',
+    formChecks:      TRICEP_FORM_CHECKS_STANDING,
+    readyGate:       TRICEP_READY_GATE,
+    cameraSetup: {
+      setupInstruction,
+      requiredJoints:    ['leftShoulder',  'leftElbow',  'leftWrist'],
+      requiredJointsAlt: ['rightShoulder', 'rightElbow', 'rightWrist'],
+    },
+    minRepInterval:  0.5,
+    planarityChecks: TRICEP_PLANARITY,
+  };
+}
+
+// Skullcrusher: same thresholds, lying-down form checks (torso lean disabled).
+function skullcrusherVariant(
+  id:               string,
+  displayName:      string,
+  setupInstruction: string,
+): ExerciseDefinitionDef {
+  return {
+    id,
+    displayName,
+    repMetric:          TRICEP_REP_METRIC,
+    topAngle:           85,
+    repEnterThreshold:  72,
+    repExitThreshold:   77,
+    goodROMThreshold:   25,
+    insufficientROMCue: 'EXTEND FULLY',
+    formChecks:      TRICEP_FORM_CHECKS_LYING,
+    readyGate:       TRICEP_READY_GATE,
+    cameraSetup: {
+      setupInstruction,
+      requiredJoints:    ['leftShoulder',  'leftElbow',  'leftWrist'],
+      requiredJointsAlt: ['rightShoulder', 'rightElbow', 'rightWrist'],
+    },
+    minRepInterval:  0.5,
+    planarityChecks: TRICEP_PLANARITY,
+  };
+}
+
 // ─── Registry ─────────────────────────────────────────────────────────────────
 // Missing key → setExerciseDefinition(null) → Swift registry fallback used.
 
@@ -1212,6 +1364,14 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
     // Feet elevated on a bench. Same shoulder→elbow→wrist metric.
   ),
 
+  closegripPushup: pushupVariant(
+    'closegripPushup',
+    'Close-grip Push-up',
+    'Place phone on floor to your side — shoulders and hands in frame',
+    // Hands under shoulders (narrow). Same elbow-angle metric and hip checks.
+    // Belongs to the push-up family, not tricep — uses jointAngle(shoulder,elbow,wrist).
+  ),
+
   // ─── Shoulder-press-family variants ────────────────────────────────────────
   //
   // All clone the shoulderPress template VERBATIM. reviewed: false.
@@ -1278,5 +1438,33 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
     'Bulgarian Split Squat',
     'Stand side-on to the camera — full body and bench in frame',
     // Rear foot elevated. Front-leg knee is the metric joint.
+  ),
+
+  // ─── Tricep-family variants ─────────────────────────────────────────────────
+  //
+  // All use lineVsVertical(wrist→elbow) as repMetric — forearm angle from vertical.
+  // DECREASES as elbow extends (rest ~80°, full extension ~0-15°). reviewed: false.
+  // tricepKickback excluded: its metric INCREASES during extension (see comments above).
+
+  tricepPushdown: tricepVariant(
+    'tricepPushdown',
+    'Tricep Pushdown',
+    'Stand sideways to the camera — shoulder, elbow, and wrist in frame',
+    // Cable or band, standing. Upper arm vertical at side, forearm swings down.
+  ),
+
+  overheadTricepExtension: tricepVariant(
+    'overheadTricepExtension',
+    'Overhead Tricep Extension',
+    'Stand sideways to the camera — arms fully above head in frame',
+    // Dumbbell or cable overhead. Elbow bent behind head, forearm extends up.
+  ),
+
+  skullcrusher: skullcrusherVariant(
+    'skullcrusher',
+    'Skullcrusher',
+    'Set camera to your side at bench height — lie flat, arms in frame',
+    // EZ-bar or dumbbell, lying on bench. Elbows bent (rest), extend upward (bottom).
+    // Torso lean check disabled (meaningless when lying flat).
   ),
 };

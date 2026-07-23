@@ -509,6 +509,62 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     isFormCheckable: true,
   },
 
+  // ─── Close-grip push-up (push-up family) ─────────────────────────────────
+
+  {
+    id:              'closegripPushup',
+    displayName:     'Close-grip Push-up',
+    muscleGroups:    [MuscleGroup.Chest, MuscleGroup.Arms, MuscleGroup.Core],
+    splitCategories: [SplitCategory.Upper, SplitCategory.Push],
+    difficulty:      Difficulty.Intermediate,
+    equipment:       [Equipment.None],
+    defaultReps:     8,
+    defaultSets:     3,
+    progression:     { repRange: [5, 15], setRange: [2, 4] },
+    isFormCheckable: true,
+  },
+
+  // ─── Tricep-family variants ───────────────────────────────────────────────
+
+  {
+    id:              'tricepPushdown',
+    displayName:     'Tricep Pushdown',
+    muscleGroups:    [MuscleGroup.Arms],
+    splitCategories: [SplitCategory.Upper, SplitCategory.Push],
+    difficulty:      Difficulty.Beginner,
+    equipment:       [Equipment.Cable],
+    defaultReps:     12,
+    defaultSets:     3,
+    progression:     { repRange: [8, 20], setRange: [2, 4] },
+    isFormCheckable: true,
+  },
+
+  {
+    id:              'overheadTricepExtension',
+    displayName:     'Overhead Tricep Extension',
+    muscleGroups:    [MuscleGroup.Arms],
+    splitCategories: [SplitCategory.Upper, SplitCategory.Push],
+    difficulty:      Difficulty.Intermediate,
+    equipment:       [Equipment.Dumbbell],
+    defaultReps:     10,
+    defaultSets:     3,
+    progression:     { repRange: [8, 15], setRange: [2, 4] },
+    isFormCheckable: true,
+  },
+
+  {
+    id:              'skullcrusher',
+    displayName:     'Skullcrusher',
+    muscleGroups:    [MuscleGroup.Arms],
+    splitCategories: [SplitCategory.Upper, SplitCategory.Push],
+    difficulty:      Difficulty.Intermediate,
+    equipment:       [Equipment.Barbell],
+    defaultReps:     10,
+    defaultSets:     3,
+    progression:     { repRange: [6, 12], setRange: [3, 4] },
+    isFormCheckable: true,
+  },
+
   // ─────────────────────────────────────────────────────────────────────────
   // ADD NEW FORM-CHECKABLE EXERCISES HERE.
   // ─────────────────────────────────────────────────────────────────────────

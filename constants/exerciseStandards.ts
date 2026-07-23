@@ -232,6 +232,61 @@ function lungeStandard(exerciseId: string): ExerciseStandardDef {
   };
 }
 
+// ─── Shared tricep standard building-blocks ──────────────────────────────────
+//
+// repMetric for all tricep variants = lineVsVertical(wrist→elbow).
+//   REST  (elbow bent, forearm horizontal): ≈ 80-85°
+//   PEAK  (elbow extended, forearm vertical): ≈ 0-15°
+//
+// standardPeakAngleMax: 20 — forearm must reach within 20° of vertical
+//                              (= near-full elbow extension).
+// standardStartAngleMin: 65 — forearm must be close to horizontal at start
+//                              (= elbows properly bent before next rep).
+//
+// Static check: shoulder–hip–knee range measures body swing / momentum use.
+// This check is meaningless for the skullcrusher (person lying flat) but all
+// entries use the same standard since reviewed: false — verify on-device.
+
+const TRICEP_STATIC_CHECKS: JointAngleCheckDef[] = [
+  {
+    description: 'Left torso — shoulder–hip–knee range (no body swing)',
+    a: 'leftShoulder',
+    b: 'leftHip',
+    c: 'leftKnee',
+    maxRangeDeg: 15.0,
+    cue: 'KEEP TORSO STILL — using body to push',
+  },
+  {
+    description: 'Right torso — shoulder–hip–knee range (no body swing)',
+    a: 'rightShoulder',
+    b: 'rightHip',
+    c: 'rightKnee',
+    maxRangeDeg: 15.0,
+    cue: 'KEEP TORSO STILL — using body to push',
+  },
+];
+
+const TRICEP_TOP_FAULTS = [
+  'PARTIAL REP — not fully extending at the bottom',
+  'ELBOW FLARE — upper arms not staying close to the body',
+  'BODY SWING — using momentum instead of tricep strength',
+];
+
+function tricepStandard(exerciseId: string): ExerciseStandardDef {
+  return {
+    exerciseId,
+    reviewed: false,
+    standardPeakAngleMax:  20.0,
+    standardStartAngleMin: 65.0,
+    romCue:    'EXTEND FULLY — not reaching full lockout',
+    extendCue: 'RETURN TO START — forearm not returning to horizontal',
+    staticChecks: TRICEP_STATIC_CHECKS,
+    tempoMinSec: 1.5,
+    tempoMaxSec: 5.0,
+    topFaults: TRICEP_TOP_FAULTS,
+  };
+}
+
 // ─── Registry ────────────────────────────────────────────────────────────────
 // Add new standards here as more exercises gain Layer 2 support.
 // Missing key → Layer 2 inactive for that exercise (Layer 1 relative signals only).
@@ -432,4 +487,11 @@ export const EXERCISE_STANDARDS: Record<string, ExerciseStandardDef> = {
   reverseLunge:        lungeStandard('reverseLunge'),
   stepUp:              lungeStandard('stepUp'),
   bulgarianSplitSquat: lungeStandard('bulgarianSplitSquat'),
+
+  // ─── Tricep-family variants ────────────────────────────────────────────────
+  // closegripPushup is in the push-up family and has no Layer 2 standard (same
+  // as all other push-up variants).
+  tricepPushdown:          tricepStandard('tricepPushdown'),
+  overheadTricepExtension: tricepStandard('overheadTricepExtension'),
+  skullcrusher:            tricepStandard('skullcrusher'),
 };

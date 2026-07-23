@@ -126,7 +126,11 @@ export type ExerciseType =
   // Shoulder-press-family variants
   | 'overheadPress' | 'arnoldPress' | 'dumbbellShoulderPress' | 'machineShoulderPress'
   // Lunge-family variants
-  | 'splitSquat' | 'reverseLunge' | 'stepUp' | 'bulgarianSplitSquat';
+  | 'splitSquat' | 'reverseLunge' | 'stepUp' | 'bulgarianSplitSquat'
+  // Push-up-family addition
+  | 'closegripPushup'
+  // Tricep-family variants
+  | 'tricepPushdown' | 'overheadTricepExtension' | 'skullcrusher';
 
 export async function setExercise(type: ExerciseType): Promise<void> {
   if (!ATHLTCameraNative) return;

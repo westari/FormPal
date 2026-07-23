@@ -41,6 +41,12 @@ const EXERCISE_UI: Record<string, { symbol: string; grad: [string, string] }> = 
   reverseLunge:        { symbol: 'figure.step.training', grad: ['#C084FC', '#6D28D9'] },
   stepUp:              { symbol: 'figure.step.training', grad: ['#A78BFA', '#5B21B6'] },
   bulgarianSplitSquat: { symbol: 'figure.step.training', grad: ['#8B5CF6', '#4C1D95'] },
+  // Close-grip push-up (push-up family) — same icon, darker navy blue
+  closegripPushup:     { symbol: 'figure.core.training', grad: ['#93C5FD', '#1E3A8A'] },
+  // Tricep family — dumbbell icon, amber/gold to distinguish from green curl family
+  tricepPushdown:          { symbol: 'dumbbell.fill', grad: ['#FDE68A', '#D97706'] },
+  overheadTricepExtension: { symbol: 'dumbbell.fill', grad: ['#FCD34D', '#B45309'] },
+  skullcrusher:            { symbol: 'dumbbell.fill', grad: ['#FCA5A5', '#9A3412'] },
 };
 
 export default function ExercisePickerScreen() {

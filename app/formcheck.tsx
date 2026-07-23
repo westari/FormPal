@@ -88,6 +88,12 @@ const SETUP_INFO: Record<string, { icon: string; title: string; sub: string }> =
   dumbbellShoulderPress: { icon: 'camera.fill', title: 'Face the camera',                         sub: 'Stand back — arms and shoulders in frame' },
   machineShoulderPress:  { icon: 'camera.fill', title: 'Face the camera',                         sub: 'Stand back — arms and shoulders in frame' },
   jumpingJack:           { icon: 'camera.fill', title: 'Face the camera',                         sub: 'Full body in frame — arms and legs visible' },
+  // Close-grip push-up (push-up family) — same as other push-up variants
+  closegripPushup:          { icon: 'iphone', title: 'Phone on the floor, to your side',          sub: 'Get in position — shoulders and hands in frame' },
+  // Tricep family — side-on camera
+  tricepPushdown:           { icon: 'arrow.left.and.right', title: 'Stand sideways',              sub: 'Arms in frame — shoulder to wrist' },
+  overheadTricepExtension:  { icon: 'arrow.left.and.right', title: 'Stand sideways',              sub: 'Arms fully above head in frame' },
+  skullcrusher:             { icon: 'arrow.left.and.right', title: 'Set camera to your side',     sub: 'Lie flat on bench — arms in frame' },
 };
 
 // ─── Debug log panel — set false to hide without removing code ────────────────
