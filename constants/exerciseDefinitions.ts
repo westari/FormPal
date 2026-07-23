@@ -710,13 +710,20 @@ const TRICEP_FORM_CHECKS_LYING: FormCheckDef[] = [
   { ...TRICEP_TORSO_LEAN, enabled: false },
 ];
 
-// Ready gate: expect the user to start with elbows bent (forearm ~horizontal).
-// lineVsVertical(wrist→elbow) ≈ 65-92° for a horizontal forearm.
+// Ready gate: accept any starting position where elbows are visible.
+// lineVsVertical(wrist→elbow) ranges widely across variants:
+//   pushdown at rest: wrist above elbow (cable from overhead) → metric ~20-60°
+//   overhead extension at rest: forearm behind head, wrist below elbow → metric ~0-40°
+//   skullcrusher at rest: forearm angled off chest → metric ~30-80°
+// Setting readyAngleMin:0 covers all three without forcing a specific start angle.
+// requiredJoints uses only elbows (not wrists) because these are side-view exercises:
+//   the far-side wrist is occluded by the body and will have near-zero confidence,
+//   causing the gate to never pass even when the near-side arm is clearly visible.
 const TRICEP_READY_GATE: ReadyGateDef = {
-  readyAngleMin:  60,
+  readyAngleMin:  0,
   readyAngleMax:  92,
-  requiredJoints: ['leftWrist', 'leftElbow', 'rightWrist', 'rightElbow'],
-  minConfidence:  0.15,
+  requiredJoints: ['leftElbow', 'rightElbow'],
+  minConfidence:  0.10,
   stableDuration: 0.5,
 };
 
@@ -728,6 +735,19 @@ const TRICEP_PLANARITY: PlanarityCheckDef[] = [
 ];
 
 // Standing tricep variants (pushdown, overhead extension).
+//
+// Threshold design:
+//   topAngle: 85°       — rest with forearm ~horizontal
+//   repEnterThreshold: 72° — rep starts here (user has pushed ~13° below rest)
+//   repExitThreshold: 82°  — rep ends when user returns within 3° of rest
+//   goodROMThreshold: 25°  — extension must reach ≤25° from vertical for GOOD
+//
+// Hysteresis = exit(82) - enter(72) = 10°.
+// Previously 5° (exit=77); that allowed cable rebound from 77° back to ~60°
+// to register as a second phantom rep. 10° hysteresis requires the rebound to
+// drop the metric 17° from the exit point (82° → 65°) before re-triggering —
+// a much larger overshoot that is physically implausible in normal use.
+// minRepInterval=1.0 provides a debounce backup for slow rebounds.
 function tricepVariant(
   id:               string,
   displayName:      string,
@@ -739,7 +759,7 @@ function tricepVariant(
     repMetric:          TRICEP_REP_METRIC,
     topAngle:           85,
     repEnterThreshold:  72,
-    repExitThreshold:   77,
+    repExitThreshold:   82,
     goodROMThreshold:   25,
     insufficientROMCue: 'EXTEND FULLY',
     formChecks:      TRICEP_FORM_CHECKS_STANDING,
@@ -749,12 +769,12 @@ function tricepVariant(
       requiredJoints:    ['leftShoulder',  'leftElbow',  'leftWrist'],
       requiredJointsAlt: ['rightShoulder', 'rightElbow', 'rightWrist'],
     },
-    minRepInterval:  0.5,
+    minRepInterval:  1.0,
     planarityChecks: TRICEP_PLANARITY,
   };
 }
 
-// Skullcrusher: same thresholds, lying-down form checks (torso lean disabled).
+// Skullcrusher: same thresholds as tricepVariant, lying-down form checks.
 function skullcrusherVariant(
   id:               string,
   displayName:      string,
@@ -766,7 +786,7 @@ function skullcrusherVariant(
     repMetric:          TRICEP_REP_METRIC,
     topAngle:           85,
     repEnterThreshold:  72,
-    repExitThreshold:   77,
+    repExitThreshold:   82,
     goodROMThreshold:   25,
     insufficientROMCue: 'EXTEND FULLY',
     formChecks:      TRICEP_FORM_CHECKS_LYING,
@@ -776,7 +796,7 @@ function skullcrusherVariant(
       requiredJoints:    ['leftShoulder',  'leftElbow',  'leftWrist'],
       requiredJointsAlt: ['rightShoulder', 'rightElbow', 'rightWrist'],
     },
-    minRepInterval:  0.5,
+    minRepInterval:  1.0,
     planarityChecks: TRICEP_PLANARITY,
   };
 }
