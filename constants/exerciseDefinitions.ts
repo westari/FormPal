@@ -801,6 +801,285 @@ function skullcrusherVariant(
   };
 }
 
+// ─── Row family ────────────────────────────────────────────────────────────────
+//
+// HORIZONTAL PULL — new movement pattern, no prior coverage.
+// Rep metric: bestSide jointAngle(shoulder, elbow, wrist).
+//   Arm hangs straight (~165°) → elbow flexes to ~70-90° at peak pull.
+//   Angle DECREASES during pull → matches engine's decreasing state machine
+//   (same direction as bicep curl, but different starting range).
+//
+// Form checks expressible with existing primitives:
+//   1. Incomplete pull → goodROMThreshold: 95° + insufficientROMCue: 'PULL HIGHER'. ✅
+//   2. Torso swing (bent-over only) → average(lineVsVertical(hip→shoulder))
+//      throughoutMin < 25° → 'STOP SWINGING'. Fires if torso jerked upright
+//      (momentum cheat) at any point during the rep. ✅
+//
+// Form checks NOT expressible with existing primitives:
+//   3. Back rounding → SKIPPED. Vision Body Pose has no mid-spine landmark.
+//      Nearest proxy (signedDeviationFromLine: hip from shoulder→knee) measures
+//      hip position deviation, not spinal curvature — too imprecise to use.
+//
+// Seated sub-family (seatedCableRow, machineRow) uses seatedRowVariant():
+// completely different metric (distanceRatio wrist→hip) and form checks (torso lean)
+// vs the bent-over sub-family. See seatedRowVariant() for full spec.
+//
+// Inverted row: included in bentOverRowVariant (same rep metric). The torso swing
+// check (throughoutMin < 10°) does NOT fire for inverted rows — body is horizontal
+// (~90°), never near 10°. The primary inverted-row fault (hips dropping) would need
+// signedDeviationFromLine on shoulder→ankle axis, similar to push-up hip_sag —
+// not added here; skipped and reported.
+
+// bestSide picks whichever arm has higher average joint confidence.
+// In side-on camera the far arm is occluded (shoulder + elbow + wrist all hidden behind
+// torso) → consistently LOW confidence. Near arm is fully visible → HIGH confidence.
+// bestSide reliably selects the near arm. On-device evidence for why NOT minimum:
+//   [REP] #8 peak=0.6° (anatomically impossible — far arm junk reading)
+//   [REP] #6 L=23.2° R=142.7° diff=84% — minimum was picking the 23.2° garbage
+// minimum is deterministic but deterministically selects the bad side in side-on view.
+const ROW_REP_METRIC: MetricDef = {
+  type:  'bestSide',
+  left:  { type: 'jointAngle', a: 'leftShoulder',  pivot: 'leftElbow',  c: 'leftWrist'  },
+  right: { type: 'jointAngle', a: 'rightShoulder', pivot: 'rightElbow', c: 'rightWrist' },
+  leftJoints:  ['leftShoulder', 'leftElbow', 'leftWrist'],
+  rightJoints: ['rightShoulder', 'rightElbow', 'rightWrist'],
+};
+
+// Torso stability: normalizedVerticalGap(shoulder, hip).
+//
+// Previous metric lineVsVertical(hip→knee) REMOVED — structurally blind to torso rocking:
+//   The legs are fixed; hip does not move relative to knee when the whole body swings.
+//   On-device: full-body swing produced good checkmarks. A metric that can't detect
+//   the fault cannot stay.
+//
+// WHY normalizedVerticalGap(shoulder, hip):
+//   Measures how far the shoulder is ABOVE the hip (value = vertical gap / torso length).
+//   In proper hinged position (back ~horizontal): shoulder ≈ hip height → value near 0.
+//   Heaving toward upright: shoulder rises above hip → value increases and check fires. ✓
+//   Scapular retraction moves shoulder HORIZONTALLY (backward in 3D) — minimal vertical
+//   component → this metric is largely uncontaminated by correct form. ✓
+//
+// Threshold: throughoutMax > 0.2 (shoulder 20% of torso length above hip = meaningful heave).
+// Conservative; calibrate once [REP] heave=X.XXX limit=0.2 logging is added (native batch item).
+const ROW_TORSO_SWING: FormCheckDef = {
+  id:         'torso_swing',
+  cue:        'STOP SWINGING',
+  metric: {
+    type:  'average',
+    left:  { type: 'normalizedVerticalGap', upper: 'leftShoulder',  lower: 'leftHip'  },
+    right: { type: 'normalizedVerticalGap', upper: 'rightShoulder', lower: 'rightHip' },
+  },
+  evaluateAt: 'throughoutMax',
+  condition:  { type: 'greaterThan', value: 0.2 },
+  priority:   1,
+  enabled:    true,
+};
+
+// Ready gate: DISABLED for all row variants.
+//
+// The gate failed repeatedly across tricep, seated row, and bent-over row — the
+// combination of a side-on camera, occluded far arm, and confidence-sensitive joint
+// requirements made it take up to a minute to open and required the user to face
+// the camera first. The gate is not usable as designed for this exercise class.
+//
+// Junk-rep protection without the gate:
+//   1. Phantom-rep guard (Swift): required = max(abs(168−80)×0.30, 0.01) = 26.4°.
+//      Any real rep entry (metric drops below repEnterThreshold=100°) has already moved
+//      68° from topAngle=168°, far exceeding 26.4°. Setup noise can't fake this.
+//   2. minRepInterval: 0.8 — prevents rapid double-counting during transition to position.
+//   3. repEnterThreshold=100°: arm must flex 68° below straight to enter a rep.
+//      Normal arm swing during walking or setup doesn't approach this depth.
+//
+// Implementation: fully permissive gate — passes any metric value instantly.
+const ROW_GATE_PASSTHROUGH: ReadyGateDef = {
+  readyAngleMin:  0,
+  readyAngleMax:  360,
+  requiredJoints: [],
+  minConfidence:  0,
+  stableDuration: 0.1,
+};
+
+const ROW_PLANARITY: PlanarityCheckDef[] = [
+  {
+    id: 'uarm_l', jointA: 'leftShoulder', jointB: 'leftElbow',
+    minRatio: 0.75, cue: 'TURN SIDE-ON', fallbackReferenceRatio: 0.64, enabled: false,
+  },
+];
+
+// Side view makes torso hinge and elbow travel both visible.
+// Knee included to improve Vision's hip confidence for a bent-over person.
+const ROW_CAMERA_JOINTS_A = ['leftShoulder',  'leftElbow',  'leftWrist',  'leftHip',  'leftKnee'];
+const ROW_CAMERA_JOINTS_B = ['rightShoulder', 'rightElbow', 'rightWrist', 'rightHip', 'rightKnee'];
+
+// Bent-over variants: hinged torso, torso swing check active.
+//
+// Threshold design (on-device logs: start=168-176°, good peaks=40-60°, shallow-bad=82-94°):
+//
+//   topAngle:          168  — matches logged start position
+//
+//   repEnterThreshold:  85  — arm must flex 83° before a rep registers.
+//                            Movements staying above 85° (arm swinging, casual flex) produce
+//                            no count and fire no cue. Was 100 (68° flex) — arm swing was
+//                            still reaching into the rep zone and firing 'PULL HIGHER'.
+//                            Reps peaking 81-84° enter and count as BAD (correct — real attempt,
+//                            short ROM). Reps peaking ≤80° count as GOOD.
+//
+//   repExitThreshold:   95  — rep fires at 95° on the return. Hysteresis: 95−85=10° ✓
+//
+//   goodROMThreshold:   80  — peak must reach ≤80° for a GOOD rep.
+//                            Logged good reps 40-60° → 20° margin ✓
+//                            Logged shallow reps 82-94° → all fail, fire 'PULL HIGHER' ✓
+//
+//   Phantom guard: required = max(abs(168−80)×0.30, 0.01) = 26.4°.
+//   Minimum entry movement = 83° (168° to 85°). 83 > 26.4 ✓
+function bentOverRowVariant(
+  id:               string,
+  displayName:      string,
+  setupInstruction: string,
+): ExerciseDefinitionDef {
+  return {
+    id,
+    displayName,
+    repMetric:          ROW_REP_METRIC,
+    topAngle:           168,
+    repEnterThreshold:   85,  // was 100 — arm swing no longer reaches into rep zone
+    repExitThreshold:    95,  // hysteresis: 95−85=10° ✓
+    goodROMThreshold:    80,  // logged bad reps 82-94° fail; good reps 40-60° pass
+    insufficientROMCue: 'PULL HIGHER',
+    formChecks:         [ROW_TORSO_SWING],
+    readyGate:          ROW_GATE_PASSTHROUGH,
+    cameraSetup: {
+      setupInstruction,
+      requiredJoints:    ROW_CAMERA_JOINTS_A,
+      requiredJointsAlt: ROW_CAMERA_JOINTS_B,
+    },
+    minRepInterval:  0.8,
+    planarityChecks: ROW_PLANARITY,
+  };
+}
+
+// ─── Seated sub-family: complete rebuild ─────────────────────────────────────
+//
+// The seated cable row is a HORIZONTAL pull. Elbow angle (used by bentOverRowVariant)
+// is wrong — the governing motion is the HAND TRAVELING FROM EXTENDED-FORWARD TO
+// touching the abdomen, not elbow flexion depth. The correct metric is the 2D distance
+// between the wrist and the hip, body-normalized (= distanceRatio).
+//
+// distanceRatio(a, b) = |a - b| / torsoReference (shoulder→hip on best-visible side).
+// Scale (measured on-device):
+//   Arm extended (start): ~2.0 torso lengths from hip
+//   Handle at stomach (end): ~0.1 torso lengths from hip
+//
+// Metric DECREASES during the pull → matches engine's hardwired DECREASING direction. ✓
+//
+// maximum picks the larger wrist-to-hip ratio — always the near arm. Far arm always reads
+// near-zero (occluded in side-on view, collapsed 2D position). See SEATED_ROW_REP_METRIC.
+//
+// THRESHOLDS calibrated from on-device [REP] log.
+// Native batch item: add "[REP] wristToHip=X.XX enter=Y exit=Z" per rep (still needed for future tuning).
+
+const SEATED_ROW_REP_METRIC: MetricDef = {
+  type:  'maximum',
+  left:  { type: 'distanceRatio', a: 'leftWrist',  b: 'leftHip'  },
+  right: { type: 'distanceRatio', a: 'rightWrist', b: 'rightHip' },
+  // maximum over bestSide: the far wrist is always occluded in side-on view and collapses to
+  // near-zero 2D distance from the hip (hidden behind/near the torso → ~0 projected gap).
+  // maximum always returns the LARGER of left and right — always the near arm (real wrist-to-hip
+  // gap) at every point in the ROM. bestSide could wrongly pick the far side if the near wrist
+  // happened to be at the frame edge during full extension (low confidence on that joint).
+};
+
+// Torso lean check: seated row torso should stay roughly vertical.
+// lineVsVertical(hip→shoulder): 0° = spine vertical. Increases when leaning back.
+// WHY lineVsVertical(hip→shoulder) is usable here (unlike bent-over row):
+//   Bent-over row: baseline angle was ~45° (tilted), so scapular retraction
+//   (shoulder moving backward) caused ~30-40° swing in the 2D projected angle.
+//   Seated row: baseline is near 0° (vertical). Scapular retraction adds ~3-8°.
+//   On-device: 29-34° measured on normal seated reps — 30° fired on clean reps.
+//   45° lets full-range reps pass; backward body rock (>50°) still triggers.
+//   Note: standing up also fires this cue until native inactivity detection ships.
+// Calibrate once [REP] torsoLean=X.X limit=45 logging is added (native batch item).
+const SEATED_ROW_TORSO_CHECK: FormCheckDef = {
+  id:         'torso_lean',
+  cue:        'SIT UP TALL',
+  metric: {
+    type:  'average',
+    left:  { type: 'lineVsVertical', from: 'leftHip',  to: 'leftShoulder'  },
+    right: { type: 'lineVsVertical', from: 'rightHip', to: 'rightShoulder' },
+  },
+  evaluateAt: 'throughoutMax',
+  condition:  { type: 'greaterThan', value: 45 },
+  priority:   1,
+  enabled:    true,
+};
+
+// Elbow-bend check at peak pull — detects hands-leading fault.
+// jointAngle(shoulder→elbow←wrist): when elbows drive back, both shoulder and wrist are
+// on the SAME side of the elbow (both "in front" of the elbow position behind the body),
+// producing an acute angle (~50-65°). When hands lead without elbow drive, the elbow barely
+// moves: shoulder is above and the wrist is pulled inward, diverging from opposite sides of
+// the elbow → obtuse angle (~80-90°).
+// Camera-orientation agnostic: the angle does not depend on which way the user faces.
+// bestSide: uses the near (higher-confidence) elbow — far side is occluded in side-on view.
+// Threshold 75° is a calibration estimate — verify from on-device [REP] elbow_drive=X log.
+const SEATED_ROW_ELBOW_CHECK: FormCheckDef = {
+  id:         'elbow_drive',
+  cue:        'DRIVE ELBOWS BACK',
+  metric: {
+    type:  'bestSide',
+    left:  { type: 'jointAngle', a: 'leftShoulder',  pivot: 'leftElbow',  c: 'leftWrist'  },
+    right: { type: 'jointAngle', a: 'rightShoulder', pivot: 'rightElbow', c: 'rightWrist' },
+    leftJoints:  ['leftShoulder',  'leftElbow',  'leftWrist' ],
+    rightJoints: ['rightShoulder', 'rightElbow', 'rightWrist'],
+  },
+  evaluateAt: 'atBottom',
+  condition:  { type: 'greaterThan', value: 75 },
+  priority:   2,
+  enabled:    true,
+};
+
+// Camera joints for seated row: wrist + elbow (for visibility) + shoulder + hip.
+// No knee — seated exercise, knee not needed for any metric or check.
+const SEATED_ROW_CAMERA_JOINTS_A = ['leftShoulder',  'leftElbow',  'leftWrist',  'leftHip'];
+const SEATED_ROW_CAMERA_JOINTS_B = ['rightShoulder', 'rightElbow', 'rightWrist', 'rightHip'];
+
+// Seated variants: upright torso, horizontal pull, wrist-to-hip metric.
+// Passthrough gate — same far-arm occlusion problem as bent-over row (see ROW_GATE_PASSTHROUGH).
+// Phantom guard: required = max(abs(1.9 - 0.85) * 0.30, 0.01) = 0.315.
+// Min entry movement = 1.9 - 1.2 = 0.7 torso lengths. 0.7 > 0.315 ✓
+function seatedRowVariant(
+  id:               string,
+  displayName:      string,
+  setupInstruction: string,
+): ExerciseDefinitionDef {
+  return {
+    id,
+    displayName,
+    repMetric:          SEATED_ROW_REP_METRIC,
+    // Threshold design (measured on-device: start ~2.0, finish ~0.1):
+    //   topAngle:          1.9  — just below the ~2.0 measured start (arm extended toward cable).
+    //   repEnterThreshold: 1.2  — hand must travel 0.8 torso lengths inward before rep registers.
+    //   repExitThreshold:  1.4  — rep fires early on return. Hysteresis: 1.4 − 1.2 = 0.2 ✓
+    //   goodROMThreshold:  0.85 — on-device peak logged at 0.8 on full pulls; 0.6 fired every rep.
+    //                             Finish 0.1–0.8 passes; stopping at ~1.0+ fires the cue.
+    //                             Fires 'PULL TO YOUR STOMACH' if peak > 0.85.
+    topAngle:           1.9,
+    repEnterThreshold:  1.2,
+    repExitThreshold:   1.4,
+    goodROMThreshold:   0.85,
+    insufficientROMCue: 'PULL TO YOUR STOMACH',
+    formChecks:         [SEATED_ROW_TORSO_CHECK, SEATED_ROW_ELBOW_CHECK],
+    readyGate:          ROW_GATE_PASSTHROUGH,
+    cameraSetup: {
+      setupInstruction,
+      requiredJoints:    SEATED_ROW_CAMERA_JOINTS_A,
+      requiredJointsAlt: SEATED_ROW_CAMERA_JOINTS_B,
+    },
+    minRepInterval:  0.8,
+    planarityChecks: [],
+  };
+}
+
 // ─── Registry ─────────────────────────────────────────────────────────────────
 // Missing key → setExerciseDefinition(null) → Swift registry fallback used.
 
@@ -1486,5 +1765,51 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
     'Set camera to your side at bench height — lie flat, arms in frame',
     // EZ-bar or dumbbell, lying on bench. Elbows bent (rest), extend upward (bottom).
     // Torso lean check disabled (meaningless when lying flat).
+  ),
+
+  // ─── Row family — bent-over sub-family ─────────────────────────────────────
+  bentOverRow: bentOverRowVariant(
+    'bentOverRow',
+    'Bent-Over Row',
+    'Stand side-on — hinge forward, arm hangs from shoulder to wrist in frame',
+  ),
+
+  barbellRow: bentOverRowVariant(
+    'barbellRow',
+    'Barbell Row',
+    'Stand side-on — hinge forward over the bar, shoulder to wrist in frame',
+  ),
+
+  singleArmRow: bentOverRowVariant(
+    'singleArmRow',
+    'Single-Arm Row',
+    'Stand side-on — working arm in frame, shoulder to wrist clearly visible',
+  ),
+
+  invertedRow: bentOverRowVariant(
+    'invertedRow',
+    'Inverted Row',
+    'Set camera to your side — body straight under the bar, arms in frame',
+    // Body is horizontal (~90° from vertical). Torso swing check (throughoutMin < 25°)
+    // never fires. Primary fault (hips dropping) not expressible with current primitives.
+  ),
+
+  tBarRow: bentOverRowVariant(
+    'tBarRow',
+    'T-Bar Row',
+    'Stand side-on — hinge forward over the bar, shoulder to wrist in frame',
+  ),
+
+  // ─── Row family — seated sub-family ─────────────────────────────────────────
+  seatedCableRow: seatedRowVariant(
+    'seatedCableRow',
+    'Seated Cable Row',
+    'Sit side-on — hip and wrist both in frame, arm extended toward cable',
+  ),
+
+  machineRow: seatedRowVariant(
+    'machineRow',
+    'Machine Row',
+    'Sit side-on — hip and wrist both in frame, arm extended toward handles',
   ),
 };

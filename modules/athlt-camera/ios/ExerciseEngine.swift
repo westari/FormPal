@@ -50,6 +50,8 @@ private enum SetupPhaseState {
     case holding(startTime: Date)
 }
 
+private enum ActivityState { case active, suppressed }
+
 // ─── The exercise engine ──────────────────────────────────────────────────────
 //
 // Three-phase design:
@@ -180,6 +182,23 @@ final class ExerciseEngine {
     private var lastValidPoseTime: Date = .distantPast
     private let inactivityTimeout: TimeInterval = 2.5
 
+    // ── Walk-away / inactivity suppression ───────────────────────────────────
+    // Suppresses rep counting and cues when the user walks toward the camera
+    // (approach) or has been idle after finishing a set (inactivity).
+    // Resumes automatically when the user returns to the exercise start position.
+    private var activityState:           ActivityState = .active
+    private var suppressionReason:       String        = ""
+    private var torsoRefBaseline:        Double?       = nil  // max ref seen in first TORSO_BASELINE_FRAMES
+    private var torsoRefBaselineFrames:  Int           = 0
+    private var torsoRefCurrent:         Double        = 0.0
+    private var resumeConsecFrames:      Int           = 0
+
+    private static let APPROACH_SCALE_FACTOR:  Double = 1.35  // torso >35% above baseline → approaching
+    private static let APPROACH_RELEASE_MULT:  Double = 1.15  // must drop to <15% above baseline to resume
+    private static let INACTIVITY_REP_GAP_SEC: Double = 8.0   // idle gap after last rep before suppression
+    private static let TORSO_BASELINE_FRAMES:  Int    = 60    // ~2s at 30fps to establish baseline
+    private static let RESUME_CONSEC_FRAMES:   Int    = 15    // ~0.5s in start zone to resume
+
     // ── Per-frame log throttle ────────────────────────────────────────────────
     private var lastFrameLogTime: Double = 0
 
@@ -213,6 +232,7 @@ final class ExerciseEngine {
         lastFrameLogTime      = 0
         resetCalibrationState(keepDerived: false)
         resetRepState()
+        resetActivityState()
     }
 
     // Partial reset — resets rep counters but keeps enginePhase and calibration-derived thresholds.
@@ -229,6 +249,7 @@ final class ExerciseEngine {
         lastGateLogTime       = 0
         lastFrameLogTime      = 0
         resetRepState()
+        resetActivityState()
     }
 
     // ─── Per-frame entry point ────────────────────────────────────────────────
@@ -286,10 +307,11 @@ final class ExerciseEngine {
         // ── ACTIVE phase ──────────────────────────────────────────────────────
         lastValidPoseTime = timestamp
         accumulate(pose: pose)
-        // FIX 2: always evaluate gate so exit hysteresis can also run.
-        // Old: `if !isReady { updateReadyGate }` — gate was never evaluated after firing.
         updateReadyGate(pose: pose, angle: angle, timestamp: timestamp)
-        if isReady { runStateMachine(pose: pose, angle: angle, timestamp: timestamp) }
+        updateActivityState(pose: pose, angle: angle, timestamp: timestamp)
+        if isReady && activityState == .active {
+            runStateMachine(pose: pose, angle: angle, timestamp: timestamp)
+        }
 
         let snapshot      = currentMetricSnapshot(pose: pose)
         let outOfPlaneCue = isReady ? currentOutOfPlaneCue(pose: pose) : nil
@@ -891,6 +913,84 @@ final class ExerciseEngine {
         consecutiveFailFrames = 0
         repPhase = isReady ? .atTop : .waitingForReady
         resetRepState()
+    }
+
+    // ── Walk-away suppression ─────────────────────────────────────────────────
+
+    private func updateActivityState(pose: Pose, angle: Double, timestamp: Date) {
+        // Build torso-scale baseline during the first TORSO_BASELINE_FRAMES of ACTIVE phase.
+        // Uses max over the window so the baseline reflects the user's closest natural position;
+        // the approach threshold is then relative to a position the user actually held.
+        if let ref = torsoReference(pose: pose) {
+            torsoRefCurrent = ref
+            if torsoRefBaselineFrames < Self.TORSO_BASELINE_FRAMES {
+                torsoRefBaseline = max(torsoRefBaseline ?? 0.0, ref)
+                torsoRefBaselineFrames += 1
+            }
+        }
+
+        switch activityState {
+        case .active:
+            // Approach: torso reference has grown significantly above baseline (user walking closer).
+            if let baseline = torsoRefBaseline,
+               torsoRefBaselineFrames >= Self.TORSO_BASELINE_FRAMES,
+               torsoRefCurrent > baseline * Self.APPROACH_SCALE_FACTOR {
+                suppressAndLog(reason: "approach " +
+                               "torsoRef=\(String(format: "%.3f", torsoRefCurrent)) " +
+                               "baseline=\(String(format: "%.3f", baseline))")
+                return
+            }
+            // Inactivity: at least one rep done, not mid-rep, long gap since last rep.
+            if totalReps > 0,
+               repPhase != .inRep,
+               timestamp.timeIntervalSince(lastRepTime) >= Self.INACTIVITY_REP_GAP_SEC {
+                suppressAndLog(reason: "inactivity gap=\(String(format: "%.1f", timestamp.timeIntervalSince(lastRepTime)))s")
+            }
+
+        case .suppressed:
+            // Resume when torso scale has normalised AND metric is back in the start zone.
+            // "Start zone" = metric >= 75% of topAngle (user has arm extended toward start position).
+            let torsoOk: Bool = {
+                guard let baseline = torsoRefBaseline else { return true }
+                return torsoRefCurrent <= baseline * Self.APPROACH_RELEASE_MULT
+            }()
+            let inStartZone = angle >= def.topAngle * 0.75
+            if torsoOk && inStartZone {
+                resumeConsecFrames += 1
+            } else {
+                resumeConsecFrames = 0
+            }
+            if resumeConsecFrames >= Self.RESUME_CONSEC_FRAMES {
+                activityState = .active
+                resumeConsecFrames = 0
+                let msg = "[ACTIVITY] state=active reason=returned_to_start_position"
+                NSLog("[Engine] [%@] %@", def.id, msg)
+                onDebugLog?(msg)
+            }
+        }
+    }
+
+    private func suppressAndLog(reason: String) {
+        activityState = .suppressed
+        suppressionReason = reason
+        resumeConsecFrames = 0
+        // Abandon any in-progress rep cleanly so stale accumulators don't carry over.
+        if repPhase == .inRep {
+            repPhase = .atTop
+            resetRepState()
+        }
+        let msg = "[ACTIVITY] state=suppressed reason=\(reason)"
+        NSLog("[Engine] [%@] %@", def.id, msg)
+        onDebugLog?(msg)
+    }
+
+    private func resetActivityState() {
+        activityState          = .active
+        suppressionReason      = ""
+        torsoRefBaseline       = nil
+        torsoRefBaselineFrames = 0
+        torsoRefCurrent        = 0.0
+        resumeConsecFrames     = 0
     }
 
     private func resetRepState() {
