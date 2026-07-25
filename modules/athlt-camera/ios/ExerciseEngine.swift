@@ -199,6 +199,17 @@ final class ExerciseEngine {
     private static let TORSO_BASELINE_FRAMES:  Int    = 60    // ~2s at 30fps to establish baseline
     private static let RESUME_CONSEC_FRAMES:   Int    = 15    // ~0.5s in start zone to resume
 
+    // ── Settle gate ───────────────────────────────────────────────────────────
+    // Prevents the first arm-raise into starting position from being counted as a rep.
+    // Root cause: raising arms from ~1.1 → 2.0 is a 0.9-unit swing, which passes the
+    // phantom-rep guard (requires only ~0.2 units for seated row). The settle gate holds
+    // rep counting until the metric has been stably above exitThreshold for SETTLE_FRAMES.
+    // Once settled, hasSettled stays true for the session — no re-settling between reps.
+    private var hasSettled:       Bool = false
+    private var settledTopFrames: Int  = 0
+
+    private static let SETTLE_FRAMES: Int = 8   // ~0.27s at 30fps
+
     // ── Per-frame log throttle ────────────────────────────────────────────────
     private var lastFrameLogTime: Double = 0
 
@@ -233,6 +244,7 @@ final class ExerciseEngine {
         resetCalibrationState(keepDerived: false)
         resetRepState()
         resetActivityState()
+        resetSettleState()
     }
 
     // Partial reset — resets rep counters but keeps enginePhase and calibration-derived thresholds.
@@ -250,6 +262,7 @@ final class ExerciseEngine {
         lastFrameLogTime      = 0
         resetRepState()
         resetActivityState()
+        resetSettleState()
     }
 
     // ─── Per-frame entry point ────────────────────────────────────────────────
@@ -655,6 +668,28 @@ final class ExerciseEngine {
 
         case .atTop:
             repTopValue = max(repTopValue, angle)
+
+            // Settle gate: block rep entry until the metric has held above exitThreshold for
+            // SETTLE_FRAMES consecutive frames. Prevents the initial arm-raise into starting
+            // position from registering as a rep (the motion crosses enter/exit thresholds with
+            // enough swing to pass the phantom-rep guard).
+            // hasSettled stays true once set — no re-settling between reps or rest periods.
+            if !hasSettled {
+                if angle > effectiveExitThreshold {
+                    settledTopFrames = min(settledTopFrames + 1, Self.SETTLE_FRAMES + 2)
+                    if settledTopFrames >= Self.SETTLE_FRAMES {
+                        hasSettled = true
+                        let msg = "[SETTLE] top stable — rep counting active"
+                        NSLog("[Engine] [%@] %@", def.id, msg)
+                        onDebugLog?(msg)
+                    }
+                } else {
+                    // Graceful decay for single-frame noise (don't hard-reset on one bad frame).
+                    settledTopFrames = max(0, settledTopFrames - 1)
+                }
+                return
+            }
+
             if angle < effectiveEnterThreshold {
                 repPhase      = .inRep
                 repMinAngle   = angle
@@ -991,6 +1026,11 @@ final class ExerciseEngine {
         torsoRefBaselineFrames = 0
         torsoRefCurrent        = 0.0
         resumeConsecFrames     = 0
+    }
+
+    private func resetSettleState() {
+        hasSettled       = false
+        settledTopFrames = 0
     }
 
     private func resetRepState() {
