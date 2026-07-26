@@ -322,6 +322,23 @@ final class ExerciseEngine {
         accumulate(pose: pose)
         updateReadyGate(pose: pose, angle: angle, timestamp: timestamp)
         updateActivityState(pose: pose, angle: angle, timestamp: timestamp)
+
+        // Pre-accumulate settle gate in parallel with the ready gate.
+        // With the passthrough gate, isReady opens in ~0.27s (8 frames). Without this
+        // block, settle needs 8 MORE frames AFTER ready opens — if the user starts their
+        // first rep in that window the settle gate consumes it. Accumulating concurrently
+        // means hasSettled can complete during the same window as isReady, so the first
+        // real rep is allowed immediately when the user was in start position from the start.
+        if !isReady && !hasSettled && angle > effectiveExitThreshold {
+            settledTopFrames = min(settledTopFrames + 1, Self.SETTLE_FRAMES + 2)
+            if settledTopFrames >= Self.SETTLE_FRAMES {
+                hasSettled = true
+                let msg = "[SETTLE] pre-ready stable — first rep allowed immediately"
+                NSLog("[Engine] [%@] %@", def.id, msg)
+                onDebugLog?(msg)
+            }
+        }
+
         if isReady && activityState == .active {
             runStateMachine(pose: pose, angle: angle, timestamp: timestamp)
         }
@@ -832,20 +849,32 @@ final class ExerciseEngine {
         // Appends raw form check values after " | " so hip deviation can be read directly
         // (e.g. "| hip_pike_l=0.021 hip_sag_l=-0.018") without NSLog access on Windows.
         let swing = repTopValue - repMinAngle
-        let formLog = evaluated.keys.sorted().compactMap { id -> String? in
-            guard let v = evaluated[id] else { return nil }
-            return "\(id)=\(String(format: "%.3f", v))"
+        let formLog = def.formChecks.filter(\.enabled).compactMap { ch -> String? in
+            guard let v = evaluated[ch.id] else { return nil }
+            let lim: Double
+            switch ch.condition {
+            case .greaterThan(let t): lim = t
+            case .lessThan(let t):    lim = t
+            }
+            let tag = failed.contains { $0.id == ch.id } ? "FAIL" : "ok"
+            return "\(ch.id)=\(String(format: "%.3f", v))/lim=\(String(format: "%.3f", lim))[\(tag)]"
         }.joined(separator: " ")
         onDebugLog?("[REP] #\(totalReps) top=\(String(format: "%.1f", repTopValue)) " +
                     "bottom=\(String(format: "%.1f", repMinAngle)) " +
+                    "thr=\(String(format: "%.1f", effectiveROMThreshold)) " +
                     "swing=\(String(format: "%.1f", swing)) " +
                     "ROM=\(goodROM ? "ok" : "short") cue=\(cue)" +
                     (formLog.isEmpty ? "" : " | \(formLog)"))
 
         let checkLog = def.formChecks.filter(\.enabled).map { ch -> String in
             let v   = evaluated[ch.id].map { String(format: "%.3f", $0) } ?? "nil"
+            let lim: Double
+            switch ch.condition {
+            case .greaterThan(let t): lim = t
+            case .lessThan(let t):    lim = t
+            }
             let tag = failed.contains { $0.id == ch.id } ? "FAIL" : "ok"
-            return "\(ch.id)=\(v)[\(tag)]"
+            return "\(ch.id)=\(v)/lim=\(String(format: "%.3f", lim))[\(tag)]"
         }.joined(separator: " ")
 
         NSLog("[Engine] [%@] Rep #%d peak=%g ROM=%@ cue=%@ %d/%d | %@",
