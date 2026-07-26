@@ -93,6 +93,33 @@ export interface ExerciseDefinitionDef {
   planarityChecks?:   PlanarityCheckDef[];
 }
 
+// ─── Shared passthrough ready gate ───────────────────────────────────────────
+//
+// Applied to every exercise. The ready gate is no longer used for exercise-
+// specific positioning — that job is covered by three more robust mechanisms:
+//   1. SETUP phase: required joints visible + 2-second hold before ACTIVE.
+//   2. Settle gate (native): metric must hold above exitThreshold for 8 frames
+//      before the first rep registers — prevents position-entry motion from
+//      counting as a rep. Settle gate and passthrough gate now accumulate
+//      in parallel so the first real rep is never blocked (see Fix 5 note).
+//   3. Phantom-rep guard (native): requires 30% of [topAngle → goodROM] range
+//      of genuine movement — noise dips and setup jitter can't fake this.
+//
+// Why the exercise-specific gates were removed:
+//   Side-on exercises (row, tricep, lunge): far-arm or far-leg joints are
+//   occluded → required joints never reach minConfidence → gate stays closed
+//   for 30-60s requiring the user to face the camera or reposition.
+//   Angle-range constraints (shoulder press, squat): gate fires or breaks
+//   unexpectedly on Vision angle drift during the set.
+//   All three layers above are more robust and exercise-agnostic.
+const PASSTHROUGH_GATE: ReadyGateDef = {
+  readyAngleMin:  0,
+  readyAngleMax:  360,
+  requiredJoints: [],
+  minConfidence:  0,
+  stableDuration: 0.1,
+};
+
 // ─── Shared curl building-blocks ──────────────────────────────────────────────
 //
 // All bicep-curl variants share the same joints, rep signal, thresholds,
@@ -155,15 +182,6 @@ const CURL_FORM_CHECKS: FormCheckDef[] = [
   },
 ];
 
-const CURL_READY_GATE: ReadyGateDef = {
-  readyAngleMin:  140,
-  readyAngleMax:  190,
-  requiredJoints: ['leftShoulder', 'leftElbow', 'leftWrist',
-                    'rightShoulder', 'rightElbow', 'rightWrist'],
-  minConfidence:  0.30,
-  stableDuration: 0.3,
-};
-
 const CURL_CAMERA_REQUIRED_JOINTS = [
   'leftShoulder', 'rightShoulder', 'leftElbow', 'rightElbow', 'leftWrist', 'rightWrist',
 ];
@@ -192,7 +210,7 @@ function curlVariant(
     insufficientROMCue: 'CURL HIGHER',
 
     formChecks: CURL_FORM_CHECKS,
-    readyGate:  CURL_READY_GATE,
+    readyGate:  PASSTHROUGH_GATE,
 
     cameraSetup: {
       setupInstruction,
@@ -252,15 +270,6 @@ const SQUAT_FORM_CHECKS: FormCheckDef[] = [
   },
 ];
 
-const SQUAT_READY_GATE: ReadyGateDef = {
-  readyAngleMin:  155,
-  readyAngleMax:  190,
-  requiredJoints: ['leftHip', 'leftKnee', 'leftAnkle',
-                   'rightHip', 'rightKnee', 'rightAnkle'],
-  minConfidence:  0.30,
-  stableDuration: 1.0,
-};
-
 const SQUAT_CAMERA_JOINTS = [
   'leftShoulder', 'rightShoulder',
   'leftHip',      'rightHip',
@@ -287,10 +296,10 @@ function squatVariant(
     topAngle:           160,
     repEnterThreshold:  150,
     repExitThreshold:   155,
-    goodROMThreshold:   100,
+    goodROMThreshold:   90,   // tightened 100→90: genuine parallel squat ≤90°; quarter squat ~130° fails
     insufficientROMCue: 'GO DEEPER',
     formChecks:      SQUAT_FORM_CHECKS,
-    readyGate:       SQUAT_READY_GATE,
+    readyGate:       PASSTHROUGH_GATE,
     cameraSetup:     { setupInstruction, requiredJoints: SQUAT_CAMERA_JOINTS },
     calibration:     { repsNeeded: 2, enterFraction: 0.50, exitFraction: 0.25 },
     minRepInterval:  0.5,
@@ -376,14 +385,6 @@ const PUSHUP_HIP_CHECKS_KNEE: FormCheckDef[] = [
   },
 ];
 
-const PUSHUP_READY_GATE: ReadyGateDef = {
-  readyAngleMin:  130,
-  readyAngleMax:  185,
-  requiredJoints: ['leftShoulder', 'leftElbow', 'rightShoulder', 'rightElbow'],
-  minConfidence:  0.15,
-  stableDuration: 0.5,
-};
-
 const PUSHUP_PLANARITY: PlanarityCheckDef[] = [
   { id: 'uarm_l', jointA: 'leftShoulder', jointB: 'leftElbow',
     minRatio: 0.75, cue: 'TURN SIDE-ON', fallbackReferenceRatio: 0.64, enabled: false },
@@ -401,10 +402,10 @@ function pushupVariant(
     topAngle:           160,
     repEnterThreshold:  140,
     repExitThreshold:   150,
-    goodROMThreshold:    90,
+    goodROMThreshold:    75,   // tightened 90→75: proper push-up ≤75°; half push-up (~85-90°) fails
     insufficientROMCue: 'GO DEEPER',
     formChecks:      PUSHUP_HIP_CHECKS,
-    readyGate:       PUSHUP_READY_GATE,
+    readyGate:       PASSTHROUGH_GATE,
     cameraSetup: {
       setupInstruction,
       requiredJoints:    ['leftShoulder',  'leftElbow',  'leftWrist'],
@@ -428,10 +429,10 @@ function kneePushupVariant(
     topAngle:           160,
     repEnterThreshold:  140,
     repExitThreshold:   150,
-    goodROMThreshold:    90,
+    goodROMThreshold:    75,   // tightened 90→75: proper push-up ≤75°; half push-up (~85-90°) fails
     insufficientROMCue: 'GO DEEPER',
     formChecks:      PUSHUP_HIP_CHECKS_KNEE,
-    readyGate:       PUSHUP_READY_GATE,
+    readyGate:       PASSTHROUGH_GATE,
     cameraSetup: {
       setupInstruction,
       requiredJoints:    ['leftShoulder',  'leftElbow',  'leftWrist'],
@@ -502,14 +503,6 @@ const SHOULDER_PRESS_FORM_CHECKS: FormCheckDef[] = [
   },
 ];
 
-const SHOULDER_PRESS_READY_GATE: ReadyGateDef = {
-  readyAngleMin:  65,
-  readyAngleMax:  90,
-  requiredJoints: ['leftShoulder', 'leftElbow', 'rightShoulder', 'rightElbow'],
-  minConfidence:  0.30,
-  stableDuration: 0.8,
-};
-
 const SHOULDER_PRESS_PLANARITY: PlanarityCheckDef[] = [
   { id: 'uarm_l', jointA: 'leftShoulder',  jointB: 'leftElbow',
     minRatio: 0.75, cue: 'FACE THE CAMERA', fallbackReferenceRatio: 0.64, enabled: false },
@@ -532,7 +525,7 @@ function shoulderPressVariant(
     goodROMThreshold:   35,
     insufficientROMCue: 'PRESS HIGHER',
     formChecks:      SHOULDER_PRESS_FORM_CHECKS,
-    readyGate:       SHOULDER_PRESS_READY_GATE,
+    readyGate:       PASSTHROUGH_GATE,
     cameraSetup: {
       setupInstruction,
       requiredJoints: ['leftShoulder', 'leftElbow', 'rightShoulder', 'rightElbow'],
@@ -583,15 +576,6 @@ const LUNGE_FORM_CHECKS: FormCheckDef[] = [
   },
 ];
 
-const LUNGE_READY_GATE: ReadyGateDef = {
-  readyAngleMin:  155,
-  readyAngleMax:  190,
-  requiredJoints: ['leftHip', 'leftKnee', 'leftAnkle',
-                   'rightHip', 'rightKnee', 'rightAnkle'],
-  minConfidence:  0.30,
-  stableDuration: 1.0,
-};
-
 const LUNGE_CAMERA_JOINTS = [
   'leftShoulder', 'rightShoulder',
   'leftHip',      'rightHip',
@@ -621,7 +605,7 @@ function lungeVariant(
     goodROMThreshold:   105,
     insufficientROMCue: 'LUNGE DEEPER',
     formChecks:      LUNGE_FORM_CHECKS,
-    readyGate:       LUNGE_READY_GATE,
+    readyGate:       PASSTHROUGH_GATE,
     cameraSetup:     { setupInstruction, requiredJoints: LUNGE_CAMERA_JOINTS },
     calibration:     { repsNeeded: 2, enterFraction: 0.50, exitFraction: 0.25 },
     minRepInterval:  0.5,
@@ -710,22 +694,9 @@ const TRICEP_FORM_CHECKS_LYING: FormCheckDef[] = [
   { ...TRICEP_TORSO_LEAN, enabled: false },
 ];
 
-// Ready gate: accept any starting position where elbows are visible.
-// lineVsVertical(wrist→elbow) ranges widely across variants:
-//   pushdown at rest: wrist above elbow (cable from overhead) → metric ~20-60°
-//   overhead extension at rest: forearm behind head, wrist below elbow → metric ~0-40°
-//   skullcrusher at rest: forearm angled off chest → metric ~30-80°
-// Setting readyAngleMin:0 covers all three without forcing a specific start angle.
-// requiredJoints uses only elbows (not wrists) because these are side-view exercises:
-//   the far-side wrist is occluded by the body and will have near-zero confidence,
-//   causing the gate to never pass even when the near-side arm is clearly visible.
-const TRICEP_READY_GATE: ReadyGateDef = {
-  readyAngleMin:  0,
-  readyAngleMax:  92,
-  requiredJoints: ['leftElbow', 'rightElbow'],
-  minConfidence:  0.10,
-  stableDuration: 0.5,
-};
+// Ready gate: all tricep variants use PASSTHROUGH_GATE.
+// The far-side elbow is occluded in side-on view → confidence-based joint gates
+// reliably fail even when the near arm is fully visible.
 
 const TRICEP_PLANARITY: PlanarityCheckDef[] = [
   { id: 'forearm_l', jointA: 'leftWrist',  jointB: 'leftElbow',
@@ -763,7 +734,7 @@ function tricepVariant(
     goodROMThreshold:   25,
     insufficientROMCue: 'EXTEND FULLY',
     formChecks:      TRICEP_FORM_CHECKS_STANDING,
-    readyGate:       TRICEP_READY_GATE,
+    readyGate:       PASSTHROUGH_GATE,
     cameraSetup: {
       setupInstruction,
       requiredJoints:    ['leftShoulder',  'leftElbow',  'leftWrist'],
@@ -790,7 +761,7 @@ function skullcrusherVariant(
     goodROMThreshold:   25,
     insufficientROMCue: 'EXTEND FULLY',
     formChecks:      TRICEP_FORM_CHECKS_LYING,
-    readyGate:       TRICEP_READY_GATE,
+    readyGate:       PASSTHROUGH_GATE,
     cameraSetup: {
       setupInstruction,
       requiredJoints:    ['leftShoulder',  'leftElbow',  'leftWrist'],
@@ -859,8 +830,12 @@ const ROW_REP_METRIC: MetricDef = {
 //   Scapular retraction moves shoulder HORIZONTALLY (backward in 3D) — minimal vertical
 //   component → this metric is largely uncontaminated by correct form. ✓
 //
-// Threshold: throughoutMax > 0.2 (shoulder 20% of torso length above hip = meaningful heave).
-// Conservative; calibrate once [REP] heave=X.XXX limit=0.2 logging is added (native batch item).
+// Threshold: throughoutMax > 0.80.
+// On-device calibration: stable bent-over torso consistently logs 0.56–0.58 (shoulder IS
+// above hip in Vision's y-axis even in proper hinged position — original "near 0" comment
+// was wrong about the coordinate assumption). 0.20 fired on every rep. 0.80 gives a
+// 0.22-unit margin above the measured stable range; genuine heave (torso toward upright
+// ≈ 1.0) fires well above threshold. ✓
 const ROW_TORSO_SWING: FormCheckDef = {
   id:         'torso_swing',
   cue:        'STOP SWINGING',
@@ -870,34 +845,15 @@ const ROW_TORSO_SWING: FormCheckDef = {
     right: { type: 'normalizedVerticalGap', upper: 'rightShoulder', lower: 'rightHip' },
   },
   evaluateAt: 'throughoutMax',
-  condition:  { type: 'greaterThan', value: 0.2 },
+  condition:  { type: 'greaterThan', value: 0.80 },
   priority:   1,
   enabled:    true,
 };
 
-// Ready gate: DISABLED for all row variants.
-//
-// The gate failed repeatedly across tricep, seated row, and bent-over row — the
-// combination of a side-on camera, occluded far arm, and confidence-sensitive joint
-// requirements made it take up to a minute to open and required the user to face
-// the camera first. The gate is not usable as designed for this exercise class.
-//
-// Junk-rep protection without the gate:
-//   1. Phantom-rep guard (Swift): required = max(abs(168−80)×0.30, 0.01) = 26.4°.
-//      Any real rep entry (metric drops below repEnterThreshold=100°) has already moved
-//      68° from topAngle=168°, far exceeding 26.4°. Setup noise can't fake this.
-//   2. minRepInterval: 0.8 — prevents rapid double-counting during transition to position.
-//   3. repEnterThreshold=100°: arm must flex 68° below straight to enter a rep.
-//      Normal arm swing during walking or setup doesn't approach this depth.
-//
-// Implementation: fully permissive gate — passes any metric value instantly.
-const ROW_GATE_PASSTHROUGH: ReadyGateDef = {
-  readyAngleMin:  0,
-  readyAngleMax:  360,
-  requiredJoints: [],
-  minConfidence:  0,
-  stableDuration: 0.1,
-};
+// Ready gate: all row variants use PASSTHROUGH_GATE (see top of file).
+// Far-arm occlusion in side-on view makes confidence-based gates unusable here.
+// Junk-rep protection is provided by the phantom-rep guard (26.4° min movement
+// required), minRepInterval: 0.8, and repEnterThreshold: 85° (83° below start).
 
 const ROW_PLANARITY: PlanarityCheckDef[] = [
   {
@@ -947,7 +903,7 @@ function bentOverRowVariant(
     goodROMThreshold:    80,  // logged bad reps 82-94° fail; good reps 40-60° pass
     insufficientROMCue: 'PULL HIGHER',
     formChecks:         [ROW_TORSO_SWING],
-    readyGate:          ROW_GATE_PASSTHROUGH,
+    readyGate:          PASSTHROUGH_GATE,
     cameraSetup: {
       setupInstruction,
       requiredJoints:    ROW_CAMERA_JOINTS_A,
@@ -1022,6 +978,9 @@ const SEATED_ROW_TORSO_CHECK: FormCheckDef = {
 // Camera-orientation agnostic: the angle does not depend on which way the user faces.
 // bestSide: uses the near (higher-confidence) elbow — far side is occluded in side-on view.
 // Threshold 75° is a calibration estimate — verify from on-device [REP] elbow_drive=X log.
+// throughoutMin: captures minimum angle across the whole rep rather than the single frame
+// where repMetric is minimum. Robust against single-frame occlusion at peak pull (elbow
+// close to body → Vision confidence drops → atBottom sample returns nil → check skipped).
 const SEATED_ROW_ELBOW_CHECK: FormCheckDef = {
   id:         'elbow_drive',
   cue:        'DRIVE ELBOWS BACK',
@@ -1032,7 +991,7 @@ const SEATED_ROW_ELBOW_CHECK: FormCheckDef = {
     leftJoints:  ['leftShoulder',  'leftElbow',  'leftWrist' ],
     rightJoints: ['rightShoulder', 'rightElbow', 'rightWrist'],
   },
-  evaluateAt: 'atBottom',
+  evaluateAt: 'throughoutMin',
   condition:  { type: 'greaterThan', value: 75 },
   priority:   2,
   enabled:    true,
@@ -1044,7 +1003,7 @@ const SEATED_ROW_CAMERA_JOINTS_A = ['leftShoulder',  'leftElbow',  'leftWrist', 
 const SEATED_ROW_CAMERA_JOINTS_B = ['rightShoulder', 'rightElbow', 'rightWrist', 'rightHip'];
 
 // Seated variants: upright torso, horizontal pull, wrist-to-hip metric.
-// Passthrough gate — same far-arm occlusion problem as bent-over row (see ROW_GATE_PASSTHROUGH).
+// Passthrough gate — same far-arm occlusion problem as bent-over row (see PASSTHROUGH_GATE).
 // Phantom guard: required = max(abs(1.9 - 0.85) * 0.30, 0.01) = 0.315.
 // Min entry movement = 1.9 - 1.2 = 0.7 torso lengths. 0.7 > 0.315 ✓
 function seatedRowVariant(
@@ -1069,7 +1028,7 @@ function seatedRowVariant(
     goodROMThreshold:   0.85,
     insufficientROMCue: 'PULL TO YOUR STOMACH',
     formChecks:         [SEATED_ROW_TORSO_CHECK, SEATED_ROW_ELBOW_CHECK],
-    readyGate:          ROW_GATE_PASSTHROUGH,
+    readyGate:          PASSTHROUGH_GATE,
     cameraSetup: {
       setupInstruction,
       requiredJoints:    SEATED_ROW_CAMERA_JOINTS_A,
@@ -1103,7 +1062,7 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
     topAngle:           160,
     repEnterThreshold:  150,
     repExitThreshold:   155,
-    goodROMThreshold:   100,
+    goodROMThreshold:   90,   // tightened 100→90: genuine parallel squat ≤90°; quarter squat ~130° fails
     insufficientROMCue: 'GO DEEPER',
 
     formChecks: [
@@ -1148,14 +1107,7 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
       },
     ],
 
-    readyGate: {
-      readyAngleMin:  155,
-      readyAngleMax:  190,
-      requiredJoints: ['leftHip', 'leftKnee', 'leftAnkle',
-                        'rightHip', 'rightKnee', 'rightAnkle'],
-      minConfidence:  0.30,
-      stableDuration: 1.0,
-    },
+    readyGate: PASSTHROUGH_GATE,
 
     cameraSetup: {
       setupInstruction: 'Stand sideways to the camera — full body in frame',
@@ -1220,7 +1172,7 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
     topAngle:           160,
     repEnterThreshold:  140,
     repExitThreshold:   150,
-    goodROMThreshold:    90,   // was 100 — tightened so elbows must reach near right-angle
+    goodROMThreshold:    75,   // tightened 90→75: proper push-up ≤75°; half push-up (~85-90°) fails
     insufficientROMCue: 'GO DEEPER',
 
     formChecks: [
@@ -1283,17 +1235,7 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
       },
     ],
 
-    readyGate: {
-      // readyAngleMin set 10° below repEnterThreshold (140°) so the gate condition doesn't
-      // start accumulating exit-frames the instant the first rep starts. Gate stays passing
-      // until angle < 130° — well into the rep, giving the 20-frame exit buffer plenty of
-      // headroom before the rep completes. After the first rep, isReady is permanent.
-      readyAngleMin:  130,
-      readyAngleMax:  185,
-      requiredJoints: ['leftShoulder', 'leftElbow', 'rightShoulder', 'rightElbow'],
-      minConfidence:  0.15,
-      stableDuration: 0.5,
-    },
+    readyGate: PASSTHROUGH_GATE,
 
     cameraSetup: {
       setupInstruction: 'Lay your phone on its side on the floor, a few feet to your side',
@@ -1363,14 +1305,7 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
       },
     ],
 
-    readyGate: {
-      readyAngleMin:  155,
-      readyAngleMax:  190,
-      requiredJoints: ['leftHip', 'leftKnee', 'leftAnkle',
-                        'rightHip', 'rightKnee', 'rightAnkle'],
-      minConfidence:  0.30,
-      stableDuration: 1.0,
-    },
+    readyGate: PASSTHROUGH_GATE,
 
     cameraSetup: {
       setupInstruction: 'Stand sideways to the camera — full body in frame',
@@ -1484,16 +1419,7 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
       },
     ],
 
-    readyGate: {
-      readyAngleMin:  65,
-      readyAngleMax:  90,
-      // Hips removed: repMetric only uses shoulders+elbows. Hips can be at the
-      // frame edge when the phone is at chest height, causing the gate to never
-      // trigger (ROOT CAUSE A was the validity gate; this fixes the ready gate).
-      requiredJoints: ['leftShoulder', 'leftElbow', 'rightShoulder', 'rightElbow'],
-      minConfidence:  0.30,
-      stableDuration: 0.8,
-    },
+    readyGate: PASSTHROUGH_GATE,
 
     cameraSetup: {
       // Shoulder press is FRONT-FACING: both arms move symmetrically overhead.
