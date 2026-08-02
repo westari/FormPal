@@ -209,7 +209,8 @@ final class ExerciseEngine {
     private static let SETTLE_FRAMES: Int = 8   // ~0.27s at 30fps
 
     // ── Per-frame log throttle ────────────────────────────────────────────────
-    private var lastFrameLogTime: Double = 0
+    private var lastFrameLogTime:    Double = 0
+    private var lastActivityLogTime: Double = 0
 
     // ── Callbacks ─────────────────────────────────────────────────────────────
     var onRepDetected:       ((RepResult)        -> Void)?
@@ -331,7 +332,12 @@ final class ExerciseEngine {
             }
         }
 
-        if isReady && activityState == .active {
+        // Runs even while suppressed (activityState == .suppressed): a genuinely
+        // completed rep is a strong enough signal on its own to force-resume — see
+        // the force-resume check in completeRep(). Blocking the state machine here
+        // entirely would mean no motion is ever tracked during suppression, so a
+        // real rep could never be recognized as evidence the user is back.
+        if isReady {
             runStateMachine(pose: pose, angle: angle, timestamp: timestamp)
         }
 
@@ -440,7 +446,18 @@ final class ExerciseEngine {
     // configured, its sample buffers are reset here but collection now happens
     // passively off real completed reps (see feedPassiveCalibration) instead of
     // a separate blocking phase.
+    //
+    // BUG FIX: this used to leave activityState/torsoRefBaseline untouched, which only
+    // matters the FIRST time (both already start clean from reset()). But when a user
+    // steps fully out of frame for ≥LEAVE_TIMEOUT, notePersonMissing() force-returns
+    // enginePhase to .setup WITHOUT touching activityState or the torso baseline. If
+    // they re-pass SETUP at a different distance/angle, the stale pre-departure
+    // baseline could permanently block the resume check (torsoOk never satisfied) —
+    // and if they'd left while already suppressed, that state carried over too, so
+    // isReady/rep counting could stay silently gated after they were clearly back.
+    // Resetting here guarantees every entry into ACTIVE starts from a clean baseline.
     private func transitionFromSetup() {
+        resetActivityState()
         if let config = def.calibration {
             calibRepCount   = 0
             calibRestBuf    = []
@@ -756,6 +773,20 @@ final class ExerciseEngine {
             return
         }
 
+        // Fail-safe force-resume: reaching this point means a rep just passed the
+        // phantom-rep guard AND the validity gate — real, deliberate movement, not
+        // noise. If we were suppressed (walked away / inactive), that's stronger
+        // evidence the user is back than the resume heuristic above needs — a
+        // missed rep from staying stuck suppressed is worse than the suppression's
+        // benefit, so clear it here regardless of torso scale / start-zone state.
+        if activityState == .suppressed {
+            activityState      = .active
+            resumeConsecFrames = 0
+            let msg = "[ACTIVITY] state=active reason=forced_by_completed_rep_during_suppression"
+            NSLog("[Engine] [%@] %@", def.id, msg)
+            onDebugLog?(msg)
+        }
+
         // Feed the passive calibration buffers off this valid, real rep — see
         // feedPassiveCalibration doc comment. No-ops once already calibrated.
         feedPassiveCalibration(topValue: repTopValue, peakValue: peakAngle)
@@ -1005,11 +1036,35 @@ final class ExerciseEngine {
                 return torsoRefCurrent <= baseline * Self.APPROACH_RELEASE_MULT
             }()
             let inStartZone = angle >= def.topAngle * 0.75
+
+            // ROOT CAUSE: this counter used to hard-reset to 0 on any single failing
+            // frame — the exact bug already fixed for the ready gate (FIX 2, above) and
+            // the settle gate. At ~10fps effective sampling (frameSkip=3 of 30fps), one
+            // noisy Vision frame (confidence dip, motion blur) was enough to keep this
+            // permanently at 0, so RESUME_CONSEC_FRAMES (15 consecutive clean frames)
+            // was almost never reached in practice — suppression looked "stuck".
+            // Fix: graceful decay, matching every other hysteresis counter in this file.
             if torsoOk && inStartZone {
-                resumeConsecFrames += 1
+                resumeConsecFrames = min(resumeConsecFrames + 1, Self.RESUME_CONSEC_FRAMES + 5)
             } else {
-                resumeConsecFrames = 0
+                resumeConsecFrames = max(0, resumeConsecFrames - 1)
             }
+
+            // [ACTIVITY] diagnostic — always emitted (throttled ~3/sec) while suppressed,
+            // so a stuck resume is debuggable instead of silent.
+            let nowLog = timestamp.timeIntervalSinceReferenceDate
+            if nowLog - lastActivityLogTime >= 0.33 {
+                lastActivityLogTime = nowLog
+                let baselineStr = torsoRefBaseline.map { String(format: "%.3f", $0) } ?? "n/a"
+                let releaseStr  = torsoRefBaseline.map { String(format: "%.3f", $0 * Self.APPROACH_RELEASE_MULT) } ?? "n/a"
+                let msg = "[ACTIVITY] suppressed reason=\(suppressionReason) " +
+                          "torso=\(String(format: "%.3f", torsoRefCurrent)) baseline=\(baselineStr) releaseMax=\(releaseStr) torsoOk=\(torsoOk) " +
+                          "metric=\(String(format: "%.1f", angle)) needMetric>=\(String(format: "%.1f", def.topAngle * 0.75)) inStartZone=\(inStartZone) " +
+                          "resumeFrames=\(resumeConsecFrames)/\(Self.RESUME_CONSEC_FRAMES)"
+                NSLog("[Engine] [%@] %@", def.id, msg)
+                onDebugLog?(msg)
+            }
+
             if resumeConsecFrames >= Self.RESUME_CONSEC_FRAMES {
                 activityState = .active
                 resumeConsecFrames = 0
