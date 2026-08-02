@@ -24,7 +24,6 @@ import {
   addCameraStateListener,
   addErrorListener,
   addSetupStatusListener,
-  addCalibrationStatusListener,
   addDebugLogListener,
   isNativeModuleLinked,
 } from '../modules/athlt-camera/src/index';
@@ -94,6 +93,14 @@ const SETUP_INFO: Record<string, { icon: string; title: string; sub: string }> =
   tricepPushdown:           { icon: 'arrow.left.and.right', title: 'Stand sideways',              sub: 'Arms in frame — shoulder to wrist' },
   overheadTricepExtension:  { icon: 'arrow.left.and.right', title: 'Stand sideways',              sub: 'Arms fully above head in frame' },
   skullcrusher:             { icon: 'arrow.left.and.right', title: 'Set camera to your side',     sub: 'Lie flat on bench — arms in frame' },
+  // Row family — all side-on camera
+  bentOverRow:    { icon: 'arrow.left.and.right', title: 'Stand sideways',            sub: 'Hinge forward — shoulder to wrist in frame' },
+  barbellRow:     { icon: 'arrow.left.and.right', title: 'Stand sideways',            sub: 'Hinge forward over bar — shoulder to wrist in frame' },
+  singleArmRow:   { icon: 'arrow.left.and.right', title: 'Stand sideways',            sub: 'Working arm in frame — shoulder to wrist visible' },
+  invertedRow:    { icon: 'arrow.left.and.right', title: 'Set camera to your side',   sub: 'Body straight under bar — arms clearly in frame' },
+  tBarRow:        { icon: 'arrow.left.and.right', title: 'Stand sideways',            sub: 'Hinge forward over bar — shoulder to wrist in frame' },
+  seatedCableRow: { icon: 'arrow.left.and.right', title: 'Sit sideways to camera',   sub: 'Hip and wrist both in frame — arm extended toward cable' },
+  machineRow:     { icon: 'arrow.left.and.right', title: 'Sit sideways to camera',   sub: 'Hip and wrist both in frame — arm extended toward handles' },
 };
 
 // ─── Debug log panel — set false to hide without removing code ────────────────
@@ -145,8 +152,6 @@ export default function FormCheckScreen() {
   const [setupAllVisible,   setSetupAllVisible]   = useState(false);
   const [setupHoldProgress, setSetupHoldProgress] = useState(0);
   const [setupHint,         setSetupHint]         = useState('');
-
-  const [calibStatus, setCalibStatus] = useState<{ repsCompleted: number; repsNeeded: number } | null>(null);
 
   const [feedback, setFeedback] = useState<{ key: number; good: boolean; reason: string } | null>(null);
   const feedbackKey    = useRef(0);
@@ -251,14 +256,6 @@ export default function FormCheckScreen() {
     const camSub   = addCameraStateListener(e => {
       if (mounted && e.running) setPhase(p => (p === 'starting' ? 'setup' : p));
     });
-    const calibSub = addCalibrationStatusListener(event => {
-      if (!mounted) return;
-      if (event.passed) {
-        setCalibStatus(null);
-      } else {
-        setCalibStatus({ repsCompleted: event.repsCompleted, repsNeeded: event.repsNeeded });
-      }
-    });
     const setupSub = addSetupStatusListener(event => {
       if (!mounted) return;
       setSetupAllVisible(event.allJointsVisible);
@@ -330,7 +327,6 @@ export default function FormCheckScreen() {
       mounted = false;
       errSub.remove();
       camSub.remove();
-      calibSub.remove();
       setupSub.remove();
       if (hintTimer.current)      { clearTimeout(hintTimer.current);      hintTimer.current = null; }
       if (setupDoneTimer.current) { clearTimeout(setupDoneTimer.current); setupDoneTimer.current = null; }
@@ -529,26 +525,11 @@ export default function FormCheckScreen() {
         </View>
       )}
 
-      {/* Calibration overlay */}
-      {isTracking && calibStatus !== null && (
-        <View style={s.calibOverlay} pointerEvents="none">
-          <View style={s.calibCard}>
-            <Text style={s.calibTitle}>Calibrating to you</Text>
-            <Text style={s.calibSub}>Do {calibStatus.repsNeeded} slow full reps</Text>
-            <View style={s.calibDots}>
-              {Array.from({ length: calibStatus.repsNeeded }).map((_, i) => (
-                <View key={i} style={[s.calibDot, i < calibStatus.repsCompleted && s.calibDotDone]} />
-              ))}
-            </View>
-          </View>
-        </View>
-      )}
-
       {/* "You're all set!" */}
       {phase === 'setup-done' && (
         <View style={s.setupDoneOverlay} pointerEvents="none">
           <View style={s.setupSuccessCard}>
-            <SymbolView name="checkmark.circle.fill" size={32} tintColor={C.good} type="monochrome" style={{ width: 32, height: 32 }} />
+            <SymbolView name="checkmark.circle.fill" size={44} tintColor={C.good} type="monochrome" style={{ width: 44, height: 44 }} />
             <Text style={s.setupSuccessText}>You're all set!</Text>
           </View>
         </View>
@@ -639,7 +620,14 @@ export default function FormCheckScreen() {
         <View style={s.debugPanel}>
           <Row label="person"  value={stats.personDetected ? 'yes' : 'no'} good={stats.personDetected} />
           <Row label="ready"   value={stats.ready ? 'yes' : 'no'} good={stats.ready} />
-          <Row label={['curl','hammerCurl','concentrationCurl','preacherCurl','reverseCurl','cableCurl','pushup','kneePushup','inclinePushup','widePushup','diamondPushup','declinePushup'].includes(exerciseType) ? 'elbow°' : 'knee°'} value={stats.kneeAngle.toFixed(1)} />
+          <Row
+            label={
+              (['seatedCableRow', 'machineRow'] as string[]).includes(exerciseType) ? 'wrHip' :
+              (['curl','hammerCurl','concentrationCurl','preacherCurl','reverseCurl','cableCurl','pushup','kneePushup','inclinePushup','widePushup','diamondPushup','declinePushup','closegripPushup','tricepPushdown','overheadTricepExtension','skullcrusher','bentOverRow','barbellRow','singleArmRow','invertedRow','tBarRow'] as string[]).includes(exerciseType) ? 'elbow°' :
+              'knee°'
+            }
+            value={stats.kneeAngle.toFixed((['seatedCableRow', 'machineRow'] as string[]).includes(exerciseType) ? 2 : 1)}
+          />
           <Row label="back°"   value={stats.backAngle.toFixed(1)} />
           <Row label="phase"   value={stats.phase} />
           <Row label="frames"  value={`${stats.totalFramesAnalyzed} / ${stats.totalFramesReceived}`} />
@@ -843,26 +831,26 @@ const s = StyleSheet.create({
     alignItems: 'center', gap: 10,
   },
   readyHintText: {
-    fontSize: 13, fontWeight: '600', color: C.muted, backgroundColor: C.glass,
-    paddingHorizontal: 18, paddingVertical: 8, borderRadius: 100,
+    fontSize: 19, fontWeight: '700', color: C.muted, backgroundColor: C.glass,
+    paddingHorizontal: 22, paddingVertical: 12, borderRadius: 100,
     borderWidth: StyleSheet.hairlineWidth, borderColor: C.border, overflow: 'hidden',
     textAlign: 'center',
   },
   bypassBtn: {
-    paddingHorizontal: 24, paddingVertical: 10, borderRadius: 100,
+    paddingHorizontal: 28, paddingVertical: 13, borderRadius: 100,
     backgroundColor: 'rgba(251,146,60,0.18)',
     borderWidth: 1, borderColor: 'rgba(251,146,60,0.40)',
   },
-  bypassBtnTxt: { fontSize: 14, fontWeight: '700', color: C.warn },
+  bypassBtnTxt: { fontSize: 18, fontWeight: '700', color: C.warn },
   outOfPlaneHint: { position: 'absolute', top: '43%', left: 0, right: 0, alignItems: 'center' },
   outOfPlaneText: {
-    fontSize: 14, fontWeight: '600', color: C.warn, backgroundColor: 'rgba(10,11,12,0.80)',
-    paddingHorizontal: 18, paddingVertical: 8, borderRadius: 100,
+    fontSize: 18, fontWeight: '700', color: C.warn, backgroundColor: 'rgba(10,11,12,0.80)',
+    paddingHorizontal: 20, paddingVertical: 10, borderRadius: 100,
     borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(251,146,60,0.35)', overflow: 'hidden',
   },
   repBlock:  { position: 'absolute', top: '18%', left: 0, right: 0, alignItems: 'center' },
-  repNum:    { fontSize: 100, fontWeight: '700', lineHeight: 104, color: '#fff' },
-  repSub:    { fontSize: 15, color: C.muted, marginTop: 4 },
+  repNum:    { fontSize: 140, fontWeight: '800', lineHeight: 144, color: '#fff' },
+  repSub:    { fontSize: 20, fontWeight: '600', color: C.muted, marginTop: 6 },
   debugPanel: { position: 'absolute', bottom: 140, left: 16, backgroundColor: C.glass, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, minWidth: 210, borderWidth: 1, borderColor: C.border },
   bottomBar:  { position: 'absolute', bottom: 0, left: 0, right: 0, alignItems: 'center', paddingTop: 12, paddingHorizontal: 24, gap: 12 },
   hint:       { color: C.muted, fontSize: 13 },
@@ -896,15 +884,15 @@ const s = StyleSheet.create({
   bcGreen: { borderColor: C.good },
   setupPanel: { position: 'absolute', bottom: 100, left: 16, right: 16, gap: 10 },
   statusPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'center',
-    paddingHorizontal: 16, paddingVertical: 9, borderRadius: 100,
+    flexDirection: 'row', alignItems: 'center', gap: 10, alignSelf: 'center',
+    paddingHorizontal: 20, paddingVertical: 12, borderRadius: 100,
     backgroundColor: 'rgba(14,15,18,0.78)', borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.14)',
   },
   statusPillGood:    { backgroundColor: 'rgba(74,222,128,0.14)', borderColor: 'rgba(74,222,128,0.32)' },
-  statusDot:         { width: 7, height: 7, borderRadius: 4, backgroundColor: C.muted },
+  statusDot:         { width: 10, height: 10, borderRadius: 5, backgroundColor: C.muted },
   statusDotGood:     { backgroundColor: C.good },
-  statusPillTxt:     { fontSize: 13.5, fontWeight: '500', color: C.muted },
+  statusPillTxt:     { fontSize: 18, fontWeight: '700', color: C.muted },
   statusPillTxtGood: { color: C.good },
   setupCard: {
     backgroundColor: 'rgba(10,11,12,0.88)', borderRadius: 20, borderWidth: 1,
@@ -916,22 +904,10 @@ const s = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth, borderColor: C.border,
     alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
-  setupTitle: { fontSize: 16, fontWeight: '600', color: C.text, lineHeight: 21 },
-  setupSub:   { fontSize: 13, fontWeight: '400', color: C.muted, lineHeight: 18, marginTop: 2 },
+  setupTitle: { fontSize: 20, fontWeight: '700', color: C.text, lineHeight: 25 },
+  setupSub:   { fontSize: 16, fontWeight: '400', color: C.muted, lineHeight: 21, marginTop: 2 },
   progressTrack: { height: 4, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 2, overflow: 'hidden' },
   progressFill:  { height: 4, backgroundColor: C.good, borderRadius: 2 },
-
-  // ── Calibration overlay ───────────────────────────────────────────────────
-  calibOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'flex-end', alignItems: 'center', paddingBottom: 160 },
-  calibCard: {
-    backgroundColor: 'rgba(10,11,12,0.92)', borderRadius: 20, borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)', padding: 24, gap: 10, alignItems: 'center', minWidth: 270,
-  },
-  calibTitle: { fontSize: 17, fontWeight: '700', color: C.text },
-  calibSub:   { fontSize: 13, color: C.muted },
-  calibDots:  { flexDirection: 'row', gap: 10, marginTop: 4 },
-  calibDot:     { width: 14, height: 14, borderRadius: 7, backgroundColor: 'rgba(255,255,255,0.18)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)' },
-  calibDotDone: { backgroundColor: C.good, borderColor: C.good },
 
   // ── Live debug log panel ──────────────────────────────────────────────────
   dbgPanel: {
@@ -957,11 +933,11 @@ const s = StyleSheet.create({
 
   // ── "You're all set!" card ────────────────────────────────────────────────
   setupSuccessCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingHorizontal: 28, paddingVertical: 18, backgroundColor: 'rgba(10,11,12,0.90)',
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    paddingHorizontal: 32, paddingVertical: 22, backgroundColor: 'rgba(10,11,12,0.90)',
     borderRadius: 100, borderWidth: 1, borderColor: 'rgba(74,222,128,0.28)',
   },
-  setupSuccessText: { fontSize: 18, fontWeight: '700', color: C.good },
+  setupSuccessText: { fontSize: 24, fontWeight: '800', color: C.good },
 });
 
 const d = StyleSheet.create({

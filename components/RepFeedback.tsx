@@ -1,21 +1,210 @@
+// RepFeedback — liquid glass feedback card, overlaid on the exercise camera view.
+// Props unchanged: { good, reason, onComplete } — formcheck.tsx needs no edits.
+
 import React, { useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
-import Svg, { Circle, Path, Line } from 'react-native-svg';
+import { View, Text, StyleSheet, Animated, Platform } from 'react-native';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Path as SvgPath, Line as SvgLine } from 'react-native-svg';
 
-const FB_GOOD_FILL = '#15803D';
-const FB_GOOD_RING = '#4ADE80';
-const FB_BAD_FILL  = '#B91C1C';
-const FB_BAD_RING  = '#F87171';
+// ─── Tokens ───────────────────────────────────────────────────────────────────
 
-const SVG_SZ    = 200;
-const SVG_C     = 100;
-const DISC_R    = 72;
-const RING_R    = 88;
-const RING_CIRC = 2 * Math.PI * RING_R;
-const PC        = 24;
+const GREEN = '#32d74b';
+const RED   = '#ff453a';
 
-const AnimatedSvgCircle = Animated.createAnimatedComponent(Circle);
+// ─── MyPal star ───────────────────────────────────────────────────────────────
 
+function Star() {
+  return (
+    <Svg width={12} height={12} viewBox="0 0 24 24">
+      <SvgPath
+        d="M12 2.5l1.7 5.3 5.3 1.7-5.3 1.7L12 16.5l-1.7-5.3L5 9.5l5.3-1.7z"
+        fill="rgba(255,255,255,0.70)"
+      />
+      <SvgPath
+        d="M18.5 14l.8 2.4 2.4.8-2.4.8-.8 2.4-.8-2.4-2.4-.8 2.4-.8z"
+        fill="rgba(255,255,255,0.70)"
+      />
+    </Svg>
+  );
+}
+
+// ─── Glass orb (check or X) ───────────────────────────────────────────────────
+
+const ORB = 130;
+
+function GlassOrb({ good }: { good: boolean }) {
+  const glow = good ? GREEN : RED;
+
+  return (
+    <View style={[orb.shadow, { shadowColor: glow }]}>
+      <View style={[orb.circle, { borderColor: `${glow}90` }]}>
+        <View style={[StyleSheet.absoluteFill, orb.base]} />
+        <LinearGradient
+          colors={[
+            'rgba(255,255,255,0.58)',
+            'rgba(255,255,255,0.14)',
+            'rgba(255,255,255,0.02)',
+            'rgba(255,255,255,0.06)',
+          ]}
+          locations={[0, 0.38, 0.65, 1]}
+          start={{ x: 0.12, y: 0 }}
+          end={{ x: 0.88, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={orb.iconCenter}>
+          <Svg width={66} height={66} viewBox="0 0 24 24">
+            {good ? (
+              <SvgPath
+                d="M 3.5 12 L 9.5 18 L 20.5 5.5"
+                stroke="white"
+                strokeWidth={2.6}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                fill="none"
+              />
+            ) : (
+              <>
+                <SvgLine
+                  x1={5} y1={5} x2={19} y2={19}
+                  stroke="white" strokeWidth={2.6} strokeLinecap="round"
+                />
+                <SvgLine
+                  x1={19} y1={5} x2={5} y2={19}
+                  stroke="white" strokeWidth={2.6} strokeLinecap="round"
+                />
+              </>
+            )}
+          </Svg>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const orb = StyleSheet.create({
+  shadow: {
+    width:        ORB,
+    height:       ORB,
+    borderRadius: ORB / 2,
+    ...Platform.select({ ios: {
+      shadowOffset:  { width: 0, height: 0 },
+      shadowOpacity: 0.70,
+      shadowRadius:  20,
+    }}),
+  },
+  circle: {
+    width:        ORB,
+    height:       ORB,
+    borderRadius: ORB / 2,
+    borderWidth:  1.5,
+    overflow:     'hidden',
+  },
+  base:       { backgroundColor: 'rgba(255,255,255,0.10)' },
+  iconCenter: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+});
+
+// ─── Liquid glass card ────────────────────────────────────────────────────────
+
+const CARD_W = 270;
+const CARD_R = 32;
+
+function GlassCard({ good, reason }: { good: boolean; reason: string }) {
+  return (
+    <View style={card.shadow}>
+      <BlurView intensity={65} tint="dark" style={card.blur}>
+        <LinearGradient
+          colors={[
+            'rgba(255,255,255,0.22)',
+            'rgba(255,255,255,0.07)',
+            'rgba(255,255,255,0.00)',
+            'rgba(255,255,255,0.04)',
+          ]}
+          locations={[0, 0.30, 0.65, 1]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+
+        <View style={card.header}>
+          <Star />
+          <Text style={card.headerTxt}>MYPAL</Text>
+        </View>
+
+        <View style={card.divider} />
+
+        <View style={card.orbWrap}>
+          <GlassOrb good={good} />
+        </View>
+
+        <Text style={card.cue} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.70}>
+          {good ? 'Solid form.' : reason}
+        </Text>
+
+        <View style={card.border} pointerEvents="none" />
+      </BlurView>
+    </View>
+  );
+}
+
+const card = StyleSheet.create({
+  shadow: {
+    width:        CARD_W,
+    borderRadius: CARD_R,
+    ...Platform.select({ ios: {
+      shadowColor:   '#000',
+      shadowOffset:  { width: 0, height: 12 },
+      shadowOpacity: 0.50,
+      shadowRadius:  28,
+    }}),
+  },
+  blur: {
+    width:             CARD_W,
+    borderRadius:      CARD_R,
+    overflow:          'hidden',
+    paddingTop:        18,
+    paddingBottom:     30,
+    paddingHorizontal: 14,
+    alignItems:        'center',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           5,
+    alignSelf:     'flex-start',
+  },
+  headerTxt: {
+    fontSize:      13,
+    fontWeight:    '700',
+    color:         'rgba(255,255,255,0.62)',
+    letterSpacing: 2,
+  },
+  divider: {
+    width:           '100%',
+    height:          StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    marginTop:       12,
+    marginBottom:    20,
+  },
+  orbWrap: { marginBottom: 20 },
+  cue: {
+    fontSize:      26,
+    fontWeight:    '700',
+    color:         'rgba(255,255,255,0.95)',
+    textAlign:     'center',
+    letterSpacing: -0.3,
+    lineHeight:    31,
+  },
+  border: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: CARD_R,
+    borderWidth:  1,
+    borderColor:  'rgba(255,255,255,0.20)',
+  },
+});
+
+// ─── RepFeedback overlay ──────────────────────────────────────────────────────
 
 export default function RepFeedback({
   good,
@@ -26,168 +215,32 @@ export default function RepFeedback({
   reason: string;
   onComplete: () => void;
 }) {
-  const fillColor = good ? FB_GOOD_FILL : FB_BAD_FILL;
-  const ringColor = good ? FB_GOOD_RING : FB_BAD_RING;
-  const mounted   = useRef(true);
-
-  const masterOpacity = useRef(new Animated.Value(1)).current;
-  const scaleAnim     = useRef(new Animated.Value(0)).current;
-  const ringProgress  = useRef(new Animated.Value(0)).current;
-
-  const particles = useRef(
-    Array.from({ length: PC }, () => ({
-      ty:     new Animated.Value(0),
-      op:     new Animated.Value(0),
-      startX: (Math.random() - 0.5) * 170,
-      size:   6 + Math.random() * 18,
-      delay:  Math.random() * 450,
-      dur:    700 + Math.random() * 450,
-      rise:   -(100 + Math.random() * 140),
-    }))
-  ).current;
+  const mounted = useRef(true);
+  const opacity = useRef(new Animated.Value(0)).current;
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     mounted.current = true;
 
-    Animated.spring(scaleAnim, {
-      toValue: 1, damping: 12, stiffness: 200, useNativeDriver: true,
-    }).start();
-
-    Animated.timing(ringProgress, {
-      toValue: 1, duration: 560, delay: 60, useNativeDriver: false,
-    }).start();
-
-    particles.forEach(p => {
-      Animated.sequence([
-        Animated.delay(p.delay),
-        Animated.parallel([
-          Animated.timing(p.ty, { toValue: p.rise, duration: p.dur, useNativeDriver: true }),
-          Animated.sequence([
-            Animated.timing(p.op, { toValue: 0.9,  duration: 120, useNativeDriver: true }),
-            Animated.delay(Math.max(0, p.dur - 420)),
-            Animated.timing(p.op, { toValue: 0,    duration: 300, useNativeDriver: true }),
-          ]),
-        ]),
-      ]).start();
-    });
-
-    const hold = good ? 900 : 1100;
     Animated.sequence([
-      Animated.delay(hold),
-      Animated.timing(masterOpacity, { toValue: 0, duration: 380, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 1, duration: 150, useNativeDriver: true }),
+      Animated.delay(good ? 900 : 1100),
+      Animated.timing(opacity, { toValue: 0, duration: 380, useNativeDriver: true }),
     ]).start(() => { if (mounted.current) onComplete(); });
 
     return () => { mounted.current = false; };
   }, []);
 
-  const dashOffset = ringProgress.interpolate({
-    inputRange: [0, 1], outputRange: [RING_CIRC, 0],
-  });
-
   return (
     <Animated.View
-      style={[StyleSheet.absoluteFill, fb.overlay, { opacity: masterOpacity }]}
+      style={[StyleSheet.absoluteFill, rf.overlay, { opacity }]}
       pointerEvents="none"
     >
-      <View style={StyleSheet.absoluteFill} pointerEvents="none">
-        {particles.map((p, i) => (
-          <View
-            key={i}
-            style={{
-              position:   'absolute',
-              left:       '50%' as any,
-              top:        '54%' as any,
-              marginLeft: p.startX - p.size / 2,
-              marginTop:  -(p.size / 2),
-            }}
-          >
-            <Animated.View
-              style={{
-                width:           p.size,
-                height:          p.size,
-                borderRadius:    p.size / 2,
-                backgroundColor: ringColor,
-                opacity:         p.op,
-                transform:       [{ translateY: p.ty }],
-              }}
-            />
-          </View>
-        ))}
-      </View>
-
-      <Animated.View style={{ transform: [{ scale: scaleAnim }], alignItems: 'center' }}>
-        <Svg width={SVG_SZ} height={SVG_SZ} viewBox={`0 0 ${SVG_SZ} ${SVG_SZ}`}>
-          <Circle cx={SVG_C} cy={SVG_C} r={DISC_R} fill={fillColor} />
-          <Circle
-            cx={SVG_C} cy={SVG_C} r={RING_R}
-            fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={4}
-          />
-          <AnimatedSvgCircle
-            cx={SVG_C} cy={SVG_C} r={RING_R}
-            fill="none"
-            stroke={ringColor}
-            strokeWidth={5}
-            strokeDasharray={`${RING_CIRC} ${RING_CIRC}`}
-            strokeDashoffset={dashOffset}
-            strokeLinecap="round"
-            rotation="-90"
-            originX={SVG_C}
-            originY={SVG_C}
-          />
-          {good ? (
-            <Path
-              d="M 62 102 L 88 128 L 140 68"
-              stroke="white"
-              strokeWidth={12}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              fill="none"
-            />
-          ) : (
-            <>
-              <Line x1={70} y1={70} x2={130} y2={130} stroke="white" strokeWidth={12} strokeLinecap="round" />
-              <Line x1={130} y1={70} x2={70}  y2={130} stroke="white" strokeWidth={12} strokeLinecap="round" />
-            </>
-          )}
-        </Svg>
-
-        {!good && (
-          <View style={fb.cuePill}>
-            <Text
-              style={fb.cueText}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.65}
-            >
-              {reason}
-            </Text>
-          </View>
-        )}
-      </Animated.View>
+      <GlassCard good={good} reason={reason} />
     </Animated.View>
   );
 }
 
-const fb = StyleSheet.create({
+const rf = StyleSheet.create({
   overlay: { alignItems: 'center', justifyContent: 'center' },
-  cuePill: {
-    marginTop:         16,
-    paddingHorizontal: 26,
-    paddingVertical:   11,
-    borderRadius:      100,
-    backgroundColor:   'rgba(0,0,0,0.55)',
-    borderWidth:       StyleSheet.hairlineWidth,
-    borderColor:       'rgba(255,255,255,0.22)',
-  },
-  cueText: {
-    fontSize:         26,
-    fontWeight:       '800',
-    color:            'white',
-    letterSpacing:    2,
-    textAlign:        'center',
-    textShadowColor:  'rgba(0,0,0,0.70)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
 });

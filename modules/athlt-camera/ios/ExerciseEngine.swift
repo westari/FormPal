@@ -22,7 +22,7 @@ struct SetupStatus {
     let hint:             String
 }
 
-// ─── Calibration status (emitted during CALIBRATION phase) ───────────────────
+// ─── Calibration status (emitted passively during ACTIVE tracking) ───────────
 
 struct CalibrationStatus {
     let repsCompleted: Int
@@ -42,7 +42,7 @@ struct EngineDebugStats {
 
 // ─── Internal phases ──────────────────────────────────────────────────────────
 
-private enum EnginePhase { case setup, calibration, active }
+private enum EnginePhase { case setup, active }
 private enum RepPhase    { case waitingForReady, atTop, inRep }
 
 private enum SetupPhaseState {
@@ -54,22 +54,22 @@ private enum ActivityState { case active, suppressed }
 
 // ─── The exercise engine ──────────────────────────────────────────────────────
 //
-// Three-phase design:
+// Two-phase design:
 //
 //   SETUP (enginePhase = .setup):
 //     Checks requiredJoints visibility + edge margin.
 //     Requires a 2-second continuous hold before passing.
 //     Rep counting does NOT run. Emits onSetupUpdate every frame.
 //
-//   CALIBRATION (enginePhase = .calibration) — optional:
-//     Runs if def.calibration != nil.
-//     User does repsNeeded slow reps; engine records rest/peak metric values.
-//     On completion, derives repEnter/repExit/goodROM thresholds for this user.
-//     Emits onCalibrationUpdate on each calib rep and when done.
-//
 //   ACTIVE (enginePhase = .active):
-//     Pure rep counting with zero calibration interference.
-//     Uses derived thresholds if calibration ran, otherwise static ones.
+//     Rep counting starts immediately on static thresholds — isReady opens in
+//     ~0.27s via the ready gate, no separate blocking calibration step.
+//     If def.calibration != nil, the first repsNeeded VALID completed reps also
+//     feed the calibration sample buffers in the background (see completeRep /
+//     feedPassiveCalibration); once collected, repEnter/repExit thresholds
+//     swap to derived per-user values for every rep after that point. This
+//     used to be a separate CALIBRATION phase that blocked rep counting and
+//     readiness for repsNeeded slow reps — now it rides along on real reps.
 //     Returns to SETUP if all required joints missing for ≥ 3 seconds.
 //
 // Rep logic (ACTIVE only):
@@ -146,11 +146,9 @@ final class ExerciseEngine {
     private static let SETUP_JOINT_MIN_CONF:  Float        = 0.30
     private static let SETUP_EDGE_MARGIN:     Double       = 0.05
 
-    // ── Calibration ───────────────────────────────────────────────────────────
-    private var calibInRep:        Bool     = false
-    private var calibRepPeak:      Double   = 999
-    private var calibRestBuf:      [Double] = []   // rest-angle rolling buffer
-    private var calibPeakAngles:   [Double] = []
+    // ── Calibration (passive — fed from real completed reps, see completeRep) ──
+    private var calibRestBuf:      [Double] = []   // top/rest value per sampled rep
+    private var calibPeakAngles:   [Double] = []   // bottom/peak value per sampled rep
     private var calibRepCount:     Int      = 0
     private var calibDerivedEnter: Double?  = nil
     private var calibDerivedExit:  Double?  = nil
@@ -306,13 +304,6 @@ final class ExerciseEngine {
                                            isReady: false, formMetrics: [:], outOfPlaneCue: nil))
             return
 
-        case .calibration:
-            lastValidPoseTime = timestamp
-            runCalibration(pose: pose, angle: angle, timestamp: timestamp)
-            onDebugStats?(EngineDebugStats(primaryAngle: angle, phase: "calibration",
-                                           isReady: false, formMetrics: [:], outOfPlaneCue: nil))
-            return
-
         case .active:
             break
         }
@@ -320,6 +311,7 @@ final class ExerciseEngine {
         // ── ACTIVE phase ──────────────────────────────────────────────────────
         lastValidPoseTime = timestamp
         accumulate(pose: pose)
+        trackSegmentReferences(pose: pose)
         updateReadyGate(pose: pose, angle: angle, timestamp: timestamp)
         updateActivityState(pose: pose, angle: angle, timestamp: timestamp)
 
@@ -371,10 +363,6 @@ final class ExerciseEngine {
             if case .holding = setupPhaseState {
                 NSLog("[Engine] [%@] Setup: person left — hold reset", def.id)
                 setupPhaseState = .pending
-            }
-            if enginePhase == .calibration {
-                calibInRep   = false
-                calibRestBuf = []
             }
             onSetupUpdate?(SetupStatus(allJointsVisible: false, holdProgress: 0.0,
                                        passed: false, hint: "Step into frame to start"))
@@ -448,22 +436,22 @@ final class ExerciseEngine {
                                    passed: false, hint: hintForMissingJoints(missingJoints)))
     }
 
-    // Called when setup passes — transitions to CALIBRATION (if configured) or ACTIVE.
+    // Called when setup passes — goes straight to ACTIVE. If def.calibration is
+    // configured, its sample buffers are reset here but collection now happens
+    // passively off real completed reps (see feedPassiveCalibration) instead of
+    // a separate blocking phase.
     private func transitionFromSetup() {
         if let config = def.calibration {
-            enginePhase    = .calibration
-            calibRepCount  = 0
-            calibRestBuf   = []
+            calibRepCount   = 0
+            calibRestBuf    = []
             calibPeakAngles = []
-            calibInRep     = false
-            calibRepPeak   = 999
-            NSLog("[Engine] [%@] Entering CALIBRATION — do %d slow reps", def.id, config.repsNeeded)
+            NSLog("[Engine] [%@] Entering ACTIVE — calibrating silently over first %d reps",
+                  def.id, config.repsNeeded)
             onCalibrationUpdate?(CalibrationStatus(repsCompleted: 0,
                                                    repsNeeded: config.repsNeeded,
                                                    passed: false))
-        } else {
-            enginePhase = .active
         }
+        enginePhase = .active
     }
 
     private func missingSetupJoints(_ joints: [Joint], pose: Pose) -> [Joint] {
@@ -494,53 +482,49 @@ final class ExerciseEngine {
         return "Adjust so your body fills the frame"
     }
 
-    // ─── Calibration phase ────────────────────────────────────────────────────
+    // ─── Passive calibration ──────────────────────────────────────────────────
+    //
+    // Reps count from the very first one on static thresholds — there is no
+    // blocking calibration step. If def.calibration is configured, the first
+    // repsNeeded VALID completed reps (see completeRep) also feed these sample
+    // buffers in the background; once collected, finishCalibration() derives
+    // per-user repEnter/repExit thresholds that apply to every rep after that
+    // point. Called with the same top/bottom values used for the [REP] log.
+    private func feedPassiveCalibration(topValue: Double, peakValue: Double) {
+        guard let config = def.calibration,
+              calibDerivedEnter == nil,
+              calibRepCount < config.repsNeeded else { return }
 
-    private func runCalibration(pose: Pose, angle: Double, timestamp: Date) {
-        guard let config = def.calibration else { return }
+        calibRestBuf.append(topValue)
+        calibPeakAngles.append(peakValue)
+        calibRepCount += 1
+        NSLog("[Engine] [%@] Passive calib sample %d/%d — top=%g peak=%g",
+              def.id, calibRepCount, config.repsNeeded, topValue, peakValue)
 
-        // Track max segment ratio throughout calibration — max = limb most in-plane = reference.
+        let passed = calibRepCount >= config.repsNeeded
+        onCalibrationUpdate?(CalibrationStatus(repsCompleted: calibRepCount,
+                                               repsNeeded: config.repsNeeded,
+                                               passed: passed))
+        if passed { finishCalibration(config: config) }
+    }
+
+    // Tracks the maximum segment-length ratio seen for each planarity check — the
+    // most in-plane (side-on) moment becomes the per-user reference used later to
+    // judge foreshortening. Runs every ACTIVE frame (previously only during the
+    // blocking CALIBRATION phase, which delayed the reference by repsNeeded reps).
+    private func trackSegmentReferences(pose: Pose) {
         for check in def.planarityChecks where check.enabled {
             if let v = Metric.segmentLengthRatio(jointA: check.jointA, jointB: check.jointB)
                              .measure(pose: pose) {
                 calibratedSegmentRefs[check.id] = max(calibratedSegmentRefs[check.id] ?? 0, v)
             }
         }
-
-        if !calibInRep {
-            calibRestBuf.append(angle)
-            if calibRestBuf.count > 40 { calibRestBuf.removeFirst() }
-
-            if angle < def.repEnterThreshold {
-                calibInRep   = true
-                calibRepPeak = angle
-                NSLog("[Engine] [%@] Calib rep %d entering — metric=%g",
-                      def.id, calibRepCount + 1, angle)
-            }
-        } else {
-            if angle < calibRepPeak { calibRepPeak = angle }
-
-            if angle > def.repExitThreshold {
-                calibPeakAngles.append(calibRepPeak)
-                calibRepCount += 1
-                calibInRep = false
-                NSLog("[Engine] [%@] Calib rep %d done — peak=%g", def.id, calibRepCount, calibRepPeak)
-
-                if calibRepCount >= config.repsNeeded {
-                    finishCalibration(config: config)
-                } else {
-                    onCalibrationUpdate?(CalibrationStatus(repsCompleted: calibRepCount,
-                                                           repsNeeded: config.repsNeeded,
-                                                           passed: false))
-                }
-            }
-        }
     }
 
     private func finishCalibration(config: CalibrationConfig) {
-        // Use the last 15 rest-period frames for rest angle (captures post-rep stillness).
-        let restSample = Array(calibRestBuf.suffix(15))
-        guard !calibPeakAngles.isEmpty, restSample.count >= 3 else {
+        // One sample per real rep now (not a continuous per-frame buffer), so just
+        // require at least one of each — calibRepCount already guarantees repsNeeded.
+        guard !calibPeakAngles.isEmpty, !calibRestBuf.isEmpty else {
             NSLog("[Engine] [%@] Calib: insufficient data — using static thresholds", def.id)
             enginePhase = .active
             onCalibrationUpdate?(CalibrationStatus(repsCompleted: calibRepCount,
@@ -550,7 +534,7 @@ final class ExerciseEngine {
         }
 
         let avgPeak = calibPeakAngles.reduce(0, +) / Double(calibPeakAngles.count)
-        let avgRest = restSample.reduce(0, +)       / Double(restSample.count)
+        let avgRest = calibRestBuf.reduce(0, +)    / Double(calibRestBuf.count)
         let range   = avgRest - avgPeak
 
         // Reject if range is less than 10% of rest value (not enough movement detected).
@@ -585,8 +569,6 @@ final class ExerciseEngine {
     }
 
     private func resetCalibrationState(keepDerived: Bool) {
-        calibInRep      = false
-        calibRepPeak    = 999
         calibRestBuf    = []
         calibPeakAngles = []
         calibRepCount   = 0
@@ -773,6 +755,10 @@ final class ExerciseEngine {
                                      planarityLog: "planarity=n/a", planarityPassed: false))
             return
         }
+
+        // Feed the passive calibration buffers off this valid, real rep — see
+        // feedPassiveCalibration doc comment. No-ops once already calibrated.
+        feedPassiveCalibration(topValue: repTopValue, peakValue: peakAngle)
 
         // ── Planarity gate ────────────────────────────────────────────────────────
         // If any segment was foreshortened during this rep the 2D angles are unreliable.
@@ -1084,8 +1070,7 @@ final class ExerciseEngine {
 
     private func phaseLabel() -> String {
         switch enginePhase {
-        case .setup:       return "setup"
-        case .calibration: return "calibration"
+        case .setup: return "setup"
         case .active:
             switch repPhase {
             case .waitingForReady: return "waiting"
