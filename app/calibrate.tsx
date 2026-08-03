@@ -51,6 +51,7 @@ import {
   getCalibration, getAllCalibrations, saveCalibration,
   type CalibrationRecord, type CalibratedOverride,
 } from '../lib/calibration/store';
+import { findFamilyMembers, narrowOverrideForTarget } from '../lib/calibration/families';
 
 // ─── Palette (matches formcheck.tsx) ───────────────────────────────────────────
 const C = {
@@ -146,6 +147,17 @@ export default function CalibrateScreen() {
 
   const def = exerciseId ? EXERCISE_DEFINITIONS[exerciseId] : null;
   const steps = useMemo(() => (def ? buildSteps(def) : []), [def]);
+
+  // Family application — other exercises that share this one's exact repMetric
+  // (same helper/constant, e.g. all squat variants), so calibrating one
+  // representative exercise can apply to the whole family. See
+  // lib/calibration/families.ts for why this is deep-equality, not a hardcoded list.
+  const familyMembers = useMemo(
+    () => (exerciseId ? findFamilyMembers(EXERCISE_DEFINITIONS, exerciseId) : []),
+    [exerciseId],
+  );
+  const [selectedFamily, setSelectedFamily] = useState<Set<string>>(new Set());
+  const [showAllExercises, setShowAllExercises] = useState(false);
 
   const [stepIndex, setStepIndex] = useState(0);
   const [sessionSub, setSessionSub] = useState<SessionSub>('setup');
@@ -334,6 +346,21 @@ export default function CalibrateScreen() {
     setPhase(next);
   }, []);
 
+  // Pre-check every auto-detected family member as soon as the summary screen
+  // is reached — the user can uncheck any of them, or reveal the full exercise
+  // list below to add ones that weren't auto-detected.
+  useEffect(() => {
+    if (phase === 'summary') setSelectedFamily(new Set(familyMembers));
+  }, [phase, familyMembers]);
+
+  const toggleFamilyMember = (id: string) => {
+    setSelectedFamily(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
   const acceptGoodStep = (range: ReturnType<typeof suggestRangeThresholds>) => {
     overridesRef.current.topAngle          = range.topAngle;
     overridesRef.current.repEnterThreshold = range.repEnterThreshold;
@@ -379,16 +406,29 @@ export default function CalibrateScreen() {
   // ── Save / export ─────────────────────────────────────────────────────────
 
   const handleSave = async () => {
-    if (!exerciseId) return;
-    const record: CalibrationRecord = {
-      exerciseId,
-      calibratedAt: Date.now(),
-      sampleSize,
-      overrides: overridesRef.current,
-      distributions: distributionsRef.current,
-    };
-    await saveCalibration(record);
-    showNotice('Calibration saved — takes effect next time you start this exercise.');
+    if (!exerciseId || !def) return;
+    const calibratedAt = Date.now();
+    const targetIds = [exerciseId, ...selectedFamily];
+    for (const targetId of targetIds) {
+      const targetDef = EXERCISE_DEFINITIONS[targetId];
+      const overrides = targetId === exerciseId
+        ? overridesRef.current
+        : narrowOverrideForTarget(overridesRef.current, def, targetDef);
+      await saveCalibration({
+        exerciseId: targetId,
+        calibratedAt,
+        sampleSize,
+        overrides,
+        // Same raw distributions for every target — they all came from the
+        // same demonstrated reps of the representative exercise (exerciseId).
+        distributions: distributionsRef.current,
+      });
+    }
+    showNotice(
+      targetIds.length > 1
+        ? `Saved to ${targetIds.length} exercises — takes effect next time each is started.`
+        : 'Calibration saved — takes effect next time you start this exercise.',
+    );
   };
 
   const handleExport = () => {
@@ -536,9 +576,43 @@ export default function CalibrateScreen() {
               <Text style={s.reportBig}>limit → {val}</Text>
             </View>
           ))}
+
+          <Text style={s.familyTitle}>Apply to other exercises</Text>
+          {familyMembers.length > 0 ? (
+            <>
+              <Text style={s.subtitle}>
+                These share {def.displayName}'s exact rep metric — pre-selected, uncheck any you don't want:
+              </Text>
+              {familyMembers.map(id => (
+                <FamilyRow
+                  key={id}
+                  label={EXERCISE_DEFINITIONS[id].displayName}
+                  checked={selectedFamily.has(id)}
+                  onToggle={() => toggleFamilyMember(id)}
+                />
+              ))}
+            </>
+          ) : (
+            <Text style={s.subtitle}>No other exercise shares this exact rep metric.</Text>
+          )}
+          <Pressable onPress={() => setShowAllExercises(v => !v)}>
+            <Text style={s.familyMoreLink}>{showAllExercises ? '– Hide other exercises' : '+ Add other exercises manually'}</Text>
+          </Pressable>
+          {showAllExercises && Object.keys(EXERCISE_DEFINITIONS)
+            .filter(id => id !== exerciseId && !familyMembers.includes(id))
+            .map(id => (
+              <FamilyRow
+                key={id}
+                label={EXERCISE_DEFINITIONS[id].displayName}
+                checked={selectedFamily.has(id)}
+                onToggle={() => toggleFamilyMember(id)}
+              />
+            ))}
         </ScrollView>
         <GlassButton style={s.wideBtn} onPress={handleSave}>
-          <Text style={s.buttonTxt}>Save Calibration</Text>
+          <Text style={s.buttonTxt}>
+            {selectedFamily.size > 0 ? `Save to ${selectedFamily.size + 1} Exercises` : 'Save Calibration'}
+          </Text>
         </GlassButton>
         <GlassButton style={s.wideBtn} onPress={handleExport}>
           <Text style={s.buttonTxt}>Export as Text</Text>
@@ -788,6 +862,17 @@ function DistributionRow({ label, result }: { label: string; result: OutlierReje
   );
 }
 
+function FamilyRow({ label, checked, onToggle }: { label: string; checked: boolean; onToggle: () => void }) {
+  return (
+    <Pressable style={s.familyRow} onPress={onToggle}>
+      <View style={[s.checkbox, checked && s.checkboxChecked]}>
+        {checked && <Text style={s.checkboxMark}>✓</Text>}
+      </View>
+      <Text style={s.familyRowLabel}>{label}</Text>
+    </Pressable>
+  );
+}
+
 // Adaptive step size — a fixed step of 1 works for angle metrics (0-180°) but
 // would blow past the whole scale for a small-range metric like a distance
 // ratio (typically 0.0-1.0-ish). Scale the step to the metric's plausible range.
@@ -844,6 +929,17 @@ const s = StyleSheet.create({
   reportNote: { fontSize: 13, marginTop: 8, lineHeight: 18 },
   reportNoteWarn: { color: C.warn },
   reportNoteGood: { color: C.good },
+
+  familyTitle: { fontSize: 16, fontWeight: '800', color: C.text, marginTop: 8, marginBottom: 4 },
+  familyMoreLink: { fontSize: 13, fontWeight: '600', color: C.good, paddingVertical: 10 },
+  familyRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 },
+  checkbox: {
+    width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: C.border,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  checkboxChecked: { backgroundColor: C.good, borderColor: C.good },
+  checkboxMark: { fontSize: 13, fontWeight: '800', color: '#08110B' },
+  familyRowLabel: { fontSize: 15, fontWeight: '600', color: C.text },
 
   noticeTxt: {
     position: 'absolute', left: 16, right: 16, top: 90, textAlign: 'center',
