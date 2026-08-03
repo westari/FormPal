@@ -47,6 +47,20 @@ const EXERCISE_UI: Record<string, { symbol: string; grad: [string, string] }> = 
   tricepPushdown:          { symbol: 'dumbbell.fill', grad: ['#FDE68A', '#D97706'] },
   overheadTricepExtension: { symbol: 'dumbbell.fill', grad: ['#FCD34D', '#B45309'] },
   skullcrusher:            { symbol: 'dumbbell.fill', grad: ['#FCA5A5', '#9A3412'] },
+  // Row family — steel blue (bent-over sub-family) / teal (seated sub-family)
+  bentOverRow:   { symbol: 'dumbbell.fill', grad: ['#5B9BD5', '#1B4E7E'] },
+  barbellRow:    { symbol: 'dumbbell.fill', grad: ['#7FBADC', '#14416E'] },
+  singleArmRow:  { symbol: 'dumbbell.fill', grad: ['#3B85C4', '#0D2F5A'] },
+  invertedRow:   { symbol: 'dumbbell.fill', grad: ['#92C5E8', '#1A3560'] },
+  tBarRow:       { symbol: 'dumbbell.fill', grad: ['#4A8EC2', '#152E58'] },
+  seatedCableRow: { symbol: 'dumbbell.fill', grad: ['#2DD4BF', '#115E59'] },
+  machineRow:     { symbol: 'dumbbell.fill', grad: ['#14B8A6', '#0F4845'] },
+  // Hip-hinge family — crimson/rose, distinct from every other family's palette
+  romanianDeadlift: { symbol: 'figure.strengthtraining.traditional', grad: ['#FB7185', '#9F1239'] },
+  deadlift:         { symbol: 'figure.strengthtraining.traditional', grad: ['#F43F5E', '#881337'] },
+  goodMorning:      { symbol: 'figure.strengthtraining.traditional', grad: ['#E11D48', '#7F1D3B'] },
+  kettlebellSwing:  { symbol: 'figure.strengthtraining.traditional', grad: ['#FDA4AF', '#BE123C'] },
+  singleLegRDL:     { symbol: 'figure.strengthtraining.traditional', grad: ['#FB7185', '#831843'] },
 };
 
 export default function ExercisePickerScreen() {

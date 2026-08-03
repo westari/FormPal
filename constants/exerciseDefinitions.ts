@@ -1039,6 +1039,117 @@ function seatedRowVariant(
   };
 }
 
+// ─── Hip-hinge family building-blocks ─────────────────────────────────────────
+//
+// GENUINELY NEW TEMPLATE — not a squat clone. Squat is knee-dominant (large
+// knee flexion, torso stays upright); hinge is hip-dominant (torso travels
+// from vertical toward horizontal, knee flexion stays minimal ~5-20°).
+// Opposite emphasis, so it needs its own repMetric, not squat's.
+//
+// PLACEHOLDER WARNING: every threshold below is unverified — lineVsHorizontal
+// has never been used in this codebase before. Do 5 reps of romanianDeadlift
+// (bodyweight/dowel is fine for calibration) once this reloads, and send the
+// [REP] log — real repEnterThreshold/repExitThreshold/goodROMThreshold will be
+// set from your actual numbers, not these placeholders.
+//
+// REP METRIC: lineVsHorizontal(hip, shoulder) — the torso's angle FROM
+// horizontal. Standing (vertical torso) = 90°. Fully hinged (horizontal torso)
+// = 0°. DECREASES as the person hinges deeper, matching the engine's hardwired
+// decreasing-metric convention (same direction as squat's knee angle). Chosen
+// over lineVsVertical (used elsewhere for torso lean — squat's back_lean,
+// shoulderPress's lean_back) specifically because its complement gives a
+// directly decreasing signal for this movement, and matches the "degrees from
+// horizontal" framing hinge depth is usually described in.
+//
+// hip→shoulder as a joint PAIR is already proven in this codebase (squat's
+// back_lean, shoulderPress's lean_back both use it, via lineVsVertical) — the
+// new part is using it as the PRIMARY rep metric via lineVsHorizontal, and
+// every number below. None of it has on-device validation yet.
+const HINGE_REP_METRIC: MetricDef = {
+  type:  'average',
+  left:  { type: 'lineVsHorizontal', from: 'leftHip',  to: 'leftShoulder'  },
+  right: { type: 'lineVsHorizontal', from: 'rightHip', to: 'rightShoulder' },
+};
+
+// FORM CHECK — squatting instead of hinging. Reuses squat's own repMetric
+// joint triple (jointAngle hip→knee→ankle, averaged L/R) — the same metric
+// squat uses to COUNT reps, repurposed here as a FAULT check: if the knee
+// bends past a hinge's small allowed range, the person has turned it into a
+// squat. evaluateAt: throughoutMin catches the deepest (most squat-like) knee
+// bend during the rep — verified as implemented in ExerciseEngine.swift
+// (resolveValue/accumulate both handle it) even though no existing exercise
+// uses it yet.
+// PLACEHOLDER: condition value is a deliberately lenient guess (fires only on
+// an obvious, extreme squat substitution) so it can't misfire before real
+// data. Squat's own repEnterThreshold (150°) / goodROMThreshold (90°) give a
+// rough sense of scale — a real hinge should stay well above squat's own
+// "shallow squat" range. This check's raw value is printed automatically in
+// the [REP] log (knee_bend=value/lim=...) for every rep — tighten once you
+// see real numbers.
+const HINGE_KNEE_BEND_CHECK: FormCheckDef = {
+  id:         'knee_bend',
+  cue:        "PUSH HIPS BACK, DON'T SQUAT",
+  metric: {
+    type:  'average',
+    left:  { type: 'jointAngle', a: 'leftHip',  pivot: 'leftKnee',  c: 'leftAnkle'  },
+    right: { type: 'jointAngle', a: 'rightHip', pivot: 'rightKnee', c: 'rightAnkle' },
+  },
+  evaluateAt: 'throughoutMin',
+  condition:  { type: 'lessThan', value: 110 },  // PLACEHOLDER — lenient, verify from [REP] log
+  priority:   1,
+  enabled:    true,
+};
+
+// FORM CHECK — rounded upper back: NOT BUILT, on purpose. Apple Vision has no
+// spine/mid-back landmark (only nose, shoulders, elbows, wrists, hips, knees,
+// ankles — see Joints.swift's Joint enum) — there is no way to see curvature
+// in the torso line from only its two endpoints. Same limitation already
+// documented for the row family's flat-back attempts. Depth
+// (insufficientROMCue below) and the knee-bend check above are the only
+// Layer-1 checks for this family; rounding relies on the user's own cue
+// awareness rather than a check that would fire randomly.
+
+// Side-on so torso travel and hip movement are both visible. Only the joints
+// actually used by the metric/checks (shoulder, hip, knee) — no far-side
+// wrist/ankle, which is what caused occlusion bugs in the row/tricep families.
+const HINGE_CAMERA_JOINTS_A = ['leftShoulder',  'leftHip',  'leftKnee'];
+const HINGE_CAMERA_JOINTS_B = ['rightShoulder', 'rightHip', 'rightKnee'];
+
+function hingeVariant(
+  id:               string,
+  displayName:      string,
+  setupInstruction: string,
+  minRepInterval:   number = 0.5,
+): ExerciseDefinitionDef {
+  return {
+    id,
+    displayName,
+    repMetric: HINGE_REP_METRIC,
+    // PLACEHOLDER THRESHOLDS — none of these are verified. topAngle=90 is the
+    // mathematically-vertical value (real standing posture may read a few
+    // degrees off); enter/exit are set wide/permissive so reps register
+    // regardless of the real number; goodROMThreshold=55 is a deliberately
+    // lenient depth requirement (looser than the research spec's ~30-45°) so
+    // it doesn't fire false "HINGE DEEPER" cues before real data confirms
+    // where your actual hinge depth lands. Send a [REP] log from 5 reps and
+    // all four of these get replaced with real numbers.
+    topAngle:           90,
+    repEnterThreshold:  80,
+    repExitThreshold:   85,
+    goodROMThreshold:   55,
+    insufficientROMCue: 'HINGE DEEPER',
+    formChecks:         [HINGE_KNEE_BEND_CHECK],
+    readyGate:          PASSTHROUGH_GATE,
+    cameraSetup: {
+      setupInstruction,
+      requiredJoints:    HINGE_CAMERA_JOINTS_A,
+      requiredJointsAlt: HINGE_CAMERA_JOINTS_B,
+    },
+    minRepInterval,
+    planarityChecks: [],
+  };
+}
+
 // ─── Registry ─────────────────────────────────────────────────────────────────
 // Missing key → setExerciseDefinition(null) → Swift registry fallback used.
 
@@ -1737,5 +1848,57 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
     'machineRow',
     'Machine Row',
     'Sit side-on — hip and wrist both in frame, arm extended toward handles',
+  ),
+
+  // ─── Hip-hinge family ───────────────────────────────────────────────────────
+  //
+  // romanianDeadlift is the reference/base exercise — the placeholder
+  // thresholds above are meant to be calibrated from THIS one first (bodyweight
+  // or dowel, no equipment needed), then the rest inherit the same real numbers
+  // since hinge mechanics are nearly identical across all of them (per the
+  // research spec). ALL thresholds here are placeholders — see the building
+  // blocks above and the [REP] log.
+  romanianDeadlift: hingeVariant(
+    'romanianDeadlift',
+    'Romanian Deadlift',
+    'Stand sideways to the camera — full body in frame, hips and shoulders visible',
+  ),
+
+  deadlift: hingeVariant(
+    'deadlift',
+    'Deadlift',
+    'Stand sideways to the camera — full body in frame, hips and shoulders visible',
+    // Conventional deadlift starts from the floor (more knee bend at the very
+    // bottom than an RDL) but the working ROM and torso-angle signal are the
+    // same hinge pattern. Flag if on-device data shows this needs its own
+    // knee_bend allowance separate from the RDL-derived placeholder.
+  ),
+
+  goodMorning: hingeVariant(
+    'goodMorning',
+    'Good Morning',
+    'Stand sideways to the camera — full body in frame, hips and shoulders visible',
+    // Bar-on-back hinge — same torso-angle mechanics as RDL, just loaded
+    // differently. No mechanical reason to expect different thresholds.
+  ),
+
+  kettlebellSwing: hingeVariant(
+    'kettlebellSwing',
+    'Kettlebell Swing',
+    'Stand sideways to the camera — full body in frame, hips and shoulders visible',
+    // Explosive/ballistic — noticeably faster tempo than a controlled RDL, so
+    // minRepInterval is set shorter here (placeholder: 0.3 vs the family
+    // default 0.5) to avoid missing fast reps. This is a guess about tempo
+    // ONLY, not the core metric — verify against a real device log same as
+    // the rest; if 0.3 turns out too short/long, it's an easy one-line fix.
+    0.3,
+  ),
+
+  singleLegRDL: hingeVariant(
+    'singleLegRDL',
+    'Single-Leg RDL',
+    'Stand sideways to the camera — full body in frame, hips and shoulders visible',
+    // Single-leg balance changes the difficulty, not the torso-angle mechanics
+    // being measured — same repMetric and placeholder thresholds as the rest.
   ),
 };

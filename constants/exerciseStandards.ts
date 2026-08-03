@@ -287,6 +287,136 @@ function tricepStandard(exerciseId: string): ExerciseStandardDef {
   };
 }
 
+// ─── Shared row standard building-blocks ──────────────────────────────────────
+//
+// Rep metric = bestSide elbow jointAngle(shoulder, elbow, wrist).
+//   Start: arm straight (~165°). Peak: elbow flexed to ~70-90°.
+//
+// Static checks: shoulder-hip-knee angle range during the rep.
+//   For bent-over rows: torso should stay at a constant hinge (≤20° variation).
+//   For seated rows: torso should stay upright (≤15° variation; stricter).
+//
+// reviewed:false for all row variants — numbers need on-device verification.
+
+// Row static checks: REMOVED.
+//
+// All previous attempts used shoulder–hip–knee, but the shoulder RETRACTS by design
+// during every row rep — scapular retraction contaminated the angle regardless of
+// threshold (on-device: 32–41° variation on correct reps even at 65° limit).
+//
+// The only viable torso-stability check without the shoulder would need the ankle as
+// a reference (e.g. hip–knee–ankle). Ankle is not in frame for the row camera setup
+// (camera captures shoulder→wrist, not floor).
+//
+// Torso detection is now handled by the Layer 1 per-rep form check in exerciseDefinitions.ts:
+//   lineVsVertical(hip→knee) throughoutMin < 15° → 'STOP SWINGING'
+// This is shoulder-free and fires when the hip travels forward over the knee.
+const ROW_STATIC_CHECKS_BENT_OVER: JointAngleCheckDef[] = [];
+const ROW_STATIC_CHECKS_SEATED:    JointAngleCheckDef[] = [];
+
+const ROW_TOP_FAULTS_BENT_OVER = [
+  'HALF ROW — not pulling elbow past torso',
+  'BODY SWING — using momentum to heave the weight',
+  'SHRUG — trapping with shoulder instead of pulling through elbow',
+];
+
+const ROW_TOP_FAULTS_SEATED = [
+  'HALF ROW — not pulling handle all the way back',
+  'LEAN BACK — rocking body instead of pulling with lats',
+  'SHRUG — shoulder rising instead of staying packed',
+];
+
+function bentOverRowStandard(exerciseId: string): ExerciseStandardDef {
+  return {
+    exerciseId,
+    reviewed:              false,
+    standardPeakAngleMax:  90.0,   // must flex to ≤90° for quality rep
+    standardStartAngleMin: 150.0,  // must straighten to ≥150° before next pull
+    romCue:    'PULL HIGHER — not reaching elbow flexion',
+    extendCue: 'LOWER FULLY — arm not returning to straight',
+    staticChecks: ROW_STATIC_CHECKS_BENT_OVER,
+    tempoMinSec: 1.0,
+    tempoMaxSec: 5.0,
+    topFaults: ROW_TOP_FAULTS_BENT_OVER,
+  };
+}
+
+function seatedRowStandard(exerciseId: string): ExerciseStandardDef {
+  // Metric is maximum(distanceRatio(wrist,hip)) — body-normalized, always picks near arm.
+  // Values calibrated from on-device [REP] log (measured: start ~2.0, finish ~0.1).
+  // standardPeakAngleMax:  handle must reach ≤ 0.85 torso lengths from hip (GOOD rep)
+  //                        Calibrated: on-device peak=0.8 on full pulls; 0.6 fired every rep.
+  // standardStartAngleMin: wrist should be ≥ 1.9 torso lengths from hip at the start
+  return {
+    exerciseId,
+    reviewed:              false,
+    standardPeakAngleMax:  0.85,  // wrist-to-hip distanceRatio at peak of good rep
+    standardStartAngleMin: 1.9,   // wrist-to-hip distanceRatio at full arm extension
+    romCue:    'PULL TO YOUR STOMACH — handle not reaching the torso',
+    extendCue: 'REACH FORWARD — arm not fully extending between reps',
+    staticChecks: ROW_STATIC_CHECKS_SEATED,
+    tempoMinSec: 1.0,
+    tempoMaxSec: 5.0,
+    topFaults: ROW_TOP_FAULTS_SEATED,
+  };
+}
+
+// ─── Shared hip-hinge standard building-blocks ────────────────────────────────
+//
+// repMetric = average(lineVsHorizontal(hip, shoulder)) — torso angle FROM horizontal.
+//   HIGH (~90°) standing (start position). LOW (~30-45° per research spec) at
+//   the bottom of a proper hinge.
+//
+// PLACEHOLDER — mirrors the placeholder rep-range thresholds in
+// constants/exerciseDefinitions.ts's hingeVariant(). lineVsHorizontal has no
+// on-device validation in this codebase yet. Verify from a real device log
+// before trusting these; set reviewed: true only after that.
+//
+// Static check = knee stability (hip→knee→ankle angle range) — a hinge's knee
+// should barely move; large variation here means the person is squatting
+// instead of hinging (same concept as the knee_bend Layer-1 check, via
+// Layer 2's range-based mechanism).
+
+const HINGE_STATIC_CHECKS: JointAngleCheckDef[] = [
+  {
+    description: 'Left knee stability — hip→knee→ankle angle range (should barely move in a hinge)',
+    a: 'leftHip',
+    b: 'leftKnee',
+    c: 'leftAnkle',
+    maxRangeDeg: 20.0,
+    cue: "DON'T SQUAT IT — bend at the hips, not the knees",
+  },
+  {
+    description: 'Right knee stability — hip→knee→ankle angle range (should barely move in a hinge)',
+    a: 'rightHip',
+    b: 'rightKnee',
+    c: 'rightAnkle',
+    maxRangeDeg: 20.0,
+    cue: "DON'T SQUAT IT — bend at the hips, not the knees",
+  },
+];
+
+const HINGE_TOP_FAULTS = [
+  'INCOMPLETE HINGE — not reaching enough torso travel toward horizontal',
+  'SQUATTING IT — bending the knees too much instead of sending the hips back',
+  'ROUNDED BACK — losing a neutral spine at the bottom (not camera-detectable — watch for this yourself)',
+];
+
+function hingeStandard(exerciseId: string): ExerciseStandardDef {
+  return {
+    exerciseId,
+    reviewed: false,  // PLACEHOLDER numbers below — verify on-device before flipping to true
+    standardPeakAngleMax:  60.0,   // must hinge to at least this close to horizontal
+    standardStartAngleMin: 80.0,   // must return to near-vertical before rep counts
+    romCue:    'HINGE DEEPER — not reaching enough depth',
+    extendCue: 'STAND FULLY — not returning upright',
+    staticChecks: HINGE_STATIC_CHECKS,
+    tempoMinSec: 1.5,
+    tempoMaxSec: 5.0,
+    topFaults: HINGE_TOP_FAULTS,
+  };
+}
+
 // ─── Registry ────────────────────────────────────────────────────────────────
 // Add new standards here as more exercises gain Layer 2 support.
 // Missing key → Layer 2 inactive for that exercise (Layer 1 relative signals only).
@@ -494,4 +624,20 @@ export const EXERCISE_STANDARDS: Record<string, ExerciseStandardDef> = {
   tricepPushdown:          tricepStandard('tricepPushdown'),
   overheadTricepExtension: tricepStandard('overheadTricepExtension'),
   skullcrusher:            tricepStandard('skullcrusher'),
+
+  // ─── Row family ────────────────────────────────────────────────────────────
+  bentOverRow:   bentOverRowStandard('bentOverRow'),
+  barbellRow:    bentOverRowStandard('barbellRow'),
+  singleArmRow:  bentOverRowStandard('singleArmRow'),
+  invertedRow:   bentOverRowStandard('invertedRow'),
+  tBarRow:       bentOverRowStandard('tBarRow'),
+  seatedCableRow: seatedRowStandard('seatedCableRow'),
+  machineRow:     seatedRowStandard('machineRow'),
+
+  // ─── Hip-hinge family ───────────────────────────────────────────────────────
+  romanianDeadlift: hingeStandard('romanianDeadlift'),
+  deadlift:         hingeStandard('deadlift'),
+  goodMorning:      hingeStandard('goodMorning'),
+  kettlebellSwing:  hingeStandard('kettlebellSwing'),
+  singleLegRDL:     hingeStandard('singleLegRDL'),
 };

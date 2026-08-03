@@ -29,6 +29,7 @@ import {
 } from '../modules/athlt-camera/src/index';
 import { EXERCISE_STANDARDS } from '../constants/exerciseStandards';
 import { EXERCISE_DEFINITIONS } from '../constants/exerciseDefinitions';
+import { getCalibration, applyOverride } from '../lib/calibration/store';
 import type { DebugStatsEvent, RepEvent, ExerciseType } from '../modules/athlt-camera/src/index';
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
@@ -101,6 +102,12 @@ const SETUP_INFO: Record<string, { icon: string; title: string; sub: string }> =
   tBarRow:        { icon: 'arrow.left.and.right', title: 'Stand sideways',            sub: 'Hinge forward over bar — shoulder to wrist in frame' },
   seatedCableRow: { icon: 'arrow.left.and.right', title: 'Sit sideways to camera',   sub: 'Hip and wrist both in frame — arm extended toward cable' },
   machineRow:     { icon: 'arrow.left.and.right', title: 'Sit sideways to camera',   sub: 'Hip and wrist both in frame — arm extended toward handles' },
+  // Hip-hinge family — side-on camera, torso travel + hip movement both visible
+  romanianDeadlift: { icon: 'arrow.left.and.right', title: 'Stand sideways', sub: 'Full body in frame — hips and shoulders visible' },
+  deadlift:         { icon: 'arrow.left.and.right', title: 'Stand sideways', sub: 'Full body in frame — hips and shoulders visible' },
+  goodMorning:      { icon: 'arrow.left.and.right', title: 'Stand sideways', sub: 'Full body in frame — hips and shoulders visible' },
+  kettlebellSwing:  { icon: 'arrow.left.and.right', title: 'Stand sideways', sub: 'Full body in frame — hips and shoulders visible' },
+  singleLegRDL:     { icon: 'arrow.left.and.right', title: 'Stand sideways', sub: 'Full body in frame — hips and shoulders visible' },
 };
 
 // ─── Debug log panel — set false to hide without removing code ────────────────
@@ -313,8 +320,11 @@ export default function FormCheckScreen() {
         setPhase('idle');
       } else {
         await setExercise(exerciseType);
-        const defEntry = EXERCISE_DEFINITIONS[exerciseType] ?? null;
-        const defMsg = `[DEF-LOOKUP] id=${exerciseType} found=${defEntry !== null ? 'yes' : 'no'}`;
+        const baseDef = EXERCISE_DEFINITIONS[exerciseType] ?? null;
+        const calib = baseDef ? await getCalibration(exerciseType).catch(() => null) : null;
+        const defEntry = baseDef ? applyOverride(baseDef, calib?.overrides) : null;
+        const defMsg = `[DEF-LOOKUP] id=${exerciseType} found=${defEntry !== null ? 'yes' : 'no'}` +
+          (calib ? ` overrides=applied(${new Date(calib.calibratedAt).toLocaleDateString()})` : '');
         console.log(defMsg);
         if (DEBUG_LOG_ENABLED) setDebugLogs(prev => [...prev.slice(-24), defMsg]);
         if (DEBUG_LOG_ENABLED) sessionLogRef.current.push(defMsg);

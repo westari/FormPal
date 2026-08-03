@@ -130,7 +130,13 @@ export type ExerciseType =
   // Push-up-family addition
   | 'closegripPushup'
   // Tricep-family variants
-  | 'tricepPushdown' | 'overheadTricepExtension' | 'skullcrusher';
+  | 'tricepPushdown' | 'overheadTricepExtension' | 'skullcrusher'
+  // Row family — bent-over sub-family (hinged torso)
+  | 'bentOverRow' | 'barbellRow' | 'singleArmRow' | 'invertedRow' | 'tBarRow'
+  // Row family — seated sub-family (upright torso; different sub-template)
+  | 'seatedCableRow' | 'machineRow'
+  // Hip-hinge family (hip-dominant, minimal knee bend — opposite emphasis of squat)
+  | 'romanianDeadlift' | 'deadlift' | 'goodMorning' | 'kettlebellSwing' | 'singleLegRDL';
 
 export async function setExercise(type: ExerciseType): Promise<void> {
   if (!ATHLTCameraNative) return;

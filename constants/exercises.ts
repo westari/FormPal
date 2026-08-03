@@ -565,6 +565,168 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     isFormCheckable: true,
   },
 
+  // ─── Row family ────────────────────────────────────────────────────────────
+
+  {
+    id:              'bentOverRow',
+    displayName:     'Bent-Over Row',
+    muscleGroups:    [MuscleGroup.Back],
+    splitCategories: [SplitCategory.Upper, SplitCategory.Pull],
+    difficulty:      Difficulty.Intermediate,
+    equipment:       [Equipment.Dumbbell],
+    defaultReps:     10,
+    defaultSets:     3,
+    progression:     { repRange: [6, 12], setRange: [3, 4] },
+    isFormCheckable: true,
+  },
+
+  {
+    id:              'barbellRow',
+    displayName:     'Barbell Row',
+    muscleGroups:    [MuscleGroup.Back],
+    splitCategories: [SplitCategory.Upper, SplitCategory.Pull],
+    difficulty:      Difficulty.Intermediate,
+    equipment:       [Equipment.Barbell],
+    defaultReps:     8,
+    defaultSets:     4,
+    progression:     { repRange: [5, 10], setRange: [3, 5] },
+    isFormCheckable: true,
+  },
+
+  {
+    id:              'singleArmRow',
+    displayName:     'Single-Arm Row',
+    muscleGroups:    [MuscleGroup.Back],
+    splitCategories: [SplitCategory.Upper, SplitCategory.Pull],
+    difficulty:      Difficulty.Beginner,
+    equipment:       [Equipment.Dumbbell],
+    defaultReps:     10,
+    defaultSets:     3,
+    progression:     { repRange: [8, 12], setRange: [3, 4] },
+    isFormCheckable: true,
+  },
+
+  {
+    id:              'invertedRow',
+    displayName:     'Inverted Row',
+    muscleGroups:    [MuscleGroup.Back],
+    splitCategories: [SplitCategory.Upper, SplitCategory.Pull],
+    difficulty:      Difficulty.Beginner,
+    equipment:       [Equipment.None],
+    defaultReps:     10,
+    defaultSets:     3,
+    progression:     { repRange: [8, 15], setRange: [3, 4] },
+    isFormCheckable: true,
+  },
+
+  {
+    id:              'tBarRow',
+    displayName:     'T-Bar Row',
+    muscleGroups:    [MuscleGroup.Back],
+    splitCategories: [SplitCategory.Upper, SplitCategory.Pull],
+    difficulty:      Difficulty.Intermediate,
+    equipment:       [Equipment.Barbell],
+    defaultReps:     8,
+    defaultSets:     4,
+    progression:     { repRange: [6, 10], setRange: [3, 5] },
+    isFormCheckable: true,
+  },
+
+  {
+    id:              'seatedCableRow',
+    displayName:     'Seated Cable Row',
+    muscleGroups:    [MuscleGroup.Back],
+    splitCategories: [SplitCategory.Upper, SplitCategory.Pull],
+    difficulty:      Difficulty.Beginner,
+    equipment:       [Equipment.Cable],
+    defaultReps:     12,
+    defaultSets:     3,
+    progression:     { repRange: [8, 15], setRange: [3, 4] },
+    isFormCheckable: true,
+  },
+
+  {
+    id:              'machineRow',
+    displayName:     'Machine Row',
+    muscleGroups:    [MuscleGroup.Back],
+    splitCategories: [SplitCategory.Upper, SplitCategory.Pull],
+    difficulty:      Difficulty.Beginner,
+    equipment:       [Equipment.Machine],
+    defaultReps:     12,
+    defaultSets:     3,
+    progression:     { repRange: [8, 15], setRange: [3, 4] },
+    isFormCheckable: true,
+  },
+
+  // ─── Hip-hinge family ───────────────────────────────────────────────────────
+  {
+    id:              'romanianDeadlift',
+    displayName:     'Romanian Deadlift',
+    muscleGroups:    [MuscleGroup.Legs, MuscleGroup.Back],
+    splitCategories: [SplitCategory.Lower],
+    difficulty:      Difficulty.Intermediate,
+    equipment:       [Equipment.Dumbbell],
+    defaultReps:     10,
+    defaultSets:     3,
+    progression:     { repRange: [8, 20], setRange: [2, 5] },
+    isFormCheckable: true,
+  },
+
+  {
+    id:              'deadlift',
+    displayName:     'Deadlift',
+    muscleGroups:    [MuscleGroup.Legs, MuscleGroup.Back],
+    splitCategories: [SplitCategory.Lower],
+    difficulty:      Difficulty.Intermediate,
+    equipment:       [Equipment.Barbell],
+    defaultReps:     8,
+    defaultSets:     3,
+    progression:     { repRange: [5, 15], setRange: [2, 5] },
+    isFormCheckable: true,
+  },
+
+  {
+    id:              'goodMorning',
+    displayName:     'Good Morning',
+    muscleGroups:    [MuscleGroup.Legs, MuscleGroup.Back],
+    splitCategories: [SplitCategory.Lower],
+    difficulty:      Difficulty.Advanced,
+    equipment:       [Equipment.Barbell],
+    defaultReps:     10,
+    defaultSets:     3,
+    progression:     { repRange: [8, 15], setRange: [2, 4] },
+    isFormCheckable: true,
+  },
+
+  {
+    id:              'kettlebellSwing',
+    displayName:     'Kettlebell Swing',
+    muscleGroups:    [MuscleGroup.Legs, MuscleGroup.Back],
+    splitCategories: [SplitCategory.Lower],
+    difficulty:      Difficulty.Intermediate,
+    // No Kettlebell entry in the Equipment enum — Dumbbell is the closest
+    // stand-in (a common swing substitute); flag if a real Equipment.Kettlebell
+    // is ever added.
+    equipment:       [Equipment.Dumbbell],
+    defaultReps:     15,
+    defaultSets:     3,
+    progression:     { repRange: [10, 25], setRange: [2, 5] },
+    isFormCheckable: true,
+  },
+
+  {
+    id:              'singleLegRDL',
+    displayName:     'Single-Leg RDL',
+    muscleGroups:    [MuscleGroup.Legs, MuscleGroup.Back],
+    splitCategories: [SplitCategory.Lower],
+    difficulty:      Difficulty.Intermediate,
+    equipment:       [Equipment.None],
+    defaultReps:     8,
+    defaultSets:     3,
+    progression:     { repRange: [6, 15], setRange: [2, 4] },
+    isFormCheckable: true,
+  },
+
   // ─────────────────────────────────────────────────────────────────────────
   // ADD NEW FORM-CHECKABLE EXERCISES HERE.
   // ─────────────────────────────────────────────────────────────────────────
