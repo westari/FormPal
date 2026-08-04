@@ -319,8 +319,10 @@ export default function FormCheckScreen() {
         const baseDef = EXERCISE_DEFINITIONS[exerciseType] ?? null;
         const calib = baseDef ? await getCalibration(exerciseType).catch(() => null) : null;
         const defEntry = baseDef ? applyOverride(baseDef, calib?.overrides) : null;
-        const defMsg = `[DEF-LOOKUP] id=${exerciseType} found=${defEntry !== null ? 'yes' : 'no'}` +
-          (calib ? ` overrides=applied(${new Date(calib.calibratedAt).toLocaleDateString()})` : '');
+        // Explicit applied/none (not just omitted) so a silent bad override left over
+        // from testing the calibration tool is easy to spot in the session log.
+        const defMsg = `[DEF-LOOKUP] id=${exerciseType} found=${defEntry !== null ? 'yes' : 'no'} ` +
+          (calib ? `overrides=applied(${new Date(calib.calibratedAt).toLocaleDateString()})` : 'overrides=none');
         console.log(defMsg);
         if (DEBUG_LOG_ENABLED) sessionLogRef.current.push(defMsg);
         await setExerciseDefinition(defEntry);

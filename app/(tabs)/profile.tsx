@@ -17,6 +17,7 @@ import { StatusBar } from 'expo-status-bar';
 
 import { FONT, Sp, W } from '../../constants/theme';
 import ScreenBackground from '../../components/ScreenBackground';
+import { clearAllCalibrations } from '../../lib/calibration/store';
 
 // ─── Design tokens (exact match to index.tsx) ─────────────────────────────────
 
@@ -200,6 +201,23 @@ export default function ProfileScreen() {
     );
   };
 
+  const clearCalibrationOverrides = () => {
+    Alert.alert(
+      'Clear Calibration Overrides',
+      'This deletes every saved exercise calibration. Every exercise reverts to its built-in thresholds until you recalibrate. Use this if the calibration tool may have saved a bad override while you were testing it.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear', style: 'destructive',
+          onPress: async () => {
+            await clearAllCalibrations();
+            Alert.alert('Cleared', 'All saved calibration overrides have been removed.');
+          },
+        },
+      ],
+    );
+  };
+
   // Build a one-line profile summary for the avatar card
   const planSummary = [
     plan.goal        ? GOAL_LABELS[plan.goal]      : null,
@@ -346,6 +364,19 @@ export default function ProfileScreen() {
               colors={['#5E5CE6', '#3634A3']}
               label="ARKit Body Experiment (DEV)"
               onPress={() => router.push('/ar-experiment')}
+            />
+            <SettingRow
+              icon="slider.horizontal.3"
+              colors={['#0AAF8E', '#0A6C63']}
+              label="Calibrate an Exercise (DEV)"
+              onPress={() => router.push('/calibrate')}
+            />
+            <SettingRow
+              icon="trash.fill"
+              colors={['#FF6B6B', '#FF3B30']}
+              label="Clear Calibration Overrides (DEV)"
+              onPress={clearCalibrationOverrides}
+              danger
               last
             />
           </SettingsCard>
