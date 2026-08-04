@@ -97,6 +97,12 @@ export interface ExerciseDefinitionDef {
   // (currently: the hip-hinge family), where a growing shoulder-hip 2D distance
   // is caused by the movement itself, not by the user walking toward the camera.
   suppressApproachDetection?: boolean;
+  // Fraction of |repTopValue - goodROMThreshold| a rep's recorded movement must
+  // clear to avoid being rejected as noise by the phantom-rep guard (see
+  // ExerciseEngine.swift runStateMachine). Default 0.30 (omit for every normal
+  // exercise) — only raise this for an exercise with a documented "small
+  // movement counts as a real rep" problem.
+  phantomGuardFraction?: number;
 }
 
 // ─── Shared passthrough ready gate ───────────────────────────────────────────
@@ -158,7 +164,11 @@ const CURL_FORM_CHECKS: FormCheckDef[] = [
     priority:   1,
     enabled:    true,
   },
-  // Priority 4: shoulder→elbow drifted forward from vertical (>30°).
+  // Priority 4: shoulder→elbow drifted forward from vertical.
+  // Tightened 30→20: reported not strict enough. Cleanly measurable — this is a
+  // direct 2-point angle (shoulder→elbow) with no contaminating third joint, the
+  // same joint pair already reused for shoulder press/tricep, so tightening the
+  // number is a reasonable adjustment, not a rebuild.
   {
     id:         'elbow_drift',
     cue:        'KEEP ELBOW STILL',
@@ -168,7 +178,7 @@ const CURL_FORM_CHECKS: FormCheckDef[] = [
       right: { type: 'lineVsVertical', from: 'rightShoulder', to: 'rightElbow' },
     },
     evaluateAt: 'throughoutMax',
-    condition:  { type: 'greaterThan', value: 30 },
+    condition:  { type: 'greaterThan', value: 20 },
     priority:   4,
     enabled:    true,
   },
@@ -211,7 +221,13 @@ function curlVariant(
     repMetric:          CURL_REP_METRIC,
     topAngle:           160,
     repEnterThreshold:  145,
-    repExitThreshold:   145,
+    // FIXED — repExitThreshold was 145, THE SAME VALUE as repEnterThreshold: zero
+    // hysteresis. Any dip below 145 followed by a rise back above 145 (even by a
+    // fraction of a degree) completed a rep instantly, with no gap requiring a
+    // meaningful return-to-rest first — root cause contributor to "tiny movement,
+    // return to start, counts as GOOD". Widened to a 5° gap, matching squat's own
+    // 150/155 convention.
+    repExitThreshold:   150,
     goodROMThreshold:    60,
     insufficientROMCue: 'CURL HIGHER',
 
@@ -226,6 +242,11 @@ function curlVariant(
     calibration:    CURL_CALIBRATION,
     minRepInterval: 0.5,
     planarityChecks: [],
+    // Tightened from the 0.30 default (see ExerciseDefinition.swift) to 0.40 —
+    // reported a small partial movement (hold at start, move a little, return)
+    // was passing as a genuine rep. Requires a rep to travel a larger fraction of
+    // the top→goodROM range before it's trusted as real rather than noise/wiggle.
+    phantomGuardFraction: 0.40,
   };
 }
 
@@ -251,7 +272,8 @@ const SQUAT_FORM_CHECKS: FormCheckDef[] = [
       left:  { type: 'lineVsVertical', from: 'leftHip',  to: 'leftShoulder'  },
       right: { type: 'lineVsVertical', from: 'rightHip', to: 'rightShoulder' },
     },
-    evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 30 },
+    // Loosened 30→35: reported too strict, firing on a normal upright squat.
+    evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 35 },
     priority: 1, enabled: true,
   },
   {
@@ -333,7 +355,8 @@ const PUSHUP_HIP_CHECKS: FormCheckDef[] = [
     id: 'hip_pike_l', cue: 'HIPS DOWN',
     metric: { type: 'signedDeviationFromLine', point: 'leftHip',
               lineFrom: 'leftShoulder', lineTo: 'leftAnkle' },
-    evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 0.05 },
+    // Tightened 0.05→0.035: reported it only fired on VERY exaggerated piking.
+    evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 0.035 },
     priority: 4, enabled: true,
   },
   {
@@ -347,7 +370,8 @@ const PUSHUP_HIP_CHECKS: FormCheckDef[] = [
     id: 'hip_pike_r', cue: 'HIPS DOWN',
     metric: { type: 'signedDeviationFromLine', point: 'rightHip',
               lineFrom: 'rightShoulder', lineTo: 'rightAnkle' },
-    evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 0.05 },
+    // Tightened 0.05→0.035: reported it only fired on VERY exaggerated piking.
+    evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 0.035 },
     priority: 4, enabled: true,
   },
   {
@@ -365,7 +389,8 @@ const PUSHUP_HIP_CHECKS_KNEE: FormCheckDef[] = [
     id: 'hip_pike_l', cue: 'HIPS DOWN',
     metric: { type: 'signedDeviationFromLine', point: 'leftHip',
               lineFrom: 'leftShoulder', lineTo: 'leftKnee' },
-    evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 0.05 },
+    // Tightened 0.05→0.035: reported it only fired on VERY exaggerated piking.
+    evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 0.035 },
     priority: 4, enabled: true,
   },
   {
@@ -379,7 +404,8 @@ const PUSHUP_HIP_CHECKS_KNEE: FormCheckDef[] = [
     id: 'hip_pike_r', cue: 'HIPS DOWN',
     metric: { type: 'signedDeviationFromLine', point: 'rightHip',
               lineFrom: 'rightShoulder', lineTo: 'rightKnee' },
-    evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 0.05 },
+    // Tightened 0.05→0.035: reported it only fired on VERY exaggerated piking.
+    evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 0.035 },
     priority: 4, enabled: true,
   },
   {
@@ -608,7 +634,7 @@ function lungeVariant(
     topAngle:           165,
     repEnterThreshold:  145,
     repExitThreshold:   150,
-    goodROMThreshold:   105,
+    goodROMThreshold:    95,  // tightened 105→95: reported not strict enough on depth
     insufficientROMCue: 'LUNGE DEEPER',
     formChecks:      LUNGE_FORM_CHECKS,
     readyGate:       PASSTHROUGH_GATE,
@@ -879,21 +905,28 @@ const ROW_CAMERA_JOINTS_B = ['rightShoulder', 'rightElbow', 'rightWrist', 'right
 //
 //   topAngle:          168  — matches logged start position
 //
-//   repEnterThreshold:  85  — arm must flex 83° before a rep registers.
-//                            Movements staying above 85° (arm swinging, casual flex) produce
-//                            no count and fire no cue. Was 100 (68° flex) — arm swing was
-//                            still reaching into the rep zone and firing 'PULL HIGHER'.
-//                            Reps peaking 81-84° enter and count as BAD (correct — real attempt,
-//                            short ROM). Reps peaking ≤80° count as GOOD.
+// FIXED — repEnterThreshold was 85, chosen specifically so casual arm-swinging
+// (not a real pull attempt) wouldn't register a rep at all. That decision
+// directly caused the reported bug: repEnterThreshold(85) sits IN THE MIDDLE
+// of the logged shallow-bad cluster (82-94°) — a shallow pull peaking anywhere
+// from 86-94° never even crosses 85 to register as an attempt, so it silently
+// doesn't count, contradicting the app's own philosophy ("a partial rep should
+// COUNT but be marked BAD with the ROM cue, not silently ignored" — and arm-
+// swinging that doesn't reach depth is exactly the "PULL HIGHER" case, not
+// something to hide). Widened to 100 — comfortably above the entire logged
+// 82-94° shallow-bad range, so any of those attempts now register and
+// correctly fail goodROM(80) with 'PULL HIGHER' instead of being invisible.
+// Swinging is still separately caught by ROW_TORSO_SWING when it involves real
+// torso movement — this change only affects whether a shallow/swung pull
+// COUNTS (as bad), not whether it's flagged as swinging.
 //
-//   repExitThreshold:   95  — rep fires at 95° on the return. Hysteresis: 95−85=10° ✓
+//   repExitThreshold:  110  — 10° hysteresis above the new entry, same gap as before.
 //
-//   goodROMThreshold:   80  — peak must reach ≤80° for a GOOD rep.
-//                            Logged good reps 40-60° → 20° margin ✓
-//                            Logged shallow reps 82-94° → all fail, fire 'PULL HIGHER' ✓
+//   goodROMThreshold:   80  — UNCHANGED. Logged good reps 40-60° → 20° margin ✓
+//                            Logged shallow reps 82-94° now correctly enter and fail.
 //
 //   Phantom guard: required = max(abs(168−80)×0.30, 0.01) = 26.4°.
-//   Minimum entry movement = 83° (168° to 85°). 83 > 26.4 ✓
+//   New minimum entry movement = 68° (168° to 100°). 68 > 26.4 ✓ (was 83 > 26.4)
 function bentOverRowVariant(
   id:               string,
   displayName:      string,
@@ -904,8 +937,8 @@ function bentOverRowVariant(
     displayName,
     repMetric:          ROW_REP_METRIC,
     topAngle:           168,
-    repEnterThreshold:   85,  // was 100 — arm swing no longer reaches into rep zone
-    repExitThreshold:    95,  // hysteresis: 95−85=10° ✓
+    repEnterThreshold:  100,
+    repExitThreshold:   110,
     goodROMThreshold:    80,  // logged bad reps 82-94° fail; good reps 40-60° pass
     insufficientROMCue: 'PULL HIGHER',
     formChecks:         [ROW_TORSO_SWING],
@@ -1553,7 +1586,7 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
         cue:        'HIPS DOWN',
         metric: { type: 'signedDeviationFromLine', point: 'leftHip', lineFrom: 'leftShoulder', lineTo: 'leftAnkle' },
         evaluateAt: 'throughoutMax',
-        condition:  { type: 'greaterThan', value: 0.05 },
+        condition:  { type: 'greaterThan', value: 0.035 },  // tightened 0.05→0.035 (was too exaggerated-only)
         priority:   4,
         enabled:    true,
       },
@@ -1571,7 +1604,7 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
         cue:        'HIPS DOWN',
         metric: { type: 'signedDeviationFromLine', point: 'rightHip', lineFrom: 'rightShoulder', lineTo: 'rightAnkle' },
         evaluateAt: 'throughoutMax',
-        condition:  { type: 'greaterThan', value: 0.05 },
+        condition:  { type: 'greaterThan', value: 0.035 },  // tightened 0.05→0.035 (was too exaggerated-only)
         priority:   4,
         enabled:    true,
       },
@@ -1624,7 +1657,7 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
     topAngle:           165,
     repEnterThreshold:  145,
     repExitThreshold:   150,
-    goodROMThreshold:   105,
+    goodROMThreshold:    95,  // tightened 105→95: reported not strict enough on depth
     insufficientROMCue: 'LUNGE DEEPER',
 
     formChecks: [

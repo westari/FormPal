@@ -56,6 +56,7 @@ extension ExerciseDefinition {
         let planarityChecks = planarityCheckDicts.compactMap { parsePlanarityCheck($0) }
 
         let suppressApproachDetection = dict["suppressApproachDetection"] as? Bool ?? false
+        let phantomGuardFraction = dict["phantomGuardFraction"] as? Double ?? 0.30
 
         let def = ExerciseDefinition(
             id:                        id,
@@ -72,7 +73,8 @@ extension ExerciseDefinition {
             calibration:               calibration,
             minRepInterval:            minRepInterval,
             planarityChecks:           planarityChecks,
-            suppressApproachDetection: suppressApproachDetection
+            suppressApproachDetection: suppressApproachDetection,
+            phantomGuardFraction:      phantomGuardFraction
         )
 
         let metricType = repMetricDict["type"] as? String ?? "?"

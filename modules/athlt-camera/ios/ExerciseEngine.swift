@@ -666,7 +666,16 @@ final class ExerciseEngine {
             consecutiveFailFrames = 0
             if !isReady {
                 consecutivePassFrames = min(consecutivePassFrames + 1, Self.READY_ENTER_FRAMES + 5)
-                if consecutivePassFrames >= Self.READY_ENTER_FRAMES {
+                // ROOT CAUSE (PRIORITY 1A, "ready flickers on before truly settled"): with
+                // PASSTHROUGH_GATE (every exercise), conditionsMet is trivially always true —
+                // isReady used to flip after just READY_ENTER_FRAMES (~0.27-0.8s) had elapsed
+                // since ACTIVE began, with NO check that the user was actually holding a stable
+                // position yet. "Ready" reported true while the user could still be walking in /
+                // adjusting. Requiring hasSettled here ties "ready" to the SAME genuine-stability
+                // signal the settle gate already verifies (metric held above exitThreshold for
+                // SETTLE_FRAMES) — no deadlock, since hasSettled has its own pre-accumulation
+                // path below that runs independently of isReady.
+                if consecutivePassFrames >= Self.READY_ENTER_FRAMES && hasSettled {
                     isReady  = true
                     repPhase = .atTop
                     let msg = "[GATE] READY after \(Self.READY_ENTER_FRAMES) pass frames — metric=\(String(format: "%.3f", angle))"
@@ -720,18 +729,32 @@ final class ExerciseEngine {
             repPhase = .atTop
 
         case .atTop:
-            repTopValue = max(repTopValue, angle)
-
             // Settle gate: block rep entry until the metric has held above exitThreshold for
             // SETTLE_FRAMES consecutive frames. Prevents the initial arm-raise into starting
             // position from registering as a rep (the motion crosses enter/exit thresholds with
             // enough swing to pass the phantom-rep guard).
             // hasSettled stays true once set — no re-settling between reps or rest periods.
+            //
+            // ROOT CAUSE (PRIORITY 1A, "ready flickers on early, then rep counting breaks for
+            // the whole session"): repTopValue = max(repTopValue, angle) used to run
+            // UNCONDITIONALLY, every frame, even BEFORE hasSettled — including frames while the
+            // user is still walking into position / adjusting after SETUP passes but before they've
+            // actually held still. A single anomalous reading during that window (e.g. an arm mid-
+            // swing while getting set) could permanently inflate repTopValue, since it only ever
+            // grows (max, never reset until the session restarts). repTopValue feeds the phantom-
+            // rep guard's required-movement calculation (required = |repTopValue - goodROM| * 0.30)
+            // — an inflated repTopValue makes `required` larger for every subsequent rep, and if
+            // inflated enough, NO real rep can ever move far enough to clear it again. Every later
+            // rep gets silently logged as "[REP] rejected ... (phantom)" — exactly "misses almost
+            // every subsequent rep" for the rest of the session.
+            // FIX: only start accumulating repTopValue AFTER hasSettled, seeded from the exact
+            // frame settling was confirmed — discards whatever noise came before it.
             if !hasSettled {
                 if angle > effectiveExitThreshold {
                     settledTopFrames = min(settledTopFrames + 1, Self.SETTLE_FRAMES + 2)
                     if settledTopFrames >= Self.SETTLE_FRAMES {
-                        hasSettled = true
+                        hasSettled  = true
+                        repTopValue = angle
                         let msg = "[SETTLE] top stable — rep counting active"
                         NSLog("[Engine] [%@] %@", def.id, msg)
                         onDebugLog?(msg)
@@ -742,6 +765,8 @@ final class ExerciseEngine {
                 }
                 return
             }
+
+            repTopValue = max(repTopValue, angle)
 
             // framesSincePoseGap gate: don't trust a rep ENTRY on a frame that just
             // recovered from a pose gap (step-out-of-frame, occlusion) — see the
@@ -775,8 +800,9 @@ final class ExerciseEngine {
                 }
 
                 // ─ Phantom-rep guard ──────────────────────────────────────────────────
-                // Rejects noise dips: a real rep must travel at least 30% of the range
-                // from the pre-rep top to the goodROM target.
+                // Rejects noise dips: a real rep must travel at least def.phantomGuardFraction
+                // (default 30%, per-exercise override — see ExerciseDefinition.swift) of the
+                // range from the pre-rep top to the goodROM target.
                 //
                 // Uses repTopValue (max seen in .atTop) not repEnterValue (crossing point)
                 // because at the BOTTOM of the rep the pose metric often returns nil (elbow
@@ -785,7 +811,7 @@ final class ExerciseEngine {
                 // well above enterThreshold (~0.40 vs 0.17), giving a real movement reading
                 // even when nil frames swallow the bottom of the rep.
                 let movement = repTopValue - repMinAngle
-                let required = max(abs(repTopValue - effectiveROMThreshold) * 0.30, 0.01)
+                let required = max(abs(repTopValue - effectiveROMThreshold) * def.phantomGuardFraction, 0.01)
                 guard movement >= required else {
                     let msg = "[REP] rejected — movement=\(String(format: "%.4f", movement)) " +
                               "(start=\(String(format: "%.4f", repTopValue)) peak=\(String(format: "%.4f", repMinAngle))) " +

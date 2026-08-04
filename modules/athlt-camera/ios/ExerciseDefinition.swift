@@ -179,6 +179,15 @@ struct ExerciseDefinition {
     // other exercise; only hinge-pattern exercises set this true.
     let suppressApproachDetection: Bool
 
+    // ── Phantom-rep guard sensitivity ─────────────────────────────────────────
+    // Fraction of |repTopValue - goodROMThreshold| that a rep's recorded movement
+    // (repTopValue - repMinAngle) must clear to avoid being rejected as noise (see
+    // ExerciseEngine.swift runStateMachine's phantom-rep guard). Default 0.30
+    // preserves EXACT existing behavior for every exercise that doesn't set this —
+    // only exercises with a documented "small movement counts as a real rep"
+    // problem (curl) raise it.
+    let phantomGuardFraction: Double
+
     init(id: String, displayName: String,
          repMetric: Metric,
          topAngle: Double, repEnterThreshold: Double, repExitThreshold: Double,
@@ -189,7 +198,8 @@ struct ExerciseDefinition {
          calibration: CalibrationConfig? = nil,
          minRepInterval: TimeInterval,
          planarityChecks: [PlanarityCheck] = [],
-         suppressApproachDetection: Bool = false) {
+         suppressApproachDetection: Bool = false,
+         phantomGuardFraction: Double = 0.30) {
         self.id                        = id
         self.displayName               = displayName
         self.repMetric                 = repMetric
@@ -205,5 +215,6 @@ struct ExerciseDefinition {
         self.minRepInterval            = minRepInterval
         self.planarityChecks           = planarityChecks
         self.suppressApproachDetection = suppressApproachDetection
+        self.phantomGuardFraction      = phantomGuardFraction
     }
 }
