@@ -55,21 +55,24 @@ extension ExerciseDefinition {
         let planarityCheckDicts = dict["planarityChecks"] as? [[String: Any]] ?? []
         let planarityChecks = planarityCheckDicts.compactMap { parsePlanarityCheck($0) }
 
+        let suppressApproachDetection = dict["suppressApproachDetection"] as? Bool ?? false
+
         let def = ExerciseDefinition(
-            id:                 id,
-            displayName:        displayName,
-            repMetric:          repMetric,
-            topAngle:           topAngle,
-            repEnterThreshold:  repEnterThreshold,
-            repExitThreshold:   repExitThreshold,
-            goodROMThreshold:   goodROMThreshold,
-            insufficientROMCue: insufficientROMCue,
-            formChecks:         formChecks,
-            readyGate:          readyGate,
-            cameraSetup:        cameraSetup,
-            calibration:        calibration,
-            minRepInterval:     minRepInterval,
-            planarityChecks:    planarityChecks
+            id:                        id,
+            displayName:               displayName,
+            repMetric:                 repMetric,
+            topAngle:                  topAngle,
+            repEnterThreshold:         repEnterThreshold,
+            repExitThreshold:          repExitThreshold,
+            goodROMThreshold:          goodROMThreshold,
+            insufficientROMCue:        insufficientROMCue,
+            formChecks:                formChecks,
+            readyGate:                 readyGate,
+            cameraSetup:               cameraSetup,
+            calibration:               calibration,
+            minRepInterval:            minRepInterval,
+            planarityChecks:           planarityChecks,
+            suppressApproachDetection: suppressApproachDetection
         )
 
         let metricType = repMetricDict["type"] as? String ?? "?"

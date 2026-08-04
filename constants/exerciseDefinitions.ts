@@ -91,6 +91,12 @@ export interface ExerciseDefinitionDef {
   calibration?:       CalibrationDef;
   minRepInterval:     number;
   planarityChecks?:   PlanarityCheckDef[];
+  // Opt out of torso-scale approach/walk-away detection (see ExerciseEngine.swift
+  // updateActivityState). Default false (omit for every normal exercise) — only
+  // set true for exercises whose primary movement is a large torso-angle change
+  // (currently: the hip-hinge family), where a growing shoulder-hip 2D distance
+  // is caused by the movement itself, not by the user walking toward the camera.
+  suppressApproachDetection?: boolean;
 }
 
 // ─── Shared passthrough ready gate ───────────────────────────────────────────
@@ -1071,31 +1077,48 @@ const HINGE_REP_METRIC: MetricDef = {
   right: { type: 'lineVsHorizontal', from: 'rightHip', to: 'rightShoulder' },
 };
 
-// FORM CHECK — squatting instead of hinging. Reuses squat's own repMetric
-// joint triple (jointAngle hip→knee→ankle, averaged L/R) — the same metric
-// squat uses to COUNT reps, repurposed here as a FAULT check: if the knee
-// bends past a hinge's small allowed range, the person has turned it into a
-// squat. evaluateAt: throughoutMin catches the deepest (most squat-like) knee
-// bend during the rep — verified as implemented in ExerciseEngine.swift
-// (resolveValue/accumulate both handle it) even though no existing exercise
-// uses it yet.
-// PLACEHOLDER: condition value is a deliberately lenient guess (fires only on
-// an obvious, extreme squat substitution) so it can't misfire before real
-// data. Squat's own repEnterThreshold (150°) / goodROMThreshold (90°) give a
-// rough sense of scale — a real hinge should stay well above squat's own
-// "shallow squat" range. This check's raw value is printed automatically in
-// the [REP] log (knee_bend=value/lim=...) for every rep — tighten once you
-// see real numbers.
+// FORM CHECK — squatting instead of hinging.
+//
+// FIXED — the original version had two stacked bugs, found from an on-device
+// log (knee_bend=54.6/lim=110[FAIL] fired on a rep with correct, minimal knee
+// bend; a Layer-2 static check separately showed an implausible 119-125° knee-
+// angle RANGE on that same rep):
+//
+//   1. WRONG OPERATOR: metric was jointAngle(hip, knee, ankle) with condition
+//      {lessThan, value: 110} — "FAILS when knee_bend < 110". But hip-knee-
+//      ankle angle DECREASES as the knee bends more (same convention as
+//      squat's own knee angle) — so this fired on LOW values (heavy bend)
+//      being fine and treated a merely-moderate reading as the fault.
+//      Backwards from "fires when the knee bends too much."
+//   2. CONTAMINATED METRIC: even with the operator fixed, hip-knee-ankle angle
+//      isn't a clean knee-flexion signal for a hinge. The HIP is the joint
+//      that moves the most in a hinge — it translates backward substantially
+//      while the true knee joint barely flexes. That hip translation alone
+//      swings the computed 2D angle by 100°+ (confirmed on-device: implausible
+//      119-125° range on a rep with near-zero real knee bend) even with almost
+//      no actual flexion. Same class of problem as the approach-suppression
+//      fix needing to exclude the hip-based torsoRef signal — anything
+//      involving the hip is unreliable here.
+//
+// FIX: measure the SHIN's angle from vertical instead — lineVsVertical(ankle,
+// knee) — which excludes the hip entirely. In a correct hinge the shin stays
+// close to vertical (knee stays stacked over the ankle); in a squat the knee
+// travels forward past the toes, visibly tilting the shin forward. This is
+// squat's own (disabled, never-verified) heel_rise check's exact joint pair
+// and condition direction (greaterThan) — reused here as the closest verified
+// precedent, salvaging the check rather than dropping it.
+// PLACEHOLDER: condition value is a lenient guess — verify from the [REP] log
+// (knee_bend=value/lim=... prints for every rep) and tighten from there.
 const HINGE_KNEE_BEND_CHECK: FormCheckDef = {
   id:         'knee_bend',
   cue:        "PUSH HIPS BACK, DON'T SQUAT",
   metric: {
     type:  'average',
-    left:  { type: 'jointAngle', a: 'leftHip',  pivot: 'leftKnee',  c: 'leftAnkle'  },
-    right: { type: 'jointAngle', a: 'rightHip', pivot: 'rightKnee', c: 'rightAnkle' },
+    left:  { type: 'lineVsVertical', from: 'leftAnkle',  to: 'leftKnee'  },
+    right: { type: 'lineVsVertical', from: 'rightAnkle', to: 'rightKnee' },
   },
-  evaluateAt: 'throughoutMin',
-  condition:  { type: 'lessThan', value: 110 },  // PLACEHOLDER — lenient, verify from [REP] log
+  evaluateAt: 'throughoutMax',
+  condition:  { type: 'greaterThan', value: 25 },  // PLACEHOLDER — verify from [REP] log
   priority:   1,
   enabled:    true,
 };
@@ -1125,14 +1148,14 @@ function hingeVariant(
     id,
     displayName,
     repMetric: HINGE_REP_METRIC,
-    // PLACEHOLDER THRESHOLDS — none of these are verified. topAngle=90 is the
-    // mathematically-vertical value (real standing posture may read a few
-    // degrees off); enter/exit are set wide/permissive so reps register
-    // regardless of the real number; goodROMThreshold=55 is a deliberately
-    // lenient depth requirement (looser than the research spec's ~30-45°) so
-    // it doesn't fire false "HINGE DEEPER" cues before real data confirms
-    // where your actual hinge depth lands. Send a [REP] log from 5 reps and
-    // all four of these get replaced with real numbers.
+    // Rep-range thresholds — first on-device log confirms the shape of these:
+    // top=89.5° (topAngle placeholder was 90, essentially exact), bottom=20.5°,
+    // swing=69°, ROM=ok against goodROMThreshold=55. Per spec: a full hinge to
+    // ~20-40° should count good, a shallow one staying above ~60° should fire
+    // "HINGE DEEPER" — 55 already sits correctly between those (20.5 passes,
+    // anything ≥60 fails), so left unchanged. Still only one rep's worth of
+    // data — enter/exit remain intentionally wide/permissive until more reps
+    // (and the other variants) confirm this holds.
     topAngle:           90,
     repEnterThreshold:  80,
     repExitThreshold:   85,
@@ -1147,6 +1170,12 @@ function hingeVariant(
     },
     minRepInterval,
     planarityChecks: [],
+    // See ExerciseEngine.swift updateActivityState — torso-scale approach
+    // detection is fundamentally unreliable for this family (confirmed
+    // on-device even after the repPhase-gate fix): the hinge's own torso
+    // rotation inflates the same shoulder-hip distance signal walking closer
+    // to the camera would. Inactivity-based suppression (8s idle) stays.
+    suppressApproachDetection: true,
   };
 }
 

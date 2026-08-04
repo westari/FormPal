@@ -190,12 +190,14 @@ final class ExerciseEngine {
     private var torsoRefBaselineFrames:  Int           = 0
     private var torsoRefCurrent:         Double        = 0.0
     private var resumeConsecFrames:      Int           = 0
+    private var approachConsecFrames:    Int           = 0
 
     private static let APPROACH_SCALE_FACTOR:  Double = 1.35  // torso >35% above baseline → approaching
     private static let APPROACH_RELEASE_MULT:  Double = 1.15  // must drop to <15% above baseline to resume
     private static let INACTIVITY_REP_GAP_SEC: Double = 8.0   // idle gap after last rep before suppression
     private static let TORSO_BASELINE_FRAMES:  Int    = 60    // ~2s at 30fps to establish baseline
     private static let RESUME_CONSEC_FRAMES:   Int    = 15    // ~0.5s in start zone to resume
+    private static let APPROACH_ENTER_FRAMES:  Int    = 8     // ~0.27s consecutive to suppress on approach
 
     // ── Settle gate ───────────────────────────────────────────────────────────
     // Prevents the first arm-raise into starting position from being counted as a rep.
@@ -1013,13 +1015,39 @@ final class ExerciseEngine {
         switch activityState {
         case .active:
             // Approach: torso reference has grown significantly above baseline (user walking closer).
-            if let baseline = torsoRefBaseline,
-               torsoRefBaselineFrames >= Self.TORSO_BASELINE_FRAMES,
-               torsoRefCurrent > baseline * Self.APPROACH_SCALE_FACTOR {
-                suppressAndLog(reason: "approach " +
-                               "torsoRef=\(String(format: "%.3f", torsoRefCurrent)) " +
-                               "baseline=\(String(format: "%.3f", baseline))")
-                return
+            //
+            // ROOT CAUSE (hinge family false-positive): torsoReference is the 2D shoulder-hip
+            // distance in-frame — a proxy for camera distance ONLY if the torso's ANGLE to the
+            // camera stays roughly constant. A hip-hinge's entire movement IS the torso rotating
+            // from vertical to horizontal in the camera's view plane; real-world hinging isn't
+            // perfectly planar and Vision's landmark estimate drifts more at extreme bent-over
+            // angles, so the rotation itself inflates torsoRef exactly like walking closer would.
+            //
+            // A first fix gated this to repPhase != .inRep (only evaluate at rest) plus
+            // consecutive-frame hysteresis, matching the inactivity check below and every other
+            // gate in this file. On-device data showed it's still not enough — even the
+            // "at rest" torsoRef reading for this family doesn't reliably return within
+            // APPROACH_SCALE_FACTOR of the original standing baseline (natural rep-to-rep
+            // posture variance, cumulative Vision drift). Torso-scale approach detection is
+            // fundamentally unreliable for any exercise whose primary movement is a large
+            // torso-angle change, not just mid-rep — so exercises that need it opt out entirely
+            // via def.suppressApproachDetection (see ExerciseDefinition.swift). Currently: the
+            // hip-hinge family. The repPhase gate + hysteresis stays for every other exercise.
+            if !def.suppressApproachDetection, repPhase != .inRep {
+                if let baseline = torsoRefBaseline,
+                   torsoRefBaselineFrames >= Self.TORSO_BASELINE_FRAMES,
+                   torsoRefCurrent > baseline * Self.APPROACH_SCALE_FACTOR {
+                    approachConsecFrames = min(approachConsecFrames + 1, Self.APPROACH_ENTER_FRAMES + 5)
+                    if approachConsecFrames >= Self.APPROACH_ENTER_FRAMES {
+                        suppressAndLog(reason: "approach " +
+                                       "torsoRef=\(String(format: "%.3f", torsoRefCurrent)) " +
+                                       "baseline=\(String(format: "%.3f", baseline))")
+                        approachConsecFrames = 0
+                        return
+                    }
+                } else {
+                    approachConsecFrames = max(0, approachConsecFrames - 1)
+                }
             }
             // Inactivity: at least one rep done, not mid-rep, long gap since last rep.
             if totalReps > 0,
@@ -1079,6 +1107,7 @@ final class ExerciseEngine {
         activityState = .suppressed
         suppressionReason = reason
         resumeConsecFrames = 0
+        approachConsecFrames = 0
         // Abandon any in-progress rep cleanly so stale accumulators don't carry over.
         if repPhase == .inRep {
             repPhase = .atTop
@@ -1096,6 +1125,7 @@ final class ExerciseEngine {
         torsoRefBaselineFrames = 0
         torsoRefCurrent        = 0.0
         resumeConsecFrames     = 0
+        approachConsecFrames   = 0
     }
 
     private func resetSettleState() {

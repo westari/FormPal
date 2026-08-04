@@ -168,6 +168,17 @@ struct ExerciseDefinition {
     // ── Planarity checks (foreshortening gate) ────────────────────────────────
     let planarityChecks: [PlanarityCheck]
 
+    // ── Walk-away/approach suppression opt-out ────────────────────────────────
+    // The approach-detection half of walk-away suppression (see ExerciseEngine's
+    // updateActivityState) treats a growing shoulder-hip 2D distance as "user
+    // walked toward the camera". That assumption breaks for any exercise whose
+    // PRIMARY movement is the torso rotating in the camera's view plane (hip
+    // hinge family: RDL, deadlift, good morning, kettlebell swing, single-leg
+    // RDL) — the rotation itself inflates the same measurement, indistinguishable
+    // from real approach. Default false preserves existing behavior for every
+    // other exercise; only hinge-pattern exercises set this true.
+    let suppressApproachDetection: Bool
+
     init(id: String, displayName: String,
          repMetric: Metric,
          topAngle: Double, repEnterThreshold: Double, repExitThreshold: Double,
@@ -177,20 +188,22 @@ struct ExerciseDefinition {
          cameraSetup: CameraSetupConfig? = nil,
          calibration: CalibrationConfig? = nil,
          minRepInterval: TimeInterval,
-         planarityChecks: [PlanarityCheck] = []) {
-        self.id                 = id
-        self.displayName        = displayName
-        self.repMetric          = repMetric
-        self.topAngle           = topAngle
-        self.repEnterThreshold  = repEnterThreshold
-        self.repExitThreshold   = repExitThreshold
-        self.goodROMThreshold   = goodROMThreshold
-        self.insufficientROMCue = insufficientROMCue
-        self.formChecks         = formChecks
-        self.readyGate          = readyGate
-        self.cameraSetup        = cameraSetup
-        self.calibration        = calibration
-        self.minRepInterval     = minRepInterval
-        self.planarityChecks    = planarityChecks
+         planarityChecks: [PlanarityCheck] = [],
+         suppressApproachDetection: Bool = false) {
+        self.id                        = id
+        self.displayName               = displayName
+        self.repMetric                 = repMetric
+        self.topAngle                  = topAngle
+        self.repEnterThreshold         = repEnterThreshold
+        self.repExitThreshold          = repExitThreshold
+        self.goodROMThreshold          = goodROMThreshold
+        self.insufficientROMCue        = insufficientROMCue
+        self.formChecks                = formChecks
+        self.readyGate                 = readyGate
+        self.cameraSetup               = cameraSetup
+        self.calibration               = calibration
+        self.minRepInterval            = minRepInterval
+        self.planarityChecks           = planarityChecks
+        self.suppressApproachDetection = suppressApproachDetection
     }
 }

@@ -372,29 +372,23 @@ function seatedRowStandard(exerciseId: string): ExerciseStandardDef {
 // on-device validation in this codebase yet. Verify from a real device log
 // before trusting these; set reviewed: true only after that.
 //
-// Static check = knee stability (hip→knee→ankle angle range) — a hinge's knee
-// should barely move; large variation here means the person is squatting
-// instead of hinging (same concept as the knee_bend Layer-1 check, via
-// Layer 2's range-based mechanism).
-
-const HINGE_STATIC_CHECKS: JointAngleCheckDef[] = [
-  {
-    description: 'Left knee stability — hip→knee→ankle angle range (should barely move in a hinge)',
-    a: 'leftHip',
-    b: 'leftKnee',
-    c: 'leftAnkle',
-    maxRangeDeg: 20.0,
-    cue: "DON'T SQUAT IT — bend at the hips, not the knees",
-  },
-  {
-    description: 'Right knee stability — hip→knee→ankle angle range (should barely move in a hinge)',
-    a: 'rightHip',
-    b: 'rightKnee',
-    c: 'rightAnkle',
-    maxRangeDeg: 20.0,
-    cue: "DON'T SQUAT IT — bend at the hips, not the knees",
-  },
-];
+// Static checks: REMOVED. Same resolution already used for the row family
+// above (see ROW_STATIC_CHECKS_BENT_OVER) for the identical class of problem.
+//
+// The original static check used hip→knee→ankle angle range as a "knee
+// stability" proxy. On-device data (from the Layer-1 knee_bend check, which
+// used the same joint triple) showed this angle swinging 119-125° during a
+// rep with near-zero real knee bend — the HIP translates substantially during
+// a hinge and contaminates any angle computed through it, regardless of the
+// maxRangeDeg threshold chosen. Loosening the number doesn't fix that; the
+// signal itself doesn't isolate knee flexion for this movement.
+//
+// The fix used for the Layer-1 check (constants/exerciseDefinitions.ts's
+// HINGE_KNEE_BEND_CHECK) — lineVsVertical(ankle, knee), which excludes the hip
+// — isn't expressible here: JointAngleCheckDef only supports a 3-point angle
+// (a, b, c), not a 2-point line-vs-vertical. Knee stability is fully covered
+// by that fixed Layer-1 check instead; nothing is lost by removing this.
+const HINGE_STATIC_CHECKS: JointAngleCheckDef[] = [];
 
 const HINGE_TOP_FAULTS = [
   'INCOMPLETE HINGE — not reaching enough torso travel toward horizontal',
