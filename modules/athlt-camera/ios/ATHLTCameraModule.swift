@@ -297,6 +297,7 @@ public class ATHLTCameraModule: Module {
                 let tempoMin  = dict["tempoMinSec"]  as? Double ?? 1.5
                 let tempoMax  = dict["tempoMaxSec"]  as? Double ?? 5.0
                 let topFaults = dict["topFaults"]    as? [String] ?? []
+                let jerkSpikeMultiple = dict["jerkSpikeMultiple"] as? Double ?? 2.0
 
                 let standard = ExerciseStandard(
                     exerciseId:            exerciseId,
@@ -308,7 +309,8 @@ public class ATHLTCameraModule: Module {
                     staticChecks:          checks,
                     tempoMinSec:           tempoMin,
                     tempoMaxSec:           tempoMax,
-                    topFaults:             topFaults
+                    topFaults:             topFaults,
+                    jerkSpikeMultiple:     jerkSpikeMultiple
                 )
 
                 self.sendEvent("onDebugLog", ["message":

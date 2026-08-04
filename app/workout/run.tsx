@@ -13,7 +13,8 @@
  * (arriving back from formcheck), it records the result and enters 'rest' phase.
  * If not, it opens in 'intro' phase for the current exercise.
  *
- * When all exercises are done, navigates to /workout/summary.
+ * When all exercises are done, navigates to /recap (mode=workout), which pulls
+ * the finished WorkoutSummary from useWorkoutSessionStore itself.
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -105,7 +106,7 @@ export default function WorkoutRunScreen() {
       const updated = useWorkoutSessionStore.getState();
       if (!updated.hasMoreExercises()) {
         // All done — go to summary
-        router.replace('/workout/summary' as any);
+        router.replace({ pathname: '/recap', params: { mode: 'workout' } } as any);
         return;
       }
 
@@ -161,7 +162,7 @@ export default function WorkoutRunScreen() {
   function advanceToIntro() {
     const st = useWorkoutSessionStore.getState();
     if (!st.hasMoreExercises()) {
-      router.replace('/workout/summary' as any);
+      router.replace({ pathname: '/recap', params: { mode: 'workout' } } as any);
     } else {
       setPhase('intro');
     }
@@ -190,7 +191,7 @@ export default function WorkoutRunScreen() {
 
       const updated = useWorkoutSessionStore.getState();
       if (!updated.hasMoreExercises()) {
-        router.replace('/workout/summary' as any);
+        router.replace({ pathname: '/recap', params: { mode: 'workout' } } as any);
         return;
       }
       const prevIdx  = (updated.session?.currentIndex ?? 1) - 1;
@@ -205,7 +206,7 @@ export default function WorkoutRunScreen() {
     skipCurrent();
     const updated = useWorkoutSessionStore.getState();
     if (!updated.hasMoreExercises()) {
-      router.replace('/workout/summary' as any);
+      router.replace({ pathname: '/recap', params: { mode: 'workout' } } as any);
       return;
     }
     setPhase('intro');
@@ -220,7 +221,7 @@ export default function WorkoutRunScreen() {
         {
           text:    'End workout',
           style:   'destructive',
-          onPress: () => router.replace('/workout/summary' as any),
+          onPress: () => router.replace({ pathname: '/recap', params: { mode: 'workout' } } as any),
         },
       ],
     );

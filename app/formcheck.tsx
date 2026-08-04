@@ -430,6 +430,7 @@ export default function FormCheckScreen() {
       router.replace({
         pathname: '/recap',
         params: {
+          exercise: exerciseType,
           reps:     String(navParams.reps),
           goodReps: String(navParams.goodReps),
           videoUri: navParams.videoUri,

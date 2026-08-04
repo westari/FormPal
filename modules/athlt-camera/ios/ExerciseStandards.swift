@@ -47,6 +47,12 @@ struct ExerciseStandard {
     let tempoMinSec:           Double
     let tempoMaxSec:           Double
     let topFaults:             [String]
+    // Per-exercise override for UniversalQualityEngine's swinging-check jerk-ratio
+    // threshold (defaults to 2.0 when the JS side omits it). Some movements (e.g.
+    // a bodyweight hip-hinge) naturally carry more rep-to-rep velocity variance
+    // than an isolation exercise, so they need a wider multiple before "SWINGING"
+    // fires on normal execution.
+    let jerkSpikeMultiple:     Double
 }
 
 // ─── Joint string initializer ─────────────────────────────────────────────────

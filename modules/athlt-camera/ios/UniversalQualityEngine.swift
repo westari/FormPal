@@ -41,11 +41,19 @@ final class UniversalQualityEngine {
     private let rangeShrinkLimit:       Double = 0.85
     private let durDeviationLimit:      Double = 0.40
     private let symmetryRelDiffLimit:   Double = 0.20
-    private let jerkSpikeMultiple:      Double = 2.0
+    private let defaultJerkSpikeMultiple: Double = 2.0  // per-exercise override: ExerciseStandard.jerkSpikeMultiple
     private let anchorBreachMultiple:   Double = 2.2
     private let anchorCutoffFraction:   Double = 0.25
     private let frameBufferSeconds:     Double = 30.0
     private let bufferTrimInterval:     Int    = 30
+
+    // Bilateral symmetry requires BOTH sides' joints to be well-tracked, not just
+    // above the general kMinConf (0.25) presence floor. A device log showed an
+    // occluded knee reading confidence 0.39–0.56 (above kMinConf, so
+    // computeJointAngle still returned an angle) alongside a well-tracked side at
+    // 0.91–0.97 — the occluded side's noisy angle then looked like a real
+    // left/right difference. 0.6 sits between those two observed clusters.
+    private let symmetryMinConf:        Float  = 0.6
 
     // MARK: – Frame record
 
@@ -167,11 +175,16 @@ final class UniversalQualityEngine {
         let stats = computeRepStats(frames: rawWindow, peakValue: peakValue)
 
         // ── Reference / calibration phase ─────────────────────────────────────
+        // Only reps that meet the ROM standard seed the baseline. A short/
+        // incomplete early rep would poison range/duration/jerk baselines low,
+        // making every later GOOD rep look artificially fast/big by comparison
+        // (this is exactly what happened on-device: rep #1 was a short 75.8°
+        // hinge, baseline jerk locked in low, and every normal-tempo rep after
+        // it read as 2.75×–4.83× baseline jerk → SWINGING fired on clean reps).
+        // Bad reps are simply skipped here — calibration keeps waiting for
+        // nBaseline good ones rather than locking in a bad reference.
 
         if referenceStats.count < nBaseline {
-            referenceStats.append(stats)
-            let n = referenceStats.count
-
             if let std = activeStandard {
                 log?("[STD] rep #\(repNumber) ref: peak=\(f1(stats.peakValue))° start=\(f1(stats.startValue))°  (standard: peak≤\(f1(std.standardPeakAngleMax))° start≥\(f1(std.standardStartAngleMin))°)")
                 for (i, check) in std.staticChecks.enumerated() {
@@ -181,7 +194,16 @@ final class UniversalQualityEngine {
                 }
             }
 
-            log?("[UNIV] rep #\(repNumber): CALIBRATING (\(n)/\(nBaseline))  range=\(f3(stats.range))  dur=\(f2(stats.duration))s  jerk=\(f5(stats.jerk))")
+            guard isValidForBaseline(stats) else {
+                let limit = activeStandard.map { f1($0.standardPeakAngleMax) } ?? "n/a"
+                log?("[UNIV] rep #\(repNumber): EXCLUDED from baseline — peak=\(f1(stats.peakValue))° doesn't meet ROM standard (≤\(limit)°). Still calibrating, waiting for a full-range rep.")
+                lastRepTime = repEndTime
+                return
+            }
+
+            referenceStats.append(stats)
+            let n = referenceStats.count
+            log?("[UNIV] rep #\(repNumber): CALIBRATING (\(n)/\(nBaseline) good)  range=\(f3(stats.range))  dur=\(f2(stats.duration))s  jerk=\(f5(stats.jerk))")
             if n == nBaseline { buildBaseline() }
             lastRepTime = repEndTime
             return
@@ -222,6 +244,7 @@ final class UniversalQualityEngine {
 
         // ── Layer 1: relative signals ─────────────────────────────────────────
 
+        let jerkSpikeMultiple = activeStandard?.jerkSpikeMultiple ?? defaultJerkSpikeMultiple
         let jerkRatio  = bJerk > 1e-9 ? stats.jerk / bJerk : 1.0
         let isSwinging = jerkRatio >= jerkSpikeMultiple
 
@@ -301,6 +324,18 @@ final class UniversalQualityEngine {
         lastRepTime = .distantPast
         // activeStandard and relevantJoints NOT cleared — they are exercise config,
         // not session state, and persist across startTracking/stopTracking calls.
+    }
+
+    // MARK: – Baseline validity gate
+
+    // Only a rep that reaches the exercise's own ROM standard should seed the
+    // personal baseline (see the calibration-phase comment in onRepCompleted).
+    // No standard registered for this exercise = no ROM floor to check against —
+    // accept the rep rather than guess a limit (matches the CLAUDE.md
+    // investigate-first rule: don't invent a threshold with no reference).
+    private func isValidForBaseline(_ stats: RepStats) -> Bool {
+        guard let std = activeStandard else { return true }
+        return stats.peakValue <= std.standardPeakAngleMax
     }
 
     // MARK: – Baseline construction
@@ -485,6 +520,17 @@ final class UniversalQualityEngine {
         var bestActivity = 0.0
 
         for (la, lp, lc, ra, rp, rc) in candidates {
+            // computeJointAngle already gates each point at kMinConf (0.25), but
+            // that floor is too permissive for a LEFT-vs-RIGHT comparison: a
+            // low-but-passing-confidence point (e.g. 0.4, occluded) still yields
+            // an angle, and that noisy angle then looks like a real asymmetry
+            // against a well-tracked other side. Require both sides' three
+            // points to clear the stricter symmetryMinConf before comparing —
+            // if one side is low-confidence, this is a tracking artifact, not
+            // real unevenness, and the check should stay silent.
+            let points = [la, lp, lc, ra, rp, rc]
+            guard points.allSatisfy({ (pose[$0]?.confidence ?? 0) >= symmetryMinConf }) else { continue }
+
             guard let lA = computeJointAngle(pose: pose, a: la, b: lp, c: lc),
                   let rA = computeJointAngle(pose: pose, a: ra, b: rp, c: rc) else { continue }
             let activity = (abs(180.0 - lA) + abs(180.0 - rA)) / 2.0

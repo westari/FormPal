@@ -1302,6 +1302,31 @@ const RAISE_DIRECTION_CHECK: FormCheckDef = {
   enabled:    true,
 };
 
+// FORM CHECK — bent elbows (a lateral/front raise should be done with fairly
+// straight arms, raising from the shoulder — not curling the weight up with
+// the elbows). FEASIBILITY: jointAngle(shoulder, elbow, wrist) is a proven
+// primitive (curl/tricep's own primary rep metric), so elbow bend itself is
+// reliably measurable. What's genuinely NEW here (CLAUDE.md rule #2) is using
+// it as a "stay near-straight throughout" constraint on a non-elbow-dominant
+// lift — no existing exercise does that, so there's no comparable threshold to
+// inherit. Set wide/permissive on purpose (120°, i.e. only a substantial
+// curl-like bend trips it) so it won't false-fire on normal use; do a few reps
+// with straight arms and a few with deliberately bent arms and send the [REP]
+// log (arms_bent=value/lim=...) so I can tighten the real number.
+const RAISE_ARMS_STRAIGHT_CHECK: FormCheckDef = {
+  id:         'arms_bent',
+  cue:        'KEEP ARMS STRAIGHT',
+  metric: {
+    type:  'average',
+    left:  { type: 'jointAngle', a: 'leftShoulder',  pivot: 'leftElbow',  c: 'leftWrist'  },
+    right: { type: 'jointAngle', a: 'rightShoulder', pivot: 'rightElbow', c: 'rightWrist' },
+  },
+  evaluateAt: 'throughoutMin',
+  condition:  { type: 'lessThan', value: 120 },  // PLACEHOLDER — deliberately wide, verify from [REP] log
+  priority:   4,
+  enabled:    true,
+};
+
 // CAMERA — lateral raise: FRONT-facing. The raise's arc stays in the frontal
 // plane (side-to-side), which is parallel to a front camera's image plane —
 // no foreshortening at any point in the rep (the ideal angle for this
@@ -1357,20 +1382,25 @@ function lateralRaiseVariant(
     // not a cue-selection bug (verified: completeRep() can only ever assign
     // one cue, the logic doesn't allow both). minRepInterval also widened
     // 0.5→1.0, matching tricep's exact fix, as a debounce backup.
-    // goodROMThreshold=30 is UNCHANGED and still a placeholder — no real
-    // "arms raised to shoulder height" data point yet. The [METRIC] log
-    // already prints this exercise's value continuously (~3/sec) via
-    // onDebugLog, visible in the on-screen debug panel — do a few raises and
-    // read arms-down vs arms-up directly from that to set goodROMThreshold.
+    // goodROMThreshold TIGHTENED 30→15: "too lenient, says good form on
+    // basically anything" — with topAngle=72 (rest) and true shoulder height
+    // at 0°, a threshold of 30 only required the arm to travel 42 of the full
+    // 72° range (58%) to count as good. 15 requires ~79% (57 of 72°), close to
+    // parallel with the floor, while still leaving a small allowance below a
+    // literal 0° for natural rep-to-rep/camera-angle variation. Still a
+    // reasoned value, not device-verified — the [METRIC] log already prints
+    // this exercise's value continuously; send your real arms-up reading and
+    // I'll set the exact number if 15 isn't right.
     topAngle:           72,
     repEnterThreshold:  55,
     repExitThreshold:   68,
-    goodROMThreshold:   30,
-    insufficientROMCue: 'RAISE TO SHOULDER HEIGHT',
+    goodROMThreshold:   15,
+    insufficientROMCue: 'RAISE HIGHER',
     // too_high removed (see comment above — not actually a fault, was also
     // firing inconsistently). wrong_direction added (see comment above —
-    // assessed as cleanly detectable for this front-facing camera).
-    formChecks:         [RAISE_SWING_CHECK, RAISE_DIRECTION_CHECK],
+    // assessed as cleanly detectable for this front-facing camera). arms_bent
+    // added — see RAISE_ARMS_STRAIGHT_CHECK comment for feasibility reasoning.
+    formChecks:         [RAISE_SWING_CHECK, RAISE_DIRECTION_CHECK, RAISE_ARMS_STRAIGHT_CHECK],
     readyGate:          PASSTHROUGH_GATE,
     cameraSetup: {
       setupInstruction,
@@ -1406,12 +1436,18 @@ function frontRaiseVariant(
     // wrong_direction NOT added here — that check was only assessed for a
     // FRONT-facing camera (lateral raise); front raise uses a SIDE camera,
     // a different geometry that hasn't been evaluated for this fault.
+    // goodROMThreshold TIGHTENED 30→15 — same reasoning as lateralRaiseVariant
+    // (see its comment): requires reaching ~79% of the full arms-down-to-
+    // shoulder-height range instead of 58%. Still a reasoned value, not
+    // device-verified for THIS exercise specifically — verify from this
+    // exercise's own [METRIC] log.
     topAngle:           72,
     repEnterThreshold:  55,
     repExitThreshold:   68,
-    goodROMThreshold:   30,
-    insufficientROMCue: 'RAISE TO SHOULDER HEIGHT',
-    formChecks:         [RAISE_SWING_CHECK],
+    goodROMThreshold:   15,
+    insufficientROMCue: 'RAISE HIGHER',
+    // arms_bent added — same feasibility reasoning as lateralRaiseVariant.
+    formChecks:         [RAISE_SWING_CHECK, RAISE_ARMS_STRAIGHT_CHECK],
     readyGate:          PASSTHROUGH_GATE,
     cameraSetup: {
       setupInstruction,

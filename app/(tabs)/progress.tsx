@@ -16,8 +16,7 @@ import {
   View, Text, StyleSheet, ScrollView, Pressable, Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SymbolView } from 'expo-symbols';
 import { StatusBar } from 'expo-status-bar';
@@ -30,12 +29,15 @@ import Svg, {
   Stop,
   Line as SvgLine,
 } from 'react-native-svg';
-import Body from 'react-native-body-highlighter';
 
 import { FONT, Sp, W } from '../../constants/theme';
 import Ring from '../../components/Ring';
 import ScreenBackground from '../../components/ScreenBackground';
-import { EXERCISE_CATALOG, MuscleGroup } from '../../constants/exercises';
+import { MuscleHeatmap } from '../../components/MuscleHeatmap';
+import {
+  getAllSessions, groupIntoWorkouts, computeOverallMuscleScores,
+  type SessionEntry, type WorkoutGroup,
+} from '../../lib/sessionLog';
 
 // ─── Design tokens — exact match to index.tsx ────────────────────────────────
 
@@ -69,14 +71,9 @@ const SHADOW_ROW = Platform.OS === 'ios' ? {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const SESSION_LOG_KEY = 'formpal_session_log';
 const THIRTY_DAYS_MS  = 30 * 24 * 60 * 60 * 1000;
 const SEVEN_DAYS_MS   =  7 * 24 * 60 * 60 * 1000;
 const DAY_MS          = 24 * 60 * 60 * 1000;
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type SessionEntry = { ts: number; reps: number; goodReps: number; pct: number };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -120,68 +117,6 @@ function calcStreak(sessions: SessionEntry[]): number {
   return streak;
 }
 
-// Muscle group → library slug mappings
-const GROUP_TO_FRONT_SLUGS: Partial<Record<MuscleGroup, string[]>> = {
-  [MuscleGroup.Chest]:     ['chest'],
-  [MuscleGroup.Shoulders]: ['deltoids'],
-  [MuscleGroup.Arms]:      ['biceps', 'forearm'],
-  [MuscleGroup.Core]:      ['abs', 'obliques'],
-  [MuscleGroup.Legs]:      ['quadriceps', 'adductors'],
-};
-const GROUP_TO_BACK_SLUGS: Partial<Record<MuscleGroup, string[]>> = {
-  [MuscleGroup.Back]:      ['trapezius', 'upper-back'],
-  [MuscleGroup.Shoulders]: ['deltoids'],
-  [MuscleGroup.Arms]:      ['triceps'],
-  [MuscleGroup.Core]:      ['lower-back'],
-  [MuscleGroup.Legs]:      ['hamstring', 'gluteal', 'calves'],
-};
-
-function computeGroupScores(sessions: SessionEntry[]): Partial<Record<MuscleGroup, number>> {
-  if (sessions.length === 0) return {};
-  const now = Date.now();
-  const weightedReps = sessions.reduce((sum, s) => {
-    const ageDays = (now - s.ts) / DAY_MS;
-    return sum + s.reps * Math.exp(-ageDays * Math.LN2 / 14);
-  }, 0);
-  const intensity = Math.min(1, weightedReps / 200);
-
-  const groupCount: Partial<Record<MuscleGroup, number>> = {};
-  for (const ex of EXERCISE_CATALOG) {
-    for (const mg of ex.muscleGroups) {
-      groupCount[mg] = (groupCount[mg] ?? 0) + 1;
-    }
-  }
-  const maxCount = Math.max(...(Object.values(groupCount) as number[]));
-  const result: Partial<Record<MuscleGroup, number>> = {};
-  for (const mg of Object.keys(groupCount) as MuscleGroup[]) {
-    result[mg] = ((groupCount[mg] ?? 0) / maxCount) * intensity;
-  }
-  return result;
-}
-
-function scoreToIntensity(score: number): 1 | 2 | 3 {
-  if (score < 0.3) return 1;
-  if (score < 0.65) return 2;
-  return 3;
-}
-
-function buildBodyData(
-  groupScores: Partial<Record<MuscleGroup, number>>,
-  side: 'front' | 'back',
-): Array<{ slug: string; intensity: 1 | 2 | 3 }> {
-  const mapping = side === 'front' ? GROUP_TO_FRONT_SLUGS : GROUP_TO_BACK_SLUGS;
-  const out: Array<{ slug: string; intensity: 1 | 2 | 3 }> = [];
-  for (const [mg, slugs] of Object.entries(mapping) as [MuscleGroup, string[]][]) {
-    const score = groupScores[mg] ?? 0;
-    if (score > 0.05) {
-      for (const slug of slugs) {
-        out.push({ slug, intensity: scoreToIntensity(score) });
-      }
-    }
-  }
-  return out;
-}
-
 // ─── SectionHeader ────────────────────────────────────────────────────────────
 
 function SectionHeader({ title, sub }: { title: string; sub?: string }) {
@@ -198,26 +133,33 @@ const sh = StyleSheet.create({
   sub:   { marginTop: 2, fontSize: 12, fontWeight: W.medium, color: C.textSub },
 });
 
-// ─── SessionCard — exact clone of home screen ─────────────────────────────────
+// ─── SessionCard — one row per WORKOUT (grouped by ts), taps into /recap ──────
 
-function SessionCard({ entry }: { entry: SessionEntry }) {
-  const pct = entry.pct;
+function SessionCard({ group }: { group: WorkoutGroup }) {
+  const router = useRouter();
+  const pct = group.pct;
   const bgColor   = pct >= 80 ? C.goodBg  : pct >= 60 ? C.midBg  : C.lowBg;
   const textColor = pct >= 80 ? C.goodText : pct >= 60 ? C.midText : C.lowText;
+  const title = group.entries.length === 1
+    ? group.entries[0].displayName
+    : `Workout · ${group.entries.length} exercises`;
   return (
-    <View style={[sc.card, SHADOW_ROW]}>
+    <Pressable
+      style={({ pressed }) => [sc.card, SHADOW_ROW, pressed && { opacity: 0.7 }]}
+      onPress={() => router.push({ pathname: '/recap', params: { ts: String(group.ts) } })}
+    >
       <View style={sc.iconBox}>
         <SymbolView name="dumbbell.fill" type="monochrome"
           style={{ width: 18, height: 18 }} tintColor="#6b7180" />
       </View>
       <View style={sc.mid}>
-        <Text style={sc.date}>{formatLong(entry.ts)}</Text>
-        <Text style={sc.meta}>{entry.reps} reps · {entry.goodReps} good</Text>
+        <Text style={sc.date}>{title}</Text>
+        <Text style={sc.meta}>{formatLong(group.ts)} · {group.totalReps} reps</Text>
       </View>
       <View style={[sc.badge, { backgroundColor: bgColor }]}>
         <Text style={[sc.badgeTxt, { color: textColor }]}>{pct}%</Text>
       </View>
-    </View>
+    </Pressable>
   );
 }
 const sc = StyleSheet.create({
@@ -464,37 +406,18 @@ const ifc = StyleSheet.create({
 });
 
 // ─── MuscleMapCard ────────────────────────────────────────────────────────────
-
-const BODY_COLORS = ['#FFC24B', '#FF9F0A', '#FF7A2E'] as const;
-const BODY_SCALE  = 0.72; // 144 × 288
+// Thin wrapper around the shared MuscleHeatmap — same component the recap
+// screen uses, so "reused, not rebuilt" holds for both.
 
 function MuscleMapCard({ sessions }: { sessions: SessionEntry[] }) {
-  const groupScores = useMemo(() => computeGroupScores(sessions), [sessions]);
+  const overallScores = useMemo(() => computeOverallMuscleScores(sessions), [sessions]);
   const isEmpty = sessions.length === 0;
-
-  const frontData = useMemo(() => buildBodyData(groupScores, 'front'), [groupScores]);
-  const backData  = useMemo(() => buildBodyData(groupScores, 'back'),  [groupScores]);
 
   return (
     <View style={[mm.card, SHADOW_HIGH]}>
       <View style={mm.header}>
-        <View style={{ flex: 1 }}>
-          <Text style={mm.title}>Muscle coverage</Text>
-          <Text style={mm.sub}>Computed from your squat · push-up · curl sessions</Text>
-        </View>
-        {!isEmpty && (
-          <View style={mm.legendBar}>
-            <LinearGradient
-              colors={['#FFC24B', '#FF9F0A', '#FF7A2E']}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-              style={mm.legendGrad}
-            />
-            <View style={mm.legendLabels}>
-              <Text style={mm.legendLbl}>Low</Text>
-              <Text style={mm.legendLbl}>High</Text>
-            </View>
-          </View>
-        )}
+        <Text style={mm.title}>Muscle coverage</Text>
+        <Text style={mm.sub}>Cumulative volume from every exercise you've logged</Text>
       </View>
 
       {isEmpty ? (
@@ -507,35 +430,7 @@ function MuscleMapCard({ sessions }: { sessions: SessionEntry[] }) {
           </Text>
         </View>
       ) : (
-        <View style={mm.diagramsRow}>
-          <View style={mm.diagramCol}>
-            <Body
-              data={frontData}
-              side="front"
-              gender="male"
-              scale={BODY_SCALE}
-              colors={BODY_COLORS}
-              defaultFill="rgba(200,210,228,0.4)"
-              border="none"
-            />
-            <Text style={mm.diagramLabel}>Front</Text>
-          </View>
-
-          <View style={mm.diagramDivider} />
-
-          <View style={mm.diagramCol}>
-            <Body
-              data={backData}
-              side="back"
-              gender="male"
-              scale={BODY_SCALE}
-              colors={BODY_COLORS}
-              defaultFill="rgba(200,210,228,0.4)"
-              border="none"
-            />
-            <Text style={mm.diagramLabel}>Back</Text>
-          </View>
-        </View>
+        <MuscleHeatmap overallScores={overallScores} showLegend={false} />
       )}
 
       {!isEmpty && (
@@ -552,20 +447,12 @@ const mm = StyleSheet.create({
     borderWidth: 1, borderColor: C.border,
     padding: 20, gap: 18,
   },
-  header:         { flexDirection: 'row', alignItems: 'flex-start' },
+  header:         { gap: 2 },
   title:          { fontSize: 15.5, fontWeight: W.bold, letterSpacing: -0.2, color: C.text },
-  sub:            { marginTop: 2, fontSize: 11, fontWeight: W.medium, color: C.textSub },
-  legendBar:      { alignItems: 'flex-end', gap: 4, marginLeft: 12 },
-  legendGrad:     { width: 60, height: 7, borderRadius: 4 },
-  legendLabels:   { flexDirection: 'row', justifyContent: 'space-between', width: 60 },
-  legendLbl:      { fontSize: 9, fontWeight: W.semi, color: C.textSub },
+  sub:            { fontSize: 11, fontWeight: W.medium, color: C.textSub },
   emptyState:     { alignItems: 'center', paddingVertical: 28, paddingHorizontal: 24 },
   emptyTitle:     { fontSize: 15, fontWeight: W.semi, color: C.text, marginBottom: 8 },
   emptySub:       { fontSize: 13, color: C.textSub, textAlign: 'center', lineHeight: 19 },
-  diagramsRow:    { flexDirection: 'row', justifyContent: 'center', alignItems: 'flex-start' },
-  diagramCol:     { flex: 1, alignItems: 'center', gap: 8 },
-  diagramDivider: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch', backgroundColor: 'rgba(17,24,39,0.07)', marginHorizontal: 8 },
-  diagramLabel:   { fontSize: 11, fontWeight: W.semi, letterSpacing: 0.4, color: C.textSub },
   note:           { textAlign: 'center', fontSize: 10.5, color: C.textDim, fontWeight: W.medium },
 });
 
@@ -720,13 +607,12 @@ export default function ProgressScreen() {
   const [sessionsExpanded,  setSessionsExpanded]  = useState(false);
 
   useFocusEffect(useCallback(() => {
-    AsyncStorage.getItem(SESSION_LOG_KEY).then(raw => {
-      if (!raw) { setSessions([]); return; }
-      setSessions((JSON.parse(raw) as SessionEntry[]).sort((a, b) => a.ts - b.ts));
-    }).catch(() => setSessions([]));
+    getAllSessions().then(all => {
+      setSessions([...all].sort((a, b) => a.ts - b.ts));
+    });
   }, []));
 
-  const reversedSessions = useMemo(() => [...sessions].reverse(), [sessions]);
+  const workoutGroups = useMemo(() => groupIntoWorkouts(sessions), [sessions]);
 
   return (
     <>
@@ -782,7 +668,7 @@ export default function ProgressScreen() {
           <View style={{ gap: 10 }}>
             <SectionHeader
               title="By exercise"
-              sub="Per-exercise stats will unlock when sessions track exercise type"
+              sub="Detailed per-exercise trends — coming soon"
             />
             <ExerciseBreakdown sessions={sessions} />
           </View>
@@ -793,24 +679,24 @@ export default function ProgressScreen() {
             <View style={s.sessionHeader}>
               <View>
                 <Text style={sh.title}>All sessions</Text>
-                {sessions.length > 0 && (
-                  <Text style={sh.sub}>{sessions.length} logged</Text>
+                {workoutGroups.length > 0 && (
+                  <Text style={sh.sub}>{workoutGroups.length} logged</Text>
                 )}
               </View>
-              {reversedSessions.length > SESSIONS_PREVIEW && (
+              {workoutGroups.length > SESSIONS_PREVIEW && (
                 <Pressable
                   onPress={() => setSessionsExpanded(v => !v)}
                   hitSlop={10}
                 >
                   <Text style={s.viewAll}>
-                    {sessionsExpanded ? 'Show less' : `View all ${reversedSessions.length}`}
+                    {sessionsExpanded ? 'Show less' : `View all ${workoutGroups.length}`}
                   </Text>
                 </Pressable>
               )}
             </View>
 
             <View style={s.sessionList}>
-              {reversedSessions.length === 0 ? (
+              {workoutGroups.length === 0 ? (
                 <View style={[s.emptyCard, SHADOW_MED]}>
                   <SymbolView name="figure.run" type="monochrome"
                     style={{ width: 32, height: 32, marginBottom: 12 }} tintColor={C.textDim} />
@@ -821,10 +707,10 @@ export default function ProgressScreen() {
                 </View>
               ) : (
                 (sessionsExpanded
-                  ? reversedSessions
-                  : reversedSessions.slice(0, SESSIONS_PREVIEW)
-                ).map((entry, i) => (
-                  <SessionCard key={`${entry.ts}-${i}`} entry={entry} />
+                  ? workoutGroups
+                  : workoutGroups.slice(0, SESSIONS_PREVIEW)
+                ).map(group => (
+                  <SessionCard key={group.ts} group={group} />
                 ))
               )}
             </View>

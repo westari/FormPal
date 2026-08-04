@@ -39,6 +39,11 @@ export interface ExerciseStandardDef {
   tempoMinSec:           number;
   tempoMaxSec:           number;
   topFaults:             string[];
+  // Optional per-exercise override for the native swinging-check jerk-ratio
+  // threshold (native default is 2.0x baseline jerk when omitted). Movements
+  // with naturally more rep-to-rep velocity variance than an isolation lift
+  // (e.g. a bodyweight hip-hinge) need a wider multiple before "SWINGING" fires.
+  jerkSpikeMultiple?:    number;
 }
 
 // ─── Shared curl standard building-blocks ────────────────────────────────────
@@ -408,6 +413,19 @@ function hingeStandard(exerciseId: string): ExerciseStandardDef {
     tempoMinSec: 1.5,
     tempoMaxSec: 5.0,
     topFaults: HINGE_TOP_FAULTS,
+    // Loosened from the native default (2.0) after an on-device log showed
+    // SWINGING firing on nearly every normal-tempo rep (2.75x-4.83x baseline
+    // jerk). Root cause was a poisoned baseline (a short rep #1 locked in an
+    // artificially low reference jerk — now fixed in UniversalQualityEngine.swift
+    // by excluding non-standard reps from baseline calibration). This 3.0
+    // multiple is an ADDITIONAL safety margin on top of that fix, not a
+    // replacement for it: a bodyweight hinge is a bigger, more ballistic-feeling
+    // movement on a noisier 2D torso-angle metric than an isolation exercise, so
+    // it likely needs more headroom even with a clean baseline. Not disabled —
+    // real momentum-swinging is a genuine, common hinge fault worth keeping a
+    // check for. This value is a reasoned starting point, not device-verified —
+    // send a fresh log (with the baseline fix in place) and I'll tighten it.
+    jerkSpikeMultiple: 3.0,
   };
 }
 
@@ -459,9 +477,15 @@ function raiseStandard(exerciseId: string): ExerciseStandardDef {
   return {
     exerciseId,
     reviewed: false,  // PLACEHOLDER numbers below — verify on-device before flipping to true
-    standardPeakAngleMax:  35.0,   // must raise to at least this close to shoulder height
+    // Tightened 35.0→15.0: "too lenient, says good form on basically anything"
+    // — a partial raise was passing well short of shoulder height. Kept in
+    // sync with the matching Layer-0 goodROMThreshold tightening (30→15) in
+    // constants/exerciseDefinitions.ts's lateralRaiseVariant()/frontRaiseVariant().
+    // Still a reasoned value, not device-verified — send a [REP] log with your
+    // real arms-up reading and I'll set the exact number.
+    standardPeakAngleMax:  15.0,   // must raise to at least this close to shoulder height
     standardStartAngleMin: 80.0,   // must return arms fully down before rep counts
-    romCue:    'RAISE TO SHOULDER HEIGHT — not reaching enough depth',
+    romCue:    'RAISE HIGHER — not reaching enough depth',
     extendCue: 'LOWER FULLY — not returning arms down',
     staticChecks: RAISE_STATIC_CHECKS,
     tempoMinSec: 1.0,
