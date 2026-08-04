@@ -1201,31 +1201,19 @@ const RAISE_REP_METRIC_SIDE: MetricDef = {
   rightJoints: ['rightShoulder', 'rightElbow'],
 };
 
-// FORM CHECK — going too high (above shoulder height).
+// FORM CHECK — going too high (above shoulder height): REMOVED.
 //
-// FEASIBILITY NOTE: the naive approach — reusing the rep metric itself
-// (lineVsVertical/lineVsHorizontal) — does NOT work here. Both take abs(dy),
-// so they're direction-blind: an arm at 60° raised (not yet at shoulder
-// height) and an arm at 120° (raised past overhead) produce indistinguishable
-// readings from the same metric. It cannot tell "not high enough" from "too
-// high" — they look the same. Using a genuinely different, SIGNED metric
-// instead: normalizedVerticalGap(elbow, shoulder) is negative/near-zero at or
-// below shoulder height, and only goes positive once the elbow rises ABOVE
-// the shoulder's height — monotonic in the one direction that matters.
-// PLACEHOLDER threshold — verify from the [REP] log (too_high=value/lim=...).
-const RAISE_TOO_HIGH_CHECK: FormCheckDef = {
-  id:         'too_high',
-  cue:        'DON\'T GO ABOVE SHOULDERS',
-  metric: {
-    type:  'average',
-    left:  { type: 'normalizedVerticalGap', upper: 'leftElbow',  lower: 'leftShoulder'  },
-    right: { type: 'normalizedVerticalGap', upper: 'rightElbow', lower: 'rightShoulder' },
-  },
-  evaluateAt: 'throughoutMax',
-  condition:  { type: 'greaterThan', value: 0.15 },  // PLACEHOLDER — verify from [REP] log
-  priority:   1,
-  enabled:    true,
-};
+// This was built to be feasible (it was — normalizedVerticalGap(elbow,
+// shoulder) cleanly detects the elbow rising above shoulder height, unlike
+// the rep metric itself which is direction-blind), but it was the wrong
+// check to build, not an unreliable one. Going above shoulder height on a
+// lateral raise is not a form fault for a general user — it shifts emphasis
+// from the side delt to the traps, which is "less optimal," not wrong or
+// dangerous. Flagging it as bad form is misleading (and it was also firing
+// inconsistently on top of that). Removed rather than kept disabled — this
+// isn't a "revisit if the metric improves" situation, it's a judgment call
+// that the fault itself shouldn't be flagged. Incomplete ROM (not raising
+// high enough) is the only ROM-direction check that remains.
 
 // FORM CHECK — swinging/using body momentum instead of raising with control.
 // Reuses shoulder press's exact lean_back check (same joint pair, same
@@ -1246,6 +1234,38 @@ const RAISE_SWING_CHECK: FormCheckDef = {
   evaluateAt: 'throughoutMax',
   condition:  { type: 'greaterThan', value: 20 },  // PLACEHOLDER — verify from [REP] log
   priority:   2,
+  enabled:    true,
+};
+
+// FORM CHECK — wrong direction: raised forward instead of out to the sides
+// (lateral raise ONLY — front-facing camera). FEASIBILITY: assessed as
+// cleanly detectable. Reasoning: a genuine lateral raise moves the wrist
+// AWAY from the body's vertical centerline (large horizontal displacement,
+// clearly visible face-on to a front camera). Raising forward instead keeps
+// the wrist near that same centerline (motion is toward the camera, not
+// sideways) — the two are geometrically distinguishable in 2D, not just in
+// depth. Metric: bodyRelativeDeviation(wrist, axisFrom: shoulder, axisTo: hip)
+// — perpendicular distance of the wrist from the (near-vertical, for an
+// upright torso) shoulder-hip line, i.e. how far sideways the wrist has moved
+// from the body's own centerline. Same primitive already proven in shoulder
+// press's wrist_track_l/r checks (there: value 0.25 flags a wrist NOT
+// travelling in a straight vertical line — a small deviation is already
+// noteworthy in that context). A real lateral raise should reach much
+// further than that (wrist travels most of an arm's length sideways), so
+// firing when the rep's OWN maximum deviation never gets reasonably large is
+// the fault signal here. PLACEHOLDER threshold — no on-device data for this
+// specific use yet, verify from the [REP] log (wrong_direction=value/lim=...).
+const RAISE_DIRECTION_CHECK: FormCheckDef = {
+  id:         'wrong_direction',
+  cue:        'RAISE OUT TO THE SIDES',
+  metric: {
+    type:  'average',
+    left:  { type: 'bodyRelativeDeviation', point: 'leftWrist',  axisFrom: 'leftShoulder',  axisTo: 'leftHip'  },
+    right: { type: 'bodyRelativeDeviation', point: 'rightWrist', axisFrom: 'rightShoulder', axisTo: 'rightHip' },
+  },
+  evaluateAt: 'throughoutMax',
+  condition:  { type: 'lessThan', value: 0.4 },  // PLACEHOLDER — verify from [REP] log
+  priority:   3,
   enabled:    true,
 };
 
@@ -1294,26 +1314,36 @@ function lateralRaiseVariant(
     // decreases from ~72 at rest toward ~0 as the arm reaches shoulder
     // height — same decreasing convention as every other exercise); this was
     // a threshold-calibration bug, not a direction bug.
-    // New values: topAngle=72 (real measured rest), repEnterThreshold=60
-    // (12° margin below rest so resting doesn't look like a rep), 65 exit
-    // (5° hysteresis, matching squat's gap). goodROMThreshold=30 is UNCHANGED
-    // and still a placeholder — no real "arms raised to shoulder height"
-    // data point yet. The [METRIC] log already prints this exercise's value
-    // continuously (~3/sec) via onDebugLog, visible in the on-screen debug
-    // panel — do a few raises and read arms-down vs arms-up directly from
-    // that to set goodROMThreshold for real.
+    // New values: topAngle=72 (real measured rest). repEnterThreshold/
+    // repExitThreshold WIDENED from the original 60/65 (only a 5° gap) to
+    // 55/68 (13° gap) — the 5° gap was the same class of bug already fixed
+    // for tricep (21fb43b): a small wobble near the top could dip back
+    // through the narrow band and fire a second, weaker rep completion
+    // (e.g. a shallow rebound) milliseconds after a real one — two
+    // conflicting cues appearing to fire "at once" was almost certainly this,
+    // not a cue-selection bug (verified: completeRep() can only ever assign
+    // one cue, the logic doesn't allow both). minRepInterval also widened
+    // 0.5→1.0, matching tricep's exact fix, as a debounce backup.
+    // goodROMThreshold=30 is UNCHANGED and still a placeholder — no real
+    // "arms raised to shoulder height" data point yet. The [METRIC] log
+    // already prints this exercise's value continuously (~3/sec) via
+    // onDebugLog, visible in the on-screen debug panel — do a few raises and
+    // read arms-down vs arms-up directly from that to set goodROMThreshold.
     topAngle:           72,
-    repEnterThreshold:  60,
-    repExitThreshold:   65,
+    repEnterThreshold:  55,
+    repExitThreshold:   68,
     goodROMThreshold:   30,
     insufficientROMCue: 'RAISE TO SHOULDER HEIGHT',
-    formChecks:         [RAISE_TOO_HIGH_CHECK, RAISE_SWING_CHECK],
+    // too_high removed (see comment above — not actually a fault, was also
+    // firing inconsistently). wrong_direction added (see comment above —
+    // assessed as cleanly detectable for this front-facing camera).
+    formChecks:         [RAISE_SWING_CHECK, RAISE_DIRECTION_CHECK],
     readyGate:          PASSTHROUGH_GATE,
     cameraSetup: {
       setupInstruction,
       requiredJoints: RAISE_CAMERA_JOINTS_FRONT,
     },
-    minRepInterval:  0.5,
+    minRepInterval:  1.0,
     planarityChecks: [],
     // Approach/walk-away suppression assessed and NOT needed: unlike hinge,
     // neither shoulder nor hip position changes meaningfully during a raise
@@ -1331,25 +1361,31 @@ function frontRaiseVariant(
     id,
     displayName,
     repMetric:          RAISE_REP_METRIC_SIDE,
-    // Same fix and same reasoning as lateralRaiseVariant (see its comment) —
+    // Same fixes and same reasoning as lateralRaiseVariant (see its comments):
     // topAngle/enter/exit corrected from the confirmed lateralRaise device
-    // log (arms-down rest reads ~72, not the assumed 90). Front raise hasn't
+    // log (arms-down rest reads ~72, not the assumed 90) and widened to a 13°
+    // hysteresis gap (was 5°) + minRepInterval 1.0 (was 0.5), same tricep-
+    // precedent fix for conflicting/double-firing cues. Front raise hasn't
     // been separately measured yet — inheriting lateralRaise's real numbers
     // is a much better starting placeholder than the original math-only
     // guess, but still verify from this exercise's own [REP]/[METRIC] log.
+    // too_high removed (not actually a fault — see lateralRaiseVariant).
+    // wrong_direction NOT added here — that check was only assessed for a
+    // FRONT-facing camera (lateral raise); front raise uses a SIDE camera,
+    // a different geometry that hasn't been evaluated for this fault.
     topAngle:           72,
-    repEnterThreshold:  60,
-    repExitThreshold:   65,
+    repEnterThreshold:  55,
+    repExitThreshold:   68,
     goodROMThreshold:   30,
     insufficientROMCue: 'RAISE TO SHOULDER HEIGHT',
-    formChecks:         [RAISE_TOO_HIGH_CHECK, RAISE_SWING_CHECK],
+    formChecks:         [RAISE_SWING_CHECK],
     readyGate:          PASSTHROUGH_GATE,
     cameraSetup: {
       setupInstruction,
       requiredJoints:    RAISE_CAMERA_JOINTS_SIDE_A,
       requiredJointsAlt: RAISE_CAMERA_JOINTS_SIDE_B,
     },
-    minRepInterval:  0.5,
+    minRepInterval:  1.0,
     planarityChecks: [],
   };
 }

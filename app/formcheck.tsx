@@ -175,11 +175,6 @@ export default function FormCheckScreen() {
   const hintTimer      = useRef<ReturnType<typeof setTimeout> | null>(null);
   const setupDoneTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // On-screen debug log panel (last ~25 lines)
-  const [debugLogs,    setDebugLogs]    = useState<string[]>([]);
-  const [showDebugLog, setShowDebugLog] = useState(true);
-  const debugScrollRef = useRef<ScrollView | null>(null);
-
   // Full session log buffer — accumulates EVERY line for post-session review.
   // Not a state value; we never need it to trigger re-renders during the session.
   const sessionLogRef = useRef<string[]>([]);
@@ -211,9 +206,7 @@ export default function FormCheckScreen() {
     if (!DEBUG_LOG_ENABLED || notLinked) return;
     const sub = addDebugLogListener(e => {
       console.log('[DEBUG]', e.message);
-      // Rolling on-screen panel: last 25 lines
-      setDebugLogs(prev => [...prev.slice(-24), e.message]);
-      // Full session buffer: every line, no limit
+      // Full session buffer: every line, no limit — feeds the post-session review only.
       sessionLogRef.current.push(e.message);
       // Parse [METRIC] lines for live push-up readout
       if (e.message.startsWith('[METRIC]')) {
@@ -329,7 +322,6 @@ export default function FormCheckScreen() {
         const defMsg = `[DEF-LOOKUP] id=${exerciseType} found=${defEntry !== null ? 'yes' : 'no'}` +
           (calib ? ` overrides=applied(${new Date(calib.calibratedAt).toLocaleDateString()})` : '');
         console.log(defMsg);
-        if (DEBUG_LOG_ENABLED) setDebugLogs(prev => [...prev.slice(-24), defMsg]);
         if (DEBUG_LOG_ENABLED) sessionLogRef.current.push(defMsg);
         await setExerciseDefinition(defEntry);
         void setExerciseStandard(EXERCISE_STANDARDS[exerciseType] ?? null);
@@ -507,38 +499,20 @@ export default function FormCheckScreen() {
         <RepFeedback key={feedback.key} good={feedback.good} reason={feedback.reason} onComplete={() => setFeedback(null)} />
       )}
 
-      {/* SETUP overlay */}
+      {/* SETUP overlay — same clean layout as the calibration tool's setup
+          screen (app/calibrate.tsx): centered icon + title + hint + a slim
+          progress bar, no corner brackets or boxed panels. */}
       {phase === 'setup' && (
         <View style={s.setupOverlay} pointerEvents="none">
-          <View style={s.bracketGuide}>
-            <View style={[s.bc, s.bcTL, setupAllVisible ? s.bcGreen : s.bcDim]} />
-            <View style={[s.bc, s.bcTR, setupAllVisible ? s.bcGreen : s.bcDim]} />
-            <View style={[s.bc, s.bcBL, setupAllVisible ? s.bcGreen : s.bcDim]} />
-            <View style={[s.bc, s.bcBR, setupAllVisible ? s.bcGreen : s.bcDim]} />
+          <View style={s.setupIconWrap}>
+            <SymbolView name={SETUP_INFO[exerciseType].icon as any} size={28} tintColor={C.text} type="monochrome" style={{ width: 28, height: 28 }} />
           </View>
-          <View style={s.setupPanel}>
-            <View style={[s.statusPill, setupAllVisible && s.statusPillGood]}>
-              <View style={[s.statusDot, setupAllVisible && s.statusDotGood]} />
-              <Text style={[s.statusPillTxt, setupAllVisible && s.statusPillTxtGood]}>
-                {setupAllVisible ? 'In frame — hold still' : (setupHint || 'Get your body in frame')}
-              </Text>
-            </View>
-            <View style={s.setupCard}>
-              <View style={s.setupRow}>
-                <View style={s.setupIconWrap}>
-                  <SymbolView name={SETUP_INFO[exerciseType].icon as any} size={16} tintColor={C.text} type="monochrome" style={{ width: 16, height: 16 }} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.setupTitle}>{SETUP_INFO[exerciseType].title}</Text>
-                  <Text style={s.setupSub}>{SETUP_INFO[exerciseType].sub}</Text>
-                </View>
-              </View>
-              {setupAllVisible && (
-                <View style={s.progressTrack}>
-                  <View style={[s.progressFill, { width: `${Math.round(setupHoldProgress * 100)}%` as any }]} />
-                </View>
-              )}
-            </View>
+          <Text style={s.setupTitle}>{SETUP_INFO[exerciseType].title}</Text>
+          <Text style={s.setupHint}>
+            {setupHint || (setupAllVisible ? 'Hold still while we lock on…' : SETUP_INFO[exerciseType].sub)}
+          </Text>
+          <View style={s.progressTrack}>
+            <View style={[s.progressFill, { width: `${Math.round(setupHoldProgress * 100)}%` as any }]} />
           </View>
         </View>
       )}
@@ -650,36 +624,6 @@ export default function FormCheckScreen() {
           <Row label="phase"   value={stats.phase} />
           <Row label="frames"  value={`${stats.totalFramesAnalyzed} / ${stats.totalFramesReceived}`} />
         </View>
-      )}
-
-      {/* Live debug log panel (last ~25 lines, shown during session) */}
-      {DEBUG_LOG_ENABLED && phase !== 'review' && (
-        <>
-          {!showDebugLog && debugLogs.length > 0 && (
-            <Pressable style={[s.dbgToggle, { top: insets.top + 58 }]} onPress={() => setShowDebugLog(true)}>
-              <Text style={s.dbgToggleTxt}>DBG</Text>
-            </Pressable>
-          )}
-          {showDebugLog && debugLogs.length > 0 && (
-            <View style={[s.dbgPanel, { top: insets.top + 58 }]}>
-              <View style={s.dbgHeader}>
-                <Text style={s.dbgHeaderTxt}>LIVE LOG</Text>
-                <Pressable onPress={() => Share.share({ message: debugLogs.join('\n') })}>
-                  <Text style={s.dbgShare}>Share</Text>
-                </Pressable>
-                <Pressable onPress={() => setShowDebugLog(false)}>
-                  <Text style={s.dbgClose}>✕</Text>
-                </Pressable>
-              </View>
-              <ScrollView ref={debugScrollRef} style={s.dbgScroll}
-                onContentSizeChange={() => debugScrollRef.current?.scrollToEnd({ animated: false })}>
-                {debugLogs.map((msg, i) => (
-                  <Text key={i} style={s.dbgMsg}>{msg}</Text>
-                ))}
-              </ScrollView>
-            </View>
-          )}
-        </>
       )}
 
       {/* Bottom controls */}
@@ -890,64 +834,25 @@ const s = StyleSheet.create({
   metricThresh:    { fontFamily: 'Menlo', fontSize: 8, color: C.dim, marginTop: 2 },
 
   // ── Setup overlay ─────────────────────────────────────────────────────────
-  setupOverlay:     { ...StyleSheet.absoluteFillObject },
+  // Same clean layout/spacing/styling as the calibration tool's setup screen
+  // (app/calibrate.tsx) — centered icon + title + hint + a slim progress bar.
+  setupOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center', alignItems: 'center', gap: 12, paddingHorizontal: 32,
+  },
   setupDoneOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
-  bracketGuide:     { position: 'absolute', top: 88, left: 24, right: 24, bottom: 200 },
-  bc:    { position: 'absolute', width: 48, height: 48 },
-  bcTL:  { top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3, borderTopLeftRadius: 5 },
-  bcTR:  { top: 0, right: 0, borderTopWidth: 3, borderRightWidth: 3, borderTopRightRadius: 5 },
-  bcBL:  { bottom: 0, left: 0, borderBottomWidth: 3, borderLeftWidth: 3, borderBottomLeftRadius: 5 },
-  bcBR:  { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 5 },
-  bcDim:   { borderColor: 'rgba(255,255,255,0.55)' },
-  bcGreen: { borderColor: C.good },
-  setupPanel: { position: 'absolute', bottom: 100, left: 16, right: 16, gap: 10 },
-  statusPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 10, alignSelf: 'center',
-    paddingHorizontal: 20, paddingVertical: 12, borderRadius: 100,
-    backgroundColor: 'rgba(14,15,18,0.78)', borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.14)',
-  },
-  statusPillGood:    { backgroundColor: 'rgba(74,222,128,0.14)', borderColor: 'rgba(74,222,128,0.32)' },
-  statusDot:         { width: 10, height: 10, borderRadius: 5, backgroundColor: C.muted },
-  statusDotGood:     { backgroundColor: C.good },
-  statusPillTxt:     { fontSize: 18, fontWeight: '700', color: C.muted },
-  statusPillTxtGood: { color: C.good },
-  setupCard: {
-    backgroundColor: 'rgba(10,11,12,0.88)', borderRadius: 20, borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)', padding: 20, gap: 14,
-  },
-  setupRow:     { flexDirection: 'row', alignItems: 'center', gap: 14 },
   setupIconWrap: {
-    width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.08)',
+    width: 56, height: 56, borderRadius: 28, backgroundColor: 'rgba(255,255,255,0.08)',
     borderWidth: StyleSheet.hairlineWidth, borderColor: C.border,
-    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 4,
   },
-  setupTitle: { fontSize: 20, fontWeight: '700', color: C.text, lineHeight: 25 },
-  setupSub:   { fontSize: 16, fontWeight: '400', color: C.muted, lineHeight: 21, marginTop: 2 },
-  progressTrack: { height: 4, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 2, overflow: 'hidden' },
-  progressFill:  { height: 4, backgroundColor: C.good, borderRadius: 2 },
-
-  // ── Live debug log panel ──────────────────────────────────────────────────
-  dbgPanel: {
-    position: 'absolute', right: 8, width: 220, maxHeight: 260,
-    backgroundColor: 'rgba(0,0,0,0.84)', borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.15)', overflow: 'hidden',
+  setupTitle: { fontSize: 22, fontWeight: '700', color: C.text },
+  setupHint:  { fontSize: 15, color: C.muted, textAlign: 'center' },
+  progressTrack: {
+    width: 220, height: 6, backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 3, overflow: 'hidden', marginTop: 8,
   },
-  dbgHeader: {
-    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 5, gap: 6,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.10)',
-  },
-  dbgHeaderTxt: { flex: 1, fontSize: 9, fontWeight: '700', color: '#9A9AA2', letterSpacing: 0.8 },
-  dbgShare:     { fontSize: 10, color: '#67CEFF', paddingHorizontal: 3 },
-  dbgClose:     { fontSize: 11, color: '#9A9AA2', paddingHorizontal: 3 },
-  dbgScroll:    { maxHeight: 235, padding: 6 },
-  dbgMsg:       { fontFamily: 'Menlo', fontSize: 8.5, color: '#C8C8CC', lineHeight: 13, marginBottom: 5 },
-  dbgToggle: {
-    position: 'absolute', right: 8, backgroundColor: 'rgba(0,0,0,0.60)', borderRadius: 6,
-    paddingHorizontal: 6, paddingVertical: 3, borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.15)',
-  },
-  dbgToggleTxt: { fontSize: 9, fontWeight: '700', color: '#9A9AA2', letterSpacing: 0.5 },
+  progressFill: { height: 6, backgroundColor: C.good, borderRadius: 3 },
 
   // ── "You're all set!" card ────────────────────────────────────────────────
   setupSuccessCard: {

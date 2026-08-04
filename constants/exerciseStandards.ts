@@ -411,6 +411,65 @@ function hingeStandard(exerciseId: string): ExerciseStandardDef {
   };
 }
 
+// ─── Shared shoulder/arm isolation raise standard building-blocks ────────────
+//
+// repMetric = bestSide(lineVsHorizontal(shoulder, elbow)) — upper arm angle
+// FROM horizontal. HIGH (~90°) arms down (start). LOW (~0°) at shoulder height.
+//
+// PLACEHOLDER — mirrors the placeholder rep-range thresholds in
+// constants/exerciseDefinitions.ts's lateralRaiseVariant()/frontRaiseVariant().
+// lineVsHorizontal(shoulder,elbow) has no on-device validation yet.
+//
+// Static check = torso stability, reusing shoulder press's own static-check
+// pattern verbatim (shoulder-hip-knee angle range, same "stay upright"
+// concern) — unlike the hinge family, this IS expressible in the 3-point-only
+// JointAngleCheckDef schema without contamination: the hip here is correctly
+// used as the torso's own anchor point, not a translating unrelated joint.
+
+const RAISE_STATIC_CHECKS: JointAngleCheckDef[] = [
+  {
+    description: 'Left torso upright — shoulder-hip-knee angle range (no swinging)',
+    a: 'leftShoulder',
+    b: 'leftHip',
+    c: 'leftKnee',
+    maxRangeDeg: 15.0,
+    cue: 'CONTROL IT — no swinging',
+  },
+  {
+    description: 'Right torso upright — shoulder-hip-knee angle range (no swinging)',
+    a: 'rightShoulder',
+    b: 'rightHip',
+    c: 'rightKnee',
+    maxRangeDeg: 15.0,
+    cue: 'CONTROL IT — no swinging',
+  },
+];
+
+// "TOO HIGH" removed — raising past shoulder height isn't actually a fault
+// for a general user (shifts emphasis to traps, not wrong or dangerous), and
+// the matching Layer-1 check was removed for the same reason. See
+// constants/exerciseDefinitions.ts's raiseVariant comment.
+const RAISE_TOP_FAULTS = [
+  'PARTIAL REP — not raising to shoulder height',
+  'WRONG DIRECTION — raising forward instead of out to the sides (lateral raise)',
+  'SWINGING — using body momentum instead of controlled raise strength',
+];
+
+function raiseStandard(exerciseId: string): ExerciseStandardDef {
+  return {
+    exerciseId,
+    reviewed: false,  // PLACEHOLDER numbers below — verify on-device before flipping to true
+    standardPeakAngleMax:  35.0,   // must raise to at least this close to shoulder height
+    standardStartAngleMin: 80.0,   // must return arms fully down before rep counts
+    romCue:    'RAISE TO SHOULDER HEIGHT — not reaching enough depth',
+    extendCue: 'LOWER FULLY — not returning arms down',
+    staticChecks: RAISE_STATIC_CHECKS,
+    tempoMinSec: 1.0,
+    tempoMaxSec: 4.0,
+    topFaults: RAISE_TOP_FAULTS,
+  };
+}
+
 // ─── Registry ────────────────────────────────────────────────────────────────
 // Add new standards here as more exercises gain Layer 2 support.
 // Missing key → Layer 2 inactive for that exercise (Layer 1 relative signals only).
@@ -634,4 +693,8 @@ export const EXERCISE_STANDARDS: Record<string, ExerciseStandardDef> = {
   goodMorning:      hingeStandard('goodMorning'),
   kettlebellSwing:  hingeStandard('kettlebellSwing'),
   singleLegRDL:     hingeStandard('singleLegRDL'),
+
+  // ─── Shoulder/arm isolation raise family ───────────────────────────────────
+  lateralRaise: raiseStandard('lateralRaise'),
+  frontRaise:   raiseStandard('frontRaise'),
 };

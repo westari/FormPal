@@ -180,6 +180,23 @@ final class ExerciseEngine {
     private var lastValidPoseTime: Date = .distantPast
     private let inactivityTimeout: TimeInterval = 2.5
 
+    // ── Pose-gap settle (step-out-of-frame protection) ────────────────────────
+    // A frame can pass the repMetric's confidence gate (kMinConf) while the
+    // person is only PARTIALLY visible (stepping toward the frame edge) —
+    // confidence isn't a perfect proxy for positional accuracy, especially
+    // during rapid pose transitions. A single such frame can spuriously enter
+    // a rep or corrupt repMinAngle before the person is confirmed fully gone
+    // (notePersonMissing) or handleNoPose's inactivityTimeout (2.5s) resets
+    // anything — a quick step-out-and-back can slip through both.
+    // framesSincePoseGap resets to 0 on ANY invalid/missing-pose frame (see
+    // handleNoPose) and must reach MIN_FRAMES_AFTER_POSE_GAP of consecutive
+    // valid frames before a rep is allowed to ENTER or COMPLETE — same
+    // consecutive-frame-hysteresis pattern already used for the ready gate,
+    // settle gate, and resume counter elsewhere in this file, applied here to
+    // give Vision a moment to re-settle after any pose disruption.
+    private var framesSincePoseGap: Int = 0
+    private static let MIN_FRAMES_AFTER_POSE_GAP: Int = 5  // ~0.5s at ~10fps effective rate
+
     // ── Walk-away / inactivity suppression ───────────────────────────────────
     // Suppresses rep counting and cues when the user walks toward the camera
     // (approach) or has been idle after finishing a set (inactivity).
@@ -313,6 +330,7 @@ final class ExerciseEngine {
 
         // ── ACTIVE phase ──────────────────────────────────────────────────────
         lastValidPoseTime = timestamp
+        framesSincePoseGap = min(framesSincePoseGap + 1, Self.MIN_FRAMES_AFTER_POSE_GAP + 100)
         accumulate(pose: pose)
         trackSegmentReferences(pose: pose)
         updateReadyGate(pose: pose, angle: angle, timestamp: timestamp)
@@ -352,6 +370,23 @@ final class ExerciseEngine {
 
     func notePersonMissing(timestamp: Date) {
         if enginePhase == .active {
+            // Abandon any in-progress rep IMMEDIATELY — Vision found no person at
+            // all this frame, an unambiguous signal (stronger than a single
+            // low-confidence joint) that whatever was being tracked is now stale.
+            // Previously this only happened after LEAVE_TIMEOUT (3s) here, or
+            // inactivityTimeout (2.5s) via handleNoPose — a quick step-out-and-
+            // back could stay under both, leaving a corrupted repMinAngle (from a
+            // garbled frame right before vanishing) to silently "complete" a bogus
+            // rep once the person returned. Same pattern as suppressAndLog's
+            // existing in-progress-rep cleanup.
+            if repPhase == .inRep {
+                repPhase = .atTop
+                resetRepState()
+                let msg = "[ACTIVITY] rep abandoned — person left frame"
+                NSLog("[Engine] [%@] %@", def.id, msg)
+                onDebugLog?(msg)
+            }
+
             if setupLossStart == nil { setupLossStart = timestamp }
             let gone = timestamp.timeIntervalSince(setupLossStart!)
             if gone >= Self.LEAVE_TIMEOUT {
@@ -708,7 +743,11 @@ final class ExerciseEngine {
                 return
             }
 
-            if angle < effectiveEnterThreshold {
+            // framesSincePoseGap gate: don't trust a rep ENTRY on a frame that just
+            // recovered from a pose gap (step-out-of-frame, occlusion) — see the
+            // var's doc comment. A garbled edge-of-frame reading could otherwise
+            // spuriously dip below effectiveEnterThreshold and start a phantom rep.
+            if framesSincePoseGap >= Self.MIN_FRAMES_AFTER_POSE_GAP, angle < effectiveEnterThreshold {
                 repPhase      = .inRep
                 repMinAngle   = angle
                 repEnterValue = angle
@@ -718,6 +757,12 @@ final class ExerciseEngine {
             }
 
         case .inRep:
+            // Same framesSincePoseGap gate as entry, applied to BOTH the min-angle
+            // tracking and the completion check — a garbled post-gap frame must not
+            // corrupt repMinAngle (the recorded depth) even if it doesn't complete
+            // a rep outright. Skip this frame entirely until settled.
+            guard framesSincePoseGap >= Self.MIN_FRAMES_AFTER_POSE_GAP else { return }
+
             if angle < repMinAngle {
                 repMinAngle = angle
                 snapshotAtBottom(pose: pose)
@@ -986,6 +1031,11 @@ final class ExerciseEngine {
     // ─── Inactivity reset ─────────────────────────────────────────────────────
 
     private func handleNoPose(timestamp: Date) {
+        // Reset immediately, before the inactivityTimeout guard below — a single
+        // invalid/missing-pose frame should restart the settle count even if it's
+        // too brief to trigger the full rep-state reset that follows.
+        framesSincePoseGap = 0
+
         let elapsed = timestamp.timeIntervalSince(lastValidPoseTime)
         guard lastValidPoseTime != .distantPast,
               elapsed > inactivityTimeout else { return }
