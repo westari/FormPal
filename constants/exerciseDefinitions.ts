@@ -1077,60 +1077,41 @@ const HINGE_REP_METRIC: MetricDef = {
   right: { type: 'lineVsHorizontal', from: 'rightHip', to: 'rightShoulder' },
 };
 
-// FORM CHECK — squatting instead of hinging.
+// FORM CHECK — squatting instead of hinging: REMOVED, second time, for good.
 //
-// FIXED — the original version had two stacked bugs, found from an on-device
-// log (knee_bend=54.6/lim=110[FAIL] fired on a rep with correct, minimal knee
-// bend; a Layer-2 static check separately showed an implausible 119-125° knee-
-// angle RANGE on that same rep):
+// History: v1 used jointAngle(hip,knee,ankle) with an inverted operator AND a
+// hip-contaminated metric (fixed once already). v2 switched to
+// lineVsVertical(ankle,knee) — shin angle from vertical, excluding the hip —
+// with a lenient placeholder limit of 25°.
 //
-//   1. WRONG OPERATOR: metric was jointAngle(hip, knee, ankle) with condition
-//      {lessThan, value: 110} — "FAILS when knee_bend < 110". But hip-knee-
-//      ankle angle DECREASES as the knee bends more (same convention as
-//      squat's own knee angle) — so this fired on LOW values (heavy bend)
-//      being fine and treated a merely-moderate reading as the fault.
-//      Backwards from "fires when the knee bends too much."
-//   2. CONTAMINATED METRIC: even with the operator fixed, hip-knee-ankle angle
-//      isn't a clean knee-flexion signal for a hinge. The HIP is the joint
-//      that moves the most in a hinge — it translates backward substantially
-//      while the true knee joint barely flexes. That hip translation alone
-//      swings the computed 2D angle by 100°+ (confirmed on-device: implausible
-//      119-125° range on a rep with near-zero real knee bend) even with almost
-//      no actual flexion. Same class of problem as the approach-suppression
-//      fix needing to exclude the hip-based torsoRef signal — anything
-//      involving the hip is unreliable here.
+// On-device data on v2 (clean hinge reps, NO squatting, confirmed by the
+// user): knee_bend ranged 22–56° — a 34° spread from stance/camera-framing
+// variation ALONE, within one person's own correct reps on the same set.
+// Every value above 25 (34.8, 48.5, 50.0, 56.1) wrongly fired "DON'T SQUAT".
 //
-// FIX: measure the SHIN's angle from vertical instead — lineVsVertical(ankle,
-// knee) — which excludes the hip entirely. In a correct hinge the shin stays
-// close to vertical (knee stays stacked over the ankle); in a squat the knee
-// travels forward past the toes, visibly tilting the shin forward. This is
-// squat's own (disabled, never-verified) heel_rise check's exact joint pair
-// and condition direction (greaterThan) — reused here as the closest verified
-// precedent, salvaging the check rather than dropping it.
-// PLACEHOLDER: condition value is a lenient guess — verify from the [REP] log
-// (knee_bend=value/lim=... prints for every rep) and tighten from there.
-const HINGE_KNEE_BEND_CHECK: FormCheckDef = {
-  id:         'knee_bend',
-  cue:        "PUSH HIPS BACK, DON'T SQUAT",
-  metric: {
-    type:  'average',
-    left:  { type: 'lineVsVertical', from: 'leftAnkle',  to: 'leftKnee'  },
-    right: { type: 'lineVsVertical', from: 'rightAnkle', to: 'rightKnee' },
-  },
-  evaluateAt: 'throughoutMax',
-  condition:  { type: 'greaterThan', value: 25 },  // PLACEHOLDER — verify from [REP] log
-  priority:   1,
-  enabled:    true,
-};
+// VERDICT: raising the limit to 60-65 (the next thing to try) would not
+// actually fix this — it only leaves a 4-9° margin above the observed noise
+// ceiling (56), against a metric that already showed 34° of noise-driven
+// variance in one small sample. That's not a safe margin, it just lowers how
+// often it misfires. More importantly: squat's OWN analogous check
+// (heel_rise, the exact same lineVsVertical(ankle,knee) metric) was written
+// with a similarly lenient threshold (20°) and left disabled, never
+// validated — the strongest signal in this codebase that this specific
+// metric doesn't cleanly discriminate even for its ORIGINAL purpose, let
+// alone for telling a hinge apart from a squat. No reliable daylight between
+// the two on this metric — removing rather than shipping a check that will
+// keep firing on correct form. Depth (insufficientROMCue) is the only
+// Layer-1 check for this family now; the torso-angle rep metric itself
+// already works well (confirmed from real device log: top=89.5, bottom=20.5).
 
 // FORM CHECK — rounded upper back: NOT BUILT, on purpose. Apple Vision has no
 // spine/mid-back landmark (only nose, shoulders, elbows, wrists, hips, knees,
 // ankles — see Joints.swift's Joint enum) — there is no way to see curvature
 // in the torso line from only its two endpoints. Same limitation already
 // documented for the row family's flat-back attempts. Depth
-// (insufficientROMCue below) and the knee-bend check above are the only
-// Layer-1 checks for this family; rounding relies on the user's own cue
-// awareness rather than a check that would fire randomly.
+// (insufficientROMCue below) is now the ONLY Layer-1 signal for this family —
+// the knee_bend check (above) was removed as unreliable; rounding relies on
+// the user's own cue awareness rather than a check that would fire randomly.
 
 // Side-on so torso travel and hip movement are both visible. Only the joints
 // actually used by the metric/checks (shoulder, hip, knee) — no far-side
@@ -1161,7 +1142,7 @@ function hingeVariant(
     repExitThreshold:   85,
     goodROMThreshold:   55,
     insufficientROMCue: 'HINGE DEEPER',
-    formChecks:         [HINGE_KNEE_BEND_CHECK],
+    formChecks:         [],  // knee_bend removed — see "REMOVED, second time, for good" comment above
     readyGate:          PASSTHROUGH_GATE,
     cameraSetup: {
       setupInstruction,
@@ -1176,6 +1157,200 @@ function hingeVariant(
     // rotation inflates the same shoulder-hip distance signal walking closer
     // to the camera would. Inactivity-based suppression (8s idle) stays.
     suppressApproachDetection: true,
+  };
+}
+
+// ─── Shoulder/arm isolation raise family building-blocks ──────────────────────
+//
+// BASED ON shoulderPress (closest existing exercise — arm-angle movement,
+// front-facing). Reused directly: the bestSide combinator (shoulder press uses
+// it even front-facing, for per-frame confidence robustness — not occlusion),
+// the lineVsVertical(shoulder, elbow) joint pair for the rep metric, and the
+// lineVsVertical(hip, shoulder) torso-lean check verbatim (same "stay upright"
+// concern as shoulder press's own lean_back check).
+//
+// DIRECTION FIX (new for this family): shoulder press's metric naturally
+// DECREASES during the press because raising the arm OVERHEAD moves it toward
+// vertical, which lineVsVertical reads as low. A lateral raise moves the arm
+// toward HORIZONTAL instead, which lineVsVertical reads as HIGH — backwards
+// for the engine's hardwired decreasing-metric state machine (verified: entry
+// requires the metric to drop below repEnterThreshold, no exception exists).
+// Solved exactly as for the hip-hinge family: use the complement,
+// lineVsHorizontal(shoulder, elbow), which decreases from ~90° (arms down) to
+// ~0° (arms at shoulder height) — matches engine convention, no engine change.
+//
+// PLACEHOLDER WARNING: every threshold below is unverified — this is the first
+// use of lineVsHorizontal(shoulder,elbow) in this codebase. Do 5 reps of
+// lateralRaise once this reloads and send the [REP] log.
+const RAISE_REP_METRIC_FRONT: MetricDef = {
+  type: 'bestSide',
+  left:  { type: 'lineVsHorizontal', from: 'leftShoulder',  to: 'leftElbow'  },
+  right: { type: 'lineVsHorizontal', from: 'rightShoulder', to: 'rightElbow' },
+  leftJoints:  ['leftShoulder',  'leftElbow'],
+  rightJoints: ['rightShoulder', 'rightElbow'],
+};
+
+// Side-camera version for the front raise (see camera-angle reasoning below) —
+// same joint pair and metric, bestSide here for genuine far-side occlusion
+// (row/hinge's reason) rather than shoulder press's confidence-robustness reason.
+const RAISE_REP_METRIC_SIDE: MetricDef = {
+  type: 'bestSide',
+  left:  { type: 'lineVsHorizontal', from: 'leftShoulder',  to: 'leftElbow'  },
+  right: { type: 'lineVsHorizontal', from: 'rightShoulder', to: 'rightElbow' },
+  leftJoints:  ['leftShoulder',  'leftElbow'],
+  rightJoints: ['rightShoulder', 'rightElbow'],
+};
+
+// FORM CHECK — going too high (above shoulder height).
+//
+// FEASIBILITY NOTE: the naive approach — reusing the rep metric itself
+// (lineVsVertical/lineVsHorizontal) — does NOT work here. Both take abs(dy),
+// so they're direction-blind: an arm at 60° raised (not yet at shoulder
+// height) and an arm at 120° (raised past overhead) produce indistinguishable
+// readings from the same metric. It cannot tell "not high enough" from "too
+// high" — they look the same. Using a genuinely different, SIGNED metric
+// instead: normalizedVerticalGap(elbow, shoulder) is negative/near-zero at or
+// below shoulder height, and only goes positive once the elbow rises ABOVE
+// the shoulder's height — monotonic in the one direction that matters.
+// PLACEHOLDER threshold — verify from the [REP] log (too_high=value/lim=...).
+const RAISE_TOO_HIGH_CHECK: FormCheckDef = {
+  id:         'too_high',
+  cue:        'DON\'T GO ABOVE SHOULDERS',
+  metric: {
+    type:  'average',
+    left:  { type: 'normalizedVerticalGap', upper: 'leftElbow',  lower: 'leftShoulder'  },
+    right: { type: 'normalizedVerticalGap', upper: 'rightElbow', lower: 'rightShoulder' },
+  },
+  evaluateAt: 'throughoutMax',
+  condition:  { type: 'greaterThan', value: 0.15 },  // PLACEHOLDER — verify from [REP] log
+  priority:   1,
+  enabled:    true,
+};
+
+// FORM CHECK — swinging/using body momentum instead of raising with control.
+// Reuses shoulder press's exact lean_back check (same joint pair, same
+// condition direction) — same "stay upright" concern, proven metric type.
+// Jerk/velocity-based swing detection was considered and is NOT feasible: the
+// Metric/FormCheck framework has no frame-to-frame rate-of-change primitive,
+// only instantaneous spatial readings — not attempting it.
+// PLACEHOLDER threshold — inherited as a starting point from shoulder press's
+// own value (20°), itself never on-device verified. Verify from [REP] log.
+const RAISE_SWING_CHECK: FormCheckDef = {
+  id:         'swinging',
+  cue:        'CONTROL IT, NO SWINGING',
+  metric: {
+    type:  'average',
+    left:  { type: 'lineVsVertical', from: 'leftHip',  to: 'leftShoulder'  },
+    right: { type: 'lineVsVertical', from: 'rightHip', to: 'rightShoulder' },
+  },
+  evaluateAt: 'throughoutMax',
+  condition:  { type: 'greaterThan', value: 20 },  // PLACEHOLDER — verify from [REP] log
+  priority:   2,
+  enabled:    true,
+};
+
+// CAMERA — lateral raise: FRONT-facing. The raise's arc stays in the frontal
+// plane (side-to-side), which is parallel to a front camera's image plane —
+// no foreshortening at any point in the rep (the ideal angle for this
+// movement), and both arms are genuinely visible with no occlusion (unlike
+// every side-view family so far). Includes hips explicitly (unlike shoulder
+// press's requiredJoints, which omits them despite its own lean_back check
+// needing them) since the swing check is one of only two active checks here.
+const RAISE_CAMERA_JOINTS_FRONT = [
+  'leftShoulder', 'rightShoulder', 'leftElbow', 'rightElbow',
+  'leftWrist', 'rightWrist', 'leftHip', 'rightHip',
+];
+
+// CAMERA — front raise: SIDE-facing, not front. A front raise's arc is in the
+// sagittal plane, which points straight at a front camera — the arm would
+// foreshorten to nearly nothing at the top (the exact class of bug that broke
+// curl's forearm planarity check). A side camera keeps the whole arc in-plane,
+// same reasoning as squat/hinge. requiredJointsAlt mirrors row/hinge's
+// occlusion-tolerant fallback pattern for whichever side faces the camera.
+const RAISE_CAMERA_JOINTS_SIDE_A = ['leftShoulder',  'leftElbow',  'leftHip'];
+const RAISE_CAMERA_JOINTS_SIDE_B = ['rightShoulder', 'rightElbow', 'rightHip'];
+
+function lateralRaiseVariant(
+  id:               string,
+  displayName:      string,
+  setupInstruction: string,
+): ExerciseDefinitionDef {
+  return {
+    id,
+    displayName,
+    repMetric: RAISE_REP_METRIC_FRONT,
+    // FIXED from real device log. Original topAngle=90 assumed arms-down
+    // reads mathematically-vertical (lineVsHorizontal=90); the real device
+    // log showed [GATE] metric=71.689 with arms genuinely hanging at rest —
+    // relaxed arms don't hang perfectly vertical (natural carrying angle,
+    // shoulder width holds the upper arm out from true vertical slightly),
+    // so real rest reads ~72, not ~90. That put repEnterThreshold=75 ABOVE
+    // the resting value instead of below it — the engine's .atTop case enters
+    // a rep when the metric drops BELOW repEnterThreshold, so resting at 72
+    // (already below 75) looked like a rep had already started before any
+    // arm movement happened, and every real raise from there just moved
+    // further away from repExitThreshold instead of crossing back through
+    // it. Zero reps. Metric DIRECTION was correct (confirmed: lineVsHorizontal
+    // decreases from ~72 at rest toward ~0 as the arm reaches shoulder
+    // height — same decreasing convention as every other exercise); this was
+    // a threshold-calibration bug, not a direction bug.
+    // New values: topAngle=72 (real measured rest), repEnterThreshold=60
+    // (12° margin below rest so resting doesn't look like a rep), 65 exit
+    // (5° hysteresis, matching squat's gap). goodROMThreshold=30 is UNCHANGED
+    // and still a placeholder — no real "arms raised to shoulder height"
+    // data point yet. The [METRIC] log already prints this exercise's value
+    // continuously (~3/sec) via onDebugLog, visible in the on-screen debug
+    // panel — do a few raises and read arms-down vs arms-up directly from
+    // that to set goodROMThreshold for real.
+    topAngle:           72,
+    repEnterThreshold:  60,
+    repExitThreshold:   65,
+    goodROMThreshold:   30,
+    insufficientROMCue: 'RAISE TO SHOULDER HEIGHT',
+    formChecks:         [RAISE_TOO_HIGH_CHECK, RAISE_SWING_CHECK],
+    readyGate:          PASSTHROUGH_GATE,
+    cameraSetup: {
+      setupInstruction,
+      requiredJoints: RAISE_CAMERA_JOINTS_FRONT,
+    },
+    minRepInterval:  0.5,
+    planarityChecks: [],
+    // Approach/walk-away suppression assessed and NOT needed: unlike hinge,
+    // neither shoulder nor hip position changes meaningfully during a raise
+    // (isolation movement — only the elbow/wrist swing) — torsoReference
+    // should stay flat through a rep. Leaving suppressApproachDetection unset.
+  };
+}
+
+function frontRaiseVariant(
+  id:               string,
+  displayName:      string,
+  setupInstruction: string,
+): ExerciseDefinitionDef {
+  return {
+    id,
+    displayName,
+    repMetric:          RAISE_REP_METRIC_SIDE,
+    // Same fix and same reasoning as lateralRaiseVariant (see its comment) —
+    // topAngle/enter/exit corrected from the confirmed lateralRaise device
+    // log (arms-down rest reads ~72, not the assumed 90). Front raise hasn't
+    // been separately measured yet — inheriting lateralRaise's real numbers
+    // is a much better starting placeholder than the original math-only
+    // guess, but still verify from this exercise's own [REP]/[METRIC] log.
+    topAngle:           72,
+    repEnterThreshold:  60,
+    repExitThreshold:   65,
+    goodROMThreshold:   30,
+    insufficientROMCue: 'RAISE TO SHOULDER HEIGHT',
+    formChecks:         [RAISE_TOO_HIGH_CHECK, RAISE_SWING_CHECK],
+    readyGate:          PASSTHROUGH_GATE,
+    cameraSetup: {
+      setupInstruction,
+      requiredJoints:    RAISE_CAMERA_JOINTS_SIDE_A,
+      requiredJointsAlt: RAISE_CAMERA_JOINTS_SIDE_B,
+    },
+    minRepInterval:  0.5,
+    planarityChecks: [],
   };
 }
 
@@ -1929,5 +2104,29 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
     'Stand sideways to the camera — full body in frame, hips and shoulders visible',
     // Single-leg balance changes the difficulty, not the torso-angle mechanics
     // being measured — same repMetric and placeholder thresholds as the rest.
+  ),
+
+  // ─── Shoulder/arm isolation raise family ───────────────────────────────────
+  //
+  // lateralRaise is the template — placeholder thresholds are meant to be
+  // calibrated from THIS one first, no equipment needed to test the movement
+  // pattern. Calf raise assessed and NOT included — see conversation notes:
+  // no heel/toe landmark exists, and the real ROM is a few centimeters, an
+  // order of magnitude smaller than every other exercise's swing. Not forcing
+  // it in; treat as a separate investigation if you want to test the raw
+  // ankle-position signal on-device first.
+  lateralRaise: lateralRaiseVariant(
+    'lateralRaise',
+    'Lateral Raise',
+    'Face the camera — stand back so both arms are fully in frame',
+  ),
+
+  frontRaise: frontRaiseVariant(
+    'frontRaise',
+    'Front Raise',
+    'Stand sideways to the camera — full arm in frame, shoulder to wrist visible',
+    // Side camera, not front — see RAISE_CAMERA_JOINTS_SIDE_A/B comment above:
+    // a front raise's arc points straight at a front camera and would
+    // foreshorten to nearly nothing at the top.
   ),
 };

@@ -108,6 +108,9 @@ const SETUP_INFO: Record<string, { icon: string; title: string; sub: string }> =
   goodMorning:      { icon: 'arrow.left.and.right', title: 'Stand sideways', sub: 'Full body in frame — hips and shoulders visible' },
   kettlebellSwing:  { icon: 'arrow.left.and.right', title: 'Stand sideways', sub: 'Full body in frame — hips and shoulders visible' },
   singleLegRDL:     { icon: 'arrow.left.and.right', title: 'Stand sideways', sub: 'Full body in frame — hips and shoulders visible' },
+  // Shoulder/arm isolation raise family
+  lateralRaise: { icon: 'camera.fill', title: 'Face the camera', sub: 'Stand back — both arms and shoulders in view' },
+  frontRaise:   { icon: 'arrow.left.and.right', title: 'Stand sideways', sub: 'Full arm in frame — shoulder to wrist visible' },
 };
 
 // ─── Debug log panel — set false to hide without removing code ────────────────
@@ -482,7 +485,12 @@ export default function FormCheckScreen() {
   const showRepCounter = isStopping || isTracking;
   const needsReady     = isTracking && stats != null && !stats.ready;
   const isPushupFamily = ['pushup','kneePushup','inclinePushup','widePushup','diamondPushup','declinePushup'].includes(exerciseType);
-  const showPushupMetric = isPushupFamily && isTracking && liveMetric != null;
+  // Raise family also gets the live numeric readout — needed to read arms-down
+  // vs arms-up directly on-screen while calibrating real thresholds, same as
+  // push-up used it for elbow angle during its own calibration.
+  const isRaiseFamily = ['lateralRaise', 'frontRaise'].includes(exerciseType);
+  const showPushupMetric = (isPushupFamily || isRaiseFamily) && isTracking && liveMetric != null;
+  const liveMetricLabel = isPushupFamily ? 'ELBOW ANGLE' : 'ARM ANGLE';
 
   return (
     <View style={s.root}>
@@ -601,10 +609,10 @@ export default function FormCheckScreen() {
         </View>
       )}
 
-      {/* Live push-up elbow angle readout */}
+      {/* Live metric readout — push-up elbow angle, or raise-family arm angle */}
       {showPushupMetric && (
         <View style={s.metricReadout} pointerEvents="none">
-          <Text style={s.metricLabel}>ELBOW ANGLE</Text>
+          <Text style={s.metricLabel}>{liveMetricLabel}</Text>
           <Text style={[s.metricValue, liveMetric!.state === 'down' && s.metricValueDown]}>
             {liveMetric!.value.toFixed(1)}°
           </Text>
