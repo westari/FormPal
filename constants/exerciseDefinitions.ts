@@ -565,7 +565,18 @@ function shoulderPressVariant(
     topAngle:           84,
     repEnterThreshold:  68,
     repExitThreshold:   72,
-    goodROMThreshold:   35,
+    // FIXED a real inconsistency: a device log showed genuine full presses
+    // reaching only 52-63° from vertical, but this stayed at 35 (never
+    // updated when the matching Layer-2 standardPeakAngleMax was loosened
+    // 45→65 off the same data) — meaning a real full press should have been
+    // failing ROM outright ("PRESS HIGHER" on every rep, not "too lenient").
+    // 60 aligns Layer 0 with that same real data, just inside the loosened
+    // Layer-2 standard. This does NOT by itself fix "arm-waving passes as
+    // good" — that's a control/tempo problem, not a depth problem (a fast,
+    // uncontrolled fling can reach a given angle at least as easily as a
+    // real press can, sometimes more so). See the note on this exercise for
+    // why I'm not guessing a control check without real comparison data.
+    goodROMThreshold:   60,
     insufficientROMCue: 'PRESS HIGHER',
     formChecks:      SHOULDER_PRESS_FORM_CHECKS,
     readyGate:       PASSTHROUGH_GATE,
@@ -1179,16 +1190,24 @@ function hingeVariant(
     repMetric: HINGE_REP_METRIC,
     // Rep-range thresholds — first on-device log confirmed the shape of these:
     // top=89.5° (topAngle placeholder was 90, essentially exact), bottom=20.5°
-    // for a genuinely full hinge. goodROMThreshold TIGHTENED 55→40 — on-device
-    // testing found 55 still called shallow hinges good ("HINGE DEEPER not
-    // strict enough"). 40 sits meaningfully closer to the one confirmed-full
-    // reading (20.5°) while leaving room for natural depth variation; still a
-    // reasoned value, not device-verified at this exact number — send a fresh
-    // [REP] log and I'll tune precisely if shallow reps still pass.
+    // for a genuinely full hinge. goodROMThreshold history: 55 → 40 → 45.
+    // 55 was reported "not strict enough" (shallow hinges passed); 40 (the
+    // next tightening) was then reported firing "randomly" on genuinely good
+    // full reps. Those two reports pull in opposite directions, which is
+    // itself useful information: it suggests either (a) real good-rep depth
+    // varies more rep-to-rep than the single 20.5° data point suggested, so
+    // no fixed cutoff near 40 can satisfy both without more data, or (b) a
+    // single noisy frame at the exact bottom of a rep is occasionally
+    // corrupting peakAngle (this check uses ONE frame's minimum reading, not
+    // an average) — I can't tell which from a description alone. 45 is a
+    // reasoned middle ground between the two reported extremes, NOT a
+    // confirmed fix — please send a fresh [REP] log with peak values from a
+    // few reps you'd call genuinely good vs shallow so I can set this from
+    // real numbers instead of splitting the difference a second time.
     topAngle:           90,
     repEnterThreshold:  80,
     repExitThreshold:   85,
-    goodROMThreshold:   40,
+    goodROMThreshold:   45,
     insufficientROMCue: 'HINGE DEEPER',
     formChecks:         [],  // knee_bend removed — see "REMOVED, second time, for good" comment above
     readyGate:          PASSTHROUGH_GATE,
@@ -1317,38 +1336,23 @@ const RAISE_DIRECTION_CHECK: FormCheckDef = {
   enabled:    true,
 };
 
-// FORM CHECK — bent elbows. DISABLED after on-device testing: the 120°
-// placeholder still fired "KEEP ARMS STRAIGHT" with the user's arms genuinely
-// straight, and is the likely cause of a second report (a correct sideways
-// flare wrongly getting flagged) too — the elbow-angle reading apparently
-// isn't clean for this exercise/camera-angle even at a very permissive
-// threshold. This was a brand-new, never-before-used constraint (see the
-// original reasoning below) with two misfire reports and zero confirmed
-// correct fires — per the standing rule, that's disable-not-reguess: I have
-// no evidence a third threshold guess would behave any better. Leaving the
-// check defined (not deleted) in case a future device log shows real
-// separation between straight/bent values worth re-enabling around.
+// FORM CHECK — bent elbows. REMOVED entirely (not just disabled).
 //
-// Original feasibility reasoning: jointAngle(shoulder, elbow, wrist) is a
-// proven primitive (curl/tricep's own primary rep metric), so elbow bend
-// itself is reliably measurable in general. What was genuinely NEW (CLAUDE.md
-// rule #2) was using it as a "stay near-straight throughout" constraint on a
-// non-elbow-dominant lift — no existing exercise does that, so there was no
-// comparable threshold to inherit, and it seems the reading isn't as clean
-// here as it is for curl/tricep's own use of the same primitive.
-const RAISE_ARMS_STRAIGHT_CHECK: FormCheckDef = {
-  id:         'arms_bent',
-  cue:        'KEEP ARMS STRAIGHT',
-  metric: {
-    type:  'average',
-    left:  { type: 'jointAngle', a: 'leftShoulder',  pivot: 'leftElbow',  c: 'leftWrist'  },
-    right: { type: 'jointAngle', a: 'rightShoulder', pivot: 'rightElbow', c: 'rightWrist' },
-  },
-  evaluateAt: 'throughoutMin',
-  condition:  { type: 'lessThan', value: 120 },  // unverified — see disabled note above
-  priority:   4,
-  enabled:    false,
-};
+// History: built with a deliberately wide placeholder (120°), then disabled
+// after two on-device misfire reports (fired with arms genuinely straight;
+// implicated in a second report of a correct sideways flare getting flagged).
+// A disabled check still evaluates to "always passes," which reads to the
+// user as "broken/fake — says GOOD on anything" — correct, since it wasn't
+// running at all. With zero confirmed correct fires across two rounds of
+// testing and no device data suggesting a working threshold exists, per the
+// standing rule this is now a genuine "not reliably detectable with this
+// primitive/camera-angle" verdict, not a "needs another guess." Removed
+// rather than left disabled so it can't be mistaken for active protection.
+//
+// jointAngle(shoulder, elbow, wrist) itself is a proven primitive elsewhere
+// (curl/tricep's own primary rep metric) — the elbow-angle reading just isn't
+// clean enough for THIS exercise's camera angle/motion to support a "stay
+// near-straight throughout" constraint, which no other exercise has needed.
 
 // CAMERA — lateral raise: FRONT-facing. The raise's arc stays in the frontal
 // plane (side-to-side), which is parallel to a front camera's image plane —
@@ -1421,9 +1425,9 @@ function lateralRaiseVariant(
     // too_high removed (see comment above — not actually a fault, was also
     // firing inconsistently). wrong_direction added (see comment above —
     // assessed as cleanly detectable for this front-facing camera). arms_bent
-    // DISABLED — see RAISE_ARMS_STRAIGHT_CHECK comment (misfired on straight
-    // arms on-device, twice-implicated, no confirmed correct fire).
-    formChecks:         [RAISE_SWING_CHECK, RAISE_DIRECTION_CHECK, RAISE_ARMS_STRAIGHT_CHECK],
+    // REMOVED — misfired on straight arms on-device, twice-implicated, no
+    // confirmed correct fire (see removed-check comment above).
+    formChecks:         [RAISE_SWING_CHECK, RAISE_DIRECTION_CHECK],
     readyGate:          PASSTHROUGH_GATE,
     cameraSetup: {
       setupInstruction,
@@ -1467,10 +1471,8 @@ function frontRaiseVariant(
     repExitThreshold:   68,
     goodROMThreshold:   8,
     insufficientROMCue: 'RAISE HIGHER',
-    // arms_bent DISABLED — same misfire reasoning as lateralRaiseVariant (see
-    // RAISE_ARMS_STRAIGHT_CHECK comment). Kept in the array since it's inert
-    // while disabled — no functional difference from removing it here.
-    formChecks:         [RAISE_SWING_CHECK, RAISE_ARMS_STRAIGHT_CHECK],
+    // arms_bent REMOVED — same misfire reasoning as lateralRaiseVariant.
+    formChecks:         [RAISE_SWING_CHECK],
     readyGate:          PASSTHROUGH_GATE,
     cameraSetup: {
       setupInstruction,
@@ -1800,7 +1802,8 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
     topAngle:           84,
     repEnterThreshold:  68,
     repExitThreshold:   72,
-    goodROMThreshold:   35,
+    // Aligned 35→60 with real device data — see shoulderPressVariant()'s comment.
+    goodROMThreshold:   60,
     insufficientROMCue: 'PRESS HIGHER',
 
     formChecks: [

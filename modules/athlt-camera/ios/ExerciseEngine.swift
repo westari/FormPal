@@ -209,8 +209,11 @@ final class ExerciseEngine {
     // phantom-rep guard (requires only ~0.2 units for seated row). The settle gate holds
     // rep counting until the metric has been stably above exitThreshold for SETTLE_FRAMES.
     // Once settled, hasSettled stays true for the session — no re-settling between reps.
-    private var hasSettled:       Bool = false
-    private var settledTopFrames: Int  = 0
+    private var hasSettled:             Bool = false
+    private var settledTopFrames:       Int  = 0
+    // Set once the user drops below effectiveEnterThreshold before ever settling — see the
+    // "resync on prior attempt" fix in runStateMachine's .atTop case.
+    private var attemptedRepPreSettle:  Bool = false
 
     private static let SETTLE_FRAMES: Int = 8   // ~0.27s at 30fps
 
@@ -657,19 +660,41 @@ final class ExerciseEngine {
             // every subsequent rep" for the rest of the session.
             // FIX: only start accumulating repTopValue AFTER hasSettled, seeded from the exact
             // frame settling was confirmed — discards whatever noise came before it.
+            //
+            // ROOT CAUSE (curl/shoulder press "doesn't count until you pause and go again";
+            // tricep-adjacent symptom): SETTLE_FRAMES required 8 CONSECUTIVE frames above
+            // exitThreshold with no other way to satisfy it. A user who starts their first rep
+            // immediately (completely normal — SETUP already held them still for 2s) drops
+            // below exitThreshold before accumulating 8 frames; the decay-not-reset then
+            // erodes settledTopFrames across the whole rep (many frames below threshold), and
+            // since the .atTop case returns immediately while !hasSettled, that first rep motion
+            // is entirely ignored rather than counted OR used as settle evidence. Every
+            // following rep hits the identical problem — permanently stuck until the user
+            // happens to pause with 8 clean consecutive frames between reps.
+            // FIX: a deliberate down-and-back-up excursion (crossing effectiveEnterThreshold
+            // and returning) is itself at least as strong evidence of "this is a real, stable
+            // top position" as a passive hold — resync on it immediately instead of waiting for
+            // a fresh 8-frame hold that a continuous-tempo user may never produce.
             if !hasSettled {
                 if angle > effectiveExitThreshold {
                     settledTopFrames = min(settledTopFrames + 1, Self.SETTLE_FRAMES + 2)
-                    if settledTopFrames >= Self.SETTLE_FRAMES {
+                    let readyByHold          = settledTopFrames >= Self.SETTLE_FRAMES
+                    let readyByPriorAttempt  = attemptedRepPreSettle
+                    if readyByHold || readyByPriorAttempt {
                         hasSettled  = true
                         repTopValue = angle
-                        let msg = "[SETTLE] top stable — rep counting active"
+                        let msg = "[SETTLE] " +
+                            (readyByPriorAttempt ? "resynced after an early rep attempt" : "top stable") +
+                            " — rep counting active"
                         NSLog("[Engine] [%@] %@", def.id, msg)
                         onDebugLog?(msg)
                     }
                 } else {
                     // Graceful decay for single-frame noise (don't hard-reset on one bad frame).
                     settledTopFrames = max(0, settledTopFrames - 1)
+                    if angle < effectiveEnterThreshold {
+                        attemptedRepPreSettle = true
+                    }
                 }
                 return
             }
@@ -1111,8 +1136,9 @@ final class ExerciseEngine {
     }
 
     private func resetSettleState() {
-        hasSettled       = false
-        settledTopFrames = 0
+        hasSettled             = false
+        settledTopFrames       = 0
+        attemptedRepPreSettle  = false
     }
 
     private func resetRepState() {

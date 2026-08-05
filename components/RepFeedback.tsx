@@ -209,26 +209,35 @@ const card = StyleSheet.create({
 export default function RepFeedback({
   good,
   reason,
+  seq: repSeq,
   onComplete,
 }: {
   good: boolean;
   reason: string;
+  seq: number;
   onComplete: () => void;
 }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const current = useRef<Animated.CompositeAnimation | null>(null);
 
-  // Root cause of "verdict doesn't show, especially on fast reps": the parent
-  // used to remount this component on every rep (a growing `key` prop), which
-  // hard-cuts whatever was on screen to nothing and restarts a fresh 150ms
-  // fade-in. At a fast rep tempo (well under the ~1.4-1.6s full fade-in/hold/
-  // fade-out cycle), each new rep's card could itself get cut off before its
-  // own fade-in finished — the verdict flashed for a few ms and was gone.
-  // Fix: the parent now keeps ONE mounted instance for as long as feedback is
-  // showing (no key). A new rep's good/reason props update that instance:
-  // stop whatever animation was running and SNAP opacity to 1 immediately, so
-  // the newest verdict is always visible at full opacity for at least an
-  // instant, however fast reps arrive, then run its own hold+fade-out.
+  // Root cause #1 (fixed previously): the parent used to remount this
+  // component on every rep (a growing `key` prop), which hard-cut whatever
+  // was on screen and restarted a fresh 150ms fade-in — at a fast tempo, each
+  // new rep's card could itself get cut off before its own fade-in finished.
+  // Fixed by keeping one mounted instance and updating in place instead.
+  //
+  // Root cause #2 (still happening after that fix): this effect depended on
+  // [good, reason] — but consecutive reps very often produce the IDENTICAL
+  // cue ("GOOD" followed by another "GOOD" is the normal case for a healthy
+  // set). React's dependency comparison saw no change in VALUE and simply
+  // didn't re-run the effect, so the second rep's verdict never restarted the
+  // animation — it silently rode out whatever was left of the first rep's.
+  // At slow tempo this never showed up (feedback fully completes and unmounts
+  // to null between reps, so the next rep is always a fresh mount regardless
+  // of dependencies) — only at fast tempo, where this in-place-update path is
+  // what's actually running. Fix: depend on `seq`, a plain incrementing
+  // number the parent bumps on every rep regardless of whether the cue text
+  // repeats, so the effect (and the guaranteed-visible restart) always fires.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     current.current?.stop();
@@ -241,7 +250,7 @@ export default function RepFeedback({
     seq.start(({ finished }) => { if (finished) onComplete(); });
 
     return () => { current.current?.stop(); };
-  }, [good, reason]);
+  }, [repSeq]);
 
   return (
     <Animated.View

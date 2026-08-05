@@ -163,7 +163,8 @@ export default function FormCheckScreen() {
   const [setupHoldProgress, setSetupHoldProgress] = useState(0);
   const [setupHint,         setSetupHint]         = useState('');
 
-  const [feedback, setFeedback] = useState<{ good: boolean; reason: string } | null>(null);
+  const [feedback, setFeedback] = useState<{ good: boolean; reason: string; seq: number } | null>(null);
+  const feedbackSeq    = useRef(0);
   const flashAnim      = useRef(new Animated.Value(0)).current;
   const notLinked      = !isNativeModuleLinked();
 
@@ -188,16 +189,6 @@ export default function FormCheckScreen() {
   const [liveMetric, setLiveMetric] = useState<{
     value: number; state: string; enter: number; exit: number; rom: number;
   } | null>(null);
-
-  // Gate diagnostic — last parsed [GATE] log line
-  const lastGateRef = useRef<{
-    metric: number; rangeMin: number; rangeMax: number; conf: number;
-  } | null>(null);
-
-  // Gate hint level: 0 = none, 1 = diagnostic hint (10s), 2 = bypass button (15s)
-  const [gateHintLevel, setGateHintLevel] = useState(0);
-  const gateTimer1 = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const gateTimer2 = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Debug log listener ────────────────────────────────────────────────────
 
@@ -224,20 +215,7 @@ export default function FormCheckScreen() {
           });
         }
       }
-      // Parse [GATE] lines for gate diagnostic readout
-      if (e.message.startsWith('[GATE]')) {
-        const vm = e.message.match(/metric=([-\d.]+)/);
-        const rm = e.message.match(/range=([-\d.]+)-([-\d.]+)/);
-        const cm = e.message.match(/conf=([-\d.]+)/);
-        if (vm && rm && cm) {
-          lastGateRef.current = {
-            metric:   parseFloat(vm[1]),
-            rangeMin: parseFloat(rm[1]),
-            rangeMax: parseFloat(rm[2]),
-            conf:     parseFloat(cm[1]),
-          };
-        }
-      }
+      // [GATE] lines no longer exist — the ready gate that emitted them was removed natively.
     });
     return () => sub.remove();
   }, []);
@@ -340,54 +318,6 @@ export default function FormCheckScreen() {
     };
   }, []);
 
-  // ── Gate diagnostic timers ────────────────────────────────────────────────
-  // If the ready gate hasn't opened after 10s: show a diagnostic hint with the
-  // current metric vs required range. After 15s: show a "Start anyway" bypass.
-
-  useEffect(() => {
-    const clearGateTimers = () => {
-      if (gateTimer1.current) { clearTimeout(gateTimer1.current); gateTimer1.current = null; }
-      if (gateTimer2.current) { clearTimeout(gateTimer2.current); gateTimer2.current = null; }
-    };
-
-    const isReady = stats?.ready ?? false;
-    if (phase === 'tracking' && !isReady) {
-      if (!gateTimer1.current) {
-        gateTimer1.current = setTimeout(() => {
-          setGateHintLevel(l => Math.max(l, 1));
-          gateTimer1.current = null;
-        }, 10000);
-      }
-      if (!gateTimer2.current) {
-        gateTimer2.current = setTimeout(() => {
-          setGateHintLevel(2);
-          gateTimer2.current = null;
-        }, 15000);
-      }
-    } else {
-      clearGateTimers();
-      setGateHintLevel(0);
-    }
-
-    return clearGateTimers;
-  }, [phase, stats?.ready]);
-
-  const handleBypassGate = useCallback(async () => {
-    const def = EXERCISE_DEFINITIONS[exerciseType];
-    if (!def) return;
-    await setExerciseDefinition({
-      ...def,
-      readyGate: {
-        readyAngleMin:  0,
-        readyAngleMax:  190,
-        requiredJoints: [],
-        minConfidence:  0,
-        stableDuration: 0.1,
-      },
-    });
-    setGateHintLevel(0);
-  }, [exerciseType]);
-
   // ── Tracking listeners ────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -397,7 +327,7 @@ export default function FormCheckScreen() {
       setGoodReps(rep.goodReps);
       flashAnim.setValue(1);
       Animated.timing(flashAnim, { toValue: 0, duration: 700, useNativeDriver: true }).start();
-      setFeedback({ good: rep.good, reason: rep.reason });
+      setFeedback({ good: rep.good, reason: rep.reason, seq: ++feedbackSeq.current });
       const timeSec = startTimestamp.current != null
         ? (Date.now() - startTimestamp.current) / 1000 : 0;
       repEvents.current.push({ timeSec, good: rep.good, reason: rep.reason });
@@ -476,14 +406,17 @@ export default function FormCheckScreen() {
   const isTracking     = phase === 'tracking';
   const isStopping     = phase === 'stopping';
   const showRepCounter = isStopping || isTracking;
-  const needsReady     = isTracking && stats != null && !stats.ready;
   const isPushupFamily = ['pushup','kneePushup','inclinePushup','widePushup','diamondPushup','declinePushup'].includes(exerciseType);
   // Raise family also gets the live numeric readout — needed to read arms-down
   // vs arms-up directly on-screen while calibrating real thresholds, same as
   // push-up used it for elbow angle during its own calibration.
   const isRaiseFamily = ['lateralRaise', 'frontRaise'].includes(exerciseType);
-  const showPushupMetric = (isPushupFamily || isRaiseFamily) && isTracking && liveMetric != null;
-  const liveMetricLabel = isPushupFamily ? 'ELBOW ANGLE' : 'ARM ANGLE';
+  // Tricep family too — added to investigate the zero-rep-count report: this
+  // makes the live metric vs enter/exit/rom thresholds visible on-screen while
+  // actually doing reps, not just in the post-session log.
+  const isTricepFamily = ['tricepPushdown', 'overheadTricepExtension', 'skullcrusher'].includes(exerciseType);
+  const showPushupMetric = (isPushupFamily || isRaiseFamily || isTricepFamily) && isTracking && liveMetric != null;
+  const liveMetricLabel = isPushupFamily ? 'ELBOW ANGLE' : isTricepFamily ? 'FOREARM ANGLE' : 'ARM ANGLE';
 
   return (
     <View style={s.root}>
@@ -497,7 +430,7 @@ export default function FormCheckScreen() {
 
       {/* Rep feedback badge */}
       {feedback && (
-        <RepFeedback good={feedback.good} reason={feedback.reason} onComplete={() => setFeedback(null)} />
+        <RepFeedback good={feedback.good} reason={feedback.reason} seq={feedback.seq} onComplete={() => setFeedback(null)} />
       )}
 
       {/* SETUP overlay — same clean layout as the calibration tool's setup
@@ -545,34 +478,6 @@ export default function FormCheckScreen() {
       {error && (
         <View style={s.errorCard}>
           <Text style={s.errorText}>{error}</Text>
-        </View>
-      )}
-
-      {/* Ready gate hint — escalates from generic → diagnostic → bypass */}
-      {needsReady && gateHintLevel === 0 && (
-        <View style={s.readyHint}>
-          <Text style={s.readyHintText}>Stand still to activate…</Text>
-        </View>
-      )}
-      {needsReady && gateHintLevel === 1 && (
-        <View style={s.readyHint}>
-          <Text style={s.readyHintText}>
-            {lastGateRef.current
-              ? `Gate: ${lastGateRef.current.metric.toFixed(1)}° (need 0–92°) · conf ${lastGateRef.current.conf.toFixed(2)} (need 0.10+)`
-              : 'Make sure your elbow is clearly in frame'}
-          </Text>
-        </View>
-      )}
-      {needsReady && gateHintLevel >= 2 && (
-        <View style={s.readyHintBypass}>
-          <Text style={s.readyHintText}>
-            {lastGateRef.current
-              ? `Gate: ${lastGateRef.current.metric.toFixed(1)}° · conf ${lastGateRef.current.conf.toFixed(2)}`
-              : 'Ready gate not opening'}
-          </Text>
-          <Pressable style={s.bypassBtn} onPress={handleBypassGate}>
-            <Text style={s.bypassBtnTxt}>Start Anyway</Text>
-          </Pressable>
         </View>
       )}
 
@@ -788,23 +693,6 @@ const s = StyleSheet.create({
   title:      { fontSize: 16, fontWeight: '600', color: C.text },
   errorCard:  { position: 'absolute', left: 24, right: 24, top: '38%', backgroundColor: C.glass, borderRadius: 16, padding: 24, borderWidth: 1, borderColor: C.border },
   errorText:  { color: C.warn, fontSize: 14, lineHeight: 22, textAlign: 'center' },
-  readyHint:  { position: 'absolute', top: '30%', left: 0, right: 0, alignItems: 'center' },
-  readyHintBypass: {
-    position: 'absolute', top: '30%', left: 16, right: 16,
-    alignItems: 'center', gap: 10,
-  },
-  readyHintText: {
-    fontSize: 19, fontWeight: '700', color: C.muted, backgroundColor: C.glass,
-    paddingHorizontal: 22, paddingVertical: 12, borderRadius: 100,
-    borderWidth: StyleSheet.hairlineWidth, borderColor: C.border, overflow: 'hidden',
-    textAlign: 'center',
-  },
-  bypassBtn: {
-    paddingHorizontal: 28, paddingVertical: 13, borderRadius: 100,
-    backgroundColor: 'rgba(251,146,60,0.18)',
-    borderWidth: 1, borderColor: 'rgba(251,146,60,0.40)',
-  },
-  bypassBtnTxt: { fontSize: 18, fontWeight: '700', color: C.warn },
   outOfPlaneHint: { position: 'absolute', top: '43%', left: 0, right: 0, alignItems: 'center' },
   outOfPlaneText: {
     fontSize: 18, fontWeight: '700', color: C.warn, backgroundColor: 'rgba(10,11,12,0.80)',

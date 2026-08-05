@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, Pressable, ScrollView,
+  View, Text, StyleSheet, Pressable, ScrollView, Animated,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -65,6 +65,10 @@ function isSameCalendarDay(ts: number): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
+function formatFullDate(ts: number): string {
+  return new Date(ts).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+}
+
 function generateSummary(reps: number, goodReps: number): string {
   const pct = reps > 0 ? Math.round((goodReps / reps) * 100) : 0;
   if (reps === 0)  return 'No reps were detected this session. Try positioning the phone so your full body is visible from the side.';
@@ -100,6 +104,10 @@ export default function RecapScreen() {
   const [overallScores, setOverallScores] = useState<MuscleScores>({});
   const [sharing, setSharing]             = useState(false);
   const initialized = useRef(false);
+
+  // Entrance animation — visual polish only, no bearing on data/logic.
+  const heroOpac  = useRef(new Animated.Value(0)).current;
+  const heroScale = useRef(new Animated.Value(0.94)).current;
 
   const repEventsParam = useMemo<RepEventData[]>(() => {
     try { return JSON.parse(events ?? '[]'); }
@@ -170,6 +178,15 @@ export default function RecapScreen() {
     [data],
   );
   const highlightLabel = data && isSameCalendarDay(data.ts) ? 'Today' : data ? formatShort(data.ts) : 'Today';
+
+  // Entrance animation once real data has resolved (visual only).
+  useEffect(() => {
+    if (!data) return;
+    Animated.parallel([
+      Animated.timing(heroOpac,  { toValue: 1, duration: 420, useNativeDriver: true }),
+      Animated.spring(heroScale, { toValue: 1, tension: 120, friction: 9, useNativeDriver: true }),
+    ]).start();
+  }, [data, heroOpac, heroScale]);
 
   // ── Video replay animation (solo mode only) ─────────────────────────────────
   const hasVideo = !!data?.videoUri;
@@ -249,6 +266,9 @@ export default function RecapScreen() {
   const exCount    = data.entries.length;
   const doneLabel  = data.isHistory ? 'Back' : 'Done';
   const breakdown  = data.workoutSummary?.results;
+  const headingTitle = data.isHistory
+    ? 'Session Recap'
+    : isWorkoutMode ? 'Workout Complete' : 'Session Complete';
 
   return (
     <View style={[s.root, { paddingTop: insets.top }]}>
@@ -257,22 +277,36 @@ export default function RecapScreen() {
         contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 20 }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Muscle heatmap — the hero. Captured as-is for the share image. */}
-        <ViewShot ref={shotRef} options={{ format: 'png', quality: 1 }}>
-          <View style={s.heroCard}>
-            <MuscleHeatmap
-              overallScores={overallScores}
-              highlightGroups={highlightGroups}
-              highlightLabel={highlightLabel}
-              scale={0.85}
-            />
-            <View style={s.watermarkRow}>
-              <SymbolView name="figure.strengthtraining.traditional" size={11} tintColor="#c8ccd6"
-                type="monochrome" style={{ width: 11, height: 11 }} />
-              <Text style={s.watermarkTxt}>FormPal</Text>
+        {/* Header — gives the screen a sense of arrival instead of jumping
+            straight into the hero card. */}
+        <View style={s.header}>
+          {!data.isHistory && (
+            <View style={s.checkBadge}>
+              <SymbolView name="checkmark" size={15} tintColor={C.bg} type="monochrome" style={{ width: 15, height: 15 }} />
             </View>
-          </View>
-        </ViewShot>
+          )}
+          <Text style={s.headingTitle}>{headingTitle}</Text>
+          <Text style={s.headingSub}>{formatFullDate(data.ts)}</Text>
+        </View>
+
+        {/* Muscle heatmap — the hero. Captured as-is for the share image. */}
+        <Animated.View style={{ opacity: heroOpac, transform: [{ scale: heroScale }] }}>
+          <ViewShot ref={shotRef} options={{ format: 'png', quality: 1 }}>
+            <View style={s.heroCard}>
+              <MuscleHeatmap
+                overallScores={overallScores}
+                highlightGroups={highlightGroups}
+                highlightLabel={highlightLabel}
+                scale={0.85}
+              />
+              <View style={s.watermarkRow}>
+                <SymbolView name="figure.strengthtraining.traditional" size={11} tintColor="#c8ccd6"
+                  type="monochrome" style={{ width: 11, height: 11 }} />
+                <Text style={s.watermarkTxt}>FormPal</Text>
+              </View>
+            </View>
+          </ViewShot>
+        </Animated.View>
 
         {/* Minimal, secondary stats */}
         <View style={s.statsRow}>
@@ -330,6 +364,7 @@ export default function RecapScreen() {
                   key={liveAnim.key}
                   good={liveAnim.good}
                   reason={liveAnim.reason}
+                  seq={liveAnim.key}
                   onComplete={() => setLiveAnim(null)}
                 />
               )}
@@ -375,13 +410,34 @@ const s = StyleSheet.create({
   centerFill:{ alignItems: 'center', justifyContent: 'center', gap: 8 },
   failedTxt: { color: C.muted, fontSize: 15 },
   scroll:    { flex: 1 },
-  content:   { paddingHorizontal: 20, gap: 16, paddingTop: 20 },
+  content:   { paddingHorizontal: 20, gap: 18, paddingTop: 4 },
+
+  header: { alignItems: 'center', gap: 6, paddingTop: 12, paddingBottom: 4 },
+  checkBadge: {
+    width: 34, height: 34, borderRadius: 17,
+    backgroundColor: C.good,
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 4,
+  },
+  headingTitle: {
+    fontSize: 24, fontWeight: '800', color: C.text,
+    letterSpacing: -0.4, textAlign: 'center',
+  },
+  headingSub: {
+    fontSize: 13, fontWeight: '500', color: C.muted,
+    letterSpacing: 0.1,
+  },
 
   heroCard: {
     backgroundColor: C.card,
     borderRadius:    28,
-    padding:         20,
+    padding:         22,
     gap:             18,
+    shadowColor:     '#000',
+    shadowOffset:    { width: 0, height: 14 },
+    shadowOpacity:   0.28,
+    shadowRadius:    32,
+    elevation:       10,
   },
   watermarkRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
@@ -433,6 +489,11 @@ const s = StyleSheet.create({
     alignItems:      'center',
     justifyContent:  'center',
     gap:             8,
+    shadowColor:     '#000',
+    shadowOffset:    { width: 0, height: 8 },
+    shadowOpacity:   0.22,
+    shadowRadius:    16,
+    elevation:       6,
   },
   shareTxt: { fontSize: 16, fontWeight: '700', color: C.bg, letterSpacing: 0.2 },
 
