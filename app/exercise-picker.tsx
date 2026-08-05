@@ -61,6 +61,9 @@ const EXERCISE_UI: Record<string, { symbol: string; grad: [string, string] }> = 
   goodMorning:      { symbol: 'figure.strengthtraining.traditional', grad: ['#E11D48', '#7F1D3B'] },
   kettlebellSwing:  { symbol: 'figure.strengthtraining.traditional', grad: ['#FDA4AF', '#BE123C'] },
   singleLegRDL:     { symbol: 'figure.strengthtraining.traditional', grad: ['#FB7185', '#831843'] },
+  // Shoulder/arm isolation raise family — golden-yellow, distinct from shoulder press's orange-red
+  lateralRaise: { symbol: 'figure.arms.open', grad: ['#FDE047', '#CA8A04'] },
+  frontRaise:   { symbol: 'figure.arms.open', grad: ['#FEF08A', '#A16207'] },
 };
 
 export default function ExercisePickerScreen() {

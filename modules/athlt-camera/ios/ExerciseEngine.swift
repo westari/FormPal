@@ -62,8 +62,11 @@ private enum ActivityState { case active, suppressed }
 //     Rep counting does NOT run. Emits onSetupUpdate every frame.
 //
 //   ACTIVE (enginePhase = .active):
-//     Rep counting starts immediately on static thresholds — isReady opens in
-//     ~0.27s via the ready gate, no separate blocking calibration step.
+//     Rep counting starts immediately — no separate ready gate (removed; it
+//     could get stuck indefinitely on exercises whose rest position didn't
+//     cleanly satisfy its angle-range+confidence condition). The settle gate
+//     (hasSettled, in runStateMachine's .atTop case) is the only thing left
+//     preventing the initial walk-in/arm-raise from counting as a rep.
 //     If def.calibration != nil, the first repsNeeded VALID completed reps also
 //     feed the calibration sample buffers in the background (see completeRep /
 //     feedPassiveCalibration); once collected, repEnter/repExit thresholds
@@ -116,26 +119,10 @@ final class ExerciseEngine {
     private(set) var totalReps = 0
     private(set) var goodReps  = 0
 
-    // ── Ready gate ───────────────────────────────────────────────────────────
-    //
-    // FIX 2 root cause: the old time-based readyStart approach reset on any
-    // single bad frame. At 30fps, one low-confidence Vision reading restarted
-    // the 0.8s hold timer from zero — making the gate feel random.
-    //
-    // Fix: consecutive-frame counters with entry hysteresis (8 pass frames) and
-    // exit hysteresis (20 fail frames, before first rep only). Once totalReps>0,
-    // isReady never drops — mid-set camera jitter can't break the count.
-    private(set) var isReady:              Bool = false
-    private var consecutivePassFrames:     Int  = 0
-    private var consecutiveFailFrames:     Int  = 0
-    // Throttle for [GATE] diagnostic log (~3/sec).
-    private var lastGateLogTime: Double = 0
-
-    // Frames of consecutive agreement required to enter ready (~0.27s @ 30fps).
-    private static let READY_ENTER_FRAMES: Int = 8
-    // Frames of consecutive disagreement required to exit ready (~0.67s @ 30fps).
-    // Exit only applies before first rep — once a set is underway, isReady is permanent.
-    private static let READY_EXIT_FRAMES:  Int = 20
+    // ── Ready gate: REMOVED ───────────────────────────────────────────────────
+    // A separate angle-range+confidence gate used to block all rep tracking
+    // until it opened. Removed — see the note in ingest()'s ACTIVE-phase block.
+    // The settle gate (hasSettled, below) is the only gate left.
 
     // ── Setup ────────────────────────────────────────────────────────────────
     private var setupPhaseState: SetupPhaseState = .pending
@@ -249,15 +236,11 @@ final class ExerciseEngine {
     func reset() {
         enginePhase           = .setup
         repPhase              = .waitingForReady
-        isReady               = false
-        consecutivePassFrames = 0
-        consecutiveFailFrames = 0
         totalReps             = 0
         goodReps              = 0
         setupPhaseState       = .pending
         setupLossStart        = nil
         lastValidPoseTime     = .distantPast
-        lastGateLogTime       = 0
         lastFrameLogTime      = 0
         resetCalibrationState(keepDerived: false)
         resetRepState()
@@ -269,14 +252,10 @@ final class ExerciseEngine {
     // Used when startTracking() is called after setup/calibration already passed.
     func resetForTracking() {
         repPhase              = .waitingForReady
-        isReady               = false
-        consecutivePassFrames = 0
-        consecutiveFailFrames = 0
         totalReps             = 0
         goodReps              = 0
         setupLossStart        = nil
         lastValidPoseTime     = .distantPast
-        lastGateLogTime       = 0
         lastFrameLogTime      = 0
         resetRepState()
         resetActivityState()
@@ -330,41 +309,46 @@ final class ExerciseEngine {
 
         // ── ACTIVE phase ──────────────────────────────────────────────────────
         lastValidPoseTime = timestamp
-        framesSincePoseGap = min(framesSincePoseGap + 1, Self.MIN_FRAMES_AFTER_POSE_GAP + 100)
+
+        // ROOT CAUSE (squat still corrupting reps after stepping back into frame):
+        // framesSincePoseGap only reset on a fully-nil pose (handleNoPose) or a
+        // confirmed-gone person (notePersonMissing) — but someone stepping back
+        // INTO frame passes through a window where their joints are still only
+        // PARTIALLY visible at the frame edge, with confidence that can still
+        // clear kMinConf (0.25) despite the reading being positionally garbage.
+        // That frame never counted as a "gap" at all, so the settle-after-gap
+        // protection never engaged for the exact scenario it was built for —
+        // same class of bug as the lateral-raise asymmetry check (confidence
+        // above the floor isn't the same as a reliable reading). Treat an edge-
+        // adjacent repMetric joint exactly like a pose gap.
+        if isNearFrameEdge(pose: pose, joints: def.repMetric.referencedJoints()) {
+            framesSincePoseGap = 0
+        } else {
+            framesSincePoseGap = min(framesSincePoseGap + 1, Self.MIN_FRAMES_AFTER_POSE_GAP + 100)
+        }
         accumulate(pose: pose)
         trackSegmentReferences(pose: pose)
-        updateReadyGate(pose: pose, angle: angle, timestamp: timestamp)
         updateActivityState(pose: pose, angle: angle, timestamp: timestamp)
 
-        // Pre-accumulate settle gate in parallel with the ready gate.
-        // With the passthrough gate, isReady opens in ~0.27s (8 frames). Without this
-        // block, settle needs 8 MORE frames AFTER ready opens — if the user starts their
-        // first rep in that window the settle gate consumes it. Accumulating concurrently
-        // means hasSettled can complete during the same window as isReady, so the first
-        // real rep is allowed immediately when the user was in start position from the start.
-        if !isReady && !hasSettled && angle > effectiveExitThreshold {
-            settledTopFrames = min(settledTopFrames + 1, Self.SETTLE_FRAMES + 2)
-            if settledTopFrames >= Self.SETTLE_FRAMES {
-                hasSettled = true
-                let msg = "[SETTLE] pre-ready stable — first rep allowed immediately"
-                NSLog("[Engine] [%@] %@", def.id, msg)
-                onDebugLog?(msg)
-            }
-        }
-
-        // Runs even while suppressed (activityState == .suppressed): a genuinely
-        // completed rep is a strong enough signal on its own to force-resume — see
-        // the force-resume check in completeRep(). Blocking the state machine here
-        // entirely would mean no motion is ever tracked during suppression, so a
-        // real rep could never be recognized as evidence the user is back.
-        if isReady {
-            runStateMachine(pose: pose, angle: angle, timestamp: timestamp)
-        }
+        // REMOVED: the ready gate (isReady/consecutivePassFrames/READY_ENTER_FRAMES
+        // etc.) used to block runStateMachine entirely until a separate
+        // angle-range+confidence condition held for 8 frames on top of the settle
+        // gate below. On exercises whose real resting position didn't cleanly
+        // satisfy that condition (tricep pushdown, shoulder press) it could get
+        // stuck indefinitely — "stand still to activate" that never resolved.
+        // Tracking now starts immediately on entering ACTIVE. The settle gate
+        // inside runStateMachine's .atTop case (hold above exitThreshold for
+        // SETTLE_FRAMES before the first rep can enter) is the only gate left,
+        // and it already does everything the ready gate did: prevent the initial
+        // walk-in / arm-raise-into-position from registering as a rep. Runs even
+        // while suppressed (activityState == .suppressed) — a genuinely completed
+        // rep is strong enough evidence on its own to force-resume, see completeRep().
+        runStateMachine(pose: pose, angle: angle, timestamp: timestamp)
 
         let snapshot      = currentMetricSnapshot(pose: pose)
-        let outOfPlaneCue = isReady ? currentOutOfPlaneCue(pose: pose) : nil
+        let outOfPlaneCue = currentOutOfPlaneCue(pose: pose)
         onDebugStats?(EngineDebugStats(primaryAngle: angle, phase: phaseLabel(),
-                                       isReady: isReady, formMetrics: snapshot,
+                                       isReady: true, formMetrics: snapshot,
                                        outOfPlaneCue: outOfPlaneCue))
     }
 
@@ -394,9 +378,6 @@ final class ExerciseEngine {
                 enginePhase           = .setup
                 setupPhaseState       = .pending
                 setupLossStart        = nil
-                isReady               = false
-                consecutivePassFrames = 0
-                consecutiveFailFrames = 0
                 repPhase              = .waitingForReady
                 resetCalibrationState(keepDerived: false)
                 onSetupUpdate?(SetupStatus(allJointsVisible: false, holdProgress: 0.0,
@@ -523,6 +504,20 @@ final class ExerciseEngine {
         return missing
     }
 
+    // Same edge-margin concept as missingSetupJoints, applied during ACTIVE
+    // tracking — see the framesSincePoseGap call site in ingest() for why.
+    private func isNearFrameEdge(pose: Pose, joints: [Joint]) -> Bool {
+        for joint in joints {
+            guard let p = pose[joint], p.confidence >= kMinConf else { continue }
+            let x = Double(p.x), y = Double(p.y)
+            if x < Self.SETUP_EDGE_MARGIN || x > 1 - Self.SETUP_EDGE_MARGIN ||
+               y < Self.SETUP_EDGE_MARGIN || y > 1 - Self.SETUP_EDGE_MARGIN {
+                return true
+            }
+        }
+        return false
+    }
+
     private func hintForMissingJoints(_ joints: [Joint]) -> String {
         if joints.isEmpty { return "" }
         let hasLeg = joints.contains(.leftAnkle)  || joints.contains(.rightAnkle) ||
@@ -630,93 +625,6 @@ final class ExerciseEngine {
             calibDerivedEnter   = nil
             calibDerivedExit    = nil
             calibratedSegmentRefs = [:]
-        }
-    }
-
-    // ─── Ready gate ───────────────────────────────────────────────────────────
-    //
-    // FIX 2: frame-counter hysteresis replaces the time-based readyStart approach.
-    //
-    // ROOT CAUSE of random gate: readyStart was reset to nil on any single bad frame.
-    // At 30fps, a single Vision confidence flicker below gate.minConfidence reset
-    // the 0.8s timer to zero. The gate appeared non-deterministic because it was
-    // extremely sensitive to per-frame pose noise.
-    //
-    // NEW BEHAVIOR:
-    //   ENTER: READY_ENTER_FRAMES consecutive pass frames → isReady = true.
-    //          Bad frames during accumulation decay the counter by 1 (not reset to 0),
-    //          providing grace for single-frame noise.
-    //   EXIT:  READY_EXIT_FRAMES consecutive fail frames → isReady = false.
-    //          Only applied before first rep. Once totalReps > 0, isReady is permanent
-    //          — mid-set camera jitter, brief position changes, and angle oscillation
-    //          during the set can no longer break the rep counter.
-    //
-    // Diagnostic: [GATE] log emitted via onDebugLog ~3/sec (reaches JS/Metro on Windows).
-    //   Format: [GATE] metric=<v> range=<min>-<max> conf=<minConf> consecutivePass=<n> ready=<bool>
-
-    private func updateReadyGate(pose: Pose, angle: Double, timestamp: Date) {
-        let gate      = def.readyGate
-        let angleOk   = angle >= gate.readyAngleMin && angle <= gate.readyAngleMax
-        let jointsOk  = gate.requiredJoints.allSatisfy {
-            (pose[$0]?.confidence ?? 0) >= gate.minConfidence
-        }
-        let conditionsMet = angleOk && jointsOk
-
-        if conditionsMet {
-            consecutiveFailFrames = 0
-            if !isReady {
-                consecutivePassFrames = min(consecutivePassFrames + 1, Self.READY_ENTER_FRAMES + 5)
-                // ROOT CAUSE (PRIORITY 1A, "ready flickers on before truly settled"): with
-                // PASSTHROUGH_GATE (every exercise), conditionsMet is trivially always true —
-                // isReady used to flip after just READY_ENTER_FRAMES (~0.27-0.8s) had elapsed
-                // since ACTIVE began, with NO check that the user was actually holding a stable
-                // position yet. "Ready" reported true while the user could still be walking in /
-                // adjusting. Requiring hasSettled here ties "ready" to the SAME genuine-stability
-                // signal the settle gate already verifies (metric held above exitThreshold for
-                // SETTLE_FRAMES) — no deadlock, since hasSettled has its own pre-accumulation
-                // path below that runs independently of isReady.
-                if consecutivePassFrames >= Self.READY_ENTER_FRAMES && hasSettled {
-                    isReady  = true
-                    repPhase = .atTop
-                    let msg = "[GATE] READY after \(Self.READY_ENTER_FRAMES) pass frames — metric=\(String(format: "%.3f", angle))"
-                    NSLog("[Engine] [%@] %@", def.id, msg)
-                    onDebugLog?(msg)
-                }
-            }
-        } else {
-            if !isReady {
-                // Graceful decay — single bad frames don't fully reset progress.
-                consecutivePassFrames = max(0, consecutivePassFrames - 1)
-            } else if totalReps == 0 {
-                // Exit hysteresis: only lose ready before the first rep.
-                consecutiveFailFrames += 1
-                if consecutiveFailFrames >= Self.READY_EXIT_FRAMES {
-                    isReady               = false
-                    consecutivePassFrames = 0
-                    consecutiveFailFrames = 0
-                    let msg = "[GATE] LOST READY — \(Self.READY_EXIT_FRAMES) fail frames (no reps yet)"
-                    NSLog("[Engine] [%@] %@", def.id, msg)
-                    onDebugLog?(msg)
-                }
-            }
-            // If totalReps > 0: set is underway — isReady stays true regardless of position.
-        }
-
-        // Throttled [GATE] diagnostic ~3/sec. Always emitted so you can see gate state
-        // whether passing or failing. conf= shows the weakest required joint.
-        let now = timestamp.timeIntervalSinceReferenceDate
-        if now - lastGateLogTime >= 0.33 {
-            lastGateLogTime = now
-            let minConf = gate.requiredJoints
-                .map { pose[$0]?.confidence ?? 0 }
-                .min() ?? 0
-            let msg = "[GATE] metric=\(String(format: "%.3f", angle)) " +
-                      "range=\(String(format: "%.2f", gate.readyAngleMin))-\(String(format: "%.2f", gate.readyAngleMax)) " +
-                      "conf=\(String(format: "%.2f", minConf)) " +
-                      "consecutivePass=\(consecutivePassFrames) " +
-                      "ready=\(isReady)"
-            NSLog("[Engine] [%@] %@", def.id, msg)
-            onDebugLog?(msg)
         }
     }
 
@@ -1068,9 +976,7 @@ final class ExerciseEngine {
         if repPhase == .inRep {
             NSLog("[Engine] [%@] Inactivity reset after %.1fs", def.id, elapsed)
         }
-        consecutivePassFrames = 0
-        consecutiveFailFrames = 0
-        repPhase = isReady ? .atTop : .waitingForReady
+        repPhase = .atTop
         resetRepState()
     }
 

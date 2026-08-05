@@ -151,30 +151,21 @@ function squatStandard(exerciseId: string): ExerciseStandardDef {
 
 // ─── Shared shoulder-press standard building-blocks ──────────────────────────
 //
-// Values mirror the verified shoulderPress standard VERBATIM.
-
-const SHOULDER_PRESS_STATIC_CHECKS: JointAngleCheckDef[] = [
-  {
-    description: 'Left torso upright — shoulder–hip–knee angle range',
-    a: 'leftShoulder',
-    b: 'leftHip',
-    c: 'leftKnee',
-    maxRangeDeg: 15.0,
-    cue: 'STAY UPRIGHT — arching lower back',
-  },
-  {
-    description: 'Right torso upright — shoulder–hip–knee angle range',
-    a: 'rightShoulder',
-    b: 'rightHip',
-    c: 'rightKnee',
-    maxRangeDeg: 15.0,
-    cue: 'STAY UPRIGHT — arching lower back',
-  },
-];
+// STATIC CHECK REMOVED after on-device data: shoulder-hip-knee angle range
+// showed 22–118° during normal presses (limit was 15°), firing "arching lower
+// back" on nearly every rep. Root cause: pressing overhead genuinely moves the
+// tracked SHOULDER landmark (natural scapular rotation/elevation at lockout —
+// not a fault), and this check uses the shoulder itself as one of its three
+// points — same contamination pattern as the hinge family's removed knee_bend
+// check (a joint that's supposed to be a stable anchor is actually part of the
+// exercise's own primary motion). No orthogonal 3-point angle isolates real
+// lumbar arch from normal shoulder movement during a press, so — same standard
+// as before — removed rather than left firing unreliably.
+const SHOULDER_PRESS_STATIC_CHECKS: JointAngleCheckDef[] = [];
 
 const SHOULDER_PRESS_TOP_FAULTS = [
   'HALF REP — not pressing fully overhead',
-  'BACK ARCH — excessive lumbar extension during press',
+  'BACK ARCH — excessive lumbar extension during press (not camera-detectable — watch for this yourself)',
   'FORWARD HEAD — neck jutting forward at lockout',
 ];
 
@@ -182,7 +173,10 @@ function shoulderPressStandard(exerciseId: string): ExerciseStandardDef {
   return {
     exerciseId,
     reviewed: false,
-    standardPeakAngleMax:  45.0,
+    // Loosened 45.0→65.0: on-device data showed genuine full presses reading
+    // 52–63° — the 45° standard was failing normal reps outright. 65 gives a
+    // small margin above the observed 63° max.
+    standardPeakAngleMax:  65.0,
     standardStartAngleMin: 65.0,
     romCue:    'PRESS HIGHER — not reaching overhead',
     extendCue: 'LOWER MORE — not returning to shoulder height',
@@ -477,13 +471,13 @@ function raiseStandard(exerciseId: string): ExerciseStandardDef {
   return {
     exerciseId,
     reviewed: false,  // PLACEHOLDER numbers below — verify on-device before flipping to true
-    // Tightened 35.0→15.0: "too lenient, says good form on basically anything"
-    // — a partial raise was passing well short of shoulder height. Kept in
-    // sync with the matching Layer-0 goodROMThreshold tightening (30→15) in
+    // Tightened twice now: 35.0→15.0→8.0 — still "not strict enough on raising
+    // high enough" after the first pass. Kept in sync with the matching
+    // Layer-0 goodROMThreshold tightening (30→15→8) in
     // constants/exerciseDefinitions.ts's lateralRaiseVariant()/frontRaiseVariant().
     // Still a reasoned value, not device-verified — send a [REP] log with your
     // real arms-up reading and I'll set the exact number.
-    standardPeakAngleMax:  15.0,   // must raise to at least this close to shoulder height
+    standardPeakAngleMax:  8.0,   // must raise to at least this close to shoulder height
     standardStartAngleMin: 80.0,   // must return arms fully down before rep counts
     romCue:    'RAISE HIGHER — not reaching enough depth',
     extendCue: 'LOWER FULLY — not returning arms down',
@@ -608,37 +602,24 @@ export const EXERCISE_STANDARDS: Record<string, ExerciseStandardDef> = {
     exerciseId: 'shoulderPress',
     reviewed:   false,
 
-    standardPeakAngleMax:  45.0,    // must press close to overhead
+    // Loosened 45.0→65.0 — same on-device evidence as shoulderPressStandard()
+    // below (genuine full presses read 52-63°). staticChecks removed — same
+    // contamination as that function's comment (shoulder landmark moves
+    // naturally during a press, so shoulder-hip-knee range isn't real arch).
+    standardPeakAngleMax:  65.0,    // must press close to overhead
     standardStartAngleMin: 65.0,    // must lower arms to shoulder height
 
     romCue:    'PRESS HIGHER — not reaching overhead',
     extendCue: 'LOWER MORE — not returning to shoulder height',
 
-    staticChecks: [
-      {
-        description: 'Left torso upright — shoulder–hip–knee angle range',
-        a: 'leftShoulder',
-        b: 'leftHip',
-        c: 'leftKnee',
-        maxRangeDeg: 15.0,
-        cue: 'STAY UPRIGHT — arching lower back',
-      },
-      {
-        description: 'Right torso upright — shoulder–hip–knee angle range',
-        a: 'rightShoulder',
-        b: 'rightHip',
-        c: 'rightKnee',
-        maxRangeDeg: 15.0,
-        cue: 'STAY UPRIGHT — arching lower back',
-      },
-    ],
+    staticChecks: [],
 
     tempoMinSec: 1.5,
     tempoMaxSec: 5.0,
 
     topFaults: [
       'HALF REP — not pressing fully overhead',
-      'BACK ARCH — excessive lumbar extension during press',
+      'BACK ARCH — excessive lumbar extension during press (not camera-detectable — watch for this yourself)',
       'FORWARD HEAD — neck jutting forward at lockout',
     ],
   },

@@ -6,7 +6,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { SymbolView } from 'expo-symbols';
-import ViewShot, { type ViewShotRef } from 'react-native-view-shot';
+import ViewShot from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import RepFeedback from '../components/RepFeedback';
 import { MuscleHeatmap } from '../components/MuscleHeatmap';
@@ -78,7 +78,7 @@ function generateSummary(reps: number, goodReps: number): string {
 export default function RecapScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const shotRef = useRef<ViewShotRef>(null);
+  const shotRef = useRef<ViewShot>(null);
 
   const {
     reps: repsStr, goodReps: goodRepsStr, videoUri: videoUriParam, events,

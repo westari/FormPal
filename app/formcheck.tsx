@@ -163,8 +163,7 @@ export default function FormCheckScreen() {
   const [setupHoldProgress, setSetupHoldProgress] = useState(0);
   const [setupHint,         setSetupHint]         = useState('');
 
-  const [feedback, setFeedback] = useState<{ key: number; good: boolean; reason: string } | null>(null);
-  const feedbackKey    = useRef(0);
+  const [feedback, setFeedback] = useState<{ good: boolean; reason: string } | null>(null);
   const flashAnim      = useRef(new Animated.Value(0)).current;
   const notLinked      = !isNativeModuleLinked();
 
@@ -398,8 +397,7 @@ export default function FormCheckScreen() {
       setGoodReps(rep.goodReps);
       flashAnim.setValue(1);
       Animated.timing(flashAnim, { toValue: 0, duration: 700, useNativeDriver: true }).start();
-      const k = ++feedbackKey.current;
-      setFeedback({ key: k, good: rep.good, reason: rep.reason });
+      setFeedback({ good: rep.good, reason: rep.reason });
       const timeSec = startTimestamp.current != null
         ? (Date.now() - startTimestamp.current) / 1000 : 0;
       repEvents.current.push({ timeSec, good: rep.good, reason: rep.reason });
@@ -499,7 +497,7 @@ export default function FormCheckScreen() {
 
       {/* Rep feedback badge */}
       {feedback && (
-        <RepFeedback key={feedback.key} good={feedback.good} reason={feedback.reason} onComplete={() => setFeedback(null)} />
+        <RepFeedback good={feedback.good} reason={feedback.reason} onComplete={() => setFeedback(null)} />
       )}
 
       {/* SETUP overlay — same clean layout as the calibration tool's setup

@@ -727,6 +727,33 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     isFormCheckable: true,
   },
 
+  // ─── Shoulder/arm isolation raise family ───────────────────────────────────
+  {
+    id:              'lateralRaise',
+    displayName:     'Lateral Raise',
+    muscleGroups:    [MuscleGroup.Shoulders],
+    splitCategories: [SplitCategory.Upper, SplitCategory.Push],
+    difficulty:      Difficulty.Beginner,
+    equipment:       [Equipment.Dumbbell],
+    defaultReps:     12,
+    defaultSets:     3,
+    progression:     { repRange: [10, 20], setRange: [2, 4] },
+    isFormCheckable: true,
+  },
+
+  {
+    id:              'frontRaise',
+    displayName:     'Front Raise',
+    muscleGroups:    [MuscleGroup.Shoulders],
+    splitCategories: [SplitCategory.Upper, SplitCategory.Push],
+    difficulty:      Difficulty.Beginner,
+    equipment:       [Equipment.Dumbbell],
+    defaultReps:     12,
+    defaultSets:     3,
+    progression:     { repRange: [10, 20], setRange: [2, 4] },
+    isFormCheckable: true,
+  },
+
   // ─────────────────────────────────────────────────────────────────────────
   // ADD NEW FORM-CHECKABLE EXERCISES HERE.
   // ─────────────────────────────────────────────────────────────────────────

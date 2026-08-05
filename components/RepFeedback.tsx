@@ -215,21 +215,33 @@ export default function RepFeedback({
   reason: string;
   onComplete: () => void;
 }) {
-  const mounted = useRef(true);
   const opacity = useRef(new Animated.Value(0)).current;
+  const current = useRef<Animated.CompositeAnimation | null>(null);
 
+  // Root cause of "verdict doesn't show, especially on fast reps": the parent
+  // used to remount this component on every rep (a growing `key` prop), which
+  // hard-cuts whatever was on screen to nothing and restarts a fresh 150ms
+  // fade-in. At a fast rep tempo (well under the ~1.4-1.6s full fade-in/hold/
+  // fade-out cycle), each new rep's card could itself get cut off before its
+  // own fade-in finished — the verdict flashed for a few ms and was gone.
+  // Fix: the parent now keeps ONE mounted instance for as long as feedback is
+  // showing (no key). A new rep's good/reason props update that instance:
+  // stop whatever animation was running and SNAP opacity to 1 immediately, so
+  // the newest verdict is always visible at full opacity for at least an
+  // instant, however fast reps arrive, then run its own hold+fade-out.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    mounted.current = true;
-
-    Animated.sequence([
-      Animated.timing(opacity, { toValue: 1, duration: 150, useNativeDriver: true }),
+    current.current?.stop();
+    opacity.setValue(1);
+    const seq = Animated.sequence([
       Animated.delay(good ? 900 : 1100),
       Animated.timing(opacity, { toValue: 0, duration: 380, useNativeDriver: true }),
-    ]).start(() => { if (mounted.current) onComplete(); });
+    ]);
+    current.current = seq;
+    seq.start(({ finished }) => { if (finished) onComplete(); });
 
-    return () => { mounted.current = false; };
-  }, []);
+    return () => { current.current?.stop(); };
+  }, [good, reason]);
 
   return (
     <Animated.View
