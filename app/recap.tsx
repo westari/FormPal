@@ -6,6 +6,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { SymbolView } from 'expo-symbols';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import ViewShot from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import RepFeedback from '../components/RepFeedback';
@@ -39,18 +41,32 @@ interface RecapData {
   workoutSummary?: WorkoutSummary; // present in workout mode — feeds the breakdown section
 }
 
-// ─── Palette (onboarding design system) ──────────────────────────────────────
+// ─── Palette — iOS-26 "liquid glass": light, airy, frosted, no flat black ────
+// Design note: the hero heatmap card stays a clean, near-opaque white rather
+// than blurred — it's what gets captured for the share image, and a
+// consistent, controlled background there matters more than glass consistency
+// for that one element. Everything AROUND it (background, secondary cards,
+// footer) carries the frosted-glass treatment via expo-blur's BlurView,
+// already proven elsewhere in the app (components/RepFeedback.tsx) — chosen
+// over @callstack/liquid-glass (also in package.json, but unused anywhere
+// else in the app, so not confirmed working in a real build — given this
+// session's two native-dependency crashes already, introducing a second
+// unverified native package for a UI-only pass isn't worth the risk).
 const C = {
-  bg:      '#0A0B0C',
-  surface: '#15161A',
-  card:    '#ffffff',
-  border:  'rgba(255,255,255,0.08)',
-  text:    '#F0F0F2',
-  muted:   '#9A9AA2',
-  dim:     '#62626A',
-  good:    '#4ADE80',
-  goodBg:  'rgba(21,128,61,0.14)',
-  goodRing:'rgba(74,222,128,0.28)',
+  bgTop:     '#EEF1FB',
+  bgMid:     '#F6F3FE',
+  bgBottom:  '#FFFFFF',
+  glassTint: 'rgba(255,255,255,0.55)',
+  glassBorder: 'rgba(255,255,255,0.75)',
+  card:      '#ffffff',
+  text:      '#161A2B',
+  muted:     '#6B7086',
+  dim:       '#9AA0B4',
+  accent:    '#0A6CFF',
+  good:      '#1FAE5C',
+  goodBg:    'rgba(31,174,92,0.12)',
+  goodRing:  'rgba(31,174,92,0.30)',
+  shadow:    'rgba(31,41,89,0.16)',
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -252,16 +268,19 @@ export default function RecapScreen() {
 
   if (loadFailed) {
     return (
-      <View style={[s.root, s.centerFill, { paddingTop: insets.top }]}>
-        <Text style={s.failedTxt}>No recap data found.</Text>
-        <Pressable style={[s.doneBtnFooter, { marginTop: 20 }]} onPress={() => router.back()}>
-          <Text style={s.doneTxtFooter}>Back</Text>
-        </Pressable>
+      <View style={s.root}>
+        <BgGradient />
+        <View style={[s.centerFill, { paddingTop: insets.top }]}>
+          <Text style={s.failedTxt}>No recap data found.</Text>
+          <Pressable style={[s.doneBtnFooter, { marginTop: 20 }]} onPress={() => router.back()}>
+            <Text style={s.doneTxtFooter}>Back</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
 
-  if (!data) return <View style={[s.root, { paddingTop: insets.top }]} />;
+  if (!data) return <View style={s.root}><BgGradient /></View>;
 
   const exCount    = data.entries.length;
   const doneLabel  = data.isHistory ? 'Back' : 'Done';
@@ -271,125 +290,165 @@ export default function RecapScreen() {
     : isWorkoutMode ? 'Workout Complete' : 'Session Complete';
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
-      <ScrollView
-        style={s.scroll}
-        contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 20 }]}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header — gives the screen a sense of arrival instead of jumping
-            straight into the hero card. */}
-        <View style={s.header}>
-          {!data.isHistory && (
-            <View style={s.checkBadge}>
-              <SymbolView name="checkmark" size={15} tintColor={C.bg} type="monochrome" style={{ width: 15, height: 15 }} />
+    <View style={s.root}>
+      <BgGradient />
+      <View style={{ flex: 1, paddingTop: insets.top }}>
+        <ScrollView
+          style={s.scroll}
+          contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 20 }]}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header — gives the screen a sense of arrival instead of jumping
+              straight into the hero card. */}
+          <View style={s.header}>
+            {!data.isHistory && (
+              <View style={s.checkBadgeShadow}>
+                <BlurView intensity={40} tint="light" style={s.checkBadge}>
+                  <SymbolView name="checkmark" size={16} tintColor={C.good} type="monochrome" style={{ width: 16, height: 16 }} />
+                </BlurView>
+              </View>
+            )}
+            <Text style={s.headingTitle}>{headingTitle}</Text>
+            <Text style={s.headingSub}>{formatFullDate(data.ts)}</Text>
+          </View>
+
+          {/* Muscle heatmap — the hero. Captured as-is for the share image;
+              kept a clean opaque card (not glass) so the shared image looks
+              controlled regardless of what's behind it. */}
+          <Animated.View style={{ opacity: heroOpac, transform: [{ scale: heroScale }] }}>
+            <ViewShot ref={shotRef} options={{ format: 'png', quality: 1 }}>
+              <View style={s.heroCard}>
+                <MuscleHeatmap
+                  overallScores={overallScores}
+                  highlightGroups={highlightGroups}
+                  highlightLabel={highlightLabel}
+                  scale={0.85}
+                />
+                <View style={s.watermarkRow}>
+                  <SymbolView name="figure.strengthtraining.traditional" size={11} tintColor="#aab0c4"
+                    type="monochrome" style={{ width: 11, height: 11 }} />
+                  <Text style={s.watermarkTxt}>FormPal</Text>
+                </View>
+              </View>
+            </ViewShot>
+          </Animated.View>
+
+          {/* Minimal, secondary stats — frosted glass chips */}
+          <View style={s.statsRow}>
+            <StatPill label="Exercises" value={String(exCount)} />
+            <StatPill label="Total Reps" value={String(data.totalReps)} />
+            {data.totalReps > 0 && <StatPill label="Good Form" value={`${data.pct}%`} accent />}
+          </View>
+
+          {/* Overview */}
+          {data.totalReps > 0 && (
+            <GlassCard>
+              <Text style={s.cardLabel}>OVERVIEW</Text>
+              <Text style={s.cardText}>{generateSummary(data.totalReps, data.totalGoodReps)}</Text>
+            </GlassCard>
+          )}
+
+          {/* Secondary: per-exercise breakdown (workout mode only) */}
+          {breakdown && breakdown.length > 0 && (
+            <View style={s.section}>
+              <Text style={s.sectionLabel}>BREAKDOWN</Text>
+              <GlassCard padded={false}>
+                {breakdown.map((r, i) => (
+                  <React.Fragment key={r.exerciseId + i}>
+                    <View style={s.exRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.exName}>{r.displayName}</Text>
+                        {r.completed && <Text style={s.exMeta}>{r.reps} reps</Text>}
+                        {r.skipped   && <Text style={[s.exMeta, { color: C.dim }]}>Skipped</Text>}
+                      </View>
+                      {r.completed && r.reps > 0 && (
+                        <Text style={s.exScore}>{r.formScore}%</Text>
+                      )}
+                    </View>
+                    {i < breakdown.length - 1 && <View style={s.divider} />}
+                  </React.Fragment>
+                ))}
+              </GlassCard>
             </View>
           )}
-          <Text style={s.headingTitle}>{headingTitle}</Text>
-          <Text style={s.headingSub}>{formatFullDate(data.ts)}</Text>
-        </View>
 
-        {/* Muscle heatmap — the hero. Captured as-is for the share image. */}
-        <Animated.View style={{ opacity: heroOpac, transform: [{ scale: heroScale }] }}>
-          <ViewShot ref={shotRef} options={{ format: 'png', quality: 1 }}>
-            <View style={s.heroCard}>
-              <MuscleHeatmap
-                overallScores={overallScores}
-                highlightGroups={highlightGroups}
-                highlightLabel={highlightLabel}
-                scale={0.85}
-              />
-              <View style={s.watermarkRow}>
-                <SymbolView name="figure.strengthtraining.traditional" size={11} tintColor="#c8ccd6"
-                  type="monochrome" style={{ width: 11, height: 11 }} />
-                <Text style={s.watermarkTxt}>FormPal</Text>
+          {/* Secondary: video replay (solo quick-form-check only) */}
+          {hasVideo && (
+            <View style={s.section}>
+              <Text style={s.sectionLabel}>REPLAY</Text>
+              <View style={s.videoWrap}>
+                <VideoView
+                  player={player}
+                  style={StyleSheet.absoluteFill}
+                  allowsFullscreen
+                  nativeControls
+                  contentFit="contain"
+                />
+                {liveAnim && (
+                  <RepFeedback
+                    key={liveAnim.key}
+                    good={liveAnim.good}
+                    reason={liveAnim.reason}
+                    seq={liveAnim.key}
+                    onComplete={() => setLiveAnim(null)}
+                  />
+                )}
               </View>
             </View>
-          </ViewShot>
-        </Animated.View>
+          )}
+        </ScrollView>
 
-        {/* Minimal, secondary stats */}
-        <View style={s.statsRow}>
-          <StatPill label="Exercises" value={String(exCount)} />
-          <StatPill label="Total Reps" value={String(data.totalReps)} />
-          {data.totalReps > 0 && <StatPill label="Good Form" value={`${data.pct}%`} accent />}
-        </View>
-
-        {/* Overview */}
-        {data.totalReps > 0 && (
-          <View style={s.card}>
-            <Text style={s.cardLabel}>OVERVIEW</Text>
-            <Text style={s.cardText}>{generateSummary(data.totalReps, data.totalGoodReps)}</Text>
+        {/* Footer — frosted glass bar; Share is the primary action, Done/Back
+            just navigates away. */}
+        <BlurView intensity={50} tint="light" style={s.footer}>
+          <View style={[s.footerInner, { paddingBottom: Math.max(insets.bottom + 16, 28) }]}>
+            <Pressable
+              style={({ pressed }) => [s.shareBtnShadow, pressed && { opacity: 0.88 }]}
+              onPress={handleShare}
+              disabled={sharing}
+            >
+              <LinearGradient
+                colors={[C.accent, '#3D8BFF']}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                style={s.shareBtn}
+              >
+                <SymbolView name="square.and.arrow.up" size={17} tintColor="#fff" type="monochrome" style={{ width: 17, height: 17 }} />
+                <Text style={s.shareTxt}>{sharing ? 'Preparing…' : 'Share Recap'}</Text>
+              </LinearGradient>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [s.doneBtnFooter, pressed && { opacity: 0.6 }]}
+              onPress={handleDone}
+            >
+              <Text style={s.doneTxtFooter}>{doneLabel}</Text>
+            </Pressable>
           </View>
-        )}
-
-        {/* Secondary: per-exercise breakdown (workout mode only) */}
-        {breakdown && breakdown.length > 0 && (
-          <View style={s.section}>
-            <Text style={s.sectionLabel}>BREAKDOWN</Text>
-            <View style={s.card}>
-              {breakdown.map((r, i) => (
-                <React.Fragment key={r.exerciseId + i}>
-                  <View style={s.exRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={s.exName}>{r.displayName}</Text>
-                      {r.completed && <Text style={s.exMeta}>{r.reps} reps</Text>}
-                      {r.skipped   && <Text style={[s.exMeta, { color: C.dim }]}>Skipped</Text>}
-                    </View>
-                    {r.completed && r.reps > 0 && (
-                      <Text style={s.exScore}>{r.formScore}%</Text>
-                    )}
-                  </View>
-                  {i < breakdown.length - 1 && <View style={s.divider} />}
-                </React.Fragment>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {/* Secondary: video replay (solo quick-form-check only) */}
-        {hasVideo && (
-          <View style={s.section}>
-            <Text style={s.sectionLabel}>REPLAY</Text>
-            <View style={s.videoWrap}>
-              <VideoView
-                player={player}
-                style={StyleSheet.absoluteFill}
-                allowsFullscreen
-                nativeControls
-                contentFit="contain"
-              />
-              {liveAnim && (
-                <RepFeedback
-                  key={liveAnim.key}
-                  good={liveAnim.good}
-                  reason={liveAnim.reason}
-                  seq={liveAnim.key}
-                  onComplete={() => setLiveAnim(null)}
-                />
-              )}
-            </View>
-          </View>
-        )}
-      </ScrollView>
-
-      {/* Footer — Share is the primary action; Done/Back just navigates away */}
-      <View style={[s.footer, { paddingBottom: Math.max(insets.bottom + 16, 28) }]}>
-        <Pressable
-          style={({ pressed }) => [s.shareBtn, pressed && { opacity: 0.85 }]}
-          onPress={handleShare}
-          disabled={sharing}
-        >
-          <SymbolView name="square.and.arrow.up" size={17} tintColor={C.bg} type="monochrome" style={{ width: 17, height: 17 }} />
-          <Text style={s.shareTxt}>{sharing ? 'Preparing…' : 'Share Recap'}</Text>
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [s.doneBtnFooter, pressed && { opacity: 0.6 }]}
-          onPress={handleDone}
-        >
-          <Text style={s.doneTxtFooter}>{doneLabel}</Text>
-        </Pressable>
+        </BlurView>
       </View>
+    </View>
+  );
+}
+
+// ─── Background gradient — soft, light, flowing (no flat black) ──────────────
+function BgGradient() {
+  return (
+    <LinearGradient
+      colors={[C.bgTop, C.bgMid, C.bgBottom]}
+      start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }}
+      style={StyleSheet.absoluteFill}
+      pointerEvents="none"
+    />
+  );
+}
+
+// ─── Frosted glass card ───────────────────────────────────────────────────────
+function GlassCard({ children, padded = true }: { children: React.ReactNode; padded?: boolean }) {
+  return (
+    <View style={s.glassShadow}>
+      <BlurView intensity={45} tint="light" style={[s.glassCard, !padded && { padding: 0 }]}>
+        <View style={s.glassBorder} pointerEvents="none" />
+        {children}
+      </BlurView>
     </View>
   );
 }
@@ -397,30 +456,36 @@ export default function RecapScreen() {
 // ─── Stat pill ────────────────────────────────────────────────────────────────
 function StatPill({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
-    <View style={[sp.pill, accent && sp.pillAccent]}>
-      <Text style={[sp.value, accent && sp.valueAccent]}>{value}</Text>
-      <Text style={sp.label}>{label}</Text>
+    <View style={sp.shadow}>
+      <BlurView intensity={45} tint="light" style={[sp.pill, accent && sp.pillAccent]}>
+        <Text style={[sp.value, accent && sp.valueAccent]}>{value}</Text>
+        <Text style={sp.label}>{label}</Text>
+      </BlurView>
     </View>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  root:      { flex: 1, backgroundColor: C.bg },
-  centerFill:{ alignItems: 'center', justifyContent: 'center', gap: 8 },
+  root:      { flex: 1, backgroundColor: C.bgBottom },
+  centerFill:{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
   failedTxt: { color: C.muted, fontSize: 15 },
   scroll:    { flex: 1 },
   content:   { paddingHorizontal: 20, gap: 18, paddingTop: 4 },
 
   header: { alignItems: 'center', gap: 6, paddingTop: 12, paddingBottom: 4 },
+  checkBadgeShadow: {
+    borderRadius: 20, marginBottom: 4,
+    shadowColor: C.good, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10,
+  },
   checkBadge: {
-    width: 34, height: 34, borderRadius: 17,
-    backgroundColor: C.good,
+    width: 38, height: 38, borderRadius: 19,
     alignItems: 'center', justifyContent: 'center',
-    marginBottom: 4,
+    overflow: 'hidden',
+    borderWidth: 1, borderColor: C.glassBorder,
   },
   headingTitle: {
-    fontSize: 24, fontWeight: '800', color: C.text,
+    fontSize: 25, fontWeight: '800', color: C.text,
     letterSpacing: -0.4, textAlign: 'center',
   },
   headingSub: {
@@ -433,85 +498,98 @@ const s = StyleSheet.create({
     borderRadius:    28,
     padding:         22,
     gap:             18,
-    shadowColor:     '#000',
-    shadowOffset:    { width: 0, height: 14 },
-    shadowOpacity:   0.28,
-    shadowRadius:    32,
+    shadowColor:     C.shadow,
+    shadowOffset:    { width: 0, height: 16 },
+    shadowOpacity:   1,
+    shadowRadius:    36,
     elevation:       10,
   },
   watermarkRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
-    opacity: 0.55,
+    opacity: 0.6,
   },
-  watermarkTxt: { fontSize: 11, fontWeight: '700', color: '#8b93a3', letterSpacing: 0.3 },
+  watermarkTxt: { fontSize: 11, fontWeight: '700', color: '#aab0c4', letterSpacing: 0.3 },
 
   statsRow: { flexDirection: 'row', gap: 10 },
 
-  card: {
-    backgroundColor: C.surface,
-    borderRadius:    16,
-    padding:         18,
-    borderWidth:     1,
-    borderColor:     C.border,
-    gap:             8,
+  glassShadow: {
+    borderRadius: 20,
+    shadowColor: C.shadow, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 1, shadowRadius: 20,
   },
-  cardLabel: { fontSize: 11, fontWeight: '600', color: C.muted, letterSpacing: 1.2 },
+  glassCard: {
+    borderRadius:    20,
+    padding:         18,
+    gap:             8,
+    overflow:        'hidden',
+    backgroundColor: C.glassTint,
+  },
+  glassBorder: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 20,
+    borderWidth:  1,
+    borderColor:  C.glassBorder,
+  },
+  cardLabel: { fontSize: 11, fontWeight: '700', color: C.muted, letterSpacing: 1.2 },
   cardText:  { fontSize: 14.5, fontWeight: '400', color: C.text, lineHeight: 21, letterSpacing: -0.1 },
 
   section:      { gap: 8 },
-  sectionLabel: { fontSize: 11, fontWeight: '700', color: C.dim, letterSpacing: 1, marginLeft: 2 },
+  sectionLabel: { fontSize: 11, fontWeight: '700', color: C.dim, letterSpacing: 1, marginLeft: 4 },
 
   exRow:   { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
   exName:  { fontSize: 14, fontWeight: '600', color: C.text },
   exMeta:  { fontSize: 12, color: C.muted, marginTop: 2 },
   exScore: { fontSize: 13, fontWeight: '700', color: C.good },
-  divider: { height: StyleSheet.hairlineWidth, backgroundColor: C.border, marginHorizontal: 14 },
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: C.glassBorder, marginHorizontal: 14 },
 
   videoWrap: {
     width: '100%', aspectRatio: 9 / 16,
-    borderRadius: 16, overflow: 'hidden',
+    borderRadius: 20, overflow: 'hidden',
     backgroundColor: '#000',
   },
 
   footer: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(22,26,43,0.08)',
+    overflow: 'hidden',
+  },
+  footerInner: {
     paddingHorizontal: 20,
     paddingTop:        14,
     gap:               10,
-    backgroundColor:   C.bg,
-    borderTopWidth:    StyleSheet.hairlineWidth,
-    borderTopColor:    C.border,
+  },
+  shareBtnShadow: {
+    borderRadius: 100,
+    shadowColor: C.accent, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.35, shadowRadius: 18,
   },
   shareBtn: {
-    backgroundColor: C.text,
     borderRadius:    100,
     paddingVertical: 17,
     flexDirection:   'row',
     alignItems:      'center',
     justifyContent:  'center',
     gap:             8,
-    shadowColor:     '#000',
-    shadowOffset:    { width: 0, height: 8 },
-    shadowOpacity:   0.22,
-    shadowRadius:    16,
-    elevation:       6,
   },
-  shareTxt: { fontSize: 16, fontWeight: '700', color: C.bg, letterSpacing: 0.2 },
+  shareTxt: { fontSize: 16, fontWeight: '700', color: '#fff', letterSpacing: 0.2 },
 
   doneBtnFooter: { alignItems: 'center', paddingVertical: 8 },
   doneTxtFooter: { fontSize: 14, fontWeight: '600', color: C.muted },
 });
 
 const sp = StyleSheet.create({
+  shadow: {
+    flex: 1, borderRadius: 16,
+    shadowColor: C.shadow, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 1, shadowRadius: 14,
+  },
   pill: {
-    flex:              1,
-    backgroundColor:   C.surface,
-    borderRadius:      14,
+    borderRadius:      16,
     paddingVertical:   16,
     paddingHorizontal: 10,
     alignItems:        'center',
-    borderWidth:       1,
-    borderColor:       C.border,
     gap:               4,
+    overflow:          'hidden',
+    backgroundColor:   C.glassTint,
+    borderWidth:       1,
+    borderColor:       C.glassBorder,
   },
   pillAccent: {
     borderColor:     C.goodRing,

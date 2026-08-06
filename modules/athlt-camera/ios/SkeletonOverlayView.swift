@@ -3,26 +3,30 @@ import UIKit
 /// Real-time skeleton overlay drawn over the camera preview during form-check.
 ///
 /// Performance design:
-///   • Two CAShapeLayers (lineLayer + dotLayer) created once in setup() — GPU-rendered.
+///   • CAShapeLayers created once in setup() — GPU-rendered.
 ///   • Each frame: build two CGMutablePaths (C-level, no ObjC bridge cost) and assign
 ///     to layer.path inside a no-animation CATransaction. No setNeedsDisplay, no draw(rect:).
 ///   • Driven by a CADisplayLink in ATHLTCameraView at native refresh rate (60-120 Hz).
 ///
-/// Coordinate transform (see visionToView):
-///   Vision returns normalised coords with origin BOTTOM-LEFT (y-up).
-///   Preview layer uses .resizeAspectFill, portrait orientation.
-///   We correct for y-flip and aspect-fill crop offset.
-///
-/// TUNING after first build:
-///   • If skeleton is flipped on FRONT camera, check isMirrored flag in ATHLTCameraModule.
-///   • If skeleton is offset, check NSLog "[GymCamera] pixel buffer WxH" (h > w = portrait ✓).
-
+/// VISUAL DESIGN (glow style): a plain flat-blue wireframe read as "cheap." Detection/
+/// tracking/smoothing/coordinate-transform logic below is UNCHANGED — only how the
+/// same computed paths get drawn changed. Each bone line and joint dot is now two
+/// layers sharing the same path: a wider, blurred, low-opacity "glow" layer underneath
+/// (CALayer's native shadow* properties, applied to a layer whose own content is
+/// invisible — a standard, cheap way to get a soft glow from a CAShapeLayer without a
+/// custom blur/Metal pass) and a slim, bright "core" layer on top. Joint dots use a
+/// warm-white core over a colored glow so they read as small glowing points rather than
+/// flat filled circles — closer to the AR-fitness-app look than a solid dot+outline.
 final class SkeletonOverlayView: UIView {
 
     // MARK: – Layers
+    // "Glow" layers are wider/blurred and sit underneath; "core" layers are thin/bright
+    // and sit on top, sharing the exact same path per frame.
 
-    private let lineLayer = CAShapeLayer()
-    private let dotLayer  = CAShapeLayer()
+    private let lineGlowLayer = CAShapeLayer()
+    private let lineCoreLayer = CAShapeLayer()
+    private let dotGlowLayer  = CAShapeLayer()
+    private let dotCoreLayer  = CAShapeLayer()
 
     // MARK: – Smoothing
 
@@ -59,11 +63,22 @@ final class SkeletonOverlayView: UIView {
     ]
 
     private static let minConfidence: Float  = 0.30
-    private static let dotRadius:     CGFloat = 5.0
-    private static let lineWidth:     CGFloat = 2.5
 
-    // #0A6CFF — FormPal accent blue
-    private static let blue = UIColor(red: 0.04, green: 0.42, blue: 1.00, alpha: 1.0)
+    // Core (bright, crisp) sizes — slightly slimmer than the old flat design (2.5pt)
+    // for a more refined line weight.
+    private static let dotCoreRadius: CGFloat = 3.6
+    private static let lineCoreWidth: CGFloat = 2.0
+    // Glow (soft, wide) sizes — the shadow radius does the actual softening; the
+    // shape itself is drawn a little wider than the core so the blur has something
+    // to spread from.
+    private static let dotGlowRadius: CGFloat = 7.0
+    private static let lineGlowWidth: CGFloat = 5.0
+
+    // FormPal accent blue for the glow; a warm near-white for the crisp core, which
+    // is what actually reads as "glowing" rather than flat-colored.
+    private static let accent    = UIColor(red: 0.10, green: 0.55, blue: 1.00, alpha: 1.0)
+    private static let coreLine  = UIColor(red: 0.55, green: 0.80, blue: 1.00, alpha: 1.0)
+    private static let coreDot   = UIColor(red: 0.92, green: 0.97, blue: 1.00, alpha: 1.0)
 
     // MARK: – Init
 
@@ -74,29 +89,50 @@ final class SkeletonOverlayView: UIView {
         backgroundColor          = .clear
         isUserInteractionEnabled = false
 
-        // Bone lines — thin, rounded, semi-transparent blue
-        lineLayer.fillColor   = UIColor.clear.cgColor
-        lineLayer.strokeColor = Self.blue.withAlphaComponent(0.75).cgColor
-        lineLayer.lineWidth   = Self.lineWidth
-        lineLayer.lineCap     = .round
-        lineLayer.lineJoin    = .round
-        layer.addSublayer(lineLayer)
+        // ── Bone glow (wide, blurred, underneath) ──────────────────────────────
+        lineGlowLayer.fillColor    = UIColor.clear.cgColor
+        lineGlowLayer.strokeColor  = Self.accent.withAlphaComponent(0.55).cgColor
+        lineGlowLayer.lineWidth    = Self.lineGlowWidth
+        lineGlowLayer.lineCap      = .round
+        lineGlowLayer.lineJoin     = .round
+        lineGlowLayer.shadowColor  = Self.accent.cgColor
+        lineGlowLayer.shadowRadius = 6
+        lineGlowLayer.shadowOpacity = 0.85
+        lineGlowLayer.shadowOffset = .zero
+        layer.addSublayer(lineGlowLayer)
 
-        // Joint dots — solid blue fill, thin white outline for contrast on any background.
-        // NOTE: dotLayer.strokeColor is white so the outline reads against both
-        //       the blue skeleton lines and the camera feed.
-        dotLayer.fillColor   = Self.blue.cgColor
-        dotLayer.strokeColor = UIColor.white.withAlphaComponent(0.85).cgColor
-        dotLayer.lineWidth   = 1.5
-        layer.addSublayer(dotLayer)
+        // ── Bone core (slim, bright, on top) ───────────────────────────────────
+        lineCoreLayer.fillColor   = UIColor.clear.cgColor
+        lineCoreLayer.strokeColor = Self.coreLine.withAlphaComponent(0.95).cgColor
+        lineCoreLayer.lineWidth   = Self.lineCoreWidth
+        lineCoreLayer.lineCap     = .round
+        lineCoreLayer.lineJoin    = .round
+        layer.addSublayer(lineCoreLayer)
+
+        // ── Joint glow (wide, blurred, underneath) ─────────────────────────────
+        dotGlowLayer.fillColor    = Self.accent.withAlphaComponent(0.45).cgColor
+        dotGlowLayer.strokeColor  = UIColor.clear.cgColor
+        dotGlowLayer.shadowColor  = Self.accent.cgColor
+        dotGlowLayer.shadowRadius = 7
+        dotGlowLayer.shadowOpacity = 0.9
+        dotGlowLayer.shadowOffset = .zero
+        layer.addSublayer(dotGlowLayer)
+
+        // ── Joint core (small, bright, on top) ─────────────────────────────────
+        dotCoreLayer.fillColor   = Self.coreDot.cgColor
+        dotCoreLayer.strokeColor = Self.accent.withAlphaComponent(0.9).cgColor
+        dotCoreLayer.lineWidth   = 1.25
+        layer.addSublayer(dotCoreLayer)
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        lineLayer.frame = bounds
-        dotLayer.frame  = bounds
+        lineGlowLayer.frame = bounds
+        lineCoreLayer.frame = bounds
+        dotGlowLayer.frame  = bounds
+        dotCoreLayer.frame  = bounds
         CATransaction.commit()
     }
 
@@ -128,8 +164,10 @@ final class SkeletonOverlayView: UIView {
         smoothed = [:]
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        lineLayer.path = nil
-        dotLayer.path  = nil
+        lineGlowLayer.path = nil
+        lineCoreLayer.path = nil
+        dotGlowLayer.path  = nil
+        dotCoreLayer.path  = nil
         CATransaction.commit()
     }
 
@@ -140,9 +178,11 @@ final class SkeletonOverlayView: UIView {
         guard vSize.width > 0, vSize.height > 0,
               videoWidth > 0, videoHeight > 0 else { return }
 
-        let linePath = CGMutablePath()
-        let dotPath  = CGMutablePath()
-        let r = Self.dotRadius
+        let linePath     = CGMutablePath()
+        let dotCorePath  = CGMutablePath()
+        let dotGlowPath  = CGMutablePath()
+        let rCore = Self.dotCoreRadius
+        let rGlow = Self.dotGlowRadius
 
         // Helper: Vision normalised → view point (nil if joint not tracked)
         func pt(_ j: Joint) -> CGPoint? {
@@ -155,6 +195,7 @@ final class SkeletonOverlayView: UIView {
 
         // ── Bone lines ──────────────────────────────────────────────────────
         // Both endpoints must be confident — don't draw a bone to an unknown joint.
+        // Same single path reused for both the glow and core line layers.
         for (a, b) in Self.connections {
             guard let pa = pt(a), let pb = pt(b) else { continue }
             linePath.move(to: pa)
@@ -162,21 +203,17 @@ final class SkeletonOverlayView: UIView {
         }
 
         // ── Joint dots ──────────────────────────────────────────────────────
-        // KEY FIX: use addEllipse(in:) instead of addArc.
-        //
-        // addArc on a CGMutablePath WITHOUT a preceding move(to:) inserts a
-        // straight line from the current point to the arc's start point before
-        // drawing the arc. With multiple arcs and a fill colour, those implicit
-        // connecting segments create filled triangles/polygons between the circles
-        // — exactly the "orbs/triangles" artefact the user sees.
-        //
-        // addEllipse(in:) creates each ellipse as its OWN closed subpath
-        // (implicit moveTo at entry, no line from previous subpath), so the
-        // circles are always isolated — clean dots, nothing else.
+        // KEY FIX (kept from the original design): addEllipse(in:) instead of
+        // addArc — addArc without a preceding move(to:) draws an implicit
+        // connecting line from the previous subpath, which with a fill colour
+        // creates filled triangle/polygon artefacts between circles.
+        // addEllipse(in:) is always its own closed subpath, so dots stay isolated.
         for joint in Joint.allCases {
             guard let p = pt(joint) else { continue }
-            dotPath.addEllipse(in: CGRect(x: p.x - r, y: p.y - r,
-                                          width: r * 2, height: r * 2))
+            dotCorePath.addEllipse(in: CGRect(x: p.x - rCore, y: p.y - rCore,
+                                              width: rCore * 2, height: rCore * 2))
+            dotGlowPath.addEllipse(in: CGRect(x: p.x - rGlow, y: p.y - rGlow,
+                                              width: rGlow * 2, height: rGlow * 2))
         }
 
         // Disable CALayer implicit animations so the skeleton snaps to each new
@@ -184,8 +221,10 @@ final class SkeletonOverlayView: UIView {
         // 10 fps inference looks like 1-fps lag on a 60 Hz display).
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        lineLayer.path = linePath
-        dotLayer.path  = dotPath
+        lineGlowLayer.path = linePath
+        lineCoreLayer.path = linePath
+        dotGlowLayer.path  = dotGlowPath
+        dotCoreLayer.path  = dotCorePath
         CATransaction.commit()
     }
 

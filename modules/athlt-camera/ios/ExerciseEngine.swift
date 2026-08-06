@@ -209,11 +209,12 @@ final class ExerciseEngine {
     // phantom-rep guard (requires only ~0.2 units for seated row). The settle gate holds
     // rep counting until the metric has been stably above exitThreshold for SETTLE_FRAMES.
     // Once settled, hasSettled stays true for the session — no re-settling between reps.
-    private var hasSettled:             Bool = false
-    private var settledTopFrames:       Int  = 0
-    // Set once the user drops below effectiveEnterThreshold before ever settling — see the
-    // "resync on prior attempt" fix in runStateMachine's .atTop case.
-    private var attemptedRepPreSettle:  Bool = false
+    private var hasSettled:             Bool   = false
+    private var settledTopFrames:       Int    = 0
+    // Highest angle seen so far while !hasSettled — a fallback "rest" reading
+    // for exercises where the user never fully returns above exitThreshold
+    // between reps (see the resync fix in runStateMachine's .atTop case).
+    private var settleCandidateTop:     Double = -.infinity
 
     private static let SETTLE_FRAMES: Int = 8   // ~0.27s at 30fps
 
@@ -661,42 +662,60 @@ final class ExerciseEngine {
             // FIX: only start accumulating repTopValue AFTER hasSettled, seeded from the exact
             // frame settling was confirmed — discards whatever noise came before it.
             //
-            // ROOT CAUSE (curl/shoulder press "doesn't count until you pause and go again";
-            // tricep-adjacent symptom): SETTLE_FRAMES required 8 CONSECUTIVE frames above
-            // exitThreshold with no other way to satisfy it. A user who starts their first rep
-            // immediately (completely normal — SETUP already held them still for 2s) drops
-            // below exitThreshold before accumulating 8 frames; the decay-not-reset then
-            // erodes settledTopFrames across the whole rep (many frames below threshold), and
-            // since the .atTop case returns immediately while !hasSettled, that first rep motion
-            // is entirely ignored rather than counted OR used as settle evidence. Every
-            // following rep hits the identical problem — permanently stuck until the user
-            // happens to pause with 8 clean consecutive frames between reps.
-            // FIX: a deliberate down-and-back-up excursion (crossing effectiveEnterThreshold
-            // and returning) is itself at least as strong evidence of "this is a real, stable
-            // top position" as a passive hold — resync on it immediately instead of waiting for
-            // a fresh 8-frame hold that a continuous-tempo user may never produce.
+            // ROOT CAUSE #1 (curl/shoulder press/tricep "doesn't count until you pause and
+            // go again"): SETTLE_FRAMES required 8 CONSECUTIVE frames above exitThreshold
+            // with no other way to satisfy it. A user who starts their first rep immediately
+            // drops below exitThreshold before accumulating 8 frames, and the .atTop case
+            // returns immediately while !hasSettled — that first rep motion is entirely
+            // ignored, and every following rep hits the identical problem: permanently stuck
+            // until the user happens to pause with 8 clean consecutive frames between reps.
+            //
+            // ROOT CAUSE #2 (why the first fix — "resync on return above exitThreshold" —
+            // still didn't work for curl): that fix STILL required the metric to climb back
+            // above effectiveExitThreshold at least once to ever check the resync condition.
+            // A continuous-tempo lifter who doesn't fully re-extend between reps (very common
+            // real form — keeping tension on, not locking out every rep) may NEVER produce a
+            // frame where the metric climbs back that high, so neither the original 8-frame
+            // hold NOR the "resync on return" fix could ever fire — both gated on the exact
+            // same condition (reaching exitThreshold) that this user's real tempo never hits.
+            //
+            // REAL FIX: don't require reaching back up to exitThreshold at all. Track the
+            // highest angle seen so far (settleCandidateTop) as a standing "best available
+            // rest reading," and the MOMENT the user shows a genuine, deliberate descent past
+            // effectiveEnterThreshold — strong evidence on its own that this is real exercise
+            // motion, not noise — settle immediately using that tracked peak as repTopValue.
+            // Critically, this does NOT `return`: it falls through to the entry-check below in
+            // the SAME frame, so this first rep is actually COUNTED instead of being wasted as
+            // a silently-ignored "primer."
             if !hasSettled {
+                settleCandidateTop = max(settleCandidateTop, angle)
+
                 if angle > effectiveExitThreshold {
                     settledTopFrames = min(settledTopFrames + 1, Self.SETTLE_FRAMES + 2)
-                    let readyByHold          = settledTopFrames >= Self.SETTLE_FRAMES
-                    let readyByPriorAttempt  = attemptedRepPreSettle
-                    if readyByHold || readyByPriorAttempt {
+                    if settledTopFrames >= Self.SETTLE_FRAMES {
                         hasSettled  = true
                         repTopValue = angle
-                        let msg = "[SETTLE] " +
-                            (readyByPriorAttempt ? "resynced after an early rep attempt" : "top stable") +
-                            " — rep counting active"
+                        let msg = "[SETTLE] top stable — rep counting active"
                         NSLog("[Engine] [%@] %@", def.id, msg)
                         onDebugLog?(msg)
                     }
                 } else {
                     // Graceful decay for single-frame noise (don't hard-reset on one bad frame).
                     settledTopFrames = max(0, settledTopFrames - 1)
-                    if angle < effectiveEnterThreshold {
-                        attemptedRepPreSettle = true
-                    }
                 }
-                return
+
+                if !hasSettled, angle < effectiveEnterThreshold {
+                    hasSettled  = true
+                    repTopValue = settleCandidateTop
+                    let msg = "[SETTLE] resynced on first real rep attempt (top≈\(String(format: "%.1f", settleCandidateTop))) — rep counting active"
+                    NSLog("[Engine] [%@] %@", def.id, msg)
+                    onDebugLog?(msg)
+                }
+
+                guard hasSettled else { return }
+                // Falls through below using this SAME frame — if we just settled via the
+                // resync path (angle already < effectiveEnterThreshold), the entry check
+                // immediately below will correctly recognize this frame as a real rep entry.
             }
 
             repTopValue = max(repTopValue, angle)
@@ -1136,9 +1155,9 @@ final class ExerciseEngine {
     }
 
     private func resetSettleState() {
-        hasSettled             = false
-        settledTopFrames       = 0
-        attemptedRepPreSettle  = false
+        hasSettled          = false
+        settledTopFrames    = 0
+        settleCandidateTop  = -.infinity
     }
 
     private func resetRepState() {

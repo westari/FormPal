@@ -1167,10 +1167,41 @@ const HINGE_REP_METRIC: MetricDef = {
 // spine/mid-back landmark (only nose, shoulders, elbows, wrists, hips, knees,
 // ankles — see Joints.swift's Joint enum) — there is no way to see curvature
 // in the torso line from only its two endpoints. Same limitation already
-// documented for the row family's flat-back attempts. Depth
-// (insufficientROMCue below) is now the ONLY Layer-1 signal for this family —
-// the knee_bend check (above) was removed as unreliable; rounding relies on
-// the user's own cue awareness rather than a check that would fire randomly.
+// documented for the row family's flat-back attempts. Rounding itself STAYS
+// not-built — nothing below changes that.
+
+// FORM CHECK — torso tipping too far / hips shooting up ahead of the chest
+// ("stripper deadlift" — hips rise and the torso pitches forward faster than
+// a controlled hinge, instead of hips and torso rising together). THIS IS a
+// torso-ANGLE check (shoulder→hip line vs vertical) — the exact same
+// primitive and style as squat's back_lean/chest-up check — NOT a spine/
+// rounding check. Both points (shoulder, hip) are fully trackable; this is
+// not a landmark-availability question the way rounding is.
+//
+// Metric: lineVsVertical(hip, shoulder) — the complement of HINGE_REP_METRIC
+// (lineVsHorizontal on the SAME two points). Standing ≈ 0° from vertical.
+// The one confirmed on-device full-depth reading (bottom=20.5° from
+// horizontal) works out to ≈69.5° from vertical for a normal, controlled
+// full hinge. This check is NOT re-testing depth (that's what
+// goodROMThreshold already does on the same underlying signal) — it's
+// catching torso lean that goes MEANINGFULLY BEYOND what a controlled deep
+// hinge produces, which is what "hips shoot up, chest stays down" actually
+// looks like on this metric: more forward pitch than the depth alone
+// explains. PLACEHOLDER threshold (80°) is deliberately set well above the
+// one confirmed full-depth reading (69.5°) so a normal deep rep won't trip
+// it — do a few clean reps and a couple of deliberately "hips-first" reps
+// and send the [REP] log (torso_angle=value/lim=...) so I can set the real
+// number instead of guessing where the true fault line is.
+const HINGE_TORSO_ANGLE_CHECK: FormCheckDef = {
+  id: 'torso_angle', cue: 'HIPS DOWN, CHEST UP',
+  metric: {
+    type:  'average',
+    left:  { type: 'lineVsVertical', from: 'leftHip',  to: 'leftShoulder'  },
+    right: { type: 'lineVsVertical', from: 'rightHip', to: 'rightShoulder' },
+  },
+  evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 80 }, // PLACEHOLDER — verify from [REP] log
+  priority: 1, enabled: true,
+};
 
 // Side-on so torso travel and hip movement are both visible. Only the joints
 // actually used by the metric/checks (shoulder, hip, knee) — no far-side
@@ -1209,7 +1240,10 @@ function hingeVariant(
     repExitThreshold:   85,
     goodROMThreshold:   45,
     insufficientROMCue: 'HINGE DEEPER',
-    formChecks:         [],  // knee_bend removed — see "REMOVED, second time, for good" comment above
+    // knee_bend removed — see "REMOVED, second time, for good" comment above.
+    // torso_angle added — see HINGE_TORSO_ANGLE_CHECK comment (placeholder,
+    // needs a real log — this is a NEW check, not a revival of knee_bend).
+    formChecks:         [HINGE_TORSO_ANGLE_CHECK],
     readyGate:          PASSTHROUGH_GATE,
     cameraSetup: {
       setupInstruction,
