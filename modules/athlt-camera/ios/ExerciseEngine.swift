@@ -134,16 +134,44 @@ final class ExerciseEngine {
     private static let SETUP_EDGE_MARGIN:     Double       = 0.05
 
     // ── Calibration (passive — fed from real completed reps, see completeRep) ──
+    //
+    // ROOT CAUSE (session-to-session feedback inconsistency, highest-priority
+    // report): 5 exercises (curl, squat, shoulderPress, lunge, frontRaise) had
+    // def.calibration set, which after just 2 reps REPLACED the carefully
+    // tuned, real-device-log-derived repEnter/repExitThreshold with values
+    // derived from THAT session's first 2 reps alone. Two reps is a tiny,
+    // noise-prone sample with zero outlier rejection — a slightly-off opening
+    // pair shifts the rep-boundary window for the entire rest of the session,
+    // which can shift which frames get scanned for repMinAngle (the value
+    // goodROM compares against a FIXED, non-derived threshold). Same physical
+    // rep, different session, different opening reps → different verdict.
+    // This was the real mechanism — NOT the Universal Quality Engine's
+    // baseline (confirmed separately: its signals only ever reach [UNIV] logs,
+    // never the user-visible verdict — see onRepCompleted's wiring in
+    // ATHLTCameraModule.swift, which sends onRepDetected BEFORE calling
+    // universalEngine.onRepCompleted at all).
+    //
+    // FIX: effectiveEnterThreshold/effectiveExitThreshold below now ALWAYS use
+    // the static, tuned def values — never the per-session derived ones. This
+    // makes rep-boundary detection behave identically to every other exercise
+    // in the app (none of which have def.calibration), and removes the only
+    // per-session-varying input into what a "same movement" verdict depends
+    // on. The sample-collection code below is left in place (harmless,
+    // unused) rather than deleted, in case per-user adaptation is revisited
+    // later with a larger sample and outlier rejection — but it no longer
+    // affects behavior.
     private var calibRestBuf:      [Double] = []   // top/rest value per sampled rep
     private var calibPeakAngles:   [Double] = []   // bottom/peak value per sampled rep
     private var calibRepCount:     Int      = 0
     private var calibDerivedEnter: Double?  = nil
     private var calibDerivedExit:  Double?  = nil
 
-    // ── Active thresholds (static or derived from calibration) ────────────────
-    // goodROMThreshold is always absolute — never derived from user calibration reps.
-    private var effectiveEnterThreshold: Double { calibDerivedEnter ?? def.repEnterThreshold }
-    private var effectiveExitThreshold:  Double { calibDerivedExit  ?? def.repExitThreshold  }
+    // ── Active thresholds ──────────────────────────────────────────────────────
+    // All three are now always the static, per-exercise-tuned values — see the
+    // ROOT CAUSE comment above for why calibDerivedEnter/Exit are intentionally
+    // never read here anymore.
+    private var effectiveEnterThreshold: Double { def.repEnterThreshold }
+    private var effectiveExitThreshold:  Double { def.repExitThreshold  }
     private var effectiveROMThreshold:   Double { def.goodROMThreshold }
 
     // ── Form-over-ROM priority ────────────────────────────────────────────────

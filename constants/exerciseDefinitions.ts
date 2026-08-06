@@ -565,18 +565,21 @@ function shoulderPressVariant(
     topAngle:           84,
     repEnterThreshold:  68,
     repExitThreshold:   72,
-    // FIXED a real inconsistency: a device log showed genuine full presses
-    // reaching only 52-63° from vertical, but this stayed at 35 (never
-    // updated when the matching Layer-2 standardPeakAngleMax was loosened
-    // 45→65 off the same data) — meaning a real full press should have been
-    // failing ROM outright ("PRESS HIGHER" on every rep, not "too lenient").
-    // 60 aligns Layer 0 with that same real data, just inside the loosened
-    // Layer-2 standard. This does NOT by itself fix "arm-waving passes as
-    // good" — that's a control/tempo problem, not a depth problem (a fast,
-    // uncontrolled fling can reach a given angle at least as easily as a
-    // real press can, sometimes more so). See the note on this exercise for
-    // why I'm not guessing a control check without real comparison data.
-    goodROMThreshold:   60,
+    // TIGHTENED again, 60→55, from a real-press device log: bottom angles
+    // across 7 reps were 41, 46, 65, 63, 4.9, 63, 41 — genuine full presses
+    // cluster at ≤46° (one rep hit 4.9), and clearly short presses sit at
+    // 63-65°. 60 sat inside that gap, right on the ambiguous boundary — a
+    // real full press to 63-65 (still short of the 41-46 cluster, but not by
+    // a huge margin) could fail while looking "the same" to the user as one
+    // that passed. 55 sits with clear margin above the confirmed full-press
+    // cluster (≤46) and below the confirmed short-press cluster (63+), so a
+    // real press clearly passes and only genuinely short reps fail. This is
+    // a real number from real data, not a guess. Does NOT by itself fix
+    // "arm-waving passes as good" — that's a control/tempo problem, not a
+    // depth problem (a fast, uncontrolled fling can reach a given angle at
+    // least as easily as a real press, sometimes more so). See the note on
+    // this exercise for what log I need to find a real control signal.
+    goodROMThreshold:   55,
     insufficientROMCue: 'PRESS HIGHER',
     formChecks:      SHOULDER_PRESS_FORM_CHECKS,
     readyGate:       PASSTHROUGH_GATE,
@@ -796,6 +799,20 @@ function tricepVariant(
     },
     minRepInterval:  1.0,
     planarityChecks: TRICEP_PLANARITY,
+    // ROOT CAUSE (zero reps, confirmed from device log): approach-suppression
+    // fired immediately and never released — "[ACTIVITY] state=suppressed
+    // reason=approach torsoRef=0.414 baseline=0.191" — and stayed suppressed
+    // for the whole session. Same failure mode already fixed for the hinge
+    // family: torsoReference (2D shoulder-hip distance) is only a reliable
+    // camera-distance proxy if the torso's own scale/angle stays roughly
+    // constant during the rep. Tricep pushdown is typically done standing
+    // close to a cable stack or with the torso leaning into the movement —
+    // exactly the kind of torso-scale change (not real walking) that fools
+    // this heuristic, same root cause as hinge's torso rotation. Genuinely
+    // unreliable for this exercise, not a tunable threshold — opting out via
+    // the same flag rather than re-tuning a signal that's structurally wrong
+    // for this movement pattern.
+    suppressApproachDetection: true,
   };
 }
 
@@ -1180,18 +1197,29 @@ const HINGE_REP_METRIC: MetricDef = {
 //
 // Metric: lineVsVertical(hip, shoulder) — the complement of HINGE_REP_METRIC
 // (lineVsHorizontal on the SAME two points). Standing ≈ 0° from vertical.
-// The one confirmed on-device full-depth reading (bottom=20.5° from
-// horizontal) works out to ≈69.5° from vertical for a normal, controlled
-// full hinge. This check is NOT re-testing depth (that's what
-// goodROMThreshold already does on the same underlying signal) — it's
-// catching torso lean that goes MEANINGFULLY BEYOND what a controlled deep
-// hinge produces, which is what "hips shoot up, chest stays down" actually
-// looks like on this metric: more forward pitch than the depth alone
-// explains. PLACEHOLDER threshold (80°) is deliberately set well above the
-// one confirmed full-depth reading (69.5°) so a normal deep rep won't trip
-// it — do a few clean reps and a couple of deliberately "hips-first" reps
-// and send the [REP] log (torso_angle=value/lim=...) so I can set the real
-// number instead of guessing where the true fault line is.
+// This check is NOT re-testing depth (that's what goodROMThreshold already
+// does on the same underlying signal) — it's catching torso lean that goes
+// MEANINGFULLY BEYOND what a controlled deep hinge produces, which is what
+// "hips shoot up, chest stays down" actually looks like on this metric: more
+// forward pitch than the depth alone explains.
+//
+// CONFIRMED WORKING on-device: a deliberately-bad full-back-roll rep read
+// torso_angle=87.4 and correctly failed; good reps read 54.5 and correctly
+// passed. TIGHTENED 80→72 from that same log: a rep with only SLIGHT rounding
+// read 67.8 and passed at the 80 limit — 72 moves the fault line closer to
+// that moderately-bad rep while keeping clear margin above the confirmed
+// good-rep reading (54-55), so normal deep hinges still won't trip it.
+//
+// HONEST LIMIT, confirmed by that same slight-rounding rep: this check
+// catches gross posture faults (hips shooting up, torso pitching forward
+// beyond a controlled hinge) — it does NOT and CANNOT catch subtle spine
+// rounding. A back that rounds slightly while the hip/shoulder LINE stays
+// within a normal hinge angle will read as fine on this metric, because it's
+// measuring torso POSITION, not spine CURVATURE. That gap is fundamental (no
+// mid-spine landmark exists) — tightening this further to try to catch
+// rep 3's slight rounding would mean firing on genuinely good deep hinges
+// instead, not closing the gap. This check's job is hip/torso position; spine
+// rounding stays explicitly not-built, per the comment above.
 const HINGE_TORSO_ANGLE_CHECK: FormCheckDef = {
   id: 'torso_angle', cue: 'HIPS DOWN, CHEST UP',
   metric: {
@@ -1199,7 +1227,7 @@ const HINGE_TORSO_ANGLE_CHECK: FormCheckDef = {
     left:  { type: 'lineVsVertical', from: 'leftHip',  to: 'leftShoulder'  },
     right: { type: 'lineVsVertical', from: 'rightHip', to: 'rightShoulder' },
   },
-  evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 80 }, // PLACEHOLDER — verify from [REP] log
+  evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 72 }, // tightened 80→72 from real device log
   priority: 1, enabled: true,
 };
 
@@ -1836,8 +1864,8 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
     topAngle:           84,
     repEnterThreshold:  68,
     repExitThreshold:   72,
-    // Aligned 35→60 with real device data — see shoulderPressVariant()'s comment.
-    goodROMThreshold:   60,
+    // 35→60→55 — see shoulderPressVariant()'s comment for the real-press log this is based on.
+    goodROMThreshold:   55,
     insufficientROMCue: 'PRESS HIGHER',
 
     formChecks: [
