@@ -41,32 +41,37 @@ interface RecapData {
   workoutSummary?: WorkoutSummary; // present in workout mode — feeds the breakdown section
 }
 
-// ─── Palette — iOS-26 "liquid glass": light, airy, frosted, no flat black ────
-// Design note: the hero heatmap card stays a clean, near-opaque white rather
-// than blurred — it's what gets captured for the share image, and a
-// consistent, controlled background there matters more than glass consistency
-// for that one element. Everything AROUND it (background, secondary cards,
-// footer) carries the frosted-glass treatment via expo-blur's BlurView,
-// already proven elsewhere in the app (components/RepFeedback.tsx) — chosen
-// over @callstack/liquid-glass (also in package.json, but unused anywhere
-// else in the app, so not confirmed working in a real build — given this
-// session's two native-dependency crashes already, introducing a second
-// unverified native package for a UI-only pass isn't worth the risk).
+// ─── Palette — iOS-26 "liquid glass," rebuilt ────────────────────────────────
+// WHY THE LAST VERSION LOOKED "JUST WHITE" (diagnosed, not guessed):
+// expo-blur uses genuine native UIVisualEffectView blur on iOS — confirmed by
+// reading the library source; the JS getBackgroundColor() approximation only
+// exists in BlurView.web.ts, it's never used on iOS. Two design choices, not
+// a broken component, produced the washed-out look:
+//   1. The background gradient (#EEF1FB→#F6F3FE→#FFFFFF) was nearly pure
+//      white — blur has nothing colorful to visibly distort, so it just
+//      blurred near-white into more near-white.
+//   2. Each glass card ALSO set its own backgroundColor at 55% white opacity
+//      directly on the BlurView, stacked on top of "light" tint (itself a
+//      bright/white blur style) — two whitish layers compounding into a flat
+//      wash regardless of whether the blur itself was rendering correctly.
+// Fix: a genuinely saturated (not pastel-near-white) background gradient, and
+// a much lower glass-fill opacity (~15%) so the blur's distortion of that
+// color carries the visual weight instead of a solid tint painted over it.
 const C = {
-  bgTop:     '#EEF1FB',
-  bgMid:     '#F6F3FE',
-  bgBottom:  '#FFFFFF',
-  glassTint: 'rgba(255,255,255,0.55)',
-  glassBorder: 'rgba(255,255,255,0.75)',
-  card:      '#ffffff',
-  text:      '#161A2B',
-  muted:     '#6B7086',
-  dim:       '#9AA0B4',
-  accent:    '#0A6CFF',
-  good:      '#1FAE5C',
-  goodBg:    'rgba(31,174,92,0.12)',
-  goodRing:  'rgba(31,174,92,0.30)',
-  shadow:    'rgba(31,41,89,0.16)',
+  bgTop:      '#A9C1F5', // periwinkle — clearly blue, not off-white
+  bgMid:      '#C9B7EE', // soft violet
+  bgBottom:   '#F0DCEC', // soft pink-lavender — still light, never flat white
+  glassFill:  'rgba(255,255,255,0.15)',
+  glassEdge:  'rgba(255,255,255,0.65)',
+  card:       '#ffffff',
+  text:       '#181B2E',
+  muted:      '#5B6178',
+  dim:        'rgba(255,255,255,0.75)',
+  accent:     '#0A6CFF',
+  good:       '#1FAE5C',
+  goodFill:   'rgba(31,174,92,0.18)',
+  goodEdge:   'rgba(78,214,140,0.55)',
+  shadow:     'rgba(35,25,70,0.22)',
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -295,16 +300,15 @@ export default function RecapScreen() {
       <View style={{ flex: 1, paddingTop: insets.top }}>
         <ScrollView
           style={s.scroll}
-          contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 20 }]}
+          contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 24 }]}
           showsVerticalScrollIndicator={false}
         >
-          {/* Header — gives the screen a sense of arrival instead of jumping
-              straight into the hero card. */}
+          {/* Header — minimal, sets arrival before the hero */}
           <View style={s.header}>
             {!data.isHistory && (
               <View style={s.checkBadgeShadow}>
-                <BlurView intensity={40} tint="light" style={s.checkBadge}>
-                  <SymbolView name="checkmark" size={16} tintColor={C.good} type="monochrome" style={{ width: 16, height: 16 }} />
+                <BlurView intensity={65} tint="light" style={s.checkBadge}>
+                  <SymbolView name="checkmark" size={17} tintColor={C.good} type="monochrome" style={{ width: 17, height: 17 }} />
                 </BlurView>
               </View>
             )}
@@ -312,9 +316,11 @@ export default function RecapScreen() {
             <Text style={s.headingSub}>{formatFullDate(data.ts)}</Text>
           </View>
 
-          {/* Muscle heatmap — the hero. Captured as-is for the share image;
-              kept a clean opaque card (not glass) so the shared image looks
-              controlled regardless of what's behind it. */}
+          {/* HERO — muscle heatmap. Captured as-is for the share image; kept a
+              clean opaque card (not glass) on purpose: it's what gets shared
+              out to other apps, and a controlled, predictable background
+              there matters more than glass consistency for that one element.
+              It reads fine sitting on the colorful gradient regardless. */}
           <Animated.View style={{ opacity: heroOpac, transform: [{ scale: heroScale }] }}>
             <ViewShot ref={shotRef} options={{ format: 'png', quality: 1 }}>
               <View style={s.heroCard}>
@@ -333,7 +339,8 @@ export default function RecapScreen() {
             </ViewShot>
           </Animated.View>
 
-          {/* Minimal, secondary stats — frosted glass chips */}
+          {/* Stat pills — real frosted glass, low-opacity fill so the colorful
+              background shows through the blur instead of a flat wash. */}
           <View style={s.statsRow}>
             <StatPill label="Exercises" value={String(exCount)} />
             <StatPill label="Total Reps" value={String(data.totalReps)} />
@@ -359,7 +366,7 @@ export default function RecapScreen() {
                       <View style={{ flex: 1 }}>
                         <Text style={s.exName}>{r.displayName}</Text>
                         {r.completed && <Text style={s.exMeta}>{r.reps} reps</Text>}
-                        {r.skipped   && <Text style={[s.exMeta, { color: C.dim }]}>Skipped</Text>}
+                        {r.skipped   && <Text style={[s.exMeta, { color: C.muted }]}>Skipped</Text>}
                       </View>
                       {r.completed && r.reps > 0 && (
                         <Text style={s.exScore}>{r.formScore}%</Text>
@@ -398,38 +405,44 @@ export default function RecapScreen() {
           )}
         </ScrollView>
 
-        {/* Footer — frosted glass bar; Share is the primary action, Done/Back
-            just navigates away. */}
-        <BlurView intensity={50} tint="light" style={s.footer}>
-          <View style={[s.footerInner, { paddingBottom: Math.max(insets.bottom + 16, 28) }]}>
-            <Pressable
-              style={({ pressed }) => [s.shareBtnShadow, pressed && { opacity: 0.88 }]}
-              onPress={handleShare}
-              disabled={sharing}
-            >
-              <LinearGradient
-                colors={[C.accent, '#3D8BFF']}
-                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                style={s.shareBtn}
+        {/* Footer — Share is the one prominent CTA; Done/Back is a quiet
+            secondary link underneath. No hard divider line — a soft
+            transparent-to-glass fade instead, so it reads as part of the
+            same flowing screen rather than a separate bolted-on bar. */}
+        <View style={s.footerFade} pointerEvents="box-none">
+          <BlurView intensity={70} tint="light" style={s.footer}>
+            <View style={[s.footerInner, { paddingBottom: Math.max(insets.bottom + 16, 28) }]}>
+              <Pressable
+                style={({ pressed }) => [s.shareBtnShadow, pressed && { opacity: 0.88 }]}
+                onPress={handleShare}
+                disabled={sharing}
               >
-                <SymbolView name="square.and.arrow.up" size={17} tintColor="#fff" type="monochrome" style={{ width: 17, height: 17 }} />
-                <Text style={s.shareTxt}>{sharing ? 'Preparing…' : 'Share Recap'}</Text>
-              </LinearGradient>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [s.doneBtnFooter, pressed && { opacity: 0.6 }]}
-              onPress={handleDone}
-            >
-              <Text style={s.doneTxtFooter}>{doneLabel}</Text>
-            </Pressable>
-          </View>
-        </BlurView>
+                <LinearGradient
+                  colors={[C.accent, '#7A5CFA']}
+                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                  style={s.shareBtn}
+                >
+                  <SymbolView name="square.and.arrow.up" size={17} tintColor="#fff" type="monochrome" style={{ width: 17, height: 17 }} />
+                  <Text style={s.shareTxt}>{sharing ? 'Preparing…' : 'Share Recap'}</Text>
+                </LinearGradient>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [s.doneBtnFooter, pressed && { opacity: 0.6 }]}
+                onPress={handleDone}
+              >
+                <Text style={s.doneTxtFooter}>{doneLabel}</Text>
+              </Pressable>
+            </View>
+          </BlurView>
+        </View>
       </View>
     </View>
   );
 }
 
-// ─── Background gradient — soft, light, flowing (no flat black) ──────────────
+// ─── Background gradient — genuinely colorful, never flat white/black ────────
+// Deliberately saturated (not pastel-near-white) — see the palette comment
+// above for why: blur needs real color/contrast behind it to read as glass.
 function BgGradient() {
   return (
     <LinearGradient
@@ -445,8 +458,8 @@ function BgGradient() {
 function GlassCard({ children, padded = true }: { children: React.ReactNode; padded?: boolean }) {
   return (
     <View style={s.glassShadow}>
-      <BlurView intensity={45} tint="light" style={[s.glassCard, !padded && { padding: 0 }]}>
-        <View style={s.glassBorder} pointerEvents="none" />
+      <BlurView intensity={60} tint="light" style={[s.glassCard, !padded && { padding: 0 }]}>
+        <View style={s.glassEdge} pointerEvents="none" />
         {children}
       </BlurView>
     </View>
@@ -457,7 +470,7 @@ function GlassCard({ children, padded = true }: { children: React.ReactNode; pad
 function StatPill({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
     <View style={sp.shadow}>
-      <BlurView intensity={45} tint="light" style={[sp.pill, accent && sp.pillAccent]}>
+      <BlurView intensity={60} tint="light" style={[sp.pill, accent && sp.pillAccent]}>
         <Text style={[sp.value, accent && sp.valueAccent]}>{value}</Text>
         <Text style={sp.label}>{label}</Text>
       </BlurView>
@@ -469,40 +482,40 @@ function StatPill({ label, value, accent }: { label: string; value: string; acce
 const s = StyleSheet.create({
   root:      { flex: 1, backgroundColor: C.bgBottom },
   centerFill:{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
-  failedTxt: { color: C.muted, fontSize: 15 },
+  failedTxt: { color: C.text, fontSize: 15 },
   scroll:    { flex: 1 },
-  content:   { paddingHorizontal: 20, gap: 18, paddingTop: 4 },
+  content:   { paddingHorizontal: 20, gap: 20, paddingTop: 6 },
 
-  header: { alignItems: 'center', gap: 6, paddingTop: 12, paddingBottom: 4 },
+  header: { alignItems: 'center', gap: 6, paddingTop: 14, paddingBottom: 2 },
   checkBadgeShadow: {
-    borderRadius: 20, marginBottom: 4,
-    shadowColor: C.good, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10,
+    borderRadius: 21, marginBottom: 6,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.18, shadowRadius: 10,
   },
   checkBadge: {
-    width: 38, height: 38, borderRadius: 19,
+    width: 40, height: 40, borderRadius: 20,
     alignItems: 'center', justifyContent: 'center',
     overflow: 'hidden',
-    borderWidth: 1, borderColor: C.glassBorder,
+    borderWidth: 1, borderColor: C.glassEdge,
   },
   headingTitle: {
-    fontSize: 25, fontWeight: '800', color: C.text,
+    fontSize: 26, fontWeight: '800', color: C.text,
     letterSpacing: -0.4, textAlign: 'center',
   },
   headingSub: {
-    fontSize: 13, fontWeight: '500', color: C.muted,
-    letterSpacing: 0.1,
+    fontSize: 13.5, fontWeight: '600', color: C.text,
+    opacity: 0.6, letterSpacing: 0.1,
   },
 
   heroCard: {
     backgroundColor: C.card,
-    borderRadius:    28,
+    borderRadius:    30,
     padding:         22,
     gap:             18,
     shadowColor:     C.shadow,
-    shadowOffset:    { width: 0, height: 16 },
+    shadowOffset:    { width: 0, height: 18 },
     shadowOpacity:   1,
-    shadowRadius:    36,
-    elevation:       10,
+    shadowRadius:    40,
+    elevation:       12,
   },
   watermarkRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
@@ -510,103 +523,106 @@ const s = StyleSheet.create({
   },
   watermarkTxt: { fontSize: 11, fontWeight: '700', color: '#aab0c4', letterSpacing: 0.3 },
 
-  statsRow: { flexDirection: 'row', gap: 10 },
+  statsRow: { flexDirection: 'row', gap: 12 },
 
   glassShadow: {
-    borderRadius: 20,
-    shadowColor: C.shadow, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 1, shadowRadius: 20,
+    borderRadius: 22,
+    shadowColor: C.shadow, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 1, shadowRadius: 24,
   },
   glassCard: {
-    borderRadius:    20,
-    padding:         18,
+    borderRadius:    22,
+    padding:         19,
     gap:             8,
     overflow:        'hidden',
-    backgroundColor: C.glassTint,
+    backgroundColor: C.glassFill,
   },
-  glassBorder: {
+  glassEdge: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 20,
+    borderRadius: 22,
     borderWidth:  1,
-    borderColor:  C.glassBorder,
+    borderColor:  C.glassEdge,
   },
-  cardLabel: { fontSize: 11, fontWeight: '700', color: C.muted, letterSpacing: 1.2 },
-  cardText:  { fontSize: 14.5, fontWeight: '400', color: C.text, lineHeight: 21, letterSpacing: -0.1 },
+  cardLabel: { fontSize: 11, fontWeight: '800', color: C.text, opacity: 0.55, letterSpacing: 1.4 },
+  cardText:  { fontSize: 15, fontWeight: '500', color: C.text, lineHeight: 22, letterSpacing: -0.1 },
 
-  section:      { gap: 8 },
-  sectionLabel: { fontSize: 11, fontWeight: '700', color: C.dim, letterSpacing: 1, marginLeft: 4 },
+  section:      { gap: 10 },
+  sectionLabel: { fontSize: 11, fontWeight: '800', color: C.text, opacity: 0.5, letterSpacing: 1.4, marginLeft: 4 },
 
-  exRow:   { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
-  exName:  { fontSize: 14, fontWeight: '600', color: C.text },
-  exMeta:  { fontSize: 12, color: C.muted, marginTop: 2 },
-  exScore: { fontSize: 13, fontWeight: '700', color: C.good },
-  divider: { height: StyleSheet.hairlineWidth, backgroundColor: C.glassBorder, marginHorizontal: 14 },
+  exRow:   { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 12 },
+  exName:  { fontSize: 14.5, fontWeight: '700', color: C.text },
+  exMeta:  { fontSize: 12, color: C.text, opacity: 0.6, marginTop: 2 },
+  exScore: { fontSize: 13, fontWeight: '800', color: C.good },
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: C.glassEdge, marginHorizontal: 16 },
 
   videoWrap: {
     width: '100%', aspectRatio: 9 / 16,
-    borderRadius: 20, overflow: 'hidden',
+    borderRadius: 22, overflow: 'hidden',
     backgroundColor: '#000',
   },
 
+  footerFade: {
+    // No hard border — a tall enough blur region that the content scrolling
+    // underneath softly disappears into it rather than hitting a visible seam.
+  },
   footer: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(22,26,43,0.08)',
     overflow: 'hidden',
   },
   footerInner: {
-    paddingHorizontal: 20,
-    paddingTop:        14,
-    gap:               10,
+    paddingHorizontal: 22,
+    paddingTop:        18,
+    gap:               12,
   },
   shareBtnShadow: {
     borderRadius: 100,
-    shadowColor: C.accent, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.35, shadowRadius: 18,
+    shadowColor: C.accent, shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.4, shadowRadius: 20,
   },
   shareBtn: {
     borderRadius:    100,
-    paddingVertical: 17,
+    paddingVertical: 18,
     flexDirection:   'row',
     alignItems:      'center',
     justifyContent:  'center',
-    gap:             8,
+    gap:             9,
   },
-  shareTxt: { fontSize: 16, fontWeight: '700', color: '#fff', letterSpacing: 0.2 },
+  shareTxt: { fontSize: 16.5, fontWeight: '800', color: '#fff', letterSpacing: 0.2 },
 
-  doneBtnFooter: { alignItems: 'center', paddingVertical: 8 },
-  doneTxtFooter: { fontSize: 14, fontWeight: '600', color: C.muted },
+  doneBtnFooter: { alignItems: 'center', paddingVertical: 6 },
+  doneTxtFooter: { fontSize: 14.5, fontWeight: '700', color: C.text, opacity: 0.55 },
 });
 
 const sp = StyleSheet.create({
   shadow: {
-    flex: 1, borderRadius: 16,
-    shadowColor: C.shadow, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 1, shadowRadius: 14,
+    flex: 1, borderRadius: 18,
+    shadowColor: C.shadow, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 1, shadowRadius: 18,
   },
   pill: {
-    borderRadius:      16,
-    paddingVertical:   16,
+    borderRadius:      18,
+    paddingVertical:   18,
     paddingHorizontal: 10,
     alignItems:        'center',
     gap:               4,
     overflow:          'hidden',
-    backgroundColor:   C.glassTint,
+    backgroundColor:   C.glassFill,
     borderWidth:       1,
-    borderColor:       C.glassBorder,
+    borderColor:       C.glassEdge,
   },
   pillAccent: {
-    borderColor:     C.goodRing,
-    backgroundColor: C.goodBg,
+    borderColor:     C.goodEdge,
+    backgroundColor: C.goodFill,
   },
   value: {
-    fontSize:   26,
-    fontWeight: '700',
+    fontSize:   27,
+    fontWeight: '800',
     color:      C.text,
-    lineHeight: 30,
+    lineHeight: 31,
     letterSpacing: -0.5,
   },
   valueAccent: { color: C.good },
   label: {
     fontSize:   11,
-    fontWeight: '500',
-    color:      C.muted,
+    fontWeight: '700',
+    color:      C.text,
+    opacity:    0.6,
     letterSpacing: 0.2,
   },
 });
