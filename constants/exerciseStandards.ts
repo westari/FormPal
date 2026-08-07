@@ -246,13 +246,22 @@ function lungeStandard(exerciseId: string): ExerciseStandardDef {
 // This check is meaningless for the skullcrusher (person lying flat) but all
 // entries use the same standard since reviewed: false — verify on-device.
 
+// LOOSENED 15→25: device log showed this check "already violating in
+// baseline" — 19.5° average during the reference/calibration reps themselves,
+// before any real swinging could even be assessed. Unlike shoulder press's
+// analogous check (which showed a wild 22-118° range and was removed outright
+// as fundamentally contaminated by the pressing motion), this is a modest,
+// consistent overage — a genuine tricep pushdown appears to naturally involve
+// a bit more shoulder-hip-knee variation than 15° allows, not a metric that's
+// meaningless for this exercise. Loosened rather than removed; 25 sits
+// comfortably above the observed 19.5° baseline average.
 const TRICEP_STATIC_CHECKS: JointAngleCheckDef[] = [
   {
     description: 'Left torso — shoulder–hip–knee range (no body swing)',
     a: 'leftShoulder',
     b: 'leftHip',
     c: 'leftKnee',
-    maxRangeDeg: 15.0,
+    maxRangeDeg: 25.0,
     cue: 'KEEP TORSO STILL — using body to push',
   },
   {
@@ -260,7 +269,7 @@ const TRICEP_STATIC_CHECKS: JointAngleCheckDef[] = [
     a: 'rightShoulder',
     b: 'rightHip',
     c: 'rightKnee',
-    maxRangeDeg: 15.0,
+    maxRangeDeg: 25.0,
     cue: 'KEEP TORSO STILL — using body to push',
   },
 ];

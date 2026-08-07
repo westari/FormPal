@@ -157,7 +157,12 @@ final class UniversalQualityEngine {
 
     // MARK: – Rep completion
 
-    func onRepCompleted(repNumber: Int, peakValue: Double, repEndTime: Date) {
+    // Return value: the verdict-override cue when this rep should be forced
+    // BAD (currently: swinging/jerk-spike only — see completeRep()'s comment
+    // in ExerciseEngine.swift for why and the on-device evidence). nil means
+    // "no override, trust the ROM/form-check verdict as computed."
+    @discardableResult
+    func onRepCompleted(repNumber: Int, peakValue: Double, repEndTime: Date) -> String? {
         let lookback: TimeInterval = baselineDuration.map { $0 * 2.5 } ?? 8.0
         let windowStart = repEndTime.addingTimeInterval(-min(lookback, frameBufferSeconds - 1))
         let rawWindow   = frameBuffer.filter { $0.timestamp >= windowStart && $0.timestamp <= repEndTime }
@@ -169,7 +174,7 @@ final class UniversalQualityEngine {
         guard rawWindow.count >= 5 else {
             log?("[UNIV] rep #\(repNumber): only \(rawWindow.count) frames in window — skipped")
             lastRepTime = repEndTime
-            return
+            return nil
         }
 
         let stats = computeRepStats(frames: rawWindow, peakValue: peakValue)
@@ -198,7 +203,7 @@ final class UniversalQualityEngine {
                 let limit = activeStandard.map { f1($0.standardPeakAngleMax) } ?? "n/a"
                 log?("[UNIV] rep #\(repNumber): EXCLUDED from baseline — peak=\(f1(stats.peakValue))° doesn't meet ROM standard (≤\(limit)°). Still calibrating, waiting for a full-range rep.")
                 lastRepTime = repEndTime
-                return
+                return nil
             }
 
             referenceStats.append(stats)
@@ -206,14 +211,14 @@ final class UniversalQualityEngine {
             log?("[UNIV] rep #\(repNumber): CALIBRATING (\(n)/\(nBaseline) good)  range=\(f3(stats.range))  dur=\(f2(stats.duration))s  jerk=\(f5(stats.jerk))")
             if n == nBaseline { buildBaseline() }
             lastRepTime = repEndTime
-            return
+            return nil
         }
 
         guard let bRange = baselineRange,
               let bDur   = baselineDuration,
               let bJerk  = baselineJerk else {
             lastRepTime = repEndTime
-            return
+            return nil
         }
 
         // ── Layer 2a: static-joint violation from standard ────────────────────
@@ -300,6 +305,19 @@ final class UniversalQualityEngine {
 
         log?("[UNIV] rep #\(repNumber) | → \(cue)")
         lastRepTime = repEndTime
+
+        // Verdict override: ONLY for swinging (jerk-spike) — the specific,
+        // confirmed-reliable signal this hook was built for (real flails hit
+        // 3.5-5.5x baseline jerk on-device, real reps stayed ~1x, a clean
+        // separation). Returns the full priority-ordered cue (so a co-
+        // occurring static-standard violation still wins the displayed text,
+        // exactly like the [UNIV] log above), not always the literal
+        // "SWINGING" string. Every OTHER Layer-1 signal (UNEVEN, CUTTING
+        // SHORT, RUSHING/SLOWING, compensation) stays diagnostic-only for
+        // now — deliberately not wired to the verdict. That's out of scope
+        // for what was asked, and some (UNEVEN in particular) have their own
+        // separate reliability caveats already documented elsewhere.
+        return isSwinging ? cue : nil
     }
 
     // MARK: – Reset

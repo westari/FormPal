@@ -714,16 +714,18 @@ const TRICEP_REP_METRIC: MetricDef = {
 //   lineVsVertical(shoulder→elbow) ≈ 0° when upper arm is vertical (correct).
 //   Increases when upper arm tilts forward/sideways (elbow drifting).
 //   Separate L/R checks so the in-view side fires even when the other is occluded.
+// LOOSENED 30→45: device log showed 43 and 31 firing against the 30 limit on
+// reps done with correct elbow position. 45 sits above both observed values.
 const TRICEP_ELBOW_DRIFT_L: FormCheckDef = {
   id: 'elbow_drift_l', cue: 'KEEP ELBOWS IN',
   metric: { type: 'lineVsVertical', from: 'leftShoulder', to: 'leftElbow' },
-  evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 30 },
+  evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 45 },
   priority: 4, enabled: true,
 };
 const TRICEP_ELBOW_DRIFT_R: FormCheckDef = {
   id: 'elbow_drift_r', cue: 'KEEP ELBOWS IN',
   metric: { type: 'lineVsVertical', from: 'rightShoulder', to: 'rightElbow' },
-  evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 30 },
+  evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 45 },
   priority: 4, enabled: true,
 };
 const TRICEP_TORSO_LEAN: FormCheckDef = {
@@ -766,16 +768,25 @@ const TRICEP_PLANARITY: PlanarityCheckDef[] = [
 //
 // Threshold design:
 //   topAngle: 85°       — rest with forearm ~horizontal
-//   repEnterThreshold: 72° — rep starts here (user has pushed ~13° below rest)
-//   repExitThreshold: 82°  — rep ends when user returns within 3° of rest
+//   repEnterThreshold: 65° — rep starts here (user has pushed ~20° below rest)
+//   repExitThreshold: 84°  — rep ends when user returns within 1° of rest
 //   goodROMThreshold: 25°  — extension must reach ≤25° from vertical for GOOD
 //
-// Hysteresis = exit(82) - enter(72) = 10°.
-// Previously 5° (exit=77); that allowed cable rebound from 77° back to ~60°
-// to register as a second phantom rep. 10° hysteresis requires the rebound to
-// drop the metric 17° from the exit point (82° → 65°) before re-triggering —
-// a much larger overshoot that is physically implausible in normal use.
-// minRepInterval=1.0 provides a debounce backup for slow rebounds.
+// Hysteresis history: 5° (exit=77) → 10° (72/82, this file's earlier fix) →
+// 19° (65/84, this pass). The 10° gap was sized against an ASSUMED rebound
+// (cable bouncing back from full extension) and reported fixed at the time,
+// but double-counting was reported again — "one rep on the way down, one on
+// the way up" for a single pushdown. That phrasing points at a PREMATURE
+// phantom completion partway through the descent (a brief reversal crosses
+// back above exit before the person reaches true depth), not the
+// full-extension rebound the 10° gap targeted — a different point in the rep
+// than the original fix addressed, which is why it wasn't caught by that
+// number. Widened further (19° gap) and entry moved deeper (65, vs the old
+// 72) so a brief mid-descent reversal has much more room to occur without
+// crossing back above exit. This is reasoned from the existing precedent, not
+// a fresh log of this exact double-count's oscillation values — if it still
+// double-counts, send a log and I'll set this from the real numbers instead
+// of widening a third time by feel.
 function tricepVariant(
   id:               string,
   displayName:      string,
@@ -786,8 +797,8 @@ function tricepVariant(
     displayName,
     repMetric:          TRICEP_REP_METRIC,
     topAngle:           85,
-    repEnterThreshold:  72,
-    repExitThreshold:   82,
+    repEnterThreshold:  65,
+    repExitThreshold:   84,
     goodROMThreshold:   25,
     insufficientROMCue: 'EXTEND FULLY',
     formChecks:      TRICEP_FORM_CHECKS_STANDING,
@@ -797,7 +808,8 @@ function tricepVariant(
       requiredJoints:    ['leftShoulder',  'leftElbow',  'leftWrist'],
       requiredJointsAlt: ['rightShoulder', 'rightElbow', 'rightWrist'],
     },
-    minRepInterval:  1.0,
+    // Widened 1.0→1.3 as an additional debounce layer alongside the hysteresis fix.
+    minRepInterval:  1.3,
     planarityChecks: TRICEP_PLANARITY,
     // ROOT CAUSE (zero reps, confirmed from device log): approach-suppression
     // fired immediately and never released — "[ACTIVITY] state=suppressed
@@ -1241,7 +1253,9 @@ function hingeVariant(
   id:               string,
   displayName:      string,
   setupInstruction: string,
-  minRepInterval:   number = 0.5,
+  // Widened 0.5→0.7 as part of the double-counting fix below — kettlebellSwing
+  // passes its own explicit 0.3 (faster, explosive tempo) and is unaffected.
+  minRepInterval:   number = 0.7,
 ): ExerciseDefinitionDef {
   return {
     id,
@@ -1263,9 +1277,23 @@ function hingeVariant(
     // confirmed fix — please send a fresh [REP] log with peak values from a
     // few reps you'd call genuinely good vs shallow so I can set this from
     // real numbers instead of splitting the difference a second time.
+    // DOUBLE-COUNTING FIX: hysteresis (enter→exit gap) was only 5° — narrow on
+    // its own, and proportionally much tighter than tricep's already-fixed 10°
+    // gap relative to each exercise's total ROM (hinge's full range is roughly
+    // 55-70°, tricep's ~60°, so 5° here is under 10% of the range vs tricep's
+    // ~17%). A small wobble/settle right at the top between reps could dip back
+    // below entry and re-trigger a second completion for one physical rep —
+    // same failure class as tricep's documented cable-rebound double-count,
+    // just from body sway/settle instead of cable elasticity. Widened to a 12°
+    // gap (75/87) — exit kept at 87, safely below the one confirmed real
+    // standing reading (89.5°) so a genuine return to standing still completes
+    // the rep; entry moved deeper (75) so a small settle near the top can't
+    // reach it. Reasoned from the existing tricep precedent, not a fresh log of
+    // this exact double-count event — send a log if it still double-counts and
+    // I'll tune from the real oscillation values.
     topAngle:           90,
-    repEnterThreshold:  80,
-    repExitThreshold:   85,
+    repEnterThreshold:  75,
+    repExitThreshold:   87,
     goodROMThreshold:   45,
     insufficientROMCue: 'HINGE DEEPER',
     // knee_bend removed — see "REMOVED, second time, for good" comment above.

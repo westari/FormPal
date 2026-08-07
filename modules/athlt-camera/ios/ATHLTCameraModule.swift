@@ -461,12 +461,22 @@ public class ATHLTCameraModule: Module {
             let compareLine = "[COMPARE] \(self.currentExercise) rep#\(result.totalReps)" +
                 "  2D=\(av2D)°  \(gated)  \(bpPart)  \(bpTail)"
             self.sendEvent("onDebugLog", ["message": compareLine])
+        }
 
-            // Universal quality engine — emits [UNIV] lines via its own log closure
-            self.universalEngine.onRepCompleted(
-                repNumber:  result.totalReps,
-                peakValue:  result.primaryAngle,
-                repEndTime: Date()
+        // Universal quality engine — called from INSIDE ExerciseEngine.completeRep(),
+        // before the good/bad verdict is finalized (see checkSwingOverride's doc
+        // comment on ExerciseEngine). This is now the ONLY call site for
+        // universalEngine.onRepCompleted — it used to also be called a second
+        // time here in onRepDetected, AFTER the verdict was already sent to JS,
+        // which is exactly why the swinging signal it computes could never
+        // affect what the user saw. One call site now, with its return value
+        // wired to actually change the verdict when it fires.
+        engine.checkSwingOverride = { [weak self] peakValue, repNumber, repEndTime in
+            guard let self else { return nil }
+            return self.universalEngine.onRepCompleted(
+                repNumber:  repNumber,
+                peakValue:  peakValue,
+                repEndTime: repEndTime
             )
         }
 

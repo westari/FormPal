@@ -258,6 +258,15 @@ final class ExerciseEngine {
     // Arbitrary diagnostic message — wired to sendEvent("onDebugLog") in ATHLTCameraModule.
     // Used for [METRIC], [VALID], [GATE], [REP] logs so they reach JS/Metro on Windows.
     var onDebugLog:          ((String) -> Void)?
+    // Lets UniversalQualityEngine veto a GOOD verdict using signals this engine
+    // has no primitive for (velocity/jerk over time — ExerciseEngine only ever
+    // sees instantaneous per-frame angles). Wired in ATHLTCameraModule to call
+    // universalEngine.onRepCompleted(...) and return its swing-override cue.
+    // Called from completeRep() BEFORE goodReps increments, so the counter and
+    // the sent verdict can never disagree — see the ROOT CAUSE comment there.
+    // Returns non-nil to force isGood=false with that cue; nil leaves the
+    // ROM/form-check verdict as computed.
+    var checkSwingOverride:  ((_ peakValue: Double, _ repNumber: Int, _ repEndTime: Date) -> String?)?
     // ─────────────────────────────────────────────────────────────────────────
 
     init(definition: ExerciseDefinition) {
@@ -819,6 +828,10 @@ final class ExerciseEngine {
         // This avoids "ADJUST POSITION" from joints irrelevant to the exercise metric
         // (e.g. hips in shoulderPress readyGate, ankles at bottom of squat).
         guard dataIsValid(pose: pose) else {
+            // Already bad — nothing to override — but still feed the quality
+            // engine so its frame buffer/baseline bookkeeping stays in sync
+            // with every completeRep() call, same as before this hook existed.
+            _ = checkSwingOverride?(peakAngle, totalReps, timestamp)
             onRepDetected?(RepResult(good: false, cue: "ADJUST POSITION",
                                      primaryAngle: peakAngle, totalReps: totalReps,
                                      goodReps: goodReps, formValues: [:],
@@ -870,6 +883,8 @@ final class ExerciseEngine {
         if let planCue = planarityFailCue {
             NSLog("[Engine] [%@] Rep #%d PLANARITY FAIL — cue=%@ %@",
                   def.id, totalReps, planCue, planDetail)
+            // Already bad — nothing to override — see the dataIsValid guard above.
+            _ = checkSwingOverride?(peakAngle, totalReps, timestamp)
             onRepDetected?(RepResult(
                 good: false, cue: planCue, primaryAngle: peakAngle,
                 totalReps: totalReps, goodReps: goodReps,
@@ -894,8 +909,8 @@ final class ExerciseEngine {
                                 .sorted { $0.priority > $1.priority }
                                 .first
 
-        let cue:    String
-        let isGood: Bool
+        var cue:    String
+        var isGood: Bool
 
         if !goodROM {
             if let override = topOverride {
@@ -912,6 +927,28 @@ final class ExerciseEngine {
             cue    = "GOOD"
             isGood = true
         }
+
+        // ROOT CAUSE (shoulder press "flailing gives a GOOD check"): the
+        // Universal Quality Engine was already correctly detecting flailing
+        // as a jerk-ratio spike (3.5-5.5x baseline on real flails, ~1x on
+        // real reps — a clean separation confirmed from an on-device log) —
+        // but its signal only ever reached a [UNIV] debug log, never this
+        // verdict. ExerciseEngine has no rate-of-change primitive of its own
+        // (only instantaneous per-frame angles), so it structurally cannot
+        // detect a flail on its own — this hook is what lets the one engine
+        // that CAN see it (jerk = velocity variance over the whole rep
+        // window) veto a verdict the other engine can't reliably distinguish
+        // from a real rep. Only checked when we were about to call it GOOD —
+        // an already-bad rep has nothing to override. Checked BEFORE
+        // goodReps increments below so the counter and the sent verdict are
+        // always consistent (no separate reconciliation needed downstream).
+        if isGood, let swingCue = checkSwingOverride?(peakAngle, totalReps, timestamp) {
+            isGood = false
+            cue    = swingCue
+            NSLog("[Engine] [%@] Rep #%d verdict overridden by swing detection: %@", def.id, totalReps, swingCue)
+            onDebugLog?("[REP] #\(totalReps) verdict overridden — was GOOD, swing detected → \(swingCue)")
+        }
+
         if isGood { goodReps += 1 }
 
         // [REP] log to onDebugLog → visible in JS session review.
