@@ -265,7 +265,7 @@ final class ExerciseEngine {
     // already tried for tricep/hinge) only shrinks the window this can happen in;
     // it doesn't close it, because the bug isn't about HOW FAR apart enter/exit
     // are, it's about a single frame being trusted at all. Requiring the metric
-    // to hold above exitThreshold for EXIT_CONFIRM_FRAMES consecutive frames
+    // to hold above exitThreshold for def.exitConfirmFrames consecutive frames
     // before completing — hard reset on any dip back down, since that's still-
     // genuine continued rep motion, not noise — closes this for every exercise
     // at once. This does NOT catch a genuine multi-frame PAUSE well above
@@ -274,24 +274,18 @@ final class ExerciseEngine {
     // debounce window can distinguish that from two real reps without more
     // information than this engine has.
     //
-    // PREEMPTIVE SAFETY REVIEW: set to 2, not 3. At the ~10fps effective
-    // processing rate (frameSkip=3 of 30fps — confirmed in ATHLTCameraModule),
-    // 3 frames is ~0.3s of REQUIRED dwell time above exitThreshold before a
-    // rep can complete. For most exercises that's imperceptible, but
-    // kettlebellSwing is an explicitly ballistic, fast-tempo movement (already
-    // treated as such via its own minRepInterval=0.3s override) — if its
-    // brief moment at/near full extension doesn't sustain above exitThreshold
-    // for a full 0.3s, reps could go uncounted entirely (worse than the
-    // original double-count bug). 2 frames (~0.2s) still fully closes the
-    // reported bug (a lone single-frame spike still can't reach 2 consecutive
-    // confirmations) while halving the dwell requirement for fast/ballistic
-    // reps. Also: a turning point (top of a swing, top of a press) is where
-    // velocity is naturally LOWEST — genuine rep completions should
-    // physically linger there longer than a mid-motion noise spike does,
-    // which is why this debounce targets the right thing even at 2 frames;
-    // still worth watching kettlebellSwing specifically on first test.
-    private var exitConfirmFrames: Int = 0
-    private static let EXIT_CONFIRM_FRAMES: Int = 2
+    // REGRESSION, FOUND AND FIXED: a prior pass weakened this globally from 3
+    // to 2 frames "preemptively," reasoning kettlebellSwing (an explicitly
+    // ballistic movement) might not sustain above exitThreshold for a full
+    // 0.3s. That was never confirmed on-device, and it directly caused the
+    // double-counting to come back on shoulder press/tricep — the exact
+    // exercises this gate exists for. The dwell requirement is now
+    // per-exercise (def.exitConfirmFrames, see ExerciseDefinition.swift),
+    // defaulting to 3 (the value that actually closed the reported bug) for
+    // every exercise; kettlebellSwing alone overrides it down. Never weaken
+    // the DEFAULT to accommodate one exercise's hypothetical edge case again —
+    // override that one exercise instead.
+    private var exitConfirmCount: Int = 0
 
     // ── Form-check reliability floor (CORE false-cue fix) ────────────────────
     // ROOT CAUSE (tricep "KEEP ELBOWS IN when the elbow isn't moving", and the
@@ -470,13 +464,14 @@ final class ExerciseEngine {
         // gate below. On exercises whose real resting position didn't cleanly
         // satisfy that condition (tricep pushdown, shoulder press) it could get
         // stuck indefinitely — "stand still to activate" that never resolved.
-        // Tracking now starts immediately on entering ACTIVE. The settle gate
-        // inside runStateMachine's .atTop case (hold above exitThreshold for
-        // SETTLE_FRAMES before the first rep can enter) is the only gate left,
-        // and it already does everything the ready gate did: prevent the initial
-        // walk-in / arm-raise-into-position from registering as a rep. Runs even
-        // while suppressed (activityState == .suppressed) — a genuinely completed
-        // rep is strong enough evidence on its own to force-resume, see completeRep().
+        // Tracking now starts immediately on entering ACTIVE. Rep ENTRY is gated
+        // by two things inside runStateMachine's .atTop case: the settle gate
+        // (hold above exitThreshold for SETTLE_FRAMES before the first rep can
+        // enter — replaces what the ready gate did) and activityState ==
+        // .suppressed (walk-away/approach/receding/inactivity — see
+        // updateActivityState). The suppression check is a genuine block now;
+        // it silently was not for a while (see the guard's own comment) —
+        // that's why suppression-related fixes kept not holding.
         runStateMachine(pose: pose, angle: angle, timestamp: timestamp)
 
         let snapshot      = currentMetricSnapshot(pose: pose)
@@ -850,6 +845,16 @@ final class ExerciseEngine {
 
             repTopValue = max(repTopValue, angle)
 
+            // CORE FIX (suppression was silently inert): activityState ==
+            // .suppressed must block a NEW rep from entering. It never did —
+            // see the ROOT CAUSE note above updateActivityState below. Every
+            // walk-away/approach/receding "fix" that shipped before this
+            // (suppressApproachDetection, recede detection) only ever updated
+            // this variable and logged messages; nothing downstream ever
+            // read it to actually stop a rep. That is why those fixes never
+            // held — there was nothing wired to hold. This is the wiring.
+            guard activityState != .suppressed else { return }
+
             // framesSincePoseGap gate: don't trust a rep ENTRY on a frame that just
             // recovered from a pose gap (step-out-of-frame, occlusion) — see the
             // var's doc comment. A garbled edge-of-frame reading could otherwise
@@ -877,17 +882,17 @@ final class ExerciseEngine {
             guard angle > effectiveExitThreshold else {
                 // Dropped back at/below exit before confirming — still genuinely
                 // mid-rep, not a real return to rest. Reset the confirm count.
-                exitConfirmFrames = 0
+                exitConfirmCount = 0
                 return
             }
 
-            // CORE double-count fix — see EXIT_CONFIRM_FRAMES doc comment above.
+            // CORE double-count fix — see exitConfirmCount's doc comment above.
             // Require the metric to hold above exit for several consecutive
-            // frames before trusting this as a genuine return-to-rest, not a
-            // single-frame spike mid-rep.
-            exitConfirmFrames += 1
-            guard exitConfirmFrames >= Self.EXIT_CONFIRM_FRAMES else { return }
-            exitConfirmFrames = 0
+            // frames (def.exitConfirmFrames, per-exercise) before trusting this
+            // as a genuine return-to-rest, not a single-frame spike mid-rep.
+            exitConfirmCount += 1
+            guard exitConfirmCount >= def.exitConfirmFrames else { return }
+            exitConfirmCount = 0
 
             do {
                 guard timestamp.timeIntervalSince(lastRepTime) >= def.minRepInterval else {
@@ -919,6 +924,30 @@ final class ExerciseEngine {
                     return
                 }
 
+                // ─ Movement-shape gate (Issue 1 core fix — hinge hip_drift) ────────────
+                // A check marked gatesCounting: true doesn't just flag bad form, it
+                // decides whether this was the target movement AT ALL. For the hinge
+                // family: a lean (torso tips, hips stay put) and a back-roll (rounding
+                // instead of hinging) share ONE signature — the hips never travel back
+                // — which is exactly what hip_drift (normalizedHorizontalGap hip↔ankle)
+                // measures. If it fails, this attempt is rejected the same way a
+                // phantom-rep is: logged, NOT counted, no cue shown — not "counted as
+                // bad," genuinely not registered, per the explicit ask. Value is ALWAYS
+                // logged (pass or fail) via [GATE] so a calibration log captures real
+                // hinges alongside leans/rolls in one session.
+                for check in def.formChecks where check.enabled && check.gatesCounting {
+                    let value = resolveValue(check: check)
+                    let valueStr = value.map { String(format: "%.4f", $0) } ?? "nil"
+                    if let v = value, check.fails(value: v) {
+                        let msg = "[REP] rejected — \(check.id)=\(valueStr) — gate failed, not counted as a rep"
+                        NSLog("[Engine] [%@] %@", def.id, msg)
+                        onDebugLog?(msg)
+                        repPhase = .atTop
+                        return
+                    }
+                    onDebugLog?("[GATE] \(check.id)=\(valueStr) — passed")
+                }
+
                 completeRep(pose: pose, peakAngle: repMinAngle, timestamp: timestamp)
                 repPhase = .atTop
             }
@@ -947,12 +976,13 @@ final class ExerciseEngine {
             return
         }
 
-        // Fail-safe force-resume: reaching this point means a rep just passed the
-        // phantom-rep guard AND the validity gate — real, deliberate movement, not
-        // noise. If we were suppressed (walked away / inactive), that's stronger
-        // evidence the user is back than the resume heuristic above needs — a
-        // missed rep from staying stuck suppressed is worse than the suppression's
-        // benefit, so clear it here regardless of torso scale / start-zone state.
+        // Fail-safe force-resume, kept as defense-in-depth: now that rep ENTRY
+        // is itself gated on activityState != .suppressed (see runStateMachine's
+        // .atTop case), a rep can no longer actually reach this point while
+        // suppressed — the real un-suppress path is the torsoOk+inStartZone
+        // condition in updateActivityState's .suppressed case. Left in place
+        // in case a future change reopens a path to completeRep() while
+        // suppressed; harmless no-op otherwise.
         if activityState == .suppressed {
             activityState      = .active
             resumeConsecFrames = 0
@@ -1261,11 +1291,22 @@ final class ExerciseEngine {
                 }
             }
             // Receding (walking away) — see RECEDE_SCALE_FACTOR's doc comment.
-            // Deliberately NOT gated behind suppressApproachDetection: that flag
-            // is about torsoRef GROWING from the exercise's own motion (hinge
-            // rotation, leaning into a cable stack); a large sustained SHRINK is
-            // a different signal this codebase has never gated at all.
-            if repPhase != .inRep,
+            // SAFETY REVISION: originally shipped NOT gated behind
+            // suppressApproachDetection, reasoned as "a different failure mode"
+            // from the GROWING false-positive that flag exists for. That
+            // reasoning was never device-verified, and it stopped being safe
+            // the moment suppression became a REAL block on rep counting (see
+            // the guard in runStateMachine's .atTop case) — before that fix,
+            // this check firing was harmless (suppression didn't actually stop
+            // anything); now it can genuinely zero out a whole set. Tricep is
+            // exactly the exercise that (a) already has suppressApproachDetection
+            // = true because its torso-scale signal is known-unreliable
+            // (leaning into the cable stack), and (b) is the one reporting zero
+            // reps again — an unverified, ungated recede check is a live
+            // suspect. Now gated the same as approach: exercises that already
+            // distrust torso-scale for the GROWING case distrust it for the
+            // SHRINKING case too until proven otherwise with real data.
+            if !def.suppressApproachDetection, repPhase != .inRep,
                let baseline = torsoRefBaseline,
                torsoRefBaselineFrames >= Self.TORSO_BASELINE_FRAMES,
                torsoRefCurrent < baseline * Self.RECEDE_SCALE_FACTOR {
@@ -1371,7 +1412,7 @@ final class ExerciseEngine {
         repMinAngle       = 999
         repTopValue       = 0
         repEnterValue     = 0
-        exitConfirmFrames = 0
+        exitConfirmCount  = 0
         resetRepAccumulators()
     }
 

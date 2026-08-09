@@ -45,6 +45,11 @@ export interface FormCheckDef {
   condition:  { type: 'greaterThan' | 'lessThan'; value: number };
   priority:   number;
   enabled:    boolean;
+  // When true and this check fails, the rep is rejected entirely (not
+  // counted, no cue) instead of counting-but-flagged — see
+  // ExerciseEngine.swift's gatesCounting doc comment. Only for checks that
+  // mean "this wasn't the target movement," never ordinary form faults.
+  gatesCounting?: boolean;
 }
 
 export interface ReadyGateDef {
@@ -104,6 +109,15 @@ export interface ExerciseDefinitionDef {
   // exercise) — only raise this for an exercise with a documented "small
   // movement counts as a real rep" problem.
   phantomGuardFraction?: number;
+  // Consecutive frames the metric must hold above repExitThreshold before a
+  // rep is trusted as complete (CORE double-count fix — see
+  // ExerciseEngine.swift's exitConfirmCount doc comment). Default 3 (omit for
+  // every normal exercise) — do NOT lower this globally for one exercise's
+  // sake again; override it on that one exercise instead (see
+  // kettlebellSwing below for the one legitimate case: an explicitly
+  // ballistic movement whose brief moment at full extension may not sustain
+  // for multiple frames).
+  exitConfirmFrames?: number;
 }
 
 // ─── Shared passthrough ready gate ───────────────────────────────────────────
@@ -1258,13 +1272,25 @@ const HINGE_TORSO_ANGLE_CHECK: FormCheckDef = {
 // horizontal (screen-x) displacement between hip and ankle — exactly what
 // the new normalizedHorizontalGap primitive measures (see Metric.swift).
 //
+// GATES COUNTING, not just flags — per explicit request, a lean or back-roll
+// with no real hip travel must not register as a rep AT ALL (no cue, not
+// counted), not "count but flag." gatesCounting: true (see FormCheckDef +
+// ExerciseEngine.swift's runStateMachine — a failing gated check rejects the
+// whole rep the same way the phantom-rep guard does: logged, uncounted).
+//
 // PLACEHOLDER WARNING per CLAUDE.md: normalizedHorizontalGap has never been
 // used in this codebase before and this threshold has zero on-device
-// validation. Set intentionally near-zero so it does NOT block real reps
-// while unverified — do a few reps of a REAL hinge and a few of a DELIBERATE
-// lean-without-hinging, send the [REP] log (hip_drift=X will be in it
-// automatically), and the real cutoff between the two gets set from that,
-// not guessed here.
+// validation. Set intentionally near-zero (0.02 — dimensional check: hip and
+// ankle x-positions are in Vision's 0-1 normalized space, divided by
+// torsoReference which typically runs ~0.15-0.35 for a properly-framed
+// person, so 0.02 requires the hip to be within ~2% of torso length of
+// directly above the ankle to reject — smaller than ordinary postural sway
+// or pose noise, so it should NOT reject any real attempt, hinge or lean,
+// while unverified) so it does NOT block real reps before calibration. Do a
+// few reps of a REAL hinge, a few DELIBERATE leans-without-hinging, and a
+// few back-rolls — send the [REP]/[GATE] log (hip_drift=X is logged on
+// EVERY rep attempt now, accepted or rejected) and the real cutoff between
+// "real hinge" and "not a hinge" gets set from that, not guessed here.
 const HINGE_HIP_DRIFT_CHECK: FormCheckDef = {
   id: 'hip_drift', cue: 'PUSH YOUR HIPS BACK',
   metric: {
@@ -1273,7 +1299,7 @@ const HINGE_HIP_DRIFT_CHECK: FormCheckDef = {
     right: { type: 'normalizedHorizontalGap', a: 'rightHip', b: 'rightAnkle' },
   },
   evaluateAt: 'atBottom', condition: { type: 'lessThan', value: 0.02 }, // PLACEHOLDER — see comment above
-  priority: 2, enabled: true,
+  priority: 2, enabled: true, gatesCounting: true,
 };
 
 // Side-on so torso travel and hip movement are both visible. Ankle added
@@ -2342,17 +2368,26 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
     // differently. No mechanical reason to expect different thresholds.
   ),
 
-  kettlebellSwing: hingeVariant(
-    'kettlebellSwing',
-    'Kettlebell Swing',
-    'Stand sideways to the camera — full body in frame, hips and shoulders visible',
-    // Explosive/ballistic — noticeably faster tempo than a controlled RDL, so
-    // minRepInterval is set shorter here (placeholder: 0.3 vs the family
-    // default 0.5) to avoid missing fast reps. This is a guess about tempo
-    // ONLY, not the core metric — verify against a real device log same as
-    // the rest; if 0.3 turns out too short/long, it's an easy one-line fix.
-    0.3,
-  ),
+  kettlebellSwing: {
+    ...hingeVariant(
+      'kettlebellSwing',
+      'Kettlebell Swing',
+      'Stand sideways to the camera — full body in frame, hips and shoulders visible',
+      // Explosive/ballistic — noticeably faster tempo than a controlled RDL, so
+      // minRepInterval is set shorter here (placeholder: 0.3 vs the family
+      // default 0.5) to avoid missing fast reps. This is a guess about tempo
+      // ONLY, not the core metric — verify against a real device log same as
+      // the rest; if 0.3 turns out too short/long, it's an easy one-line fix.
+      0.3,
+    ),
+    // Same ballistic-movement exception as minRepInterval above, applied to
+    // the core exit-confirm dwell (see ExerciseDefinition.swift /
+    // exerciseDefinitions.ts's exitConfirmFrames doc comments) — the default
+    // (3 frames, ~0.3s) is what actually fixed double-counting everywhere
+    // else; this is the ONE narrow, named exception, not a reason to lower
+    // the default.
+    exitConfirmFrames: 1,
+  },
 
   singleLegRDL: hingeVariant(
     'singleLegRDL',

@@ -23,6 +23,31 @@ import type { WorkoutSummary } from '../store/workoutSessionStore';
 import { usePlanStore } from '../store/planStore';
 import type { MuscleGroup } from '../constants/exercises';
 
+// ─── Error boundary ───────────────────────────────────────────────────────────
+// Per explicit request: the recap screen must degrade gracefully instead of
+// taking the whole app down. React error boundaries only catch JS-render-phase
+// exceptions (not a genuine native-layer crash), but the heatmap render was
+// the strongest suspect for exactly that kind of JS exception (a malformed
+// path string, unexpected null data) — this guarantees that if it (or
+// anything else in the wrapped subtree) throws, this screen shows a plain
+// fallback instead of the whole app crashing.
+class RecapSectionBoundary extends React.Component<
+  { fallback: React.ReactNode; children: React.ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { fallback: React.ReactNode; children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(error: unknown) {
+    console.error('[RecapSectionBoundary] caught render error:', error);
+  }
+  render() {
+    return this.state.hasError ? this.props.fallback : this.props.children;
+  }
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface RepEventData {
   timeSec: number;
@@ -333,12 +358,20 @@ export default function RecapScreen() {
   pages.push({
     key: 'map', label: 'Muscle Map',
     render: () => (
-      <MuscleHeatmap
-        overallScores={overallScores}
-        highlightGroups={highlightGroups}
-        highlightLabel={highlightLabel}
-        scale={0.55}
-      />
+      <RecapSectionBoundary
+        fallback={
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+            <Text style={s.cardText}>Muscle map couldn't load this time — your reps are still saved.</Text>
+          </View>
+        }
+      >
+        <MuscleHeatmap
+          overallScores={overallScores}
+          highlightGroups={highlightGroups}
+          highlightLabel={highlightLabel}
+          scale={0.55}
+        />
+      </RecapSectionBoundary>
     ),
   });
   if (data.totalReps > 0) {
@@ -440,6 +473,15 @@ export default function RecapScreen() {
             watermark, deliberately separate from the swipeable deck below
             so the shared image stays clean and self-explanatory. */}
         <Animated.View style={{ opacity: heroOpac, transform: [{ scale: heroScale }], alignItems: 'center' }}>
+        <RecapSectionBoundary
+          fallback={
+            <View style={[s.heroShareCard, { alignItems: 'center', justifyContent: 'center', minHeight: 160 }]}>
+              <Text style={s.cardText}>
+                {data.totalReps > 0 ? `${data.pct}% good form` : 'Session complete'}
+              </Text>
+            </View>
+          }
+        >
           <ViewShot ref={shotRef} options={{ format: 'png', quality: 1 }}>
             <View style={s.heroShareCard}>
               <View style={{ width: ringSize, height: ringSize }}>
@@ -481,6 +523,7 @@ export default function RecapScreen() {
               </View>
             </View>
           </ViewShot>
+        </RecapSectionBoundary>
         </Animated.View>
 
         {/* Swipeable glass deck — Apple Fitness/Activity summary pattern:

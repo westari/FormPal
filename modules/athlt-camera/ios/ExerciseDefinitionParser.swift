@@ -57,6 +57,10 @@ extension ExerciseDefinition {
 
         let suppressApproachDetection = dict["suppressApproachDetection"] as? Bool ?? false
         let phantomGuardFraction = dict["phantomGuardFraction"] as? Double ?? 0.30
+        let exitConfirmFrames: Int
+        if let v = dict["exitConfirmFrames"] as? Int { exitConfirmFrames = v }
+        else if let v = dict["exitConfirmFrames"] as? Double { exitConfirmFrames = Int(v) }
+        else { exitConfirmFrames = 3 }
 
         let def = ExerciseDefinition(
             id:                        id,
@@ -74,7 +78,8 @@ extension ExerciseDefinition {
             minRepInterval:            minRepInterval,
             planarityChecks:           planarityChecks,
             suppressApproachDetection: suppressApproachDetection,
-            phantomGuardFraction:      phantomGuardFraction
+            phantomGuardFraction:      phantomGuardFraction,
+            exitConfirmFrames:         exitConfirmFrames
         )
 
         let metricType = repMetricDict["type"] as? String ?? "?"
@@ -218,8 +223,10 @@ extension ExerciseDefinition {
         if let p = dict["priority"] as? Int { priority = p }
         else if let p = dict["priority"] as? Double { priority = Int(p) }
         else { return nil }
+        let gatesCounting = dict["gatesCounting"] as? Bool ?? false
         return FormCheck(id: id, cue: cue, metric: metric, evaluateAt: evalAt,
-                         condition: condition, priority: priority, enabled: enabled)
+                         condition: condition, priority: priority, enabled: enabled,
+                         gatesCounting: gatesCounting)
     }
 
     private static func parseReadyGate(_ dict: [String: Any]) -> ReadyGateConfig? {

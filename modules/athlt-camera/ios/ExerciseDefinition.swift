@@ -188,6 +188,20 @@ struct ExerciseDefinition {
     // problem (curl) raise it.
     let phantomGuardFraction: Double
 
+    // ── Exit-confirmation dwell (CORE double-count fix, per-exercise override) ─
+    // Consecutive frames the metric must hold above repExitThreshold before a
+    // rep is trusted as complete (see ExerciseEngine.swift's EXIT_CONFIRM_FRAMES
+    // doc comment for the full root-cause story — a single-frame noise spike
+    // mid-rep was completing reps early, producing "one rep counted going up,
+    // one coming back down"). Default 3 is the value that actually closed the
+    // reported double-counting on shoulder press/tricep; it must NOT be
+    // weakened globally to accommodate one exercise. kettlebellSwing overrides
+    // this down to 1 (effectively immediate, like the original behavior) since
+    // it's an explicitly ballistic, fast-tempo movement whose brief moment at
+    // full extension may not sustain for multiple frames — same treatment as
+    // its own minRepInterval/tempoMinSec exceptions elsewhere in this app.
+    let exitConfirmFrames: Int
+
     init(id: String, displayName: String,
          repMetric: Metric,
          topAngle: Double, repEnterThreshold: Double, repExitThreshold: Double,
@@ -199,7 +213,8 @@ struct ExerciseDefinition {
          minRepInterval: TimeInterval,
          planarityChecks: [PlanarityCheck] = [],
          suppressApproachDetection: Bool = false,
-         phantomGuardFraction: Double = 0.30) {
+         phantomGuardFraction: Double = 0.30,
+         exitConfirmFrames: Int = 3) {
         self.id                        = id
         self.displayName               = displayName
         self.repMetric                 = repMetric
@@ -216,5 +231,6 @@ struct ExerciseDefinition {
         self.planarityChecks           = planarityChecks
         self.suppressApproachDetection = suppressApproachDetection
         self.phantomGuardFraction      = phantomGuardFraction
+        self.exitConfirmFrames         = exitConfirmFrames
     }
 }
