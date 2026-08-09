@@ -96,7 +96,16 @@ function curlStandard(exerciseId: string): ExerciseStandardDef {
 
     staticChecks: CURL_STATIC_CHECKS,
 
-    tempoMinSec: 1.5,
+    // LOOSENED 1.5→0.8 (preemptive, before this value was ever actually
+    // enforced anywhere — see UniversalQualityEngine.swift's tempo-floor
+    // check). 1.5s for a FULL rep cycle (top→bottom→top) is tight for a
+    // brisk-but-controlled curl done at a continuous, no-pause tempo (the
+    // "keeps tension on" style already documented elsewhere in this codebase
+    // as common real form) — a fast, real, correctly-formed curl can
+    // complete in ~1-1.3s. 0.8 sits below that with margin while still well
+    // above a true sub-second flail. Zero on-device data behind either
+    // number — send a log if this still fires on a real rep.
+    tempoMinSec: 0.8,
     tempoMaxSec: 5.0,
 
     topFaults: CURL_TOP_FAULTS,
@@ -143,7 +152,11 @@ function squatStandard(exerciseId: string): ExerciseStandardDef {
     romCue:    'GO DEEPER — not reaching parallel',
     extendCue: 'STAND FULLY — not returning to standing',
     staticChecks: SQUAT_STATIC_CHECKS,
-    tempoMinSec: 2.0,
+    // LOOSENED 2.0→1.2 (preemptive, before ever enforced — see curlStandard's
+    // comment for why). Squats are naturally slower than isolation lifts
+    // (ROM + balance), so kept higher than curl/press, but 2.0s still risked
+    // firing on a fast, controlled bodyweight/air squat. Not device-verified.
+    tempoMinSec: 1.2,
     tempoMaxSec: 6.0,
     topFaults: SQUAT_TOP_FAULTS,
   };
@@ -181,7 +194,12 @@ function shoulderPressStandard(exerciseId: string): ExerciseStandardDef {
     romCue:    'PRESS HIGHER — not reaching overhead',
     extendCue: 'LOWER MORE — not returning to shoulder height',
     staticChecks: SHOULDER_PRESS_STATIC_CHECKS,
-    tempoMinSec: 1.5,
+    // LOOSENED 1.5→0.8 (preemptive, before ever enforced — see curlStandard's
+    // comment). Overhead pressing has a moderate ROM and can be done briskly
+    // with real control in ~1-1.3s — this is also the exercise the flail
+    // complaint was specifically about, so err toward NOT re-flagging a real
+    // fast press while still catching a true sub-second flail. Not verified.
+    tempoMinSec: 0.8,
     tempoMaxSec: 5.0,
     topFaults: SHOULDER_PRESS_TOP_FAULTS,
   };
@@ -225,7 +243,10 @@ function lungeStandard(exerciseId: string): ExerciseStandardDef {
     romCue:    'LUNGE DEEPER — not reaching depth',
     extendCue: 'STAND FULLY — not returning upright',
     staticChecks: LUNGE_STATIC_CHECKS,
-    tempoMinSec: 2.0,
+    // LOOSENED 2.0→1.2 — same reasoning as squatStandard (balance-dependent
+    // movement, kept higher than isolation lifts, but 2.0 risked firing on a
+    // fast, controlled lunge). Not device-verified.
+    tempoMinSec: 1.2,
     tempoMaxSec: 6.0,
     topFaults: LUNGE_TOP_FAULTS,
   };
@@ -289,7 +310,12 @@ function tricepStandard(exerciseId: string): ExerciseStandardDef {
     romCue:    'EXTEND FULLY — not reaching full lockout',
     extendCue: 'RETURN TO START — forearm not returning to horizontal',
     staticChecks: TRICEP_STATIC_CHECKS,
-    tempoMinSec: 1.5,
+    // LOOSENED 1.5→0.7 (preemptive). Pushdowns/extensions have a short ROM
+    // and are commonly done briskly even with good form, especially on
+    // lighter/higher-rep sets — 1.5s risked firing on completely normal
+    // cadence. This is also the exercise with the most active false-cue
+    // complaints already, so err toward permissive here. Not device-verified.
+    tempoMinSec: 0.7,
     tempoMaxSec: 5.0,
     topFaults: TRICEP_TOP_FAULTS,
   };
@@ -343,7 +369,9 @@ function bentOverRowStandard(exerciseId: string): ExerciseStandardDef {
     romCue:    'PULL HIGHER — not reaching elbow flexion',
     extendCue: 'LOWER FULLY — arm not returning to straight',
     staticChecks: ROW_STATIC_CHECKS_BENT_OVER,
-    tempoMinSec: 1.0,
+    // LOOSENED 1.0→0.6 (preemptive) — a quick pull-and-return can be well
+    // under 1.0s with real control. Not device-verified.
+    tempoMinSec: 0.6,
     tempoMaxSec: 5.0,
     topFaults: ROW_TOP_FAULTS_BENT_OVER,
   };
@@ -363,7 +391,8 @@ function seatedRowStandard(exerciseId: string): ExerciseStandardDef {
     romCue:    'PULL TO YOUR STOMACH — handle not reaching the torso',
     extendCue: 'REACH FORWARD — arm not fully extending between reps',
     staticChecks: ROW_STATIC_CHECKS_SEATED,
-    tempoMinSec: 1.0,
+    // LOOSENED 1.0→0.6 — same reasoning as bentOverRowStandard. Not verified.
+    tempoMinSec: 0.6,
     tempoMaxSec: 5.0,
     topFaults: ROW_TOP_FAULTS_SEATED,
   };
@@ -413,7 +442,15 @@ function hingeStandard(exerciseId: string): ExerciseStandardDef {
     romCue:    'HINGE DEEPER — not reaching enough depth',
     extendCue: 'STAND FULLY — not returning upright',
     staticChecks: HINGE_STATIC_CHECKS,
-    tempoMinSec: 1.5,
+    // LOOSENED 1.5→1.0 (preemptive) — kept a bit higher than isolation lifts
+    // (balance-dependent, larger ROM) but 1.5 still risked firing on a fast,
+    // controlled RDL/deadlift/good-morning rep. kettlebellSwing overrides
+    // this separately below (see the registry entry) — it's a deliberately
+    // ballistic, explosive movement (already treated as such elsewhere via
+    // its own minRepInterval=0.3 override in exerciseDefinitions.ts) and
+    // would misfire constantly on every correct rep if it inherited this
+    // controlled-tempo floor. Not device-verified.
+    tempoMinSec: 1.0,
     tempoMaxSec: 5.0,
     topFaults: HINGE_TOP_FAULTS,
     // Loosened from the native default (2.0) after an on-device log showed
@@ -491,7 +528,8 @@ function raiseStandard(exerciseId: string): ExerciseStandardDef {
     romCue:    'RAISE HIGHER — not reaching enough depth',
     extendCue: 'LOWER FULLY — not returning arms down',
     staticChecks: RAISE_STATIC_CHECKS,
-    tempoMinSec: 1.0,
+    // LOOSENED 1.0→0.6 (preemptive) — a controlled raise can be brisk. Not verified.
+    tempoMinSec: 0.6,
     tempoMaxSec: 4.0,
     topFaults: RAISE_TOP_FAULTS,
   };
@@ -541,7 +579,9 @@ export const EXERCISE_STANDARDS: Record<string, ExerciseStandardDef> = {
       },
     ],
 
-    tempoMinSec: 2.0,
+    // LOOSENED 2.0→1.2 (preemptive, before ever enforced — see the
+    // squatStandard() family function's identical fix and reasoning above).
+    tempoMinSec: 1.2,
     tempoMaxSec: 6.0,
 
     topFaults: [
@@ -588,7 +628,9 @@ export const EXERCISE_STANDARDS: Record<string, ExerciseStandardDef> = {
       },
     ],
 
-    tempoMinSec: 2.0,
+    // LOOSENED 2.0→1.2 (preemptive) — see lungeStandard() family function's
+    // identical fix and reasoning above.
+    tempoMinSec: 1.2,
     tempoMaxSec: 6.0,
 
     topFaults: [
@@ -623,7 +665,10 @@ export const EXERCISE_STANDARDS: Record<string, ExerciseStandardDef> = {
 
     staticChecks: [],
 
-    tempoMinSec: 1.5,
+    // LOOSENED 1.5→0.8 (preemptive) — see shoulderPressStandard() family
+    // function's identical fix and reasoning above (this is the exercise
+    // the flail complaint was specifically about).
+    tempoMinSec: 0.8,
     tempoMaxSec: 5.0,
 
     topFaults: [
@@ -705,7 +750,14 @@ export const EXERCISE_STANDARDS: Record<string, ExerciseStandardDef> = {
   romanianDeadlift: hingeStandard('romanianDeadlift'),
   deadlift:         hingeStandard('deadlift'),
   goodMorning:      hingeStandard('goodMorning'),
-  kettlebellSwing:  hingeStandard('kettlebellSwing'),
+  // OVERRIDE, not the shared hinge tempo floor: a kettlebell swing is
+  // deliberately explosive/ballistic — the hip snap that powers it is
+  // supposed to be fast. Every other hinge variant assumes a controlled
+  // tempo; applying that same floor here would fire "TOO FAST" on every
+  // single correctly-performed rep. Mirrors the same exception already made
+  // for minRepInterval (0.3s override) in exerciseDefinitions.ts's
+  // kettlebellSwing entry — same movement, same reasoning, applied here too.
+  kettlebellSwing: { ...hingeStandard('kettlebellSwing'), tempoMinSec: 0.25 },
   singleLegRDL:     hingeStandard('singleLegRDL'),
 
   // ─── Shoulder/arm isolation raise family ───────────────────────────────────

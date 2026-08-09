@@ -268,15 +268,30 @@ final class ExerciseEngine {
     // to hold above exitThreshold for EXIT_CONFIRM_FRAMES consecutive frames
     // before completing — hard reset on any dip back down, since that's still-
     // genuine continued rep motion, not noise — closes this for every exercise
-    // at once. 3 frames (~0.3s at the ~10fps effective processing rate noted
-    // elsewhere in this file) is short enough to add no perceptible lag to a
-    // real rep's completion while filtering single-frame spikes. This does NOT
-    // catch a genuine multi-frame PAUSE well above exitThreshold mid-rep before
-    // the person presses again — that's real, ambiguous user behavior (arguably
-    // two attempts), not a bug, and no debounce window can distinguish that from
-    // two real reps without more information than this engine has.
+    // at once. This does NOT catch a genuine multi-frame PAUSE well above
+    // exitThreshold mid-rep before the person presses again — that's real,
+    // ambiguous user behavior (arguably two attempts), not a bug, and no
+    // debounce window can distinguish that from two real reps without more
+    // information than this engine has.
+    //
+    // PREEMPTIVE SAFETY REVIEW: set to 2, not 3. At the ~10fps effective
+    // processing rate (frameSkip=3 of 30fps — confirmed in ATHLTCameraModule),
+    // 3 frames is ~0.3s of REQUIRED dwell time above exitThreshold before a
+    // rep can complete. For most exercises that's imperceptible, but
+    // kettlebellSwing is an explicitly ballistic, fast-tempo movement (already
+    // treated as such via its own minRepInterval=0.3s override) — if its
+    // brief moment at/near full extension doesn't sustain above exitThreshold
+    // for a full 0.3s, reps could go uncounted entirely (worse than the
+    // original double-count bug). 2 frames (~0.2s) still fully closes the
+    // reported bug (a lone single-frame spike still can't reach 2 consecutive
+    // confirmations) while halving the dwell requirement for fast/ballistic
+    // reps. Also: a turning point (top of a swing, top of a press) is where
+    // velocity is naturally LOWEST — genuine rep completions should
+    // physically linger there longer than a mid-motion noise spike does,
+    // which is why this debounce targets the right thing even at 2 frames;
+    // still worth watching kettlebellSwing specifically on first test.
     private var exitConfirmFrames: Int = 0
-    private static let EXIT_CONFIRM_FRAMES: Int = 3
+    private static let EXIT_CONFIRM_FRAMES: Int = 2
 
     // ── Form-check reliability floor (CORE false-cue fix) ────────────────────
     // ROOT CAUSE (tricep "KEEP ELBOWS IN when the elbow isn't moving", and the

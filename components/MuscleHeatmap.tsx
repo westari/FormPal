@@ -171,8 +171,15 @@ function ThermalCanvas({
   // 0..724 window before scaling down to the rendered size.
   const translateX = side === 'back' ? -DESIGN_W : 0;
   return (
+    // PREEMPTIVE FIX: StyleSheet.absoluteFill sets top/left/right/bottom all
+    // to 0, which combined with an explicit width/height in the same style
+    // array is an over-constrained, platform-dependent layout combo (Yoga
+    // has to decide whether right/bottom or width/height wins) — exact pixel
+    // alignment matters here since this canvas has to sit precisely over
+    // Body's silhouette, so removed the ambiguity: explicit position+size
+    // only, no right/bottom.
     <Canvas
-      style={[StyleSheet.absoluteFill, { width: DESIGN_W * scale, height: DESIGN_H * scale }]}
+      style={{ position: 'absolute', top: 0, left: 0, width: DESIGN_W * scale, height: DESIGN_H * scale }}
     >
       {/* Outer group: scales the whole thing down to the rendered size.
           Inner group: shifts the back-side path data (x∈[724,1448] in the

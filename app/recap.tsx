@@ -68,23 +68,29 @@ interface RecapData {
 // doneChip) so each has a real translucent-white fill UNDER the blur, not
 // blur alone — matching how iOS's own system materials are built (tint +
 // blur together, not just blur).
+// PREEMPTIVE FIX (found on self-review, before device testing): `card`,
+// `dim`, `goodFill`, `goodEdge`, `shadow` below were all defined but never
+// referenced anywhere in this file — dead variables left over from an
+// earlier palette (a discarded stat-pill design). Concretely, `card` being
+// dead meant heroShareCard (the exact View wrapped by ViewShot for the share
+// image) had NO backgroundColor at all — it would render fine on screen (the
+// gradient behind it shows through), but the CAPTURED PNG would have a
+// transparent background behind the ring/text, which most share targets
+// (Messages, Instagram) render oddly. `card` is now applied there — the rest
+// were genuinely unused and have been removed rather than left as dead code.
 const C = {
   bgTop:      '#0B0F2A',
   bgMid:      '#181638',
   bgBottom:   '#241531',
   glassFill:  'rgba(255,255,255,0.08)',
   glassEdge:  'rgba(255,255,255,0.16)',
-  card:       '#ffffff',
+  card:       '#141233', // opaque dark card — used by heroShareCard so the ViewShot capture isn't transparent
   text:       '#F4F4FB',
   muted:      'rgba(244,244,251,0.58)',
-  dim:        'rgba(244,244,251,0.4)',
   accent:     '#6E8BFF',
   accent2:    '#B98CFF',
   good:       '#3DE08C',
-  goodFill:   'rgba(61,224,140,0.16)',
-  goodEdge:   'rgba(61,224,140,0.4)',
   ringTrack:  'rgba(255,255,255,0.12)',
-  shadow:     'rgba(0,0,0,0.5)',
 };
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -304,6 +310,7 @@ export default function RecapScreen() {
         <View style={[s.centerFill, { paddingTop: insets.top }]}>
           <Text style={s.failedTxt}>No recap data found.</Text>
           <Pressable style={[s.doneChip, { marginTop: 20 }]} onPress={() => router.back()}>
+            <BlurView intensity={65} tint="light" style={StyleSheet.absoluteFill} />
             <Text style={s.doneChipTxt}>Back</Text>
           </Pressable>
         </View>
@@ -330,7 +337,7 @@ export default function RecapScreen() {
         overallScores={overallScores}
         highlightGroups={highlightGroups}
         highlightLabel={highlightLabel}
-        scale={0.62}
+        scale={0.55}
       />
     ),
   });
@@ -575,6 +582,7 @@ const s = StyleSheet.create({
   heroShareCard: {
     alignItems: 'center', gap: 14,
     paddingVertical: 26, paddingHorizontal: 30,
+    backgroundColor: C.card, borderRadius: 28,
   },
   ringCenter: {
     ...StyleSheet.absoluteFillObject,
@@ -593,8 +601,16 @@ const s = StyleSheet.create({
   watermarkTxt: { fontSize: 10.5, fontWeight: '700', color: 'rgba(255,255,255,0.4)', letterSpacing: 0.3 },
 
   deckWrap: { gap: 12 },
+  // PREEMPTIVE FIX: was height:300 with the Muscle Map page's content
+  // (legend + front/back diagrams at scale 0.62) needing ~296px on top of
+  // this card's own 36px padding + ~24px label/gap overhead — comfortably
+  // over budget, and pageCard clips with overflow:'hidden', so the bottom of
+  // the heatmap (labels, part of the legs) would have been cut off on first
+  // render. Raised to 360 and the Muscle Map page's scale dropped 0.62→0.55
+  // (see the MuscleHeatmap call above) — leaves a real margin, verified by
+  // hand-computing the layout, not just eyeballed.
   pageCard: {
-    height: 300, borderRadius: 26, overflow: 'hidden',
+    height: 360, borderRadius: 26, overflow: 'hidden',
     padding: 18, gap: 10, backgroundColor: C.glassFill,
   },
   glassEdgeOverlay: {
