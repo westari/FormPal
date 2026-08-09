@@ -179,6 +179,33 @@ final class UniversalQualityEngine {
 
         let stats = computeRepStats(frames: rawWindow, peakValue: peakValue)
 
+        // ── Absolute tempo floor (works from rep #1 — no baseline needed) ──────
+        // ROOT CAUSE (shoulder press flail passing as GOOD): every signal above
+        // this line is RELATIVE to the user's own first 3 reps. That structurally
+        // cannot catch a flail that IS one of those first 3 reps (there's no
+        // baseline yet to compare against), and if an early flail gets accepted
+        // into the baseline (isValidForBaseline only checks that it reached
+        // depth — a fast flail usually does), every later real, controlled rep
+        // then gets compared against an artificially "fast" reference instead.
+        // tempoMinSec was already parsed from ExerciseStandardDef into this
+        // struct (see ExerciseStandards.swift) but never actually read anywhere
+        // in this engine — a real number sitting unused. Duration is ABSOLUTE:
+        // a rep faster than the exercise's own minimum controlled tempo is too
+        // fast regardless of what came before it, so this check runs before and
+        // independent of the baseline-calibration branch below, and — like the
+        // isValidForBaseline gate — a too-fast rep is excluded from seeding the
+        // baseline rather than teaching the baseline that "fast" is normal.
+        // These tempoMinSec values were written speculatively (reviewed: false,
+        // same as every other field on these standards) and have never been
+        // exercised in practice since nothing read them before now — watch for
+        // false "TOO FAST" on a legitimately brisk but controlled rep, send a
+        // log if so and the number gets tuned from real data instead of guessed.
+        if let std = activeStandard, stats.duration > 0, stats.duration < std.tempoMinSec {
+            log?("[STD] rep #\(repNumber): duration=\(f2(stats.duration))s < tempoMin=\(f1(std.tempoMinSec))s — too fast, excluded from baseline")
+            lastRepTime = repEndTime
+            return "TOO FAST — control the rep"
+        }
+
         // ── Reference / calibration phase ─────────────────────────────────────
         // Only reps that meet the ROM standard seed the baseline. A short/
         // incomplete early rep would poison range/duration/jerk baselines low,

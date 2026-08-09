@@ -246,6 +246,84 @@ final class ExerciseEngine {
 
     private static let SETTLE_FRAMES: Int = 8   // ~0.27s at 30fps
 
+    // ── Exit confirmation (CORE double-count fix) ────────────────────────────
+    // ROOT CAUSE, applies to every exercise, not a per-exercise threshold problem:
+    // the .inRep completion check (`angle > effectiveExitThreshold` below) fired
+    // on a SINGLE frame with zero debounce — the only transition anywhere in this
+    // state machine that didn't already have the same consecutive-frame
+    // confirmation pattern used everywhere else (SETTLE_FRAMES, MIN_FRAMES_AFTER_
+    // POSE_GAP, RESUME_CONSEC_FRAMES, APPROACH_ENTER_FRAMES all require multiple
+    // consecutive frames before acting — completion alone acted on frame one).
+    // A single anomalous frame — Vision jitter, a brief sticking-point wobble
+    // mid-press, a 2D foreshortening blip as the limb rotates — that transiently
+    // reads back above exitThreshold WHILE THE PERSON IS STILL MID-REP completes
+    // the rep immediately using whatever partial repMinAngle had been reached so
+    // far, resets to .atTop, and then the person's continued real motion (still
+    // pressing up, then coming back down) enters and completes a SECOND time —
+    // exactly "one rep counted going up, one counted coming back down" for what
+    // was physically one repetition. Widening per-exercise hysteresis (the fixes
+    // already tried for tricep/hinge) only shrinks the window this can happen in;
+    // it doesn't close it, because the bug isn't about HOW FAR apart enter/exit
+    // are, it's about a single frame being trusted at all. Requiring the metric
+    // to hold above exitThreshold for EXIT_CONFIRM_FRAMES consecutive frames
+    // before completing — hard reset on any dip back down, since that's still-
+    // genuine continued rep motion, not noise — closes this for every exercise
+    // at once. 3 frames (~0.3s at the ~10fps effective processing rate noted
+    // elsewhere in this file) is short enough to add no perceptible lag to a
+    // real rep's completion while filtering single-frame spikes. This does NOT
+    // catch a genuine multi-frame PAUSE well above exitThreshold mid-rep before
+    // the person presses again — that's real, ambiguous user behavior (arguably
+    // two attempts), not a bug, and no debounce window can distinguish that from
+    // two real reps without more information than this engine has.
+    private var exitConfirmFrames: Int = 0
+    private static let EXIT_CONFIRM_FRAMES: Int = 3
+
+    // ── Form-check reliability floor (CORE false-cue fix) ────────────────────
+    // ROOT CAUSE (tricep "KEEP ELBOWS IN when the elbow isn't moving", and the
+    // same class of misfire possible on any exercise's throughoutMax/Min form
+    // check): Metric.measure() gates every joint at kMinConf (0.25) — the same
+    // floor already proven, in this exact codebase, to be too permissive for
+    // anything comparing two readings against each other (see
+    // UniversalQualityEngine's symmetryMinConf=0.6, added after a device log
+    // showed a 0.39-0.56-confidence occluded joint producing a noisy angle that
+    // looked like a real left/right difference against a well-tracked side).
+    // throughoutMax/Min accumulation has the identical shape of problem: it's
+    // effectively "is any single frame across the whole rep worse than X" — one
+    // low-but-passing-confidence frame (motion blur, brief partial occlusion)
+    // can permanently corrupt accumMax for that rep even if every other frame
+    // was fine, and unlike a single-value check, there's no later frame that
+    // can undo a bad max/min once recorded. Reusing the SAME validated 0.6
+    // floor (not a new guessed number) specifically for form-check measurement
+    // — repMetric/dataIsValid keep using kMinConf unchanged, since that gate's
+    // job (basic rep-tracking availability) is different from this one's
+    // (trusting a value enough to accumulate it into a rep-long max/min).
+    private static let FORM_CHECK_MIN_CONF: Float = 0.6
+
+    // ── Receding (walking away) suppression ──────────────────────────────────
+    // ROOT CAUSE (tricep "gave an X when I walked away to get my phone"):
+    // updateActivityState's approach check only ever watches for torsoRef
+    // GROWING (walking closer) — there was never a matching check for it
+    // SHRINKING (walking away). Tricep also has suppressApproachDetection=true
+    // (needed because leaning into a cable stack inflates torsoRef the same way
+    // approaching does), which left it with NO walk-away protection at all
+    // beyond the 8s inactivity timer — and tricep's own repMetric (forearm angle
+    // from vertical) is geometrically close to what a normal arm swings through
+    // while walking, so a walk-away within 8s of the last rep can read as a real
+    // one. Fix mirrors the existing approach check but for a large, sustained
+    // SHRINK, and is intentionally NOT gated behind suppressApproachDetection —
+    // that flag exists for the GROWING false-positive (hinge/tricep's own motion
+    // can inflate torsoRef), a different failure mode than receding. Deliberately
+    // conservative threshold: this codebase's own foreshortening checks
+    // (segmentLengthRatio, e.g. squat's 0.75 minRatio) show normal exercise-
+    // induced shrink tops out around 25-30% — RECEDE_SCALE_FACTOR (0.5, i.e. the
+    // torso must collapse to LESS THAN HALF baseline) sits well beyond that, so
+    // it should stay quiet during real reps even for torso-rotating exercises.
+    // Not device-verified for this exact scenario — send a log if it misfires
+    // on a real rep (too sensitive) or doesn't catch a real walk-away (too
+    // conservative) and it'll be tuned from real numbers instead of reasoned margin.
+    private var recedeConsecFrames: Int = 0
+    private static let RECEDE_SCALE_FACTOR: Double = 0.5
+
     // ── Per-frame log throttle ────────────────────────────────────────────────
     private var lastFrameLogTime:    Double = 0
     private var lastActivityLogTime: Double = 0
@@ -781,7 +859,22 @@ final class ExerciseEngine {
                 repMinAngle = angle
                 snapshotAtBottom(pose: pose)
             }
-            if angle > effectiveExitThreshold {
+            guard angle > effectiveExitThreshold else {
+                // Dropped back at/below exit before confirming — still genuinely
+                // mid-rep, not a real return to rest. Reset the confirm count.
+                exitConfirmFrames = 0
+                return
+            }
+
+            // CORE double-count fix — see EXIT_CONFIRM_FRAMES doc comment above.
+            // Require the metric to hold above exit for several consecutive
+            // frames before trusting this as a genuine return-to-rest, not a
+            // single-frame spike mid-rep.
+            exitConfirmFrames += 1
+            guard exitConfirmFrames >= Self.EXIT_CONFIRM_FRAMES else { return }
+            exitConfirmFrames = 0
+
+            do {
                 guard timestamp.timeIntervalSince(lastRepTime) >= def.minRepInterval else {
                     NSLog("[Engine] [%@] Debounce — skip", def.id)
                     repPhase = .atTop
@@ -1035,7 +1128,8 @@ final class ExerciseEngine {
     private func accumulate(pose: Pose) {
         guard repPhase == .inRep else { return }
         for check in def.formChecks where check.enabled {
-            guard let v = check.measure(pose: pose) else { continue }
+            guard isReliable(check: check, pose: pose),
+                  let v = check.measure(pose: pose) else { continue }
             accumMax[check.id] = max(accumMax[check.id] ?? -999, v)
             accumMin[check.id] = min(accumMin[check.id] ??  999, v)
         }
@@ -1051,7 +1145,18 @@ final class ExerciseEngine {
     private func snapshotAtBottom(pose: Pose) {
         for check in def.formChecks where check.enabled {
             guard case .atBottom = check.evaluateAt else { continue }
+            guard isReliable(check: check, pose: pose) else { continue }
             if let v = check.measure(pose: pose) { atBottomVal[check.id] = v }
+        }
+    }
+
+    // See FORM_CHECK_MIN_CONF's doc comment — a stricter floor than the
+    // repMetric/dataIsValid gate (kMinConf), specifically for values trusted
+    // into a rep-long accumMax/accumMin/atBottomVal, where one bad frame can't
+    // be corrected by a later good one.
+    private func isReliable(check: FormCheck, pose: Pose) -> Bool {
+        check.metric.referencedJoints().allSatisfy {
+            (pose[$0]?.confidence ?? 0) >= Self.FORM_CHECK_MIN_CONF
         }
     }
 
@@ -1140,6 +1245,26 @@ final class ExerciseEngine {
                     approachConsecFrames = max(0, approachConsecFrames - 1)
                 }
             }
+            // Receding (walking away) — see RECEDE_SCALE_FACTOR's doc comment.
+            // Deliberately NOT gated behind suppressApproachDetection: that flag
+            // is about torsoRef GROWING from the exercise's own motion (hinge
+            // rotation, leaning into a cable stack); a large sustained SHRINK is
+            // a different signal this codebase has never gated at all.
+            if repPhase != .inRep,
+               let baseline = torsoRefBaseline,
+               torsoRefBaselineFrames >= Self.TORSO_BASELINE_FRAMES,
+               torsoRefCurrent < baseline * Self.RECEDE_SCALE_FACTOR {
+                recedeConsecFrames = min(recedeConsecFrames + 1, Self.APPROACH_ENTER_FRAMES + 5)
+                if recedeConsecFrames >= Self.APPROACH_ENTER_FRAMES {
+                    suppressAndLog(reason: "receding " +
+                                   "torsoRef=\(String(format: "%.3f", torsoRefCurrent)) " +
+                                   "baseline=\(String(format: "%.3f", baseline))")
+                    recedeConsecFrames = 0
+                    return
+                }
+            } else {
+                recedeConsecFrames = max(0, recedeConsecFrames - 1)
+            }
             // Inactivity: at least one rep done, not mid-rep, long gap since last rep.
             if totalReps > 0,
                repPhase != .inRep,
@@ -1199,6 +1324,7 @@ final class ExerciseEngine {
         suppressionReason = reason
         resumeConsecFrames = 0
         approachConsecFrames = 0
+        recedeConsecFrames = 0
         // Abandon any in-progress rep cleanly so stale accumulators don't carry over.
         if repPhase == .inRep {
             repPhase = .atTop
@@ -1217,6 +1343,7 @@ final class ExerciseEngine {
         torsoRefCurrent        = 0.0
         resumeConsecFrames     = 0
         approachConsecFrames   = 0
+        recedeConsecFrames     = 0
     }
 
     private func resetSettleState() {
@@ -1226,9 +1353,10 @@ final class ExerciseEngine {
     }
 
     private func resetRepState() {
-        repMinAngle   = 999
-        repTopValue   = 0
-        repEnterValue = 0
+        repMinAngle       = 999
+        repTopValue       = 0
+        repEnterValue     = 0
+        exitConfirmFrames = 0
         resetRepAccumulators()
     }
 

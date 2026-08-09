@@ -52,6 +52,22 @@ interface RecapData {
 // glass cards (Apple Fitness/Activity summary pattern) instead of a single
 // vertical stack of equal-weight boxes, and a floating circular FAB for
 // Share instead of a full-width bottom bar.
+//
+// ROOT CAUSE of "purple background, no visible glass" (this exact build,
+// confirmed by re-reading the code, not a rendering failure): two real bugs,
+// not one. (1) Every BlurView here used tint="dark", which on iOS overlays a
+// translucent BLACK tint on top of the blur — stacked on an already dark
+// navy/purple background, that's dark-on-dark with almost no contrast. The
+// blur was genuinely rendering; it just wasn't visible. Switched to
+// tint="light" (a translucent white tint), which is what real iOS glass-
+// over-dark-media looks like (Control Center over a dark wallpaper, Apple
+// Music's Now Playing controls) — light glass floating over a dark scene is
+// the actual visual signature being asked for. (2) glassFill was defined in
+// this palette but never applied as a backgroundColor anywhere — a genuinely
+// dead variable. Now applied to every glass surface (iconChip, pageCard,
+// doneChip) so each has a real translucent-white fill UNDER the blur, not
+// blur alone — matching how iOS's own system materials are built (tint +
+// blur together, not just blur).
 const C = {
   bgTop:      '#0B0F2A',
   bgMid:      '#181638',
@@ -394,7 +410,7 @@ export default function RecapScreen() {
           Close/back sits where a modal dismiss control naturally lives. */}
       <View style={[s.topBar, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
         <Pressable onPress={handleDone} style={({ pressed }) => [s.iconChip, pressed && { opacity: 0.7 }]}>
-          <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
+          <BlurView intensity={65} tint="light" style={StyleSheet.absoluteFill} />
           <SymbolView
             name={data.isHistory ? 'chevron.left' : 'xmark'}
             size={14} tintColor={C.text} type="monochrome" style={{ width: 14, height: 14 }}
@@ -476,7 +492,7 @@ export default function RecapScreen() {
           >
             {pages.map(p => (
               <View key={p.key} style={[s.pageCard, { width: PAGE_W, marginRight: PAGE_GAP }]}>
-                <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
+                <BlurView intensity={55} tint="light" style={StyleSheet.absoluteFill} />
                 <View style={s.glassEdgeOverlay} pointerEvents="none" />
                 <Text style={s.pageLabel}>{p.label.toUpperCase()}</Text>
                 <View style={{ flex: 1 }}>{p.render()}</View>
@@ -499,7 +515,7 @@ export default function RecapScreen() {
           full-width bar pinned across the whole screen width. */}
       <View style={[s.fabRow, { paddingBottom: insets.bottom + 18 }]} pointerEvents="box-none">
         <Pressable onPress={handleDone} style={({ pressed }) => [s.doneChip, pressed && { opacity: 0.7 }]}>
-          <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
+          <BlurView intensity={65} tint="light" style={StyleSheet.absoluteFill} />
           <Text style={s.doneChipTxt}>{doneLabel}</Text>
         </Pressable>
         <Pressable
@@ -550,7 +566,7 @@ const s = StyleSheet.create({
   iconChip: {
     width: 34, height: 34, borderRadius: 17,
     alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-    borderWidth: 1, borderColor: C.glassEdge,
+    borderWidth: 1, borderColor: C.glassEdge, backgroundColor: C.glassFill,
   },
   topBarTitleWrap: { flex: 1, alignItems: 'center' },
   topBarTitle: { fontSize: 15, fontWeight: '800', color: C.text, letterSpacing: -0.2 },
@@ -579,7 +595,7 @@ const s = StyleSheet.create({
   deckWrap: { gap: 12 },
   pageCard: {
     height: 300, borderRadius: 26, overflow: 'hidden',
-    padding: 18, gap: 10,
+    padding: 18, gap: 10, backgroundColor: C.glassFill,
   },
   glassEdgeOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -609,7 +625,7 @@ const s = StyleSheet.create({
   doneChip: {
     height: 44, paddingHorizontal: 20, borderRadius: 22,
     alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-    borderWidth: 1, borderColor: C.glassEdge,
+    borderWidth: 1, borderColor: C.glassEdge, backgroundColor: C.glassFill,
   },
   doneChipTxt: { fontSize: 14.5, fontWeight: '700', color: C.text },
   fabShadow: {

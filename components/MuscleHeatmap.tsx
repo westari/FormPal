@@ -3,42 +3,54 @@
  *
  * Shared muscle-coverage body diagram — used by the progress tab (cumulative
  * only) and the recap screen (cumulative + "worked this session" overlay).
- * Wraps react-native-body-highlighter for the base body outline; does not
- * re-implement the body art.
  *
- * HEAT LAYER, v2 — REBUILT after v1 read as "random color splashes" instead
- * of a real heatmap. Root cause of that: v1 drew free-floating <Ellipse>
- * blobs positioned at approximate muscle centroids, sized by rough bounding
- * boxes — nothing clipped them to the body's actual silhouette, so the color
- * could visibly bleed outside the real muscle outline, breaking the illusion
- * that the BODY itself was glowing.
+ * HEAT LAYER, v3 — genuine continuous thermal field, not discrete colored
+ * shapes. v1 used floating <Ellipse> blobs at approximate centroids (color
+ * visibly outside the real muscle outline). v2 (react-native-svg) fixed the
+ * boundary problem by filling the EXACT extracted muscle-region paths
+ * directly, but each region was still its own flat, separately-blurred SVG
+ * shape — adjacent regions didn't blend into each other, so it still read as
+ * "several colored patches" rather than one continuous heat field, which is
+ * what was called out as "not a real heatmap, just color splashes."
  *
- * Fix: components/muscleShapePaths.ts contains the ACTUAL SVG path shapes for
- * each muscle region, extracted directly from react-native-body-highlighter's
- * own bundled path data (not approximated) via a one-off Node script reading
- * dist/assets/body{Front,Back}.js. Each active muscle is now drawn using that
- * EXACT path as the fill shape — a soft blurred copy underneath (real
- * FeGaussianBlur, react-native-svg supports it) for the glow bleed, a crisp
- * copy on top for a defined core — so the color is always bounded by the true
- * anatomy, and reads as "this muscle is glowing" rather than a floating blob.
- * react-native-body-highlighter's own <Body> now only renders the neutral
- * outline (empty data) — this component is the single source of muscle color.
+ * v3 fix — uses @shopify/react-native-skia (already a dependency, already
+ * used elsewhere in this app: components/Ring.tsx, components/SpeedoGauge.tsx
+ * — no new native module, no rebuild): the exact same muscle-region paths are
+ * filled onto a Skia canvas, but the WHOLE composited layer is rasterized and
+ * blurred together as pixels (Group's `layer` + `Blur` image filter) instead
+ * of each SVG shape getting its own independent, contained blur. A real
+ * pixel-space blur spreads and blends across shape BOUNDARIES, which is what
+ * actually produces a continuous-looking gradient between adjacent regions
+ * instead of separately-glowing patches — this is the genuine difference
+ * between "a heatmap" and "some blurred shapes." The blurred layer is then
+ * masked (Skia `Mask`, alpha mode) to the real full-body outline (also
+ * extracted from the same library, see FRONT_BODY_OUTLINE/BACK_BODY_OUTLINE
+ * in muscleShapePaths.ts) so the blur — which by nature spreads color beyond
+ * its source shapes — can never bleed past the person's actual silhouette,
+ * no matter how large the blur radius.
+ *
+ * react-native-body-highlighter's own <Body> renders ONLY as the neutral
+ * base outline underneath (empty data) — this component is the single
+ * source of muscle color, avoiding the earlier "flat fill + blob on top"
+ * double-rendering.
  *
  * Gender note: the library only ships gender="male" | "female" body shapes —
- * there is no neutral silhouette option, and building a custom one would mean
- * not reusing this component. "male" is hardcoded below as an accepted
- * limitation, not a guess — see CLAUDE.md investigate-first rule.
+ * there is no neutral silhouette option. "male" is hardcoded below as an
+ * accepted limitation, not a guess — see CLAUDE.md investigate-first rule.
  */
 
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Defs, Filter, FeGaussianBlur, Path } from 'react-native-svg';
+import { Canvas, Group, Mask, Path as SkiaPath, Blur } from '@shopify/react-native-skia';
 import Body from 'react-native-body-highlighter';
 import type { Slug } from 'react-native-body-highlighter';
 import { MuscleGroup } from '../constants/exercises';
 import type { MuscleScores } from '../lib/sessionLog';
-import { FRONT_MUSCLE_PATHS, BACK_MUSCLE_PATHS } from './muscleShapePaths';
+import {
+  FRONT_MUSCLE_PATHS, BACK_MUSCLE_PATHS,
+  FRONT_BODY_OUTLINE, BACK_BODY_OUTLINE,
+} from './muscleShapePaths';
 
 const C = {
   text:    '#0b1020',
@@ -47,7 +59,14 @@ const C = {
 
 const BODY_COLORS  = ['#FFC24B', '#FF9F0A', '#FF7A2E'] as const; // legend chip only
 const TODAY_COLOR  = '#0a84ff'; // distinct overlay color for "worked this session"
-const GLOW_BLUR_ID = 'muscleGlowBlur'; // one shared filter, reused by every glow layer
+
+// Base render size — matches react-native-body-highlighter's own fixed design
+// size (200×400 at scale=1) and viewBox ('0 0 724 1448' front / '724 0 724 1448'
+// back), confirmed from SvgMaleWrapper.js. The Skia canvas is drawn at the same
+// 724×1448 coordinate space and scaled down to match via a transform, so the
+// muscle paths (extracted in that same coordinate space) need no conversion.
+const DESIGN_W = 724;
+const DESIGN_H = 1448;
 
 const GROUP_TO_FRONT_SLUGS: Partial<Record<MuscleGroup, Slug[]>> = {
   [MuscleGroup.Chest]:     ['chest'],
@@ -93,21 +112,21 @@ function thermalColor(score: number): string {
   return `rgb(${r},${g},${b})`;
 }
 
-interface MuscleGlowSpec {
+interface MuscleFillSpec {
   key:     string;
   paths:   string[];
   color:   string;
   opacity: number;
 }
 
-function buildGlowSpecs(
+function buildFillSpecs(
   overallScores: MuscleScores,
   highlightGroups: Set<MuscleGroup> | undefined,
   side: 'front' | 'back',
-): MuscleGlowSpec[] {
+): MuscleFillSpec[] {
   const mapping   = side === 'front' ? GROUP_TO_FRONT_SLUGS   : GROUP_TO_BACK_SLUGS;
   const pathTable = side === 'front' ? FRONT_MUSCLE_PATHS     : BACK_MUSCLE_PATHS;
-  const out: MuscleGlowSpec[] = [];
+  const out: MuscleFillSpec[] = [];
   for (const [mg, slugs] of Object.entries(mapping) as [MuscleGroup, Slug[]][]) {
     const isHighlighted = highlightGroups?.has(mg) ?? false;
     const score = overallScores[mg] ?? 0;
@@ -116,13 +135,13 @@ function buildGlowSpecs(
       const paths = pathTable[slug];
       if (!paths || paths.length === 0) continue;
       if (isHighlighted) {
-        out.push({ key: `${side}-${slug}-today`, paths, color: TODAY_COLOR, opacity: 0.85 });
+        out.push({ key: `${side}-${slug}-today`, paths, color: TODAY_COLOR, opacity: 0.9 });
       } else {
         out.push({
           key: `${side}-${slug}`,
           paths,
           color: thermalColor(score),
-          opacity: 0.55 + score * 0.4, // 0.55 (barely worked) → 0.95 (heavily worked)
+          opacity: 0.6 + score * 0.35, // 0.6 (barely worked) → 0.95 (heavily worked)
         });
       }
     }
@@ -130,59 +149,54 @@ function buildGlowSpecs(
   return out;
 }
 
-// ─── MuscleGlowLayer ───────────────────────────────────────────────────────
-// A second <Svg>, the same rendered size as Body, laid directly over it.
-// Each active muscle draws its OWN real path shape twice: once blurred and
-// enlarged slightly underneath (the soft glow bleed) and once crisp on top
-// (the defined core) — both using the exact silhouette, so color never
-// floats outside the real muscle outline.
+// ─── ThermalCanvas ─────────────────────────────────────────────────────────
+// The actual heat field: every active muscle's real path filled at full
+// design resolution, the whole group rasterized + blurred together (so
+// adjacent regions bleed into one continuous field, not separate glowing
+// patches), then masked to the real body outline so the blur can never
+// escape the silhouette.
 
-function MuscleGlowLayer({
-  specs, side, scale,
+function ThermalCanvas({
+  specs, outline, scale, side,
 }: {
-  specs: MuscleGlowSpec[];
-  side:  'front' | 'back';
-  scale: number;
+  specs:   MuscleFillSpec[];
+  outline: string;
+  scale:   number;
+  side:    'front' | 'back';
 }) {
   if (specs.length === 0) return null;
-  const viewBox = side === 'front' ? '0 0 724 1448' : '724 0 724 1448';
+  // The back-side path data lives in x∈[724,1448] (viewBox '724 0 724 1448',
+  // confirmed from SvgMaleWrapper.js) since front/back share one coordinate
+  // space in the source SVG — translate it back into the canvas's own
+  // 0..724 window before scaling down to the rendered size.
+  const translateX = side === 'back' ? -DESIGN_W : 0;
   return (
-    <Svg
-      width={200 * scale}
-      height={400 * scale}
-      viewBox={viewBox}
-      style={StyleSheet.absoluteFill}
-      pointerEvents="none"
+    <Canvas
+      style={[StyleSheet.absoluteFill, { width: DESIGN_W * scale, height: DESIGN_H * scale }]}
     >
-      <Defs>
-        <Filter id={GLOW_BLUR_ID} x="-50%" y="-50%" width="200%" height="200%">
-          <FeGaussianBlur stdDeviation={7} />
-        </Filter>
-      </Defs>
-      {/* Glow bleed pass — blurred, slightly larger via strokeWidth so the
-          blur has real content to spread from at the shape's own edge. */}
-      {specs.map(spec => spec.paths.map((d, i) => (
-        <Path
-          key={`${spec.key}-glow-${i}`}
-          d={d}
-          fill={spec.color}
-          fillOpacity={spec.opacity * 0.65}
-          stroke={spec.color}
-          strokeOpacity={spec.opacity * 0.5}
-          strokeWidth={10}
-          filter={`url(#${GLOW_BLUR_ID})`}
-        />
-      )))}
-      {/* Crisp core pass — the real shape, clearly defined on top of its own glow. */}
-      {specs.map(spec => spec.paths.map((d, i) => (
-        <Path
-          key={`${spec.key}-core-${i}`}
-          d={d}
-          fill={spec.color}
-          fillOpacity={spec.opacity}
-        />
-      )))}
-    </Svg>
+      {/* Outer group: scales the whole thing down to the rendered size.
+          Inner group: shifts the back-side path data (x∈[724,1448] in the
+          source SVG's shared coordinate space) into the 0..724 window BEFORE
+          the outer scale is applied — nested Groups compose like nested SVG
+          <g> elements, which avoids depending on any single-array transform
+          multiplication order. */}
+      <Group transform={[{ scale }]}>
+        <Group transform={[{ translateX }]}>
+          <Mask mode="alpha" mask={<SkiaPath path={outline} color="white" />}>
+            <Group layer={<Blur blur={22} />}>
+              {specs.map(spec => spec.paths.map((d, i) => (
+                <SkiaPath
+                  key={`${spec.key}-${i}`}
+                  path={d}
+                  color={spec.color}
+                  opacity={spec.opacity}
+                />
+              )))}
+            </Group>
+          </Mask>
+        </Group>
+      </Group>
+    </Canvas>
   );
 }
 
@@ -205,12 +219,18 @@ export function MuscleHeatmap({
 }) {
   const isEmpty = Object.keys(overallScores).length === 0 && (!highlightGroups || highlightGroups.size === 0);
 
-  const frontGlow = useMemo(
-    () => buildGlowSpecs(overallScores, highlightGroups, 'front'),
+  // Body's own fixed design size is 200×400 at scale=1 (confirmed from
+  // SvgMaleWrapper.js) — the Skia canvas draws at the native 724×1448 path
+  // coordinate space, so it needs its OWN scale factor to end up the same
+  // rendered size as Body: 200/724 per unit of the `scale` prop.
+  const canvasScale = scale * (200 / DESIGN_W);
+
+  const frontFill = useMemo(
+    () => buildFillSpecs(overallScores, highlightGroups, 'front'),
     [overallScores, highlightGroups],
   );
-  const backGlow = useMemo(
-    () => buildGlowSpecs(overallScores, highlightGroups, 'back'),
+  const backFill = useMemo(
+    () => buildFillSpecs(overallScores, highlightGroups, 'back'),
     [overallScores, highlightGroups],
   );
 
@@ -251,7 +271,7 @@ export function MuscleHeatmap({
                 defaultFill="rgba(200,210,228,0.35)"
                 border="none"
               />
-              <MuscleGlowLayer specs={frontGlow} side="front" scale={scale} />
+              <ThermalCanvas specs={frontFill} outline={FRONT_BODY_OUTLINE} scale={canvasScale} side="front" />
             </View>
             {showLabels && <Text style={mh.diagramLabel}>Front</Text>}
           </View>
@@ -268,7 +288,7 @@ export function MuscleHeatmap({
                 defaultFill="rgba(200,210,228,0.35)"
                 border="none"
               />
-              <MuscleGlowLayer specs={backGlow} side="back" scale={scale} />
+              <ThermalCanvas specs={backFill} outline={BACK_BODY_OUTLINE} scale={canvasScale} side="back" />
             </View>
             {showLabels && <Text style={mh.diagramLabel}>Back</Text>}
           </View>

@@ -118,6 +118,11 @@ extension ExerciseDefinition {
                   let lower = (dict["lower"] as? String).flatMap(Joint.init(string:)) else { return nil }
             return .normalizedVerticalGap(upper: upper, lower: lower)
 
+        case "normalizedHorizontalGap":
+            guard let a = (dict["a"] as? String).flatMap(Joint.init(string:)),
+                  let b = (dict["b"] as? String).flatMap(Joint.init(string:)) else { return nil }
+            return .normalizedHorizontalGap(a: a, b: b)
+
         case "bodyRelativeGap":
             guard let a        = (dict["a"]        as? String).flatMap(Joint.init(string:)),
                   let b        = (dict["b"]        as? String).flatMap(Joint.init(string:)),

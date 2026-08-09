@@ -23,6 +23,7 @@ export type MetricDef =
   | { type: 'lineVsHorizontal';       from: string; to: string }
   | { type: 'verticalGap';            upper: string; lower: string }
   | { type: 'normalizedVerticalGap';  upper: string; lower: string }
+  | { type: 'normalizedHorizontalGap'; a: string; b: string }
   | { type: 'bodyRelativeGap';        a: string; b: string; axisFrom: string; axisTo: string }
   | { type: 'bodyRelativeDeviation';  point: string; axisFrom: string; axisTo: string }
   | { type: 'deviationFromLine';      point: string; lineFrom: string; lineTo: string }
@@ -1243,11 +1244,43 @@ const HINGE_TORSO_ANGLE_CHECK: FormCheckDef = {
   priority: 1, enabled: true,
 };
 
-// Side-on so torso travel and hip movement are both visible. Only the joints
-// actually used by the metric/checks (shoulder, hip, knee) — no far-side
-// wrist/ankle, which is what caused occlusion bugs in the row/tricep families.
-const HINGE_CAMERA_JOINTS_A = ['leftShoulder',  'leftHip',  'leftKnee'];
-const HINGE_CAMERA_JOINTS_B = ['rightShoulder', 'rightHip', 'rightKnee'];
+// FORM CHECK — leaning forward without actually hinging (torso pitches
+// forward but the hips never travel back). CORE ROOT CAUSE: HINGE_REP_METRIC
+// (lineVsHorizontal(hip, shoulder)) is a torso ANGLE measured only from the
+// hip and shoulder's own two positions — it cannot tell a genuine hip hinge
+// (hips translate backward, flat back, minimal knee bend) apart from a
+// generic forward lean/waist-bend that produces the IDENTICAL shoulder/hip
+// angle change without the hips ever moving. Depth alone (goodROMThreshold)
+// can't fix this — a lean can reach the same torso angle as a real hinge.
+// The one thing a lean and a real hinge genuinely differ on: a real hinge's
+// hips travel backward relative to the (planted, stationary) ankle; a lean's
+// don't. In this side-on camera view, that backward travel shows up as
+// horizontal (screen-x) displacement between hip and ankle — exactly what
+// the new normalizedHorizontalGap primitive measures (see Metric.swift).
+//
+// PLACEHOLDER WARNING per CLAUDE.md: normalizedHorizontalGap has never been
+// used in this codebase before and this threshold has zero on-device
+// validation. Set intentionally near-zero so it does NOT block real reps
+// while unverified — do a few reps of a REAL hinge and a few of a DELIBERATE
+// lean-without-hinging, send the [REP] log (hip_drift=X will be in it
+// automatically), and the real cutoff between the two gets set from that,
+// not guessed here.
+const HINGE_HIP_DRIFT_CHECK: FormCheckDef = {
+  id: 'hip_drift', cue: 'PUSH YOUR HIPS BACK',
+  metric: {
+    type:  'average',
+    left:  { type: 'normalizedHorizontalGap', a: 'leftHip',  b: 'leftAnkle'  },
+    right: { type: 'normalizedHorizontalGap', a: 'rightHip', b: 'rightAnkle' },
+  },
+  evaluateAt: 'atBottom', condition: { type: 'lessThan', value: 0.02 }, // PLACEHOLDER — see comment above
+  priority: 2, enabled: true,
+};
+
+// Side-on so torso travel and hip movement are both visible. Ankle added
+// (wasn't previously required) — HINGE_HIP_DRIFT_CHECK needs it visible;
+// still no far-side wrist, which is what caused occlusion bugs elsewhere.
+const HINGE_CAMERA_JOINTS_A = ['leftShoulder',  'leftHip',  'leftKnee',  'leftAnkle'];
+const HINGE_CAMERA_JOINTS_B = ['rightShoulder', 'rightHip', 'rightKnee', 'rightAnkle'];
 
 function hingeVariant(
   id:               string,
@@ -1299,7 +1332,9 @@ function hingeVariant(
     // knee_bend removed — see "REMOVED, second time, for good" comment above.
     // torso_angle added — see HINGE_TORSO_ANGLE_CHECK comment (placeholder,
     // needs a real log — this is a NEW check, not a revival of knee_bend).
-    formChecks:         [HINGE_TORSO_ANGLE_CHECK],
+    // hip_drift added — see HINGE_HIP_DRIFT_CHECK comment (also placeholder,
+    // needs a real log) — catches a forward lean with no real hip hinge.
+    formChecks:         [HINGE_TORSO_ANGLE_CHECK, HINGE_HIP_DRIFT_CHECK],
     readyGate:          PASSTHROUGH_GATE,
     cameraSetup: {
       setupInstruction,

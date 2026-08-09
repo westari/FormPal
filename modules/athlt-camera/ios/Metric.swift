@@ -32,6 +32,14 @@ indirect enum Metric {
     /// Body-scale normalised: value is independent of camera distance and user height.
     case normalizedVerticalGap(upper: Joint, lower: Joint)
 
+    /// `|a.x − b.x|` divided by torso reference length (shoulder→hip). The horizontal
+    /// (screen-x) counterpart of normalizedVerticalGap — for a side-on camera view,
+    /// horizontal image displacement between two joints IS real-world forward/backward
+    /// travel (e.g. hip traveling backward relative to a planted ankle during a hip
+    /// hinge). Absolute value: camera-orientation-agnostic (works whether the person
+    /// faces left or right in frame), unlike a signed x-delta which would flip sign.
+    case normalizedHorizontalGap(a: Joint, b: Joint)
+
     /// Component of `(a − b)` projected onto the CCW-perpendicular of axis `(axisFrom → axisTo)`,
     /// normalised by axis length. Positive when `a` is "above" `b` relative to the body's own
     /// longitudinal axis — orientation-agnostic for exercises where the body is non-upright.
@@ -99,6 +107,12 @@ extension Metric {
             guard let gap = computeVerticalGap(pose: pose, upper: upper, lower: lower),
                   let ref = torsoReference(pose: pose), ref > 0 else { return nil }
             return gap / ref
+
+        case let .normalizedHorizontalGap(a, b):
+            guard let pa = pose[a], pa.confidence >= kMinConf,
+                  let pb = pose[b], pb.confidence >= kMinConf,
+                  let ref = torsoReference(pose: pose), ref > 0 else { return nil }
+            return abs(Double(pa.x - pb.x)) / ref
 
         case let .bodyRelativeGap(a, b, axisFrom, axisTo):
             guard let pa  = pose[a],       pa.confidence  >= kMinConf,
@@ -193,6 +207,7 @@ extension Metric {
         case let .lineVsHorizontal(from, to):          return [from, to]
         case let .verticalGap(upper, lower):           return [upper, lower]
         case let .normalizedVerticalGap(upper, lower): return [upper, lower]
+        case let .normalizedHorizontalGap(a, b):       return [a, b]
         case let .bodyRelativeGap(a, b, af, at):       return [a, b, af, at]
         case let .bodyRelativeDeviation(p, af, at):    return [p, af, at]
         case let .deviationFromLine(p, lf, lt):        return [p, lf, lt]
