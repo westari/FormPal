@@ -118,6 +118,14 @@ export interface ExerciseDefinitionDef {
   // ballistic movement whose brief moment at full extension may not sustain
   // for multiple frames).
   exitConfirmFrames?: number;
+  // Consecutive frames Vision must report NO person at all, while mid-rep,
+  // before the in-progress rep is abandoned (see ExerciseEngine.swift's
+  // consecutiveMissingFrames doc comment). Default 3 (~0.3s, omit for every
+  // normal exercise) — a log-confirmed exception exists for tricep: done
+  // close to the camera with the forearm crossing the torso every rep,
+  // Vision's whole-body detector can lose the person for longer than that
+  // from self-occlusion alone, killing every rep before it could complete.
+  missingPersonGraceFrames?: number;
 }
 
 // ─── Shared passthrough ready gate ───────────────────────────────────────────
@@ -840,6 +848,22 @@ function tricepVariant(
     // the same flag rather than re-tuning a signal that's structurally wrong
     // for this movement pattern.
     suppressApproachDetection: true,
+    // FOLLOW-UP, log-confirmed (still zero reps after the approach-suppression
+    // fix): the default 3-frame missing-person grace period wasn't the fix
+    // either — a log showed "[ACTIVITY] rep abandoned — person left frame (3
+    // consecutive missing frames)" on every single rep despite the user never
+    // leaving. Tricep pushdown's forearm crosses in front of the torso at the
+    // bottom of every rep, and Vision's whole-body detector can lose the
+    // person entirely for longer than 3 frames from that self-occlusion
+    // alone — a real, exercise-normal occlusion, not someone leaving. Raised
+    // to 15 (~1.5s), comfortably above a typical brief occlusion and roughly
+    // matched to this exercise's own minRepInterval (1.3s) — a genuine
+    // walk-away is still caught once they're gone longer than that, and
+    // completion itself stays separately protected (framesSincePoseGap still
+    // requires clean tracking after any gap before trusting a completion).
+    // Not device-verified as the exact right number — send a log if it's
+    // still too short (or if it now lets a real walk-away complete a rep).
+    missingPersonGraceFrames: 15,
   };
 }
 

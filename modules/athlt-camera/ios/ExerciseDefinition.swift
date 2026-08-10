@@ -202,6 +202,24 @@ struct ExerciseDefinition {
     // its own minRepInterval/tempoMinSec exceptions elsewhere in this app.
     let exitConfirmFrames: Int
 
+    // ── Missing-person abandonment grace period (per-exercise override) ──────
+    // Consecutive frames Vision must report NO person at all, while mid-rep,
+    // before the in-progress rep is abandoned (see ExerciseEngine.swift's
+    // MISSING_PERSON_GRACE_FRAMES doc comment). Default 3 (~0.3s) is fine for
+    // exercises tracked at a normal distance. Tricep pushdown/overhead
+    // extension is done close to the camera with the forearm crossing in
+    // front of the torso every single rep — a log confirmed Vision's
+    // whole-body detector can lose the person for MORE than 3 consecutive
+    // frames from that self-occlusion alone, aborting every rep before it
+    // could complete. Raised for that family specifically (see
+    // tricepVariant() in exerciseDefinitions.ts) rather than weakened
+    // globally — completion still has its own independent protection
+    // (framesSincePoseGap requires MIN_FRAMES_AFTER_POSE_GAP clean frames
+    // after ANY pose gap before trusting a completion), so a larger grace
+    // period here does not reopen the original "stale data silently
+    // completes a bogus rep" bug this abandonment logic exists to prevent.
+    let missingPersonGraceFrames: Int
+
     init(id: String, displayName: String,
          repMetric: Metric,
          topAngle: Double, repEnterThreshold: Double, repExitThreshold: Double,
@@ -214,7 +232,8 @@ struct ExerciseDefinition {
          planarityChecks: [PlanarityCheck] = [],
          suppressApproachDetection: Bool = false,
          phantomGuardFraction: Double = 0.30,
-         exitConfirmFrames: Int = 3) {
+         exitConfirmFrames: Int = 3,
+         missingPersonGraceFrames: Int = 3) {
         self.id                        = id
         self.displayName               = displayName
         self.repMetric                 = repMetric
@@ -232,5 +251,6 @@ struct ExerciseDefinition {
         self.suppressApproachDetection = suppressApproachDetection
         self.phantomGuardFraction      = phantomGuardFraction
         self.exitConfirmFrames         = exitConfirmFrames
+        self.missingPersonGraceFrames  = missingPersonGraceFrames
     }
 }

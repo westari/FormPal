@@ -61,6 +61,10 @@ extension ExerciseDefinition {
         if let v = dict["exitConfirmFrames"] as? Int { exitConfirmFrames = v }
         else if let v = dict["exitConfirmFrames"] as? Double { exitConfirmFrames = Int(v) }
         else { exitConfirmFrames = 3 }
+        let missingPersonGraceFrames: Int
+        if let v = dict["missingPersonGraceFrames"] as? Int { missingPersonGraceFrames = v }
+        else if let v = dict["missingPersonGraceFrames"] as? Double { missingPersonGraceFrames = Int(v) }
+        else { missingPersonGraceFrames = 3 }
 
         let def = ExerciseDefinition(
             id:                        id,
@@ -79,7 +83,8 @@ extension ExerciseDefinition {
             planarityChecks:           planarityChecks,
             suppressApproachDetection: suppressApproachDetection,
             phantomGuardFraction:      phantomGuardFraction,
-            exitConfirmFrames:         exitConfirmFrames
+            exitConfirmFrames:         exitConfirmFrames,
+            missingPersonGraceFrames:  missingPersonGraceFrames
         )
 
         let metricType = repMetricDict["type"] as? String ?? "?"

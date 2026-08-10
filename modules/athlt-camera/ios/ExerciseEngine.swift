@@ -226,7 +226,7 @@ final class ExerciseEngine {
     // and it happens on every rep at the exact moment repPhase == .inRep,
     // so every single rep got killed before it could ever complete.
     // Genuinely walking away is NOT one frame — it's sustained. Require
-    // MISSING_PERSON_GRACE_FRAMES consecutive missing-person frames before
+    // def.missingPersonGraceFrames consecutive missing-person frames before
     // abandoning, same order of magnitude as exitConfirmFrames. This does not
     // reopen the ORIGINAL bug this logic was written to fix (a stale
     // repMinAngle silently producing a bogus completion after a step-out) —
@@ -234,8 +234,18 @@ final class ExerciseEngine {
     // separately protected by framesSincePoseGap (reset to 0 on ANY missing
     // frame, requiring MIN_FRAMES_AFTER_POSE_GAP clean frames before a rep
     // can complete) — abandonment and completion are independent gates here.
+    //
+    // REGRESSION FOLLOW-UP: the flat 3-frame default (~0.3s) was STILL not
+    // enough for tricep specifically — a log showed Vision losing the whole
+    // person for MORE than 3 consecutive frames from the forearm-crossing-
+    // torso self-occlusion alone. Made this a per-exercise override
+    // (def.missingPersonGraceFrames, see ExerciseDefinition.swift) rather
+    // than raising the global default again — same lesson as
+    // exitConfirmFrames: a single flat constant kept needing conflicting
+    // values for different exercises, so it's per-exercise now. Default
+    // stays 3 for exercises tracked at normal distance; tricepVariant()
+    // overrides it up (see exerciseDefinitions.ts).
     private var consecutiveMissingFrames: Int = 0
-    private static let MISSING_PERSON_GRACE_FRAMES: Int = 3
 
     // ── Walk-away / inactivity suppression ───────────────────────────────────
     // Suppresses rep counting and cues when the user walks toward the camera
@@ -358,6 +368,23 @@ final class ExerciseEngine {
     private var recedeConsecFrames: Int = 0
     private static let RECEDE_SCALE_FACTOR: Double = 0.5
 
+    // FOLLOW-UP (shoulder press: walking away still counted 2 phantom reps
+    // before suppression caught up): recede was sharing APPROACH_ENTER_FRAMES
+    // (8 frames, ~0.8s) with the approach check. During that ~0.8s BEFORE
+    // recede confirms, a real arm swing from walking can complete 1-2 phantom
+    // reps if it happens to cross the exercise's own enter/exit thresholds —
+    // plausible within well under a second. Approach needs a longer
+    // confirmation window because it has to distinguish "slightly closer,
+    // still exercising" from "genuinely walked closer," a subtle difference.
+    // Recede doesn't have that problem: by the time torsoRef has ALREADY
+    // collapsed past RECEDE_SCALE_FACTOR (50% — a large, conservative
+    // amplitude chosen specifically to stay clear of normal exercise
+    // variance), the change itself is already unambiguous, so it can afford
+    // to confirm faster without materially raising false-positive risk.
+    // Halving the window is a reasoned, not device-verified, tradeoff — send
+    // a log if 2 fewer phantom reps still slip through before this catches up.
+    private static let RECEDE_ENTER_FRAMES: Int = 4
+
     // ── Per-frame log throttle ────────────────────────────────────────────────
     private var lastFrameLogTime:    Double = 0
     private var lastActivityLogTime: Double = 0
@@ -421,7 +448,7 @@ final class ExerciseEngine {
         if enginePhase == .active { setupLossStart = nil }
         // Vision found a person this frame (ingest is only called when it did —
         // see ATHLTCameraModule's results.isEmpty guard) — clear the missing-
-        // person grace counter. See MISSING_PERSON_GRACE_FRAMES's doc comment.
+        // person grace counter. See consecutiveMissingFrames's doc comment.
         consecutiveMissingFrames = 0
 
         guard let angle = def.repMetric.measure(pose: pose) else {
@@ -513,13 +540,13 @@ final class ExerciseEngine {
     func notePersonMissing(timestamp: Date) {
         if enginePhase == .active {
             // Abandon any in-progress rep once Vision has found no person at all
-            // for MISSING_PERSON_GRACE_FRAMES consecutive frames — see that
-            // constant's doc comment for the root cause this replaced (a
-            // single-frame, zero-debounce abandon that was killing every
-            // tricep rep). A sustained gap is still treated as unambiguous;
-            // this only filters a single-frame miss.
-            consecutiveMissingFrames = min(consecutiveMissingFrames + 1, Self.MISSING_PERSON_GRACE_FRAMES + 5)
-            if repPhase == .inRep, consecutiveMissingFrames >= Self.MISSING_PERSON_GRACE_FRAMES {
+            // for def.missingPersonGraceFrames consecutive frames — see that
+            // field's doc comment (ExerciseDefinition.swift) for the root
+            // cause this replaced (a single-frame, zero-debounce abandon that
+            // was killing every tricep rep). A sustained gap is still treated
+            // as unambiguous; this only filters a brief, exercise-normal miss.
+            consecutiveMissingFrames = min(consecutiveMissingFrames + 1, def.missingPersonGraceFrames + 5)
+            if repPhase == .inRep, consecutiveMissingFrames >= def.missingPersonGraceFrames {
                 repPhase = .atTop
                 resetRepState()
                 let msg = "[ACTIVITY] rep abandoned — person left frame (\(consecutiveMissingFrames) consecutive missing frames)"
@@ -1415,8 +1442,8 @@ final class ExerciseEngine {
                let baseline = torsoRefBaseline,
                torsoRefBaselineFrames >= Self.TORSO_BASELINE_FRAMES,
                torsoRefCurrent < baseline * Self.RECEDE_SCALE_FACTOR {
-                recedeConsecFrames = min(recedeConsecFrames + 1, Self.APPROACH_ENTER_FRAMES + 5)
-                if recedeConsecFrames >= Self.APPROACH_ENTER_FRAMES {
+                recedeConsecFrames = min(recedeConsecFrames + 1, Self.RECEDE_ENTER_FRAMES + 5)
+                if recedeConsecFrames >= Self.RECEDE_ENTER_FRAMES {
                     suppressAndLog(reason: "receding " +
                                    "torsoRef=\(String(format: "%.3f", torsoRefCurrent)) " +
                                    "baseline=\(String(format: "%.3f", baseline))")
