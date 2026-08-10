@@ -26,43 +26,109 @@
  *
  *   Both paths are the standard, Apple-documented way to achieve
  *   duck-over-music behavior. NOT independently confirmed on a physical
- *   device with music actually playing in this session — do that test
- *   before shipping (play Spotify, start a FormPal session, trigger a good
- *   rep and a bad rep, confirm Spotify ducks and resumes rather than
- *   pausing).
+ *   device with music actually playing — do that test once a dev-client
+ *   build with both native modules linked exists (play Spotify, start a
+ *   FormPal session, trigger a good rep and a bad rep, confirm Spotify ducks
+ *   and resumes rather than pausing).
+ *
+ * NATIVE MODULE REQUIREMENT — READ BEFORE DEBUGGING "not working":
+ *
+ *   Both expo-speech (native id 'ExpoSpeech') and expo-audio (native id
+ *   'ExpoAudio') ship real Swift/Kotlin code, not pure JS. Their JS entry
+ *   points call requireNativeModule(id) at MODULE-EVALUATION time (i.e. the
+ *   instant the package is imported, before any function is called) — see
+ *   node_modules/expo-speech/build/ExponentSpeech.js and
+ *   node_modules/expo-audio/build/AudioModule.js. If that native module
+ *   isn't compiled into the current dev-client binary, requireNativeModule
+ *   throws immediately and unconditionally on import.
+ *
+ *   A dev-client built before these packages were added to package.json
+ *   will NOT have them — that's not a bug, it's exactly what "native module"
+ *   means. A fresh EAS dev-client build (or local prebuild) that includes
+ *   expo-speech and expo-audio in the dependency tree is required once.
+ *   After that, no further rebuild is needed for JS-only changes to this
+ *   file — same as every other native module in this app
+ *   (modules/athlt-camera works the same way).
+ *
+ *   Both are therefore required with `require()` inside try/catch below —
+ *   exactly the pattern modules/athlt-camera/src/index.ts already uses for
+ *   ATHLTCameraNative — instead of a static top-level `import`, because a
+ *   static import's underlying require() call happens outside any try/catch
+ *   Babel/Metro would otherwise wrap it in, which is what crashed the whole
+ *   app on launch before this fix (the exception fired while evaluating
+ *   app/_layout.tsx's import chain, before RootLayout ever rendered).
+ *   Every exported function below checks isVoiceAvailable()/isChimeAvailable()
+ *   (or the module reference directly) before touching the native API, so a
+ *   missing native module degrades to "audio feature silently does nothing"
+ *   rather than crashing the app.
  */
 
-import * as Speech from 'expo-speech';
-import { setAudioModeAsync, createAudioPlayer, type AudioPlayer } from 'expo-audio';
+import type * as SpeechNS from 'expo-speech';
+import type * as AudioNS from 'expo-audio';
 import { useAudioSettingsStore } from '../store/audioSettingsStore';
+
+// Derived from the type-only SpeechNS import above rather than a separate
+// `export type { Voice } from 'expo-speech'` re-export statement — that form
+// is supposed to be elided by the TS/Babel transform, but this file exists
+// specifically because a supposedly-safe expo-speech reference turned out
+// not to be, so it isn't worth the risk of a transpiler edge case reviving
+// the same crash for one type alias.
+export type Voice = SpeechNS.Voice;
+
+let SpeechModule: typeof SpeechNS | null = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  SpeechModule = require('expo-speech');
+} catch (e) {
+  console.warn('[audioFeedback] expo-speech native module not linked — voice cues disabled until the next dev-client build.', e);
+}
+
+let AudioModule: typeof AudioNS | null = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  AudioModule = require('expo-audio');
+} catch (e) {
+  console.warn('[audioFeedback] expo-audio native module not linked — good-rep chime disabled until the next dev-client build.', e);
+}
+
+export function isVoiceAvailable(): boolean { return SpeechModule !== null; }
+export function isChimeAvailable(): boolean { return AudioModule !== null; }
+
+// ─── Audio session (ducking) ────────────────────────────────────────────────
 
 let sessionConfigured = false;
 
 export async function configureAudioSession(): Promise<void> {
-  if (sessionConfigured) return;
+  if (sessionConfigured || !AudioModule) return;
   sessionConfigured = true;
   try {
-    await setAudioModeAsync({
+    await AudioModule.setAudioModeAsync({
       playsInSilentMode:      true,
       interruptionMode:       'duckOthers',
       shouldPlayInBackground: false,
       allowsRecording:        false,
     });
   } catch (e) {
-    // Non-fatal: chime still plays, just possibly without ducking (e.g. a
-    // simulator quirk) — voice ducking is unaffected since it uses its own
-    // session (see file header).
+    // Non-fatal: chime still attempts to play, just possibly without
+    // ducking (e.g. a simulator quirk) — voice ducking is unaffected since
+    // it uses its own session (see file header).
     console.warn('[audioFeedback] setAudioModeAsync failed', e);
   }
 }
 
 // ─── Good-rep chime ─────────────────────────────────────────────────────────
 
-let chimePlayer: AudioPlayer | null = null;
+let chimePlayer: AudioNS.AudioPlayer | null = null;
 
-function getChimePlayer(): AudioPlayer {
+function getChimePlayer(): AudioNS.AudioPlayer | null {
+  if (!AudioModule) return null;
   if (!chimePlayer) {
-    chimePlayer = createAudioPlayer(require('../assets/sounds/good-rep-chime.wav'));
+    try {
+      chimePlayer = AudioModule.createAudioPlayer(require('../assets/sounds/good-rep-chime.wav'));
+    } catch (e) {
+      console.warn('[audioFeedback] failed to create chime player', e);
+      return null;
+    }
   }
   return chimePlayer;
 }
@@ -70,8 +136,9 @@ function getChimePlayer(): AudioPlayer {
 export function playGoodRepChime(): void {
   const { audioEnabled, soundEffectEnabled } = useAudioSettingsStore.getState();
   if (!audioEnabled || !soundEffectEnabled) return;
+  const player = getChimePlayer();
+  if (!player) return;
   try {
-    const player = getChimePlayer();
     player.seekTo(0).catch(() => {}).finally(() => {
       try { player.play(); } catch { /* ignore */ }
     });
@@ -83,14 +150,19 @@ export function playGoodRepChime(): void {
 // ─── Spoken corrections ─────────────────────────────────────────────────────
 
 function speak(text: string): void {
+  if (!SpeechModule) return;
   const { voiceIdentifier } = useAudioSettingsStore.getState();
-  Speech.stop();
-  Speech.speak(text, {
-    voice:                      voiceIdentifier ?? undefined,
-    rate:                       1.0,
-    pitch:                      1.0,
-    useApplicationAudioSession: false,
-  });
+  try {
+    SpeechModule.stop();
+    SpeechModule.speak(text, {
+      voice:                      voiceIdentifier ?? undefined,
+      rate:                       1.0,
+      pitch:                      1.0,
+      useApplicationAudioSession: false,
+    });
+  } catch (e) {
+    console.warn('[audioFeedback] speech playback failed', e);
+  }
 }
 
 export function speakCorrection(text: string): void {
@@ -112,13 +184,28 @@ function speakRepCount(count: number): void {
 }
 
 export function previewVoice(identifier: string | null): void {
-  Speech.stop();
-  Speech.speak('This is how I sound.', {
-    voice:                      identifier ?? undefined,
-    rate:                       1.0,
-    pitch:                      1.0,
-    useApplicationAudioSession: false,
-  });
+  if (!SpeechModule) return;
+  try {
+    SpeechModule.stop();
+    SpeechModule.speak('This is how I sound.', {
+      voice:                      identifier ?? undefined,
+      rate:                       1.0,
+      pitch:                      1.0,
+      useApplicationAudioSession: false,
+    });
+  } catch (e) {
+    console.warn('[audioFeedback] voice preview failed', e);
+  }
+}
+
+export async function listAvailableVoices(): Promise<SpeechNS.Voice[]> {
+  if (!SpeechModule) return [];
+  try {
+    return await SpeechModule.getAvailableVoicesAsync();
+  } catch (e) {
+    console.warn('[audioFeedback] getAvailableVoicesAsync failed', e);
+    return [];
+  }
 }
 
 // ─── Rep event entry point ──────────────────────────────────────────────────

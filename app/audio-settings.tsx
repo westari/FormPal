@@ -16,12 +16,14 @@ import { View, Text, StyleSheet, ScrollView, Pressable, Switch, Platform } from 
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
-import * as Speech from 'expo-speech';
 
 import { Col, Sp, Sz, W, R, Elev, FONT } from '../constants/theme';
 import ScreenBackground from '../components/ScreenBackground';
 import { useAudioSettingsStore, type VoiceFrequency } from '../store/audioSettingsStore';
-import { previewVoice, playGoodRepChime } from '../lib/audioFeedback';
+import {
+  previewVoice, playGoodRepChime, listAvailableVoices,
+  isVoiceAvailable, isChimeAvailable, type Voice,
+} from '../lib/audioFeedback';
 
 const SHADOW_MED = Platform.OS === 'ios' ? { boxShadow: Elev.medium.shadow } as any : { elevation: Elev.medium.android };
 
@@ -44,22 +46,23 @@ export default function AudioSettingsScreen() {
   const setVoiceFrequency     = useAudioSettingsStore(s => s.setVoiceFrequency);
   const setVoiceIdentifier    = useAudioSettingsStore(s => s.setVoiceIdentifier);
 
-  const [voices, setVoices] = useState<Speech.Voice[] | null>(null);
+  const [voices, setVoices] = useState<Voice[] | null>(null);
+  const voiceAvailable = isVoiceAvailable();
+  const chimeAvailable = isChimeAvailable();
 
   useEffect(() => {
+    if (!voiceAvailable) { setVoices([]); return; }
     let cancelled = false;
-    Speech.getAvailableVoicesAsync()
-      .then(list => {
-        if (cancelled) return;
-        // English voices only — a device can ship 100+ voices across every
-        // supported language, and only the ones that can read English cues
-        // are useful here.
-        const english = list.filter(v => v.language?.toLowerCase().startsWith('en'));
-        setVoices(english.length > 0 ? english : list);
-      })
-      .catch(() => setVoices([]));
+    listAvailableVoices().then(list => {
+      if (cancelled) return;
+      // English voices only — a device can ship 100+ voices across every
+      // supported language, and only the ones that can read English cues
+      // are useful here.
+      const english = list.filter(v => v.language?.toLowerCase().startsWith('en'));
+      setVoices(english.length > 0 ? english : list);
+    });
     return () => { cancelled = true; };
-  }, []);
+  }, [voiceAvailable]);
 
   return (
     <ScreenBackground>
@@ -77,6 +80,18 @@ export default function AudioSettingsScreen() {
             <Text style={s.sub}>MyPal speaks over your music, never stops it.</Text>
           </View>
         </View>
+
+        {(!voiceAvailable || !chimeAvailable) && (
+          <View style={s.notice}>
+            <Text style={s.noticeText}>
+              {!voiceAvailable && !chimeAvailable
+                ? 'Voice and chime need a fresh app build to turn on — this device build predates the audio feature.'
+                : !voiceAvailable
+                  ? 'Voice needs a fresh app build to turn on — the chime works now.'
+                  : 'The chime needs a fresh app build to turn on — voice works now.'}
+            </Text>
+          </View>
+        )}
 
         {/* ── General ─────────────────────────────────────────────────── */}
         <Text style={s.sectionTitle}>General</Text>
@@ -100,7 +115,7 @@ export default function AudioSettingsScreen() {
             <Switch
               value={soundEffectEnabled}
               onValueChange={(v) => { setSoundEffectEnabled(v); if (v) playGoodRepChime(); }}
-              disabled={!audioEnabled}
+              disabled={!audioEnabled || !chimeAvailable}
               trackColor={{ false: Col.textDim, true: Col.good }}
             />
           </View>
@@ -113,7 +128,7 @@ export default function AudioSettingsScreen() {
             <Pressable
               key={opt.value}
               onPress={() => setVoiceFrequency(opt.value)}
-              disabled={!audioEnabled}
+              disabled={!audioEnabled || !voiceAvailable}
               style={({ pressed }) => [
                 s.row,
                 i < FREQUENCY_OPTIONS.length - 1 && s.rowBorder,
@@ -136,10 +151,10 @@ export default function AudioSettingsScreen() {
         <View style={[s.card, SHADOW_MED]}>
           <Pressable
             onPress={() => { setVoiceIdentifier(null); previewVoice(null); }}
-            disabled={!audioEnabled}
+            disabled={!audioEnabled || !voiceAvailable}
             style={({ pressed }) => [s.row, s.rowBorder, pressed && { opacity: 0.7 }]}
           >
-            <Text style={[s.rowLabel, { flex: 1 }, !audioEnabled && s.dimmed]}>System default</Text>
+            <Text style={[s.rowLabel, { flex: 1 }, (!audioEnabled || !voiceAvailable) && s.dimmed]}>System default</Text>
             {voiceIdentifier === null && (
               <SymbolView name="checkmark" size={16} tintColor={Col.good} type="monochrome" style={{ width: 16, height: 16 }} />
             )}
@@ -155,7 +170,7 @@ export default function AudioSettingsScreen() {
             <Pressable
               key={v.identifier}
               onPress={() => { setVoiceIdentifier(v.identifier); previewVoice(v.identifier); }}
-              disabled={!audioEnabled}
+              disabled={!audioEnabled || !voiceAvailable}
               style={({ pressed }) => [
                 s.row,
                 i < voices.length - 1 && s.rowBorder,
@@ -191,6 +206,12 @@ const s = StyleSheet.create({
   },
   title: { fontSize: Sz.h2, fontWeight: W.bold, color: Col.text, letterSpacing: -0.3 },
   sub:   { fontSize: Sz.small, color: Col.textSub, maxWidth: 260 },
+
+  notice: {
+    backgroundColor: Col.midSoft, borderRadius: R.inner,
+    padding: Sp.md, marginBottom: Sp.md,
+  },
+  noticeText: { fontSize: Sz.small, color: Col.text, lineHeight: 19 },
 
   sectionTitle: {
     fontSize: Sz.small, fontWeight: W.semi, color: Col.textSub,
