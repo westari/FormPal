@@ -212,6 +212,31 @@ final class ExerciseEngine {
     private var framesSincePoseGap: Int = 0
     private static let MIN_FRAMES_AFTER_POSE_GAP: Int = 5  // ~0.5s at ~10fps effective rate
 
+    // ── Missing-person grace period (Issue 2 core fix) ────────────────────────
+    // ROOT CAUSE (tricep zero reps, log-confirmed: settle succeeds, then every
+    // single rep hits "[ACTIVITY] rep abandoned — person left frame" with the
+    // user never actually leaving): notePersonMissing's in-progress-rep
+    // abandonment fired on the FIRST single frame Vision's whole-body
+    // detector returned zero observations — no debounce at all, the only
+    // transition in this file with that property (see EXIT_CONFIRM_FRAMES'
+    // doc comment for the identical class of bug already fixed on the
+    // completion side). A single missed Vision frame is not rare during any
+    // fast or self-occluding movement — tricep pushdown's forearm crossing
+    // down in front of the torso at the bottom of the rep is exactly that,
+    // and it happens on every rep at the exact moment repPhase == .inRep,
+    // so every single rep got killed before it could ever complete.
+    // Genuinely walking away is NOT one frame — it's sustained. Require
+    // MISSING_PERSON_GRACE_FRAMES consecutive missing-person frames before
+    // abandoning, same order of magnitude as exitConfirmFrames. This does not
+    // reopen the ORIGINAL bug this logic was written to fix (a stale
+    // repMinAngle silently producing a bogus completion after a step-out) —
+    // that bug was about completing with corrupted data, and completion is
+    // separately protected by framesSincePoseGap (reset to 0 on ANY missing
+    // frame, requiring MIN_FRAMES_AFTER_POSE_GAP clean frames before a rep
+    // can complete) — abandonment and completion are independent gates here.
+    private var consecutiveMissingFrames: Int = 0
+    private static let MISSING_PERSON_GRACE_FRAMES: Int = 3
+
     // ── Walk-away / inactivity suppression ───────────────────────────────────
     // Suppresses rep counting and cues when the user walks toward the camera
     // (approach) or has been idle after finishing a set (inactivity).
@@ -394,6 +419,10 @@ final class ExerciseEngine {
 
     func ingest(pose: Pose, timestamp: Date) {
         if enginePhase == .active { setupLossStart = nil }
+        // Vision found a person this frame (ingest is only called when it did —
+        // see ATHLTCameraModule's results.isEmpty guard) — clear the missing-
+        // person grace counter. See MISSING_PERSON_GRACE_FRAMES's doc comment.
+        consecutiveMissingFrames = 0
 
         guard let angle = def.repMetric.measure(pose: pose) else {
             handleNoPose(timestamp: timestamp)
@@ -483,19 +512,17 @@ final class ExerciseEngine {
 
     func notePersonMissing(timestamp: Date) {
         if enginePhase == .active {
-            // Abandon any in-progress rep IMMEDIATELY — Vision found no person at
-            // all this frame, an unambiguous signal (stronger than a single
-            // low-confidence joint) that whatever was being tracked is now stale.
-            // Previously this only happened after LEAVE_TIMEOUT (3s) here, or
-            // inactivityTimeout (2.5s) via handleNoPose — a quick step-out-and-
-            // back could stay under both, leaving a corrupted repMinAngle (from a
-            // garbled frame right before vanishing) to silently "complete" a bogus
-            // rep once the person returned. Same pattern as suppressAndLog's
-            // existing in-progress-rep cleanup.
-            if repPhase == .inRep {
+            // Abandon any in-progress rep once Vision has found no person at all
+            // for MISSING_PERSON_GRACE_FRAMES consecutive frames — see that
+            // constant's doc comment for the root cause this replaced (a
+            // single-frame, zero-debounce abandon that was killing every
+            // tricep rep). A sustained gap is still treated as unambiguous;
+            // this only filters a single-frame miss.
+            consecutiveMissingFrames = min(consecutiveMissingFrames + 1, Self.MISSING_PERSON_GRACE_FRAMES + 5)
+            if repPhase == .inRep, consecutiveMissingFrames >= Self.MISSING_PERSON_GRACE_FRAMES {
                 repPhase = .atTop
                 resetRepState()
-                let msg = "[ACTIVITY] rep abandoned — person left frame"
+                let msg = "[ACTIVITY] rep abandoned — person left frame (\(consecutiveMissingFrames) consecutive missing frames)"
                 NSLog("[Engine] [%@] %@", def.id, msg)
                 onDebugLog?(msg)
             }
@@ -605,6 +632,21 @@ final class ExerciseEngine {
     // Resetting here guarantees every entry into ACTIVE starts from a clean baseline.
     private func transitionFromSetup() {
         resetActivityState()
+        // DEFENSIVE FIX (investigating Issue 1 — "stop mid-session and
+        // restart" double-counting): this already resets activityState for
+        // exactly this reason ("Resetting here guarantees every entry into
+        // ACTIVE starts from a clean baseline" — see the comment above this
+        // function), but settle/rep state was NOT included. A stop that's
+        // long enough to trip notePersonMissing's LEAVE_TIMEOUT (3s) returns
+        // enginePhase to .setup WITHOUT clearing hasSettled/settleCandidateTop
+        // or repMinAngle/repTopValue/exitConfirmCount — a real gap, though not
+        // yet confirmed as THE mechanism behind the reported double-count
+        // (no on-device log of this exact sequence yet — see the report).
+        // Closing it regardless since stale settle/rep state surviving a
+        // SETUP round-trip is clearly not intended, matching how
+        // resetActivityState() is already handled here.
+        resetSettleState()
+        resetRepState()
         if let config = def.calibration {
             calibRepCount   = 0
             calibRestBuf    = []
@@ -968,7 +1010,9 @@ final class ExerciseEngine {
             // Already bad — nothing to override — but still feed the quality
             // engine so its frame buffer/baseline bookkeeping stays in sync
             // with every completeRep() call, same as before this hook existed.
-            _ = checkSwingOverride?(peakAngle, totalReps, timestamp)
+            // Date() not `timestamp` — see the ROOT CAUSE note on the main
+            // checkSwingOverride call below for why.
+            _ = checkSwingOverride?(peakAngle, totalReps, Date())
             onRepDetected?(RepResult(good: false, cue: "ADJUST POSITION",
                                      primaryAngle: peakAngle, totalReps: totalReps,
                                      goodReps: goodReps, formValues: [:],
@@ -1022,7 +1066,8 @@ final class ExerciseEngine {
             NSLog("[Engine] [%@] Rep #%d PLANARITY FAIL — cue=%@ %@",
                   def.id, totalReps, planCue, planDetail)
             // Already bad — nothing to override — see the dataIsValid guard above.
-            _ = checkSwingOverride?(peakAngle, totalReps, timestamp)
+            // Date() not `timestamp` — see the ROOT CAUSE note below.
+            _ = checkSwingOverride?(peakAngle, totalReps, Date())
             onRepDetected?(RepResult(
                 good: false, cue: planCue, primaryAngle: peakAngle,
                 totalReps: totalReps, goodReps: goodReps,
@@ -1080,7 +1125,29 @@ final class ExerciseEngine {
         // an already-bad rep has nothing to override. Checked BEFORE
         // goodReps increments below so the counter and the sent verdict are
         // always consistent (no separate reconciliation needed downstream).
-        if isGood, let swingCue = checkSwingOverride?(peakAngle, totalReps, timestamp) {
+        //
+        // ROOT CAUSE FOUND, Issue 7 ("0 frames in window — skipped" on every
+        // single rep, log-confirmed): `timestamp` here is ExerciseEngine's own
+        // internal clock, which comes from ingest()'s caller
+        // (ATHLTCameraModule.runPoseDetection) passing the CAMERA/CMSampleBuffer
+        // timebase — Date(timeIntervalSince1970: cameraUptimeSeconds), i.e. an
+        // epoch a few hours after Jan 1 1970 (matches the log's
+        // windowStart_epoch/repEnd_epoch ≈ 69840-69848). That's fine for
+        // EVERYTHING ExerciseEngine itself does with it (minRepInterval
+        // debounce, inactivity timeouts, settle timing) since those are all
+        // DURATIONS between two of its own consistently-camera-timebased
+        // Dates — self-consistent, so never visibly broken. But
+        // UniversalQualityEngine.ingestFrame is called separately, correctly,
+        // with real Date() (wall clock, ~2026, matches the log's
+        // ts_epoch≈1786377696) — and onRepCompleted's repEndTime was the ONE
+        // place `timestamp` (camera timebase) crossed into that wall-clock
+        // world, comparing an 1970-ish Date against a frameBuffer full of
+        // 2026 Dates. The filter can never match anything → window is always
+        // 0 frames → the swing-override hook has been silently unable to
+        // fire since it was introduced. Fixed at all three call sites in this
+        // function: pass Date() (real wall clock, matching ingestFrame) here
+        // instead of `timestamp`.
+        if isGood, let swingCue = checkSwingOverride?(peakAngle, totalReps, Date()) {
             isGood = false
             cue    = swingCue
             NSLog("[Engine] [%@] Rep #%d verdict overridden by swing detection: %@", def.id, totalReps, swingCue)
@@ -1199,9 +1266,47 @@ final class ExerciseEngine {
     // repMetric/dataIsValid gate (kMinConf), specifically for values trusted
     // into a rep-long accumMax/accumMin/atBottomVal, where one bad frame can't
     // be corrected by a later good one.
+    // ROOT CAUSE FOUND (Issue 7 — hip_drift=nil on every single rep, log-confirmed):
+    // this used to flatten check.metric.referencedJoints() and require ALL of
+    // them to individually clear FORM_CHECK_MIN_CONF. For a combinator metric
+    // like HINGE_HIP_DRIFT_CHECK's average(left, right) — average of
+    // normalizedHorizontalGap(leftHip,leftAnkle) and the right-side
+    // equivalent — referencedJoints() returns ALL FOUR joints (both hips,
+    // both ankles), so the flattened check demanded every one of them
+    // simultaneously clear 0.6 confidence. But Metric.measure()'s own
+    // combine() is explicitly designed to gracefully fall back to whichever
+    // SINGLE side is available (see Metric.swift) — for any side-on exercise
+    // (which is EXACTLY what average/bestSide combinators over left+right
+    // joints exist for), the far side is routinely lower-confidence by
+    // design. The old isReliable() defeated that fallback entirely, requiring
+    // both sides at once — which for a genuinely side-on hinge/tricep camera
+    // angle is close to impossible, hence nil on literally every rep.
+    // FIX: mirror Metric.measure()'s own combinator structure instead of
+    // flattening. average/minimum/maximum are reliable if EITHER branch is
+    // (same OR-fallback combine() already implements); bestSide is reliable
+    // if EITHER named side's own joint list clears the floor (mirroring how
+    // bestSide.measure() itself picks a side). Only a true leaf primitive
+    // requires ALL of its own directly-referenced joints — that part of the
+    // original logic was correct, it just needs to apply per-branch, not
+    // flattened across the whole tree.
     private func isReliable(check: FormCheck, pose: Pose) -> Bool {
-        check.metric.referencedJoints().allSatisfy {
-            (pose[$0]?.confidence ?? 0) >= Self.FORM_CHECK_MIN_CONF
+        isMetricReliable(check.metric, pose: pose)
+    }
+
+    private func isMetricReliable(_ metric: Metric, pose: Pose) -> Bool {
+        switch metric {
+        case let .average(l, r),
+             let .minimum(l, r),
+             let .maximum(l, r):
+            return isMetricReliable(l, pose: pose) || isMetricReliable(r, pose: pose)
+        case let .bestSide(_, _, leftJoints, rightJoints):
+            let leftOk  = leftJoints.allSatisfy  { (pose[$0]?.confidence ?? 0) >= Self.FORM_CHECK_MIN_CONF }
+            let rightOk = rightJoints.allSatisfy { (pose[$0]?.confidence ?? 0) >= Self.FORM_CHECK_MIN_CONF }
+            return leftOk || rightOk
+        default:
+            return metric.referencedJoints().allSatisfy {
+                (pose[$0]?.confidence ?? 0) >= Self.FORM_CHECK_MIN_CONF
+            }
         }
     }
 

@@ -24,13 +24,9 @@ import { usePlanStore } from '../store/planStore';
 import type { MuscleGroup } from '../constants/exercises';
 
 // ─── Error boundary ───────────────────────────────────────────────────────────
-// Per explicit request: the recap screen must degrade gracefully instead of
-// taking the whole app down. React error boundaries only catch JS-render-phase
-// exceptions (not a genuine native-layer crash), but the heatmap render was
-// the strongest suspect for exactly that kind of JS exception (a malformed
-// path string, unexpected null data) — this guarantees that if it (or
-// anything else in the wrapped subtree) throws, this screen shows a plain
-// fallback instead of the whole app crashing.
+// The recap screen must degrade gracefully instead of taking the whole app
+// down — this guarantees that if a wrapped subtree throws, this screen shows
+// a plain fallback instead of the whole app crashing.
 class RecapSectionBoundary extends React.Component<
   { fallback: React.ReactNode; children: React.ReactNode },
   { hasError: boolean }
@@ -68,54 +64,48 @@ interface RecapData {
 }
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
-// Dark liquid-glass field — this is the actual structural change from the
-// previous two passes (which only swapped a light pastel palette in/out on
-// the SAME stacked-card skeleton). Real iOS-26-style glass reads as glass
-// because of CONTRAST — panes floating over a deep, moody background — not
-// because of any particular hue. Composition below is also new: one
-// dominant ring hero (not a boxed rectangle) + a horizontal paging deck of
-// glass cards (Apple Fitness/Activity summary pattern) instead of a single
-// vertical stack of equal-weight boxes, and a floating circular FAB for
-// Share instead of a full-width bottom bar.
+// REDESIGN, take 3 — root cause of "purple failed blur" (confirmed by
+// re-reading the screenshot, not guessed): the background gradient
+// (#0B0F2A→#181638→#241531) was dark navy through dark violet — three colors
+// close in both hue AND value. Blur distorts whatever color/contrast is
+// BEHIND it; a background with barely any internal contrast gives the blur
+// almost nothing to visibly smear, so a glass panel over it just reads as
+// "slightly different flat gray-purple," not "frosted." The glass surfaces
+// were also relying on blur alone to read as glass, with only an 8%-opacity
+// fill and a 16%-opacity border — both too subtle to sell "this is a
+// distinct floating pane" on their own if the blur itself isn't visually
+// obvious.
 //
-// ROOT CAUSE of "purple background, no visible glass" (this exact build,
-// confirmed by re-reading the code, not a rendering failure): two real bugs,
-// not one. (1) Every BlurView here used tint="dark", which on iOS overlays a
-// translucent BLACK tint on top of the blur — stacked on an already dark
-// navy/purple background, that's dark-on-dark with almost no contrast. The
-// blur was genuinely rendering; it just wasn't visible. Switched to
-// tint="light" (a translucent white tint), which is what real iOS glass-
-// over-dark-media looks like (Control Center over a dark wallpaper, Apple
-// Music's Now Playing controls) — light glass floating over a dark scene is
-// the actual visual signature being asked for. (2) glassFill was defined in
-// this palette but never applied as a backgroundColor anywhere — a genuinely
-// dead variable. Now applied to every glass surface (iconChip, pageCard,
-// doneChip) so each has a real translucent-white fill UNDER the blur, not
-// blur alone — matching how iOS's own system materials are built (tint +
-// blur together, not just blur).
-// PREEMPTIVE FIX (found on self-review, before device testing): `card`,
-// `dim`, `goodFill`, `goodEdge`, `shadow` below were all defined but never
-// referenced anywhere in this file — dead variables left over from an
-// earlier palette (a discarded stat-pill design). Concretely, `card` being
-// dead meant heroShareCard (the exact View wrapped by ViewShot for the share
-// image) had NO backgroundColor at all — it would render fine on screen (the
-// gradient behind it shows through), but the CAPTURED PNG would have a
-// transparent background behind the ring/text, which most share targets
-// (Messages, Instagram) render oddly. `card` is now applied there — the rest
-// were genuinely unused and have been removed rather than left as dead code.
+// Fix, three parts:
+//  1. A genuinely high-contrast, saturated background (electric indigo →
+//     violet → hot pink/coral) — real color variation for blur to distort,
+//     so the frosted effect is visually obvious even at moderate intensity.
+//  2. Every glass surface now layers THREE things, not one: BlurView at
+//     near-max intensity, a low-opacity white fill UNDER it (glassFill,
+//     bumped 0.08→0.14), and a soft white-to-transparent highlight gradient
+//     OVER it at the top edge (glassHighlight) — the classic "light catching
+//     the top of a glass/acrylic pane" cue real UI glass always has, which
+//     sells the effect even independent of exactly how strong the live blur
+//     turns out to be on-device.
+//  3. Real drop shadows under the glass panels via a shadow-wrapper pattern
+//     (shadowColor on an outer View, overflow:hidden clipping on an inner
+//     one) — a floating glass pane needs to visibly float; nothing here had
+//     a shadow before.
 const C = {
-  bgTop:      '#0B0F2A',
-  bgMid:      '#181638',
-  bgBottom:   '#241531',
-  glassFill:  'rgba(255,255,255,0.08)',
-  glassEdge:  'rgba(255,255,255,0.16)',
-  card:       '#141233', // opaque dark card — used by heroShareCard so the ViewShot capture isn't transparent
-  text:       '#F4F4FB',
-  muted:      'rgba(244,244,251,0.58)',
-  accent:     '#6E8BFF',
-  accent2:    '#B98CFF',
-  good:       '#3DE08C',
-  ringTrack:  'rgba(255,255,255,0.12)',
+  bgTop:          '#160B3D', // deep indigo
+  bgMid:          '#4A1E6E', // vivid violet
+  bgBottom:       '#D94F7A', // warm coral-pink — real color distance from bgTop
+  glassFill:      'rgba(255,255,255,0.14)',
+  glassHighlight: 'rgba(255,255,255,0.35)',
+  glassEdge:      'rgba(255,255,255,0.30)',
+  card:           '#1C1140', // opaque dark card — used by heroShareCard so the ViewShot capture isn't transparent
+  text:           '#FFFFFF',
+  muted:          'rgba(255,255,255,0.62)',
+  accent:         '#8AA2FF',
+  accent2:        '#E297FF',
+  good:           '#3DE08C',
+  ringTrack:      'rgba(255,255,255,0.16)',
+  shadow:         'rgba(20,6,40,0.55)',
 };
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -146,6 +136,47 @@ function generateSummary(reps: number, goodReps: number): string {
   if (pct >= 50)   return `You hit good form on ${goodReps} of ${reps} reps (${pct}%). Slow down the rep and focus on full range of motion.`;
   return `${reps} reps completed with ${goodReps} in good form (${pct}%). Focus on control over speed next session.`;
 }
+
+// ─── Glass surface — the one place blur/fill/highlight/border/shadow compose ──
+// Every "glass" element in this screen (icon chip, page cards, done chip)
+// renders through this so the treatment can never drift out of sync between
+// them again. Shadow lives on the OUTER (unclipped) wrapper — shadow +
+// overflow:hidden on the SAME view silently clips the shadow away on iOS,
+// so the rounded-corner clip has to happen on an inner view instead.
+function GlassSurface({
+  style, radius, children, shadow = true,
+}: {
+  style?:  any;
+  radius: number;
+  children: React.ReactNode;
+  shadow?: boolean;
+}) {
+  return (
+    <View style={shadow ? [gs.shadowWrap, { borderRadius: radius, shadowColor: C.shadow }] : undefined}>
+      <View style={[{ borderRadius: radius, overflow: 'hidden' }, style]}>
+        <BlurView intensity={95} tint="light" style={StyleSheet.absoluteFill} />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: C.glassFill }]} pointerEvents="none" />
+        <LinearGradient
+          colors={[C.glassHighlight, 'rgba(255,255,255,0)']}
+          start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 0.6 }}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+        <View
+          style={[StyleSheet.absoluteFill, { borderRadius: radius, borderWidth: 1, borderColor: C.glassEdge }]}
+          pointerEvents="none"
+        />
+        {children}
+      </View>
+    </View>
+  );
+}
+
+const gs = StyleSheet.create({
+  shadowWrap: {
+    shadowOffset: { width: 0, height: 10 }, shadowOpacity: 1, shadowRadius: 22, elevation: 8,
+  },
+});
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function RecapScreen() {
@@ -334,10 +365,11 @@ export default function RecapScreen() {
         <BgGradient />
         <View style={[s.centerFill, { paddingTop: insets.top }]}>
           <Text style={s.failedTxt}>No recap data found.</Text>
-          <Pressable style={[s.doneChip, { marginTop: 20 }]} onPress={() => router.back()}>
-            <BlurView intensity={65} tint="light" style={StyleSheet.absoluteFill} />
-            <Text style={s.doneChipTxt}>Back</Text>
-          </Pressable>
+          <GlassSurface radius={22} style={[s.doneChip, { marginTop: 20 }]}>
+            <Pressable onPress={() => router.back()} style={s.doneChipInner}>
+              <Text style={s.doneChipTxt}>Back</Text>
+            </Pressable>
+          </GlassSurface>
         </View>
       </View>
     );
@@ -449,13 +481,14 @@ export default function RecapScreen() {
       {/* Floating top bar — a small glass pill, not a full header block.
           Close/back sits where a modal dismiss control naturally lives. */}
       <View style={[s.topBar, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
-        <Pressable onPress={handleDone} style={({ pressed }) => [s.iconChip, pressed && { opacity: 0.7 }]}>
-          <BlurView intensity={65} tint="light" style={StyleSheet.absoluteFill} />
-          <SymbolView
-            name={data.isHistory ? 'chevron.left' : 'xmark'}
-            size={14} tintColor={C.text} type="monochrome" style={{ width: 14, height: 14 }}
-          />
-        </Pressable>
+        <GlassSurface radius={17} style={s.iconChip}>
+          <Pressable onPress={handleDone} style={({ pressed }) => [s.iconChipInner, pressed && { opacity: 0.7 }]}>
+            <SymbolView
+              name={data.isHistory ? 'chevron.left' : 'xmark'}
+              size={14} tintColor={C.text} type="monochrome" style={{ width: 14, height: 14 }}
+            />
+          </Pressable>
+        </GlassSurface>
         <View style={s.topBarTitleWrap}>
           <Text style={s.topBarTitle} numberOfLines={1}>{headingTitle}</Text>
           <Text style={s.topBarSub}>{formatFullDate(data.ts)}</Text>
@@ -471,7 +504,10 @@ export default function RecapScreen() {
         {/* HERO — a dominant ring, not a boxed rectangle. This is what gets
             captured for the share image: ring + headline numbers + a
             watermark, deliberately separate from the swipeable deck below
-            so the shared image stays clean and self-explanatory. */}
+            so the shared image stays clean and self-explanatory. Deliberately
+            opaque (not glass) — a controlled, predictable background matters
+            more than glass consistency for the one element that leaves the
+            app as a shared image. */}
         <Animated.View style={{ opacity: heroOpac, transform: [{ scale: heroScale }], alignItems: 'center' }}>
         <RecapSectionBoundary
           fallback={
@@ -527,9 +563,9 @@ export default function RecapScreen() {
         </Animated.View>
 
         {/* Swipeable glass deck — Apple Fitness/Activity summary pattern:
-            each page is its own floating pane, paged horizontally, with a
-            dot indicator, instead of every section being stacked as an
-            equal-weight vertical box. */}
+            each page is its own floating glass pane, paged horizontally,
+            with a dot indicator, instead of every section being stacked as
+            an equal-weight vertical box. */}
         <View style={s.deckWrap}>
           <ScrollView
             horizontal
@@ -541,12 +577,14 @@ export default function RecapScreen() {
             contentContainerStyle={{ paddingRight: PAGE_GAP }}
           >
             {pages.map(p => (
-              <View key={p.key} style={[s.pageCard, { width: PAGE_W, marginRight: PAGE_GAP }]}>
-                <BlurView intensity={55} tint="light" style={StyleSheet.absoluteFill} />
-                <View style={s.glassEdgeOverlay} pointerEvents="none" />
+              <GlassSurface
+                key={p.key}
+                radius={26}
+                style={[s.pageCard, { width: PAGE_W, marginRight: PAGE_GAP }]}
+              >
                 <Text style={s.pageLabel}>{p.label.toUpperCase()}</Text>
                 <View style={{ flex: 1 }}>{p.render()}</View>
-              </View>
+              </GlassSurface>
             ))}
           </ScrollView>
           {pages.length > 1 && (
@@ -560,14 +598,15 @@ export default function RecapScreen() {
       </ScrollView>
 
       {/* Floating actions — a circular gradient FAB for Share (the one
-          prominent action), a quiet text link for Done/Back beside it.
-          Both float over the content on a soft blur shelf instead of a
-          full-width bar pinned across the whole screen width. */}
+          prominent action), a quiet glass chip for Done/Back beside it.
+          Both float over the content instead of a full-width bar pinned
+          across the whole screen width. */}
       <View style={[s.fabRow, { paddingBottom: insets.bottom + 18 }]} pointerEvents="box-none">
-        <Pressable onPress={handleDone} style={({ pressed }) => [s.doneChip, pressed && { opacity: 0.7 }]}>
-          <BlurView intensity={65} tint="light" style={StyleSheet.absoluteFill} />
-          <Text style={s.doneChipTxt}>{doneLabel}</Text>
-        </Pressable>
+        <GlassSurface radius={22} style={s.doneChip}>
+          <Pressable onPress={handleDone} style={({ pressed }) => [s.doneChipInner, pressed && { opacity: 0.7 }]}>
+            <Text style={s.doneChipTxt}>{doneLabel}</Text>
+          </Pressable>
+        </GlassSurface>
         <Pressable
           onPress={handleShare}
           disabled={sharing}
@@ -613,11 +652,8 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'flex-start', gap: 10,
     paddingHorizontal: 16,
   },
-  iconChip: {
-    width: 34, height: 34, borderRadius: 17,
-    alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-    borderWidth: 1, borderColor: C.glassEdge, backgroundColor: C.glassFill,
-  },
+  iconChip:      { width: 34, height: 34 },
+  iconChipInner: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   topBarTitleWrap: { flex: 1, alignItems: 'center' },
   topBarTitle: { fontSize: 15, fontWeight: '800', color: C.text, letterSpacing: -0.2 },
   topBarSub:   { fontSize: 11.5, fontWeight: '600', color: C.muted, marginTop: 1 },
@@ -644,21 +680,11 @@ const s = StyleSheet.create({
   watermarkTxt: { fontSize: 10.5, fontWeight: '700', color: 'rgba(255,255,255,0.4)', letterSpacing: 0.3 },
 
   deckWrap: { gap: 12 },
-  // PREEMPTIVE FIX: was height:300 with the Muscle Map page's content
-  // (legend + front/back diagrams at scale 0.62) needing ~296px on top of
-  // this card's own 36px padding + ~24px label/gap overhead — comfortably
-  // over budget, and pageCard clips with overflow:'hidden', so the bottom of
-  // the heatmap (labels, part of the legs) would have been cut off on first
-  // render. Raised to 360 and the Muscle Map page's scale dropped 0.62→0.55
-  // (see the MuscleHeatmap call above) — leaves a real margin, verified by
-  // hand-computing the layout, not just eyeballed.
+  // Muscle Map page's content (legend + front/back diagrams at scale 0.55)
+  // needs ~296px on top of this card's own padding/label overhead — 360
+  // leaves real margin, verified by hand-computing the layout.
   pageCard: {
-    height: 360, borderRadius: 26, overflow: 'hidden',
-    padding: 18, gap: 10, backgroundColor: C.glassFill,
-  },
-  glassEdgeOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: 26, borderWidth: 1, borderColor: C.glassEdge,
+    height: 360, padding: 18, gap: 10,
   },
   pageLabel: { fontSize: 11, fontWeight: '800', color: C.muted, letterSpacing: 1.4 },
   cardText:  { fontSize: 15, fontWeight: '500', color: C.text, lineHeight: 22, letterSpacing: -0.1 },
@@ -681,12 +707,9 @@ const s = StyleSheet.create({
     position: 'absolute', left: 20, right: 20, bottom: 0,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
   },
-  doneChip: {
-    height: 44, paddingHorizontal: 20, borderRadius: 22,
-    alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-    borderWidth: 1, borderColor: C.glassEdge, backgroundColor: C.glassFill,
-  },
-  doneChipTxt: { fontSize: 14.5, fontWeight: '700', color: C.text },
+  doneChip:      { height: 44, paddingHorizontal: 20 },
+  doneChipInner: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  doneChipTxt:   { fontSize: 14.5, fontWeight: '700', color: C.text },
   fabShadow: {
     borderRadius: 32,
     shadowColor: C.accent, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.5, shadowRadius: 18,
