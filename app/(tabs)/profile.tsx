@@ -18,6 +18,7 @@ import { StatusBar } from 'expo-status-bar';
 import { FONT, Sp, W } from '../../constants/theme';
 import ScreenBackground from '../../components/ScreenBackground';
 import { clearAllCalibrations } from '../../lib/calibration/store';
+import { useAudioSettingsStore } from '../../store/audioSettingsStore';
 
 // ─── Design tokens (exact match to index.tsx) ─────────────────────────────────
 
@@ -167,6 +168,7 @@ const scard = StyleSheet.create({
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const audioEnabled = useAudioSettingsStore(s => s.audioEnabled);
 
   const [plan,      setPlan]      = useState<PlanProfile>({});
   const [readiness, setReadiness] = useState<string | null>(null);
@@ -310,6 +312,13 @@ export default function ProfileScreen() {
           {/* ── 5. APP ──────────────────────────────────────────────────── */}
           <SectionHeader title="App" />
           <SettingsCard>
+            <SettingRow
+              icon="speaker.wave.2.fill"
+              colors={['#0A84FF', '#0056CC']}
+              label="Audio coaching"
+              value={audioEnabled ? 'On' : 'Off'}
+              onPress={() => router.push('/audio-settings')}
+            />
             <SettingRow
               icon="bell.fill"
               colors={['#FF9F0A', '#FF6B00']}

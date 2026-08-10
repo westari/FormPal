@@ -30,6 +30,7 @@ import {
 import { EXERCISE_STANDARDS } from '../constants/exerciseStandards';
 import { EXERCISE_DEFINITIONS } from '../constants/exerciseDefinitions';
 import { getCalibration, applyOverride } from '../lib/calibration/store';
+import { handleRepAudio } from '../lib/audioFeedback';
 import type { DebugStatsEvent, RepEvent, ExerciseType } from '../modules/athlt-camera/src/index';
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
@@ -328,6 +329,7 @@ export default function FormCheckScreen() {
       flashAnim.setValue(1);
       Animated.timing(flashAnim, { toValue: 0, duration: 700, useNativeDriver: true }).start();
       setFeedback({ good: rep.good, reason: rep.reason, seq: ++feedbackSeq.current });
+      handleRepAudio(rep.good, rep.reason, rep.goodReps);
       const timeSec = startTimestamp.current != null
         ? (Date.now() - startTimestamp.current) / 1000 : 0;
       repEvents.current.push({ timeSec, good: rep.good, reason: rep.reason });

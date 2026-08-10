@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as FileSystem from 'expo-file-system';
 import * as SplashScreen from 'expo-splash-screen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { configureAudioSession } from '../lib/audioFeedback';
 import {
   useFonts,
   BricolageGrotesque_300Light,
@@ -52,6 +53,7 @@ export default function RootLayout() {
   }, [fontsLoaded, fontError]);
 
   useEffect(() => { void pruneOldVideos(); }, []);
+  useEffect(() => { void configureAudioSession(); }, []);
 
   // Block render until fonts loaded (or failed — system font fallback is fine).
   if (!fontsLoaded && !fontError) return null;
