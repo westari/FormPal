@@ -138,7 +138,9 @@ export type ExerciseType =
   // Hip-hinge family (hip-dominant, minimal knee bend — opposite emphasis of squat)
   | 'romanianDeadlift' | 'deadlift' | 'goodMorning' | 'kettlebellSwing' | 'singleLegRDL'
   // Shoulder/arm isolation raise family (front-facing lateral, side-facing front raise)
-  | 'lateralRaise' | 'frontRaise';
+  | 'lateralRaise' | 'frontRaise'
+  // Lat pulldown family (vertical pull, elbow-angle metric — front-facing, seated)
+  | 'latPulldownWide' | 'closeGripPulldown';
 
 export async function setExercise(type: ExerciseType): Promise<void> {
   if (!ATHLTCameraNative) return;

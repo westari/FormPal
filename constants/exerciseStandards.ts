@@ -539,6 +539,64 @@ function raiseStandard(exerciseId: string): ExerciseStandardDef {
 // Add new standards here as more exercises gain Layer 2 support.
 // Missing key → Layer 2 inactive for that exercise (Layer 1 relative signals only).
 
+// ─── Shared lat pulldown standard building-blocks ────────────────────────────
+//
+// repMetric family = average(shoulder–elbow–wrist jointAngle) — the SAME
+// primitive as curlStandard() above (curl is the reference this whole family
+// is based on — see the investigate-first comment in exerciseDefinitions.ts's
+// latPulldownVariant()). Arm relatively STRAIGHT (~160°) at the top/start,
+// elbow BENDS as the bar is pulled down toward the chest (peak contraction).
+//
+// PLACEHOLDER, NOT DEVICE-VERIFIED. Deliberately mirrors the equally-unverified
+// Layer-0 placeholders in exerciseDefinitions.ts's latPulldownVariant()
+// (topAngle 160 / repExitThreshold 150 / goodROMThreshold 90) rather than
+// inventing a second, different set of guessed numbers — do a few reps, send
+// the [REP] log, and both layers get set together from the same real values.
+//
+// staticChecks: [] — deliberately empty, not an oversight. A shoulder-hip-knee
+// (or shoulder-hip-elbow) torso-stability check would use the SHOULDER as one
+// of its three points, and the shoulder is not a stable anchor here — a lat
+// pulldown's own primary motion includes real scapular depression/elevation
+// as the bar comes down and the shoulder blades engage. This is the exact
+// contamination pattern already found and fixed by removing
+// SHOULDER_PRESS_STATIC_CHECKS above (see that comment) — reusing the same
+// reasoning rather than re-discovering it the slow way. The Layer-0
+// LAT_PULLDOWN_TORSO_CHECK (hip→shoulder line vs. vertical, no elbow/shoulder
+// angle involved) is the swing/lean-back signal for this family instead.
+
+const LAT_PULLDOWN_TOP_FAULTS = [
+  'PARTIAL REP — not pulling the bar down far enough',
+  'SWINGING — using body momentum/lean instead of controlled pulling strength',
+  'LEANING BACK TOO FAR — turning the pulldown into a row',
+];
+
+function latPulldownStandard(exerciseId: string): ExerciseStandardDef {
+  return {
+    exerciseId,
+    reviewed: false,  // PLACEHOLDER — send a [REP] log spanning one full rep to set real numbers
+
+    // Mirrors exerciseDefinitions.ts's latPulldownVariant() goodROMThreshold (90)
+    // and repExitThreshold/topAngle (150/160) directly — same reasoning as
+    // curlStandard() reusing curl's own Layer-0 numbers, just not yet
+    // device-confirmed for this family.
+    standardPeakAngleMax:  90.0,
+    standardStartAngleMin: 145.0,
+
+    romCue:    'PULL DOWN FURTHER — not reaching full contraction',
+    extendCue: 'FULLY EXTEND — arms not returning straight overhead',
+
+    staticChecks: [],
+
+    // Mirrors curlStandard()'s tempo floor — same elbow-angle-driven isolation
+    // movement pattern, same "loosened preemptively before ever enforced"
+    // reasoning (see curlStandard's comment). Not device-verified.
+    tempoMinSec: 0.8,
+    tempoMaxSec: 5.0,
+
+    topFaults: LAT_PULLDOWN_TOP_FAULTS,
+  };
+}
+
 export const EXERCISE_STANDARDS: Record<string, ExerciseStandardDef> = {
 
   // ─── Squat ────────────────────────────────────────────────────────────────
@@ -763,4 +821,8 @@ export const EXERCISE_STANDARDS: Record<string, ExerciseStandardDef> = {
   // ─── Shoulder/arm isolation raise family ───────────────────────────────────
   lateralRaise: raiseStandard('lateralRaise'),
   frontRaise:   raiseStandard('frontRaise'),
+
+  // ─── Lat pulldown family ────────────────────────────────────────────────────
+  latPulldownWide:    latPulldownStandard('latPulldownWide'),
+  closeGripPulldown:  latPulldownStandard('closeGripPulldown'),
 };
