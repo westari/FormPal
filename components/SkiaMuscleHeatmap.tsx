@@ -75,12 +75,24 @@ interface ScatterPoint { x: number; y: number; r: number }
 
 // Visual-design constants, not CV thresholds — freely tunable by eye on the
 // test screen, not subject to the exercise-definition investigate-first rule.
-const MIN_POINTS       = 8;
-const MAX_EXTRA_POINTS = 24;  // + MIN_POINTS at opacity's top end
-const POINT_R_MIN      = 20;  // path-space units (724x1448 coord system)
-const POINT_R_MAX      = 34;
-const BLUR_RADIUS       = 24; // path-space units — scales down with the Group matrix like everything else
-const DOT_OPACITY_MULT  = 0.30; // fraction of the spec's own opacity per dot
+//
+// RETUNED (reported "looks really bad" with no screenshot to iterate from —
+// this is a reasoned blind pass, not a verified fix; a screenshot next time
+// would let this actually be tuned precisely instead of guessed at twice).
+// Root-cause reasoning: 8-32 points at radius 20-34 with blur 24 means, for
+// a typical muscle region maybe 60-150 units across in this 724x1448 space,
+// each dot's visible spread (radius+blur ≈ 44-58 units) covers a LARGE
+// fraction of the whole region on its own — with so few of them, that reads
+// as a handful of overlapping giant blotches, not a smooth graduated field.
+// MANY smaller, more numerous dots blend far more continuously than a few
+// huge ones (the same reason a real heatmap.js point cloud uses hundreds of
+// small points, not a dozen large ones) — density up, individual size down.
+const MIN_POINTS       = 20;
+const MAX_EXTRA_POINTS = 40;  // + MIN_POINTS at opacity's top end
+const POINT_R_MIN      = 10;  // path-space units (724x1448 coord system)
+const POINT_R_MAX      = 16;
+const BLUR_RADIUS       = 14; // path-space units — scales down with the Group matrix like everything else
+const DOT_OPACITY_MULT  = 0.38; // fraction of the spec's own opacity per dot — a bit higher since more, smaller dots need less individual weight to accumulate to a solid-looking core
 
 function scatterInPath(path: SkPath, count: number): ScatterPoint[] {
   const bounds = path.getBounds();

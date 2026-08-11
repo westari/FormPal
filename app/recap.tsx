@@ -13,6 +13,8 @@ import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 import ViewShot from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import { SkiaMuscleHeatmapSafe } from '../components/SkiaMuscleHeatmapSafe';
+import RepFeedback from '../components/RepFeedback';
+import { repFeedbackSentence } from '../lib/repFeedbackSentences';
 import {
   getAllSessions, appendSessions, groupIntoWorkouts, computeOverallMuscleScores,
   muscleGroupsWorked, type SessionEntry, type MuscleScores, type RepEventData,
@@ -256,6 +258,15 @@ function BgGradient() {
 // player control has no concept of. Tapping anywhere seeks the video;
 // tapping a marker seeks to that rep exactly (markers sit on top of the
 // tappable track, so a tap on a marker still resolves to its own position).
+//
+// SMOOTHING: the playhead's position used to be set directly via a
+// percentage `left` recomputed every 100ms poll tick — visually a step/jump
+// each tick rather than motion, which read as "choppy." `left` as a
+// percentage can't be animated on the native thread anyway (only transform/
+// opacity can). Fixed by measuring the track's actual pixel width (onLayout,
+// already had this for tap-to-seek) and driving the playhead via an
+// Animated.Value + translateX in PIXELS, eased with a short timing animation
+// between poll ticks instead of snapping — reads as a smooth glide.
 function RepTimeline({
   events, duration, currentTime, onSeek,
 }: {
@@ -265,80 +276,100 @@ function RepTimeline({
   onSeek:      (t: number) => void;
 }) {
   const [barWidth, setBarWidth] = useState(0);
+  const playheadX = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (duration <= 0 || barWidth <= 0) return;
+    const frac = Math.min(1, Math.max(0, currentTime / duration));
+    Animated.timing(playheadX, { toValue: frac * barWidth, duration: 100, useNativeDriver: true }).start();
+  }, [currentTime, duration, barWidth, playheadX]);
+
   if (duration <= 0) return null;
-  const playheadFrac = Math.min(1, Math.max(0, currentTime / duration));
 
   return (
-    <Pressable
-      style={s.timelineTrack}
-      onLayout={e => setBarWidth(e.nativeEvent.layout.width)}
-      onPress={e => {
-        if (barWidth <= 0) return;
-        const frac = Math.min(1, Math.max(0, e.nativeEvent.locationX / barWidth));
-        onSeek(frac * duration);
-      }}
-    >
-      <View style={s.timelineBase} pointerEvents="none" />
-      <View style={[s.timelinePlayhead, { left: `${playheadFrac * 100}%` }]} pointerEvents="none" />
-      {events.map((ev, i) => {
-        const frac = Math.min(1, Math.max(0, ev.timeSec / duration));
-        return (
-          <View
-            key={i}
-            style={[s.timelineMarker, ev.good ? s.timelineMarkerGood : s.timelineMarkerBad, { left: `${frac * 100}%` }]}
-            pointerEvents="none"
-          />
-        );
-      })}
-    </Pressable>
+    <View>
+      <Text style={s.timelineLabel}>SESSION TIMELINE</Text>
+      <Pressable
+        style={s.timelineTrack}
+        onLayout={e => setBarWidth(e.nativeEvent.layout.width)}
+        onPress={e => {
+          if (barWidth <= 0) return;
+          const frac = Math.min(1, Math.max(0, e.nativeEvent.locationX / barWidth));
+          onSeek(frac * duration);
+        }}
+      >
+        <View style={s.timelineBase} pointerEvents="none" />
+        <Animated.View
+          style={[s.timelinePlayhead, { transform: [{ translateX: playheadX }] }]}
+          pointerEvents="none"
+        />
+        {events.map((ev, i) => {
+          const frac = Math.min(1, Math.max(0, ev.timeSec / duration));
+          return (
+            <View
+              key={i}
+              style={[s.timelineMarker, ev.good ? s.timelineMarkerGood : s.timelineMarkerBad, { left: `${frac * 100}%` }]}
+              pointerEvents="none"
+            />
+          );
+        })}
+      </Pressable>
+    </View>
   );
 }
 
-// ─── MyPal overview — collapsible, scrollable per-rep list ────────────────────
-// Pulled straight from the same repEvents data that already drives the video
-// badge/timeline above — one source of truth, three different views of it.
-// Tapping a row seeks the video to that rep, same as tapping its timeline
-// marker, so the list and the video stay usable together rather than as two
-// disconnected pieces of UI.
-function MyPalOverview({
-  events, expanded, onToggle, onSeek,
+// ─── MyPal review — one rep at a time, not a scrollable list ──────────────────
+// REDESIGNED from a flat list of every rep (felt like raw cue text dumped on
+// screen) to a focused single-rep card: a natural sentence (see
+// lib/repFeedbackSentences.ts) plus Prev/Next controls that both browse
+// reps AND seek the video to match, so the two stay in sync instead of
+// being two disconnected pieces of UI. currentIndex is kept in sync with
+// whichever rep the video is currently over (see the polling effect below),
+// so it also just naturally follows normal playback with no extra wiring.
+function MyPalReview({
+  events, currentIndex, onPrev, onNext,
 }: {
-  events:   RepEventData[];
-  expanded: boolean;
-  onToggle: () => void;
-  onSeek:   (t: number) => void;
+  events:       RepEventData[];
+  currentIndex: number;
+  onPrev:       () => void;
+  onNext:       () => void;
 }) {
+  const ev = events[currentIndex];
+  if (!ev) return null;
+  const sentence = repFeedbackSentence(ev.good, ev.reason, currentIndex);
+
   return (
     <GlassSurface radius={30} style={s.detailCard}>
-      <Pressable onPress={onToggle} style={s.overviewHeader} hitSlop={6}>
+      <View style={s.reviewHeader}>
+        <View style={[s.reviewIcon, ev.good ? s.reviewIconGood : s.reviewIconBad]}>
+          <Text style={[s.reviewIconTxt, { color: ev.good ? C.good : C.bad }]}>{ev.good ? '✓' : '✗'}</Text>
+        </View>
         <View style={{ flex: 1 }}>
-          <Text style={s.detailCardLabel}>MYPAL OVERVIEW</Text>
-          <Text style={s.overviewSub}>{events.length} {events.length === 1 ? 'rep' : 'reps'} reviewed</Text>
+          <Text style={s.detailCardLabel}>MYPAL REVIEW</Text>
+          <Text style={s.reviewRepLabel}>Rep {currentIndex + 1} of {events.length}</Text>
         </View>
-        <SymbolView
-          name={expanded ? 'chevron.up' : 'chevron.down'}
-          size={14} tintColor={C.mutedDim} type="monochrome"
-          style={{ width: 14, height: 14 }}
-        />
-      </Pressable>
-      {expanded && (
-        <View style={s.overviewList}>
-          {events.map((ev, i) => (
-            <Pressable
-              key={i}
-              onPress={() => onSeek(ev.timeSec)}
-              style={({ pressed }) => [s.overviewRow, pressed && { opacity: 0.6 }]}
-            >
-              <View style={[s.overviewDot, ev.good ? s.overviewDotGood : s.overviewDotBad]}>
-                <Text style={s.overviewDotTxt}>{ev.good ? '✓' : '✗'}</Text>
-              </View>
-              <Text style={s.overviewRowTxt} numberOfLines={1}>
-                Rep {i + 1} — {ev.good ? 'Good form' : (ev.reason || 'Needs work')}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      )}
+      </View>
+
+      <Text style={s.reviewSentence}>{sentence}</Text>
+
+      <View style={s.reviewNav}>
+        <Pressable
+          onPress={onPrev}
+          disabled={currentIndex === 0}
+          style={({ pressed }) => [s.reviewNavBtn, currentIndex === 0 && s.reviewNavBtnDisabled, pressed && { opacity: 0.6 }]}
+        >
+          <SymbolView name="chevron.left" size={14} tintColor={currentIndex === 0 ? C.mutedDim : C.text} type="monochrome" style={{ width: 14, height: 14 }} />
+          <Text style={[s.reviewNavTxt, currentIndex === 0 && s.reviewNavTxtDisabled]}>Prev rep</Text>
+        </Pressable>
+        <Pressable
+          onPress={onNext}
+          disabled={currentIndex === events.length - 1}
+          style={({ pressed }) => [s.reviewNavBtn, currentIndex === events.length - 1 && s.reviewNavBtnDisabled, pressed && { opacity: 0.6 }]}
+        >
+          <Text style={[s.reviewNavTxt, currentIndex === events.length - 1 && s.reviewNavTxtDisabled]}>Next rep</Text>
+          <SymbolView name="chevron.right" size={14} tintColor={currentIndex === events.length - 1 ? C.mutedDim : C.text} type="monochrome" style={{ width: 14, height: 14 }} />
+        </Pressable>
+      </View>
     </GlassSurface>
   );
 }
@@ -467,26 +498,25 @@ export default function RecapScreen() {
   }, [data, heroOpac, heroY]);
 
   // ── Video replay overlay (solo mode only) ────────────────────────────────────
-  // REPLACED the old fire-and-fade "liveAnim" (a RepFeedback flash that
-  // played once when the timeline CROSSED a rep's timestamp forward, then
-  // disappeared after ~1s regardless of what the user did next) with a
-  // PERSISTENT badge derived fresh from player.currentTime on every poll
-  // tick. "Which rep is this?" is recomputed from scratch each tick rather
-  // than tracked as a one-shot crossing event, so it stays correct — and
-  // stays ON SCREEN — whether the video is playing, paused, or scrubbed
-  // backward: pausing anywhere no longer loses the badge, which was the
-  // actual ask ("pause on any rep and see the check/X/cue"). This is a
-  // persistent OVERLAY, not literally baked into the video's pixels — see
-  // repBadge's render site for why.
+  // REBUILT for parity with the live workout view: a rep counter (running
+  // total/good, synced to video time) plus the SAME RepFeedback component
+  // the live camera view uses for its ✓/✗ card — same component, same size,
+  // same fade timing, triggered fresh (via flashSeq) any time the "current
+  // rep" changes, whether from normal forward playback crossing a
+  // timestamp OR an explicit seek/skip. reviewIndex is a SEPARATE, always-
+  // valid-once-data-exists index (starts at 0, not null) that drives the
+  // MyPal review card and the Prev/Next buttons — kept in sync with
+  // whichever rep the video is currently over, but also independently
+  // settable by Prev/Next before/without the video needing to have reached
+  // that point yet.
   const hasVideo = !!data?.videoUri;
   const player = useVideoPlayer(data?.videoUri || null, p => { p.loop = false; });
-  const [repBadge, setRepBadge] = useState<{ index: number; good: boolean; reason: string } | null>(null);
-  // Duration/currentTime aren't reactive React state on expo-video's player
-  // object — same reason the existing 100ms poll already exists for
-  // repBadge — reused here rather than a second interval.
   const [videoTime, setVideoTime] = useState(0);
   const [videoDuration, setVideoDuration] = useState(0);
-  const [overviewExpanded, setOverviewExpanded] = useState(true);
+  const [reviewIndex, setReviewIndex] = useState(0);
+  const [videoFlash, setVideoFlash] = useState<{ seq: number; good: boolean; reason: string } | null>(null);
+  const lastFlashedIndex = useRef<number | null>(null);
+  const flashSeqRef = useRef(0);
 
   useEffect(() => {
     if (!hasVideo || !data?.repEvents || data.repEvents.length === 0) return;
@@ -499,10 +529,12 @@ export default function RecapScreen() {
       for (let i = 0; i < evs.length; i++) {
         if (evs[i].timeSec <= t) idx = i; else break;
       }
-      if (idx === -1) {
-        setRepBadge(prev => (prev === null ? prev : null));
-      } else {
-        setRepBadge(prev => (prev?.index === idx ? prev : { index: idx, good: evs[idx].good, reason: evs[idx].reason }));
+      if (idx === -1) return; // before the first rep — leave reviewIndex at its default (0)
+      if (idx !== lastFlashedIndex.current) {
+        lastFlashedIndex.current = idx;
+        setReviewIndex(idx);
+        flashSeqRef.current += 1;
+        setVideoFlash({ seq: flashSeqRef.current, good: evs[idx].good, reason: evs[idx].reason });
       }
     }, 100);
     return () => clearInterval(id);
@@ -511,6 +543,29 @@ export default function RecapScreen() {
   const seekTo = useCallback((timeSec: number) => {
     try { player.currentTime = timeSec; } catch { /* player not ready yet */ }
   }, [player]);
+
+  // Prev/Next — browse reviewIndex directly (snappy, doesn't wait on the
+  // 100ms poll) AND seek the video to match, so scrubbing via these buttons
+  // and via the timeline/native controls both keep everything in sync.
+  const goToRep = useCallback((direction: 1 | -1) => {
+    const evs = data?.repEvents;
+    if (!evs || evs.length === 0) return;
+    setReviewIndex(prev => {
+      const next = Math.min(evs.length - 1, Math.max(0, prev + direction));
+      lastFlashedIndex.current = next;
+      flashSeqRef.current += 1;
+      setVideoFlash({ seq: flashSeqRef.current, good: evs[next].good, reason: evs[next].reason });
+      seekTo(evs[next].timeSec);
+      return next;
+    });
+  }, [data, seekTo]);
+
+  const runningCounts = useMemo(() => {
+    const evs = data?.repEvents;
+    if (!evs || evs.length === 0) return null;
+    const upTo = evs.slice(0, reviewIndex + 1);
+    return { total: upTo.length, good: upTo.filter(e => e.good).length };
+  }, [data, reviewIndex]);
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
@@ -786,25 +841,38 @@ export default function RecapScreen() {
                     nativeControls
                     contentFit="contain"
                   />
-                  {/* Persistent rep badge — see repBadge's doc comment above.
-                      A small corner chip, not the big live-camera RepFeedback
-                      card (that component's full-screen size was designed to
-                      sit over a live camera view, not share space with video
-                      controls). Genuinely embedding this into the video's own
-                      pixels would mean re-encoding the file (ffmpeg-class
-                      video processing, a real native dependency and a much
-                      bigger separate undertaking) — this achieves the actual
-                      ask, pausing on any rep to see its check/X/cue, as a
-                      playhead-synced overlay instead, without that cost. */}
-                  {repBadge && (
-                    <View style={[s.videoBadge, repBadge.good ? s.videoBadgeGood : s.videoBadgeBad]} pointerEvents="none">
-                      <Text style={s.videoBadgeNum}>
-                        #{repBadge.index + 1} {repBadge.good ? '✓' : '✗'}
-                      </Text>
-                      {!repBadge.good && repBadge.reason ? (
-                        <Text style={s.videoBadgeCue} numberOfLines={1}>{repBadge.reason}</Text>
-                      ) : null}
+
+                  {/* Rep counter — same style/position language as the live
+                      workout view's repBlock/repNum/repSub (app/formcheck.tsx),
+                      scaled down to fit this much smaller embedded video
+                      instead of a full screen. Shows the running total/good
+                      count AS OF whichever rep is currently in view. */}
+                  {runningCounts && (
+                    <View style={s.videoCounter} pointerEvents="none">
+                      <Text style={s.videoCounterNum}>{runningCounts.total}</Text>
+                      <Text style={s.videoCounterSub}>{runningCounts.good} good</Text>
                     </View>
+                  )}
+
+                  {/* Live-parity ✓/✗ flash — the EXACT same RepFeedback
+                      component the live camera view uses, same size/timing/
+                      style. Fires fresh (via seq) whenever the current rep
+                      changes, whether from normal forward playback crossing
+                      that rep's timestamp or an explicit seek/skip — see the
+                      polling effect and goToRep above. Genuinely baking this
+                      into the video's own pixels would mean re-encoding the
+                      file (ffmpeg-class processing, a real native dependency
+                      and a much bigger separate undertaking) — this overlay
+                      achieves the same "see the check/X exactly like live"
+                      result without that cost. */}
+                  {videoFlash && (
+                    <RepFeedback
+                      key={videoFlash.seq}
+                      good={videoFlash.good}
+                      reason={videoFlash.reason}
+                      seq={videoFlash.seq}
+                      onComplete={() => setVideoFlash(null)}
+                    />
                   )}
                 </View>
 
@@ -823,14 +891,14 @@ export default function RecapScreen() {
               </GlassSurface>
             )}
 
-            {/* MyPal overview — collapsible per-rep list, same data as the
-                video badge/timeline above. Tapping a row seeks the video. */}
+            {/* MyPal review — one rep at a time with a real sentence, not a
+                flat list. Prev/Next also drives the video (goToRep). */}
             {data.repEvents && data.repEvents.length > 0 && (
-              <MyPalOverview
+              <MyPalReview
                 events={data.repEvents}
-                expanded={overviewExpanded}
-                onToggle={() => setOverviewExpanded(v => !v)}
-                onSeek={seekTo}
+                currentIndex={reviewIndex}
+                onPrev={() => goToRep(-1)}
+                onNext={() => goToRep(1)}
               />
             )}
 
@@ -957,24 +1025,35 @@ const s = StyleSheet.create({
   videoWrap: {
     width: '100%', aspectRatio: 9 / 16, borderRadius: 22, overflow: 'hidden', backgroundColor: '#000',
   },
-  videoBadge: {
-    position: 'absolute', left: 12, top: 12, maxWidth: '70%',
-    borderRadius: 12, paddingVertical: 6, paddingHorizontal: 10, borderWidth: 1,
+
+  // Rep counter overlaid on the video — same style language as the live
+  // view's repBlock/repNum/repSub (app/formcheck.tsx: 140/20, white, weight
+  // 800/600), scaled down for this much smaller embedded container instead
+  // of a full screen.
+  videoCounter: {
+    position: 'absolute', top: '6%', left: 0, right: 0, alignItems: 'center',
   },
-  videoBadgeGood: { backgroundColor: 'rgba(46,125,99,0.55)', borderColor: 'rgba(255,255,255,0.35)' },
-  videoBadgeBad:  { backgroundColor: 'rgba(255,59,48,0.55)', borderColor: 'rgba(255,255,255,0.35)' },
-  videoBadgeNum:  { fontSize: 13, fontWeight: '700', color: '#fff' },
-  videoBadgeCue:  { fontSize: 11, fontWeight: '600', color: '#fff', marginTop: 2 },
+  videoCounterNum: { fontSize: 46, fontWeight: '800', lineHeight: 50, color: '#fff' },
+  videoCounterSub: { fontSize: 12.5, fontWeight: '600', color: 'rgba(255,255,255,0.75)', marginTop: 2 },
 
   // ── Rep timeline ──────────────────────────────────────────────────────────
+  // Given its own label + more top margin (was flush against the video's
+  // bottom edge before, easy to miss/read as an afterthought) — reported as
+  // "too low/cluttered"; this is the fix for both, along with the animated
+  // playhead in RepTimeline itself (see its own doc comment for the choppy-
+  // motion root cause).
+  timelineLabel: {
+    fontSize: 10.5, fontWeight: '700', letterSpacing: 1.2, textTransform: 'uppercase',
+    color: C.mutedDim, marginTop: 18, marginBottom: 6, marginHorizontal: 6,
+  },
   timelineTrack: {
-    height: 32, marginTop: 10, marginHorizontal: 6, justifyContent: 'center',
+    height: 32, marginHorizontal: 6, justifyContent: 'center',
   },
   timelineBase: {
     height: 4, borderRadius: 2, backgroundColor: 'rgba(19,26,46,0.12)',
   },
   timelinePlayhead: {
-    position: 'absolute', top: 6, width: 2, height: 20, marginLeft: -1,
+    position: 'absolute', top: 6, left: -1, width: 2, height: 20,
     backgroundColor: C.text, borderRadius: 1,
   },
   timelineMarker: {
@@ -984,22 +1063,25 @@ const s = StyleSheet.create({
   timelineMarkerGood: { backgroundColor: C.good },
   timelineMarkerBad:  { backgroundColor: C.bad },
 
-  // ── MyPal overview ────────────────────────────────────────────────────────
-  overviewHeader: { flexDirection: 'row', alignItems: 'center' },
-  overviewSub:    { fontSize: 12, color: C.muted, marginTop: -6 },
-  overviewList:   { marginTop: 12, gap: 2 },
-  overviewRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingVertical: 9,
-  },
-  overviewDot: {
-    width: 22, height: 22, borderRadius: 11,
+  // ── MyPal review ──────────────────────────────────────────────────────────
+  reviewHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  reviewIcon: {
+    width: 36, height: 36, borderRadius: 18,
     alignItems: 'center', justifyContent: 'center',
   },
-  overviewDotGood: { backgroundColor: 'rgba(46,125,99,0.15)' },
-  overviewDotBad:  { backgroundColor: 'rgba(255,59,48,0.13)' },
-  overviewDotTxt:  { fontSize: 11, fontWeight: '700', color: C.text },
-  overviewRowTxt:  { flex: 1, fontSize: 13.5, fontWeight: '500', color: C.text },
+  reviewIconGood: { backgroundColor: 'rgba(46,125,99,0.15)' },
+  reviewIconBad:  { backgroundColor: 'rgba(255,59,48,0.13)' },
+  reviewIconTxt:  { fontSize: 16, fontWeight: '700' },
+  reviewRepLabel: { fontSize: 15, fontWeight: '600', color: C.text, marginTop: 1 },
+  reviewSentence: { fontSize: 15, fontWeight: '500', color: C.text, lineHeight: 22, letterSpacing: -0.1, marginTop: 14 },
+  reviewNav: {
+    flexDirection: 'row', justifyContent: 'space-between', marginTop: 18,
+    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(90,110,160,0.25)', paddingTop: 14,
+  },
+  reviewNavBtn: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  reviewNavBtnDisabled: { opacity: 0.4 },
+  reviewNavTxt: { fontSize: 13.5, fontWeight: '600', color: C.text },
+  reviewNavTxtDisabled: { color: C.mutedDim },
 
   dotsRow: {
     position: 'absolute', left: 0, right: 0,

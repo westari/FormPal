@@ -233,7 +233,13 @@ export function previewVoice(identifier: string | null): void {
   if (!SpeechModule) return;
   try {
     SpeechModule.stop();
-    SpeechModule.speak('This is how I sound.', {
+    // Previews with an actual rep count ("Five. Ten.") rather than a generic
+    // "this is how I sound" line — this voice's ONLY real job during a
+    // workout is speaking rep-count callouts (see speakRepCount above), so
+    // the preview should sound like that job, not like a general narrator,
+    // to make the scope obvious without needing to read the surrounding
+    // settings copy at all.
+    SpeechModule.speak('Five. Ten.', {
       voice:                      identifier ?? undefined,
       rate:                       1.0,
       pitch:                      1.0,

@@ -142,10 +142,22 @@ export default function AudioSettingsScreen() {
         </View>
 
         {/* ── Voice picker ────────────────────────────────────────────── */}
-        {/* Form-correction cues now play pre-recorded clips (lib/cueClips.ts),
-            not this voice — this picker only affects the spoken rep-count
-            ("5", "10", ...) announced every 5th good rep. */}
         <Text style={s.sectionTitle}>Voice (rep counts)</Text>
+        {/* Explicit banner, not just a footnote — the most common way this
+            reads as "broken" is picking a voice, hearing correction cues in
+            a different fixed voice, and never actually hearing a rep-count
+            callout at all because voiceFrequency defaults to "Corrections
+            only" above (this picker's voice literally never plays until
+            "Corrections + counts" is selected). Preview text is scoped to
+            match ("Five. Ten.") rather than a generic sample line. */}
+        <View style={s.notice}>
+          <Text style={s.noticeText}>
+            This voice is used ONLY for spoken rep counts ("Five", "Ten"...), and only
+            plays live when "Corrections + counts" is selected above. Form-correction
+            cues (like "KEEP ELBOWS IN") always use a separate, fixed coach voice —
+            they don't change here.
+          </Text>
+        </View>
         <View style={[s.card, SHADOW_MED]}>
           <Pressable
             onPress={() => { setVoiceIdentifier(null); previewVoice(null); }}
@@ -185,7 +197,7 @@ export default function AudioSettingsScreen() {
             </Pressable>
           ))}
         </View>
-        <Text style={s.footnote}>Tap a voice to hear a short preview. Form-correction cues use their own pre-recorded clips, not this voice.</Text>
+        <Text style={s.footnote}>Tap a voice to hear a preview of your rep count.</Text>
       </ScrollView>
     </ScreenBackground>
   );
