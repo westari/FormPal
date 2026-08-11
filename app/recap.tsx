@@ -248,6 +248,101 @@ function BgGradient() {
   );
 }
 
+// ─── Rep timeline — scrubber strip with a colored marker per rep ──────────────
+// Sits below the video, NOT a replacement for the native scrub bar
+// (nativeControls stays — play/pause/fullscreen/native seek all keep
+// working). This is a supplementary strip whose whole reason to exist is the
+// at-a-glance green/red overview across the full session, which a native
+// player control has no concept of. Tapping anywhere seeks the video;
+// tapping a marker seeks to that rep exactly (markers sit on top of the
+// tappable track, so a tap on a marker still resolves to its own position).
+function RepTimeline({
+  events, duration, currentTime, onSeek,
+}: {
+  events:      RepEventData[];
+  duration:    number;
+  currentTime: number;
+  onSeek:      (t: number) => void;
+}) {
+  const [barWidth, setBarWidth] = useState(0);
+  if (duration <= 0) return null;
+  const playheadFrac = Math.min(1, Math.max(0, currentTime / duration));
+
+  return (
+    <Pressable
+      style={s.timelineTrack}
+      onLayout={e => setBarWidth(e.nativeEvent.layout.width)}
+      onPress={e => {
+        if (barWidth <= 0) return;
+        const frac = Math.min(1, Math.max(0, e.nativeEvent.locationX / barWidth));
+        onSeek(frac * duration);
+      }}
+    >
+      <View style={s.timelineBase} pointerEvents="none" />
+      <View style={[s.timelinePlayhead, { left: `${playheadFrac * 100}%` }]} pointerEvents="none" />
+      {events.map((ev, i) => {
+        const frac = Math.min(1, Math.max(0, ev.timeSec / duration));
+        return (
+          <View
+            key={i}
+            style={[s.timelineMarker, ev.good ? s.timelineMarkerGood : s.timelineMarkerBad, { left: `${frac * 100}%` }]}
+            pointerEvents="none"
+          />
+        );
+      })}
+    </Pressable>
+  );
+}
+
+// ─── MyPal overview — collapsible, scrollable per-rep list ────────────────────
+// Pulled straight from the same repEvents data that already drives the video
+// badge/timeline above — one source of truth, three different views of it.
+// Tapping a row seeks the video to that rep, same as tapping its timeline
+// marker, so the list and the video stay usable together rather than as two
+// disconnected pieces of UI.
+function MyPalOverview({
+  events, expanded, onToggle, onSeek,
+}: {
+  events:   RepEventData[];
+  expanded: boolean;
+  onToggle: () => void;
+  onSeek:   (t: number) => void;
+}) {
+  return (
+    <GlassSurface radius={30} style={s.detailCard}>
+      <Pressable onPress={onToggle} style={s.overviewHeader} hitSlop={6}>
+        <View style={{ flex: 1 }}>
+          <Text style={s.detailCardLabel}>MYPAL OVERVIEW</Text>
+          <Text style={s.overviewSub}>{events.length} {events.length === 1 ? 'rep' : 'reps'} reviewed</Text>
+        </View>
+        <SymbolView
+          name={expanded ? 'chevron.up' : 'chevron.down'}
+          size={14} tintColor={C.mutedDim} type="monochrome"
+          style={{ width: 14, height: 14 }}
+        />
+      </Pressable>
+      {expanded && (
+        <View style={s.overviewList}>
+          {events.map((ev, i) => (
+            <Pressable
+              key={i}
+              onPress={() => onSeek(ev.timeSec)}
+              style={({ pressed }) => [s.overviewRow, pressed && { opacity: 0.6 }]}
+            >
+              <View style={[s.overviewDot, ev.good ? s.overviewDotGood : s.overviewDotBad]}>
+                <Text style={s.overviewDotTxt}>{ev.good ? '✓' : '✗'}</Text>
+              </View>
+              <Text style={s.overviewRowTxt} numberOfLines={1}>
+                Rep {i + 1} — {ev.good ? 'Good form' : (ev.reason || 'Needs work')}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+    </GlassSurface>
+  );
+}
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function RecapScreen() {
   const router = useRouter();
@@ -386,12 +481,20 @@ export default function RecapScreen() {
   const hasVideo = !!data?.videoUri;
   const player = useVideoPlayer(data?.videoUri || null, p => { p.loop = false; });
   const [repBadge, setRepBadge] = useState<{ index: number; good: boolean; reason: string } | null>(null);
+  // Duration/currentTime aren't reactive React state on expo-video's player
+  // object — same reason the existing 100ms poll already exists for
+  // repBadge — reused here rather than a second interval.
+  const [videoTime, setVideoTime] = useState(0);
+  const [videoDuration, setVideoDuration] = useState(0);
+  const [overviewExpanded, setOverviewExpanded] = useState(true);
 
   useEffect(() => {
     if (!hasVideo || !data?.repEvents || data.repEvents.length === 0) return;
     const evs = data.repEvents; // assumed ascending by timeSec — pushed in order as reps complete
     const id = setInterval(() => {
       const t = player.currentTime;
+      setVideoTime(t);
+      if (player.duration > 0) setVideoDuration(d => (d === player.duration ? d : player.duration));
       let idx = -1;
       for (let i = 0; i < evs.length; i++) {
         if (evs[i].timeSec <= t) idx = i; else break;
@@ -404,6 +507,10 @@ export default function RecapScreen() {
     }, 100);
     return () => clearInterval(id);
   }, [hasVideo, data, player]);
+
+  const seekTo = useCallback((timeSec: number) => {
+    try { player.currentTime = timeSec; } catch { /* player not ready yet */ }
+  }, [player]);
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
@@ -424,6 +531,30 @@ export default function RecapScreen() {
       setSharing(false);
     }
   }, [sharing]);
+
+  // Separate from handleShare (which captures the recap card as a PNG via
+  // ViewShot) — this is specifically for the video/replay page, where "share
+  // the video" is the contextually obvious meaning. Falls back to the recap
+  // card share if there's somehow no video (shouldn't happen — only rendered
+  // when hasVideo is true — but staying consistent rather than doing nothing).
+  const handleShareVideo = useCallback(async () => {
+    if (sharing) return;
+    setSharing(true);
+    try {
+      if (data?.videoUri) {
+        const available = await Sharing.isAvailableAsync();
+        if (available) {
+          await Sharing.shareAsync(data.videoUri, { mimeType: 'video/mp4', dialogTitle: 'Share your FormPal replay' });
+        }
+      } else {
+        await handleShare();
+      }
+    } catch {
+      // best-effort — no native share sheet on some platforms/simulators
+    } finally {
+      setSharing(false);
+    }
+  }, [sharing, data, handleShare]);
 
   const handleDone = useCallback(async () => {
     if (data?.isHistory) { router.back(); return; }
@@ -676,8 +807,58 @@ export default function RecapScreen() {
                     </View>
                   )}
                 </View>
+
+                {/* Timeline — every rep at its timestamp, green=good/red=bad,
+                    tap anywhere to scrub. See RepTimeline's own doc comment
+                    for why this sits alongside nativeControls rather than
+                    replacing them. */}
+                {data.repEvents && data.repEvents.length > 0 && (
+                  <RepTimeline
+                    events={data.repEvents}
+                    duration={videoDuration}
+                    currentTime={videoTime}
+                    onSeek={seekTo}
+                  />
+                )}
               </GlassSurface>
             )}
+
+            {/* MyPal overview — collapsible per-rep list, same data as the
+                video badge/timeline above. Tapping a row seeks the video. */}
+            {data.repEvents && data.repEvents.length > 0 && (
+              <MyPalOverview
+                events={data.repEvents}
+                expanded={overviewExpanded}
+                onToggle={() => setOverviewExpanded(v => !v)}
+                onSeek={seekTo}
+              />
+            )}
+
+            {/* Actions — this page had neither before; Share here shares the
+                video file itself (contextually the point of this page),
+                Done exits the same way page 1's Done does. */}
+            <View style={s.actions}>
+              <Pressable
+                onPress={hasVideo ? handleShareVideo : handleShare}
+                disabled={sharing}
+                style={({ pressed }) => [s.shareBtnShadow, pressed && { transform: [{ scale: 0.98 }] }]}
+              >
+                <LinearGradient
+                  colors={[C.accentA, C.accentB, C.accentC]}
+                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                  style={s.shareBtn}
+                >
+                  <SymbolView name="square.and.arrow.up" size={18} tintColor="#fff" type="monochrome" style={{ width: 18, height: 18 }} />
+                  <Text style={s.shareBtnTxt}>{hasVideo ? 'Share Replay' : 'Share Recap'}</Text>
+                </LinearGradient>
+              </Pressable>
+
+              <GlassSurface radius={22} style={s.doneChip} shadow={false}>
+                <Pressable onPress={handleDone} style={({ pressed }) => [s.doneChipInner, pressed && { opacity: 0.7 }]}>
+                  <Text style={s.doneChipTxt}>{doneLabel}</Text>
+                </Pressable>
+              </GlassSurface>
+            </View>
           </ScrollView>
         )}
       </ScrollView>
@@ -784,6 +965,41 @@ const s = StyleSheet.create({
   videoBadgeBad:  { backgroundColor: 'rgba(255,59,48,0.55)', borderColor: 'rgba(255,255,255,0.35)' },
   videoBadgeNum:  { fontSize: 13, fontWeight: '700', color: '#fff' },
   videoBadgeCue:  { fontSize: 11, fontWeight: '600', color: '#fff', marginTop: 2 },
+
+  // ── Rep timeline ──────────────────────────────────────────────────────────
+  timelineTrack: {
+    height: 32, marginTop: 10, marginHorizontal: 6, justifyContent: 'center',
+  },
+  timelineBase: {
+    height: 4, borderRadius: 2, backgroundColor: 'rgba(19,26,46,0.12)',
+  },
+  timelinePlayhead: {
+    position: 'absolute', top: 6, width: 2, height: 20, marginLeft: -1,
+    backgroundColor: C.text, borderRadius: 1,
+  },
+  timelineMarker: {
+    position: 'absolute', top: 10, width: 12, height: 12, marginLeft: -6,
+    borderRadius: 6, borderWidth: 2, borderColor: '#fff',
+  },
+  timelineMarkerGood: { backgroundColor: C.good },
+  timelineMarkerBad:  { backgroundColor: C.bad },
+
+  // ── MyPal overview ────────────────────────────────────────────────────────
+  overviewHeader: { flexDirection: 'row', alignItems: 'center' },
+  overviewSub:    { fontSize: 12, color: C.muted, marginTop: -6 },
+  overviewList:   { marginTop: 12, gap: 2 },
+  overviewRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingVertical: 9,
+  },
+  overviewDot: {
+    width: 22, height: 22, borderRadius: 11,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  overviewDotGood: { backgroundColor: 'rgba(46,125,99,0.15)' },
+  overviewDotBad:  { backgroundColor: 'rgba(255,59,48,0.13)' },
+  overviewDotTxt:  { fontSize: 11, fontWeight: '700', color: C.text },
+  overviewRowTxt:  { flex: 1, fontSize: 13.5, fontWeight: '500', color: C.text },
 
   dotsRow: {
     position: 'absolute', left: 0, right: 0,
