@@ -142,7 +142,10 @@ export default function AudioSettingsScreen() {
         </View>
 
         {/* ── Voice picker ────────────────────────────────────────────── */}
-        <Text style={s.sectionTitle}>Voice</Text>
+        {/* Form-correction cues now play pre-recorded clips (lib/cueClips.ts),
+            not this voice — this picker only affects the spoken rep-count
+            ("5", "10", ...) announced every 5th good rep. */}
+        <Text style={s.sectionTitle}>Voice (rep counts)</Text>
         <View style={[s.card, SHADOW_MED]}>
           <Pressable
             onPress={() => { setVoiceIdentifier(null); previewVoice(null); }}
@@ -182,7 +185,7 @@ export default function AudioSettingsScreen() {
             </Pressable>
           ))}
         </View>
-        <Text style={s.footnote}>Tap a voice to hear a short preview.</Text>
+        <Text style={s.footnote}>Tap a voice to hear a short preview. Form-correction cues use their own pre-recorded clips, not this voice.</Text>
       </ScrollView>
     </ScreenBackground>
   );

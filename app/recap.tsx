@@ -468,7 +468,7 @@ export default function RecapScreen() {
           contentContainerStyle={[s.page, { paddingTop: insets.top + 18, paddingBottom: insets.bottom + 24 }]}
           showsVerticalScrollIndicator={false}
         >
-          <Animated.View style={{ opacity: heroOpac, transform: [{ translateY: heroY }], flex: 1 }}>
+          <Animated.View style={{ opacity: heroOpac, transform: [{ translateY: heroY }] }}>
             <ViewShot ref={shotRef} options={{ format: 'png', quality: 1 }}>
               <View style={{ backgroundColor: 'transparent' }}>
                 {/* Header */}
@@ -480,14 +480,23 @@ export default function RecapScreen() {
                   <Text style={s.headerSub}>{formatFullDateTime(data.ts)}</Text>
                 </View>
 
-                {/* Hero — muscle heatmap panel */}
+                {/* Hero — muscle heatmap panel. Sized to its own content
+                    (no flex/minHeight) — this card used to be `flex:1` inside
+                    a ScrollView, which has no reliable meaning there (a
+                    ScrollView's content isn't a bounded flex parent the way a
+                    plain View is), so on-device the card could end up shorter
+                    than what MuscleHeatmap actually needs at this scale,
+                    causing the front/back diagrams to run into each other and
+                    the stat grid below to read as cramped. Letting the card
+                    size to its content (padding + label + title + the
+                    heatmap's own intrinsic size) removes the guesswork. */}
                 <GlassSurface radius={34} style={s.heroCard}>
                   <Text style={s.heroLabel}>MUSCLE HEATMAP</Text>
                   <Text style={s.heroTitle}>{highlightLabel}</Text>
                   <View style={s.heroBody}>
                     <RecapSectionBoundary
                       fallback={
-                        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+                        <View style={{ alignItems: 'center', justifyContent: 'center', padding: 20 }}>
                           <Text style={s.cardText}>Muscle map couldn't load this time — your reps are still saved.</Text>
                         </View>
                       }
@@ -496,7 +505,7 @@ export default function RecapScreen() {
                         overallScores={overallScores}
                         highlightGroups={highlightGroups}
                         highlightLabel={highlightLabel}
-                        scale={0.62}
+                        scale={0.6}
                       />
                     </RecapSectionBoundary>
                   </View>
@@ -663,22 +672,24 @@ const s = StyleSheet.create({
   headerSub:   { fontSize: 13, fontWeight: '500', letterSpacing: 0.2, color: C.muted },
 
   heroCard: {
-    flex: 1, minHeight: 340,
-    padding: 18, paddingTop: 18,
+    // Intrinsic sizing — no flex/minHeight. See the comment at this card's
+    // JSX for why the previous flex:1-in-a-ScrollView approach was the root
+    // cause of the front/back diagrams crowding each other.
+    padding: 20, alignItems: 'center',
   },
-  heroLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1.4, textTransform: 'uppercase', color: C.mutedDim },
-  heroTitle: { fontSize: 19, fontWeight: '600', letterSpacing: -0.3, color: C.text, marginTop: 2, marginBottom: 12 },
-  heroBody:  { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  heroLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1.4, textTransform: 'uppercase', color: C.mutedDim, alignSelf: 'flex-start' },
+  heroTitle: { fontSize: 19, fontWeight: '600', letterSpacing: -0.3, color: C.text, marginTop: 2, marginBottom: 18, alignSelf: 'flex-start' },
+  heroBody:  { alignItems: 'center', width: '100%' },
 
-  statGrid: { flexDirection: 'row', gap: 8, marginTop: 14 },
+  statGrid: { flexDirection: 'row', gap: 8, marginTop: 22 },
   statTile: {
     flex: 1, alignItems: 'center', gap: 3,
-    paddingVertical: 12, paddingHorizontal: 4,
+    paddingVertical: 14, paddingHorizontal: 4,
   },
   statVal: { fontSize: 18, fontWeight: '600', letterSpacing: -0.3, color: C.text },
   statLbl: { fontSize: 10, fontWeight: '600', letterSpacing: 0.5, textTransform: 'uppercase', color: C.mutedDim },
 
-  actions: { gap: 10, marginTop: 16 },
+  actions: { gap: 10, marginTop: 22 },
   shareBtnShadow: {
     borderRadius: 24,
     shadowColor: C.accentA, shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.4, shadowRadius: 20,

@@ -4,25 +4,40 @@
  * Spoken form-correction cues + a non-verbal good-rep chime, both mixed OVER
  * the user's own music rather than pausing it.
  *
+ * CUE PLAYBACK, HOW IT WORKS (as of the pre-generated-clip rework):
+ *
+ *   Every corrective cue is now a bundled audio clip (lib/cueClips.ts →
+ *   assets/sounds/cues/*.wav), played through expo-audio — NOT live
+ *   text-to-speech. This replaced expo-speech as the primary path because
+ *   even curated iOS voices sounded robotic; a small fixed cue vocabulary is
+ *   a better fit for pre-recorded premium-TTS clips than live synthesis.
+ *
+ *   expo-speech is KEPT for exactly two things:
+ *     1. Milestone rep-count announcements ("5", "10", ...) — open-ended
+ *        numbers can't be exhaustively pre-recorded.
+ *     2. A defensive fallback in speakCorrection() if a cue string somehow
+ *        isn't in CUE_CLIPS (shouldn't happen — the map is exhaustive as of
+ *        this writing — but a future new cue string added to
+ *        exerciseDefinitions/exerciseStandards/native without a matching
+ *        clip should still be audible, not silently dropped).
+ *
  * DUCKING, HOW IT WORKS (two independent mechanisms, one per audio source):
  *
- *   1. The good-rep CHIME plays through an expo-audio AudioPlayer, which uses
- *      the app's own shared AVAudioSession. configureAudioSession() (called
- *      once, from app/_layout.tsx) sets that session's category to
- *      `interruptionMode: 'duckOthers'` — the same iOS mechanism apps like
- *      Google Maps use to briefly lower Spotify/Apple Music's volume for a
- *      turn-by-turn cue, then let it climb back up. It never pauses/stops
- *      the other app's playback.
+ *   1. The good-rep CHIME *and* cue CLIPS both play through expo-audio
+ *      AudioPlayers, which use the app's own shared AVAudioSession.
+ *      configureAudioSession() (called once, from app/_layout.tsx) sets that
+ *      session's category to `interruptionMode: 'duckOthers'` — the same
+ *      iOS mechanism apps like Google Maps use to briefly lower
+ *      Spotify/Apple Music's volume for a turn-by-turn cue, then let it
+ *      climb back up. It never pauses/stops the other app's playback.
  *
- *   2. Spoken CORRECTIONS go through expo-speech (AVSpeechSynthesizer).
- *      speak() is called with `useApplicationAudioSession: false` — Apple's
- *      documented default — which tells the synthesizer to use its OWN
- *      private audio session instead of the app's. That private session is
- *      pre-configured by Apple to automatically duck other audio for the
- *      duration of the utterance and hand focus back afterward, exactly like
- *      Siri or VoiceOver. This is intentionally NOT routed through the same
- *      session as the chime — the two features are independent apps of the
- *      same underlying duck-don't-stop iOS behavior.
+ *   2. The expo-speech fallback path (rep counts / unmapped cues) is called
+ *      with `useApplicationAudioSession: false` — Apple's documented
+ *      default — which tells the synthesizer to use its OWN private audio
+ *      session instead of the app's. That private session is pre-configured
+ *      by Apple to automatically duck other audio for the duration of the
+ *      utterance and hand focus back afterward, exactly like Siri or
+ *      VoiceOver.
  *
  *   Both paths are the standard, Apple-documented way to achieve
  *   duck-over-music behavior. NOT independently confirmed on a physical
@@ -66,6 +81,7 @@
 import type * as SpeechNS from 'expo-speech';
 import type * as AudioNS from 'expo-audio';
 import { useAudioSettingsStore } from '../store/audioSettingsStore';
+import { CUE_CLIPS } from './cueClips';
 
 // Derived from the type-only SpeechNS import above rather than a separate
 // `export type { Voice } from 'expo-speech'` re-export statement — that form
@@ -147,7 +163,32 @@ export function playGoodRepChime(): void {
   }
 }
 
-// ─── Spoken corrections ─────────────────────────────────────────────────────
+// ─── Cue clips (primary correction path) ────────────────────────────────────
+
+// One player reused across cues (same pattern as chimePlayer) — corrections
+// don't overlap each other in practice (one rep completes before the next).
+let cuePlayer: AudioNS.AudioPlayer | null = null;
+let cuePlayerSource: any = null;
+
+function playCueClip(source: any): boolean {
+  if (!AudioModule) return false;
+  try {
+    if (!cuePlayer || cuePlayerSource !== source) {
+      cuePlayer?.remove?.();
+      cuePlayer = AudioModule.createAudioPlayer(source);
+      cuePlayerSource = source;
+    }
+    cuePlayer.seekTo(0).catch(() => {}).finally(() => {
+      try { cuePlayer!.play(); } catch { /* ignore */ }
+    });
+    return true;
+  } catch (e) {
+    console.warn('[audioFeedback] cue clip playback failed', e);
+    return false;
+  }
+}
+
+// ─── Spoken corrections (fallback + rep counts) ─────────────────────────────
 
 function speak(text: string): void {
   if (!SpeechModule) return;
@@ -168,6 +209,10 @@ function speak(text: string): void {
 export function speakCorrection(text: string): void {
   const { audioEnabled, voiceFrequency } = useAudioSettingsStore.getState();
   if (!audioEnabled || voiceFrequency === 'off' || !text) return;
+  const clip = CUE_CLIPS[text];
+  if (clip && playCueClip(clip)) return;
+  // Defensive fallback only — see file header. Should be rare/never in
+  // practice since CUE_CLIPS is meant to cover every cue string in the app.
   speak(text);
 }
 

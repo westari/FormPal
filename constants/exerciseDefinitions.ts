@@ -1297,29 +1297,49 @@ const HINGE_REP_METRIC: MetricDef = {
 //
 // CONFIRMED WORKING on-device: a deliberately-bad full-back-roll rep read
 // torso_angle=87.4 and correctly failed; good reps read 54.5 and correctly
-// passed. TIGHTENED 80→72 from that same log: a rep with only SLIGHT rounding
-// read 67.8 and passed at the 80 limit — 72 moves the fault line closer to
-// that moderately-bad rep while keeping clear margin above the confirmed
-// good-rep reading (54-55), so normal deep hinges still won't trip it.
+// passed. A rep with only SLIGHT rounding read 67.8 — first left passing (at
+// an old 80 limit), then tightened to 72 to move the fault line closer to
+// it, but STILL leaving it passing (67.8 < 72).
 //
-// HONEST LIMIT, confirmed by that same slight-rounding rep: this check
-// catches gross posture faults (hips shooting up, torso pitching forward
-// beyond a controlled hinge) — it does NOT and CANNOT catch subtle spine
-// rounding. A back that rounds slightly while the hip/shoulder LINE stays
-// within a normal hinge angle will read as fine on this metric, because it's
-// measuring torso POSITION, not spine CURVATURE. That gap is fundamental (no
-// mid-spine landmark exists) — tightening this further to try to catch
-// rep 3's slight rounding would mean firing on genuinely good deep hinges
-// instead, not closing the gap. This check's job is hip/torso position; spine
-// rounding stays explicitly not-built, per the comment above.
+// RETIGHTENED 72→64, on explicit request after on-device testing reported a
+// knees-bent + rounded-back rep NOT firing "STRAIGHTEN YOUR BACK" (see
+// HINGE_HIP_DRIFT_FLAG_CHECK below — that check might also have been the one
+// not firing; both are being made more sensitive together since there's no
+// log yet telling us which one actually needed it). 64 sits between the
+// confirmed good-rep reading (54.5, ~9.5° of margin preserved) and the
+// confirmed slight-rounding reading (67.8 — NOW correctly fails at 64,
+// reversing the earlier decision to deliberately leave it passing). Cue
+// changed from 'HIPS DOWN, CHEST UP' to 'STRAIGHTEN YOUR BACK' to match
+// HINGE_HIP_DRIFT_FLAG_CHECK's wording — both checks are aimed at the same
+// user-perceived fault (bad back position during a hinge) even though they
+// measure different geometry, so unifying the cue text means whichever one
+// actually fires, the user sees the same corrective message.
+//
+// STILL NOT FULLY CALIBRATED — 64 is reasoned from the same two real data
+// points as before, not a fresh log of THIS specific knees-bent+rounded
+// posture. Every rep now logs both torso_angle and hip_drift_flag's actual
+// values via the standard [REP] log line (ExerciseEngine.swift's
+// completeRep(), already existed before this change — no code needed there)
+// — send that log after a few more reps and I'll set the real number instead
+// of retightening blind a second time.
+//
+// HONEST LIMIT, unchanged: this check measures torso POSITION (the
+// hip-shoulder line's angle), not spine CURVATURE — a back that rounds
+// slightly while that line stays within a normal hinge angle will still read
+// as fine here. That gap is fundamental (no mid-spine landmark exists) and
+// no threshold change closes it. What retightening DOES do: catch more
+// rounding that's severe enough to also show up in torso position, at the
+// cost of being more willing to flag a deep-but-correct hinge — a
+// deliberate trade given the user's explicit ask to make this fire more,
+// not less.
 const HINGE_TORSO_ANGLE_CHECK: FormCheckDef = {
-  id: 'torso_angle', cue: 'HIPS DOWN, CHEST UP',
+  id: 'torso_angle', cue: 'STRAIGHTEN YOUR BACK',
   metric: {
     type:  'average',
     left:  { type: 'lineVsVertical', from: 'leftHip',  to: 'leftShoulder'  },
     right: { type: 'lineVsVertical', from: 'rightHip', to: 'rightShoulder' },
   },
-  evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 72 }, // tightened 80→72 from real device log
+  evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 64 }, // retightened 72→64, see comment above
   priority: 1, enabled: true,
 };
 
@@ -1366,10 +1386,20 @@ const HINGE_TORSO_ANGLE_CHECK: FormCheckDef = {
 // actually fine). Applying that consistently now that on-device testing
 // showed the gate itself was the thing misfiring, not just its threshold.
 //
-// PLACEHOLDER WARNING per CLAUDE.md: 0.08 is unchanged from before — still a
-// reasoned value with zero device calibration behind it, not a confirmed
-// number. hip_drift is logged on every rep (per-rep form-check log line) and
-// can be tuned from real numbers at any time.
+// WIDENED 0.08→0.15 on explicit request: on-device testing of a knees-bent +
+// rounded-back rep reported this NOT firing. Per CLAUDE.md's process for an
+// unverified threshold with no fresh log available — don't guess a
+// "better" number, make it deliberately more permissive so it registers
+// more often (a flag over-firing is recoverable; under-firing on a genuinely
+// bad rep is the worse failure the user is actually reporting) — rather than
+// pick a second unvalidated number. 0.15 has zero device calibration behind
+// it, same honesty as the 0.08 it replaces.
+//
+// hip_drift_flag is logged on every rep (per-rep [REP] log line, already
+// existed — see ExerciseEngine.swift's completeRep()) alongside
+// torso_angle's own value, so a log from a few more reps — good and
+// knees-bent-rounded-back both — is what actually sets the real number here
+// instead of widening blind a second time.
 const HINGE_HIP_DRIFT_FLAG_CHECK: FormCheckDef = {
   id: 'hip_drift_flag', cue: 'STRAIGHTEN YOUR BACK',
   metric: {
@@ -1377,7 +1407,7 @@ const HINGE_HIP_DRIFT_FLAG_CHECK: FormCheckDef = {
     left:  { type: 'normalizedHorizontalGap', a: 'leftHip',  b: 'leftAnkle'  },
     right: { type: 'normalizedHorizontalGap', a: 'rightHip', b: 'rightAnkle' },
   },
-  evaluateAt: 'atBottom', condition: { type: 'lessThan', value: 0.08 }, // PLACEHOLDER — see comment above
+  evaluateAt: 'atBottom', condition: { type: 'lessThan', value: 0.15 }, // PLACEHOLDER — see comment above
   priority: 2, enabled: true,
 };
 

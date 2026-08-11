@@ -54,17 +54,21 @@ const C = {
 };
 
 const BODY_COLORS  = ['#FFC24B', '#FF9F0A', '#FF7A2E'] as const; // legend chip only
-const TODAY_COLOR  = '#0a84ff'; // distinct overlay color for "worked this session"
+export const TODAY_COLOR  = '#0a84ff'; // distinct overlay color for "worked this session"
 const GLOW_BLUR_ID = 'muscleGlowBlur'; // one shared filter, reused by every glow layer
 
-const GROUP_TO_FRONT_SLUGS: Partial<Record<MuscleGroup, Slug[]>> = {
+// Exported so the experimental Skia heatmap (components/SkiaMuscleHeatmap.tsx,
+// reached only via the isolated /skia-heatmap-test route) can reuse the exact
+// same muscle-group → score → color logic instead of re-deriving it and
+// risking the two views drifting apart.
+export const GROUP_TO_FRONT_SLUGS: Partial<Record<MuscleGroup, Slug[]>> = {
   [MuscleGroup.Chest]:     ['chest'],
   [MuscleGroup.Shoulders]: ['deltoids'],
   [MuscleGroup.Arms]:      ['biceps', 'forearm'],
   [MuscleGroup.Core]:      ['abs', 'obliques'],
   [MuscleGroup.Legs]:      ['quadriceps', 'adductors'],
 };
-const GROUP_TO_BACK_SLUGS: Partial<Record<MuscleGroup, Slug[]>> = {
+export const GROUP_TO_BACK_SLUGS: Partial<Record<MuscleGroup, Slug[]>> = {
   [MuscleGroup.Back]:      ['trapezius', 'upper-back'],
   [MuscleGroup.Shoulders]: ['deltoids'],
   [MuscleGroup.Arms]:      ['triceps'],
@@ -84,7 +88,7 @@ const THERMAL_STOPS: [number, [number, number, number]][] = [
 
 function lerp(a: number, b: number, t: number) { return a + (b - a) * t; }
 
-function thermalColor(score: number): string {
+export function thermalColor(score: number): string {
   const s = Math.max(0, Math.min(1, score));
   let lo = THERMAL_STOPS[0], hi = THERMAL_STOPS[THERMAL_STOPS.length - 1];
   for (let i = 0; i < THERMAL_STOPS.length - 1; i++) {
@@ -101,14 +105,14 @@ function thermalColor(score: number): string {
   return `rgb(${r},${g},${b})`;
 }
 
-interface MuscleGlowSpec {
+export interface MuscleGlowSpec {
   key:     string;
   paths:   string[];
   color:   string;
   opacity: number;
 }
 
-function buildGlowSpecs(
+export function buildGlowSpecs(
   overallScores: MuscleScores,
   highlightGroups: Set<MuscleGroup> | undefined,
   side: 'front' | 'back',
