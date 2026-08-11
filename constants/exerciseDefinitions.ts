@@ -50,6 +50,17 @@ export interface FormCheckDef {
   // ExerciseEngine.swift's gatesCounting doc comment. Only for checks that
   // mean "this wasn't the target movement," never ordinary form faults.
   gatesCounting?: boolean;
+  // Per-check override of FORM_CHECK_MIN_CONF (ExerciseEngine.swift's
+  // isMetricReliable/isReliable) — the confidence floor a frame's joints must
+  // clear before this check's value is trusted into its throughoutMax/Min
+  // accumulator. Default 0.6 (omit for every normal check) protects against
+  // one noisy low-confidence frame permanently corrupting a rep-long max/min.
+  // Only lower this for a check whose real fault moment is ALSO the moment
+  // confidence naturally degrades (e.g. tricep elbow_drift — the forearm
+  // crosses in front of the torso, partially occluding the elbow, right when
+  // the arm is most extended and elbow position most likely to have drifted)
+  // — see TRICEP_ELBOW_DRIFT_L/R below for the reasoning and honesty caveat.
+  formCheckMinConf?: number;
 }
 
 export interface ReadyGateDef {
@@ -759,17 +770,36 @@ const TRICEP_REP_METRIC: MetricDef = {
 // elbow_drift still fires normally as the top-priority cue on any rep that
 // DID reach full extension with bad elbow position (goodROM=true path is
 // unaffected by this priority change).
+// formCheckMinConf ADDED (Fix 5.1 investigation — "sometimes correctly says
+// KEEP ELBOWS IN, sometimes wrongly says GOOD" on the same real flare):
+// evaluateAt: 'throughoutMax' means one bad frame can't be corrected by a
+// later good one — accumMax only ever goes up. ExerciseEngine's shared
+// isReliable() gate (FORM_CHECK_MIN_CONF=0.6) excludes any frame where
+// EITHER shoulder or elbow reads below that confidence from ever reaching
+// accumMax at all. Tricep's forearm crosses in front of the torso at the
+// bottom of the rep — the exact same self-occlusion already confirmed (see
+// missingPersonGraceFrames above) to make Vision lose tracking here — and
+// that's also the moment a real flare is most likely to be at its worst. If
+// confidence dips on exactly that frame, the true peak silently never gets
+// recorded and the rep can read GOOD despite a real fault. NOT CONFIRMED
+// from a device log which of the two candidate causes (this, vs. the value
+// genuinely oscillating right at the 45° line) is dominant — 0.45 is a
+// reasoned interim floor (between kMinConf=0.25 "some data exists" and the
+// default 0.6 "fully trust it"), NOT a verified number. The new confDrops
+// diagnostic (ExerciseEngine.swift accumulate()) logs how many frames get
+// excluded per rep — send a log from an inconsistent session and I'll know
+// which cause it actually is instead of guessing a second time.
 const TRICEP_ELBOW_DRIFT_L: FormCheckDef = {
   id: 'elbow_drift_l', cue: 'KEEP ELBOWS IN',
   metric: { type: 'lineVsVertical', from: 'leftShoulder', to: 'leftElbow' },
   evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 45 },
-  priority: 3, enabled: true,
+  priority: 3, enabled: true, formCheckMinConf: 0.45,
 };
 const TRICEP_ELBOW_DRIFT_R: FormCheckDef = {
   id: 'elbow_drift_r', cue: 'KEEP ELBOWS IN',
   metric: { type: 'lineVsVertical', from: 'rightShoulder', to: 'rightElbow' },
   evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 45 },
-  priority: 3, enabled: true,
+  priority: 3, enabled: true, formCheckMinConf: 0.45,
 };
 const TRICEP_TORSO_LEAN: FormCheckDef = {
   id: 'torso_lean', cue: 'STAY UPRIGHT',
@@ -905,6 +935,19 @@ function tricepVariant(
     // Not device-verified as the exact right number — send a log if it's
     // still too short (or if it now lets a real walk-away complete a rep).
     missingPersonGraceFrames: 15,
+    // ROOT CAUSE of "partial reps don't count at all" — same phantom-rep-guard
+    // mechanism documented in detail on hingeVariant()'s phantomGuardFraction
+    // above. For tricep's numbers (topAngle=45, goodROMThreshold=10): a bare
+    // entry only guarantees ~20° of movement, but the guard (default fraction
+    // 0.30 against the top→goodROM gap) requires ~10.5° AS LONG AS
+    // repTopValue reads close to the 45° anchor — and tricep's own two real
+    // device readings of "top" so far were 8.0 and 35.2, BOTH far below that
+    // anchor, meaning this guard has likely been rejecting a large share of
+    // real attempts every session, not just edge cases. Same fix as hinge,
+    // same reasoning: lowered to 0.05 so a genuine entry isn't also required
+    // to approach good depth to be counted at all — insufficientROMCue
+    // ("EXTEND FULLY") is what should handle a shallow-but-real rep now.
+    phantomGuardFraction: 0.05,
   };
 }
 
@@ -1487,6 +1530,33 @@ function hingeVariant(
     // rotation inflates the same shoulder-hip distance signal walking closer
     // to the camera would. Inactivity-based suppression (8s idle) stays.
     suppressApproachDetection: true,
+    // ROOT CAUSE of "still only counts GOOD reps, imperfect ones vanish
+    // silently" (reported after the hip_drift gate was already removed —
+    // this is a DIFFERENT, still-active native gate): the phantom-rep guard
+    // (ExerciseEngine.swift completeRep, "movement >= required") measures
+    // required movement as a fraction of |repTopValue - goodROMThreshold|
+    // (45°), NOT of |repTopValue - repEnterThreshold| (75°). Worked out
+    // algebraically: with the default fraction (0.30), a rep only clears the
+    // guard if repTopValue >= ~87.9° — just ~1.6° of headroom above the one
+    // confirmed standing reading (89.5°). Any real-world dip in repTopValue
+    // between reps (not fully returning to standing, camera drift, fatigue)
+    // pushes a genuinely-entered, genuinely-shallow rep below that line and
+    // it's silently rejected as "phantom" — logged, not counted, no cue.
+    // This is the actual live mechanism behind the report, not a guess: the
+    // JS-level hip_drift gate this was blamed on last round was already
+    // removed, so something else native had to be doing the rejecting, and
+    // this is the only other place completeRep() can be skipped for
+    // literally every exercise right now (gatesCounting is currently unset
+    // everywhere). FIX: lowered to 0.05 — this doesn't disable the guard
+    // (a true zero-movement noise blip still fails it), it just stops it
+    // from ALSO requiring near-good depth to register as a rep at all,
+    // matching the explicit ask that only a true non-attempt should not
+    // count. See exerciseDefinitions.ts's FormCheckDef-adjacent comment on
+    // phantomGuardFraction — default (0.30) is left alone for every other
+    // exercise since curl specifically NEEDS the stricter default (it was
+    // raised to 0.40 there to reject small wiggles) and no other exercise
+    // has a confirmed report of this failure mode.
+    phantomGuardFraction: 0.05,
   };
 }
 
@@ -1884,6 +1954,18 @@ function latPulldownVariant(
     // No suppressApproachDetection — seated, front-facing, torso-scale has
     // no known contamination source the way hinge/tricep's does. Revisit
     // only if a log shows otherwise.
+    // ROOT CAUSE contributor to "barely counts — 1 rep out of many": same
+    // phantom-rep-guard mechanism as hingeVariant/tricepVariant above. With
+    // topAngle=160, goodROMThreshold=90, the default fraction (0.30) requires
+    // repTopValue >= ~168.6° for even a bare-threshold entry to register —
+    // ABOVE topAngle itself, meaning the guard could reject literally every
+    // rep regardless of depth unless repTopValue reads unusually high. This
+    // stacks with the separate placeholder-threshold problem (topAngle/enter/
+    // exit/ROM are all unverified, see LAT_PULLDOWN_REP_METRIC comment) — the
+    // combination is consistent with "almost nothing counts." Lowered for the
+    // same reason as the other two: this guard should reject true non-
+    // attempts, not gate on depth (that's goodROMThreshold's job).
+    phantomGuardFraction: 0.05,
   };
 }
 

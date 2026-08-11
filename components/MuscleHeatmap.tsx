@@ -300,6 +300,12 @@ const mh = StyleSheet.create({
   emptyTxt:       { fontSize: 13, color: C.textSub, textAlign: 'center', lineHeight: 19 },
   diagramsRow:    { flexDirection: 'row', justifyContent: 'center', alignItems: 'flex-start' },
   diagramCol:     { flex: 1, alignItems: 'center', gap: 8 },
-  diagramDivider: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch', backgroundColor: 'rgba(17,24,39,0.07)', marginHorizontal: 8 },
+  // marginHorizontal 8→18: doubled the gap around the divider so front/back
+  // separation reads as obviously intentional even at a glance, on top of
+  // (not instead of) the heroCard intrinsic-sizing fix from the prior round —
+  // see recap.tsx's heroCard comment. If this STILL doesn't look different
+  // on-device, the code isn't the problem — see Fix 4's note on unpushed
+  // commits in this round's report.
+  diagramDivider: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch', backgroundColor: 'rgba(17,24,39,0.07)', marginHorizontal: 18 },
   diagramLabel:   { fontSize: 11, fontWeight: '600', letterSpacing: 0.4, color: C.textSub },
 });

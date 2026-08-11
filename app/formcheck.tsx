@@ -185,6 +185,12 @@ export default function FormCheckScreen() {
   const repEvents      = useRef<{ timeSec: number; good: boolean; reason: string }[]>([]);
   const sessionStopped = useRef(false);
   const isTrackingRef  = useRef(false);
+  // True only once real native tracking has genuinely begun (after
+  // startTracking() resolves and phase actually becomes 'tracking') — see
+  // the setupSub listener below for why this is a SEPARATE flag from
+  // isTrackingRef (which flips true earlier, before the 1.5s setup-done
+  // grace period even starts).
+  const trackingActiveRef = useRef(false);
   const hintTimer      = useRef<ReturnType<typeof setTimeout> | null>(null);
   const setupDoneTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -242,8 +248,9 @@ export default function FormCheckScreen() {
     }
 
     let mounted = true;
-    sessionStopped.current = false;
-    isTrackingRef.current  = false;
+    sessionStopped.current  = false;
+    isTrackingRef.current   = false;
+    trackingActiveRef.current = false;
 
     const errSub   = addErrorListener(e => { if (mounted) setError(e.message); });
     const camSub   = addCameraStateListener(e => {
@@ -279,13 +286,37 @@ export default function FormCheckScreen() {
             startTimestamp.current = Date.now();
             repEvents.current      = [];
             setPhase('tracking');
+            trackingActiveRef.current = true;
             await startTracking();
             setupDoneTimer.current = null;
           }, 1500);
         } else {
           setPhase('tracking');
+          trackingActiveRef.current = true;
         }
       } else {
+        // ROOT CAUSE ("FACE THE CAMERA" reappearing mid-set on lat pulldown,
+        // reported as a misfiring live cue): native's runSetupCheck() only
+        // ever runs while enginePhase == .setup, and enginePhase never goes
+        // back to .setup once it flips to .active — so a genuine, in-order
+        // onSetupStatus event can't legitimately arrive once real tracking
+        // has begun. But isTrackingRef flips true the INSTANT the first
+        // passed:true event arrives — well before startTracking() is even
+        // called (there's a deliberate 1.5s grace delay first) — so for that
+        // whole window native can still be emitting a stream of genuine
+        // .setup-phase events, some of which are passed:false from ordinary
+        // micro-movement (adjusting grip, settling). Any one of those,
+        // delivered with the bridge's normal event-queue latency, could
+        // arrive AFTER this JS side already committed to 'tracking'
+        // (isTrackingRef.current was already true, setupDoneTimer already
+        // cleared) and incorrectly re-trigger setPhase('setup') below,
+        // showing the setup screen's "Face the camera" title as if it were a
+        // live correction. trackingActiveRef only flips true once tracking
+        // has GENUINELY started (after the grace delay, right where
+        // startTracking() is actually called) — once that's true, any
+        // further not-passed event is definitely stale and is ignored
+        // entirely instead of reverting the phase.
+        if (trackingActiveRef.current) return;
         if (setupDoneTimer.current) {
           clearTimeout(setupDoneTimer.current);
           setupDoneTimer.current = null;
@@ -366,6 +397,9 @@ export default function FormCheckScreen() {
           exerciseId: workoutExerciseId ?? exerciseType,
           reps:       String(navParams.reps),
           goodReps:   String(navParams.goodReps),
+          // Feeds recap.tsx's rep breakdown section for workout mode — see
+          // store/workoutSessionStore.ts's ExerciseResult.repEvents.
+          events:     JSON.stringify(repEvents.current),
         },
       });
     } else {

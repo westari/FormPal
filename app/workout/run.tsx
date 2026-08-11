@@ -31,6 +31,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 import ScreenBackground from '../../components/ScreenBackground';
 import { useWorkoutSessionStore } from '../../store/workoutSessionStore';
+import type { RepEventData } from '../../lib/sessionLog';
 import { FONT, W, Sp, R, Elev, Col } from '../../constants/theme';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -65,6 +66,7 @@ export default function WorkoutRunScreen() {
     exerciseId?: string;
     reps?:       string;
     goodReps?:   string;
+    events?:     string;
   }>();
 
   // Store actions
@@ -87,7 +89,7 @@ export default function WorkoutRunScreen() {
     if (processed.current) return;
     processed.current = true;
 
-    const { exerciseId, reps: repsStr, goodReps: goodStr } = params;
+    const { exerciseId, reps: repsStr, goodReps: goodStr, events: eventsStr } = params;
 
     if (!session) {
       // No active session — navigate back
@@ -99,8 +101,10 @@ export default function WorkoutRunScreen() {
       // Returning from formcheck with results
       const reps     = parseInt(repsStr, 10)  || 0;
       const goodReps = parseInt(goodStr, 10) || 0;
+      let repEvents: RepEventData[] = [];
+      try { repEvents = eventsStr ? JSON.parse(eventsStr) : []; } catch { repEvents = []; }
 
-      completeExercise(exerciseId, reps, goodReps);
+      completeExercise(exerciseId, reps, goodReps, repEvents);
 
       // Read updated store state synchronously
       const updated = useWorkoutSessionStore.getState();

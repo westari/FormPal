@@ -183,6 +183,8 @@ final class ExerciseEngine {
     private var accumMax:    [String: Double] = [:]
     private var accumMin:    [String: Double] = [:]
     private var atBottomVal: [String: Double] = [:]
+    // Diagnostic counter — see accumulate()'s doc comment below.
+    private var confDrops:   [String: Int]    = [:]
 
     // ── Planarity / foreshortening gate ───────────────────────────────────────
     // calibratedSegmentRefs: max segmentLengthRatio per check learned during calibration.
@@ -1196,7 +1198,9 @@ final class ExerciseEngine {
             case .lessThan(let t):    lim = t
             }
             let tag = failed.contains { $0.id == ch.id } ? "FAIL" : "ok"
-            return "\(ch.id)=\(String(format: "%.3f", v))/lim=\(String(format: "%.3f", lim))[\(tag)]"
+            let drops = confDrops[ch.id] ?? 0
+            return "\(ch.id)=\(String(format: "%.3f", v))/lim=\(String(format: "%.3f", lim))[\(tag)]" +
+                   (drops > 0 ? " \(ch.id)_confDrops=\(drops)" : "")
         }.joined(separator: " ")
         onDebugLog?("[REP] #\(totalReps) top=\(String(format: "%.1f", repTopValue)) " +
                     "bottom=\(String(format: "%.1f", repMinAngle)) " +
@@ -1262,13 +1266,29 @@ final class ExerciseEngine {
         accumMin           = [:]
         atBottomVal        = [:]
         planarityMinRatios = [:]
+        confDrops          = [:]
     }
 
+    // DIAGNOSTIC (Fix 5.1 investigation — tricep elbow_drift inconsistency):
+    // confDrops counts, per check per rep, how many .inRep frames were
+    // EXCLUDED from accumMax/Min because isReliable() failed (confidence
+    // below the check's floor). throughoutMax can't be corrected by a later
+    // good frame — if the real fault moment (e.g. forearm crossing torso at
+    // full extension) is ALSO the moment confidence drops, the true peak
+    // silently never gets recorded, and a genuinely-flared rep can read as
+    // GOOD. Logged in completeRep()'s [REP] line as "<id>_confDrops=N" so a
+    // sent log can show whether that's actually happening (high confDrops on
+    // a reported-wrongly-GOOD rep = confirms it) or whether the value is just
+    // oscillating near the 45° boundary with confDrops=0 (a different, purely
+    // threshold-tuning problem instead).
     private func accumulate(pose: Pose) {
         guard repPhase == .inRep else { return }
         for check in def.formChecks where check.enabled {
-            guard isReliable(check: check, pose: pose),
-                  let v = check.measure(pose: pose) else { continue }
+            guard isReliable(check: check, pose: pose) else {
+                confDrops[check.id] = (confDrops[check.id] ?? 0) + 1
+                continue
+            }
+            guard let v = check.measure(pose: pose) else { continue }
             accumMax[check.id] = max(accumMax[check.id] ?? -999, v)
             accumMin[check.id] = min(accumMin[check.id] ??  999, v)
         }
@@ -1317,22 +1337,23 @@ final class ExerciseEngine {
     // original logic was correct, it just needs to apply per-branch, not
     // flattened across the whole tree.
     private func isReliable(check: FormCheck, pose: Pose) -> Bool {
-        isMetricReliable(check.metric, pose: pose)
+        let floor = check.formCheckMinConf ?? Self.FORM_CHECK_MIN_CONF
+        return isMetricReliable(check.metric, pose: pose, minConf: floor)
     }
 
-    private func isMetricReliable(_ metric: Metric, pose: Pose) -> Bool {
+    private func isMetricReliable(_ metric: Metric, pose: Pose, minConf: Float) -> Bool {
         switch metric {
         case let .average(l, r),
              let .minimum(l, r),
              let .maximum(l, r):
-            return isMetricReliable(l, pose: pose) || isMetricReliable(r, pose: pose)
+            return isMetricReliable(l, pose: pose, minConf: minConf) || isMetricReliable(r, pose: pose, minConf: minConf)
         case let .bestSide(_, _, leftJoints, rightJoints):
-            let leftOk  = leftJoints.allSatisfy  { (pose[$0]?.confidence ?? 0) >= Self.FORM_CHECK_MIN_CONF }
-            let rightOk = rightJoints.allSatisfy { (pose[$0]?.confidence ?? 0) >= Self.FORM_CHECK_MIN_CONF }
+            let leftOk  = leftJoints.allSatisfy  { (pose[$0]?.confidence ?? 0) >= minConf }
+            let rightOk = rightJoints.allSatisfy { (pose[$0]?.confidence ?? 0) >= minConf }
             return leftOk || rightOk
         default:
             return metric.referencedJoints().allSatisfy {
-                (pose[$0]?.confidence ?? 0) >= Self.FORM_CHECK_MIN_CONF
+                (pose[$0]?.confidence ?? 0) >= minConf
             }
         }
     }

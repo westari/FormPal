@@ -229,9 +229,10 @@ extension ExerciseDefinition {
         else if let p = dict["priority"] as? Double { priority = Int(p) }
         else { return nil }
         let gatesCounting = dict["gatesCounting"] as? Bool ?? false
+        let formCheckMinConf: Float? = (dict["formCheckMinConf"] as? Double).map(Float.init)
         return FormCheck(id: id, cue: cue, metric: metric, evaluateAt: evalAt,
                          condition: condition, priority: priority, enabled: enabled,
-                         gatesCounting: gatesCounting)
+                         gatesCounting: gatesCounting, formCheckMinConf: formCheckMinConf)
     }
 
     private static func parseReadyGate(_ dict: [String: Any]) -> ReadyGateConfig? {

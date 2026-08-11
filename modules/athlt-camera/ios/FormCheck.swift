@@ -43,13 +43,21 @@ struct FormCheck {
     // Defaults to false via the parser when the JSON field is absent.
     let gatesCounting: Bool
 
-    // Explicit init with a default for gatesCounting so every existing
-    // FormCheck(...) call site (ExerciseRegistry.swift's ~13 hardcoded
-    // definitions) keeps compiling unchanged — only call sites that need
-    // gating (currently just the JSON parser, for hinge's hip_drift) pass it.
+    // Per-check override of ExerciseEngine's FORM_CHECK_MIN_CONF (the
+    // confidence floor a frame must clear before this check's value is
+    // trusted into a rep-long throughoutMax/Min accumulator). nil = use the
+    // engine's shared default. See exerciseDefinitions.ts's FormCheckDef
+    // doc comment for when to set this.
+    let formCheckMinConf: Float?
+
+    // Explicit init with defaults for gatesCounting/formCheckMinConf so every
+    // existing FormCheck(...) call site (ExerciseRegistry.swift's ~13
+    // hardcoded definitions) keeps compiling unchanged — only call sites that
+    // need gating or a custom confidence floor (currently just the JSON
+    // parser) pass them.
     init(id: String, cue: String, metric: Metric, evaluateAt: EvaluateAt,
          condition: FormCondition, priority: Int, enabled: Bool,
-         gatesCounting: Bool = false) {
+         gatesCounting: Bool = false, formCheckMinConf: Float? = nil) {
         self.id = id
         self.cue = cue
         self.metric = metric
@@ -58,6 +66,7 @@ struct FormCheck {
         self.priority = priority
         self.enabled = enabled
         self.gatesCounting = gatesCounting
+        self.formCheckMinConf = formCheckMinConf
     }
 }
 

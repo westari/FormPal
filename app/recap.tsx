@@ -16,7 +16,7 @@ import RepFeedback from '../components/RepFeedback';
 import { MuscleHeatmap } from '../components/MuscleHeatmap';
 import {
   getAllSessions, appendSessions, groupIntoWorkouts, computeOverallMuscleScores,
-  muscleGroupsWorked, type SessionEntry, type MuscleScores,
+  muscleGroupsWorked, type SessionEntry, type MuscleScores, type RepEventData,
 } from '../lib/sessionLog';
 import { EXERCISE_DEFINITIONS } from '../constants/exerciseDefinitions';
 import { useWorkoutSessionStore } from '../store/workoutSessionStore';
@@ -46,11 +46,6 @@ class RecapSectionBoundary extends React.Component<
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-interface RepEventData {
-  timeSec: number;
-  good:    boolean;
-  reason:  string;
-}
 
 interface RecapData {
   ts:              number;
@@ -60,6 +55,13 @@ interface RecapData {
   pct:             number;
   videoUri?:       string;
   repEvents?:      RepEventData[];
+  // Per-exercise version of repEvents, keyed by exerciseId — solo mode has
+  // exactly one entry (mirrors repEvents above); workout mode has one per
+  // completed exercise (see store/workoutSessionStore.ts's ExerciseResult).
+  // Drives the "Rep breakdown" section below the stat grid. History mode
+  // entries never have this (past sessions didn't capture it) — the section
+  // is simply omitted for those, not fabricated.
+  repEventsByExercise?: Record<string, RepEventData[]>;
   isHistory:       boolean;
   workoutSummary?: WorkoutSummary;
   // Real elapsed session time when we have it — workout mode (WorkoutSummary
@@ -99,6 +101,7 @@ const C = {
   muted:     'rgba(30,40,70,0.55)',
   mutedDim:  'rgba(30,42,74,0.52)',
   good:      '#2E7D63',
+  bad:       '#FF3B30', // matches constants/theme.ts's Col.low — the app-wide "bad" red
 
   accentA:   '#5A6CFF',
   accentB:   '#7A5CF0',
@@ -290,11 +293,18 @@ export default function RecapScreen() {
           }));
         if (entries.length > 0) await appendSessions(entries);
 
+        const repEventsByExercise: Record<string, RepEventData[]> = {};
+        for (const r of summary.results) {
+          if (r.completed && r.repEvents && r.repEvents.length > 0) {
+            repEventsByExercise[r.exerciseId] = r.repEvents;
+          }
+        }
+
         setData({
           ts: summary.finishedAt, entries,
           totalReps: summary.totalReps, totalGoodReps: summary.totalGoodReps,
           pct: summary.overallFormScore, isHistory: false, workoutSummary: summary,
-          durationSec: summary.durationSeconds,
+          durationSec: summary.durationSeconds, repEventsByExercise,
         });
       } else if (isHistoryMode) {
         const all    = await getAllSessions();
@@ -324,6 +334,7 @@ export default function RecapScreen() {
           totalReps: reps, totalGoodReps: goodReps, pct,
           videoUri: typeof videoUriParam === 'string' && videoUriParam.length > 0 ? videoUriParam : undefined,
           repEvents: repEventsParam, isHistory: false,
+          repEventsByExercise: repEventsParam.length > 0 ? { [exId]: repEventsParam } : undefined,
           durationSec: parsedDuration != null && !isNaN(parsedDuration) ? parsedDuration : undefined,
         });
       }
@@ -534,6 +545,49 @@ export default function RecapScreen() {
                     </GlassSurface>
                   )}
                 </View>
+
+                {/* Rep breakdown — per-exercise good/bad chips with the cue
+                    shown on each bad rep. Was previously captured (repEvents
+                    flowed all the way to this screen already) but never
+                    rendered anywhere — the only place it showed up was a
+                    live flash animation timed to video playback, which
+                    required a video AND for it to be actively playing.
+                    Static and always visible whenever the data exists, for
+                    both solo and workout mode; omitted entirely for history
+                    (old sessions never captured this) instead of faking it. */}
+                {data.repEventsByExercise && Object.keys(data.repEventsByExercise).length > 0 && (
+                  <RecapSectionBoundary fallback={null}>
+                    <GlassSurface radius={24} style={s.repBreakdownCard}>
+                      <Text style={s.heroLabel}>REP BREAKDOWN</Text>
+                      {data.entries.map(entry => {
+                        const evs = data.repEventsByExercise?.[entry.exerciseId];
+                        if (!evs || evs.length === 0) return null;
+                        return (
+                          <View key={entry.exerciseId} style={s.repExerciseBlock}>
+                            {data.entries.length > 1 && (
+                              <Text style={s.repExerciseName}>{entry.displayName}</Text>
+                            )}
+                            <View style={s.repChipRow}>
+                              {evs.map((ev, i) => (
+                                <View
+                                  key={i}
+                                  style={[s.repChip, ev.good ? s.repChipGood : s.repChipBad]}
+                                >
+                                  <Text style={[s.repChipNum, ev.good ? s.repChipNumGood : s.repChipNumBad]}>
+                                    {i + 1} {ev.good ? '✓' : '✗'}
+                                  </Text>
+                                  {!ev.good && ev.reason ? (
+                                    <Text style={s.repChipCue} numberOfLines={1}>{ev.reason}</Text>
+                                  ) : null}
+                                </View>
+                              ))}
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </GlassSurface>
+                  </RecapSectionBoundary>
+                )}
               </View>
             </ViewShot>
 
@@ -688,6 +742,21 @@ const s = StyleSheet.create({
   },
   statVal: { fontSize: 18, fontWeight: '600', letterSpacing: -0.3, color: C.text },
   statLbl: { fontSize: 10, fontWeight: '600', letterSpacing: 0.5, textTransform: 'uppercase', color: C.mutedDim },
+
+  repBreakdownCard: { padding: 20, marginTop: 14 },
+  repExerciseBlock: { marginTop: 14 },
+  repExerciseName:  { fontSize: 13, fontWeight: '600', color: C.text, marginBottom: 8 },
+  repChipRow:       { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  repChip: {
+    borderRadius: 12, paddingVertical: 6, paddingHorizontal: 10,
+    borderWidth: 1, maxWidth: 150,
+  },
+  repChipGood: { backgroundColor: 'rgba(46,125,99,0.12)', borderColor: 'rgba(46,125,99,0.3)' },
+  repChipBad:  { backgroundColor: 'rgba(255,59,48,0.10)', borderColor: 'rgba(255,59,48,0.28)' },
+  repChipNum:     { fontSize: 12, fontWeight: '700' },
+  repChipNumGood: { color: C.good },
+  repChipNumBad:  { color: C.bad },
+  repChipCue: { fontSize: 10, fontWeight: '600', color: C.bad, marginTop: 2 },
 
   actions: { gap: 10, marginTop: 22 },
   shareBtnShadow: {

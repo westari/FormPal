@@ -31,6 +31,18 @@ export interface SessionEntry {
   pct:         number; // 0-100 form score for this exercise
 }
 
+// Per-rep good/bad + cue, EPHEMERAL only — never persisted into SessionEntry/
+// AsyncStorage (would grow the log unboundedly). Flows solo mode: formcheck.tsx
+// -> recap.tsx nav param. Workout mode: formcheck.tsx -> workout/run.tsx ->
+// workoutSessionStore's transient ExerciseResult -> recap.tsx. Recap renders
+// it as the per-rep good/bad breakdown; history mode has none since past
+// sessions never captured it.
+export interface RepEventData {
+  timeSec: number;
+  good:    boolean;
+  reason:  string;
+}
+
 export interface WorkoutGroup {
   ts:            number;
   entries:       SessionEntry[];

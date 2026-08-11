@@ -1,42 +1,58 @@
 /**
- * components/SkiaMuscleHeatmap.tsx — EXPERIMENTAL real continuous Skia
- * thermal heatmap. Reached ONLY via the isolated /skia-heatmap-test route
- * (app/skia-heatmap-test.tsx) until it's been confirmed not to crash on a
- * real device — it is NOT wired into recap.tsx or the progress tab.
+ * components/SkiaMuscleHeatmap.tsx — EXPERIMENTAL continuous Skia thermal
+ * heatmap. Reached ONLY via the isolated /skia-heatmap-test route
+ * (app/skia-heatmap-test.tsx) until confirmed not to crash on a real device
+ * — NOT wired into recap.tsx or the progress tab.
  *
- * WHY THIS EXISTS: the shipped components/MuscleHeatmap.tsx (react-native-svg)
- * is proven-safe but each muscle glows independently — adjacent regions don't
- * blend into each other, so it isn't a true continuous thermal field. A prior
- * Skia attempt (v3, reverted — see MuscleHeatmap.tsx's header comment) used
- * Mask + Group(layer=...) + Blur and crashed on device; none of those three
- * APIs are used anywhere else in this app.
+ * ── TECHNIQUE — scattered points + Gaussian blur, same family as heatmap.js ──
  *
- * WHAT THIS VERSION USES INSTEAD (deliberately restricted to the smallest
- * API surface that can produce real cross-shape blending):
- *   - Canvas, Path, BlurMask, LinearGradient — already used safely in
- *     components/Ring.tsx and components/SpeedoGauge.tsx.
- *   - Group WITHOUT a `layer` prop (a plain grouping container, not an
- *     offscreen-composited layer) — also already used in SpeedoGauge.tsx.
- *   - Group's `matrix` prop, given a flat 9-number array (not a `transform`
- *     op list) — this is the one genuinely new-to-this-app primitive: a
- *     direct, unambiguous 3x3 matrix (no composition-order guesswork), used
- *     purely to map the shared 724x1448 muscle-path coordinate space (see
- *     components/muscleShapePaths.ts) down to canvas pixels.
- *   - Skia.Path.MakeFromSVGString — a pure path-data parser, not a
- *     masking/layering primitive.
+ * Instead of filling each muscle's SHAPE with one flat color (the previous
+ * version, and the shipped SVG MuscleHeatmap), this scatters many small soft
+ * dots across each muscle's area — density/count driven by how much that
+ * muscle was trained — and lets their blurred edges overlap and stack. Where
+ * many dots cluster (heavily worked muscle, or the shared boundary between
+ * two adjacent worked muscles) the overlapping alpha makes that region read
+ * hotter/more solid; where dots are sparse it stays faint. That's what
+ * produces a field that blends across muscle boundaries instead of looking
+ * like discrete glowing shapes.
  *
- * NO Mask, NO Group(layer=...), NO Blur (the full-canvas filter node) are
- * used anywhere in this file. The "continuous" look instead comes from many
- * overlapping BlurMask-softened shapes alpha-blending where they overlap —
- * ordinary Porter-Duff src-over compositing, the same thing that happens
- * when two semi-transparent React Native Views overlap.
+ * ── HONEST GAP vs. a textbook heatmap.js implementation ─────────────────────
  *
- * SILHOUETTE: rather than clipping the canvas to the body outline (which
- * would need Skia's Mask or a clip primitive not yet proven in this app),
- * the outline is drawn as its own filled Skia Path first, underneath the
- * heat, and blur radii are kept modest relative to body size. Heat can
- * bleed a few px past the silhouette edge in extreme cases — an accepted
- * tradeoff for staying inside the known-safe API set.
+ * The textbook version is a genuine TWO-PASS technique: (1) render every
+ * point as grayscale ADDITIVE intensity into an offscreen buffer, so
+ * overlapping points literally SUM past 1.0, then (2) remap that summed
+ * buffer through a 1D color gradient (a lookup table) so color comes from
+ * the FINAL accumulated value at each pixel. Doing that for real in Skia
+ * needs an offscreen `Group layer={...}` with an additive blend mode for
+ * pass 1, and either a `ColorFilter` or a custom `Shader`/RuntimeEffect for
+ * pass 2 — none of which are used anywhere else in this app, and `layer`
+ * specifically is the SAME primitive already confirmed to have crashed this
+ * exact component once before (see the old header comment, preserved in git
+ * history: the reverted v3 used Mask + Group(layer=...) + Blur).
+ *
+ * This version deliberately stays OUTSIDE that risk: every dot is drawn with
+ * its OWN pre-computed color (from the existing thermalColor() ramp, keyed
+ * to that muscle's score) at low, fixed opacity, composited with Skia's
+ * default (normal/src-over) blending — no layer, no blend modes, no
+ * ColorFilter, no Shader. Overlapping same-colored dots still visibly
+ * intensify (more opaque stacked alpha reads as "hotter"), and overlapping
+ * DIFFERENT-colored dots from adjacent muscles blend into a genuine
+ * transitional color at the seam — both of the visual goals — but this is
+ * alpha-stacking approximating accumulation, not literal per-pixel summed
+ * intensity remapped through a gradient. Color resolution is per-muscle
+ * (continuous 0–1 via thermalColor, same as before), not per-pixel.
+ *
+ * If the real two-pass version is wanted after this is confirmed stable, it
+ * is a deliberate, separate, higher-risk follow-up — not attempted here
+ * given this round's explicit priority ("NOT crashing over speed").
+ *
+ * ── SAFE API SURFACE USED ────────────────────────────────────────────────
+ * Canvas, Path (+ Skia.Path.MakeFromSVGString, .getBounds(), .contains() —
+ * plain path-data/hit-test utilities, not masking/layering), BlurMask, plain
+ * Group (no `layer` prop — already used in components/SpeedoGauge.tsx), and
+ * Group's `matrix` prop given a flat 9-number array (unambiguous, no
+ * transform-order guessing) to map the shared 724x1448 muscle-path
+ * coordinate space (components/muscleShapePaths.ts) to canvas pixels.
  */
 
 import React, { useMemo } from 'react';
@@ -51,6 +67,36 @@ import { buildGlowSpecs, type MuscleGlowSpec } from './MuscleHeatmap';
 const VIEW_W = 724;
 const VIEW_H = 1448;
 const OUTLINE_FILL = 'rgba(200,210,228,0.35)'; // matches MuscleHeatmap's defaultFill
+
+// ─── Point scatter (density-weighted, rejection-sampled inside the real
+// muscle path — not just its bounding box) ──────────────────────────────────
+
+interface ScatterPoint { x: number; y: number; r: number }
+
+// Visual-design constants, not CV thresholds — freely tunable by eye on the
+// test screen, not subject to the exercise-definition investigate-first rule.
+const MIN_POINTS       = 8;
+const MAX_EXTRA_POINTS = 24;  // + MIN_POINTS at opacity's top end
+const POINT_R_MIN      = 20;  // path-space units (724x1448 coord system)
+const POINT_R_MAX      = 34;
+const BLUR_RADIUS       = 24; // path-space units — scales down with the Group matrix like everything else
+const DOT_OPACITY_MULT  = 0.30; // fraction of the spec's own opacity per dot
+
+function scatterInPath(path: SkPath, count: number): ScatterPoint[] {
+  const bounds = path.getBounds();
+  const pts: ScatterPoint[] = [];
+  const maxAttempts = count * 40;
+  let attempts = 0;
+  while (pts.length < count && attempts < maxAttempts) {
+    attempts++;
+    const x = bounds.x + Math.random() * bounds.width;
+    const y = bounds.y + Math.random() * bounds.height;
+    if (path.contains(x, y)) {
+      pts.push({ x, y, r: POINT_R_MIN + Math.random() * (POINT_R_MAX - POINT_R_MIN) });
+    }
+  }
+  return pts;
+}
 
 function useParsedPath(d: string | null): SkPath | null {
   return useMemo(() => (d ? Skia.Path.MakeFromSVGString(d) : null), [d]);
@@ -78,11 +124,21 @@ function SideCanvas({
 
   const outlinePath = useParsedPath(outlineD);
 
-  const parsedSpecs = useMemo(
-    () => specs.map(spec => ({
-      ...spec,
-      skPaths: spec.paths.map(d => Skia.Path.MakeFromSVGString(d)).filter((p): p is SkPath => p !== null),
-    })),
+  // Scatter points per spec, per sub-path — density (count) and radius are
+  // driven by the spec's own opacity (already a monotonic function of that
+  // muscle's score — see buildGlowSpecs in MuscleHeatmap.tsx), color comes
+  // straight from the spec (thermalColor(score) or TODAY_COLOR).
+  const dotGroups = useMemo(
+    () => specs.map(spec => {
+      const count = Math.round(MIN_POINTS + spec.opacity * MAX_EXTRA_POINTS);
+      const dotOpacity = spec.opacity * DOT_OPACITY_MULT;
+      const points = spec.paths.flatMap(d => {
+        const p = Skia.Path.MakeFromSVGString(d);
+        return p ? scatterInPath(p, count) : [];
+      });
+      return { key: spec.key, color: spec.color, dotOpacity, points };
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [specs],
   );
 
@@ -91,16 +147,16 @@ function SideCanvas({
       <Group matrix={matrix as any}>
         {outlinePath && <Path path={outlinePath} color={OUTLINE_FILL} style="fill" />}
 
-        {/* Glow pass — blurred, blends continuously where adjacent muscles overlap */}
-        {parsedSpecs.map(spec => spec.skPaths.map((p, i) => (
-          <Path key={`${spec.key}-glow-${i}`} path={p} color={spec.color} style="fill" opacity={spec.opacity * 0.75}>
-            <BlurMask blur={16} style="normal" />
+        {dotGroups.map(g => g.points.map((pt, i) => (
+          <Path
+            key={`${g.key}-${i}`}
+            path={Skia.Path.Make().addCircle(pt.x, pt.y, pt.r)}
+            color={g.color}
+            style="fill"
+            opacity={g.dotOpacity}
+          >
+            <BlurMask blur={BLUR_RADIUS} style="normal" />
           </Path>
-        )))}
-
-        {/* Crisp core pass — keeps each shape legible on top of its own glow */}
-        {parsedSpecs.map(spec => spec.skPaths.map((p, i) => (
-          <Path key={`${spec.key}-core-${i}`} path={p} color={spec.color} style="fill" opacity={spec.opacity} />
         )))}
       </Group>
     </Canvas>

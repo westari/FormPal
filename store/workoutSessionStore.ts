@@ -14,6 +14,7 @@
 
 import { create } from 'zustand';
 import type { Workout, PlannedExercise } from '../types/plan';
+import type { RepEventData } from '../lib/sessionLog';
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -25,6 +26,10 @@ export interface ExerciseResult {
   formScore:   number;    // 0–100
   skipped:     boolean;
   completed:   boolean;
+  // Per-rep good/bad/cue breakdown, EPHEMERAL (this store is already
+  // documented as non-persisted — see file header) — feeds recap.tsx's rep
+  // breakdown section. Empty for a skipped exercise.
+  repEvents:   RepEventData[];
 }
 
 export interface WorkoutSummary {
@@ -62,7 +67,7 @@ interface WorkoutSessionState {
   startWorkout: (workout: Workout) => void;
 
   /** Record a completed exercise result and advance the index. */
-  completeExercise: (exerciseId: string, reps: number, goodReps: number) => void;
+  completeExercise: (exerciseId: string, reps: number, goodReps: number, repEvents?: RepEventData[]) => void;
 
   /** Mark the current exercise skipped and advance. */
   skipCurrentExercise: () => void;
@@ -126,12 +131,13 @@ export const useWorkoutSessionStore = create<WorkoutSessionState>()((set, get) =
           formScore:   0,
           skipped:     false,
           completed:   false,
+          repEvents:   [],
         })),
       },
     });
   },
 
-  completeExercise: (exerciseId: string, reps: number, goodReps: number) => {
+  completeExercise: (exerciseId: string, reps: number, goodReps: number, repEvents: RepEventData[] = []) => {
     const { session } = get();
     if (!session) return;
 
@@ -140,7 +146,7 @@ export const useWorkoutSessionStore = create<WorkoutSessionState>()((set, get) =
 
     const formScore = reps > 0 ? Math.round((goodReps / reps) * 100) : 0;
     const updated   = [...session.results];
-    updated[idx]    = { ...updated[idx], reps, goodReps, formScore, completed: true, skipped: false };
+    updated[idx]    = { ...updated[idx], reps, goodReps, formScore, completed: true, skipped: false, repEvents };
 
     set({
       session: {
