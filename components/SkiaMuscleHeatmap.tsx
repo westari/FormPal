@@ -190,5 +190,10 @@ export function SkiaMuscleHeatmap({
 }
 
 const s = StyleSheet.create({
-  row: { flexDirection: 'row', justifyContent: 'center', alignItems: 'flex-start', gap: 16 },
+  // gap 16→20 — extra explicit separation between the two canvases, matching
+  // the same "make it unmistakable" bump applied to the SVG version's own
+  // divider spacing (components/MuscleHeatmap.tsx). Each canvas is a plain
+  // fixed-size View (not GlassSurface, not flex-dependent), so this is a
+  // straightforward, reliable gap — no other layout mechanism between them.
+  row: { flexDirection: 'row', justifyContent: 'center', alignItems: 'flex-start', gap: 20 },
 });

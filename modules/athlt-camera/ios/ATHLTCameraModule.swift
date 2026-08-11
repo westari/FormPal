@@ -353,6 +353,17 @@ public class ATHLTCameraModule: Module {
                 self.engine = ExerciseEngine(definition: def)
                 self.wireEngineCallbacks()
                 self.currentDef = def
+                // ROOT CAUSE of "[COMPARE] lines all say squat" on lat pulldown:
+                // currentExercise was only ever set by setExercise() (the native-
+                // registry path) — any exercise loaded via THIS function (the
+                // JSON path, used for anything not in ExerciseRegistry.swift,
+                // e.g. lat pulldown) never updated it, so it stayed at whatever
+                // the last native-registry exercise was (or its "squat" default).
+                // Purely a stale LABEL bug — engine/repMetric above already use
+                // the correct JSON-loaded def regardless — but it also fed a
+                // wrong exerciseId into blazePoseEngine's parallel comparison
+                // pass, so fixing it here too.
+                self.currentExercise = def.id
                 let relevantJoints = Array(Set(def.repMetric.referencedJoints()))
                 self.universalEngine.setRelevantJoints(relevantJoints)
 

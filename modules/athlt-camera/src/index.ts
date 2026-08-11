@@ -139,8 +139,8 @@ export type ExerciseType =
   | 'romanianDeadlift' | 'deadlift' | 'goodMorning' | 'kettlebellSwing' | 'singleLegRDL'
   // Shoulder/arm isolation raise family (front-facing lateral, side-facing front raise)
   | 'lateralRaise' | 'frontRaise'
-  // Lat pulldown family (vertical pull, elbow-angle metric — front-facing, seated)
-  | 'latPulldownWide' | 'closeGripPulldown';
+  // Lat pulldown (vertical pull, elbow-angle metric — front-facing, seated)
+  | 'latPulldown';
 
 export async function setExercise(type: ExerciseType): Promise<void> {
   if (!ATHLTCameraNative) return;

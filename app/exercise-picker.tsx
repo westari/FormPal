@@ -64,9 +64,8 @@ const EXERCISE_UI: Record<string, { symbol: string; grad: [string, string] }> = 
   // Shoulder/arm isolation raise family — golden-yellow, distinct from shoulder press's orange-red
   lateralRaise: { symbol: 'figure.arms.open', grad: ['#FDE047', '#CA8A04'] },
   frontRaise:   { symbol: 'figure.arms.open', grad: ['#FEF08A', '#A16207'] },
-  // Lat pulldown family — indigo/violet, distinct from row's steel-blue and lunge's purple
-  latPulldownWide:   { symbol: 'dumbbell.fill', grad: ['#818CF8', '#3730A3'] },
-  closeGripPulldown: { symbol: 'dumbbell.fill', grad: ['#A5B4FC', '#312E81'] },
+  // Lat pulldown — indigo/violet, distinct from row's steel-blue and lunge's purple
+  latPulldown: { symbol: 'dumbbell.fill', grad: ['#818CF8', '#3730A3'] },
 };
 
 export default function ExercisePickerScreen() {

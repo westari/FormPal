@@ -822,7 +822,7 @@ export const EXERCISE_STANDARDS: Record<string, ExerciseStandardDef> = {
   lateralRaise: raiseStandard('lateralRaise'),
   frontRaise:   raiseStandard('frontRaise'),
 
-  // ─── Lat pulldown family ────────────────────────────────────────────────────
-  latPulldownWide:    latPulldownStandard('latPulldownWide'),
-  closeGripPulldown:  latPulldownStandard('closeGripPulldown'),
+  // ─── Lat pulldown ───────────────────────────────────────────────────────────
+  // Grip variants removed — one exercise only, see exerciseDefinitions.ts.
+  latPulldown: latPulldownStandard('latPulldown'),
 };

@@ -12,8 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 import ViewShot from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
-import RepFeedback from '../components/RepFeedback';
-import { MuscleHeatmap } from '../components/MuscleHeatmap';
+import { SkiaMuscleHeatmapSafe } from '../components/SkiaMuscleHeatmapSafe';
 import {
   getAllSessions, appendSessions, groupIntoWorkouts, computeOverallMuscleScores,
   muscleGroupsWorked, type SessionEntry, type MuscleScores, type RepEventData,
@@ -168,8 +167,21 @@ function GlassSurface({
   shadow?:  boolean;
   fillOpacity?: 'high' | 'low';
 }) {
+  // ROOT CAUSE of the stat row reading as cramped/left-aligned instead of
+  // spread across the full width: `style` (which carries statTile's
+  // `flex: 1`) was only ever applied to this INNER View. `flex` only
+  // affects how a component sizes itself within ITS OWN parent's flex
+  // layout — the OUTER wrapper below is the actual child participating in
+  // statGrid's `flexDirection: 'row'`, and it had no flex/width styling at
+  // all, so it shrank to fit its content instead of claiming an even 1/3–1/4
+  // share of the row, leaving every tile bunched at the left with a big gap
+  // on the right. Pulling just `style?.flex` onto the outer wrapper (not the
+  // whole style — padding/alignItems still belong on the inner view, where
+  // the actual children render) fixes this without changing anything for
+  // every other GlassSurface caller, none of which currently pass `flex`.
+  const outerFlex = style?.flex != null ? { flex: style.flex } : undefined;
   return (
-    <View style={shadow ? [gs.shadowWrap, { borderRadius: radius, shadowColor: C.shadow }] : undefined}>
+    <View style={shadow ? [gs.shadowWrap, { borderRadius: radius, shadowColor: C.shadow }, outerFlex] : outerFlex}>
       <View style={[{ borderRadius: radius, overflow: 'hidden' }, style]}>
         <BlurView intensity={70} tint="light" style={StyleSheet.absoluteFill} />
         <LinearGradient
@@ -359,29 +371,36 @@ export default function RecapScreen() {
     ]).start();
   }, [data, heroOpac, heroY]);
 
-  // ── Video replay animation (solo mode only) ─────────────────────────────────
+  // ── Video replay overlay (solo mode only) ────────────────────────────────────
+  // REPLACED the old fire-and-fade "liveAnim" (a RepFeedback flash that
+  // played once when the timeline CROSSED a rep's timestamp forward, then
+  // disappeared after ~1s regardless of what the user did next) with a
+  // PERSISTENT badge derived fresh from player.currentTime on every poll
+  // tick. "Which rep is this?" is recomputed from scratch each tick rather
+  // than tracked as a one-shot crossing event, so it stays correct — and
+  // stays ON SCREEN — whether the video is playing, paused, or scrubbed
+  // backward: pausing anywhere no longer loses the badge, which was the
+  // actual ask ("pause on any rep and see the check/X/cue"). This is a
+  // persistent OVERLAY, not literally baked into the video's pixels — see
+  // repBadge's render site for why.
   const hasVideo = !!data?.videoUri;
   const player = useVideoPlayer(data?.videoUri || null, p => { p.loop = false; });
-  const [liveAnim, setLiveAnim] = useState<{ key: number; good: boolean; reason: string } | null>(null);
-  const animKeyRef   = useRef(0);
-  const triggeredRef = useRef(new Set<number>());
-  const prevTimeRef  = useRef(0);
+  const [repBadge, setRepBadge] = useState<{ index: number; good: boolean; reason: string } | null>(null);
 
   useEffect(() => {
     if (!hasVideo || !data?.repEvents || data.repEvents.length === 0) return;
-    const evs = data.repEvents;
+    const evs = data.repEvents; // assumed ascending by timeSec — pushed in order as reps complete
     const id = setInterval(() => {
       const t = player.currentTime;
-      if (t < prevTimeRef.current - 0.8) {
-        evs.forEach((_, i) => { if (evs[i].timeSec > t) triggeredRef.current.delete(i); });
+      let idx = -1;
+      for (let i = 0; i < evs.length; i++) {
+        if (evs[i].timeSec <= t) idx = i; else break;
       }
-      prevTimeRef.current = t;
-      evs.forEach((ev, i) => {
-        if (!triggeredRef.current.has(i) && t >= ev.timeSec) {
-          triggeredRef.current.add(i);
-          setLiveAnim({ key: ++animKeyRef.current, good: ev.good, reason: ev.reason });
-        }
-      });
+      if (idx === -1) {
+        setRepBadge(prev => (prev === null ? prev : null));
+      } else {
+        setRepBadge(prev => (prev?.index === idx ? prev : { index: idx, good: evs[idx].good, reason: evs[idx].reason }));
+      }
     }, 100);
     return () => clearInterval(id);
   }, [hasVideo, data, player]);
@@ -512,7 +531,7 @@ export default function RecapScreen() {
                         </View>
                       }
                     >
-                      <MuscleHeatmap
+                      <SkiaMuscleHeatmapSafe
                         overallScores={overallScores}
                         highlightGroups={highlightGroups}
                         highlightLabel={highlightLabel}
@@ -545,49 +564,6 @@ export default function RecapScreen() {
                     </GlassSurface>
                   )}
                 </View>
-
-                {/* Rep breakdown — per-exercise good/bad chips with the cue
-                    shown on each bad rep. Was previously captured (repEvents
-                    flowed all the way to this screen already) but never
-                    rendered anywhere — the only place it showed up was a
-                    live flash animation timed to video playback, which
-                    required a video AND for it to be actively playing.
-                    Static and always visible whenever the data exists, for
-                    both solo and workout mode; omitted entirely for history
-                    (old sessions never captured this) instead of faking it. */}
-                {data.repEventsByExercise && Object.keys(data.repEventsByExercise).length > 0 && (
-                  <RecapSectionBoundary fallback={null}>
-                    <GlassSurface radius={24} style={s.repBreakdownCard}>
-                      <Text style={s.heroLabel}>REP BREAKDOWN</Text>
-                      {data.entries.map(entry => {
-                        const evs = data.repEventsByExercise?.[entry.exerciseId];
-                        if (!evs || evs.length === 0) return null;
-                        return (
-                          <View key={entry.exerciseId} style={s.repExerciseBlock}>
-                            {data.entries.length > 1 && (
-                              <Text style={s.repExerciseName}>{entry.displayName}</Text>
-                            )}
-                            <View style={s.repChipRow}>
-                              {evs.map((ev, i) => (
-                                <View
-                                  key={i}
-                                  style={[s.repChip, ev.good ? s.repChipGood : s.repChipBad]}
-                                >
-                                  <Text style={[s.repChipNum, ev.good ? s.repChipNumGood : s.repChipNumBad]}>
-                                    {i + 1} {ev.good ? '✓' : '✗'}
-                                  </Text>
-                                  {!ev.good && ev.reason ? (
-                                    <Text style={s.repChipCue} numberOfLines={1}>{ev.reason}</Text>
-                                  ) : null}
-                                </View>
-                              ))}
-                            </View>
-                          </View>
-                        );
-                      })}
-                    </GlassSurface>
-                  </RecapSectionBoundary>
-                )}
               </View>
             </ViewShot>
 
@@ -679,14 +655,25 @@ export default function RecapScreen() {
                     nativeControls
                     contentFit="contain"
                   />
-                  {liveAnim && (
-                    <RepFeedback
-                      key={liveAnim.key}
-                      good={liveAnim.good}
-                      reason={liveAnim.reason}
-                      seq={liveAnim.key}
-                      onComplete={() => setLiveAnim(null)}
-                    />
+                  {/* Persistent rep badge — see repBadge's doc comment above.
+                      A small corner chip, not the big live-camera RepFeedback
+                      card (that component's full-screen size was designed to
+                      sit over a live camera view, not share space with video
+                      controls). Genuinely embedding this into the video's own
+                      pixels would mean re-encoding the file (ffmpeg-class
+                      video processing, a real native dependency and a much
+                      bigger separate undertaking) — this achieves the actual
+                      ask, pausing on any rep to see its check/X/cue, as a
+                      playhead-synced overlay instead, without that cost. */}
+                  {repBadge && (
+                    <View style={[s.videoBadge, repBadge.good ? s.videoBadgeGood : s.videoBadgeBad]} pointerEvents="none">
+                      <Text style={s.videoBadgeNum}>
+                        #{repBadge.index + 1} {repBadge.good ? '✓' : '✗'}
+                      </Text>
+                      {!repBadge.good && repBadge.reason ? (
+                        <Text style={s.videoBadgeCue} numberOfLines={1}>{repBadge.reason}</Text>
+                      ) : null}
+                    </View>
                   )}
                 </View>
               </GlassSurface>
@@ -735,28 +722,13 @@ const s = StyleSheet.create({
   heroTitle: { fontSize: 19, fontWeight: '600', letterSpacing: -0.3, color: C.text, marginTop: 2, marginBottom: 18, alignSelf: 'flex-start' },
   heroBody:  { alignItems: 'center', width: '100%' },
 
-  statGrid: { flexDirection: 'row', gap: 8, marginTop: 22 },
+  statGrid: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 22, width: '100%' },
   statTile: {
     flex: 1, alignItems: 'center', gap: 3,
     paddingVertical: 14, paddingHorizontal: 4,
   },
   statVal: { fontSize: 18, fontWeight: '600', letterSpacing: -0.3, color: C.text },
   statLbl: { fontSize: 10, fontWeight: '600', letterSpacing: 0.5, textTransform: 'uppercase', color: C.mutedDim },
-
-  repBreakdownCard: { padding: 20, marginTop: 14 },
-  repExerciseBlock: { marginTop: 14 },
-  repExerciseName:  { fontSize: 13, fontWeight: '600', color: C.text, marginBottom: 8 },
-  repChipRow:       { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  repChip: {
-    borderRadius: 12, paddingVertical: 6, paddingHorizontal: 10,
-    borderWidth: 1, maxWidth: 150,
-  },
-  repChipGood: { backgroundColor: 'rgba(46,125,99,0.12)', borderColor: 'rgba(46,125,99,0.3)' },
-  repChipBad:  { backgroundColor: 'rgba(255,59,48,0.10)', borderColor: 'rgba(255,59,48,0.28)' },
-  repChipNum:     { fontSize: 12, fontWeight: '700' },
-  repChipNumGood: { color: C.good },
-  repChipNumBad:  { color: C.bad },
-  repChipCue: { fontSize: 10, fontWeight: '600', color: C.bad, marginTop: 2 },
 
   actions: { gap: 10, marginTop: 22 },
   shareBtnShadow: {
@@ -789,9 +761,29 @@ const s = StyleSheet.create({
   exScore: { fontSize: 13, fontWeight: '700', color: C.good },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(90,110,160,0.25)' },
 
+  // ROOT CAUSE of "video content doesn't match container size" in the small
+  // (pre-fullscreen) view: this was a FIXED height (300) with no explicit
+  // width, giving a roughly 1.17:1 (wider-than-tall) box — but the camera
+  // records portrait video (see ATHLTCameraModule.swift's own portrait-check
+  // log), closer to 9:16 (0.5625:1, much taller than wide). contentFit=
+  // "contain" preserves the video's real aspect ratio, so a portrait video
+  // inside a landscape-ish box gets heavily pillarboxed (big black bars on
+  // both sides) — reading as "the video is smaller than its container." Using
+  // aspectRatio instead of a fixed height makes the CONTAINER'S shape match
+  // the video's actual shape, so contain has nothing left to pad. Fullscreen
+  // (via allowsFullscreen/nativeControls) is the OS's own native player UI,
+  // not affected by this container's styling — no separate fix needed there.
   videoWrap: {
-    height: 300, borderRadius: 22, overflow: 'hidden', backgroundColor: '#000',
+    width: '100%', aspectRatio: 9 / 16, borderRadius: 22, overflow: 'hidden', backgroundColor: '#000',
   },
+  videoBadge: {
+    position: 'absolute', left: 12, top: 12, maxWidth: '70%',
+    borderRadius: 12, paddingVertical: 6, paddingHorizontal: 10, borderWidth: 1,
+  },
+  videoBadgeGood: { backgroundColor: 'rgba(46,125,99,0.55)', borderColor: 'rgba(255,255,255,0.35)' },
+  videoBadgeBad:  { backgroundColor: 'rgba(255,59,48,0.55)', borderColor: 'rgba(255,255,255,0.35)' },
+  videoBadgeNum:  { fontSize: 13, fontWeight: '700', color: '#fff' },
+  videoBadgeCue:  { fontSize: 11, fontWeight: '600', color: '#fff', marginTop: 2 },
 
   dotsRow: {
     position: 'absolute', left: 0, right: 0,

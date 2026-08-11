@@ -280,6 +280,8 @@ final class ExerciseEngine {
     // for exercises where the user never fully returns above exitThreshold
     // between reps (see the resync fix in runStateMachine's .atTop case).
     private var settleCandidateTop:     Double = -.infinity
+    // Diagnostic only — see the resync log's doc comment in runStateMachine.
+    private var preSettleFrameCount:    Int    = 0
 
     private static let SETTLE_FRAMES: Int = 8   // ~0.27s at 30fps
 
@@ -884,6 +886,7 @@ final class ExerciseEngine {
             // the SAME frame, so this first rep is actually COUNTED instead of being wasted as
             // a silently-ignored "primer."
             if !hasSettled {
+                preSettleFrameCount += 1
                 settleCandidateTop = max(settleCandidateTop, angle)
 
                 if angle > effectiveExitThreshold {
@@ -903,7 +906,17 @@ final class ExerciseEngine {
                 if !hasSettled, angle < effectiveEnterThreshold {
                     hasSettled  = true
                     repTopValue = settleCandidateTop
-                    let msg = "[SETTLE] resynced on first real rep attempt (top≈\(String(format: "%.1f", settleCandidateTop))) — rep counting active"
+                    // DIAGNOSTIC (lat pulldown "rep 1 top=27.6 vs later reps 171/175"
+                    // investigation): framesSeen tells you how many .atTop frames were
+                    // actually observed before this anchor was locked in. A very low
+                    // number (a handful) means the user's first descent started before
+                    // the engine ever saw a genuine "arms up" reading — settleCandidateTop
+                    // is legitimately whatever low value it happened to see, not a
+                    // tracking/joint bug. A high number with a still-low top would point
+                    // to something else (bad tracking) instead — send this line if it
+                    // recurs and that distinguishes the two.
+                    let msg = "[SETTLE] resynced on first real rep attempt " +
+                              "(top≈\(String(format: "%.1f", settleCandidateTop)) framesSeen=\(preSettleFrameCount)) — rep counting active"
                     NSLog("[Engine] [%@] %@", def.id, msg)
                     onDebugLog?(msg)
                 }
@@ -1559,6 +1572,7 @@ final class ExerciseEngine {
         hasSettled          = false
         settledTopFrames    = 0
         settleCandidateTop  = -.infinity
+        preSettleFrameCount = 0
     }
 
     private func resetRepState() {

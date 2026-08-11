@@ -764,21 +764,8 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
   // selectable exercise list, so it was invisible in the UI despite being
   // fully functional underneath.
   {
-    id:              'latPulldownWide',
-    displayName:     'Lat Pulldown (Wide Grip)',
-    muscleGroups:    [MuscleGroup.Back, MuscleGroup.Arms],
-    splitCategories: [SplitCategory.Upper, SplitCategory.Pull],
-    difficulty:      Difficulty.Beginner,
-    equipment:       [Equipment.Cable],
-    defaultReps:     10,
-    defaultSets:     3,
-    progression:     { repRange: [8, 15], setRange: [3, 4] },
-    isFormCheckable: true,
-  },
-
-  {
-    id:              'closeGripPulldown',
-    displayName:     'Close-Grip Pulldown',
+    id:              'latPulldown',
+    displayName:     'Lat Pulldown',
     muscleGroups:    [MuscleGroup.Back, MuscleGroup.Arms],
     splitCategories: [SplitCategory.Upper, SplitCategory.Pull],
     difficulty:      Difficulty.Beginner,

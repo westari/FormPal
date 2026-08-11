@@ -113,17 +113,9 @@ const SETUP_INFO: Record<string, { icon: string; title: string; sub: string }> =
   // Shoulder/arm isolation raise family
   lateralRaise: { icon: 'camera.fill', title: 'Face the camera', sub: 'Stand back — both arms and shoulders in view' },
   frontRaise:   { icon: 'arrow.left.and.right', title: 'Stand sideways', sub: 'Full arm in frame — shoulder to wrist visible' },
-  // Lat pulldown family — front-facing, seated. ROOT CAUSE of "lat pulldown
-  // opens squat form check" (confirmed, not a native/[DEF-LOAD] issue): these
-  // two keys were missing from SETUP_INFO. exerciseType below falls back to
-  // 'squat' the instant `exercise in SETUP_INFO` is false — entirely in JS,
-  // before setExercise()/setExerciseDefinition() are ever called, so the
-  // native side never even sees "latPulldownWide" to fail to parse. Every
-  // OTHER lat pulldown registration point (EXERCISE_DEFINITIONS,
-  // EXERCISE_STANDARDS, ExerciseType, EXERCISE_UI, EXERCISE_CATALOG) was
-  // already correct — this was the one list that got missed.
-  latPulldownWide:   { icon: 'camera.fill', title: 'Face the camera', sub: 'Sit back — both arms in frame, from bar to shoulders' },
-  closeGripPulldown: { icon: 'camera.fill', title: 'Face the camera', sub: 'Sit back — both arms in frame, from bar to shoulders' },
+  // Lat pulldown — front-facing, seated. Grip variants removed — one
+  // exercise only, see constants/exerciseDefinitions.ts.
+  latPulldown: { icon: 'camera.fill', title: 'Face the camera', sub: 'Sit back — both arms in frame, from bar to shoulders' },
 };
 
 // ─── Debug log panel — set false to hide without removing code ────────────────

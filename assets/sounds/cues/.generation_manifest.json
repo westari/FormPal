@@ -1,0 +1,1114 @@
+{
+  "__default__": {
+    "adjust-position": {
+      "text_hash": "cc84e5c16d65",
+      "voice": "en-US-AndrewNeural"
+    },
+    "arms-straight-up": {
+      "text_hash": "ff41561ca1aa",
+      "voice": "en-US-AndrewNeural"
+    },
+    "chest-up": {
+      "text_hash": "15cdf3a56af8",
+      "voice": "en-US-AndrewNeural"
+    },
+    "chest-up-excessive-forward-lean": {
+      "text_hash": "e79dae3685e1",
+      "voice": "en-US-AndrewNeural"
+    },
+    "control-it-no-swinging": {
+      "text_hash": "fa5390e6a78a",
+      "voice": "en-US-AndrewNeural"
+    },
+    "control-it-no-swinging-static": {
+      "text_hash": "b6e8452d4c12",
+      "voice": "en-US-AndrewNeural"
+    },
+    "curl-further-not-reaching-full-contraction": {
+      "text_hash": "c37a87a7abe4",
+      "voice": "en-US-AndrewNeural"
+    },
+    "curl-higher": {
+      "text_hash": "364dfdbf2d8c",
+      "voice": "en-US-AndrewNeural"
+    },
+    "cutting-short-range-dropped-vs-your-start": {
+      "text_hash": "005c9b6d1697",
+      "voice": "en-US-AndrewNeural"
+    },
+    "drive-elbows-back": {
+      "text_hash": "6ef5756d42f0",
+      "voice": "en-US-AndrewNeural"
+    },
+    "drive-knee-down": {
+      "text_hash": "736b96f3d969",
+      "voice": "en-US-AndrewNeural"
+    },
+    "extend-fully": {
+      "text_hash": "e0aca2a5dbb2",
+      "voice": "en-US-AndrewNeural"
+    },
+    "extend-fully-not-reaching-full-lockout": {
+      "text_hash": "bb5db6b33d29",
+      "voice": "en-US-AndrewNeural"
+    },
+    "face-the-camera": {
+      "text_hash": "485f1dca9a7b",
+      "voice": "en-US-AndrewNeural"
+    },
+    "full-extension": {
+      "text_hash": "b6eee9405d86",
+      "voice": "en-US-AndrewNeural"
+    },
+    "fully-extend-arm-not-straightening-at-bottom": {
+      "text_hash": "5d2e47bd08df",
+      "voice": "en-US-AndrewNeural"
+    },
+    "fully-extend-arms-not-returning-straight-overhead": {
+      "text_hash": "7af915dc61da",
+      "voice": "en-US-AndrewNeural"
+    },
+    "go-deeper": {
+      "text_hash": "e2dedaa6029e",
+      "voice": "en-US-AndrewNeural"
+    },
+    "go-deeper-not-reaching-parallel": {
+      "text_hash": "93b76d977478",
+      "voice": "en-US-AndrewNeural"
+    },
+    "hinge-deeper": {
+      "text_hash": "286359722f8d",
+      "voice": "en-US-AndrewNeural"
+    },
+    "hinge-deeper-not-reaching-enough-depth": {
+      "text_hash": "644673e21dc8",
+      "voice": "en-US-AndrewNeural"
+    },
+    "hips-down": {
+      "text_hash": "e662dc229e06",
+      "voice": "en-US-AndrewNeural"
+    },
+    "hips-up": {
+      "text_hash": "f75825b5b183",
+      "voice": "en-US-AndrewNeural"
+    },
+    "keep-ankles-still-compensation": {
+      "text_hash": "1870299f6afa",
+      "voice": "en-US-AndrewNeural"
+    },
+    "keep-elbow-still": {
+      "text_hash": "0c8e373f2698",
+      "voice": "en-US-AndrewNeural"
+    },
+    "keep-elbows-in": {
+      "text_hash": "08aae9d22880",
+      "voice": "en-US-AndrewNeural"
+    },
+    "keep-elbows-still-compensation": {
+      "text_hash": "484a098b0fb3",
+      "voice": "en-US-AndrewNeural"
+    },
+    "keep-head-still-compensation": {
+      "text_hash": "1d7b357db2cc",
+      "voice": "en-US-AndrewNeural"
+    },
+    "keep-heels-down": {
+      "text_hash": "3abe09e99c3d",
+      "voice": "en-US-AndrewNeural"
+    },
+    "keep-hips-still-compensation": {
+      "text_hash": "a21071c72124",
+      "voice": "en-US-AndrewNeural"
+    },
+    "keep-knees-still-compensation": {
+      "text_hash": "0e7edb94b347",
+      "voice": "en-US-AndrewNeural"
+    },
+    "keep-shoulders-still-compensation": {
+      "text_hash": "f4d429c2c861",
+      "voice": "en-US-AndrewNeural"
+    },
+    "keep-torso-still-swinging-body": {
+      "text_hash": "cb1132f9a1ff",
+      "voice": "en-US-AndrewNeural"
+    },
+    "keep-torso-still-using-body-to-push": {
+      "text_hash": "0e0feb2a5d85",
+      "voice": "en-US-AndrewNeural"
+    },
+    "keep-wrists-still-compensation": {
+      "text_hash": "0fd694d6bbb9",
+      "voice": "en-US-AndrewNeural"
+    },
+    "knees-out": {
+      "text_hash": "e98e0a00a527",
+      "voice": "en-US-AndrewNeural"
+    },
+    "knees-tracking-lateral-knee-drift": {
+      "text_hash": "09c9d26ac1f5",
+      "voice": "en-US-AndrewNeural"
+    },
+    "lower-fully-arm-not-returning-to-straight": {
+      "text_hash": "c5ba8e342d7e",
+      "voice": "en-US-AndrewNeural"
+    },
+    "lower-fully-not-returning-arms-down": {
+      "text_hash": "6c6a6a19c4df",
+      "voice": "en-US-AndrewNeural"
+    },
+    "lower-more": {
+      "text_hash": "747b9219db47",
+      "voice": "en-US-AndrewNeural"
+    },
+    "lower-more-not-returning-to-shoulder-height": {
+      "text_hash": "32a4f0820e64",
+      "voice": "en-US-AndrewNeural"
+    },
+    "lunge-deeper": {
+      "text_hash": "fedfdb199a5a",
+      "voice": "en-US-AndrewNeural"
+    },
+    "lunge-deeper-not-reaching-depth": {
+      "text_hash": "62155e794c38",
+      "voice": "en-US-AndrewNeural"
+    },
+    "press-higher": {
+      "text_hash": "ac95141c84c0",
+      "voice": "en-US-AndrewNeural"
+    },
+    "press-higher-not-reaching-overhead": {
+      "text_hash": "1044586b032a",
+      "voice": "en-US-AndrewNeural"
+    },
+    "pull-down-further": {
+      "text_hash": "b7821d56b319",
+      "voice": "en-US-AndrewNeural"
+    },
+    "pull-down-further-not-reaching-full-contraction": {
+      "text_hash": "bd3524f9b5c0",
+      "voice": "en-US-AndrewNeural"
+    },
+    "pull-higher": {
+      "text_hash": "e1c2640fab84",
+      "voice": "en-US-AndrewNeural"
+    },
+    "pull-higher-not-reaching-elbow-flexion": {
+      "text_hash": "9a8b39e46c74",
+      "voice": "en-US-AndrewNeural"
+    },
+    "pull-to-your-stomach": {
+      "text_hash": "ac7c80723735",
+      "voice": "en-US-AndrewNeural"
+    },
+    "pull-to-your-stomach-handle-not-reaching-the-torso": {
+      "text_hash": "b16fe54ec211",
+      "voice": "en-US-AndrewNeural"
+    },
+    "raise-higher": {
+      "text_hash": "32be28d23dd9",
+      "voice": "en-US-AndrewNeural"
+    },
+    "raise-higher-not-reaching-enough-depth": {
+      "text_hash": "d53a2b9e54df",
+      "voice": "en-US-AndrewNeural"
+    },
+    "raise-out-to-the-sides": {
+      "text_hash": "f5010f8b6a30",
+      "voice": "en-US-AndrewNeural"
+    },
+    "reach-forward-arm-not-fully-extending-between-reps": {
+      "text_hash": "206f0884a0c9",
+      "voice": "en-US-AndrewNeural"
+    },
+    "return-to-start-forearm-not-returning-to-horizontal": {
+      "text_hash": "8286dd24f6fb",
+      "voice": "en-US-AndrewNeural"
+    },
+    "rushing-rep-faster-than-your-baseline": {
+      "text_hash": "b53b714929bf",
+      "voice": "en-US-AndrewNeural"
+    },
+    "sit-up-tall": {
+      "text_hash": "87c5e1ae28f7",
+      "voice": "en-US-AndrewNeural"
+    },
+    "slowing-rep-slower-than-your-baseline": {
+      "text_hash": "60e6eaa96f0e",
+      "voice": "en-US-AndrewNeural"
+    },
+    "stand-fully-not-returning-to-standing": {
+      "text_hash": "5720444d2b2f",
+      "voice": "en-US-AndrewNeural"
+    },
+    "stand-fully-not-returning-upright": {
+      "text_hash": "356505849b2b",
+      "voice": "en-US-AndrewNeural"
+    },
+    "stay-upright": {
+      "text_hash": "a8900dba87bf",
+      "voice": "en-US-AndrewNeural"
+    },
+    "stay-upright-no-swinging": {
+      "text_hash": "834d8b6601db",
+      "voice": "en-US-AndrewNeural"
+    },
+    "stop-swinging": {
+      "text_hash": "284a264f48e1",
+      "voice": "en-US-AndrewNeural"
+    },
+    "straighten-your-back": {
+      "text_hash": "fe0619a7a4ac",
+      "voice": "en-US-AndrewNeural"
+    },
+    "swinging-control-the-weight": {
+      "text_hash": "af84967ec52d",
+      "voice": "en-US-AndrewNeural"
+    },
+    "too-fast-control-the-rep": {
+      "text_hash": "344f939cd873",
+      "voice": "en-US-AndrewNeural"
+    },
+    "turn-side-on": {
+      "text_hash": "97ca6c13f696",
+      "voice": "en-US-AndrewNeural"
+    },
+    "uneven-one-side-lagging": {
+      "text_hash": "d96833d89ec3",
+      "voice": "en-US-AndrewNeural"
+    }
+  },
+  "en-US-AriaNeural": {
+    "adjust-position": {
+      "text_hash": "cc84e5c16d65",
+      "voice": "en-US-AriaNeural"
+    },
+    "arms-straight-up": {
+      "text_hash": "ff41561ca1aa",
+      "voice": "en-US-AriaNeural"
+    },
+    "chest-up": {
+      "text_hash": "15cdf3a56af8",
+      "voice": "en-US-AriaNeural"
+    },
+    "chest-up-excessive-forward-lean": {
+      "text_hash": "e79dae3685e1",
+      "voice": "en-US-AriaNeural"
+    },
+    "control-it-no-swinging": {
+      "text_hash": "fa5390e6a78a",
+      "voice": "en-US-AriaNeural"
+    },
+    "control-it-no-swinging-static": {
+      "text_hash": "b6e8452d4c12",
+      "voice": "en-US-AriaNeural"
+    },
+    "curl-further-not-reaching-full-contraction": {
+      "text_hash": "c37a87a7abe4",
+      "voice": "en-US-AriaNeural"
+    },
+    "curl-higher": {
+      "text_hash": "364dfdbf2d8c",
+      "voice": "en-US-AriaNeural"
+    },
+    "cutting-short-range-dropped-vs-your-start": {
+      "text_hash": "005c9b6d1697",
+      "voice": "en-US-AriaNeural"
+    },
+    "drive-elbows-back": {
+      "text_hash": "6ef5756d42f0",
+      "voice": "en-US-AriaNeural"
+    },
+    "drive-knee-down": {
+      "text_hash": "736b96f3d969",
+      "voice": "en-US-AriaNeural"
+    },
+    "extend-fully": {
+      "text_hash": "e0aca2a5dbb2",
+      "voice": "en-US-AriaNeural"
+    },
+    "extend-fully-not-reaching-full-lockout": {
+      "text_hash": "bb5db6b33d29",
+      "voice": "en-US-AriaNeural"
+    },
+    "face-the-camera": {
+      "text_hash": "485f1dca9a7b",
+      "voice": "en-US-AriaNeural"
+    },
+    "full-extension": {
+      "text_hash": "b6eee9405d86",
+      "voice": "en-US-AriaNeural"
+    },
+    "fully-extend-arm-not-straightening-at-bottom": {
+      "text_hash": "5d2e47bd08df",
+      "voice": "en-US-AriaNeural"
+    },
+    "fully-extend-arms-not-returning-straight-overhead": {
+      "text_hash": "7af915dc61da",
+      "voice": "en-US-AriaNeural"
+    },
+    "go-deeper": {
+      "text_hash": "e2dedaa6029e",
+      "voice": "en-US-AriaNeural"
+    },
+    "go-deeper-not-reaching-parallel": {
+      "text_hash": "93b76d977478",
+      "voice": "en-US-AriaNeural"
+    },
+    "hinge-deeper": {
+      "text_hash": "286359722f8d",
+      "voice": "en-US-AriaNeural"
+    },
+    "hinge-deeper-not-reaching-enough-depth": {
+      "text_hash": "644673e21dc8",
+      "voice": "en-US-AriaNeural"
+    },
+    "hips-down": {
+      "text_hash": "e662dc229e06",
+      "voice": "en-US-AriaNeural"
+    },
+    "hips-up": {
+      "text_hash": "f75825b5b183",
+      "voice": "en-US-AriaNeural"
+    },
+    "keep-ankles-still-compensation": {
+      "text_hash": "1870299f6afa",
+      "voice": "en-US-AriaNeural"
+    },
+    "keep-elbow-still": {
+      "text_hash": "0c8e373f2698",
+      "voice": "en-US-AriaNeural"
+    },
+    "keep-elbows-in": {
+      "text_hash": "08aae9d22880",
+      "voice": "en-US-AriaNeural"
+    },
+    "keep-elbows-still-compensation": {
+      "text_hash": "484a098b0fb3",
+      "voice": "en-US-AriaNeural"
+    },
+    "keep-head-still-compensation": {
+      "text_hash": "1d7b357db2cc",
+      "voice": "en-US-AriaNeural"
+    },
+    "keep-heels-down": {
+      "text_hash": "3abe09e99c3d",
+      "voice": "en-US-AriaNeural"
+    },
+    "keep-hips-still-compensation": {
+      "text_hash": "a21071c72124",
+      "voice": "en-US-AriaNeural"
+    },
+    "keep-knees-still-compensation": {
+      "text_hash": "0e7edb94b347",
+      "voice": "en-US-AriaNeural"
+    },
+    "keep-shoulders-still-compensation": {
+      "text_hash": "f4d429c2c861",
+      "voice": "en-US-AriaNeural"
+    },
+    "keep-torso-still-swinging-body": {
+      "text_hash": "cb1132f9a1ff",
+      "voice": "en-US-AriaNeural"
+    },
+    "keep-torso-still-using-body-to-push": {
+      "text_hash": "0e0feb2a5d85",
+      "voice": "en-US-AriaNeural"
+    },
+    "keep-wrists-still-compensation": {
+      "text_hash": "0fd694d6bbb9",
+      "voice": "en-US-AriaNeural"
+    },
+    "knees-out": {
+      "text_hash": "e98e0a00a527",
+      "voice": "en-US-AriaNeural"
+    },
+    "knees-tracking-lateral-knee-drift": {
+      "text_hash": "09c9d26ac1f5",
+      "voice": "en-US-AriaNeural"
+    },
+    "lower-fully-arm-not-returning-to-straight": {
+      "text_hash": "c5ba8e342d7e",
+      "voice": "en-US-AriaNeural"
+    },
+    "lower-fully-not-returning-arms-down": {
+      "text_hash": "6c6a6a19c4df",
+      "voice": "en-US-AriaNeural"
+    },
+    "lower-more": {
+      "text_hash": "747b9219db47",
+      "voice": "en-US-AriaNeural"
+    },
+    "lower-more-not-returning-to-shoulder-height": {
+      "text_hash": "32a4f0820e64",
+      "voice": "en-US-AriaNeural"
+    },
+    "lunge-deeper": {
+      "text_hash": "fedfdb199a5a",
+      "voice": "en-US-AriaNeural"
+    },
+    "lunge-deeper-not-reaching-depth": {
+      "text_hash": "62155e794c38",
+      "voice": "en-US-AriaNeural"
+    },
+    "press-higher": {
+      "text_hash": "ac95141c84c0",
+      "voice": "en-US-AriaNeural"
+    },
+    "press-higher-not-reaching-overhead": {
+      "text_hash": "1044586b032a",
+      "voice": "en-US-AriaNeural"
+    },
+    "pull-down-further": {
+      "text_hash": "b7821d56b319",
+      "voice": "en-US-AriaNeural"
+    },
+    "pull-down-further-not-reaching-full-contraction": {
+      "text_hash": "bd3524f9b5c0",
+      "voice": "en-US-AriaNeural"
+    },
+    "pull-higher": {
+      "text_hash": "e1c2640fab84",
+      "voice": "en-US-AriaNeural"
+    },
+    "pull-higher-not-reaching-elbow-flexion": {
+      "text_hash": "9a8b39e46c74",
+      "voice": "en-US-AriaNeural"
+    },
+    "pull-to-your-stomach": {
+      "text_hash": "ac7c80723735",
+      "voice": "en-US-AriaNeural"
+    },
+    "pull-to-your-stomach-handle-not-reaching-the-torso": {
+      "text_hash": "b16fe54ec211",
+      "voice": "en-US-AriaNeural"
+    },
+    "raise-higher": {
+      "text_hash": "32be28d23dd9",
+      "voice": "en-US-AriaNeural"
+    },
+    "raise-higher-not-reaching-enough-depth": {
+      "text_hash": "d53a2b9e54df",
+      "voice": "en-US-AriaNeural"
+    },
+    "raise-out-to-the-sides": {
+      "text_hash": "f5010f8b6a30",
+      "voice": "en-US-AriaNeural"
+    },
+    "reach-forward-arm-not-fully-extending-between-reps": {
+      "text_hash": "206f0884a0c9",
+      "voice": "en-US-AriaNeural"
+    },
+    "return-to-start-forearm-not-returning-to-horizontal": {
+      "text_hash": "8286dd24f6fb",
+      "voice": "en-US-AriaNeural"
+    },
+    "rushing-rep-faster-than-your-baseline": {
+      "text_hash": "b53b714929bf",
+      "voice": "en-US-AriaNeural"
+    },
+    "sit-up-tall": {
+      "text_hash": "87c5e1ae28f7",
+      "voice": "en-US-AriaNeural"
+    },
+    "slowing-rep-slower-than-your-baseline": {
+      "text_hash": "60e6eaa96f0e",
+      "voice": "en-US-AriaNeural"
+    },
+    "stand-fully-not-returning-to-standing": {
+      "text_hash": "5720444d2b2f",
+      "voice": "en-US-AriaNeural"
+    },
+    "stand-fully-not-returning-upright": {
+      "text_hash": "356505849b2b",
+      "voice": "en-US-AriaNeural"
+    },
+    "stay-upright": {
+      "text_hash": "a8900dba87bf",
+      "voice": "en-US-AriaNeural"
+    },
+    "stay-upright-no-swinging": {
+      "text_hash": "834d8b6601db",
+      "voice": "en-US-AriaNeural"
+    },
+    "stop-swinging": {
+      "text_hash": "284a264f48e1",
+      "voice": "en-US-AriaNeural"
+    },
+    "straighten-your-back": {
+      "text_hash": "fe0619a7a4ac",
+      "voice": "en-US-AriaNeural"
+    },
+    "swinging-control-the-weight": {
+      "text_hash": "af84967ec52d",
+      "voice": "en-US-AriaNeural"
+    },
+    "too-fast-control-the-rep": {
+      "text_hash": "344f939cd873",
+      "voice": "en-US-AriaNeural"
+    },
+    "turn-side-on": {
+      "text_hash": "97ca6c13f696",
+      "voice": "en-US-AriaNeural"
+    },
+    "uneven-one-side-lagging": {
+      "text_hash": "d96833d89ec3",
+      "voice": "en-US-AriaNeural"
+    }
+  },
+  "en-US-GuyNeural": {
+    "adjust-position": {
+      "text_hash": "cc84e5c16d65",
+      "voice": "en-US-GuyNeural"
+    },
+    "arms-straight-up": {
+      "text_hash": "ff41561ca1aa",
+      "voice": "en-US-GuyNeural"
+    },
+    "chest-up": {
+      "text_hash": "15cdf3a56af8",
+      "voice": "en-US-GuyNeural"
+    },
+    "chest-up-excessive-forward-lean": {
+      "text_hash": "e79dae3685e1",
+      "voice": "en-US-GuyNeural"
+    },
+    "control-it-no-swinging": {
+      "text_hash": "fa5390e6a78a",
+      "voice": "en-US-GuyNeural"
+    },
+    "control-it-no-swinging-static": {
+      "text_hash": "b6e8452d4c12",
+      "voice": "en-US-GuyNeural"
+    },
+    "curl-further-not-reaching-full-contraction": {
+      "text_hash": "c37a87a7abe4",
+      "voice": "en-US-GuyNeural"
+    },
+    "curl-higher": {
+      "text_hash": "364dfdbf2d8c",
+      "voice": "en-US-GuyNeural"
+    },
+    "cutting-short-range-dropped-vs-your-start": {
+      "text_hash": "005c9b6d1697",
+      "voice": "en-US-GuyNeural"
+    },
+    "drive-elbows-back": {
+      "text_hash": "6ef5756d42f0",
+      "voice": "en-US-GuyNeural"
+    },
+    "drive-knee-down": {
+      "text_hash": "736b96f3d969",
+      "voice": "en-US-GuyNeural"
+    },
+    "extend-fully": {
+      "text_hash": "e0aca2a5dbb2",
+      "voice": "en-US-GuyNeural"
+    },
+    "extend-fully-not-reaching-full-lockout": {
+      "text_hash": "bb5db6b33d29",
+      "voice": "en-US-GuyNeural"
+    },
+    "face-the-camera": {
+      "text_hash": "485f1dca9a7b",
+      "voice": "en-US-GuyNeural"
+    },
+    "full-extension": {
+      "text_hash": "b6eee9405d86",
+      "voice": "en-US-GuyNeural"
+    },
+    "fully-extend-arm-not-straightening-at-bottom": {
+      "text_hash": "5d2e47bd08df",
+      "voice": "en-US-GuyNeural"
+    },
+    "fully-extend-arms-not-returning-straight-overhead": {
+      "text_hash": "7af915dc61da",
+      "voice": "en-US-GuyNeural"
+    },
+    "go-deeper": {
+      "text_hash": "e2dedaa6029e",
+      "voice": "en-US-GuyNeural"
+    },
+    "go-deeper-not-reaching-parallel": {
+      "text_hash": "93b76d977478",
+      "voice": "en-US-GuyNeural"
+    },
+    "hinge-deeper": {
+      "text_hash": "286359722f8d",
+      "voice": "en-US-GuyNeural"
+    },
+    "hinge-deeper-not-reaching-enough-depth": {
+      "text_hash": "644673e21dc8",
+      "voice": "en-US-GuyNeural"
+    },
+    "hips-down": {
+      "text_hash": "e662dc229e06",
+      "voice": "en-US-GuyNeural"
+    },
+    "hips-up": {
+      "text_hash": "f75825b5b183",
+      "voice": "en-US-GuyNeural"
+    },
+    "keep-ankles-still-compensation": {
+      "text_hash": "1870299f6afa",
+      "voice": "en-US-GuyNeural"
+    },
+    "keep-elbow-still": {
+      "text_hash": "0c8e373f2698",
+      "voice": "en-US-GuyNeural"
+    },
+    "keep-elbows-in": {
+      "text_hash": "08aae9d22880",
+      "voice": "en-US-GuyNeural"
+    },
+    "keep-elbows-still-compensation": {
+      "text_hash": "484a098b0fb3",
+      "voice": "en-US-GuyNeural"
+    },
+    "keep-head-still-compensation": {
+      "text_hash": "1d7b357db2cc",
+      "voice": "en-US-GuyNeural"
+    },
+    "keep-heels-down": {
+      "text_hash": "3abe09e99c3d",
+      "voice": "en-US-GuyNeural"
+    },
+    "keep-hips-still-compensation": {
+      "text_hash": "a21071c72124",
+      "voice": "en-US-GuyNeural"
+    },
+    "keep-knees-still-compensation": {
+      "text_hash": "0e7edb94b347",
+      "voice": "en-US-GuyNeural"
+    },
+    "keep-shoulders-still-compensation": {
+      "text_hash": "f4d429c2c861",
+      "voice": "en-US-GuyNeural"
+    },
+    "keep-torso-still-swinging-body": {
+      "text_hash": "cb1132f9a1ff",
+      "voice": "en-US-GuyNeural"
+    },
+    "keep-torso-still-using-body-to-push": {
+      "text_hash": "0e0feb2a5d85",
+      "voice": "en-US-GuyNeural"
+    },
+    "keep-wrists-still-compensation": {
+      "text_hash": "0fd694d6bbb9",
+      "voice": "en-US-GuyNeural"
+    },
+    "knees-out": {
+      "text_hash": "e98e0a00a527",
+      "voice": "en-US-GuyNeural"
+    },
+    "knees-tracking-lateral-knee-drift": {
+      "text_hash": "09c9d26ac1f5",
+      "voice": "en-US-GuyNeural"
+    },
+    "lower-fully-arm-not-returning-to-straight": {
+      "text_hash": "c5ba8e342d7e",
+      "voice": "en-US-GuyNeural"
+    },
+    "lower-fully-not-returning-arms-down": {
+      "text_hash": "6c6a6a19c4df",
+      "voice": "en-US-GuyNeural"
+    },
+    "lower-more": {
+      "text_hash": "747b9219db47",
+      "voice": "en-US-GuyNeural"
+    },
+    "lower-more-not-returning-to-shoulder-height": {
+      "text_hash": "32a4f0820e64",
+      "voice": "en-US-GuyNeural"
+    },
+    "lunge-deeper": {
+      "text_hash": "fedfdb199a5a",
+      "voice": "en-US-GuyNeural"
+    },
+    "lunge-deeper-not-reaching-depth": {
+      "text_hash": "62155e794c38",
+      "voice": "en-US-GuyNeural"
+    },
+    "press-higher": {
+      "text_hash": "ac95141c84c0",
+      "voice": "en-US-GuyNeural"
+    },
+    "press-higher-not-reaching-overhead": {
+      "text_hash": "1044586b032a",
+      "voice": "en-US-GuyNeural"
+    },
+    "pull-down-further": {
+      "text_hash": "b7821d56b319",
+      "voice": "en-US-GuyNeural"
+    },
+    "pull-down-further-not-reaching-full-contraction": {
+      "text_hash": "bd3524f9b5c0",
+      "voice": "en-US-GuyNeural"
+    },
+    "pull-higher": {
+      "text_hash": "e1c2640fab84",
+      "voice": "en-US-GuyNeural"
+    },
+    "pull-higher-not-reaching-elbow-flexion": {
+      "text_hash": "9a8b39e46c74",
+      "voice": "en-US-GuyNeural"
+    },
+    "pull-to-your-stomach": {
+      "text_hash": "ac7c80723735",
+      "voice": "en-US-GuyNeural"
+    },
+    "pull-to-your-stomach-handle-not-reaching-the-torso": {
+      "text_hash": "b16fe54ec211",
+      "voice": "en-US-GuyNeural"
+    },
+    "raise-higher": {
+      "text_hash": "32be28d23dd9",
+      "voice": "en-US-GuyNeural"
+    },
+    "raise-higher-not-reaching-enough-depth": {
+      "text_hash": "d53a2b9e54df",
+      "voice": "en-US-GuyNeural"
+    },
+    "raise-out-to-the-sides": {
+      "text_hash": "f5010f8b6a30",
+      "voice": "en-US-GuyNeural"
+    },
+    "reach-forward-arm-not-fully-extending-between-reps": {
+      "text_hash": "206f0884a0c9",
+      "voice": "en-US-GuyNeural"
+    },
+    "return-to-start-forearm-not-returning-to-horizontal": {
+      "text_hash": "8286dd24f6fb",
+      "voice": "en-US-GuyNeural"
+    },
+    "rushing-rep-faster-than-your-baseline": {
+      "text_hash": "b53b714929bf",
+      "voice": "en-US-GuyNeural"
+    },
+    "sit-up-tall": {
+      "text_hash": "87c5e1ae28f7",
+      "voice": "en-US-GuyNeural"
+    },
+    "slowing-rep-slower-than-your-baseline": {
+      "text_hash": "60e6eaa96f0e",
+      "voice": "en-US-GuyNeural"
+    },
+    "stand-fully-not-returning-to-standing": {
+      "text_hash": "5720444d2b2f",
+      "voice": "en-US-GuyNeural"
+    },
+    "stand-fully-not-returning-upright": {
+      "text_hash": "356505849b2b",
+      "voice": "en-US-GuyNeural"
+    },
+    "stay-upright": {
+      "text_hash": "a8900dba87bf",
+      "voice": "en-US-GuyNeural"
+    },
+    "stay-upright-no-swinging": {
+      "text_hash": "834d8b6601db",
+      "voice": "en-US-GuyNeural"
+    },
+    "stop-swinging": {
+      "text_hash": "284a264f48e1",
+      "voice": "en-US-GuyNeural"
+    },
+    "straighten-your-back": {
+      "text_hash": "fe0619a7a4ac",
+      "voice": "en-US-GuyNeural"
+    },
+    "swinging-control-the-weight": {
+      "text_hash": "af84967ec52d",
+      "voice": "en-US-GuyNeural"
+    },
+    "too-fast-control-the-rep": {
+      "text_hash": "344f939cd873",
+      "voice": "en-US-GuyNeural"
+    },
+    "turn-side-on": {
+      "text_hash": "97ca6c13f696",
+      "voice": "en-US-GuyNeural"
+    },
+    "uneven-one-side-lagging": {
+      "text_hash": "d96833d89ec3",
+      "voice": "en-US-GuyNeural"
+    }
+  },
+  "en-US-JennyNeural": {
+    "adjust-position": {
+      "text_hash": "cc84e5c16d65",
+      "voice": "en-US-JennyNeural"
+    },
+    "arms-straight-up": {
+      "text_hash": "ff41561ca1aa",
+      "voice": "en-US-JennyNeural"
+    },
+    "chest-up": {
+      "text_hash": "15cdf3a56af8",
+      "voice": "en-US-JennyNeural"
+    },
+    "chest-up-excessive-forward-lean": {
+      "text_hash": "e79dae3685e1",
+      "voice": "en-US-JennyNeural"
+    },
+    "control-it-no-swinging": {
+      "text_hash": "fa5390e6a78a",
+      "voice": "en-US-JennyNeural"
+    },
+    "control-it-no-swinging-static": {
+      "text_hash": "b6e8452d4c12",
+      "voice": "en-US-JennyNeural"
+    },
+    "curl-further-not-reaching-full-contraction": {
+      "text_hash": "c37a87a7abe4",
+      "voice": "en-US-JennyNeural"
+    },
+    "curl-higher": {
+      "text_hash": "364dfdbf2d8c",
+      "voice": "en-US-JennyNeural"
+    },
+    "cutting-short-range-dropped-vs-your-start": {
+      "text_hash": "005c9b6d1697",
+      "voice": "en-US-JennyNeural"
+    },
+    "drive-elbows-back": {
+      "text_hash": "6ef5756d42f0",
+      "voice": "en-US-JennyNeural"
+    },
+    "drive-knee-down": {
+      "text_hash": "736b96f3d969",
+      "voice": "en-US-JennyNeural"
+    },
+    "extend-fully": {
+      "text_hash": "e0aca2a5dbb2",
+      "voice": "en-US-JennyNeural"
+    },
+    "extend-fully-not-reaching-full-lockout": {
+      "text_hash": "bb5db6b33d29",
+      "voice": "en-US-JennyNeural"
+    },
+    "face-the-camera": {
+      "text_hash": "485f1dca9a7b",
+      "voice": "en-US-JennyNeural"
+    },
+    "full-extension": {
+      "text_hash": "b6eee9405d86",
+      "voice": "en-US-JennyNeural"
+    },
+    "fully-extend-arm-not-straightening-at-bottom": {
+      "text_hash": "5d2e47bd08df",
+      "voice": "en-US-JennyNeural"
+    },
+    "fully-extend-arms-not-returning-straight-overhead": {
+      "text_hash": "7af915dc61da",
+      "voice": "en-US-JennyNeural"
+    },
+    "go-deeper": {
+      "text_hash": "e2dedaa6029e",
+      "voice": "en-US-JennyNeural"
+    },
+    "go-deeper-not-reaching-parallel": {
+      "text_hash": "93b76d977478",
+      "voice": "en-US-JennyNeural"
+    },
+    "hinge-deeper": {
+      "text_hash": "286359722f8d",
+      "voice": "en-US-JennyNeural"
+    },
+    "hinge-deeper-not-reaching-enough-depth": {
+      "text_hash": "644673e21dc8",
+      "voice": "en-US-JennyNeural"
+    },
+    "hips-down": {
+      "text_hash": "e662dc229e06",
+      "voice": "en-US-JennyNeural"
+    },
+    "hips-up": {
+      "text_hash": "f75825b5b183",
+      "voice": "en-US-JennyNeural"
+    },
+    "keep-ankles-still-compensation": {
+      "text_hash": "1870299f6afa",
+      "voice": "en-US-JennyNeural"
+    },
+    "keep-elbow-still": {
+      "text_hash": "0c8e373f2698",
+      "voice": "en-US-JennyNeural"
+    },
+    "keep-elbows-in": {
+      "text_hash": "08aae9d22880",
+      "voice": "en-US-JennyNeural"
+    },
+    "keep-elbows-still-compensation": {
+      "text_hash": "484a098b0fb3",
+      "voice": "en-US-JennyNeural"
+    },
+    "keep-head-still-compensation": {
+      "text_hash": "1d7b357db2cc",
+      "voice": "en-US-JennyNeural"
+    },
+    "keep-heels-down": {
+      "text_hash": "3abe09e99c3d",
+      "voice": "en-US-JennyNeural"
+    },
+    "keep-hips-still-compensation": {
+      "text_hash": "a21071c72124",
+      "voice": "en-US-JennyNeural"
+    },
+    "keep-knees-still-compensation": {
+      "text_hash": "0e7edb94b347",
+      "voice": "en-US-JennyNeural"
+    },
+    "keep-shoulders-still-compensation": {
+      "text_hash": "f4d429c2c861",
+      "voice": "en-US-JennyNeural"
+    },
+    "keep-torso-still-swinging-body": {
+      "text_hash": "cb1132f9a1ff",
+      "voice": "en-US-JennyNeural"
+    },
+    "keep-torso-still-using-body-to-push": {
+      "text_hash": "0e0feb2a5d85",
+      "voice": "en-US-JennyNeural"
+    },
+    "keep-wrists-still-compensation": {
+      "text_hash": "0fd694d6bbb9",
+      "voice": "en-US-JennyNeural"
+    },
+    "knees-out": {
+      "text_hash": "e98e0a00a527",
+      "voice": "en-US-JennyNeural"
+    },
+    "knees-tracking-lateral-knee-drift": {
+      "text_hash": "09c9d26ac1f5",
+      "voice": "en-US-JennyNeural"
+    },
+    "lower-fully-arm-not-returning-to-straight": {
+      "text_hash": "c5ba8e342d7e",
+      "voice": "en-US-JennyNeural"
+    },
+    "lower-fully-not-returning-arms-down": {
+      "text_hash": "6c6a6a19c4df",
+      "voice": "en-US-JennyNeural"
+    },
+    "lower-more": {
+      "text_hash": "747b9219db47",
+      "voice": "en-US-JennyNeural"
+    },
+    "lower-more-not-returning-to-shoulder-height": {
+      "text_hash": "32a4f0820e64",
+      "voice": "en-US-JennyNeural"
+    },
+    "lunge-deeper": {
+      "text_hash": "fedfdb199a5a",
+      "voice": "en-US-JennyNeural"
+    },
+    "lunge-deeper-not-reaching-depth": {
+      "text_hash": "62155e794c38",
+      "voice": "en-US-JennyNeural"
+    },
+    "press-higher": {
+      "text_hash": "ac95141c84c0",
+      "voice": "en-US-JennyNeural"
+    },
+    "press-higher-not-reaching-overhead": {
+      "text_hash": "1044586b032a",
+      "voice": "en-US-JennyNeural"
+    },
+    "pull-down-further": {
+      "text_hash": "b7821d56b319",
+      "voice": "en-US-JennyNeural"
+    },
+    "pull-down-further-not-reaching-full-contraction": {
+      "text_hash": "bd3524f9b5c0",
+      "voice": "en-US-JennyNeural"
+    },
+    "pull-higher": {
+      "text_hash": "e1c2640fab84",
+      "voice": "en-US-JennyNeural"
+    },
+    "pull-higher-not-reaching-elbow-flexion": {
+      "text_hash": "9a8b39e46c74",
+      "voice": "en-US-JennyNeural"
+    },
+    "pull-to-your-stomach": {
+      "text_hash": "ac7c80723735",
+      "voice": "en-US-JennyNeural"
+    },
+    "pull-to-your-stomach-handle-not-reaching-the-torso": {
+      "text_hash": "b16fe54ec211",
+      "voice": "en-US-JennyNeural"
+    },
+    "raise-higher": {
+      "text_hash": "32be28d23dd9",
+      "voice": "en-US-JennyNeural"
+    },
+    "raise-higher-not-reaching-enough-depth": {
+      "text_hash": "d53a2b9e54df",
+      "voice": "en-US-JennyNeural"
+    },
+    "raise-out-to-the-sides": {
+      "text_hash": "f5010f8b6a30",
+      "voice": "en-US-JennyNeural"
+    },
+    "reach-forward-arm-not-fully-extending-between-reps": {
+      "text_hash": "206f0884a0c9",
+      "voice": "en-US-JennyNeural"
+    },
+    "return-to-start-forearm-not-returning-to-horizontal": {
+      "text_hash": "8286dd24f6fb",
+      "voice": "en-US-JennyNeural"
+    },
+    "rushing-rep-faster-than-your-baseline": {
+      "text_hash": "b53b714929bf",
+      "voice": "en-US-JennyNeural"
+    },
+    "sit-up-tall": {
+      "text_hash": "87c5e1ae28f7",
+      "voice": "en-US-JennyNeural"
+    },
+    "slowing-rep-slower-than-your-baseline": {
+      "text_hash": "60e6eaa96f0e",
+      "voice": "en-US-JennyNeural"
+    },
+    "stand-fully-not-returning-to-standing": {
+      "text_hash": "5720444d2b2f",
+      "voice": "en-US-JennyNeural"
+    },
+    "stand-fully-not-returning-upright": {
+      "text_hash": "356505849b2b",
+      "voice": "en-US-JennyNeural"
+    },
+    "stay-upright": {
+      "text_hash": "a8900dba87bf",
+      "voice": "en-US-JennyNeural"
+    },
+    "stay-upright-no-swinging": {
+      "text_hash": "834d8b6601db",
+      "voice": "en-US-JennyNeural"
+    },
+    "stop-swinging": {
+      "text_hash": "284a264f48e1",
+      "voice": "en-US-JennyNeural"
+    },
+    "straighten-your-back": {
+      "text_hash": "fe0619a7a4ac",
+      "voice": "en-US-JennyNeural"
+    },
+    "swinging-control-the-weight": {
+      "text_hash": "af84967ec52d",
+      "voice": "en-US-JennyNeural"
+    },
+    "too-fast-control-the-rep": {
+      "text_hash": "344f939cd873",
+      "voice": "en-US-JennyNeural"
+    },
+    "turn-side-on": {
+      "text_hash": "97ca6c13f696",
+      "voice": "en-US-JennyNeural"
+    },
+    "uneven-one-side-lagging": {
+      "text_hash": "d96833d89ec3",
+      "voice": "en-US-JennyNeural"
+    }
+  }
+}

@@ -893,7 +893,20 @@ function tricepVariant(
     topAngle:           45,
     repEnterThreshold:  25,
     repExitThreshold:   35,
-    goodROMThreshold:   10,
+    // LOOSENED 10→15 (this round) — "EXTEND FULLY" reported firing "way too
+    // often." Two contributing factors, not one: (1) goodROMThreshold=10 was
+    // already flagged NOT FULLY CALIBRATED above — reasoned from two
+    // scattered readings, not a real full-rep trace, so it may simply have
+    // been tighter than genuine full extension actually reads on-device;
+    // (2) last round's phantomGuardFraction fix (elsewhere in this file) made
+    // partial reps that used to be silently rejected start COUNTING — some
+    // of the increase in how often this cue is seen is that fix working as
+    // asked, not a new bug (a rep that never registered before couldn't show
+    // any cue at all). This still only ever evaluates repMinAngle (the
+    // deepest point reached — the bottom of the pushdown), never the top; if
+    // it's still firing on genuinely full reps after this, send a [REP] log
+    // and I'll set a real number instead of loosening blind a second time.
+    goodROMThreshold:   15,
     insufficientROMCue: 'EXTEND FULLY',
     formChecks:      TRICEP_FORM_CHECKS_STANDING,
     readyGate:       PASSTHROUGH_GATE,
@@ -1322,59 +1335,21 @@ const HINGE_REP_METRIC: MetricDef = {
 // documented for the row family's flat-back attempts. Rounding itself STAYS
 // not-built — nothing below changes that.
 
-// FORM CHECK — torso tipping too far / hips shooting up ahead of the chest
-// ("stripper deadlift" — hips rise and the torso pitches forward faster than
-// a controlled hinge, instead of hips and torso rising together). THIS IS a
-// torso-ANGLE check (shoulder→hip line vs vertical) — the exact same
-// primitive and style as squat's back_lean/chest-up check — NOT a spine/
-// rounding check. Both points (shoulder, hip) are fully trackable; this is
-// not a landmark-availability question the way rounding is.
+// FORM CHECK — torso pitching too far forward for the depth reached (catches
+// a rounded/excessive-lean back, not a rep that's just deep). Metric:
+// lineVsVertical(hip, shoulder), standing ≈ 0°.
 //
-// Metric: lineVsVertical(hip, shoulder) — the complement of HINGE_REP_METRIC
-// (lineVsHorizontal on the SAME two points). Standing ≈ 0° from vertical.
-// This check is NOT re-testing depth (that's what goodROMThreshold already
-// does on the same underlying signal) — it's catching torso lean that goes
-// MEANINGFULLY BEYOND what a controlled deep hinge produces, which is what
-// "hips shoot up, chest stays down" actually looks like on this metric: more
-// forward pitch than the depth alone explains.
+// CONFIRMED on-device: a deliberately-bad full-back-roll rep read 87.4 and
+// correctly failed; good reps read 54.5 and correctly passed. 72 sits
+// between those two real readings — a somewhat-strict line that catches
+// clearly-bad rounding without flagging borderline-but-fine reps.
 //
-// CONFIRMED WORKING on-device: a deliberately-bad full-back-roll rep read
-// torso_angle=87.4 and correctly failed; good reps read 54.5 and correctly
-// passed. A rep with only SLIGHT rounding read 67.8 — first left passing (at
-// an old 80 limit), then tightened to 72 to move the fault line closer to
-// it, but STILL leaving it passing (67.8 < 72).
-//
-// RETIGHTENED 72→64, on explicit request after on-device testing reported a
-// knees-bent + rounded-back rep NOT firing "STRAIGHTEN YOUR BACK" (see
-// HINGE_HIP_DRIFT_FLAG_CHECK below — that check might also have been the one
-// not firing; both are being made more sensitive together since there's no
-// log yet telling us which one actually needed it). 64 sits between the
-// confirmed good-rep reading (54.5, ~9.5° of margin preserved) and the
-// confirmed slight-rounding reading (67.8 — NOW correctly fails at 64,
-// reversing the earlier decision to deliberately leave it passing). Cue
-// changed from 'HIPS DOWN, CHEST UP' to 'STRAIGHTEN YOUR BACK' to match
-// HINGE_HIP_DRIFT_FLAG_CHECK's wording — both checks are aimed at the same
-// user-perceived fault (bad back position during a hinge) even though they
-// measure different geometry, so unifying the cue text means whichever one
-// actually fires, the user sees the same corrective message.
-//
-// STILL NOT FULLY CALIBRATED — 64 is reasoned from the same two real data
-// points as before, not a fresh log of THIS specific knees-bent+rounded
-// posture. Every rep now logs both torso_angle and hip_drift_flag's actual
-// values via the standard [REP] log line (ExerciseEngine.swift's
-// completeRep(), already existed before this change — no code needed there)
-// — send that log after a few more reps and I'll set the real number instead
-// of retightening blind a second time.
-//
-// HONEST LIMIT, unchanged: this check measures torso POSITION (the
-// hip-shoulder line's angle), not spine CURVATURE — a back that rounds
-// slightly while that line stays within a normal hinge angle will still read
-// as fine here. That gap is fundamental (no mid-spine landmark exists) and
-// no threshold change closes it. What retightening DOES do: catch more
-// rounding that's severe enough to also show up in torso position, at the
-// cost of being more willing to flag a deep-but-correct hinge — a
-// deliberate trade given the user's explicit ask to make this fire more,
-// not less.
+// REVERTED 64→72 (this round): the prior round retightened this to 64 to
+// chase one under-firing report, which instead made it fire too often /
+// inconsistently on reps that were fine — the classic overcorrection this
+// app keeps landing on for this exact check. Back to the one number that's
+// actually confirmed against real good/bad readings. Simple, one check, one
+// job: don't re-tighten this again without a fresh log with real numbers.
 const HINGE_TORSO_ANGLE_CHECK: FormCheckDef = {
   id: 'torso_angle', cue: 'STRAIGHTEN YOUR BACK',
   metric: {
@@ -1382,67 +1357,19 @@ const HINGE_TORSO_ANGLE_CHECK: FormCheckDef = {
     left:  { type: 'lineVsVertical', from: 'leftHip',  to: 'leftShoulder'  },
     right: { type: 'lineVsVertical', from: 'rightHip', to: 'rightShoulder' },
   },
-  evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 64 }, // retightened 72→64, see comment above
+  evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 72 },
   priority: 1, enabled: true,
 };
 
-// FORM CHECK — leaning forward without actually hinging (torso pitches
-// forward but the hips never travel back). CORE ROOT CAUSE: HINGE_REP_METRIC
-// (lineVsHorizontal(hip, shoulder)) is a torso ANGLE measured only from the
-// hip and shoulder's own two positions — it cannot tell a genuine hip hinge
-// (hips translate backward, flat back, minimal knee bend) apart from a
-// generic forward lean/waist-bend that produces the IDENTICAL shoulder/hip
-// angle change without the hips ever moving. Depth alone (goodROMThreshold)
-// can't fix this — a lean can reach the same torso angle as a real hinge.
-// The one thing a lean and a real hinge genuinely differ on: a real hinge's
-// hips travel backward relative to the (planted, stationary) ankle; a lean's
-// don't. In this side-on camera view, that backward travel shows up as
-// horizontal (screen-x) displacement between hip and ankle — exactly what
-// the new normalizedHorizontalGap primitive measures (see Metric.swift).
-//
-// ONE check now, not two — the gate/flag split below was reverted after
-// real-world testing.
-//
-// HISTORY: this used to be TWO checks — a hard GATE at 0.02 (reject the rep
-// entirely, not counted, no cue) plus this FLAG at 0.08 (count the rep,
-// cue "STRAIGHTEN YOUR BACK"). The GATE was intended to catch ONLY a pure
-// lean (hips never move at all). In practice it also rejected two classes
-// of genuine hinge attempt outright, with zero explanation: (a) a SHALLOW
-// hinge — hip travel is naturally proportional to depth, so a partial rep
-// produces less hip_drift purely from being partial, not from being a lean;
-// (b) knees-bent + rounded-back form — bending the knees keeps the hip more
-// directly over the ankle (closer to a squat's geometry) instead of
-// translating it back, so a real-but-badly-formed hinge attempt can ALSO
-// read near-zero on this exact metric. Both are real attempts that should
-// count with a corrective cue, not vanish silently.
-//
-// FIX: gatesCounting removed. This is now a single FLAG check — every value
-// under 0.08 counts the rep and cues "STRAIGHTEN YOUR BACK" (covers pure
-// leans, knee-bent-rounded-back, and any other near-zero-hip-travel form
-// fault alike); the ROM check (insufficientROMCue: 'HINGE DEEPER',
-// completely independent of this check — see FORM_OVERRIDE_ROM_PRIORITY in
-// ExerciseEngine.swift) already handles shallow depth on its own, since no
-// check here reaches priority 4. This is the same reasoning that justified
-// this check's own threshold in the first place: a wrong GATE fails
-// silently (a real rep just stops registering, no explanation); a wrong
-// FLAG is recoverable (worst case, an over-strict cue on a rep that was
-// actually fine). Applying that consistently now that on-device testing
-// showed the gate itself was the thing misfiring, not just its threshold.
-//
-// WIDENED 0.08→0.15 on explicit request: on-device testing of a knees-bent +
-// rounded-back rep reported this NOT firing. Per CLAUDE.md's process for an
-// unverified threshold with no fresh log available — don't guess a
-// "better" number, make it deliberately more permissive so it registers
-// more often (a flag over-firing is recoverable; under-firing on a genuinely
-// bad rep is the worse failure the user is actually reporting) — rather than
-// pick a second unvalidated number. 0.15 has zero device calibration behind
-// it, same honesty as the 0.08 it replaces.
-//
-// hip_drift_flag is logged on every rep (per-rep [REP] log line, already
-// existed — see ExerciseEngine.swift's completeRep()) alongside
-// torso_angle's own value, so a log from a few more reps — good and
-// knees-bent-rounded-back both — is what actually sets the real number here
-// instead of widening blind a second time.
+// FORM CHECK — leaning instead of hinging (torso pitches forward but the
+// hips never travel back). A lean can reach the same torso_angle as a real
+// hinge, so torso_angle alone can't tell them apart; a real hinge's hips
+// travel backward relative to the planted ankle, a lean's don't —
+// normalizedHorizontalGap(hip, ankle) measures exactly that. FLAG, not a
+// gate: a low reading counts the rep and cues "STRAIGHTEN YOUR BACK" rather
+// than rejecting it outright (a gate here previously caused shallow and
+// knees-bent reps to vanish silently — do not reintroduce gatesCounting on
+// this check).
 const HINGE_HIP_DRIFT_FLAG_CHECK: FormCheckDef = {
   id: 'hip_drift_flag', cue: 'STRAIGHTEN YOUR BACK',
   metric: {
@@ -1450,7 +1377,13 @@ const HINGE_HIP_DRIFT_FLAG_CHECK: FormCheckDef = {
     left:  { type: 'normalizedHorizontalGap', a: 'leftHip',  b: 'leftAnkle'  },
     right: { type: 'normalizedHorizontalGap', a: 'rightHip', b: 'rightAnkle' },
   },
-  evaluateAt: 'atBottom', condition: { type: 'lessThan', value: 0.15 }, // PLACEHOLDER — see comment above
+  // REVERTED 0.15→0.08 (this round) — same overcorrection as torso_angle
+  // above: widened last round to chase an under-firing report, which
+  // instead made it fire too often. 0.08 is the original, unconfirmed-but-
+  // reasoned placeholder — still not device-calibrated, but not re-widened
+  // blind a second time either. Send a [REP] log (already logs this value
+  // every rep) if it's still wrong and I'll set a real number from that.
+  evaluateAt: 'atBottom', condition: { type: 'lessThan', value: 0.08 },
   priority: 2, enabled: true,
 };
 
@@ -1911,10 +1844,9 @@ const LAT_PULLDOWN_CAMERA_JOINTS = [
 ];
 
 // Helper — mirrors curlVariant()'s shape exactly, per the investigate-first
-// process above. Clone target for wide-grip and close-grip pulldown: elbow
-// angle doesn't fundamentally change with grip width, so both variants share
-// this template with only id/displayName/setupInstruction differing, same
-// pattern as every other family in this file.
+// process above. Only one exercise uses this template (latPulldown) — grip-
+// width variants were removed (see EXERCISE_DEFINITIONS below), so this is
+// no longer a multi-variant clone target the way curl/tricep/etc. are.
 //
 // PULL-UP / CHIN-UP DELIBERATELY NOT CLONED HERE — investigated, not built:
 // the same elbow-angle metric and direction would likely apply, but the
@@ -2755,23 +2687,25 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
     // foreshorten to nearly nothing at the top.
   ),
 
-  // ─── Lat pulldown family (vertical pull) ───────────────────────────────────
+  // ─── Lat pulldown (vertical pull) ───────────────────────────────────────────
   // See latPulldownVariant() and its comments above for the full
   // investigate-first reasoning (metric/direction/camera/form-check
   // feasibility) and the explicit placeholder-threshold warning.
-  latPulldownWide: latPulldownVariant(
-    'latPulldownWide',
-    'Lat Pulldown (Wide Grip)',
+  //
+  // Wide-grip/close-grip variants REMOVED on explicit request — grip width
+  // doesn't change the elbow-angle metric being measured, so the two
+  // "variants" were the exact same tracking/thresholds under a different
+  // name, just making the exercise list longer for no functional reason.
+  // One "Lat Pulldown" only.
+  //
+  // ORIENTATION, confirmed: face the camera (front-facing), not back-to-
+  // camera. The rep metric needs both shoulder/elbow/wrist joints visible —
+  // facing away hides the arms behind the torso from Vision's view, which is
+  // why "many reps facing away = nothing counts" was reported. This is not a
+  // tunable check, it's what the joint set physically requires.
+  latPulldown: latPulldownVariant(
+    'latPulldown',
+    'Lat Pulldown',
     'Face the camera — sit back so both arms are fully in frame, from bar to shoulders',
-  ),
-
-  closeGripPulldown: latPulldownVariant(
-    'closeGripPulldown',
-    'Close-Grip Pulldown',
-    'Face the camera — sit back so both arms are fully in frame, from bar to shoulders',
-    // Same template as latPulldownWide — grip width changes hand position,
-    // not the elbow-angle metric being measured. See latPulldownVariant()'s
-    // comment for why this clone is safe (unlike pull-up/chin-up, which is
-    // deliberately NOT cloned here).
   ),
 };
