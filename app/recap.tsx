@@ -326,6 +326,13 @@ function RepTimeline({
 // being two disconnected pieces of UI. currentIndex is kept in sync with
 // whichever rep the video is currently over (see the polling effect below),
 // so it also just naturally follows normal playback with no extra wiring.
+//
+// MOVED inside the same REPLAY card as the video (not its own separate card
+// below) — reported as "hard to see the video and MyPal at the same time,"
+// i.e. too much scroll distance between them. Renders as a plain section
+// (no GlassSurface of its own) so the caller can place it directly under
+// the timeline, inside ONE shared card boundary — closer together without
+// overlapping the video itself, which was the explicit thing to avoid.
 function MyPalReview({
   events, currentIndex, onPrev, onNext,
 }: {
@@ -339,7 +346,7 @@ function MyPalReview({
   const sentence = repFeedbackSentence(ev.good, ev.reason, currentIndex);
 
   return (
-    <GlassSurface radius={30} style={s.detailCard}>
+    <View style={s.reviewSection}>
       <View style={s.reviewHeader}>
         <View style={[s.reviewIcon, ev.good ? s.reviewIconGood : s.reviewIconBad]}>
           <Text style={[s.reviewIconTxt, { color: ev.good ? C.good : C.bad }]}>{ev.good ? '✓' : '✗'}</Text>
@@ -370,7 +377,7 @@ function MyPalReview({
           <SymbolView name="chevron.right" size={14} tintColor={currentIndex === events.length - 1 ? C.mutedDim : C.text} type="monochrome" style={{ width: 14, height: 14 }} />
         </Pressable>
       </View>
-    </GlassSurface>
+    </View>
   );
 }
 
@@ -888,18 +895,22 @@ export default function RecapScreen() {
                     onSeek={seekTo}
                   />
                 )}
-              </GlassSurface>
-            )}
 
-            {/* MyPal review — one rep at a time with a real sentence, not a
-                flat list. Prev/Next also drives the video (goToRep). */}
-            {data.repEvents && data.repEvents.length > 0 && (
-              <MyPalReview
-                events={data.repEvents}
-                currentIndex={reviewIndex}
-                onPrev={() => goToRep(-1)}
-                onNext={() => goToRep(1)}
-              />
+                {/* MyPal review — same card as the video now, right below the
+                    timeline, so both are visible without scrolling between
+                    two separate cards. See MyPalReview's own doc comment. */}
+                {data.repEvents && data.repEvents.length > 0 && (
+                  <>
+                    <View style={s.reviewDivider} />
+                    <MyPalReview
+                      events={data.repEvents}
+                      currentIndex={reviewIndex}
+                      onPrev={() => goToRep(-1)}
+                      onNext={() => goToRep(1)}
+                    />
+                  </>
+                )}
+              </GlassSurface>
             )}
 
             {/* Actions — this page had neither before; Share here shares the
@@ -1064,6 +1075,18 @@ const s = StyleSheet.create({
   timelineMarkerBad:  { backgroundColor: C.bad },
 
   // ── MyPal review ──────────────────────────────────────────────────────────
+  // Divider between the timeline above and this section — now that MyPal
+  // review lives inside the same REPLAY card as the video/timeline instead
+  // of its own separate card, this is what visually separates the two
+  // areas within one shared boundary.
+  reviewDivider: {
+    height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(90,110,160,0.25)',
+    marginTop: 18, marginHorizontal: 6,
+  },
+  // The REPLAY card uses padding:10 (tighter than detailCard's own 18, to
+  // leave more room for the video) — a little extra horizontal room here so
+  // this section's text doesn't feel as tight as the video/timeline above it.
+  reviewSection: { paddingHorizontal: 6, paddingTop: 16, paddingBottom: 4 },
   reviewHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   reviewIcon: {
     width: 36, height: 36, borderRadius: 18,
