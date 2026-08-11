@@ -31,6 +31,7 @@ import { EXERCISE_STANDARDS } from '../constants/exerciseStandards';
 import { EXERCISE_DEFINITIONS } from '../constants/exerciseDefinitions';
 import { getCalibration, applyOverride } from '../lib/calibration/store';
 import { handleRepAudio } from '../lib/audioFeedback';
+import { useAudioSettingsStore } from '../store/audioSettingsStore';
 import type { DebugStatsEvent, RepEvent, ExerciseType } from '../modules/athlt-camera/src/index';
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
@@ -357,6 +358,8 @@ export default function FormCheckScreen() {
         },
       });
     } else {
+      const durationSec = startTimestamp.current != null
+        ? Math.round((Date.now() - startTimestamp.current) / 1000) : 0;
       router.replace({
         pathname: '/recap',
         params: {
@@ -365,6 +368,7 @@ export default function FormCheckScreen() {
           goodReps: String(navParams.goodReps),
           videoUri: navParams.videoUri,
           events:   JSON.stringify(repEvents.current),
+          durationSec: String(durationSec),
         },
       });
     }
@@ -394,6 +398,10 @@ export default function FormCheckScreen() {
   }, [doNavigate]);
 
   const handleFlip = useCallback(() => void flipCamera(), []);
+
+  const audioEnabled    = useAudioSettingsStore(st => st.audioEnabled);
+  const setAudioEnabled = useAudioSettingsStore(st => st.setAudioEnabled);
+  const handleToggleMute = useCallback(() => setAudioEnabled(!audioEnabled), [audioEnabled, setAudioEnabled]);
 
   const handleBack = useCallback(async () => {
     sessionStopped.current = true;
@@ -471,9 +479,17 @@ export default function FormCheckScreen() {
         <Text style={s.title}>
           {EXERCISE_DEFINITIONS[exerciseType]?.displayName ?? exerciseType} Form Check
         </Text>
-        <GlassButton circular={40} onPress={handleFlip}>
-          <SymbolView name="arrow.triangle.2.circlepath.camera.fill" size={18} tintColor={C.text} type="monochrome" style={{ width: 18, height: 18 }} />
-        </GlassButton>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <GlassButton circular={40} onPress={handleToggleMute}>
+            <SymbolView
+              name={audioEnabled ? 'speaker.wave.2.fill' : 'speaker.slash.fill'}
+              size={18} tintColor={C.text} type="monochrome" style={{ width: 18, height: 18 }}
+            />
+          </GlassButton>
+          <GlassButton circular={40} onPress={handleFlip}>
+            <SymbolView name="arrow.triangle.2.circlepath.camera.fill" size={18} tintColor={C.text} type="monochrome" style={{ width: 18, height: 18 }} />
+          </GlassButton>
+        </View>
       </View>
 
       {/* Error */}

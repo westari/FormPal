@@ -198,10 +198,41 @@ export function previewVoice(identifier: string | null): void {
   }
 }
 
+// Curated voice list — the raw device list is 50-100+ voices (every language
+// × every accent × every quality tier), almost all near-duplicate
+// Default-quality synth voices that sound flat/robotic and barely
+// distinguishable from each other. Two-tier curation instead:
+//   1. Enhanced-quality voices first — iOS's higher-fidelity synthesis
+//      engine, genuinely more natural, not just a different accent.
+//   2. If fewer than MAX_VOICES Enhanced voices are installed (most devices
+//      ship with zero downloaded — Enhanced voices are an opt-in Settings
+//      download), fill the rest from a short allow-list of Default-quality
+//      voice NAMES that are consistently the most natural-sounding across
+//      iOS versions even undownloaded, rather than showing every Default
+//      voice.
+// Capped at MAX_VOICES total so the picker stays a short, scannable list.
+const PREFERRED_DEFAULT_VOICE_NAMES = [
+  'Ava', 'Samantha', 'Nicky', 'Aaron', 'Susan', 'Tom', 'Karen', 'Daniel', 'Moira', 'Evan', 'Nathan', 'Zoe',
+];
+const MAX_VOICES = 5;
+
 export async function listAvailableVoices(): Promise<SpeechNS.Voice[]> {
   if (!SpeechModule) return [];
   try {
-    return await SpeechModule.getAvailableVoicesAsync();
+    const all = await SpeechModule.getAvailableVoicesAsync();
+    const english = all.filter(v => v.language?.toLowerCase().startsWith('en'));
+    const pool = english.length > 0 ? english : all;
+
+    const enhanced = pool.filter(v => v.quality === 'Enhanced');
+    const curatedDefault = pool.filter(v =>
+      v.quality !== 'Enhanced' && PREFERRED_DEFAULT_VOICE_NAMES.some(n => v.name.includes(n))
+    );
+    const curated = [...enhanced, ...curatedDefault].slice(0, MAX_VOICES);
+
+    // Fallback if curation matched nothing at all (no Enhanced voices
+    // downloaded AND none of the curated names present) — show something
+    // rather than an empty picker.
+    return curated.length > 0 ? curated : pool.slice(0, MAX_VOICES);
   } catch (e) {
     console.warn('[audioFeedback] getAvailableVoicesAsync failed', e);
     return [];

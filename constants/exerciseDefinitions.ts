@@ -739,17 +739,37 @@ const TRICEP_REP_METRIC: MetricDef = {
 //   Separate L/R checks so the in-view side fires even when the other is occluded.
 // LOOSENED 30→45: device log showed 43 and 31 firing against the 30 limit on
 // reps done with correct elbow position. 45 sits above both observed values.
+//
+// PRIORITY 4→3: priority>=4 (FORM_OVERRIDE_ROM_PRIORITY, in ExerciseEngine.swift)
+// means "this check's cue overrides insufficientROMCue even on a shallow rep."
+// That's only mathematically justified when the flagged joint sits INSIDE the
+// rep metric itself — curl's own elbow_drift is priority 4 for exactly that
+// reason: CURL_REP_METRIC is a jointAngle with the elbow AS its pivot, so a
+// drifted elbow literally reshapes the measured curl angle (a curled arm can
+// read as shallower than it really is). TRICEP_REP_METRIC is different —
+// lineVsVertical(wrist, elbow), the forearm's own angle — and elbow_drift
+// measures a separate segment (lineVsVertical(shoulder, elbow), the upper
+// arm). Tilting the upper arm doesn't reshape the forearm-vs-vertical
+// reading the way an elbow-as-pivot angle gets reshaped, so priority 4 here
+// was carried over from curl's pattern without the geometry that justifies
+// it — on a partial rep it was winning the priority>=4 override every time,
+// showing "KEEP ELBOWS IN" instead of "EXTEND FULLY" regardless of whether
+// elbow position was the real problem. Priority 3 (below the override
+// threshold) fixes that: on a shallow rep, EXTEND FULLY always wins now;
+// elbow_drift still fires normally as the top-priority cue on any rep that
+// DID reach full extension with bad elbow position (goodROM=true path is
+// unaffected by this priority change).
 const TRICEP_ELBOW_DRIFT_L: FormCheckDef = {
   id: 'elbow_drift_l', cue: 'KEEP ELBOWS IN',
   metric: { type: 'lineVsVertical', from: 'leftShoulder', to: 'leftElbow' },
   evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 45 },
-  priority: 4, enabled: true,
+  priority: 3, enabled: true,
 };
 const TRICEP_ELBOW_DRIFT_R: FormCheckDef = {
   id: 'elbow_drift_r', cue: 'KEEP ELBOWS IN',
   metric: { type: 'lineVsVertical', from: 'rightShoulder', to: 'rightElbow' },
   evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 45 },
-  priority: 4, enabled: true,
+  priority: 3, enabled: true,
 };
 const TRICEP_TORSO_LEAN: FormCheckDef = {
   id: 'torso_lean', cue: 'STAY UPRIGHT',
@@ -1317,49 +1337,39 @@ const HINGE_TORSO_ANGLE_CHECK: FormCheckDef = {
 // horizontal (screen-x) displacement between hip and ankle — exactly what
 // the new normalizedHorizontalGap primitive measures (see Metric.swift).
 //
-// TWO checks on the same measurement, not one — split after real-world use
-// showed they need different failure behavior:
+// ONE check now, not two — the gate/flag split below was reverted after
+// real-world testing.
 //
-//  HINGE_HIP_DRIFT_CHECK (gate, unchanged from before): near-zero hip travel
-//  — a pure lean, hips never move at all — still REJECTS the rep entirely
-//  (gatesCounting: true). CONFIRMED working on-device: pure leans no longer
-//  count. Left exactly as-is — do not touch this threshold or behavior.
+// HISTORY: this used to be TWO checks — a hard GATE at 0.02 (reject the rep
+// entirely, not counted, no cue) plus this FLAG at 0.08 (count the rep,
+// cue "STRAIGHTEN YOUR BACK"). The GATE was intended to catch ONLY a pure
+// lean (hips never move at all). In practice it also rejected two classes
+// of genuine hinge attempt outright, with zero explanation: (a) a SHALLOW
+// hinge — hip travel is naturally proportional to depth, so a partial rep
+// produces less hip_drift purely from being partial, not from being a lean;
+// (b) knees-bent + rounded-back form — bending the knees keeps the hip more
+// directly over the ankle (closer to a squat's geometry) instead of
+// translating it back, so a real-but-badly-formed hinge attempt can ALSO
+// read near-zero on this exact metric. Both are real attempts that should
+// count with a corrective cue, not vanish silently.
 //
-//  HINGE_HIP_DRIFT_FLAG_CHECK (new): a MODERATE back-roll — some real hip
-//  travel, enough to clear the gate above, but not enough to trust as a
-//  clean hinge — was still passing as a full "GOOD" rep (log-confirmed: ROM
-//  alone was satisfying it, twice in one set). Explicit decision, made
-//  without on-device calibration data (none was available and the ask was
-//  to decide, not wait): this counts the rep instead of rejecting it,
-//  cueing "STRAIGHTEN YOUR BACK" instead of GOOD. Chosen over tightening the
-//  GATE further because a wrong gate threshold fails silently — a real deep
-//  hinge would just stop registering as a rep at all, with zero explanation,
-//  which is a worse failure than an occasional over-strict cue on a rep that
-//  was actually fine. A flag is recoverable either way; a bad gate isn't.
+// FIX: gatesCounting removed. This is now a single FLAG check — every value
+// under 0.08 counts the rep and cues "STRAIGHTEN YOUR BACK" (covers pure
+// leans, knee-bent-rounded-back, and any other near-zero-hip-travel form
+// fault alike); the ROM check (insufficientROMCue: 'HINGE DEEPER',
+// completely independent of this check — see FORM_OVERRIDE_ROM_PRIORITY in
+// ExerciseEngine.swift) already handles shallow depth on its own, since no
+// check here reaches priority 4. This is the same reasoning that justified
+// this check's own threshold in the first place: a wrong GATE fails
+// silently (a real rep just stops registering, no explanation); a wrong
+// FLAG is recoverable (worst case, an over-strict cue on a rep that was
+// actually fine). Applying that consistently now that on-device testing
+// showed the gate itself was the thing misfiring, not just its threshold.
 //
-// PLACEHOLDER WARNING per CLAUDE.md, for the FLAG check's threshold only —
-// the GATE's 0.02 stays as originally reasoned (dimensional check: hip/ankle
-// x-positions are in Vision's 0-1 normalized space, divided by
-// torsoReference which typically runs ~0.15-0.35 for a properly-framed
-// person, so 0.02 requires the hip to be within ~2% of torso length of
-// directly above the ankle to reject — essentially "no real movement at
-// all"). The FLAG threshold (0.08) is a REASONED middle value with zero
-// device calibration behind it: meaningfully above the gate's near-zero
-// floor, but still well below where a genuine deep hinge should read by the
-// same dimensional logic. If it turns out too strict (flagging real deep
-// hinges) or too loose (still missing moderate rolls), send a log — hip_drift
-// is logged on every rep now (via the normal per-rep form-check log line, no
-// longer just [GATE]) and it can be tuned from real numbers at any time.
-const HINGE_HIP_DRIFT_CHECK: FormCheckDef = {
-  id: 'hip_drift', cue: 'PUSH YOUR HIPS BACK',
-  metric: {
-    type:  'average',
-    left:  { type: 'normalizedHorizontalGap', a: 'leftHip',  b: 'leftAnkle'  },
-    right: { type: 'normalizedHorizontalGap', a: 'rightHip', b: 'rightAnkle' },
-  },
-  evaluateAt: 'atBottom', condition: { type: 'lessThan', value: 0.02 }, // confirmed working — do not change
-  priority: 2, enabled: true, gatesCounting: true,
-};
+// PLACEHOLDER WARNING per CLAUDE.md: 0.08 is unchanged from before — still a
+// reasoned value with zero device calibration behind it, not a confirmed
+// number. hip_drift is logged on every rep (per-rep form-check log line) and
+// can be tuned from real numbers at any time.
 const HINGE_HIP_DRIFT_FLAG_CHECK: FormCheckDef = {
   id: 'hip_drift_flag', cue: 'STRAIGHTEN YOUR BACK',
   metric: {
@@ -1368,11 +1378,11 @@ const HINGE_HIP_DRIFT_FLAG_CHECK: FormCheckDef = {
     right: { type: 'normalizedHorizontalGap', a: 'rightHip', b: 'rightAnkle' },
   },
   evaluateAt: 'atBottom', condition: { type: 'lessThan', value: 0.08 }, // PLACEHOLDER — see comment above
-  priority: 3, enabled: true,
+  priority: 2, enabled: true,
 };
 
 // Side-on so torso travel and hip movement are both visible. Ankle added
-// (wasn't previously required) — HINGE_HIP_DRIFT_CHECK needs it visible;
+// (wasn't previously required) — HINGE_HIP_DRIFT_FLAG_CHECK needs it visible;
 // still no far-side wrist, which is what caused occlusion bugs elsewhere.
 const HINGE_CAMERA_JOINTS_A = ['leftShoulder',  'leftHip',  'leftKnee',  'leftAnkle'];
 const HINGE_CAMERA_JOINTS_B = ['rightShoulder', 'rightHip', 'rightKnee', 'rightAnkle'];
@@ -1427,12 +1437,12 @@ function hingeVariant(
     // knee_bend removed — see "REMOVED, second time, for good" comment above.
     // torso_angle added — see HINGE_TORSO_ANGLE_CHECK comment (placeholder,
     // needs a real log — this is a NEW check, not a revival of knee_bend).
-    // hip_drift added — see HINGE_HIP_DRIFT_CHECK comment — catches a
-    // forward lean with no real hip hinge (gate, confirmed working).
-    // hip_drift_flag added — see HINGE_HIP_DRIFT_FLAG_CHECK comment —
-    // catches a moderate back-roll that clears the gate but isn't a clean
-    // hinge (flag, cues STRAIGHTEN YOUR BACK, placeholder threshold).
-    formChecks:         [HINGE_TORSO_ANGLE_CHECK, HINGE_HIP_DRIFT_CHECK, HINGE_HIP_DRIFT_FLAG_CHECK],
+    // hip_drift_flag added — see HINGE_HIP_DRIFT_FLAG_CHECK comment — catches
+    // near-zero hip travel (pure lean, knee-bent-rounded-back, or any other
+    // form fault that keeps the hip over the ankle instead of behind it) as
+    // a counted-but-flagged rep, cueing STRAIGHTEN YOUR BACK. No longer a
+    // gate — see that comment for why.
+    formChecks:         [HINGE_TORSO_ANGLE_CHECK, HINGE_HIP_DRIFT_FLAG_CHECK],
     readyGate:          PASSTHROUGH_GATE,
     cameraSetup: {
       setupInstruction,

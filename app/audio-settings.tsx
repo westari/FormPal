@@ -53,14 +53,9 @@ export default function AudioSettingsScreen() {
   useEffect(() => {
     if (!voiceAvailable) { setVoices([]); return; }
     let cancelled = false;
-    listAvailableVoices().then(list => {
-      if (cancelled) return;
-      // English voices only — a device can ship 100+ voices across every
-      // supported language, and only the ones that can read English cues
-      // are useful here.
-      const english = list.filter(v => v.language?.toLowerCase().startsWith('en'));
-      setVoices(english.length > 0 ? english : list);
-    });
+    // Curation (English-only, Enhanced-quality preferred, capped short list)
+    // now lives in listAvailableVoices() itself — see lib/audioFeedback.ts.
+    listAvailableVoices().then(list => { if (!cancelled) setVoices(list); });
     return () => { cancelled = true; };
   }, [voiceAvailable]);
 

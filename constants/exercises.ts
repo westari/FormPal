@@ -754,6 +754,41 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     isFormCheckable: true,
   },
 
+  // ─── Lat pulldown family ────────────────────────────────────────────────────
+  // Modeled on seatedCableRow above — same equipment (Cable), same split
+  // buckets (Upper + Pull), same beginner difficulty/rep-range shape. This
+  // was the missing piece of lat pulldown's registration: the exercise was
+  // already wired into EXERCISE_DEFINITIONS, EXERCISE_STANDARDS, ExerciseType,
+  // and EXERCISE_UI, but never added HERE — and this catalog (not those other
+  // lists) is what app/exercise-picker.tsx actually reads to build the
+  // selectable exercise list, so it was invisible in the UI despite being
+  // fully functional underneath.
+  {
+    id:              'latPulldownWide',
+    displayName:     'Lat Pulldown (Wide Grip)',
+    muscleGroups:    [MuscleGroup.Back, MuscleGroup.Arms],
+    splitCategories: [SplitCategory.Upper, SplitCategory.Pull],
+    difficulty:      Difficulty.Beginner,
+    equipment:       [Equipment.Cable],
+    defaultReps:     10,
+    defaultSets:     3,
+    progression:     { repRange: [8, 15], setRange: [3, 4] },
+    isFormCheckable: true,
+  },
+
+  {
+    id:              'closeGripPulldown',
+    displayName:     'Close-Grip Pulldown',
+    muscleGroups:    [MuscleGroup.Back, MuscleGroup.Arms],
+    splitCategories: [SplitCategory.Upper, SplitCategory.Pull],
+    difficulty:      Difficulty.Beginner,
+    equipment:       [Equipment.Cable],
+    defaultReps:     10,
+    defaultSets:     3,
+    progression:     { repRange: [8, 15], setRange: [3, 4] },
+    isFormCheckable: true,
+  },
+
   // ─────────────────────────────────────────────────────────────────────────
   // ADD NEW FORM-CHECKABLE EXERCISES HERE.
   // ─────────────────────────────────────────────────────────────────────────

@@ -6,9 +6,10 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { SymbolView } from 'expo-symbols';
+import { StatusBar } from 'expo-status-bar';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Circle } from 'react-native-svg';
+import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 import ViewShot from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import RepFeedback from '../components/RepFeedback';
@@ -52,71 +53,63 @@ interface RepEventData {
 }
 
 interface RecapData {
-  ts:             number;
-  entries:        SessionEntry[];
-  totalReps:      number;
-  totalGoodReps:  number;
-  pct:            number;
-  videoUri?:      string;
-  repEvents?:     RepEventData[];
-  isHistory:      boolean;
+  ts:              number;
+  entries:         SessionEntry[];
+  totalReps:       number;
+  totalGoodReps:   number;
+  pct:             number;
+  videoUri?:       string;
+  repEvents?:      RepEventData[];
+  isHistory:       boolean;
   workoutSummary?: WorkoutSummary;
+  // Real elapsed session time when we have it — workout mode (WorkoutSummary
+  // tracks this natively) and solo mode (formcheck.tsx now passes it through
+  // from its own session-start timestamp, see doNavigate). History mode has
+  // no duration recorded per past session — stays undefined there, and the
+  // Time stat tile is simply omitted rather than showing a fabricated number.
+  durationSec?:    number;
 }
 
-// ─── Palette ──────────────────────────────────────────────────────────────────
-// REDESIGN, take 3 — root cause of "purple failed blur" (confirmed by
-// re-reading the screenshot, not guessed): the background gradient
-// (#0B0F2A→#181638→#241531) was dark navy through dark violet — three colors
-// close in both hue AND value. Blur distorts whatever color/contrast is
-// BEHIND it; a background with barely any internal contrast gives the blur
-// almost nothing to visibly smear, so a glass panel over it just reads as
-// "slightly different flat gray-purple," not "frosted." The glass surfaces
-// were also relying on blur alone to read as glass, with only an 8%-opacity
-// fill and a 16%-opacity border — both too subtle to sell "this is a
-// distinct floating pane" on their own if the blur itself isn't visually
-// obvious.
-//
-// Fix, three parts:
-//  1. A genuinely high-contrast, saturated background (electric indigo →
-//     violet → hot pink/coral) — real color variation for blur to distort,
-//     so the frosted effect is visually obvious even at moderate intensity.
-//  2. Every glass surface now layers THREE things, not one: BlurView at
-//     near-max intensity, a low-opacity white fill UNDER it (glassFill,
-//     bumped 0.08→0.14), and a soft white-to-transparent highlight gradient
-//     OVER it at the top edge (glassHighlight) — the classic "light catching
-//     the top of a glass/acrylic pane" cue real UI glass always has, which
-//     sells the effect even independent of exactly how strong the live blur
-//     turns out to be on-device.
-//  3. Real drop shadows under the glass panels via a shadow-wrapper pattern
-//     (shadowColor on an outer View, overflow:hidden clipping on an inner
-//     one) — a floating glass pane needs to visibly float; nothing here had
-//     a shadow before.
+// ─── Palette — liquid-glass light theme, matches the pasted mockup ───────────
+// Deliberately a full palette swap from the previous dark-purple version:
+// the mockup's whole visual language is a bright, airy gradient (soft blue →
+// lavender → mint → peach) with white frosted-glass panels floating on top,
+// not a saturated dark background. Every token below is read directly off
+// the mockup's inline styles, not re-invented.
 const C = {
-  bgTop:          '#160B3D', // deep indigo
-  bgMid:          '#4A1E6E', // vivid violet
-  bgBottom:       '#D94F7A', // warm coral-pink — real color distance from bgTop
-  glassFill:      'rgba(255,255,255,0.14)',
-  glassHighlight: 'rgba(255,255,255,0.35)',
-  glassEdge:      'rgba(255,255,255,0.30)',
-  card:           '#1C1140', // opaque dark card — used by heroShareCard so the ViewShot capture isn't transparent
-  text:           '#FFFFFF',
-  muted:          'rgba(255,255,255,0.62)',
-  accent:         '#8AA2FF',
-  accent2:        '#E297FF',
-  good:           '#3DE08C',
-  ringTrack:      'rgba(255,255,255,0.16)',
-  shadow:         'rgba(20,6,40,0.55)',
+  bgTop:      '#EDF1FB',
+  bgMid1:     '#E4EAFA',
+  bgMid2:     '#EAF3F4',
+  bgBottom:   '#F6EFE9',
+
+  // Decorative background blobs (radial glows) — approximated in RN via
+  // react-native-svg's RadialGradient rather than CSS blur+radial-gradient,
+  // which has no direct RN equivalent.
+  blobIndigo: 'rgba(96,116,255,0.55)',
+  blobTeal:   'rgba(64,206,190,0.48)',
+  blobCoral:  'rgba(255,167,116,0.42)',
+
+  glassFillHi:   'rgba(255,255,255,0.62)',
+  glassFillLo:   'rgba(255,255,255,0.34)',
+  glassHighlight:'rgba(255,255,255,0.95)',
+  glassEdge:     'rgba(255,255,255,0.7)',
+  shadow:        'rgba(28,44,110,0.30)',
+
+  text:      '#131a2e',
+  muted:     'rgba(30,40,70,0.55)',
+  mutedDim:  'rgba(30,42,74,0.52)',
+  good:      '#2E7D63',
+
+  accentA:   '#5A6CFF',
+  accentB:   '#7A5CF0',
+  accentC:   '#38C3B8',
+
+  ringTrack: 'rgba(90,110,160,0.18)',
 };
 
-const { width: SCREEN_W } = Dimensions.get('window');
-const PAGE_GAP = 14;
-const PAGE_W   = SCREEN_W - 40; // matches horizontal content padding of 20 on each side
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function formatShort(ts: number): string {
-  return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
 
 function isSameCalendarDay(ts: number): boolean {
   const a = new Date(ts);
@@ -124,8 +117,28 @@ function isSameCalendarDay(ts: number): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
-function formatFullDate(ts: number): string {
-  return new Date(ts).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+function formatFullDateTime(ts: number): string {
+  const datePart = new Date(ts).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  const timePart = new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return `${datePart} · ${timePart}`;
+}
+
+function formatDuration(totalSec: number): string {
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  if (m >= 60) {
+    const h = Math.floor(m / 60);
+    return `${h}:${String(m % 60).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function formatMuscleGroupsLabel(groups: Set<MuscleGroup>): string {
+  if (groups.size === 0) return 'Full Body';
+  const names = Array.from(groups).map(g => g.charAt(0).toUpperCase() + g.slice(1));
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]} & ${names[1]}`;
+  return `${names.slice(0, -1).join(', ')} & ${names[names.length - 1]}`;
 }
 
 function generateSummary(reps: number, goodReps: number): string {
@@ -137,28 +150,34 @@ function generateSummary(reps: number, goodReps: number): string {
   return `${reps} reps completed with ${goodReps} in good form (${pct}%). Focus on control over speed next session.`;
 }
 
-// ─── Glass surface — the one place blur/fill/highlight/border/shadow compose ──
-// Every "glass" element in this screen (icon chip, page cards, done chip)
-// renders through this so the treatment can never drift out of sync between
-// them again. Shadow lives on the OUTER (unclipped) wrapper — shadow +
-// overflow:hidden on the SAME view silently clips the shadow away on iOS,
-// so the rounded-corner clip has to happen on an inner view instead.
+// ─── GlassSurface — light frosted-glass panel used everywhere on this screen ──
+// Every glass element (icon chip, hero card, stat tile, done chip) renders
+// through this so the treatment can't drift out of sync. Shadow lives on the
+// OUTER (unclipped) wrapper — shadow + overflow:hidden on the same view
+// silently clips the shadow away on iOS, so the rounded-corner clip happens
+// on an inner view instead.
 function GlassSurface({
-  style, radius, children, shadow = true,
+  style, radius, children, shadow = true, fillOpacity = 'high',
 }: {
   style?:  any;
-  radius: number;
+  radius:  number;
   children: React.ReactNode;
-  shadow?: boolean;
+  shadow?:  boolean;
+  fillOpacity?: 'high' | 'low';
 }) {
   return (
     <View style={shadow ? [gs.shadowWrap, { borderRadius: radius, shadowColor: C.shadow }] : undefined}>
       <View style={[{ borderRadius: radius, overflow: 'hidden' }, style]}>
-        <BlurView intensity={95} tint="light" style={StyleSheet.absoluteFill} />
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: C.glassFill }]} pointerEvents="none" />
+        <BlurView intensity={70} tint="light" style={StyleSheet.absoluteFill} />
+        <LinearGradient
+          colors={[fillOpacity === 'high' ? C.glassFillHi : C.glassFillLo, C.glassFillLo]}
+          start={{ x: 0.2, y: 0 }} end={{ x: 0.8, y: 1 }}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
         <LinearGradient
           colors={[C.glassHighlight, 'rgba(255,255,255,0)']}
-          start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 0.6 }}
+          start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 0.5 }}
           style={StyleSheet.absoluteFill}
           pointerEvents="none"
         />
@@ -174,22 +193,59 @@ function GlassSurface({
 
 const gs = StyleSheet.create({
   shadowWrap: {
-    shadowOffset: { width: 0, height: 10 }, shadowOpacity: 1, shadowRadius: 22, elevation: 8,
+    shadowOffset: { width: 0, height: 14 }, shadowOpacity: 1, shadowRadius: 26, elevation: 8,
   },
 });
+
+// ─── Background — gradient + soft radial blobs ────────────────────────────────
+// The mockup uses CSS radial-gradient + blur for drifting color blobs; RN has
+// no radial-gradient primitive, so this uses react-native-svg's RadialGradient
+// (already a project dependency) over the same 4-stop linear base gradient.
+function BgGradient() {
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <LinearGradient
+        colors={[C.bgTop, C.bgMid1, C.bgMid2, C.bgBottom]}
+        locations={[0, 0.38, 0.7, 1]}
+        start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <Svg width={SCREEN_W} height={SCREEN_H} style={StyleSheet.absoluteFill}>
+        <Defs>
+          <RadialGradient id="blobIndigo" cx="50%" cy="50%" r="50%">
+            <Stop offset="0%" stopColor={C.blobIndigo} stopOpacity={1} />
+            <Stop offset="100%" stopColor={C.blobIndigo} stopOpacity={0} />
+          </RadialGradient>
+          <RadialGradient id="blobTeal" cx="50%" cy="50%" r="50%">
+            <Stop offset="0%" stopColor={C.blobTeal} stopOpacity={1} />
+            <Stop offset="100%" stopColor={C.blobTeal} stopOpacity={0} />
+          </RadialGradient>
+          <RadialGradient id="blobCoral" cx="50%" cy="50%" r="50%">
+            <Stop offset="0%" stopColor={C.blobCoral} stopOpacity={1} />
+            <Stop offset="100%" stopColor={C.blobCoral} stopOpacity={0} />
+          </RadialGradient>
+        </Defs>
+        <Circle cx={SCREEN_W * 0.05} cy={SCREEN_H * 0.02} r={SCREEN_W * 0.62} fill="url(#blobIndigo)" />
+        <Circle cx={SCREEN_W * 1.05} cy={SCREEN_H * 0.32} r={SCREEN_W * 0.56} fill="url(#blobTeal)" />
+        <Circle cx={SCREEN_W * -0.05} cy={SCREEN_H * 0.92} r={SCREEN_W * 0.58} fill="url(#blobCoral)" />
+      </Svg>
+    </View>
+  );
+}
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function RecapScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const shotRef = useRef<ViewShot>(null);
+  const pagerRef = useRef<ScrollView>(null);
 
   const {
     reps: repsStr, goodReps: goodRepsStr, videoUri: videoUriParam, events,
-    exercise, ts: tsParam, mode,
+    exercise, ts: tsParam, mode, durationSec: durationSecParam,
   } = useLocalSearchParams<{
     reps?: string; goodReps?: string; videoUri?: string; events?: string;
-    exercise?: string; ts?: string; mode?: string;
+    exercise?: string; ts?: string; mode?: string; durationSec?: string;
   }>();
 
   const isWorkoutMode = mode === 'workout';
@@ -208,8 +264,7 @@ export default function RecapScreen() {
 
   // Entrance animation — visual polish only, no bearing on data/logic.
   const heroOpac  = useRef(new Animated.Value(0)).current;
-  const heroScale = useRef(new Animated.Value(0.94)).current;
-  const ringProgress = useRef(new Animated.Value(0)).current;
+  const heroY     = useRef(new Animated.Value(14)).current;
 
   const repEventsParam = useMemo<RepEventData[]>(() => {
     try { return JSON.parse(events ?? '[]'); }
@@ -239,6 +294,7 @@ export default function RecapScreen() {
           ts: summary.finishedAt, entries,
           totalReps: summary.totalReps, totalGoodReps: summary.totalGoodReps,
           pct: summary.overallFormScore, isHistory: false, workoutSummary: summary,
+          durationSec: summary.durationSeconds,
         });
       } else if (isHistoryMode) {
         const all    = await getAllSessions();
@@ -262,11 +318,13 @@ export default function RecapScreen() {
           reps, goodReps, pct,
         };
         if (reps > 0) await appendSessions([entry]);
+        const parsedDuration = durationSecParam != null ? parseInt(durationSecParam, 10) : undefined;
         setData({
           ts: soloTs, entries: reps > 0 ? [entry] : [],
           totalReps: reps, totalGoodReps: goodReps, pct,
           videoUri: typeof videoUriParam === 'string' && videoUriParam.length > 0 ? videoUriParam : undefined,
           repEvents: repEventsParam, isHistory: false,
+          durationSec: parsedDuration != null && !isNaN(parsedDuration) ? parsedDuration : undefined,
         });
       }
 
@@ -279,18 +337,16 @@ export default function RecapScreen() {
     () => (data ? muscleGroupsWorked(data.entries) : new Set<MuscleGroup>()),
     [data],
   );
-  const highlightLabel = data && isSameCalendarDay(data.ts) ? 'Today' : data ? formatShort(data.ts) : 'Today';
+  const highlightLabel = data && isSameCalendarDay(data.ts) ? 'Today' : data ? formatMuscleGroupsLabel(highlightGroups) : 'Today';
 
-  // Entrance animation once real data has resolved (visual only) — also
-  // sweeps the score ring from 0 to its real value instead of popping in flat.
+  // Entrance animation once real data has resolved (visual only).
   useEffect(() => {
     if (!data) return;
     Animated.parallel([
-      Animated.timing(heroOpac,  { toValue: 1, duration: 420, useNativeDriver: true }),
-      Animated.spring(heroScale, { toValue: 1, tension: 120, friction: 9, useNativeDriver: true }),
-      Animated.timing(ringProgress, { toValue: data.pct, duration: 900, useNativeDriver: false, delay: 120 }),
+      Animated.timing(heroOpac, { toValue: 1, duration: 420, useNativeDriver: true }),
+      Animated.spring(heroY,    { toValue: 0, tension: 120, friction: 10, useNativeDriver: true }),
     ]).start();
-  }, [data, heroOpac, heroScale, ringProgress]);
+  }, [data, heroOpac, heroY]);
 
   // ── Video replay animation (solo mode only) ─────────────────────────────────
   const hasVideo = !!data?.videoUri;
@@ -352,8 +408,13 @@ export default function RecapScreen() {
     }
   }, [data, isWorkoutMode, router, markWorkoutComplete, abortWorkout]);
 
-  const handlePageScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const page = Math.round(e.nativeEvent.contentOffset.x / (PAGE_W + PAGE_GAP));
+  const scrollToPage = useCallback((i: number) => {
+    pagerRef.current?.scrollTo({ x: i * SCREEN_W, animated: true });
+    setActivePage(i);
+  }, []);
+
+  const handlePagerScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const page = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
     setActivePage(page);
   }, []);
 
@@ -362,6 +423,7 @@ export default function RecapScreen() {
   if (loadFailed) {
     return (
       <View style={s.root}>
+        <StatusBar style="dark" />
         <BgGradient />
         <View style={[s.centerFill, { paddingTop: insets.top }]}>
           <Text style={s.failedTxt}>No recap data found.</Text>
@@ -375,7 +437,7 @@ export default function RecapScreen() {
     );
   }
 
-  if (!data) return <View style={s.root}><BgGradient /></View>;
+  if (!data) return <View style={s.root}><StatusBar style="dark" /><BgGradient /></View>;
 
   const exCount    = data.entries.length;
   const doneLabel  = data.isHistory ? 'Back' : 'Done';
@@ -384,338 +446,277 @@ export default function RecapScreen() {
     ? 'Session Recap'
     : isWorkoutMode ? 'Workout Complete' : 'Session Complete';
 
-  // Build the horizontal page deck — muscle map is always present, the rest
-  // are conditional on mode, same data-availability rules as before.
-  const pages: { key: string; label: string; render: () => React.ReactNode }[] = [];
-  pages.push({
-    key: 'map', label: 'Muscle Map',
-    render: () => (
-      <RecapSectionBoundary
-        fallback={
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-            <Text style={s.cardText}>Muscle map couldn't load this time — your reps are still saved.</Text>
-          </View>
-        }
-      >
-        <MuscleHeatmap
-          overallScores={overallScores}
-          highlightGroups={highlightGroups}
-          highlightLabel={highlightLabel}
-          scale={0.55}
-        />
-      </RecapSectionBoundary>
-    ),
-  });
-  if (data.totalReps > 0) {
-    pages.push({
-      key: 'overview', label: 'Overview',
-      render: () => (
-        <View style={{ justifyContent: 'center', flex: 1 }}>
-          <Text style={s.cardText}>{generateSummary(data.totalReps, data.totalGoodReps)}</Text>
-        </View>
-      ),
-    });
-  }
-  if (breakdown && breakdown.length > 0) {
-    pages.push({
-      key: 'breakdown', label: 'Breakdown',
-      render: () => (
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {breakdown.map((r, i) => (
-            <React.Fragment key={r.exerciseId + i}>
-              <View style={s.exRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.exName}>{r.displayName}</Text>
-                  {r.completed && <Text style={s.exMeta}>{r.reps} reps</Text>}
-                  {r.skipped   && <Text style={[s.exMeta, { color: C.muted }]}>Skipped</Text>}
-                </View>
-                {r.completed && r.reps > 0 && <Text style={s.exScore}>{r.formScore}%</Text>}
-              </View>
-              {i < breakdown.length - 1 && <View style={s.divider} />}
-            </React.Fragment>
-          ))}
-        </ScrollView>
-      ),
-    });
-  }
-  if (hasVideo) {
-    pages.push({
-      key: 'replay', label: 'Replay',
-      render: () => (
-        <View style={s.videoWrap}>
-          <VideoView
-            player={player}
-            style={StyleSheet.absoluteFill}
-            allowsFullscreen
-            nativeControls
-            contentFit="contain"
-          />
-          {liveAnim && (
-            <RepFeedback
-              key={liveAnim.key}
-              good={liveAnim.good}
-              reason={liveAnim.reason}
-              seq={liveAnim.key}
-              onComplete={() => setLiveAnim(null)}
-            />
-          )}
-        </View>
-      ),
-    });
-  }
-
-  const ringSize = 168;
-  const ringStroke = 14;
-  const ringRadius = (ringSize - ringStroke) / 2;
-  const ringCirc = 2 * Math.PI * ringRadius;
-  const ringOffset = ringProgress.interpolate({
-    inputRange: [0, 100],
-    outputRange: [ringCirc, 0],
-    extrapolate: 'clamp',
-  });
+  const hasDetails = (data.totalReps > 0) || (breakdown && breakdown.length > 0) || hasVideo;
 
   return (
     <View style={s.root}>
+      <StatusBar style="dark" />
       <BgGradient />
 
-      {/* Floating top bar — a small glass pill, not a full header block.
-          Close/back sits where a modal dismiss control naturally lives. */}
-      <View style={[s.topBar, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
-        <GlassSurface radius={17} style={s.iconChip}>
-          <Pressable onPress={handleDone} style={({ pressed }) => [s.iconChipInner, pressed && { opacity: 0.7 }]}>
-            <SymbolView
-              name={data.isHistory ? 'chevron.left' : 'xmark'}
-              size={14} tintColor={C.text} type="monochrome" style={{ width: 14, height: 14 }}
-            />
-          </Pressable>
-        </GlassSurface>
-        <View style={s.topBarTitleWrap}>
-          <Text style={s.topBarTitle} numberOfLines={1}>{headingTitle}</Text>
-          <Text style={s.topBarSub}>{formatFullDate(data.ts)}</Text>
-        </View>
-        <View style={{ width: 34 }} />
-      </View>
-
       <ScrollView
-        style={s.scroll}
-        contentContainerStyle={[s.content, { paddingTop: insets.top + 76, paddingBottom: insets.bottom + 120 }]}
-        showsVerticalScrollIndicator={false}
+        ref={pagerRef}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={handlePagerScroll}
+        scrollEnabled={hasDetails}
       >
-        {/* HERO — a dominant ring, not a boxed rectangle. This is what gets
-            captured for the share image: ring + headline numbers + a
-            watermark, deliberately separate from the swipeable deck below
-            so the shared image stays clean and self-explanatory. Deliberately
-            opaque (not glass) — a controlled, predictable background matters
-            more than glass consistency for the one element that leaves the
-            app as a shared image. */}
-        <Animated.View style={{ opacity: heroOpac, transform: [{ scale: heroScale }], alignItems: 'center' }}>
-        <RecapSectionBoundary
-          fallback={
-            <View style={[s.heroShareCard, { alignItems: 'center', justifyContent: 'center', minHeight: 160 }]}>
-              <Text style={s.cardText}>
-                {data.totalReps > 0 ? `${data.pct}% good form` : 'Session complete'}
-              </Text>
-            </View>
-          }
+        {/* ═══ PAGE 1 — Recap (matches the mockup 1:1: header, hero muscle-
+            heatmap panel, 4-stat grid, Share/Done actions) ═══ */}
+        <ScrollView
+          style={{ width: SCREEN_W }}
+          contentContainerStyle={[s.page, { paddingTop: insets.top + 18, paddingBottom: insets.bottom + 24 }]}
+          showsVerticalScrollIndicator={false}
         >
-          <ViewShot ref={shotRef} options={{ format: 'png', quality: 1 }}>
-            <View style={s.heroShareCard}>
-              <View style={{ width: ringSize, height: ringSize }}>
-                <Svg width={ringSize} height={ringSize}>
-                  <Circle
-                    cx={ringSize / 2} cy={ringSize / 2} r={ringRadius}
-                    stroke={C.ringTrack} strokeWidth={ringStroke} fill="none"
-                  />
-                  <AnimatedCircle
-                    cx={ringSize / 2} cy={ringSize / 2} r={ringRadius}
-                    stroke={C.good} strokeWidth={ringStroke} fill="none"
-                    strokeLinecap="round"
-                    strokeDasharray={`${ringCirc}, ${ringCirc}`}
-                    strokeDashoffset={ringOffset}
-                    rotation={-90}
-                    origin={`${ringSize / 2}, ${ringSize / 2}`}
-                  />
-                </Svg>
-                <View style={s.ringCenter}>
-                  <Text style={s.ringPct}>{data.totalReps > 0 ? `${data.pct}%` : '—'}</Text>
-                  <Text style={s.ringPctLbl}>good form</Text>
+          <Animated.View style={{ opacity: heroOpac, transform: [{ translateY: heroY }], flex: 1 }}>
+            <ViewShot ref={shotRef} options={{ format: 'png', quality: 1 }}>
+              <View style={{ backgroundColor: 'transparent' }}>
+                {/* Header */}
+                <View style={s.header}>
+                  <GlassSurface radius={27} style={s.headerIcon} shadow>
+                    <SymbolView name="checkmark" size={25} tintColor={C.good} type="monochrome" style={{ width: 25, height: 25 }} />
+                  </GlassSurface>
+                  <Text style={s.headerTitle}>{headingTitle}</Text>
+                  <Text style={s.headerSub}>{formatFullDateTime(data.ts)}</Text>
                 </View>
-              </View>
-              <View style={s.heroStatsRow}>
-                <View style={s.heroStat}>
-                  <Text style={s.heroStatVal}>{data.totalReps}</Text>
-                  <Text style={s.heroStatLbl}>reps</Text>
-                </View>
-                <View style={s.heroStatDivider} />
-                <View style={s.heroStat}>
-                  <Text style={s.heroStatVal}>{exCount}</Text>
-                  <Text style={s.heroStatLbl}>{exCount === 1 ? 'exercise' : 'exercises'}</Text>
-                </View>
-              </View>
-              <View style={s.watermarkRow}>
-                <SymbolView name="figure.strengthtraining.traditional" size={10} tintColor="rgba(255,255,255,0.4)"
-                  type="monochrome" style={{ width: 10, height: 10 }} />
-                <Text style={s.watermarkTxt}>FormPal</Text>
-              </View>
-            </View>
-          </ViewShot>
-        </RecapSectionBoundary>
-        </Animated.View>
 
-        {/* Swipeable glass deck — Apple Fitness/Activity summary pattern:
-            each page is its own floating glass pane, paged horizontally,
-            with a dot indicator, instead of every section being stacked as
-            an equal-weight vertical box. */}
-        <View style={s.deckWrap}>
-          <ScrollView
-            horizontal
-            pagingEnabled
-            snapToInterval={PAGE_W + PAGE_GAP}
-            decelerationRate="fast"
-            showsHorizontalScrollIndicator={false}
-            onMomentumScrollEnd={handlePageScroll}
-            contentContainerStyle={{ paddingRight: PAGE_GAP }}
-          >
-            {pages.map(p => (
-              <GlassSurface
-                key={p.key}
-                radius={26}
-                style={[s.pageCard, { width: PAGE_W, marginRight: PAGE_GAP }]}
+                {/* Hero — muscle heatmap panel */}
+                <GlassSurface radius={34} style={s.heroCard}>
+                  <Text style={s.heroLabel}>MUSCLE HEATMAP</Text>
+                  <Text style={s.heroTitle}>{highlightLabel}</Text>
+                  <View style={s.heroBody}>
+                    <RecapSectionBoundary
+                      fallback={
+                        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+                          <Text style={s.cardText}>Muscle map couldn't load this time — your reps are still saved.</Text>
+                        </View>
+                      }
+                    >
+                      <MuscleHeatmap
+                        overallScores={overallScores}
+                        highlightGroups={highlightGroups}
+                        highlightLabel={highlightLabel}
+                        scale={0.62}
+                      />
+                    </RecapSectionBoundary>
+                  </View>
+                </GlassSurface>
+
+                {/* Stat grid */}
+                <View style={s.statGrid}>
+                  <GlassSurface radius={20} style={s.statTile}>
+                    <Text style={s.statVal}>{data.totalReps}</Text>
+                    <Text style={s.statLbl}>Reps</Text>
+                  </GlassSurface>
+                  <GlassSurface radius={20} style={s.statTile}>
+                    <Text style={s.statVal}>{exCount}</Text>
+                    <Text style={s.statLbl}>Moves</Text>
+                  </GlassSurface>
+                  <GlassSurface radius={20} style={s.statTile}>
+                    <Text style={[s.statVal, { color: C.good }]}>
+                      {data.totalReps > 0 ? `${data.pct}%` : '—'}
+                    </Text>
+                    <Text style={s.statLbl}>Form</Text>
+                  </GlassSurface>
+                  {data.durationSec != null && (
+                    <GlassSurface radius={20} style={s.statTile}>
+                      <Text style={s.statVal}>{formatDuration(data.durationSec)}</Text>
+                      <Text style={s.statLbl}>Time</Text>
+                    </GlassSurface>
+                  )}
+                </View>
+              </View>
+            </ViewShot>
+
+            {/* Actions — outside the ViewShot capture, matches the original
+                convention of not including interactive buttons in the shared
+                image. */}
+            <View style={s.actions}>
+              <Pressable
+                onPress={handleShare}
+                disabled={sharing}
+                style={({ pressed }) => [s.shareBtnShadow, pressed && { transform: [{ scale: 0.98 }] }]}
               >
-                <Text style={s.pageLabel}>{p.label.toUpperCase()}</Text>
-                <View style={{ flex: 1 }}>{p.render()}</View>
+                <LinearGradient
+                  colors={[C.accentA, C.accentB, C.accentC]}
+                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                  style={s.shareBtn}
+                >
+                  <SymbolView name="square.and.arrow.up" size={18} tintColor="#fff" type="monochrome" style={{ width: 18, height: 18 }} />
+                  <Text style={s.shareBtnTxt}>Share Recap</Text>
+                </LinearGradient>
+              </Pressable>
+
+              <GlassSurface radius={22} style={s.doneChip} shadow={false}>
+                <Pressable onPress={handleDone} style={({ pressed }) => [s.doneChipInner, pressed && { opacity: 0.7 }]}>
+                  <Text style={s.doneChipTxt}>{doneLabel}</Text>
+                </Pressable>
               </GlassSurface>
-            ))}
-          </ScrollView>
-          {pages.length > 1 && (
-            <View style={s.dotsRow}>
-              {pages.map((p, i) => (
-                <View key={p.key} style={[s.dot, i === activePage && s.dotActive]} />
-              ))}
             </View>
-          )}
-        </View>
+          </Animated.View>
+        </ScrollView>
+
+        {/* ═══ PAGE 2 — Details (real breakdown / replay / summary text —
+            nothing fabricated; only rendered when there's real data for it) ═══ */}
+        {hasDetails && (
+          <ScrollView
+            style={{ width: SCREEN_W }}
+            contentContainerStyle={[s.page, { paddingTop: insets.top + 18, paddingBottom: insets.bottom + 24 }]}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={s.header2}>
+              <Pressable onPress={() => scrollToPage(0)} style={s.backChipWrap} hitSlop={8}>
+                <GlassSurface radius={18} style={s.backChip} shadow>
+                  <SymbolView name="chevron.left" size={16} tintColor={C.text} type="monochrome" style={{ width: 16, height: 16 }} />
+                </GlassSurface>
+              </Pressable>
+              <View style={{ gap: 2 }}>
+                <Text style={s.header2Title}>Session Details</Text>
+                <Text style={s.header2Sub}>
+                  {exCount} {exCount === 1 ? 'exercise' : 'exercises'}
+                  {data.durationSec != null ? ` · ${formatDuration(data.durationSec)}` : ''}
+                </Text>
+              </View>
+            </View>
+
+            {data.totalReps > 0 && (
+              <GlassSurface radius={30} style={s.detailCard}>
+                <Text style={s.detailCardLabel}>OVERVIEW</Text>
+                <Text style={s.cardText}>{generateSummary(data.totalReps, data.totalGoodReps)}</Text>
+              </GlassSurface>
+            )}
+
+            {breakdown && breakdown.length > 0 && (
+              <GlassSurface radius={30} style={s.detailCard}>
+                <Text style={s.detailCardLabel}>BREAKDOWN</Text>
+                {breakdown.map((r, i) => (
+                  <React.Fragment key={r.exerciseId + i}>
+                    <View style={s.exRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.exName}>{r.displayName}</Text>
+                        {r.completed && <Text style={s.exMeta}>{r.reps} reps</Text>}
+                        {r.skipped   && <Text style={[s.exMeta, { color: C.muted }]}>Skipped</Text>}
+                      </View>
+                      {r.completed && r.reps > 0 && <Text style={s.exScore}>{r.formScore}%</Text>}
+                    </View>
+                    {i < breakdown.length - 1 && <View style={s.divider} />}
+                  </React.Fragment>
+                ))}
+              </GlassSurface>
+            )}
+
+            {hasVideo && (
+              <GlassSurface radius={30} style={[s.detailCard, { padding: 10 }]}>
+                <Text style={[s.detailCardLabel, { paddingHorizontal: 8, paddingTop: 4 }]}>REPLAY</Text>
+                <View style={s.videoWrap}>
+                  <VideoView
+                    player={player}
+                    style={StyleSheet.absoluteFill}
+                    allowsFullscreen
+                    nativeControls
+                    contentFit="contain"
+                  />
+                  {liveAnim && (
+                    <RepFeedback
+                      key={liveAnim.key}
+                      good={liveAnim.good}
+                      reason={liveAnim.reason}
+                      seq={liveAnim.key}
+                      onComplete={() => setLiveAnim(null)}
+                    />
+                  )}
+                </View>
+              </GlassSurface>
+            )}
+          </ScrollView>
+        )}
       </ScrollView>
 
-      {/* Floating actions — a circular gradient FAB for Share (the one
-          prominent action), a quiet glass chip for Done/Back beside it.
-          Both float over the content instead of a full-width bar pinned
-          across the whole screen width. */}
-      <View style={[s.fabRow, { paddingBottom: insets.bottom + 18 }]} pointerEvents="box-none">
-        <GlassSurface radius={22} style={s.doneChip}>
-          <Pressable onPress={handleDone} style={({ pressed }) => [s.doneChipInner, pressed && { opacity: 0.7 }]}>
-            <Text style={s.doneChipTxt}>{doneLabel}</Text>
+      {/* Fixed page dots — always visible, jump between Recap/Details. */}
+      {hasDetails && (
+        <View style={[s.dotsRow, { bottom: insets.bottom + 12 }]} pointerEvents="box-none">
+          <Pressable onPress={() => scrollToPage(0)} hitSlop={10}>
+            <View style={[s.dot, activePage === 0 && s.dotActive]} />
           </Pressable>
-        </GlassSurface>
-        <Pressable
-          onPress={handleShare}
-          disabled={sharing}
-          style={({ pressed }) => [s.fabShadow, pressed && { transform: [{ scale: 0.94 }] }]}
-        >
-          <LinearGradient
-            colors={[C.accent, C.accent2]}
-            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-            style={s.fab}
-          >
-            <SymbolView name="square.and.arrow.up" size={20} tintColor="#fff" type="monochrome" style={{ width: 20, height: 20 }} />
-          </LinearGradient>
-        </Pressable>
-      </View>
+          <Pressable onPress={() => scrollToPage(1)} hitSlop={10}>
+            <View style={[s.dot, activePage === 1 && s.dotActive]} />
+          </Pressable>
+        </View>
+      )}
     </View>
-  );
-}
-
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
-
-// ─── Background gradient ──────────────────────────────────────────────────────
-function BgGradient() {
-  return (
-    <LinearGradient
-      colors={[C.bgTop, C.bgMid, C.bgBottom]}
-      start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }}
-      style={StyleSheet.absoluteFill}
-      pointerEvents="none"
-    />
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  root:      { flex: 1, backgroundColor: C.bgBottom },
-  centerFill:{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
-  failedTxt: { color: C.text, fontSize: 15 },
-  scroll:    { flex: 1 },
-  content:   { paddingHorizontal: 20, gap: 22 },
+  root:       { flex: 1, backgroundColor: C.bgBottom },
+  centerFill: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
+  failedTxt:  { color: C.text, fontSize: 15 },
+  page:       { paddingHorizontal: 20, flexGrow: 1 },
 
-  topBar: {
-    position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
-    flexDirection: 'row', alignItems: 'flex-start', gap: 10,
-    paddingHorizontal: 16,
+  header: {
+    alignItems: 'center', gap: 10,
+    paddingTop: 6, paddingBottom: 16,
   },
-  iconChip:      { width: 34, height: 34 },
-  iconChipInner: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  topBarTitleWrap: { flex: 1, alignItems: 'center' },
-  topBarTitle: { fontSize: 15, fontWeight: '800', color: C.text, letterSpacing: -0.2 },
-  topBarSub:   { fontSize: 11.5, fontWeight: '600', color: C.muted, marginTop: 1 },
+  headerIcon: { width: 54, height: 54, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: 26, fontWeight: '600', letterSpacing: -0.5, color: C.text },
+  headerSub:   { fontSize: 13, fontWeight: '500', letterSpacing: 0.2, color: C.muted },
 
-  heroShareCard: {
-    alignItems: 'center', gap: 14,
-    paddingVertical: 26, paddingHorizontal: 30,
-    backgroundColor: C.card, borderRadius: 28,
+  heroCard: {
+    flex: 1, minHeight: 340,
+    padding: 18, paddingTop: 18,
   },
-  ringCenter: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center', justifyContent: 'center',
+  heroLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1.4, textTransform: 'uppercase', color: C.mutedDim },
+  heroTitle: { fontSize: 19, fontWeight: '600', letterSpacing: -0.3, color: C.text, marginTop: 2, marginBottom: 12 },
+  heroBody:  { flex: 1, alignItems: 'center', justifyContent: 'center' },
+
+  statGrid: { flexDirection: 'row', gap: 8, marginTop: 14 },
+  statTile: {
+    flex: 1, alignItems: 'center', gap: 3,
+    paddingVertical: 12, paddingHorizontal: 4,
   },
-  ringPct:    { fontSize: 30, fontWeight: '800', color: C.text, letterSpacing: -0.8 },
-  ringPctLbl: { fontSize: 11, fontWeight: '600', color: C.muted, marginTop: 2 },
+  statVal: { fontSize: 18, fontWeight: '600', letterSpacing: -0.3, color: C.text },
+  statLbl: { fontSize: 10, fontWeight: '600', letterSpacing: 0.5, textTransform: 'uppercase', color: C.mutedDim },
 
-  heroStatsRow: { flexDirection: 'row', alignItems: 'center', gap: 22 },
-  heroStat:     { alignItems: 'center' },
-  heroStatVal:  { fontSize: 22, fontWeight: '800', color: C.text, letterSpacing: -0.4 },
-  heroStatLbl:  { fontSize: 11, fontWeight: '600', color: C.muted, marginTop: 1 },
-  heroStatDivider: { width: StyleSheet.hairlineWidth, height: 30, backgroundColor: C.glassEdge },
-
-  watermarkRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
-  watermarkTxt: { fontSize: 10.5, fontWeight: '700', color: 'rgba(255,255,255,0.4)', letterSpacing: 0.3 },
-
-  deckWrap: { gap: 12 },
-  // Muscle Map page's content (legend + front/back diagrams at scale 0.55)
-  // needs ~296px on top of this card's own padding/label overhead — 360
-  // leaves real margin, verified by hand-computing the layout.
-  pageCard: {
-    height: 360, padding: 18, gap: 10,
+  actions: { gap: 10, marginTop: 16 },
+  shareBtnShadow: {
+    borderRadius: 24,
+    shadowColor: C.accentA, shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.4, shadowRadius: 20,
   },
-  pageLabel: { fontSize: 11, fontWeight: '800', color: C.muted, letterSpacing: 1.4 },
-  cardText:  { fontSize: 15, fontWeight: '500', color: C.text, lineHeight: 22, letterSpacing: -0.1 },
+  shareBtn: {
+    height: 56, borderRadius: 24,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+  },
+  shareBtnTxt: { fontSize: 16.5, fontWeight: '600', letterSpacing: -0.2, color: '#fff' },
+  doneChip:      { height: 48 },
+  doneChipInner: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  doneChipTxt:   { fontSize: 15.5, fontWeight: '500', color: C.mutedDim },
+
+  cardText: { fontSize: 15, fontWeight: '500', color: C.text, lineHeight: 22, letterSpacing: -0.1 },
+
+  header2: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 6, paddingBottom: 18 },
+  backChipWrap: {},
+  backChip:     { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  header2Title: { fontSize: 20, fontWeight: '600', letterSpacing: -0.3, color: C.text },
+  header2Sub:   { fontSize: 12.5, fontWeight: '500', color: C.muted },
+
+  detailCard: { padding: 18, marginBottom: 14 },
+  detailCardLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1.4, textTransform: 'uppercase', color: C.mutedDim, marginBottom: 10 },
 
   exRow:   { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 12 },
-  exName:  { fontSize: 14.5, fontWeight: '700', color: C.text },
+  exName:  { fontSize: 14.5, fontWeight: '600', color: C.text },
   exMeta:  { fontSize: 12, color: C.muted, marginTop: 2 },
-  exScore: { fontSize: 13, fontWeight: '800', color: C.good },
-  divider: { height: StyleSheet.hairlineWidth, backgroundColor: C.glassEdge },
+  exScore: { fontSize: 13, fontWeight: '700', color: C.good },
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(90,110,160,0.25)' },
 
   videoWrap: {
-    flex: 1, borderRadius: 18, overflow: 'hidden', backgroundColor: '#000',
+    height: 300, borderRadius: 22, overflow: 'hidden', backgroundColor: '#000',
   },
 
-  dotsRow: { flexDirection: 'row', justifyContent: 'center', gap: 6 },
-  dot:       { width: 6, height: 6, borderRadius: 3, backgroundColor: C.glassEdge },
-  dotActive: { backgroundColor: C.accent, width: 16 },
-
-  fabRow: {
-    position: 'absolute', left: 20, right: 20, bottom: 0,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+  dotsRow: {
+    position: 'absolute', left: 0, right: 0,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
   },
-  doneChip:      { height: 44, paddingHorizontal: 20 },
-  doneChipInner: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  doneChipTxt:   { fontSize: 14.5, fontWeight: '700', color: C.text },
-  fabShadow: {
-    borderRadius: 32,
-    shadowColor: C.accent, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.5, shadowRadius: 18,
-  },
-  fab: {
-    width: 58, height: 58, borderRadius: 29,
-    alignItems: 'center', justifyContent: 'center',
-  },
+  dot:       { width: 7, height: 7, borderRadius: 4, backgroundColor: 'rgba(25,35,65,0.24)' },
+  dotActive: { width: 22, backgroundColor: 'rgba(25,35,65,0.62)' },
 });
