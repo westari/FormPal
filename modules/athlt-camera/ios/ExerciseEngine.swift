@@ -1002,10 +1002,38 @@ final class ExerciseEngine {
                 // even when nil frames swallow the bottom of the rep.
                 let movement = repTopValue - repMinAngle
                 let required = max(abs(repTopValue - effectiveROMThreshold) * def.phantomGuardFraction, 0.01)
-                guard movement >= required else {
+
+                // SECOND GUARD (early-fire double-count root cause — shoulder press
+                // reported, structural to any exercise with a similar threshold shape):
+                // `required` above is scaled from repTopValue, which ALREADY banks the
+                // entire repTopValue→effectiveEnterThreshold gap for free — for shoulder
+                // press that gap alone (topAngle 84 → repEnterThreshold 68 = 16) already
+                // clears `required` (≈8.7 at the default 30% fraction) by itself. That
+                // means simply ENTERING the rep, immediately followed by a brief
+                // foreshortening/noise bounce back above exitThreshold — exactly the kind
+                // of blip exitConfirmFrames' consecutive-frame hold is supposed to filter,
+                // but a genuine multi-frame plateau isn't distinguishable from noise by
+                // frame-count alone — passes this guard and completes a bogus, shallow
+                // "rep" using whatever shallow repMinAngle had been reached so far. The
+                // person's real press motion is still in progress (angle still below
+                // effectiveEnterThreshold), so the very next frame re-enters .inRep and
+                // correctly completes a SECOND time when they actually finish — one
+                // physical rep counted twice, first one early/shallow, second one real.
+                // Measuring a SECOND required-movement floor from effectiveEnterThreshold
+                // instead of repTopValue closes this: it can't be satisfied merely by
+                // crossing into the rep, only by genuinely continuing past that point.
+                // ANDed with (not replacing) the existing repTopValue-based guard above,
+                // so no already-working exercise gets a weaker guard than before — this
+                // can only reject MORE, never fewer, of what already passed.
+                let movementPastEntry = effectiveEnterThreshold - repMinAngle
+                let requiredPastEntry = max(abs(effectiveEnterThreshold - effectiveROMThreshold) * def.phantomGuardFraction, 0.01)
+
+                guard movement >= required, movementPastEntry >= requiredPastEntry else {
                     let msg = "[REP] rejected — movement=\(String(format: "%.4f", movement)) " +
                               "(start=\(String(format: "%.4f", repTopValue)) peak=\(String(format: "%.4f", repMinAngle))) " +
-                              "required=\(String(format: "%.4f", required)) (phantom)"
+                              "required=\(String(format: "%.4f", required)) " +
+                              "movementPastEntry=\(String(format: "%.4f", movementPastEntry)) " +
+                              "requiredPastEntry=\(String(format: "%.4f", requiredPastEntry)) (phantom)"
                     NSLog("[Engine] [%@] %@", def.id, msg)
                     onDebugLog?(msg)
                     repPhase = .atTop

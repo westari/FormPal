@@ -194,12 +194,22 @@ function shoulderPressStandard(exerciseId: string): ExerciseStandardDef {
     romCue:    'PRESS HIGHER — not reaching overhead',
     extendCue: 'LOWER MORE — not returning to shoulder height',
     staticChecks: SHOULDER_PRESS_STATIC_CHECKS,
-    // LOOSENED 1.5→0.8 (preemptive, before ever enforced — see curlStandard's
-    // comment). Overhead pressing has a moderate ROM and can be done briskly
-    // with real control in ~1-1.3s — this is also the exercise the flail
-    // complaint was specifically about, so err toward NOT re-flagging a real
-    // fast press while still catching a true sub-second flail. Not verified.
-    tempoMinSec: 0.8,
+    // LOOSENED AGAIN, 0.8→0.45 — reported: a normal-paced, controlled press
+    // was still tripping "TOO FAST" at 0.8s. computeRepStats() in
+    // UniversalQualityEngine.swift measures duration from the local peak
+    // found just before the rep's bottom through to completion — if that
+    // local-max search lands anywhere other than the true top (e.g. a brief
+    // buffer/tracking gap right at the start of the descent), the computed
+    // duration reads shorter than the rep actually took, so 0.8s — already a
+    // real-world-plausible full press cycle — could still misfire on a
+    // genuinely controlled rep. 0.45 sits just under minRepInterval (0.5s,
+    // the floor the state machine already enforces between two separate
+    // completions) — a rep can't even be REGISTERED faster than that, so
+    // anything below it can only be a true within-rep flail, not a brisk
+    // real press. Still not device-verified — placeholder, send a log with
+    // a few genuinely fast/flailed reps alongside normal ones if this still
+    // misfires or now lets a real flail through.
+    tempoMinSec: 0.45,
     tempoMaxSec: 5.0,
     topFaults: SHOULDER_PRESS_TOP_FAULTS,
   };
@@ -723,10 +733,12 @@ export const EXERCISE_STANDARDS: Record<string, ExerciseStandardDef> = {
 
     staticChecks: [],
 
-    // LOOSENED 1.5→0.8 (preemptive) — see shoulderPressStandard() family
-    // function's identical fix and reasoning above (this is the exercise
-    // the flail complaint was specifically about).
-    tempoMinSec: 0.8,
+    // LOOSENED AGAIN, 0.8→0.45 — see shoulderPressStandard()'s identical fix
+    // and reasoning above (reported: a normal-paced, controlled press was
+    // still tripping "TOO FAST" at 0.8s). Still not device-verified —
+    // placeholder, send a log if it still misfires or now lets a real flail
+    // through.
+    tempoMinSec: 0.45,
     tempoMaxSec: 5.0,
 
     topFaults: [
