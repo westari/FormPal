@@ -2,8 +2,8 @@
  * app/(tabs)/progress.tsx — FormPal Progress Screen
  *
  * Features:
+ *   • Muscle rank preview at the top — tap for the full page (app/muscle-ranks.tsx)
  *   • Interactive form-trend chart — tap any dot to inspect that session
- *   • Muscle coverage heatmap — front/back body diagram, exercise-weighted scoring
  *   • Personal bests / milestones
  *   • Per-exercise breakdown cards
  *   • Full session history with home-style SessionCards
@@ -33,7 +33,7 @@ import Svg, {
 import { FONT, Sp, W } from '../../constants/theme';
 import Ring from '../../components/Ring';
 import ScreenBackground from '../../components/ScreenBackground';
-import { MuscleTierMap } from '../../components/MuscleTierMap';
+import { TierEmblem, GROUP_LABELS, GROUP_DISPLAY_ORDER } from '../../components/MuscleTierMap';
 import {
   getAllSessions, groupIntoWorkouts, computeMuscleTiers,
   type SessionEntry, type WorkoutGroup,
@@ -405,57 +405,67 @@ const ifc = StyleSheet.create({
   insightBold: { fontWeight: W.bold },
 });
 
-// ─── MuscleMapCard ────────────────────────────────────────────────────────────
-// Thin wrapper around the shared MuscleTierMap — same component the recap
-// screen uses, so "reused, not rebuilt" holds for both. REPLACED the heatmap
-// with a Bronze->Diamond tier system driven by both volume AND form quality
-// — see computeMuscleTiers in lib/sessionLog.ts.
+// ─── MuscleRankPreview ──────────────────────────────────────────────────────
+// REPLACED the old full MuscleMapCard (the entire body diagram + legend +
+// list, dropped mid-page between the chart and milestones) — reported as
+// too crowded. This is a compact preview only: one small tier emblem per
+// muscle group, tap to open the full dedicated page (app/muscle-ranks.tsx)
+// for the real diagram/legend/list. Moved to the TOP of the page, above the
+// form chart, per the explicit ask.
 
-function MuscleMapCard({ sessions }: { sessions: SessionEntry[] }) {
+function MuscleRankPreview({ sessions }: { sessions: SessionEntry[] }) {
+  const router = useRouter();
   const tiers = useMemo(() => computeMuscleTiers(sessions), [sessions]);
   const isEmpty = sessions.length === 0;
 
   return (
-    <View style={[mm.card, SHADOW_HIGH]}>
-      <View style={mm.header}>
-        <Text style={mm.title}>Muscle ranks</Text>
-        <Text style={mm.sub}>Trained volume AND form quality, decayed over the past 14 days</Text>
-      </View>
-
-      {isEmpty ? (
-        <View style={mm.emptyState}>
-          <SymbolView name="figure.strengthtraining.traditional" type="monochrome"
-            style={{ width: 36, height: 36, marginBottom: 10 }} tintColor={C.textDim} />
-          <Text style={mm.emptyTitle}>No sessions yet</Text>
-          <Text style={mm.emptySub}>
-            Log form-check sessions and your muscle ranks will start filling in here.
-          </Text>
+    <Pressable
+      onPress={() => router.push('/muscle-ranks' as any)}
+      style={({ pressed }) => [pressed && { opacity: 0.85 }]}
+    >
+      <View style={[mm.card, SHADOW_HIGH]}>
+        <View style={mm.headerRow}>
+          <View style={mm.header}>
+            <Text style={mm.title}>Muscle ranks</Text>
+            <Text style={mm.sub}>Volume AND form quality</Text>
+          </View>
+          <SymbolView name="chevron.right" size={13} tintColor={C.textDim} type="monochrome" style={{ width: 13, height: 13 }} />
         </View>
-      ) : (
-        <MuscleTierMap tiers={tiers} showLegend />
-      )}
 
-      {!isEmpty && (
-        <Text style={mm.note}>
-          A muscle only reaches Diamond by being trained hard WITH good form
-        </Text>
-      )}
-    </View>
+        {isEmpty ? (
+          <Text style={mm.emptySub}>Log a session to start earning ranks</Text>
+        ) : (
+          <View style={mm.previewRow}>
+            {GROUP_DISPLAY_ORDER.map(mg => {
+              const info = tiers[mg];
+              return (
+                <View key={mg} style={mm.previewItem}>
+                  {info ? <TierEmblem tier={info.tier} size={22} /> : <View style={mm.emptyEmblem} />}
+                  <Text style={mm.previewLabel}>{GROUP_LABELS[mg]}</Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
+      </View>
+    </Pressable>
   );
 }
 const mm = StyleSheet.create({
   card: {
     backgroundColor: C.card, borderRadius: 28,
     borderWidth: 1, borderColor: C.border,
-    padding: 20, gap: 18,
+    padding: 18, gap: 14,
   },
+  headerRow:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   header:         { gap: 2 },
   title:          { fontSize: 15.5, fontWeight: W.bold, letterSpacing: -0.2, color: C.text },
   sub:            { fontSize: 11, fontWeight: W.medium, color: C.textSub },
-  emptyState:     { alignItems: 'center', paddingVertical: 28, paddingHorizontal: 24 },
-  emptyTitle:     { fontSize: 15, fontWeight: W.semi, color: C.text, marginBottom: 8 },
-  emptySub:       { fontSize: 13, color: C.textSub, textAlign: 'center', lineHeight: 19 },
-  note:           { textAlign: 'center', fontSize: 10.5, color: C.textDim, fontWeight: W.medium },
+  emptySub:       { fontSize: 13, color: C.textSub, textAlign: 'center', paddingVertical: 10 },
+  previewRow:     { flexDirection: 'row', justifyContent: 'space-between' },
+  previewItem:    { alignItems: 'center', gap: 5 },
+  previewLabel:   { fontSize: 9.5, fontWeight: W.semi, color: C.textSub },
+  emptyEmblem:    { width: 22, height: 22, borderRadius: 11, backgroundColor: C.border },
 });
 
 // ─── MilestoneCard ────────────────────────────────────────────────────────────
@@ -634,6 +644,10 @@ export default function ProgressScreen() {
             <Text style={s.sub}>Your form score and training history.</Text>
           </View>
 
+          {/* ── MUSCLE RANK PREVIEW — moved above the chart, per explicit ask.
+              Compact only; tap opens the full dedicated page. ──────────── */}
+          <MuscleRankPreview sessions={sessions} />
+
           {/* ── FORM TREND CHART ──────────────────────────────────────── */}
           <View>
             <View style={s.chartTopRow}>
@@ -653,10 +667,6 @@ export default function ProgressScreen() {
               <InteractiveFormChart sessions={sessions} tab={progressTab} />
             </View>
           </View>
-
-          {/* ── MUSCLE MAP ────────────────────────────────────────────── */}
-          <SectionHeader title="Muscle coverage" sub="Which muscle groups your sessions train" />
-          <MuscleMapCard sessions={sessions} />
 
           {/* ── MILESTONES ────────────────────────────────────────────── */}
           {sessions.length > 0 ? (

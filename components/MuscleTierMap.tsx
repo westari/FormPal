@@ -4,10 +4,10 @@
  * REPLACES components/MuscleHeatmap.tsx and the Skia thermal-heatmap attempt
  * entirely (both retired — see git history if the continuous-heatmap idea is
  * ever revisited). A muscle "rank card": each muscle group gets a game-style
- * tier (Bronze -> Silver -> Gold -> Platinum -> Diamond) computed from BOTH
- * training volume AND form quality (see computeMuscleTiers in lib/sessionLog.ts)
- * — the tier calculation, not this file, is where "trained hard WITH good
- * form" actually happens; this file just renders the result.
+ * tier (Bronze -> Champion) computed from BOTH training volume AND form
+ * quality (see computeMuscleTiers in lib/sessionLog.ts) — the tier
+ * calculation, not this file, is where "trained hard WITH good form"
+ * actually happens; this file just renders the result.
  *
  * Reuses the same proven-safe rendering approach as the old MuscleHeatmap:
  * react-native-body-highlighter's neutral <Body> outline underneath, plus a
@@ -16,10 +16,16 @@
  * colored by tier instead of a continuous thermal score. No Skia, no
  * masking/layering primitives, same plain react-native-svg used everywhere
  * else in this app.
+ *
+ * TIER EMBLEMS: real SF Symbol icons per tier (via expo-symbols, the same
+ * icon system used throughout this app), not just flat color — escalating
+ * in visual weight from a plain medal up to a crown, so climbing tiers reads
+ * as a real progression, not just a palette swap.
  */
 
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { SymbolView } from 'expo-symbols';
 import Svg, { Defs, Filter, FeGaussianBlur, Path } from 'react-native-svg';
 import Body from 'react-native-body-highlighter';
 import type { Slug } from 'react-native-body-highlighter';
@@ -37,13 +43,16 @@ const GLOW_BLUR_ID = 'muscleTierGlowBlur';
 
 // ─── Tier colors ────────────────────────────────────────────────────────────
 // Standard game-rank progression, warm/neutral metals climbing to cool bright
-// gem tones — deliberately reads as "climbing," not just 5 arbitrary colors.
+// gem tones and finally a warm gold-white for the top two — deliberately
+// reads as "climbing," not just 7 arbitrary colors.
 export const TIER_COLORS: Record<Tier, string> = {
   bronze:   '#CD7F32',
   silver:   '#B8BEC7',
   gold:     '#FFCA45',
   platinum: '#7FE8D2',
   diamond:  '#4FD1FF',
+  master:   '#B98CFF',
+  champion: '#FFD36E',
 };
 export const TIER_LABELS: Record<Tier, string> = {
   bronze:   'Bronze',
@@ -51,15 +60,31 @@ export const TIER_LABELS: Record<Tier, string> = {
   gold:     'Gold',
   platinum: 'Platinum',
   diamond:  'Diamond',
+  master:   'Master',
+  champion: 'Champion',
+};
+// Escalating emblem per tier — medal (plain) -> seal -> diamond -> star ->
+// crown (the two most prestigious). All long-standing, widely-available SF
+// Symbol names.
+export const TIER_SYMBOLS: Record<Tier, string> = {
+  bronze:   'medal.fill',
+  silver:   'medal.fill',
+  gold:     'medal.fill',
+  platinum: 'seal.fill',
+  diamond:  'diamond.fill',
+  master:   'star.fill',
+  champion: 'crown.fill',
 };
 // Opacity climbs with tier too — reinforces "more solid/vivid = higher rank"
-// on top of the color change alone.
+// on top of the color/emblem change alone.
 const TIER_OPACITY: Record<Tier, number> = {
-  bronze:   0.65,
-  silver:   0.72,
-  gold:     0.80,
-  platinum: 0.88,
-  diamond:  0.96,
+  bronze:   0.60,
+  silver:   0.68,
+  gold:     0.75,
+  platinum: 0.82,
+  diamond:  0.88,
+  master:   0.93,
+  champion: 0.97,
 };
 
 const GROUP_TO_FRONT_SLUGS: Partial<Record<MuscleGroup, Slug[]>> = {
@@ -77,7 +102,7 @@ const GROUP_TO_BACK_SLUGS: Partial<Record<MuscleGroup, Slug[]>> = {
   [MuscleGroup.Legs]:      ['hamstring', 'gluteal', 'calves'],
 };
 
-const GROUP_LABELS: Record<MuscleGroup, string> = {
+export const GROUP_LABELS: Record<MuscleGroup, string> = {
   [MuscleGroup.Chest]:     'Chest',
   [MuscleGroup.Back]:      'Back',
   [MuscleGroup.Shoulders]: 'Shoulders',
@@ -87,7 +112,7 @@ const GROUP_LABELS: Record<MuscleGroup, string> = {
 };
 // Display order — roughly top-to-bottom on the body, reads more naturally
 // than enum declaration order (which puts Legs first).
-const GROUP_DISPLAY_ORDER: MuscleGroup[] = [
+export const GROUP_DISPLAY_ORDER: MuscleGroup[] = [
   MuscleGroup.Shoulders, MuscleGroup.Chest, MuscleGroup.Back,
   MuscleGroup.Arms, MuscleGroup.Core, MuscleGroup.Legs,
 ];
@@ -151,6 +176,20 @@ function GlowLayer({ specs, side, scale }: { specs: TierGlowSpec[]; side: 'front
   );
 }
 
+// One tier badge — emblem + label, reused by the legend and (larger) by
+// TierBadge callers elsewhere (e.g. a future preview strip).
+export function TierEmblem({ tier, size = 14 }: { tier: Tier; size?: number }) {
+  return (
+    <SymbolView
+      name={TIER_SYMBOLS[tier] as any}
+      size={size}
+      tintColor={TIER_COLORS[tier]}
+      type="hierarchical"
+      style={{ width: size, height: size }}
+    />
+  );
+}
+
 export function MuscleTierMap({
   tiers,
   scale = 0.72,
@@ -177,7 +216,7 @@ export function MuscleTierMap({
         <View style={mh.legendRow}>
           {TIER_ORDER.map(t => (
             <View key={t} style={mh.legendItem}>
-              <View style={[mh.legendDot, { backgroundColor: TIER_COLORS[t] }]} />
+              <TierEmblem tier={t} size={13} />
               <Text style={mh.legendLbl}>{TIER_LABELS[t]}</Text>
             </View>
           ))}
@@ -219,7 +258,7 @@ export function MuscleTierMap({
                 <Text style={mh.listName}>{GROUP_LABELS[mg]}</Text>
                 {info ? (
                   <View style={mh.listPill}>
-                    <View style={[mh.listPillDot, { backgroundColor: TIER_COLORS[info.tier] }]} />
+                    <TierEmblem tier={info.tier} size={15} />
                     <Text style={[mh.listPillTxt, { color: TIER_COLORS[info.tier] }]}>{TIER_LABELS[info.tier]}</Text>
                   </View>
                 ) : (
@@ -237,7 +276,6 @@ export function MuscleTierMap({
 const mh = StyleSheet.create({
   legendRow:  { flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', gap: 12 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  legendDot:  { width: 9, height: 9, borderRadius: 4.5 },
   legendLbl:  { fontSize: 11, fontWeight: '600', color: C.textSub },
 
   emptyState: { alignItems: 'center', paddingVertical: 28, paddingHorizontal: 24 },
@@ -255,7 +293,6 @@ const mh = StyleSheet.create({
   },
   listName:      { fontSize: 13.5, fontWeight: '600', color: C.text },
   listPill:      { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  listPillDot:   { width: 8, height: 8, borderRadius: 4 },
   listPillTxt:   { fontSize: 12.5, fontWeight: '700' },
   listUntrained: { fontSize: 12.5, fontWeight: '500', color: C.textSub },
 });

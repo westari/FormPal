@@ -1752,82 +1752,71 @@ function frontRaiseVariant(
 
 // ─── Lat pulldown family (vertical pull) ─────────────────────────────────────
 //
-// INVESTIGATE-FIRST, per CLAUDE.md — what was reused and why:
+// ROOT CAUSE FOUND, ON-DEVICE LOG (this round) — the elbow-angle metric
+// below is FUNDAMENTALLY the wrong signal for lat pulldown, not just
+// mis-thresholded. The log proved it directly:
+//   Rep 1-2: user did a SHOULDER PRESS, not a pulldown → scored GOOD
+//   Rep 4: user WALKED AWAY to get their phone → scored GOOD
+// The previous investigate-first pass (see git history) reasoned that
+// jointAngle(shoulder,elbow,wrist) — a LOCAL angle at the elbow pivot —
+// "does not care which way the whole arm is oriented in space, only how
+// bent the elbow itself is," and treated that as a safe property (direction
+// consistency with curl). That reasoning was correct about WHAT the metric
+// measures but wrong about the CONSEQUENCE: not caring which way the arm
+// points is exactly why it can't tell a pulldown (arm overhead → arm at
+// shoulder) from a shoulder press (arm at shoulder → arm overhead) from an
+// arm just swinging while walking — all three bend/straighten the elbow
+// through a similar LOCAL angle range. The metric was blind to the one
+// thing that actually distinguishes these movements: WHERE the hand is
+// relative to the body, and which DIRECTION it travels.
 //
-// REFERENCE EXERCISES: CURL (constants above, ~line 167) for the metric TYPE
-// and direction convention, SQUAT for the bilateral-combinator choice.
-//   - Metric primitive reused from curl: jointAngle(shoulder, elbow, wrist).
-//     Curl already proves this primitive is clean and reliable — no
-//     contamination the way the hinge family's original knee-angle attempt
-//     had (hip translation polluting a joint meant to isolate the knee).
-//     Lat pulldown has no equivalent contamination risk: the elbow angle
-//     here isn't shared with any other joint's motion.
-//   - Direction: CONFIRMED by reasoning through the movement, matching curl's
-//     own confirmed direction. jointAngle is a LOCAL angle at the elbow
-//     pivot — it does not care which way the whole arm is oriented in space,
-//     only how bent the elbow itself is. At the start of a lat pulldown
-//     (arms extended overhead gripping the bar), the elbow is nearly
-//     straight — same LOCAL joint state as curl's "arm hanging, extended"
-//     start (~160-165°), even though the arm points a different direction in
-//     space. Pulling the bar down bends the elbow — the angle DECREASES,
-//     same direction as curl's curl-up phase. This matches the engine's
-//     hardwired decreasing-metric state machine with NO workaround needed —
-//     unlike tricep, which needed lineVsVertical specifically because
-//     jointAngle increases (wrong direction) during tricep extension. Lat
-//     pulldown does not have that problem.
-//   - Bilateral combinator: average(left, right), not curl's minimum(left,
-//     right) — curl uses minimum because curls are commonly done single-arm
-//     or alternating; a lat pulldown pull is essentially always
-//     synchronized, bilateral, like squat/lunge's own average(L,R) pattern.
-//     Reused squat's combinator choice for that reason, curl's primitive/
-//     direction for the metric itself.
+// FIX: repMetric rebuilt around normalizedVerticalGap(wrist, shoulder) —
+// literally "is the wrist above or below the shoulder, and by how much,"
+// which is precisely the distinction a pulldown (hands start clearly ABOVE
+// the shoulder, descend toward it) and a press (hands start AT the
+// shoulder, rise above it) differ on. This does not perfectly solve the
+// ambiguity — see the HONEST LIMIT note on latPulldownVariant() below for
+// exactly what's still unverified and why a sufficiently similar press
+// could in principle still pass — but it is a real, direct fix for the
+// specific failure mode the log proved (elbow angle being blind to arm
+// orientation), not a threshold tweak papering over the same blind spot.
 //
-// CAMERA: front-facing, both arms visible, symmetric — same framing as curl
-// (CURL_CAMERA_REQUIRED_JOINTS), explicitly to avoid the far-side occlusion
-// that required bestSide/planarity workarounds for the row family (a
-// side-on pull). Required joints: shoulders, elbows, wrists only — the exact
-// same set curl requires, nothing extra (hip is used opportunistically by
-// the torso-lean check below, same graceful-degradation pattern curl's own
-// lean_back check already uses — not a hard requirement).
+// Bilateral combinator kept as average(left, right) — a pulldown pull is
+// essentially always synchronized, bilateral, matching squat/lunge's own
+// average(L,R) pattern (unchanged reasoning from before).
 //
-// FORM CHECKS — feasibility assessed BEFORE building, per CLAUDE.md:
-//   1. INCOMPLETE ROM ("PULL DOWN FURTHER") — NOT a separate FormCheck. This
-//      is the core goodROMThreshold/insufficientROMCue mechanism every
-//      exercise already has built in — no new check needed, just the right
-//      threshold (placeholder, see below).
-//   2. MOMENTUM/SWINGING via jerk — ALREADY covered, exercise-agnostic, no
-//      new code needed. UniversalQualityEngine's jerk/swing-spike detection
-//      applies automatically to every exercise via checkSwingOverride — and
-//      as of two builds ago that hook is genuinely working (the repEndTime
-//      wall-clock fix). Nothing exercise-specific to add here.
-//   3. TORSO LEAN (covers BOTH "leaning back to yank the bar" and "excessive
-//      lean-back turning it into a row" — the same underlying signal: a
-//      throughoutMax check catches a torso that leaned back at ANY point
-//      during the rep, whether from a swinging cheat or a static excessive
-//      lean, so these don't need two separate checks). FEASIBLE — reused
-//      verbatim from curl's OWN lean_back check (average(lineVsVertical(hip,
-//      shoulder)), throughoutMax, >20° → fail) — a primitive already proven
-//      reliable in production on curl and shoulder press for this exact
-//      concern. Not re-guessed: the 20° threshold is curl's own verified
-//      number, reused because the underlying concern (torso should stay
-//      upright, don't lean back to cheat) and camera framing (front-facing)
-//      are the same shape of problem.
+// CAMERA: unchanged — front-facing, both arms visible, symmetric.
 //
 // PLACEHOLDER WARNING per CLAUDE.md: topAngle/repEnterThreshold/
-// repExitThreshold/goodROMThreshold below are ALL placeholders — zero
-// on-device data exists for lat pulldown. Set from curl's own proven RANGE
-// as a starting reference (not copied blindly — reasoned: both are "elbow
-// extended → elbow bent" motions of broadly comparable scale), but
-// deliberately not tightened the way curl's own numbers eventually were.
-// [METRIC] logging already exists (value=/enter=/exit=/rom=, ~3/sec) — do a
-// few reps and send the log; real numbers get set from that, not guessed
-// further here.
+// repExitThreshold/goodROMThreshold below are honest placeholders — this is
+// a BRAND NEW metric with zero on-device data (the log above measured the
+// OLD elbow-angle metric, not this one). Anchored to anatomical reasoning
+// (arm-length-overhead reach ≈ torso-length-ish, so normalizedVerticalGap
+// at full reach lands roughly around 1.0-1.3; pulled down to shoulder
+// height lands near 0), not a guess at a "good" number. [METRIC] logging
+// already exists (value=/enter=/exit=/rom=, ~3/sec) — do a few real
+// pulldown reps and send that log; real numbers get set from that.
 const LAT_PULLDOWN_REP_METRIC: MetricDef = {
   type:  'average',
-  left:  { type: 'jointAngle', a: 'leftShoulder',  pivot: 'leftElbow',  c: 'leftWrist'  },
-  right: { type: 'jointAngle', a: 'rightShoulder', pivot: 'rightElbow', c: 'rightWrist' },
+  left:  { type: 'normalizedVerticalGap', upper: 'leftWrist',  lower: 'leftShoulder'  },
+  right: { type: 'normalizedVerticalGap', upper: 'rightWrist', lower: 'rightShoulder' },
 };
 
+// evaluateAt CHANGED atBottom←throughoutMax (this round) — ROOT CAUSE of
+// "STAY UPRIGHT fired when the user just turned around" (log-confirmed:
+// torso_lean spiked to 33.6 during a turn, correctly measured but
+// misleading): throughoutMax takes the SINGLE WORST frame across the ENTIRE
+// rep, so a brief, transient 2D-projection artifact from turning the torso
+// (which genuinely can shift the apparent hip-shoulder line in a 2D camera
+// projection, even though a turn isn't real forward/backward lean) gets
+// treated identically to a sustained lean held through the whole rep.
+// atBottom only reads this check at the exact frame of peak pull depth —
+// a turn happening at any OTHER moment in the rep (getting into position,
+// between reps, adjusting) is no longer captured at all. This does not
+// catch a lean that happens to occur AT peak depth specifically, but that's
+// the moment where a real "yanking the bar down with a body lean" cheat
+// would actually show up, so it's the more relevant single frame to check
+// even before considering the turn false-positive.
 const LAT_PULLDOWN_TORSO_CHECK: FormCheckDef = {
   id: 'torso_lean', cue: 'STAY UPRIGHT, NO SWINGING',
   metric: {
@@ -1835,7 +1824,7 @@ const LAT_PULLDOWN_TORSO_CHECK: FormCheckDef = {
     left:  { type: 'lineVsVertical', from: 'leftHip',  to: 'leftShoulder'  },
     right: { type: 'lineVsVertical', from: 'rightHip', to: 'rightShoulder' },
   },
-  evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 20 }, // reused from curl's own verified lean_back check
+  evaluateAt: 'atBottom', condition: { type: 'greaterThan', value: 20 }, // reused from curl's own verified lean_back check
   priority: 2, enabled: true,
 };
 
@@ -1870,10 +1859,21 @@ function latPulldownVariant(
     id,
     displayName,
     repMetric:          LAT_PULLDOWN_REP_METRIC,
-    topAngle:           160,
-    repEnterThreshold:  145,
-    repExitThreshold:   150,
-    goodROMThreshold:   90,
+    // NEW NUMBERS for the new normalizedVerticalGap metric (this round) —
+    // old values (160/145/150/90) were for the retired elbow-angle metric,
+    // meaningless here. See LAT_PULLDOWN_REP_METRIC's comment for the
+    // anatomical reasoning and the explicit "not device-verified" caveat.
+    //   topAngle 1.15   — wrist clearly overhead at rest (placeholder)
+    //   enter    0.75   — must descend meaningfully to register as a real
+    //                     pull attempt, not just a small twitch (placeholder)
+    //   exit     0.95   — must return most of the way back overhead to
+    //                     complete (placeholder)
+    //   goodROM  0.15   — must pull down to near shoulder height for "good"
+    //                     (placeholder)
+    topAngle:           1.15,
+    repEnterThreshold:  0.75,
+    repExitThreshold:   0.95,
+    goodROMThreshold:   0.15,
     insufficientROMCue: 'PULL DOWN FURTHER',
     formChecks:      [LAT_PULLDOWN_TORSO_CHECK],
     readyGate:       PASSTHROUGH_GATE,
@@ -1886,17 +1886,35 @@ function latPulldownVariant(
     // No suppressApproachDetection — seated, front-facing, torso-scale has
     // no known contamination source the way hinge/tricep's does. Revisit
     // only if a log shows otherwise.
-    // ROOT CAUSE contributor to "barely counts — 1 rep out of many": same
-    // phantom-rep-guard mechanism as hingeVariant/tricepVariant above. With
-    // topAngle=160, goodROMThreshold=90, the default fraction (0.30) requires
-    // repTopValue >= ~168.6° for even a bare-threshold entry to register —
-    // ABOVE topAngle itself, meaning the guard could reject literally every
-    // rep regardless of depth unless repTopValue reads unusually high. This
-    // stacks with the separate placeholder-threshold problem (topAngle/enter/
-    // exit/ROM are all unverified, see LAT_PULLDOWN_REP_METRIC comment) — the
-    // combination is consistent with "almost nothing counts." Lowered for the
-    // same reason as the other two: this guard should reject true non-
-    // attempts, not gate on depth (that's goodROMThreshold's job).
+    //
+    // HONEST LIMIT — read this before assuming the metric redesign alone
+    // "fixes" lat pulldown: normalizedVerticalGap(wrist, shoulder) directly
+    // fixes the PROVEN failure (elbow angle being blind to which way the arm
+    // points), but it does NOT make the exercise bulletproof against every
+    // non-pulldown movement. A pulldown and a shoulder press share the exact
+    // same two extremes on this metric — "wrist at shoulder" and "wrist
+    // overhead" — just approached in opposite temporal order (pulldown RESTS
+    // overhead and pulls down; press RESTS at the shoulder and presses up).
+    // Telling them apart correctly depends on the engine correctly anchoring
+    // "rest" as the OVERHEAD position during the setup/settle phase, which
+    // in turn depends on the user actually gripping the bar overhead during
+    // setup as instructed — this app has no bar/machine recognition (Apple
+    // Vision does body pose only, not object/equipment detection), so that
+    // can't be independently verified. A press performed by someone who
+    // racks the weight near/above shoulder height between reps could, in
+    // principle, still be read as a shallow pulldown. This is a real,
+    // disclosed limitation of camera-only pose tracking for this exercise,
+    // not something the metric change fully closes — see the reliability
+    // gate added in ExerciseEngine.swift this round (rejects a rep if
+    // tracking was unreliable through most of it — the walked-away/confDrops
+    // case from the log) for the OTHER confirmed bug, which that gate does
+    // fully close, unlike this one.
+    //
+    // ROOT CAUSE contributor to the OLD "barely counts" report (elbow-angle
+    // metric, now retired): the default phantomGuardFraction (0.30) required
+    // repTopValue to read ABOVE topAngle itself for a bare entry to register
+    // — see hingeVariant()'s matching comment for the general mechanism.
+    // Same fix applies here regardless of which metric is in use.
     phantomGuardFraction: 0.05,
   };
 }

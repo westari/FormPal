@@ -159,9 +159,11 @@ export function muscleGroupsWorked(sessions: SessionEntry[]): Set<MuscleGroup> {
 // whichever is LOWER. So volume alone can get you to the door of a tier,
 // but the good-rep ratio decides whether you actually walk through it.
 
-export type Tier = 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond';
+export type Tier = 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond' | 'master' | 'champion';
 
-export const TIER_ORDER: Tier[] = ['bronze', 'silver', 'gold', 'platinum', 'diamond'];
+// EXTENDED (this round) — Bronze..Diamond alone had a low ceiling; added
+// Master and Champion above Diamond for more progression room.
+export const TIER_ORDER: Tier[] = ['bronze', 'silver', 'gold', 'platinum', 'diamond', 'master', 'champion'];
 
 export function tierIndex(t: Tier): number { return TIER_ORDER.indexOf(t); }
 
@@ -173,6 +175,8 @@ export function tierIndex(t: Tier): number { return TIER_ORDER.indexOf(t); }
 // this is a product/gamification choice, not a CV threshold — adjust freely
 // based on how it feels once real usage data exists).
 const VOLUME_THRESHOLDS: [Tier, number][] = [
+  ['champion', 700],
+  ['master',   400],
   ['diamond',  200],
   ['platinum', 100],
   ['gold',      50],
@@ -181,10 +185,12 @@ const VOLUME_THRESHOLDS: [Tier, number][] = [
 ];
 
 // Good-rep ratio thresholds (0-1). Deliberately demanding at the top —
-// Diamond requires 95% good reps — since the whole premise of this feature
+// Champion requires 99% good reps — since the whole premise of this feature
 // is that a top rank should mean genuinely clean form, not just showing up.
 const QUALITY_THRESHOLDS: [Tier, number][] = [
-  ['diamond', 0.95],
+  ['champion', 0.99],
+  ['master',   0.97],
+  ['diamond',  0.95],
   ['platinum', 0.85],
   ['gold',     0.70],
   ['silver',   0.50],

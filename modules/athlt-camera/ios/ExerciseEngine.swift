@@ -185,6 +185,10 @@ final class ExerciseEngine {
     private var atBottomVal: [String: Double] = [:]
     // Diagnostic counter — see accumulate()'s doc comment below.
     private var confDrops:   [String: Int]    = [:]
+    // Tracking-reliability gate counters — see the phantom-guard-adjacent
+    // gate in runStateMachine's .inRep completion path for how these are used.
+    private var primaryUnreliableFrames: Int = 0
+    private var primaryTotalFrames:      Int = 0
 
     // ── Planarity / foreshortening gate ───────────────────────────────────────
     // calibratedSegmentRefs: max segmentLengthRatio per check learned during calibration.
@@ -1008,6 +1012,37 @@ final class ExerciseEngine {
                     return
                 }
 
+                // ─ Tracking-reliability gate (log-confirmed bug, this round) ───────────
+                // ROOT CAUSE (lat pulldown "walked away to get phone" scored GOOD, real
+                // device log: confDrops=255 on the one form check, yet the rep still
+                // completed with ROM=ok): the PRIMARY rep metric only needs kMinConf
+                // (0.25) to be trusted for state-machine entry/exit — a much lower bar
+                // than FORM_CHECK_MIN_CONF (0.6), and nothing was checking whether the
+                // primary metric's OWN readings were trustworthy across the rep as a
+                // whole. A person walking away, waving an arm, still clears 0.25
+                // confidence on individual frames often enough to produce threshold
+                // crossings that look like a real rep, even though the tracking was
+                // garbage for most of the window. This reuses the exact confDrops
+                // machinery already built for form checks (see accumulate()) — applied
+                // here to def.repMetric itself, and used as an actual GATE, not just a
+                // diagnostic, since this exact failure is now proven, not speculative.
+                // Threshold (50%) is deliberately generous — only rejects when tracking
+                // was unreliable for the MAJORITY of the rep, so a normal brief
+                // occlusion (e.g. tricep's forearm-crossing-torso moment) doesn't
+                // accidentally trip this on legitimate reps.
+                if primaryTotalFrames > 0 {
+                    let unreliableFraction = Double(primaryUnreliableFrames) / Double(primaryTotalFrames)
+                    guard unreliableFraction <= 0.5 else {
+                        let msg = "[REP] rejected — tracking unreliable for " +
+                                  "\(primaryUnreliableFrames)/\(primaryTotalFrames) frames " +
+                                  "(\(String(format: "%.0f", unreliableFraction * 100))%), not counted"
+                        NSLog("[Engine] [%@] %@", def.id, msg)
+                        onDebugLog?(msg)
+                        repPhase = .atTop
+                        return
+                    }
+                }
+
                 // ─ Movement-shape gate (Issue 1 core fix — hinge hip_drift) ────────────
                 // A check marked gatesCounting: true doesn't just flag bad form, it
                 // decides whether this was the target movement AT ALL. For the hinge
@@ -1275,11 +1310,13 @@ final class ExerciseEngine {
     // ─── Form metric accumulation ─────────────────────────────────────────────
 
     private func resetRepAccumulators() {
-        accumMax           = [:]
-        accumMin           = [:]
-        atBottomVal        = [:]
-        planarityMinRatios = [:]
-        confDrops          = [:]
+        accumMax                = [:]
+        accumMin                = [:]
+        atBottomVal             = [:]
+        planarityMinRatios      = [:]
+        confDrops               = [:]
+        primaryUnreliableFrames = 0
+        primaryTotalFrames      = 0
     }
 
     // DIAGNOSTIC (Fix 5.1 investigation — tricep elbow_drift inconsistency):
@@ -1296,6 +1333,13 @@ final class ExerciseEngine {
     // threshold-tuning problem instead).
     private func accumulate(pose: Pose) {
         guard repPhase == .inRep else { return }
+        // Feeds the tracking-reliability gate (runStateMachine's .inRep
+        // completion path) — same FORM_CHECK_MIN_CONF floor, applied to the
+        // PRIMARY rep metric itself this time, not just form checks.
+        primaryTotalFrames += 1
+        if !isMetricReliable(def.repMetric, pose: pose, minConf: Self.FORM_CHECK_MIN_CONF) {
+            primaryUnreliableFrames += 1
+        }
         for check in def.formChecks where check.enabled {
             guard isReliable(check: check, pose: pose) else {
                 confDrops[check.id] = (confDrops[check.id] ?? 0) + 1
