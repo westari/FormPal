@@ -33,9 +33,9 @@ import Svg, {
 import { FONT, Sp, W } from '../../constants/theme';
 import Ring from '../../components/Ring';
 import ScreenBackground from '../../components/ScreenBackground';
-import { MuscleHeatmap } from '../../components/MuscleHeatmap';
+import { MuscleTierMap } from '../../components/MuscleTierMap';
 import {
-  getAllSessions, groupIntoWorkouts, computeOverallMuscleScores,
+  getAllSessions, groupIntoWorkouts, computeMuscleTiers,
   type SessionEntry, type WorkoutGroup,
 } from '../../lib/sessionLog';
 
@@ -406,18 +406,20 @@ const ifc = StyleSheet.create({
 });
 
 // ─── MuscleMapCard ────────────────────────────────────────────────────────────
-// Thin wrapper around the shared MuscleHeatmap — same component the recap
-// screen uses, so "reused, not rebuilt" holds for both.
+// Thin wrapper around the shared MuscleTierMap — same component the recap
+// screen uses, so "reused, not rebuilt" holds for both. REPLACED the heatmap
+// with a Bronze->Diamond tier system driven by both volume AND form quality
+// — see computeMuscleTiers in lib/sessionLog.ts.
 
 function MuscleMapCard({ sessions }: { sessions: SessionEntry[] }) {
-  const overallScores = useMemo(() => computeOverallMuscleScores(sessions), [sessions]);
+  const tiers = useMemo(() => computeMuscleTiers(sessions), [sessions]);
   const isEmpty = sessions.length === 0;
 
   return (
     <View style={[mm.card, SHADOW_HIGH]}>
       <View style={mm.header}>
-        <Text style={mm.title}>Muscle coverage</Text>
-        <Text style={mm.sub}>Cumulative volume from every exercise you've logged</Text>
+        <Text style={mm.title}>Muscle ranks</Text>
+        <Text style={mm.sub}>Trained volume AND form quality, decayed over the past 14 days</Text>
       </View>
 
       {isEmpty ? (
@@ -426,16 +428,16 @@ function MuscleMapCard({ sessions }: { sessions: SessionEntry[] }) {
             style={{ width: 36, height: 36, marginBottom: 10 }} tintColor={C.textDim} />
           <Text style={mm.emptyTitle}>No sessions yet</Text>
           <Text style={mm.emptySub}>
-            Log form-check sessions and your muscle coverage map will fill in here.
+            Log form-check sessions and your muscle ranks will start filling in here.
           </Text>
         </View>
       ) : (
-        <MuscleHeatmap overallScores={overallScores} showLegend={false} />
+        <MuscleTierMap tiers={tiers} showLegend />
       )}
 
       {!isEmpty && (
         <Text style={mm.note}>
-          Color warmth reflects training intensity over the past 14 days
+          A muscle only reaches Diamond by being trained hard WITH good form
         </Text>
       )}
     </View>

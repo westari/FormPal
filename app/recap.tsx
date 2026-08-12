@@ -12,12 +12,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 import ViewShot from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
-import { SkiaMuscleHeatmapSafe } from '../components/SkiaMuscleHeatmapSafe';
+import { MuscleTierMap } from '../components/MuscleTierMap';
 import RepFeedback from '../components/RepFeedback';
 import { repFeedbackSentence } from '../lib/repFeedbackSentences';
 import {
-  getAllSessions, appendSessions, groupIntoWorkouts, computeOverallMuscleScores,
-  muscleGroupsWorked, type SessionEntry, type MuscleScores, type RepEventData,
+  getAllSessions, appendSessions, groupIntoWorkouts, computeMuscleTiers,
+  muscleGroupsWorked, type SessionEntry, type MuscleTiers, type RepEventData,
 } from '../lib/sessionLog';
 import { EXERCISE_DEFINITIONS } from '../constants/exerciseDefinitions';
 import { useWorkoutSessionStore } from '../store/workoutSessionStore';
@@ -405,7 +405,7 @@ export default function RecapScreen() {
 
   const [data, setData]                   = useState<RecapData | null>(null);
   const [loadFailed, setLoadFailed]       = useState(false);
-  const [overallScores, setOverallScores] = useState<MuscleScores>({});
+  const [muscleTiers, setMuscleTiers]     = useState<MuscleTiers>({});
   const [sharing, setSharing]             = useState(false);
   const [activePage, setActivePage]       = useState(0);
   const initialized = useRef(false);
@@ -485,7 +485,7 @@ export default function RecapScreen() {
       }
 
       const allAfter = await getAllSessions();
-      setOverallScores(computeOverallMuscleScores(allAfter));
+      setMuscleTiers(computeMuscleTiers(allAfter));
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -703,33 +703,27 @@ export default function RecapScreen() {
                   <Text style={s.headerSub}>{formatFullDateTime(data.ts)}</Text>
                 </View>
 
-                {/* Hero — muscle heatmap panel. Sized to its own content
-                    (no flex/minHeight) — this card used to be `flex:1` inside
-                    a ScrollView, which has no reliable meaning there (a
-                    ScrollView's content isn't a bounded flex parent the way a
-                    plain View is), so on-device the card could end up shorter
-                    than what MuscleHeatmap actually needs at this scale,
-                    causing the front/back diagrams to run into each other and
-                    the stat grid below to read as cramped. Letting the card
-                    size to its content (padding + label + title + the
-                    heatmap's own intrinsic size) removes the guesswork. */}
+                {/* Hero — muscle rank card. REPLACED the heatmap entirely
+                    (both the SVG version and the Skia thermal attempt) with
+                    a game-style tier system: Bronze->Diamond per muscle
+                    group, computed from BOTH training volume AND form
+                    quality (see computeMuscleTiers in lib/sessionLog.ts) —
+                    not just volume, which is the actual point of the
+                    feature. Sized to its own content (no flex/minHeight) —
+                    see git history for why that matters inside a
+                    ScrollView. */}
                 <GlassSurface radius={34} style={s.heroCard}>
-                  <Text style={s.heroLabel}>MUSCLE HEATMAP</Text>
+                  <Text style={s.heroLabel}>MUSCLE RANKS</Text>
                   <Text style={s.heroTitle}>{highlightLabel}</Text>
                   <View style={s.heroBody}>
                     <RecapSectionBoundary
                       fallback={
                         <View style={{ alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-                          <Text style={s.cardText}>Muscle map couldn't load this time — your reps are still saved.</Text>
+                          <Text style={s.cardText}>Muscle ranks couldn't load this time — your reps are still saved.</Text>
                         </View>
                       }
                     >
-                      <SkiaMuscleHeatmapSafe
-                        overallScores={overallScores}
-                        highlightGroups={highlightGroups}
-                        highlightLabel={highlightLabel}
-                        scale={0.6}
-                      />
+                      <MuscleTierMap tiers={muscleTiers} scale={0.6} />
                     </RecapSectionBoundary>
                   </View>
                 </GlassSurface>

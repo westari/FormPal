@@ -145,3 +145,99 @@ export function muscleGroupsWorked(sessions: SessionEntry[]): Set<MuscleGroup> {
   }
   return set;
 }
+
+// ─── Muscle tiers (replaces the heatmap) ───────────────────────────────────
+//
+// A muscle's tier depends on BOTH how much it was trained AND how good the
+// form was — deliberately, per the explicit ask: this app is the only one
+// that can rank muscles by form quality (camera-verified reps), not just
+// volume, and that's meant to be the actual point of the feature, not a
+// side factor. A muscle reaches Diamond by being trained hard WITH good
+// form; high volume alone caps out well short of it.
+//
+// Mechanism: compute a volume tier and a quality tier independently, take
+// whichever is LOWER. So volume alone can get you to the door of a tier,
+// but the good-rep ratio decides whether you actually walk through it.
+
+export type Tier = 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond';
+
+export const TIER_ORDER: Tier[] = ['bronze', 'silver', 'gold', 'platinum', 'diamond'];
+
+export function tierIndex(t: Tier): number { return TIER_ORDER.indexOf(t); }
+
+// Volume thresholds — decayed weighted rep count (same 14-day half-life
+// curve as computeOverallMuscleScores above), but ABSOLUTE, not relative to
+// your own max. Relative-to-max would mean your single most-trained muscle
+// always reads as "maxed" even on a nearly-empty account — these are real
+// rep-count anchors instead, reasoned round numbers (not device-verified —
+// this is a product/gamification choice, not a CV threshold — adjust freely
+// based on how it feels once real usage data exists).
+const VOLUME_THRESHOLDS: [Tier, number][] = [
+  ['diamond',  200],
+  ['platinum', 100],
+  ['gold',      50],
+  ['silver',    20],
+  ['bronze',     1],
+];
+
+// Good-rep ratio thresholds (0-1). Deliberately demanding at the top —
+// Diamond requires 95% good reps — since the whole premise of this feature
+// is that a top rank should mean genuinely clean form, not just showing up.
+const QUALITY_THRESHOLDS: [Tier, number][] = [
+  ['diamond', 0.95],
+  ['platinum', 0.85],
+  ['gold',     0.70],
+  ['silver',   0.50],
+  ['bronze',   0],
+];
+
+function tierFromVolume(v: number): Tier | null {
+  for (const [tier, min] of VOLUME_THRESHOLDS) if (v >= min) return tier;
+  return null; // below even Bronze — not enough real training to rank at all
+}
+
+function tierFromQuality(q: number): Tier {
+  for (const [tier, min] of QUALITY_THRESHOLDS) if (q >= min) return tier;
+  return 'bronze';
+}
+
+export interface MuscleTierInfo {
+  tier:      Tier;
+  volume:    number; // decayed weighted rep count (absolute, not normalized)
+  goodRatio: number; // 0-1 — recency-weighted good/total, same decay applied to both
+}
+
+export type MuscleTiers = Partial<Record<MuscleGroup, MuscleTierInfo>>;
+
+export function computeMuscleTiers(sessions: SessionEntry[]): MuscleTiers {
+  const now = Date.now();
+  const volume:     Record<string, number> = {};
+  const goodVolume: Record<string, number> = {};
+
+  for (const s of sessions) {
+    const def = getExerciseDef(s.exerciseId);
+    if (!def) continue; // exerciseId missing/unknown — can't attribute muscles
+    const ageDays = (now - s.ts) / DAY_MS;
+    const decay   = Math.exp((-ageDays * Math.LN2) / 14);
+    // An exercise's good-rep ratio applies to every muscle group it targets
+    // — SessionEntry only tracks form quality per EXERCISE, not per muscle
+    // within it, so this is the honest granularity available, not an
+    // approximation of something more precise we're choosing not to show.
+    for (const mg of def.muscleGroups) {
+      volume[mg]     = (volume[mg] ?? 0) + s.reps * decay;
+      goodVolume[mg] = (goodVolume[mg] ?? 0) + s.goodReps * decay;
+    }
+  }
+
+  const out: MuscleTiers = {};
+  for (const mg of Object.keys(volume) as MuscleGroup[]) {
+    const v = volume[mg];
+    const volTier = tierFromVolume(v);
+    if (!volTier) continue; // below Bronze — not shown, not fabricated
+    const goodRatio = v > 0 ? (goodVolume[mg] ?? 0) / v : 0;
+    const qualTier  = tierFromQuality(goodRatio);
+    const finalTier = tierIndex(qualTier) < tierIndex(volTier) ? qualTier : volTier;
+    out[mg] = { tier: finalTier, volume: v, goodRatio };
+  }
+  return out;
+}

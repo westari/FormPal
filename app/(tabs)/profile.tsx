@@ -381,12 +381,6 @@ export default function ProfileScreen() {
               onPress={() => router.push('/calibrate')}
             />
             <SettingRow
-              icon="flame.fill"
-              colors={['#FF9F0A', '#FF7A2E']}
-              label="Skia Heatmap Test (DEV)"
-              onPress={() => router.push('/skia-heatmap-test')}
-            />
-            <SettingRow
               icon="trash.fill"
               colors={['#FF6B6B', '#FF3B30']}
               label="Clear Calibration Overrides (DEV)"
