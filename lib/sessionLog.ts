@@ -174,7 +174,7 @@ export function tierIndex(t: Tier): number { return TIER_ORDER.indexOf(t); }
 // rep-count anchors instead, reasoned round numbers (not device-verified —
 // this is a product/gamification choice, not a CV threshold — adjust freely
 // based on how it feels once real usage data exists).
-const VOLUME_THRESHOLDS: [Tier, number][] = [
+export const VOLUME_THRESHOLDS: [Tier, number][] = [
   ['champion', 700],
   ['master',   400],
   ['diamond',  200],
@@ -187,7 +187,7 @@ const VOLUME_THRESHOLDS: [Tier, number][] = [
 // Good-rep ratio thresholds (0-1). Deliberately demanding at the top —
 // Champion requires 99% good reps — since the whole premise of this feature
 // is that a top rank should mean genuinely clean form, not just showing up.
-const QUALITY_THRESHOLDS: [Tier, number][] = [
+export const QUALITY_THRESHOLDS: [Tier, number][] = [
   ['champion', 0.99],
   ['master',   0.97],
   ['diamond',  0.95],
