@@ -15,13 +15,13 @@
  * MUSCLE ICONS: switched from 6 broad groups to 14 individual muscles (see
  * the Muscle enum in constants/exercises.ts). 11 of them now use real PNG
  * icons (Flaticon "cube29" muscle pack — see MUSCLE_ICON_ATTRIBUTION,
- * credited at the bottom of app/muscle-ranks.tsx) wired in via
- * MUSCLE_ICON_SOURCES below. The remaining 3 (Forearms/LowerBack/Calves, no
- * art yet) fall back to the real-extracted-path SVG crop this file used
- * before (muscleShapePaths.ts) — see MUSCLE_ICON_FALLBACK's comment. Each
- * PNG's own highlighted region is recolored per-tier via an SVG hueRotate
- * filter (see TIER_HUE_ROTATE) rather than always showing the source art's
- * fixed red.
+ * credited at the bottom of app/muscle-ranks.tsx), PRE-BAKED into all 7
+ * tier colors per muscle (see MUSCLE_ICON_SOURCES' own comment for how) and
+ * wired in below. Untrained muscles reuse the same art at the silver
+ * variant + reduced opacity, not a different icon. The remaining 3
+ * (Forearms/LowerBack/Calves, no art yet) fall back to the real-extracted-
+ * path SVG crop this file used before (muscleShapePaths.ts) — see
+ * MUSCLE_ICON_FALLBACK's comment.
  */
 
 import React, { useMemo, useRef, useEffect, useId } from 'react';
@@ -29,13 +29,13 @@ import { View, Text, Image, StyleSheet, Animated } from 'react-native';
 import type { ImageSourcePropType } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { SymbolView } from 'expo-symbols';
 import Svg, { Defs, LinearGradient as SvgLinearGradient, Stop, Path, Circle, Ellipse, Line, G } from 'react-native-svg';
 import { Muscle } from '../constants/exercises';
 import type { Slug } from 'react-native-body-highlighter';
 import type { MuscleTiers, MuscleTierInfo, Tier } from '../lib/sessionLog';
 import { TIER_ORDER, tierIndex, VOLUME_THRESHOLDS, QUALITY_THRESHOLDS } from '../lib/sessionLog';
 import { FRONT_MUSCLE_PATHS, BACK_MUSCLE_PATHS } from './muscleShapePaths';
+import { BODY_MUSCLES_FRONT_PATHS, BODY_MUSCLES_BACK_PATHS } from './muscleShapePathsDetailed';
 import { Col, FONT, W, Sp } from '../constants/theme';
 
 // ─── Tier palette ───────────────────────────────────────────────────────────
@@ -349,16 +349,19 @@ function MuscleIcon({ muscle, tier, size }: { muscle: Muscle; tier?: Tier; size:
   const uid = useId();
   const gradId = `mi-${uid}`;
   const meta = tier ? TIER_META[tier] : null;
-  // Only reachable once a real tier is known — untrained muscles have no
-  // "tier" of pre-baked art to show, so they always take the SVG-fallback
-  // path below (dim gray), same as muscles with no PNG coverage at all.
-  const pngSource = tier ? MUSCLE_ICON_SOURCES[muscle]?.[tier] : undefined;
+  const iconSet = MUSCLE_ICON_SOURCES[muscle];
+  // Untrained muscles still use the SAME Flaticon art, not a different icon
+  // — just the silver-tier file (already a neutral gray) at reduced
+  // opacity, standing in for "no rank yet" instead of falling back to the
+  // crude SVG crop. The SVG fallback is now ONLY for the 3 muscles with no
+  // Flaticon coverage at all (Forearms/LowerBack/Calves), trained or not.
+  const pngSource = iconSet ? (tier ? iconSet[tier] : iconSet.silver) : undefined;
   const paths = useMemo(() => muscleFallbackPaths(muscle), [muscle]);
 
   if (pngSource) {
     return (
       <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-        <Image source={pngSource} style={{ width: size, height: size }} resizeMode="contain" />
+        <Image source={pngSource} style={{ width: size, height: size, opacity: meta ? 1 : 0.45 }} resizeMode="contain" />
       </View>
     );
   }
@@ -384,6 +387,116 @@ function MuscleIcon({ muscle, tier, size }: { muscle: Muscle; tier?: Tier; size:
   );
 }
 
+// ─── Body map — full front/back diagram, every trained muscle lit up at ───
+// once in its own tier's gradient. REBUILT (this round) on the same
+// muscleShapePathsDetailed.ts data as before, but rendered like the rest of
+// this page now looks — the same flat TIER_META 3-stop gradient fill the
+// tile icons and hero ring already use, clean edges, no blur/glow filter.
+// That was the actual problem with the old body map: not the underlying
+// path data, the rendering treatment not matching anything else on the
+// page. See muscleShapePathsDetailed.ts's header comment for why this
+// dataset (not a fresh one) is still the right call.
+const BODY_MAP_REGIONS: Partial<Record<Muscle, { side: 'front' | 'back'; ids: string[] }>> = {
+  [Muscle.Chest]:      { side: 'front', ids: ['chest-upper-left', 'chest-upper-right', 'chest-lower-left', 'chest-lower-right'] },
+  [Muscle.Shoulders]:  { side: 'front', ids: ['shoulder-front-left', 'shoulder-front-right', 'shoulder-side-left', 'shoulder-side-right'] },
+  [Muscle.RearDelts]:  { side: 'back',  ids: ['deltoid-rear-left', 'deltoid-rear-right'] },
+  [Muscle.Biceps]:     { side: 'front', ids: ['biceps-left', 'biceps-right'] },
+  [Muscle.Triceps]:    { side: 'back',  ids: ['triceps-long-left', 'triceps-lateral-left', 'triceps-long-right', 'triceps-lateral-right'] },
+  [Muscle.Lats]:       { side: 'back',  ids: ['lats-upper-left', 'lats-mid-left', 'lats-lower-left', 'lats-upper-right', 'lats-mid-right', 'lats-lower-right'] },
+  [Muscle.Traps]:      { side: 'back',  ids: ['traps-upper-left', 'traps-mid-left', 'traps-lower-left', 'traps-upper-right', 'traps-mid-right', 'traps-lower-right'] },
+  [Muscle.Abs]:        { side: 'front', ids: ['abs-upper-left', 'abs-upper-right', 'abs-lower-left', 'abs-lower-right'] },
+  [Muscle.Quads]:      { side: 'front', ids: ['quads-left', 'quads-right'] },
+  [Muscle.Hamstrings]: { side: 'back',  ids: ['hamstrings-medial-left', 'hamstrings-lateral-left', 'hamstrings-medial-right', 'hamstrings-lateral-right'] },
+  [Muscle.Glutes]:     { side: 'back',  ids: ['gluteus-medius-left', 'gluteus-maximus-left', 'gluteus-medius-right', 'gluteus-maximus-right'] },
+};
+
+interface BodyMapSpec { key: string; d: string; gradId: string; meta: { hi: string; lo: string; ink: string } }
+
+function buildBodyMapSpecs(tiers: MuscleTiers, side: 'front' | 'back', uid: string): BodyMapSpec[] {
+  const table = side === 'front' ? BODY_MUSCLES_FRONT_PATHS : BODY_MUSCLES_BACK_PATHS;
+  const out: BodyMapSpec[] = [];
+  for (const m of Object.keys(BODY_MAP_REGIONS) as Muscle[]) {
+    const region = BODY_MAP_REGIONS[m]!;
+    if (region.side !== side) continue;
+    const info = tiers[m];
+    if (!info) continue; // untrained — not shown, not fabricated
+    const meta = TIER_META[info.tier];
+    for (const id of region.ids) {
+      const d = table[id];
+      if (!d) continue;
+      out.push({ key: `${m}-${id}`, d, gradId: `bm-${uid}-${m}-${id}`, meta });
+    }
+  }
+  return out;
+}
+
+function BodyMapSide({ tiers, side, width }: { tiers: MuscleTiers; side: 'front' | 'back'; width: number }) {
+  const uid = useId();
+  const specs = useMemo(() => buildBodyMapSpecs(tiers, side, uid), [tiers, side, uid]);
+  const allPaths = side === 'front' ? BODY_MUSCLES_FRONT_PATHS : BODY_MUSCLES_BACK_PATHS;
+  const viewBox = side === 'front' ? '0 0 35 93' : '37 0 35 93';
+  const height = Math.round((width * 93) / 35);
+  return (
+    <Svg width={width} height={height} viewBox={viewBox}>
+      <Defs>
+        {specs.map(s => (
+          <SvgLinearGradient key={s.gradId} id={s.gradId} x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0%" stopColor={s.meta.hi} />
+            <Stop offset="55%" stopColor={s.meta.lo} />
+            <Stop offset="100%" stopColor={s.meta.ink} />
+          </SvgLinearGradient>
+        ))}
+      </Defs>
+      {/* Neutral silhouette — every region, untinted, so untrained muscles
+          still read as part of one coherent body, not a gap. */}
+      {Object.values(allPaths).map((d, i) => (
+        <Path key={i} d={d} fill="rgba(159,171,206,0.30)" stroke="rgba(72,79,105,0.18)" strokeWidth={0.06} />
+      ))}
+      {/* Trained regions, tier-gradient filled, on top */}
+      {specs.map(s => (
+        <Path key={s.key} d={s.d} fill={`url(#${s.gradId})`} stroke="rgba(17,24,39,0.12)" strokeWidth={0.05} />
+      ))}
+    </Svg>
+  );
+}
+
+function BodyMap({ tiers, scale }: { tiers: MuscleTiers; scale: number }) {
+  const colWidth = Math.round(118 * scale);
+  return (
+    <View style={{ gap: Math.round(8 * scale) }}>
+      <View style={mh.sectionHeaderRow}>
+        <Text style={[mh.sectionHeader, { fontSize: Math.round(11 * scale) }]}>BODY MAP</Text>
+        <Text style={[mh.sectionSub, { fontSize: Math.round(11 * scale) }]}>Front · Back</Text>
+      </View>
+      <View style={[mh.bodyMapShadowWrap, { borderRadius: Math.round(24 * scale) }]}>
+        <View style={[mh.bodyMapCard, { borderRadius: Math.round(24 * scale), padding: Math.round(Sp.md * scale) }]}>
+          <BlurView intensity={45} tint="light" style={StyleSheet.absoluteFill} />
+          <LinearGradient
+            colors={['rgba(255,255,255,0.6)', 'rgba(255,255,255,0.3)']}
+            start={{ x: 0.2, y: 0 }} end={{ x: 0.8, y: 1 }}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+          />
+          <View
+            style={[StyleSheet.absoluteFill, { borderRadius: Math.round(24 * scale), borderWidth: 1, borderColor: 'rgba(255,255,255,0.7)' }]}
+            pointerEvents="none"
+          />
+          <View style={mh.bodyMapRow}>
+            <View style={mh.bodyMapCol}>
+              <BodyMapSide tiers={tiers} side="front" width={colWidth} />
+              <Text style={[mh.bodyMapLabel, { fontSize: Math.round(10.5 * scale) }]}>FRONT</Text>
+            </View>
+            <View style={mh.bodyMapCol}>
+              <BodyMapSide tiers={tiers} side="back" width={colWidth} />
+              <Text style={[mh.bodyMapLabel, { fontSize: Math.round(10.5 * scale) }]}>BACK</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 // ─── Simple mount-fade, used by the hero card and each grid tile so the
 // page doesn't just pop into existence — the "animated" half of the ask. ──
 function FadeInView({ children, delay = 0, style }: { children: React.ReactNode; delay?: number; style?: any }) {
@@ -396,6 +509,48 @@ function FadeInView({ children, delay = 0, style }: { children: React.ReactNode;
     ]).start();
   }, []);
   return <Animated.View style={[style, { opacity, transform: [{ translateY }] }]}>{children}</Animated.View>;
+}
+
+// ─── Rank ring — circular progress ring with the tier emblem centered ─────
+// inside it, used by the hero card. Built with react-native-svg's own
+// stroke-dasharray technique (consistent with the rest of this file's SVG
+// toolkit) rather than pulling in Skia (components/Ring.tsx's approach) —
+// this file has no other Skia usage, and introducing a second rendering
+// library for one element isn't worth it.
+function RankRing({
+  progress, meta, size, strokeWidth, children,
+}: {
+  progress: number; meta: { hi: string; lo: string }; size: number; strokeWidth: number; children: React.ReactNode;
+}) {
+  const uid = useId();
+  const gradId = `rr-${uid}`;
+  const r = (size - strokeWidth) / 2;
+  const c = size / 2;
+  const circumference = 2 * Math.PI * r;
+  const dash = Math.max(0, Math.min(1, progress)) * circumference;
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
+        <Defs>
+          <SvgLinearGradient id={gradId} x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0%" stopColor={meta.hi} />
+            <Stop offset="100%" stopColor={meta.lo} />
+          </SvgLinearGradient>
+        </Defs>
+        <Circle
+          cx={c} cy={c} r={r} fill="none"
+          stroke="rgba(17,24,39,0.07)" strokeWidth={strokeWidth}
+        />
+        <Circle
+          cx={c} cy={c} r={r} fill="none"
+          stroke={`url(#${gradId})`} strokeWidth={strokeWidth} strokeLinecap="round"
+          strokeDasharray={`${dash}, ${circumference}`}
+          rotation={-90} origin={`${c}, ${c}`}
+        />
+      </Svg>
+      {children}
+    </View>
+  );
 }
 
 // ─── Backdrop blobs ─────────────────────────────────────────────────────────
@@ -557,9 +712,12 @@ export function MuscleTierMap({
     );
   }
 
-  const heroMeta   = overall ? TIER_META[overall.tier] : null;
-  const badgeSize  = Math.round(56 * scale);
-  const heroRadius = Math.round(28 * scale);
+  const heroMeta    = overall ? TIER_META[overall.tier] : null;
+  const heroRadius  = Math.round(32 * scale);
+  const ringSize    = Math.round(136 * scale);
+  const ringStroke  = Math.round(11 * scale);
+  const emblemSize  = Math.round(58 * scale);
+  const emblemWrap  = Math.round(78 * scale);
   const nextLabel = overall && !overall.atTop ? TIER_META[TIER_ORDER[tierIndex(overall.tier) + 1]].label : null;
   const pct = overall ? Math.round(overall.progress * 100) : 0;
 
@@ -571,53 +729,52 @@ export function MuscleTierMap({
               and overflow:hidden on the same view silently eats the shadow
               on iOS (same fix already proven in app/recap.tsx's GlassSurface). */}
           <View style={[mh.heroShadowWrap, { borderRadius: heroRadius }]}>
-            <View style={[mh.hero, { borderRadius: heroRadius, padding: Math.round(Sp.lg * scale) }]}>
+            <View style={[mh.hero, { borderRadius: heroRadius, paddingVertical: Math.round(Sp.xl * scale), paddingHorizontal: Math.round(Sp.lg * scale) }]}>
+              {/* Glass recipe verbatim from app/recap.tsx's GlassSurface: blur
+                  → diagonal tint wash → top sheen → hairline border. */}
+              <BlurView intensity={60} tint="light" style={StyleSheet.absoluteFill} />
               <LinearGradient
-                colors={['#FDFBF8', `${heroMeta.hi}66`, `${heroMeta.lo}3D`]}
-                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                colors={[`${heroMeta.hi}70`, `${heroMeta.lo}30`]}
+                start={{ x: 0.15, y: 0 }} end={{ x: 0.85, y: 1 }}
                 style={StyleSheet.absoluteFill}
                 pointerEvents="none"
               />
+              <LinearGradient
+                colors={['rgba(255,255,255,0.9)', 'rgba(255,255,255,0)']}
+                start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 0.6 }}
+                style={StyleSheet.absoluteFill}
+                pointerEvents="none"
+              />
+              <View
+                style={[StyleSheet.absoluteFill, { borderRadius: heroRadius, borderWidth: 1, borderColor: 'rgba(255,255,255,0.8)' }]}
+                pointerEvents="none"
+              />
 
-              <View style={mh.heroTopRow}>
-                <LinearGradient
-                  colors={[heroMeta.hi, heroMeta.lo]}
-                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                  style={[mh.heroBadge, { width: badgeSize, height: badgeSize, borderRadius: Math.round(badgeSize * 0.32) }]}
-                >
-                  <SymbolView
-                    name="chevron.up"
-                    size={Math.round(badgeSize * 0.42)}
-                    tintColor="#FFFFFF"
-                    type="monochrome"
-                    style={{ width: Math.round(badgeSize * 0.42), height: Math.round(badgeSize * 0.42) }}
-                  />
-                </LinearGradient>
-                <View style={{ flex: 1 }}>
-                  <Text style={[mh.heroKicker, { fontSize: Math.round(10.5 * scale) }]}>OVERALL STANDING</Text>
-                  <Text style={[mh.heroTierName, { color: heroMeta.ink, fontSize: Math.round(26 * scale) }]}>{heroMeta.label}</Text>
+              <Text style={[mh.heroKicker, { fontSize: Math.round(11 * scale) }]}>CURRENT RANK</Text>
+
+              <RankRing progress={overall.progress} meta={heroMeta} size={ringSize} strokeWidth={ringStroke}>
+                <View style={[mh.heroEmblemWrap, { width: emblemWrap, height: emblemWrap, borderRadius: emblemWrap / 2 }]}>
+                  <TierEmblem tier={overall.tier} size={emblemSize} />
                 </View>
-              </View>
+              </RankRing>
 
-              <View style={[mh.heroMeterTrack, { marginTop: Math.round(16 * scale), height: Math.round(8 * scale), borderRadius: Math.round(4 * scale) }]}>
-                <LinearGradient
-                  colors={[heroMeta.hi, heroMeta.lo]}
-                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                  style={{ width: `${pct}%`, height: '100%', borderRadius: Math.round(4 * scale) }}
-                />
-              </View>
+              <Text style={[mh.heroTierName, { color: heroMeta.ink, fontSize: Math.round(34 * scale) }]}>{heroMeta.label}</Text>
+
               {overall.atTop ? (
-                <Text style={[mh.heroMeterLabel, { fontSize: Math.round(11.5 * scale), marginTop: 8 }]}>Maintaining top standing</Text>
+                <Text style={[mh.heroMeterLabel, { fontSize: Math.round(12.5 * scale) }]}>Maintaining top standing</Text>
               ) : (
-                <View style={mh.heroMeterRow}>
-                  <Text style={[mh.heroMeterLabel, { fontSize: Math.round(11.5 * scale) }]}>{pct}% to next tier</Text>
-                  <Text style={[mh.heroNextName, { color: heroMeta.ink, fontSize: Math.round(12 * scale) }]}>{nextLabel}</Text>
-                </View>
+                <Text style={[mh.heroMeterLabel, { fontSize: Math.round(12.5 * scale) }]}>
+                  {pct}% to <Text style={[mh.heroNextName, { color: heroMeta.ink, fontSize: Math.round(12.5 * scale) }]}>{nextLabel}</Text>
+                </Text>
               )}
             </View>
           </View>
         </FadeInView>
       )}
+
+      <FadeInView delay={80}>
+        <BodyMap tiers={tiers} scale={scale} />
+      </FadeInView>
 
       <View style={{ gap: Math.round(8 * scale) }}>
         <View style={mh.sectionHeaderRow}>
@@ -642,6 +799,20 @@ const mh = StyleSheet.create({
   sectionHeader:    { fontWeight: W.bold, letterSpacing: 0.8, color: Col.textSub },
   sectionSub:       { fontWeight: W.medium, color: Col.textSub },
 
+  bodyMapShadowWrap: {
+    shadowColor: '#1C2C6E',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.10,
+    shadowRadius: 18,
+    elevation: 3,
+  },
+  bodyMapCard: {
+    overflow: 'hidden',
+  },
+  bodyMapRow: { flexDirection: 'row', justifyContent: 'center', gap: 22 },
+  bodyMapCol: { alignItems: 'center', gap: 6 },
+  bodyMapLabel: { fontWeight: W.bold, letterSpacing: 0.6, color: Col.textSub },
+
   // Shadow lives here (outer, unclipped) — `hero` below has overflow:hidden
   // for the rounded-corner blur/gradient clip, and shadow + overflow:hidden
   // on the same view silently eats the shadow on iOS.
@@ -653,30 +824,22 @@ const mh = StyleSheet.create({
     elevation: 6,
   },
   hero: {
-    overflow: 'hidden',
+    overflow:  'hidden',
+    alignItems: 'center',
   },
-  heroTopRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-  },
-  heroBadge: {
+  heroKicker: { fontWeight: W.bold, letterSpacing: 1.6, color: Col.textSub, marginBottom: 18 },
+  heroEmblemWrap: {
     alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.65)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.85)',
   },
-  heroKicker: { fontWeight: W.bold, letterSpacing: 1.2, color: Col.textSub },
   // Bricolage Grotesque, per DESIGN.md — this is the one "hero CTA text"
   // moment in this card (Sz.h2/24px and up), so it gets the display font,
   // not the system font every other label in this file correctly uses.
   // Critical: never pair fontWeight with a FONT.display* family — the font
   // FILE is the weight; setting fontWeight alongside it is a no-op at best.
-  heroTierName: { fontFamily: FONT.displayBlack, letterSpacing: -0.6, marginTop: 2 },
-  heroMeterTrack: {
-    width: '100%',
-    backgroundColor: 'rgba(17,24,39,0.07)',
-    overflow: 'hidden',
-  },
-  heroMeterRow: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8,
-  },
-  heroMeterLabel: { color: Col.textSub, fontWeight: W.semi },
+  heroTierName:   { fontFamily: FONT.displayBlack, letterSpacing: -0.8, marginTop: 18, textAlign: 'center' },
+  heroMeterLabel: { color: Col.textSub, fontWeight: W.semi, marginTop: 6, textAlign: 'center' },
   heroNextName:   { fontWeight: W.bold },
 
   grid: {

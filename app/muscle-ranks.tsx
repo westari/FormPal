@@ -48,10 +48,7 @@ export default function MuscleRanksScreen() {
             <Pressable onPress={() => router.back()} style={[s.backBtn, SHADOW_LOW]} hitSlop={10}>
               <SymbolView name="chevron.left" size={18} tintColor={Col.text} type="monochrome" style={{ width: 18, height: 18 }} />
             </Pressable>
-            <View style={{ gap: 2 }}>
-              <Text style={s.title}>Standing</Text>
-              <Text style={s.sub}>Trained volume AND form quality, decayed over 14 days</Text>
-            </View>
+            <Text style={s.title}>Standing</Text>
           </View>
 
           <MuscleTierMap tiers={tiers} scale={0.9} />
@@ -67,16 +64,20 @@ export default function MuscleRanksScreen() {
 
 const s = StyleSheet.create({
   header: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    marginBottom: Sp.lg,
+    flexDirection: 'row', alignItems: 'center', gap: 16,
+    marginBottom: Sp.xl,
   },
   backBtn: {
     width: 34, height: 34, borderRadius: 17,
     alignItems: 'center', justifyContent: 'center',
     backgroundColor: Col.card,
   },
-  title: { fontFamily: FONT.displayBold, fontSize: Sz.h2, color: Col.text, letterSpacing: -0.3 },
-  sub:   { fontSize: Sz.small, color: Col.textSub, maxWidth: 280 },
+  // FONT.displayLight, not displayBold — matches the app's own "greeting
+  // header" convention (see DESIGN.md's FONT table: displayLight is for
+  // screen titles like "Welcome back.", not section headings). Dropped the
+  // subtitle entirely, per explicit ask — it read as clutter under a title
+  // this size; the card below already makes the "volume AND form" point.
+  title: { fontFamily: FONT.displayLight, fontSize: Sz.h1, color: Col.text, letterSpacing: -0.5 },
 
   attribution:    { alignItems: 'center', marginTop: Sp.lg, paddingVertical: 6 },
   attributionTxt: { fontSize: Sz.caption, color: Col.textSub, textDecorationLine: 'underline' },
