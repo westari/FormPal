@@ -220,6 +220,15 @@ struct ExerciseDefinition {
     // completes a bogus rep" bug this abandonment logic exists to prevent.
     let missingPersonGraceFrames: Int
 
+    // ── Settle-anchor floor (per-exercise, opt-in — see ExerciseEngine.swift's
+    // settleCandidateAcceptable doc comment for the full root-cause story).
+    // nil (default) preserves existing settle behavior exactly for every
+    // exercise. Set only where a genuinely different movement performed in
+    // this exercise's slot could otherwise settle on its own low starting
+    // value and get miscounted (lat pulldown vs. a press sharing the same
+    // wrist/elbow-vs-shoulder metric shape, just opposite temporal order).
+    let settleAnchorMinFraction: Double?
+
     init(id: String, displayName: String,
          repMetric: Metric,
          topAngle: Double, repEnterThreshold: Double, repExitThreshold: Double,
@@ -233,7 +242,8 @@ struct ExerciseDefinition {
          suppressApproachDetection: Bool = false,
          phantomGuardFraction: Double = 0.30,
          exitConfirmFrames: Int = 3,
-         missingPersonGraceFrames: Int = 3) {
+         missingPersonGraceFrames: Int = 3,
+         settleAnchorMinFraction: Double? = nil) {
         self.id                        = id
         self.displayName               = displayName
         self.repMetric                 = repMetric
@@ -252,5 +262,6 @@ struct ExerciseDefinition {
         self.phantomGuardFraction      = phantomGuardFraction
         self.exitConfirmFrames         = exitConfirmFrames
         self.missingPersonGraceFrames  = missingPersonGraceFrames
+        self.settleAnchorMinFraction   = settleAnchorMinFraction
     }
 }

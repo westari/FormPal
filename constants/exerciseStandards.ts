@@ -551,17 +551,20 @@ function raiseStandard(exerciseId: string): ExerciseStandardDef {
 
 // ─── Shared lat pulldown standard building-blocks ────────────────────────────
 //
-// repMetric family = average(shoulder–elbow–wrist jointAngle) — the SAME
-// primitive as curlStandard() above (curl is the reference this whole family
-// is based on — see the investigate-first comment in exerciseDefinitions.ts's
-// latPulldownVariant()). Arm relatively STRAIGHT (~160°) at the top/start,
-// elbow BENDS as the bar is pulled down toward the chest (peak contraction).
-//
-// PLACEHOLDER, NOT DEVICE-VERIFIED. Deliberately mirrors the equally-unverified
-// Layer-0 placeholders in exerciseDefinitions.ts's latPulldownVariant()
-// (topAngle 160 / repExitThreshold 150 / goodROMThreshold 90) rather than
-// inventing a second, different set of guessed numbers — do a few reps, send
-// the [REP] log, and both layers get set together from the same real values.
+// STALE-SCALE BUG, ROUND 2 — same class of bug as before, caught before
+// shipping this time. exerciseDefinitions.ts's latPulldownVariant()
+// repMetric changed AGAIN this round (normalizedVerticalGap(elbow,shoulder)
+// → lineVsHorizontal(shoulder,elbow), mirrored from shoulder press's own
+// verified numbers — see that file's comment for the full derivation), but
+// this file still had the PREVIOUS round's gap-scale numbers (topAngle 0.45
+// / goodROMThreshold -0.05). UniversalQualityEngine.ingestFrame() feeds this
+// standard the EXACT SAME def.repMetric.measure() value used by the Layer-0
+// engine (ATHLTCameraModule's univMetric, not an independent calculation),
+// so this would have silently broken the same way again — comparing a
+// ~6-35 degree-scale value against 0.0/0.35 gap-scale thresholds. Now
+// mirrors the CURRENT numbers (topAngle 35 / goodROMThreshold 6) directly,
+// same "slightly more permissive than Layer-0" margin as before, same
+// reasoning as curlStandard() reusing curl's own Layer-0 numbers.
 //
 // staticChecks: [] — deliberately empty, not an oversight. A shoulder-hip-knee
 // (or shoulder-hip-elbow) torso-stability check would use the SHOULDER as one
@@ -585,12 +588,15 @@ function latPulldownStandard(exerciseId: string): ExerciseStandardDef {
     exerciseId,
     reviewed: false,  // PLACEHOLDER — send a [REP] log spanning one full rep to set real numbers
 
-    // Mirrors exerciseDefinitions.ts's latPulldownVariant() goodROMThreshold (90)
-    // and repExitThreshold/topAngle (150/160) directly — same reasoning as
-    // curlStandard() reusing curl's own Layer-0 numbers, just not yet
-    // device-confirmed for this family.
-    standardPeakAngleMax:  90.0,
-    standardStartAngleMin: 145.0,
+    // On the CURRENT lineVsHorizontal(shoulder,elbow) degree scale (see the
+    // STALE-SCALE BUG note above) — decreasing into the rep, same convention
+    // as exerciseDefinitions.ts's topAngle(35, rest/overhead)/
+    // goodROMThreshold(6, worked/elbows down-back). Set slightly more
+    // permissive than those two (start a bit below topAngle, peak a bit
+    // above goodROM) so this layer doesn't reject a rep the Layer-0 engine
+    // already accepted.
+    standardPeakAngleMax:  10.0,
+    standardStartAngleMin: 30.0,
 
     romCue:    'PULL DOWN FURTHER — not reaching full contraction',
     extendCue: 'FULLY EXTEND — arms not returning straight overhead',

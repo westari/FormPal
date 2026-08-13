@@ -289,6 +289,52 @@ final class ExerciseEngine {
 
     private static let SETTLE_FRAMES: Int = 8   // ~0.27s at 30fps
 
+    // ── Settle-anchor floor (per-exercise, opt-in) ────────────────────────────
+    // ROOT CAUSE this closes (lat pulldown reading a press-like low start as
+    // its own "rest" position): BOTH settle paths above will happily lock in
+    // repTopValue from WHATEVER value the metric happened to be at — the
+    // resync path in particular settles the instant angle first dips below
+    // effectiveEnterThreshold, using settleCandidateTop, which for someone
+    // starting their motion near the BOTTOM of this exercise's range (e.g. a
+    // press performed in the lat-pulldown exercise slot, hands starting at
+    // shoulder height instead of overhead) could be a value barely above
+    // effectiveEnterThreshold itself — nowhere near a genuine "starting at
+    // rest" reading, but accepted anyway because the mechanism was only ever
+    // built to protect against ARM-RAISE NOISE before a real exercise begins,
+    // not to verify the exercise's actual starting position is correct.
+    // def.settleAnchorMinFraction (nil for every exercise except lat pulldown
+    // — see latPulldownVariant()) requires the settle candidate to sit at
+    // least this fraction of the way from goodROMThreshold up to topAngle
+    // before EITHER path is allowed to commit; if not met, hasSettled stays
+    // false and the engine keeps waiting — a motion that never reaches a
+    // genuine starting position for this exercise simply never counts,
+    // which is the explicit intended behavior (a press should not register
+    // as a pulldown). nil preserves every other exercise's existing
+    // behavior exactly — this is strictly opt-in, never applied by default.
+    private func settleCandidateAcceptable(_ candidate: Double) -> Bool {
+        guard let frac = def.settleAnchorMinFraction else { return true }
+        let minRequired = effectiveROMThreshold + (def.topAngle - effectiveROMThreshold) * frac
+        return candidate >= minRequired
+    }
+
+    // Throttled to ~1/sec — without this, someone performing an entirely
+    // different motion (e.g. a genuine press) in this exercise's slot would
+    // fail settleCandidateAcceptable() every single frame indefinitely,
+    // flooding the debug log. settleCandidateTop keeps updating via max()
+    // regardless (see the caller), so a later genuine overhead position is
+    // still picked up the moment it occurs — this only throttles the log.
+    private func logSettleRejection(candidate: Double, timestamp: Date) {
+        let now = timestamp.timeIntervalSinceReferenceDate
+        guard now - lastSettleRejectLogTime >= 1.0 else { return }
+        lastSettleRejectLogTime = now
+        let minRequired = effectiveROMThreshold + (def.topAngle - effectiveROMThreshold) * (def.settleAnchorMinFraction ?? 0)
+        let msg = "[SETTLE] rejected — candidate=\(String(format: "%.3f", candidate)) " +
+                  "required>=\(String(format: "%.3f", minRequired)) " +
+                  "— not a genuine starting position for this exercise, still waiting"
+        NSLog("[Engine] [%@] %@", def.id, msg)
+        onDebugLog?(msg)
+    }
+
     // ── Exit confirmation (CORE double-count fix) ────────────────────────────
     // ROOT CAUSE, applies to every exercise, not a per-exercise threshold problem:
     // the .inRep completion check (`angle > effectiveExitThreshold` below) fired
@@ -396,6 +442,7 @@ final class ExerciseEngine {
     // ── Per-frame log throttle ────────────────────────────────────────────────
     private var lastFrameLogTime:    Double = 0
     private var lastActivityLogTime: Double = 0
+    private var lastSettleRejectLogTime: Double = 0
 
     // ── Callbacks ─────────────────────────────────────────────────────────────
     var onRepDetected:       ((RepResult)        -> Void)?
@@ -896,11 +943,15 @@ final class ExerciseEngine {
                 if angle > effectiveExitThreshold {
                     settledTopFrames = min(settledTopFrames + 1, Self.SETTLE_FRAMES + 2)
                     if settledTopFrames >= Self.SETTLE_FRAMES {
-                        hasSettled  = true
-                        repTopValue = angle
-                        let msg = "[SETTLE] top stable — rep counting active"
-                        NSLog("[Engine] [%@] %@", def.id, msg)
-                        onDebugLog?(msg)
+                        if settleCandidateAcceptable(angle) {
+                            hasSettled  = true
+                            repTopValue = angle
+                            let msg = "[SETTLE] top stable (value=\(String(format: "%.3f", angle))) — rep counting active"
+                            NSLog("[Engine] [%@] %@", def.id, msg)
+                            onDebugLog?(msg)
+                        } else {
+                            logSettleRejection(candidate: angle, timestamp: timestamp)
+                        }
                     }
                 } else {
                     // Graceful decay for single-frame noise (don't hard-reset on one bad frame).
@@ -908,21 +959,25 @@ final class ExerciseEngine {
                 }
 
                 if !hasSettled, angle < effectiveEnterThreshold {
-                    hasSettled  = true
-                    repTopValue = settleCandidateTop
-                    // DIAGNOSTIC (lat pulldown "rep 1 top=27.6 vs later reps 171/175"
-                    // investigation): framesSeen tells you how many .atTop frames were
-                    // actually observed before this anchor was locked in. A very low
-                    // number (a handful) means the user's first descent started before
-                    // the engine ever saw a genuine "arms up" reading — settleCandidateTop
-                    // is legitimately whatever low value it happened to see, not a
-                    // tracking/joint bug. A high number with a still-low top would point
-                    // to something else (bad tracking) instead — send this line if it
-                    // recurs and that distinguishes the two.
-                    let msg = "[SETTLE] resynced on first real rep attempt " +
-                              "(top≈\(String(format: "%.1f", settleCandidateTop)) framesSeen=\(preSettleFrameCount)) — rep counting active"
-                    NSLog("[Engine] [%@] %@", def.id, msg)
-                    onDebugLog?(msg)
+                    if settleCandidateAcceptable(settleCandidateTop) {
+                        hasSettled  = true
+                        repTopValue = settleCandidateTop
+                        // DIAGNOSTIC (lat pulldown "rep 1 top=27.6 vs later reps 171/175"
+                        // investigation): framesSeen tells you how many .atTop frames were
+                        // actually observed before this anchor was locked in. A very low
+                        // number (a handful) means the user's first descent started before
+                        // the engine ever saw a genuine "arms up" reading — settleCandidateTop
+                        // is legitimately whatever low value it happened to see, not a
+                        // tracking/joint bug. A high number with a still-low top would point
+                        // to something else (bad tracking) instead — send this line if it
+                        // recurs and that distinguishes the two.
+                        let msg = "[SETTLE] resynced on first real rep attempt " +
+                                  "(top≈\(String(format: "%.3f", settleCandidateTop)) framesSeen=\(preSettleFrameCount)) — rep counting active"
+                        NSLog("[Engine] [%@] %@", def.id, msg)
+                        onDebugLog?(msg)
+                    } else {
+                        logSettleRejection(candidate: settleCandidateTop, timestamp: timestamp)
+                    }
                 }
 
                 guard hasSettled else { return }

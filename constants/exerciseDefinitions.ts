@@ -137,6 +137,17 @@ export interface ExerciseDefinitionDef {
   // Vision's whole-body detector can lose the person for longer than that
   // from self-occlusion alone, killing every rep before it could complete.
   missingPersonGraceFrames?: number;
+  // Requires the native settle gate's anchor value (the metric reading it
+  // locks in as "rest," see ExerciseEngine.swift's settleCandidateAcceptable
+  // doc comment) to sit at least this fraction of the way from
+  // goodROMThreshold up to topAngle before EITHER settle path is allowed to
+  // commit. Default nil (omit for every normal exercise) — preserves exact
+  // existing settle behavior. Only set this where a genuinely different
+  // movement performed in this exercise's slot could otherwise settle on
+  // its own low starting value and get miscounted as this one (currently:
+  // lat pulldown vs. a press sharing the same wrist/elbow-vs-shoulder
+  // metric shape in opposite temporal order — see latPulldownVariant()).
+  settleAnchorMinFraction?: number;
 }
 
 // ─── Shared passthrough ready gate ───────────────────────────────────────────
@@ -1752,54 +1763,76 @@ function frontRaiseVariant(
 
 // ─── Lat pulldown family (vertical pull) ─────────────────────────────────────
 //
-// ROOT CAUSE FOUND, ON-DEVICE LOG (this round) — the elbow-angle metric
-// below is FUNDAMENTALLY the wrong signal for lat pulldown, not just
-// mis-thresholded. The log proved it directly:
-//   Rep 1-2: user did a SHOULDER PRESS, not a pulldown → scored GOOD
-//   Rep 4: user WALKED AWAY to get their phone → scored GOOD
-// The previous investigate-first pass (see git history) reasoned that
-// jointAngle(shoulder,elbow,wrist) — a LOCAL angle at the elbow pivot —
-// "does not care which way the whole arm is oriented in space, only how
-// bent the elbow itself is," and treated that as a safe property (direction
-// consistency with curl). That reasoning was correct about WHAT the metric
-// measures but wrong about the CONSEQUENCE: not caring which way the arm
-// points is exactly why it can't tell a pulldown (arm overhead → arm at
-// shoulder) from a shoulder press (arm at shoulder → arm overhead) from an
-// arm just swinging while walking — all three bend/straighten the elbow
-// through a similar LOCAL angle range. The metric was blind to the one
-// thing that actually distinguishes these movements: WHERE the hand is
-// relative to the body, and which DIRECTION it travels.
+// REBUILT AROUND SHOULDER PRESS'S OWN METRIC, per explicit ask — not a new
+// metric, not a new joint, not a guess. Investigated what shoulder press
+// actually measures (SHOULDER_PRESS_REP_METRIC above): bestSide of
+// lineVsVertical(shoulder, elbow) — the upper-arm's angle from vertical.
+// Verified real numbers from a real press-log: topAngle=84 (rest, elbow out
+// near shoulder height), repEnterThreshold=68, repExitThreshold=72,
+// goodROMThreshold=55 (arm pressed to near-vertical overhead). The metric
+// DECREASES as the press goes up — the engine's state machine is hardwired
+// for that direction (ExerciseEngine.swift: atTop→inRep requires
+// metric < repEnterThreshold, i.e. it only ever waits for a DROP).
 //
-// FIX: repMetric rebuilt around normalizedVerticalGap(wrist, shoulder) —
-// literally "is the wrist above or below the shoulder, and by how much,"
-// which is precisely the distinction a pulldown (hands start clearly ABOVE
-// the shoulder, descend toward it) and a press (hands start AT the
-// shoulder, rise above it) differ on. This does not perfectly solve the
-// ambiguity — see the HONEST LIMIT note on latPulldownVariant() below for
-// exactly what's still unverified and why a sufficiently similar press
-// could in principle still pass — but it is a real, direct fix for the
-// specific failure mode the log proved (elbow angle being blind to arm
-// orientation), not a threshold tweak papering over the same blind spot.
+// A lat pulldown is the geometric MIRROR of a press on this exact metric:
+//   Shoulder press: rest = elbow out (arm ~horizontal) → press UP → arm ~vertical.
+//   Lat pulldown:   rest = arm ~vertical (overhead)     → pull DOWN → elbow out/back.
+// Same two joints, same angle, opposite traversal — pulldown's REST position
+// (arms overhead) is the same body position shoulder press calls its GOOD-
+// ROM finish, and pulldown's WORKED position (elbows driven down and back)
+// is the same body position shoulder press calls its REST/topAngle. So the
+// numbers mirror directly.
 //
-// Bilateral combinator kept as average(left, right) — a pulldown pull is
-// essentially always synchronized, bilateral, matching squat/lunge's own
-// average(L,R) pattern (unchanged reasoning from before).
+// THE CATCH: lineVsVertical is direction-agnostic (Joints.swift uses
+// abs(dy), so it can't be "inverted" by swapping from/to) and always reads
+// LOW when arms are overhead — using it as-is would make lat pulldown's
+// metric INCREASE while pulling down, which the engine's hardwired
+// decreasing-only state machine would never register as a rep.
+// FIX (not a new primitive — already exists in Metric.swift and is already
+// used for exactly this direction-flip problem by the lateral-raise family,
+// see RAISE_REP_METRIC_FRONT's comment above): lineVsHorizontal(shoulder,
+// elbow), the documented complement of lineVsVertical (90 - angle). On this
+// scale, arms overhead reads HIGH (near 90) and elbows-out-and-back reads
+// LOW (near 0) — decreasing into the rep, exactly what the engine expects,
+// same two joints, same underlying angle, no engine change.
 //
-// CAMERA: unchanged — front-facing, both arms visible, symmetric.
+// NUMBERS — transformed from shoulder press's own verified values via
+// T(x) = 90 - x. T is a REFLECTION, not a per-field relabeling: it swaps
+// which endpoint (rest vs worked) each threshold sits close to, so the
+// gap-from-REST has to be preserved relative to the NEW rest value, not
+// computed by transforming each field in place (see the full derivation
+// on latPulldownVariant()'s threshold block below — naively transforming
+// exit/enter individually gives a backwards, exit<enter result):
+//   topAngle           = T(pressGoodROM 55)         = 35  (rest: arms overhead)
+//   repExitThreshold   = topAngle - (84-72)         = 23
+//   repEnterThreshold  = topAngle - (84-68)          = 19
+//   goodROMThreshold   = T(pressTopAngle 84)         = 6  (worked: elbows down/back)
+// These are REAL shoulder-press-verified numbers run through a correct
+// geometric mirror, not fresh guesses — but this specific application
+// (lat pulldown, back-facing) has zero on-device confirmation of its own.
+// [REP]/[METRIC] logs already exist generically in ExerciseEngine.swift
+// (fire for every exercise, lat pulldown included, no new logging code
+// needed) — send one from a real overhead-to-shoulders set to confirm.
 //
-// PLACEHOLDER WARNING per CLAUDE.md: topAngle/repEnterThreshold/
-// repExitThreshold/goodROMThreshold below are honest placeholders — this is
-// a BRAND NEW metric with zero on-device data (the log above measured the
-// OLD elbow-angle metric, not this one). Anchored to anatomical reasoning
-// (arm-length-overhead reach ≈ torso-length-ish, so normalizedVerticalGap
-// at full reach lands roughly around 1.0-1.3; pulled down to shoulder
-// height lands near 0), not a guess at a "good" number. [METRIC] logging
-// already exists (value=/enter=/exit=/rom=, ~3/sec) — do a few real
-// pulldown reps and send that log; real numbers get set from that.
+// Bilateral combinator kept as average(left, right), NOT shoulder press's
+// bestSide — shoulder press uses bestSide for front-facing per-frame
+// confidence robustness (not occlusion); back-facing lat pulldown sees both
+// shoulders/elbows symmetrically, so average matches squat/lunge/row's own
+// established bilateral pattern instead.
+//
+// CAMERA ORIENTATION — back-to-camera (unchanged from the prior round): a
+// lat pulldown machine is faced by the user, so a camera behind them sees
+// their back — that's the correct real-world setup, not a misconfiguration.
+// Trackability from behind (reasoned, NOT device-verified): the elbow stays
+// on the visible silhouette edge the entire rep and drives further INTO
+// view (toward the camera) at the bottom of the pull ("elbows down and
+// back") — unlike the wrist, which tucks in close to the torso midline at
+// the bottom, the highest-occlusion position from directly behind. This is
+// why the metric is elbow-based, not wrist-based.
 const LAT_PULLDOWN_REP_METRIC: MetricDef = {
   type:  'average',
-  left:  { type: 'normalizedVerticalGap', upper: 'leftWrist',  lower: 'leftShoulder'  },
-  right: { type: 'normalizedVerticalGap', upper: 'rightWrist', lower: 'rightShoulder' },
+  left:  { type: 'lineVsHorizontal', from: 'leftShoulder',  to: 'leftElbow'  },
+  right: { type: 'lineVsHorizontal', from: 'rightShoulder', to: 'rightElbow' },
 };
 
 // evaluateAt CHANGED atBottom←throughoutMax (this round) — ROOT CAUSE of
@@ -1828,8 +1861,15 @@ const LAT_PULLDOWN_TORSO_CHECK: FormCheckDef = {
   priority: 2, enabled: true,
 };
 
+// Wrist DROPPED from the required-visible set, this round — the repMetric
+// no longer tracks it (see LAT_PULLDOWN_REP_METRIC's comment: wrist is the
+// joint most likely to be occluded from the back-facing orientation this
+// exercise actually uses), and no form check needs it either
+// (LAT_PULLDOWN_TORSO_CHECK is hip/shoulder only). Requiring it during
+// SETUP would only add a chance of blocking a real back-facing user for no
+// functional benefit.
 const LAT_PULLDOWN_CAMERA_JOINTS = [
-  'leftShoulder', 'rightShoulder', 'leftElbow', 'rightElbow', 'leftWrist', 'rightWrist',
+  'leftShoulder', 'rightShoulder', 'leftElbow', 'rightElbow',
 ];
 
 // Helper — mirrors curlVariant()'s shape exactly, per the investigate-first
@@ -1859,21 +1899,30 @@ function latPulldownVariant(
     id,
     displayName,
     repMetric:          LAT_PULLDOWN_REP_METRIC,
-    // NEW NUMBERS for the new normalizedVerticalGap metric (this round) —
-    // old values (160/145/150/90) were for the retired elbow-angle metric,
-    // meaningless here. See LAT_PULLDOWN_REP_METRIC's comment for the
-    // anatomical reasoning and the explicit "not device-verified" caveat.
-    //   topAngle 1.15   — wrist clearly overhead at rest (placeholder)
-    //   enter    0.75   — must descend meaningfully to register as a real
-    //                     pull attempt, not just a small twitch (placeholder)
-    //   exit     0.95   — must return most of the way back overhead to
-    //                     complete (placeholder)
-    //   goodROM  0.15   — must pull down to near shoulder height for "good"
-    //                     (placeholder)
-    topAngle:           1.15,
-    repEnterThreshold:  0.75,
-    repExitThreshold:   0.95,
-    goodROMThreshold:   0.15,
+    // Mirrored from shoulder press's own verified numbers via T(x) = 90 - x
+    // (see LAT_PULLDOWN_REP_METRIC's comment above) — but T is a
+    // REFLECTION, so it doesn't just relabel each field, it swaps which
+    // endpoint each threshold sits close to. Derivation, gap-from-rest
+    // preserved (this is the part that actually transfers correctly):
+    //   shoulder press: topAngle=84 (rest). exit=72 sits 12 below rest.
+    //   enter=68 sits 16 below rest. goodROM=55 is the far/worked end.
+    //   lat pulldown topAngle=35 is the new "rest" — apply the SAME 12/16
+    //   gaps from that new rest: exit = 35-12 = 23, enter = 35-16 = 19.
+    // (Naively transforming exit/enter individually via T(72)/T(68) gives
+    // 18/22 — backwards, exit < enter, which inverts the intended "exit is
+    // the shallower threshold, enter is the deeper one" relationship. The
+    // gap-from-rest has to be preserved relative to the NEW rest value, not
+    // computed by transforming each field in place.)
+    // Real shoulder-press-verified numbers run through a correct geometric
+    // mirror, not fresh guesses — but this specific application (lat
+    // pulldown direction, back-facing camera) has no on-device confirmation
+    // of its own yet. Send a [REP]/[METRIC] log from a real set (both
+    // already log generically for every exercise, nothing new to add) if
+    // these need adjusting.
+    topAngle:           35,  // rest: arms overhead      (mirrors press's goodROM=55)
+    repExitThreshold:   23,  // 12 below topAngle, mirrors press's exit gap
+    repEnterThreshold:  19,  // 16 below topAngle, mirrors press's enter gap
+    goodROMThreshold:   6,   // worked: elbows down/back (mirrors press's topAngle=84)
     insufficientROMCue: 'PULL DOWN FURTHER',
     formChecks:      [LAT_PULLDOWN_TORSO_CHECK],
     readyGate:       PASSTHROUGH_GATE,
@@ -1881,41 +1930,46 @@ function latPulldownVariant(
       setupInstruction,
       requiredJoints: LAT_PULLDOWN_CAMERA_JOINTS,
     },
-    minRepInterval:  0.6,
+    // minRepInterval + calibration copied verbatim from shoulderPressVariant()
+    // — same state machine, same tempo floor, same auto-calibration behavior.
+    calibration:     { repsNeeded: 2, enterFraction: 0.50, exitFraction: 0.25 },
+    minRepInterval:  0.5,
     planarityChecks: [],
-    // No suppressApproachDetection — seated, front-facing, torso-scale has
-    // no known contamination source the way hinge/tricep's does. Revisit
-    // only if a log shows otherwise.
+    // No suppressApproachDetection — seated, torso-scale has no known
+    // contamination source the way hinge/tricep's does. Revisit only if a
+    // log shows otherwise (back-to-camera doesn't change this reasoning —
+    // it was never about front vs. back, just about torso-scale growing
+    // from real movement vs. the user walking closer).
     //
-    // HONEST LIMIT — read this before assuming the metric redesign alone
-    // "fixes" lat pulldown: normalizedVerticalGap(wrist, shoulder) directly
-    // fixes the PROVEN failure (elbow angle being blind to which way the arm
-    // points), but it does NOT make the exercise bulletproof against every
-    // non-pulldown movement. A pulldown and a shoulder press share the exact
-    // same two extremes on this metric — "wrist at shoulder" and "wrist
-    // overhead" — just approached in opposite temporal order (pulldown RESTS
-    // overhead and pulls down; press RESTS at the shoulder and presses up).
-    // Telling them apart correctly depends on the engine correctly anchoring
-    // "rest" as the OVERHEAD position during the setup/settle phase, which
-    // in turn depends on the user actually gripping the bar overhead during
-    // setup as instructed — this app has no bar/machine recognition (Apple
-    // Vision does body pose only, not object/equipment detection), so that
-    // can't be independently verified. A press performed by someone who
-    // racks the weight near/above shoulder height between reps could, in
-    // principle, still be read as a shallow pulldown. This is a real,
-    // disclosed limitation of camera-only pose tracking for this exercise,
-    // not something the metric change fully closes — see the reliability
-    // gate added in ExerciseEngine.swift this round (rejects a rep if
-    // tracking was unreliable through most of it — the walked-away/confDrops
-    // case from the log) for the OTHER confirmed bug, which that gate does
-    // fully close, unlike this one.
+    // settleAnchorMinFraction — kept from the prior round: requires the
+    // settle gate's anchor value to sit at least 30% of the way from
+    // goodROMThreshold(6) up to topAngle(35) — i.e. above ~14.7 — before
+    // it's accepted as a genuine "arms overhead" rest reading (see
+    // ExerciseEngine.swift's settleCandidateAcceptable). A press-like start
+    // (elbow already down near shoulder height, i.e. a LOW lineVsHorizontal
+    // reading) fails to settle at all rather than silently being accepted
+    // as this rep's "rest" position. This is independent of which metric
+    // is in use — it's a settle-quality gate, not a threshold value, so it
+    // carries over unchanged (the underlying numbers it reads, topAngle and
+    // goodROMThreshold, update automatically above).
+    settleAnchorMinFraction: 0.3,
     //
-    // ROOT CAUSE contributor to the OLD "barely counts" report (elbow-angle
-    // metric, now retired): the default phantomGuardFraction (0.30) required
-    // repTopValue to read ABOVE topAngle itself for a bare entry to register
-    // — see hingeVariant()'s matching comment for the general mechanism.
-    // Same fix applies here regardless of which metric is in use.
-    phantomGuardFraction: 0.05,
+    // HONEST LIMIT: settleAnchorMinFraction gives the engine a real
+    // mechanism to refuse to settle on a press-like low start, but whether
+    // real lat-pulldown users' actual overhead elbow position clears these
+    // mirrored thresholds, and whether Vision's elbow tracking holds up
+    // confidence-wise for a full back-facing set, both need a real device
+    // log to confirm — not reasoning alone, however well-grounded the
+    // mirror math is.
+    //
+    // phantomGuardFraction override REMOVED, this round — it was tightened
+    // to 0.05 specifically because the OLD (now-retired) elbow-vs-shoulder
+    // gap metric had a narrow range where the engine default (0.30) caused
+    // a "barely counts" bug. The new mirrored metric's range (35→6, a
+    // 29-unit spread) is the SAME magnitude as shoulder press's own range
+    // (84→55, also 29 units) — shoulder press uses no override and works
+    // fine, so lat pulldown now falls back to that same engine default too,
+    // for the same reason it's fine there.
   };
 }
 
@@ -2716,14 +2770,25 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
   // name, just making the exercise list longer for no functional reason.
   // One "Lat Pulldown" only.
   //
-  // ORIENTATION, confirmed: face the camera (front-facing), not back-to-
-  // camera. The rep metric needs both shoulder/elbow/wrist joints visible —
-  // facing away hides the arms behind the torso from Vision's view, which is
-  // why "many reps facing away = nothing counts" was reported. This is not a
-  // tunable check, it's what the joint set physically requires.
+  // ORIENTATION, REVERSED this round: back-to-camera, not front-facing.
+  // The PRIOR version of this note asserted front-facing was required
+  // because "facing away hides the arms behind the torso" — that reasoning
+  // was never actually re-examined per-joint, it just carried over from the
+  // wrist-based metric of that round. Back-to-camera IS how this exercise
+  // is really performed (you face the machine; a camera behind you sees
+  // your back), and the "many reps facing away = nothing counts" report is
+  // real evidence the WRIST specifically doesn't track reliably from behind
+  // at the bottom of the pull (hands close in to the torso midline — the
+  // highest self-occlusion risk in the whole rep) — not evidence the
+  // exercise is untrackable from behind. Switching the tracked joint to
+  // elbow (see LAT_PULLDOWN_REP_METRIC's comment for the full reasoning —
+  // elbows flare out and drive back through the whole rep, staying on the
+  // visible silhouette edge from a back view) should fix the actual root
+  // cause instead of avoiding the correct orientation. Not device-verified
+  // — send a [METRIC] log from a real back-facing set to confirm.
   latPulldown: latPulldownVariant(
     'latPulldown',
     'Lat Pulldown',
-    'Face the camera — sit back so both arms are fully in frame, from bar to shoulders',
+    'Back to the camera — sit back so both arms are fully in frame overhead to shoulders',
   ),
 };
