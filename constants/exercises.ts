@@ -24,6 +24,38 @@ export enum MuscleGroup {
   Core      = 'core',
 }
 
+// Individual-muscle taxonomy — ADDITIVE alongside MuscleGroup above, not a
+// replacement. MuscleGroup/muscleGroups stays exactly as-is (still used by
+// exercise-picker.tsx's subtitle text and left in place for anything else
+// that reads the 6-bucket grouping); this finer-grained enum exists
+// specifically for the muscle-rank system (lib/sessionLog.ts's
+// computeMuscleTiers, components/MuscleTierMap.tsx), which needs to tell
+// biceps from triceps and quads from hamstrings from glutes — a single
+// "arms" or "legs" bucket can't drive 10+ distinct rank tiles.
+//
+// Values NOT anatomically exhaustive — scoped to what this app's exercise
+// catalog can actually target and what the muscle-rank UI has (or will
+// have) an icon for. RearDelts/Traps/LowerBack/Abs/Calves/Forearms are
+// included for completeness even though no icon asset exists for them yet
+// (see components/MuscleTierMap.tsx — those render via the existing
+// real-path SVG icon as a fallback until dedicated art is supplied).
+export enum Muscle {
+  Chest      = 'chest',
+  Shoulders  = 'shoulders',   // front deltoid
+  RearDelts  = 'rearDelts',
+  Biceps     = 'biceps',
+  Triceps    = 'triceps',
+  Forearms   = 'forearms',
+  Lats       = 'lats',
+  Traps      = 'traps',
+  LowerBack  = 'lowerBack',
+  Abs        = 'abs',
+  Quads      = 'quads',
+  Hamstrings = 'hamstrings',
+  Glutes     = 'glutes',
+  Calves     = 'calves',
+}
+
 // Which split bucket an exercise fills.
 // An exercise can fill multiple (e.g. push-up = Upper + Push).
 export enum SplitCategory {
@@ -81,6 +113,10 @@ export interface ExerciseDef {
   id:              string;          // must match CV engine ExerciseType
   displayName:     string;
   muscleGroups:    MuscleGroup[];
+  // Individual muscles this exercise targets, ordered primary → secondary.
+  // See the Muscle enum's comment above for why this exists alongside
+  // muscleGroups instead of replacing it.
+  muscles:         Muscle[];
   splitCategories: SplitCategory[]; // which split bucket(s) this fills
   difficulty:      Difficulty;
   equipment:       Equipment[];     // what's required (empty = bodyweight only)
@@ -100,6 +136,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'squat',
     displayName:     'Bodyweight Squat',
     muscleGroups:    [MuscleGroup.Legs],
+    muscles:         [Muscle.Quads, Muscle.Glutes],
     splitCategories: [SplitCategory.Lower],
     difficulty:      Difficulty.Beginner,
     equipment:       [],             // bodyweight — no equipment
@@ -116,6 +153,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'pushup',
     displayName:     'Push-up',
     muscleGroups:    [MuscleGroup.Chest, MuscleGroup.Shoulders, MuscleGroup.Arms],
+    muscles:         [Muscle.Chest, Muscle.Triceps, Muscle.Abs],
     splitCategories: [SplitCategory.Upper, SplitCategory.Push],
     difficulty:      Difficulty.Beginner,
     equipment:       [],
@@ -132,6 +170,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'curl',
     displayName:     'Bicep Curl',
     muscleGroups:    [MuscleGroup.Arms, MuscleGroup.Back],
+    muscles:         [Muscle.Biceps],
     splitCategories: [SplitCategory.Upper, SplitCategory.Pull],
     difficulty:      Difficulty.Beginner,
     equipment:       [Equipment.Dumbbell],
@@ -148,6 +187,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'hammerCurl',
     displayName:     'Hammer Curl',
     muscleGroups:    [MuscleGroup.Arms, MuscleGroup.Back],
+    muscles:         [Muscle.Biceps, Muscle.Forearms],
     splitCategories: [SplitCategory.Upper, SplitCategory.Pull],
     difficulty:      Difficulty.Beginner,
     equipment:       [Equipment.Dumbbell],
@@ -163,6 +203,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'concentrationCurl',
     displayName:     'Concentration Curl',
     muscleGroups:    [MuscleGroup.Arms],
+    muscles:         [Muscle.Biceps],
     splitCategories: [SplitCategory.Upper, SplitCategory.Pull],
     difficulty:      Difficulty.Intermediate,
     equipment:       [Equipment.Dumbbell],
@@ -178,6 +219,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'preacherCurl',
     displayName:     'Preacher Curl',
     muscleGroups:    [MuscleGroup.Arms],
+    muscles:         [Muscle.Biceps],
     splitCategories: [SplitCategory.Upper, SplitCategory.Pull],
     difficulty:      Difficulty.Intermediate,
     equipment:       [Equipment.Dumbbell],
@@ -193,6 +235,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'reverseCurl',
     displayName:     'Reverse Curl',
     muscleGroups:    [MuscleGroup.Arms, MuscleGroup.Back],
+    muscles:         [Muscle.Biceps, Muscle.Forearms],
     splitCategories: [SplitCategory.Upper, SplitCategory.Pull],
     difficulty:      Difficulty.Intermediate,
     equipment:       [Equipment.Dumbbell],
@@ -208,6 +251,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'cableCurl',
     displayName:     'Cable Curl',
     muscleGroups:    [MuscleGroup.Arms, MuscleGroup.Back],
+    muscles:         [Muscle.Biceps],
     splitCategories: [SplitCategory.Upper, SplitCategory.Pull],
     difficulty:      Difficulty.Intermediate,
     equipment:       [Equipment.Cable],
@@ -224,6 +268,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'lunge',
     displayName:     'Lunge',
     muscleGroups:    [MuscleGroup.Legs],
+    muscles:         [Muscle.Quads, Muscle.Glutes],
     splitCategories: [SplitCategory.Lower],
     difficulty:      Difficulty.Beginner,
     equipment:       [],
@@ -239,6 +284,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'shoulderPress',
     displayName:     'Shoulder Press',
     muscleGroups:    [MuscleGroup.Shoulders, MuscleGroup.Arms],
+    muscles:         [Muscle.Shoulders, Muscle.Triceps],
     splitCategories: [SplitCategory.Upper, SplitCategory.Push],
     difficulty:      Difficulty.Intermediate,
     equipment:       [Equipment.Dumbbell],
@@ -255,6 +301,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'jumpingJack',
     displayName:     'Jumping Jack',
     muscleGroups:    [MuscleGroup.Legs, MuscleGroup.Shoulders, MuscleGroup.Core],
+    muscles:         [Muscle.Quads, Muscle.Calves, Muscle.Shoulders, Muscle.Abs],
     splitCategories: [SplitCategory.Upper, SplitCategory.Lower],
     difficulty:      Difficulty.Beginner,
     equipment:       [],
@@ -273,6 +320,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'gobletSquat',
     displayName:     'Goblet Squat',
     muscleGroups:    [MuscleGroup.Legs, MuscleGroup.Core],
+    muscles:         [Muscle.Quads, Muscle.Glutes, Muscle.Abs],
     splitCategories: [SplitCategory.Lower],
     difficulty:      Difficulty.Beginner,
     equipment:       [Equipment.Dumbbell],
@@ -286,6 +334,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'airSquat',
     displayName:     'Air Squat',
     muscleGroups:    [MuscleGroup.Legs, MuscleGroup.Core],
+    muscles:         [Muscle.Quads, Muscle.Glutes],
     splitCategories: [SplitCategory.Lower],
     difficulty:      Difficulty.Beginner,
     equipment:       [Equipment.None],
@@ -299,6 +348,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'frontSquat',
     displayName:     'Front Squat',
     muscleGroups:    [MuscleGroup.Legs, MuscleGroup.Core],
+    muscles:         [Muscle.Quads, Muscle.Glutes, Muscle.Abs],
     splitCategories: [SplitCategory.Lower],
     difficulty:      Difficulty.Advanced,
     equipment:       [Equipment.Barbell],
@@ -312,6 +362,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'backSquat',
     displayName:     'Back Squat',
     muscleGroups:    [MuscleGroup.Legs, MuscleGroup.Core],
+    muscles:         [Muscle.Quads, Muscle.Glutes],
     splitCategories: [SplitCategory.Lower],
     difficulty:      Difficulty.Intermediate,
     equipment:       [Equipment.Barbell],
@@ -325,6 +376,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'sumoSquat',
     displayName:     'Sumo Squat',
     muscleGroups:    [MuscleGroup.Legs, MuscleGroup.Core],
+    muscles:         [Muscle.Quads, Muscle.Glutes],
     splitCategories: [SplitCategory.Lower],
     difficulty:      Difficulty.Beginner,
     equipment:       [Equipment.Dumbbell],
@@ -340,6 +392,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'kneePushup',
     displayName:     'Knee Push-up',
     muscleGroups:    [MuscleGroup.Chest, MuscleGroup.Arms, MuscleGroup.Core],
+    muscles:         [Muscle.Chest, Muscle.Triceps, Muscle.Abs],
     splitCategories: [SplitCategory.Upper, SplitCategory.Push],
     difficulty:      Difficulty.Beginner,
     equipment:       [Equipment.None],
@@ -353,6 +406,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'inclinePushup',
     displayName:     'Incline Push-up',
     muscleGroups:    [MuscleGroup.Chest, MuscleGroup.Arms, MuscleGroup.Core],
+    muscles:         [Muscle.Chest, Muscle.Triceps, Muscle.Abs],
     splitCategories: [SplitCategory.Upper, SplitCategory.Push],
     difficulty:      Difficulty.Beginner,
     equipment:       [Equipment.None],
@@ -366,6 +420,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'widePushup',
     displayName:     'Wide Push-up',
     muscleGroups:    [MuscleGroup.Chest, MuscleGroup.Arms, MuscleGroup.Core],
+    muscles:         [Muscle.Chest, Muscle.Triceps, Muscle.Abs],
     splitCategories: [SplitCategory.Upper, SplitCategory.Push],
     difficulty:      Difficulty.Intermediate,
     equipment:       [Equipment.None],
@@ -379,6 +434,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'diamondPushup',
     displayName:     'Diamond Push-up',
     muscleGroups:    [MuscleGroup.Chest, MuscleGroup.Arms, MuscleGroup.Core],
+    muscles:         [Muscle.Triceps, Muscle.Chest, Muscle.Abs],
     splitCategories: [SplitCategory.Upper, SplitCategory.Push],
     difficulty:      Difficulty.Advanced,
     equipment:       [Equipment.None],
@@ -392,6 +448,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'declinePushup',
     displayName:     'Decline Push-up',
     muscleGroups:    [MuscleGroup.Chest, MuscleGroup.Arms, MuscleGroup.Core],
+    muscles:         [Muscle.Chest, Muscle.Shoulders, Muscle.Triceps, Muscle.Abs],
     splitCategories: [SplitCategory.Upper, SplitCategory.Push],
     difficulty:      Difficulty.Advanced,
     equipment:       [Equipment.None],
@@ -407,6 +464,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'overheadPress',
     displayName:     'Overhead Press',
     muscleGroups:    [MuscleGroup.Shoulders, MuscleGroup.Arms],
+    muscles:         [Muscle.Shoulders, Muscle.Triceps],
     splitCategories: [SplitCategory.Upper, SplitCategory.Push],
     difficulty:      Difficulty.Intermediate,
     equipment:       [Equipment.Barbell],
@@ -420,6 +478,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'arnoldPress',
     displayName:     'Arnold Press',
     muscleGroups:    [MuscleGroup.Shoulders, MuscleGroup.Arms],
+    muscles:         [Muscle.Shoulders, Muscle.Triceps],
     splitCategories: [SplitCategory.Upper, SplitCategory.Push],
     difficulty:      Difficulty.Intermediate,
     equipment:       [Equipment.Dumbbell],
@@ -433,6 +492,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'dumbbellShoulderPress',
     displayName:     'Dumbbell Shoulder Press',
     muscleGroups:    [MuscleGroup.Shoulders, MuscleGroup.Arms],
+    muscles:         [Muscle.Shoulders, Muscle.Triceps],
     splitCategories: [SplitCategory.Upper, SplitCategory.Push],
     difficulty:      Difficulty.Beginner,
     equipment:       [Equipment.Dumbbell],
@@ -446,6 +506,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'machineShoulderPress',
     displayName:     'Machine Shoulder Press',
     muscleGroups:    [MuscleGroup.Shoulders, MuscleGroup.Arms],
+    muscles:         [Muscle.Shoulders, Muscle.Triceps],
     splitCategories: [SplitCategory.Upper, SplitCategory.Push],
     difficulty:      Difficulty.Beginner,
     equipment:       [Equipment.Machine],
@@ -461,6 +522,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'splitSquat',
     displayName:     'Split Squat',
     muscleGroups:    [MuscleGroup.Legs, MuscleGroup.Core],
+    muscles:         [Muscle.Quads, Muscle.Glutes],
     splitCategories: [SplitCategory.Lower],
     difficulty:      Difficulty.Beginner,
     equipment:       [Equipment.None],
@@ -474,6 +536,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'reverseLunge',
     displayName:     'Reverse Lunge',
     muscleGroups:    [MuscleGroup.Legs, MuscleGroup.Core],
+    muscles:         [Muscle.Quads, Muscle.Glutes],
     splitCategories: [SplitCategory.Lower],
     difficulty:      Difficulty.Beginner,
     equipment:       [Equipment.None],
@@ -487,6 +550,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'stepUp',
     displayName:     'Step-up',
     muscleGroups:    [MuscleGroup.Legs, MuscleGroup.Core],
+    muscles:         [Muscle.Quads, Muscle.Glutes],
     splitCategories: [SplitCategory.Lower],
     difficulty:      Difficulty.Beginner,
     equipment:       [Equipment.None],
@@ -500,6 +564,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'bulgarianSplitSquat',
     displayName:     'Bulgarian Split Squat',
     muscleGroups:    [MuscleGroup.Legs, MuscleGroup.Core],
+    muscles:         [Muscle.Quads, Muscle.Glutes],
     splitCategories: [SplitCategory.Lower],
     difficulty:      Difficulty.Advanced,
     equipment:       [Equipment.None],
@@ -515,6 +580,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'closegripPushup',
     displayName:     'Close-grip Push-up',
     muscleGroups:    [MuscleGroup.Chest, MuscleGroup.Arms, MuscleGroup.Core],
+    muscles:         [Muscle.Triceps, Muscle.Chest, Muscle.Abs],
     splitCategories: [SplitCategory.Upper, SplitCategory.Push],
     difficulty:      Difficulty.Intermediate,
     equipment:       [Equipment.None],
@@ -530,6 +596,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'tricepPushdown',
     displayName:     'Tricep Pushdown',
     muscleGroups:    [MuscleGroup.Arms],
+    muscles:         [Muscle.Triceps],
     splitCategories: [SplitCategory.Upper, SplitCategory.Push],
     difficulty:      Difficulty.Beginner,
     equipment:       [Equipment.Cable],
@@ -543,6 +610,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'overheadTricepExtension',
     displayName:     'Overhead Tricep Extension',
     muscleGroups:    [MuscleGroup.Arms],
+    muscles:         [Muscle.Triceps],
     splitCategories: [SplitCategory.Upper, SplitCategory.Push],
     difficulty:      Difficulty.Intermediate,
     equipment:       [Equipment.Dumbbell],
@@ -556,6 +624,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'skullcrusher',
     displayName:     'Skullcrusher',
     muscleGroups:    [MuscleGroup.Arms],
+    muscles:         [Muscle.Triceps],
     splitCategories: [SplitCategory.Upper, SplitCategory.Push],
     difficulty:      Difficulty.Intermediate,
     equipment:       [Equipment.Barbell],
@@ -571,6 +640,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'bentOverRow',
     displayName:     'Bent-Over Row',
     muscleGroups:    [MuscleGroup.Back],
+    muscles:         [Muscle.Lats, Muscle.RearDelts, Muscle.Biceps],
     splitCategories: [SplitCategory.Upper, SplitCategory.Pull],
     difficulty:      Difficulty.Intermediate,
     equipment:       [Equipment.Dumbbell],
@@ -584,6 +654,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'barbellRow',
     displayName:     'Barbell Row',
     muscleGroups:    [MuscleGroup.Back],
+    muscles:         [Muscle.Lats, Muscle.RearDelts, Muscle.Biceps],
     splitCategories: [SplitCategory.Upper, SplitCategory.Pull],
     difficulty:      Difficulty.Intermediate,
     equipment:       [Equipment.Barbell],
@@ -597,6 +668,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'singleArmRow',
     displayName:     'Single-Arm Row',
     muscleGroups:    [MuscleGroup.Back],
+    muscles:         [Muscle.Lats, Muscle.RearDelts, Muscle.Biceps],
     splitCategories: [SplitCategory.Upper, SplitCategory.Pull],
     difficulty:      Difficulty.Beginner,
     equipment:       [Equipment.Dumbbell],
@@ -610,6 +682,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'invertedRow',
     displayName:     'Inverted Row',
     muscleGroups:    [MuscleGroup.Back],
+    muscles:         [Muscle.Lats, Muscle.RearDelts, Muscle.Biceps],
     splitCategories: [SplitCategory.Upper, SplitCategory.Pull],
     difficulty:      Difficulty.Beginner,
     equipment:       [Equipment.None],
@@ -623,6 +696,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'tBarRow',
     displayName:     'T-Bar Row',
     muscleGroups:    [MuscleGroup.Back],
+    muscles:         [Muscle.Lats, Muscle.RearDelts, Muscle.Biceps],
     splitCategories: [SplitCategory.Upper, SplitCategory.Pull],
     difficulty:      Difficulty.Intermediate,
     equipment:       [Equipment.Barbell],
@@ -636,6 +710,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'seatedCableRow',
     displayName:     'Seated Cable Row',
     muscleGroups:    [MuscleGroup.Back],
+    muscles:         [Muscle.Lats, Muscle.RearDelts, Muscle.Biceps],
     splitCategories: [SplitCategory.Upper, SplitCategory.Pull],
     difficulty:      Difficulty.Beginner,
     equipment:       [Equipment.Cable],
@@ -649,6 +724,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'machineRow',
     displayName:     'Machine Row',
     muscleGroups:    [MuscleGroup.Back],
+    muscles:         [Muscle.Lats, Muscle.RearDelts, Muscle.Biceps],
     splitCategories: [SplitCategory.Upper, SplitCategory.Pull],
     difficulty:      Difficulty.Beginner,
     equipment:       [Equipment.Machine],
@@ -663,6 +739,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'romanianDeadlift',
     displayName:     'Romanian Deadlift',
     muscleGroups:    [MuscleGroup.Legs, MuscleGroup.Back],
+    muscles:         [Muscle.Hamstrings, Muscle.Glutes, Muscle.LowerBack],
     splitCategories: [SplitCategory.Lower],
     difficulty:      Difficulty.Intermediate,
     equipment:       [Equipment.Dumbbell],
@@ -676,6 +753,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'deadlift',
     displayName:     'Deadlift',
     muscleGroups:    [MuscleGroup.Legs, MuscleGroup.Back],
+    muscles:         [Muscle.Hamstrings, Muscle.Glutes, Muscle.LowerBack, Muscle.Quads],
     splitCategories: [SplitCategory.Lower],
     difficulty:      Difficulty.Intermediate,
     equipment:       [Equipment.Barbell],
@@ -689,6 +767,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'goodMorning',
     displayName:     'Good Morning',
     muscleGroups:    [MuscleGroup.Legs, MuscleGroup.Back],
+    muscles:         [Muscle.Hamstrings, Muscle.Glutes, Muscle.LowerBack],
     splitCategories: [SplitCategory.Lower],
     difficulty:      Difficulty.Advanced,
     equipment:       [Equipment.Barbell],
@@ -702,6 +781,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'kettlebellSwing',
     displayName:     'Kettlebell Swing',
     muscleGroups:    [MuscleGroup.Legs, MuscleGroup.Back],
+    muscles:         [Muscle.Glutes, Muscle.Hamstrings, Muscle.LowerBack],
     splitCategories: [SplitCategory.Lower],
     difficulty:      Difficulty.Intermediate,
     // No Kettlebell entry in the Equipment enum — Dumbbell is the closest
@@ -718,6 +798,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'singleLegRDL',
     displayName:     'Single-Leg RDL',
     muscleGroups:    [MuscleGroup.Legs, MuscleGroup.Back],
+    muscles:         [Muscle.Hamstrings, Muscle.Glutes, Muscle.LowerBack],
     splitCategories: [SplitCategory.Lower],
     difficulty:      Difficulty.Intermediate,
     equipment:       [Equipment.None],
@@ -732,6 +813,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'lateralRaise',
     displayName:     'Lateral Raise',
     muscleGroups:    [MuscleGroup.Shoulders],
+    muscles:         [Muscle.Shoulders],
     splitCategories: [SplitCategory.Upper, SplitCategory.Push],
     difficulty:      Difficulty.Beginner,
     equipment:       [Equipment.Dumbbell],
@@ -745,6 +827,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'frontRaise',
     displayName:     'Front Raise',
     muscleGroups:    [MuscleGroup.Shoulders],
+    muscles:         [Muscle.Shoulders],
     splitCategories: [SplitCategory.Upper, SplitCategory.Push],
     difficulty:      Difficulty.Beginner,
     equipment:       [Equipment.Dumbbell],
@@ -767,6 +850,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'latPulldown',
     displayName:     'Lat Pulldown',
     muscleGroups:    [MuscleGroup.Back, MuscleGroup.Arms],
+    muscles:         [Muscle.Lats, Muscle.Biceps],
     splitCategories: [SplitCategory.Upper, SplitCategory.Pull],
     difficulty:      Difficulty.Beginner,
     equipment:       [Equipment.Cable],

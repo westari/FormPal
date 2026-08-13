@@ -9,18 +9,17 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Platform, Linking } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 import { StatusBar } from 'expo-status-bar';
 
-import { Col, Sp, Sz, W, R, Elev } from '../constants/theme';
+import { Col, Sp, Sz, FONT, Elev } from '../constants/theme';
 import ScreenBackground from '../components/ScreenBackground';
-import { MuscleTierMap } from '../components/MuscleTierMap';
+import { MuscleTierMap, MuscleRankBackdrop, computeOverallStanding, MUSCLE_ICON_ATTRIBUTION } from '../components/MuscleTierMap';
 import { getAllSessions, computeMuscleTiers, type MuscleTiers } from '../lib/sessionLog';
 
-const SHADOW_MED = Platform.OS === 'ios' ? { boxShadow: Elev.medium.shadow } as any : { elevation: Elev.medium.android };
 const SHADOW_LOW  = Platform.OS === 'ios' ? { boxShadow: Elev.low.shadow } as any : { elevation: Elev.low.android };
 
 export default function MuscleRanksScreen() {
@@ -34,10 +33,13 @@ export default function MuscleRanksScreen() {
     }, []),
   );
 
+  const overall = computeOverallStanding(tiers);
+
   return (
     <>
       <StatusBar style="dark" />
       <ScreenBackground>
+        <MuscleRankBackdrop tier={overall?.tier ?? 'bronze'} />
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingTop: insets.top + 12, paddingBottom: insets.bottom + 60, paddingHorizontal: Sp.md }}
@@ -47,25 +49,16 @@ export default function MuscleRanksScreen() {
               <SymbolView name="chevron.left" size={18} tintColor={Col.text} type="monochrome" style={{ width: 18, height: 18 }} />
             </Pressable>
             <View style={{ gap: 2 }}>
-              <Text style={s.title}>Muscle ranks</Text>
+              <Text style={s.title}>Standing</Text>
               <Text style={s.sub}>Trained volume AND form quality, decayed over 14 days</Text>
             </View>
           </View>
 
-          <View style={[s.card, SHADOW_MED]}>
-            <MuscleTierMap tiers={tiers} scale={0.9} />
-          </View>
+          <MuscleTierMap tiers={tiers} scale={0.9} />
 
-          <View style={s.noteCard}>
-            <Text style={s.noteTitle}>How ranks are earned</Text>
-            <Text style={s.noteBody}>
-              Each muscle group gets a volume rank AND a form-quality rank, independently —
-              your actual rank is whichever one is LOWER. High volume alone caps out well
-              short of the top: Diamond and above require the good-rep ratio to clear a real
-              bar too, not just showing up. This app tracks form quality via camera, which is
-              why rank can reflect more than just how many reps you did.
-            </Text>
-          </View>
+          <Pressable onPress={() => Linking.openURL(MUSCLE_ICON_ATTRIBUTION.url)} style={s.attribution} hitSlop={8}>
+            <Text style={s.attributionTxt}>{MUSCLE_ICON_ATTRIBUTION.text}</Text>
+          </Pressable>
         </ScrollView>
       </ScreenBackground>
     </>
@@ -82,19 +75,9 @@ const s = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     backgroundColor: Col.card,
   },
-  title: { fontSize: Sz.h2, fontWeight: W.bold, color: Col.text, letterSpacing: -0.3 },
+  title: { fontFamily: FONT.displayBold, fontSize: Sz.h2, color: Col.text, letterSpacing: -0.3 },
   sub:   { fontSize: Sz.small, color: Col.textSub, maxWidth: 280 },
 
-  card: {
-    backgroundColor: Col.card, borderRadius: R.card,
-    borderWidth: 1, borderColor: 'rgba(17,24,39,0.05)',
-    padding: 20,
-  },
-
-  noteCard: {
-    backgroundColor: Col.midSoft, borderRadius: R.inner,
-    padding: Sp.md, marginTop: Sp.lg, marginBottom: Sp.lg, gap: 6,
-  },
-  noteTitle: { fontSize: Sz.small, fontWeight: W.semi, color: Col.text },
-  noteBody:  { fontSize: Sz.caption, color: Col.textSub, lineHeight: 18 },
+  attribution:    { alignItems: 'center', marginTop: Sp.lg, paddingVertical: 6 },
+  attributionTxt: { fontSize: Sz.caption, color: Col.textSub, textDecorationLine: 'underline' },
 });

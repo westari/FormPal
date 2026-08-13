@@ -33,7 +33,7 @@ import Svg, {
 import { FONT, Sp, W } from '../../constants/theme';
 import Ring from '../../components/Ring';
 import ScreenBackground from '../../components/ScreenBackground';
-import { TierEmblem, GROUP_LABELS, GROUP_DISPLAY_ORDER } from '../../components/MuscleTierMap';
+import { TierEmblem, MUSCLE_LABELS, MUSCLE_DISPLAY_ORDER } from '../../components/MuscleTierMap';
 import {
   getAllSessions, groupIntoWorkouts, computeMuscleTiers,
   type SessionEntry, type WorkoutGroup,
@@ -413,10 +413,16 @@ const ifc = StyleSheet.create({
 // for the real diagram/legend/list. Moved to the TOP of the page, above the
 // form chart, per the explicit ask.
 
+const PREVIEW_MUSCLE_CAP = 6;
+
 function MuscleRankPreview({ sessions }: { sessions: SessionEntry[] }) {
   const router = useRouter();
   const tiers = useMemo(() => computeMuscleTiers(sessions), [sessions]);
   const isEmpty = sessions.length === 0;
+  const trainedPreview = useMemo(() => {
+    const trained = MUSCLE_DISPLAY_ORDER.filter(m => tiers[m]);
+    return { shown: trained.slice(0, PREVIEW_MUSCLE_CAP), extra: Math.max(0, trained.length - PREVIEW_MUSCLE_CAP) };
+  }, [tiers]);
 
   return (
     <Pressable
@@ -436,15 +442,26 @@ function MuscleRankPreview({ sessions }: { sessions: SessionEntry[] }) {
           <Text style={mm.emptySub}>Log a session to start earning ranks</Text>
         ) : (
           <View style={mm.previewRow}>
-            {GROUP_DISPLAY_ORDER.map(mg => {
-              const info = tiers[mg];
+            {/* 14 individual muscles (was 6 broad groups) don't fit one
+                non-wrapping row — show only what's actually trained, capped,
+                with a "+N" tally for the rest (visible on the full page). */}
+            {trainedPreview.shown.map(m => {
+              const info = tiers[m];
               return (
-                <View key={mg} style={mm.previewItem}>
+                <View key={m} style={mm.previewItem}>
                   {info ? <TierEmblem tier={info.tier} size={22} /> : <View style={mm.emptyEmblem} />}
-                  <Text style={mm.previewLabel}>{GROUP_LABELS[mg]}</Text>
+                  <Text style={mm.previewLabel}>{MUSCLE_LABELS[m]}</Text>
                 </View>
               );
             })}
+            {trainedPreview.extra > 0 && (
+              <View style={mm.previewItem}>
+                <View style={mm.moreChip}>
+                  <Text style={mm.moreChipTxt}>+{trainedPreview.extra}</Text>
+                </View>
+                <Text style={mm.previewLabel}>more</Text>
+              </View>
+            )}
           </View>
         )}
       </View>
@@ -466,6 +483,8 @@ const mm = StyleSheet.create({
   previewItem:    { alignItems: 'center', gap: 5 },
   previewLabel:   { fontSize: 9.5, fontWeight: W.semi, color: C.textSub },
   emptyEmblem:    { width: 22, height: 22, borderRadius: 11, backgroundColor: C.border },
+  moreChip:       { width: 22, height: 22, borderRadius: 11, backgroundColor: C.border, alignItems: 'center', justifyContent: 'center' },
+  moreChipTxt:    { fontSize: 9.5, fontWeight: W.bold, color: C.textSub },
 });
 
 // ─── MilestoneCard ────────────────────────────────────────────────────────────

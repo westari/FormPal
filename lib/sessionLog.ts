@@ -14,7 +14,7 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getExerciseDef, MuscleGroup } from '../constants/exercises';
+import { getExerciseDef, MuscleGroup, Muscle } from '../constants/exercises';
 
 export const SESSION_LOG_KEY = 'formpal_session_log';
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -213,7 +213,12 @@ export interface MuscleTierInfo {
   goodRatio: number; // 0-1 — recency-weighted good/total, same decay applied to both
 }
 
-export type MuscleTiers = Partial<Record<MuscleGroup, MuscleTierInfo>>;
+// KEYED BY Muscle (individual muscle), not MuscleGroup, this round — a
+// single "arms" or "legs" bucket can't drive separate biceps/triceps or
+// quads/hamstrings/glutes rank tiles. MuscleGroup/muscleGroupsWorked above
+// are untouched (still used by recap.tsx for something unrelated to
+// ranking) — this is a parallel, more granular system, not a replacement.
+export type MuscleTiers = Partial<Record<Muscle, MuscleTierInfo>>;
 
 export function computeMuscleTiers(sessions: SessionEntry[]): MuscleTiers {
   const now = Date.now();
@@ -225,25 +230,25 @@ export function computeMuscleTiers(sessions: SessionEntry[]): MuscleTiers {
     if (!def) continue; // exerciseId missing/unknown — can't attribute muscles
     const ageDays = (now - s.ts) / DAY_MS;
     const decay   = Math.exp((-ageDays * Math.LN2) / 14);
-    // An exercise's good-rep ratio applies to every muscle group it targets
-    // — SessionEntry only tracks form quality per EXERCISE, not per muscle
+    // An exercise's good-rep ratio applies to every muscle it targets —
+    // SessionEntry only tracks form quality per EXERCISE, not per muscle
     // within it, so this is the honest granularity available, not an
     // approximation of something more precise we're choosing not to show.
-    for (const mg of def.muscleGroups) {
-      volume[mg]     = (volume[mg] ?? 0) + s.reps * decay;
-      goodVolume[mg] = (goodVolume[mg] ?? 0) + s.goodReps * decay;
+    for (const m of def.muscles) {
+      volume[m]     = (volume[m] ?? 0) + s.reps * decay;
+      goodVolume[m] = (goodVolume[m] ?? 0) + s.goodReps * decay;
     }
   }
 
   const out: MuscleTiers = {};
-  for (const mg of Object.keys(volume) as MuscleGroup[]) {
-    const v = volume[mg];
+  for (const m of Object.keys(volume) as Muscle[]) {
+    const v = volume[m];
     const volTier = tierFromVolume(v);
     if (!volTier) continue; // below Bronze — not shown, not fabricated
-    const goodRatio = v > 0 ? (goodVolume[mg] ?? 0) / v : 0;
+    const goodRatio = v > 0 ? (goodVolume[m] ?? 0) / v : 0;
     const qualTier  = tierFromQuality(goodRatio);
     const finalTier = tierIndex(qualTier) < tierIndex(volTier) ? qualTier : volTier;
-    out[mg] = { tier: finalTier, volume: v, goodRatio };
+    out[m] = { tier: finalTier, volume: v, goodRatio };
   }
   return out;
 }
