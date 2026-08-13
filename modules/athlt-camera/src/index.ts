@@ -140,7 +140,9 @@ export type ExerciseType =
   // Shoulder/arm isolation raise family (front-facing lateral, side-facing front raise)
   | 'lateralRaise' | 'frontRaise'
   // Lat pulldown (vertical pull, elbow-angle metric — front-facing, seated)
-  | 'latPulldown';
+  | 'latPulldown'
+  // Chest press (dumbbell/bench press, side camera, elbow-angle metric)
+  | 'chestPress';
 
 export async function setExercise(type: ExerciseType): Promise<void> {
   if (!ATHLTCameraNative) return;

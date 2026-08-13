@@ -638,6 +638,113 @@ function shoulderPressVariant(
   };
 }
 
+// ─── Chest press family (dumbbell/bench press, side camera) ──────────────────
+//
+// INVESTIGATE-FIRST: closest existing family is curl — same joint triad
+// (shoulder-elbow-wrist), same jointAngle metric TYPE, same "arm extends and
+// bends at the elbow" movement shape. Reused CURL_REP_METRIC's metric type
+// directly (jointAngle, not lineVsVertical/Horizontal — a chest press's key
+// signal is elbow FLEXION depth, the same thing curl measures, unlike
+// shoulder press/lat pulldown's upper-arm-ORIENTATION signal). topAngle(160)
+// and the enter/exit gap (145/150) are curl's own verified "rest reads ~160,
+// not a literal 180, due to natural elbow give + tracking noise" numbers,
+// reused VERBATIM — same joint triad, same reasoning for why rest isn't a
+// perfect straight line. goodROMThreshold(90) is NOT copied from curl (curl
+// goes much deeper, 60) — it comes directly from the explicit ask ("lower to
+// ~90° elbow"), the one number that's genuinely new to this exercise.
+//
+// BILATERAL COMBINATOR: bestSide, NOT curl's own 'minimum' — reused from
+// RAISE_REP_METRIC_SIDE's reasoning instead (side camera → genuine far-arm
+// occlusion, not curl's front-facing "both arms should move together"
+// concern). A side view only reliably tracks the near arm.
+//
+// DIRECTION: already correct for the engine's decreasing-into-rep state
+// machine with no complement/inversion needed — bending the elbow from
+// extended(high angle) toward 90°(lower angle) IS a decrease, unlike lat
+// pulldown's overhead-start problem. Simplest of the three families built
+// this way so far.
+const CHEST_PRESS_REP_METRIC: MetricDef = {
+  type:  'bestSide',
+  left:  { type: 'jointAngle', a: 'leftShoulder',  pivot: 'leftElbow',  c: 'leftWrist'  },
+  right: { type: 'jointAngle', a: 'rightShoulder', pivot: 'rightElbow', c: 'rightWrist' },
+  leftJoints:  ['leftShoulder',  'leftElbow',  'leftWrist'],
+  rightJoints: ['rightShoulder', 'rightElbow', 'rightWrist'],
+};
+
+// FORM CHECK — not locking out at top. Same evaluateAt='throughoutMax' shape
+// as curl's own full_extension check, and the SAME known structural limit:
+// this rep-tracking window spans settle-in-to-completion, so it can't
+// cleanly isolate "returned to lockout at the END" from "was already
+// extended at the START" — curl has this same property and is already
+// shipped/enabled, so it's an accepted tradeoff in this framework, not a
+// new risk unique to this exercise. PLACEHOLDER threshold — brand new
+// application (chest press, not curl), 150 is topAngle(160) minus a 10°
+// margin, wide enough to allow real tracking noise near lockout. Send a
+// [REP] log doing a few reps that deliberately don't lock out vs. a few
+// clean ones so real separation can be found.
+const CHEST_PRESS_LOCKOUT_CHECK: FormCheckDef = {
+  id: 'lockout', cue: 'PRESS ALL THE WAY UP',
+  metric: CHEST_PRESS_REP_METRIC,
+  evaluateAt: 'throughoutMax', condition: { type: 'lessThan', value: 150 },
+  priority: 2, enabled: true,
+};
+
+// PLANARITY — elbow flare. FEASIBILITY: flaring the elbows out and away
+// from the body, viewed from the SIDE, is mostly a DEPTH change (motion
+// roughly perpendicular to the camera's 2D image plane) — exactly the class
+// of motion the existing segmentLengthRatio/planarity primitive is built to
+// catch (already proven for squat's thigh/shin and shoulder press's upper-
+// arm foreshortening). Shipped disabled, matching every other planarity
+// check in this file — none of them ship enabled without a real calibration
+// pass first, and this is a brand new application with zero on-device data.
+const CHEST_PRESS_PLANARITY: PlanarityCheckDef[] = [
+  { id: 'uarm', jointA: 'leftShoulder', jointB: 'leftElbow',
+    minRatio: 0.75, cue: 'KEEP ELBOWS IN, DON\'T FLARE OUT', fallbackReferenceRatio: 0.64, enabled: false },
+];
+
+// Side camera — either side (bestSide/planarity above only need the near
+// arm) — same requiredJoints/requiredJointsAlt pattern as the raise family's
+// RAISE_CAMERA_JOINTS_SIDE_A/B, wrist added since this metric (unlike
+// raise's) needs it.
+const CHEST_PRESS_CAMERA_JOINTS_A = ['leftShoulder',  'leftElbow',  'leftWrist'];
+const CHEST_PRESS_CAMERA_JOINTS_B = ['rightShoulder', 'rightElbow', 'rightWrist'];
+
+function chestPressVariant(
+  id:               string,
+  displayName:      string,
+  setupInstruction: string,
+): ExerciseDefinitionDef {
+  return {
+    id,
+    displayName,
+    repMetric:          CHEST_PRESS_REP_METRIC,
+    // topAngle/enter/exit reused VERBATIM from curl (CURL_REP_METRIC is the
+    // same joint triad + metric type) — see this section's top comment.
+    topAngle:           160,
+    repEnterThreshold:  145,
+    repExitThreshold:   150,
+    // goodROMThreshold NOT from curl — from the explicit ask ("lower to
+    // ~90° elbow"). PLACEHOLDER per CLAUDE.md: reasoned from the stated
+    // movement, not device-verified. Send a [REP]/[METRIC] log.
+    goodROMThreshold:   90,
+    insufficientROMCue: 'LOWER FURTHER',
+    formChecks:      [CHEST_PRESS_LOCKOUT_CHECK],
+    readyGate:       PASSTHROUGH_GATE,
+    cameraSetup: {
+      setupInstruction,
+      requiredJoints:    CHEST_PRESS_CAMERA_JOINTS_A,
+      requiredJointsAlt: CHEST_PRESS_CAMERA_JOINTS_B,
+    },
+    // calibration/minRepInterval/phantomGuardFraction reused verbatim from
+    // curlVariant() — same joint triad, same metric type, no reason to
+    // expect different tempo or noise-rejection behavior.
+    calibration:     { repsNeeded: 2, enterFraction: 0.50, exitFraction: 0.25 },
+    minRepInterval:  0.5,
+    planarityChecks: CHEST_PRESS_PLANARITY,
+    phantomGuardFraction: 0.40,
+  };
+}
+
 // ─── Shared lunge building-blocks ────────────────────────────────────────────
 //
 // Values mirror the verified lunge definition VERBATIM.
@@ -1861,6 +1968,53 @@ const LAT_PULLDOWN_TORSO_CHECK: FormCheckDef = {
   priority: 2, enabled: true,
 };
 
+// FORM CHECK — elbow flare. FEASIBILITY: the rep metric itself (shoulder-
+// elbow angle) only measures how far the upper arm has rotated, blind to
+// LATERAL elbow position — an elbow that flares wide out to the sides
+// instead of tracking down-and-back close to the torso can read as a
+// perfectly good rep on the core metric alone. Same primitive already
+// proven for exactly this "how far sideways from the body's own centerline"
+// question — bodyRelativeDeviation(point, axisFrom: shoulder, axisTo: hip)
+// — used by shoulder press's wrist_track_l/r and the lateral-raise family's
+// wrong_direction check, just applied to the elbow instead of the wrist.
+// evaluateAt 'atBottom' — same single frame (peak pull depth) the torso
+// check already reads, for the same turn-false-positive reason (see that
+// check's comment). PLACEHOLDER threshold: no on-device data for elbow
+// (not wrist) deviation on this exercise — send a [REP] log doing a few
+// clean reps and a few deliberately-flared ones so real separation can be
+// found; 0.5 is a wide starting guess (an elbow's natural sideways travel
+// during "elbows out" is real but nowhere near a wrist's full arm-length
+// reach, so wrist_track's own 1.2 does NOT carry over).
+const LAT_PULLDOWN_ELBOW_FLARE_CHECK: FormCheckDef = {
+  id: 'elbow_flare', cue: 'ELBOWS DOWN AND BACK, NOT OUT',
+  metric: {
+    type:  'average',
+    left:  { type: 'bodyRelativeDeviation', point: 'leftElbow',  axisFrom: 'leftShoulder',  axisTo: 'leftHip'  },
+    right: { type: 'bodyRelativeDeviation', point: 'rightElbow', axisFrom: 'rightShoulder', axisTo: 'rightHip' },
+  },
+  evaluateAt: 'atBottom', condition: { type: 'greaterThan', value: 0.5 },
+  priority: 3, enabled: true,
+};
+
+// PLANARITY — shoulder-elbow segment, the SAME joint pair the rep metric
+// itself tracks. Built (not just theorized) specifically for the reported
+// "turned to grab my phone, got a phantom rep": a sideways turn foreshortens
+// this exact segment in the 2D camera projection. Doesn't by itself block
+// counting (planarity only suppresses the GOOD verdict/emits its cue — see
+// ExerciseEngine.swift) but flags the frame instead of silently scoring it
+// as a normal rep. Shipped disabled, matching every other planarity check
+// in this file (SQUAT_PLANARITY, PUSHUP_PLANARITY, SHOULDER_PRESS_PLANARITY
+// are all `enabled: false` too) — the established pattern here is these need
+// a real calibration pass before going live, not a guessed minRatio turned
+// on day one. fallbackReferenceRatio reasoned from shoulder press's own
+// uarm_l/r value (0.64) — same joint pair, same rough proportions.
+const LAT_PULLDOWN_PLANARITY: PlanarityCheckDef[] = [
+  { id: 'uarm_l', jointA: 'leftShoulder',  jointB: 'leftElbow',
+    minRatio: 0.75, cue: 'FACE AWAY FROM THE CAMERA, DON\'T TURN', fallbackReferenceRatio: 0.64, enabled: false },
+  { id: 'uarm_r', jointA: 'rightShoulder', jointB: 'rightElbow',
+    minRatio: 0.75, cue: 'FACE AWAY FROM THE CAMERA, DON\'T TURN', fallbackReferenceRatio: 0.64, enabled: false },
+];
+
 // Wrist DROPPED from the required-visible set, this round — the repMetric
 // no longer tracks it (see LAT_PULLDOWN_REP_METRIC's comment: wrist is the
 // joint most likely to be occluded from the back-facing orientation this
@@ -1924,7 +2078,7 @@ function latPulldownVariant(
     repEnterThreshold:  19,  // 16 below topAngle, mirrors press's enter gap
     goodROMThreshold:   6,   // worked: elbows down/back (mirrors press's topAngle=84)
     insufficientROMCue: 'PULL DOWN FURTHER',
-    formChecks:      [LAT_PULLDOWN_TORSO_CHECK],
+    formChecks:      [LAT_PULLDOWN_TORSO_CHECK, LAT_PULLDOWN_ELBOW_FLARE_CHECK],
     readyGate:       PASSTHROUGH_GATE,
     cameraSetup: {
       setupInstruction,
@@ -1934,7 +2088,33 @@ function latPulldownVariant(
     // — same state machine, same tempo floor, same auto-calibration behavior.
     calibration:     { repsNeeded: 2, enterFraction: 0.50, exitFraction: 0.25 },
     minRepInterval:  0.5,
-    planarityChecks: [],
+    planarityChecks: LAT_PULLDOWN_PLANARITY,
+    // exitConfirmFrames RAISED 3(default)→5 — CORE double-count fix, per
+    // ExerciseEngine.swift's exitConfirmCount mechanism (the same one that
+    // "actually fixed double-counting everywhere else," per
+    // kettlebellSwing's comment on this same field). Reasoned, not device-
+    // verified: back-facing elbow tracking is inherently noisier/lower-
+    // confidence than shoulder press's front-facing view (the original
+    // orientation investigation already flagged this), and the enter/exit
+    // gap here (19→23, 4 units) is proportionally identical to shoulder
+    // press's own (68→72, also 4) — so a narrow gap alone doesn't explain a
+    // double-count shoulder press doesn't have; noisier tracking crossing
+    // that gap spuriously, more often, is the more likely culprit. A longer
+    // confirm-dwell directly targets that. Send a [REP] log if reps still
+    // double-count (raise further) or start getting missed (lower back).
+    exitConfirmFrames: 5,
+    // WALK-AWAY — investigated, nothing new to add here. ExerciseEngine.swift
+    // already has a GENERIC receding-suppression mechanism (torsoRef
+    // shrinking past RECEDE_SCALE_FACTOR, 4-frame confirm) built specifically
+    // for "walked away mid-set" and deliberately NOT gated behind
+    // suppressApproachDetection — it applies to every exercise automatically,
+    // lat pulldown included, no per-exercise field to set. The tracking-
+    // reliability gate (rejects a rep if tracking was unreliable for >50% of
+    // its frames) is likewise generic and already active. The specific
+    // report ("turned to grab my phone") is more likely a SEATED TURN than a
+    // walk — torsoRef (a distance/scale signal) may not shrink much for an
+    // in-place twist, which is exactly the gap LAT_PULLDOWN_PLANARITY above
+    // targets (a turn foreshortens the shoulder-elbow segment either way).
     // No suppressApproachDetection — seated, torso-scale has no known
     // contamination source the way hinge/tricep's does. Revisit only if a
     // log shows otherwise (back-to-camera doesn't change this reasoning —
@@ -2562,6 +2742,16 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
     'Machine Shoulder Press',
     'Face the camera — stand back so both arms are clearly in frame',
     // Fixed path. Same upper-arm metric applies.
+  ),
+
+  // ─── Chest press (new family, this round) ──────────────────────────────────
+  // See chestPressVariant()'s comment above for the full investigate-first
+  // reasoning (closest family: curl's jointAngle metric type; combinator
+  // reused from the raise family's side-camera occlusion reasoning).
+  chestPress: chestPressVariant(
+    'chestPress',
+    'Chest Press',
+    'Stand or lie sideways to the camera — shoulder, elbow, and wrist visible',
   ),
 
   // ─── Lunge-family variants ──────────────────────────────────────────────────

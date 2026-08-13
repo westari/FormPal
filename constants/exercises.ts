@@ -296,6 +296,22 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     },
     isFormCheckable: true,
   },
+  {
+    id:              'chestPress',
+    displayName:     'Chest Press',
+    muscleGroups:    [MuscleGroup.Chest, MuscleGroup.Arms],
+    muscles:         [Muscle.Chest, Muscle.Triceps],
+    splitCategories: [SplitCategory.Upper, SplitCategory.Push],
+    difficulty:      Difficulty.Intermediate,
+    equipment:       [Equipment.Dumbbell, Equipment.Barbell],
+    defaultReps:     8,
+    defaultSets:     3,
+    progression: {
+      repRange: [6, 15],
+      setRange: [2, 4],
+    },
+    isFormCheckable: true,
+  },
 
   {
     id:              'jumpingJack',

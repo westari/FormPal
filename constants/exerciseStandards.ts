@@ -215,6 +215,50 @@ function shoulderPressStandard(exerciseId: string): ExerciseStandardDef {
   };
 }
 
+// ─── Chest press standard (new family, this round) ───────────────────────────
+//
+// Same scale as exerciseDefinitions.ts's chestPressVariant() — jointAngle
+// degrees, curl's own metric type, NOT a gap/ratio scale — avoiding the
+// stale-scale bug class that hit lat pulldown twice this session (comparing
+// a degree-scale Layer-0 value against gap-scale Layer-2 thresholds).
+// standardStartAngleMin reused verbatim from curlStandard()'s own 150 (same
+// joint triad, same "rest reads ~160/165, not literal 180" reasoning).
+// standardPeakAngleMax set 5° more permissive than exerciseDefinitions.ts's
+// own goodROMThreshold(90) — same "don't let this layer reject what Layer 0
+// already accepted" pattern as every other *Standard() function here.
+const CHEST_PRESS_STATIC_CHECKS: JointAngleCheckDef[] = [];
+
+const CHEST_PRESS_TOP_FAULTS = [
+  'PARTIAL REP — not lowering to ~90° elbow bend or not locking out at top',
+  'ELBOW FLARE — elbows drifting out to the sides instead of tracking down',
+];
+
+function chestPressStandard(exerciseId: string): ExerciseStandardDef {
+  return {
+    exerciseId,
+    reviewed: false,  // PLACEHOLDER — send a [REP] log spanning a full rep to set real numbers
+
+    standardPeakAngleMax:  95.0,
+    standardStartAngleMin: 150.0,
+
+    romCue:    'LOWER FURTHER — not reaching ~90° at the bottom',
+    extendCue: 'PRESS ALL THE WAY UP — not locking out at the top',
+
+    // Empty, deliberately — same reasoning as latPulldownStandard(): whether
+    // this is done lying on a bench or standing with dumbbells is ambiguous
+    // from the exercise name alone, and a lying position has no stable
+    // vertical shoulder-hip-knee reference the way a standing curl does.
+    staticChecks: CHEST_PRESS_STATIC_CHECKS,
+
+    // Reused verbatim from curlStandard() — same joint triad, same metric
+    // type, no reason to expect different tempo behavior.
+    tempoMinSec: 0.8,
+    tempoMaxSec: 5.0,
+
+    topFaults: CHEST_PRESS_TOP_FAULTS,
+  };
+}
+
 // ─── Shared lunge standard building-blocks ────────────────────────────────────
 //
 // Values mirror the verified lunge standard VERBATIM.
@@ -799,6 +843,9 @@ export const EXERCISE_STANDARDS: Record<string, ExerciseStandardDef> = {
   arnoldPress:            shoulderPressStandard('arnoldPress'),
   dumbbellShoulderPress:  shoulderPressStandard('dumbbellShoulderPress'),
   machineShoulderPress:   shoulderPressStandard('machineShoulderPress'),
+
+  // ─── Chest press (new family, this round) ─────────────────────────────────
+  chestPress: chestPressStandard('chestPress'),
 
   // ─── Lunge-family variants ─────────────────────────────────────────────────
   splitSquat:          lungeStandard('splitSquat'),

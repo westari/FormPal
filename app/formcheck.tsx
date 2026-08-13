@@ -89,6 +89,9 @@ const SETUP_INFO: Record<string, { icon: string; title: string; sub: string }> =
   arnoldPress:           { icon: 'camera.fill', title: 'Face the camera',                         sub: 'Stand back — arms and shoulders in frame' },
   dumbbellShoulderPress: { icon: 'camera.fill', title: 'Face the camera',                         sub: 'Stand back — arms and shoulders in frame' },
   machineShoulderPress:  { icon: 'camera.fill', title: 'Face the camera',                         sub: 'Stand back — arms and shoulders in frame' },
+  // Chest press (new family, this round) — side camera, matching the raise/
+  // tricep/row families' own "Stand sideways" convention.
+  chestPress:            { icon: 'arrow.left.and.right', title: 'Stand sideways',                 sub: 'Shoulder, elbow, and wrist in frame' },
   jumpingJack:           { icon: 'camera.fill', title: 'Face the camera',                         sub: 'Full body in frame — arms and legs visible' },
   // Close-grip push-up (push-up family) — same as other push-up variants
   closegripPushup:          { icon: 'iphone', title: 'Phone on the floor, to your side',          sub: 'Get in position — shoulders and hands in frame' },
