@@ -11,7 +11,11 @@
  *
  * IDs MATCH the CV engine strings in modules/athlt-camera/src/index.ts:
  *   ExerciseType = 'squat' | 'curl' | 'pushup' | ...
+ * Enforced at compile time now, not just documented — see the
+ * _exerciseIdsRegisteredWithNativeBridge check near EXERCISE_CATALOG below.
  */
+
+import type { ExerciseType } from '../modules/athlt-camera/src/index';
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
@@ -109,14 +113,27 @@ export interface ProgressionConfig {
   nextVariationId?: string;
 }
 
+// A plain Muscle gets full (1.0) credit — the common case. An exercise
+// where a muscle is a real but lesser assist (e.g. biceps in a pulling
+// movement) can instead give it a partial-credit object. Kept as a union
+// rather than converting every entry to an object so the ~40 exercises
+// that don't need this stay untouched plain Muscle[] literals.
+export type MuscleCredit = Muscle | { muscle: Muscle; weight: number };
+
+export function muscleCreditParts(entry: MuscleCredit): { muscle: Muscle; weight: number } {
+  return typeof entry === 'object' ? entry : { muscle: entry, weight: 1 };
+}
+
 export interface ExerciseDef {
   id:              string;          // must match CV engine ExerciseType
   displayName:     string;
   muscleGroups:    MuscleGroup[];
   // Individual muscles this exercise targets, ordered primary → secondary.
   // See the Muscle enum's comment above for why this exists alongside
-  // muscleGroups instead of replacing it.
-  muscles:         Muscle[];
+  // muscleGroups instead of replacing it. computeMuscleTiers (lib/
+  // sessionLog.ts) reads each entry's weight via muscleCreditParts() —
+  // "secondary" here isn't just documentation, it actually credits less.
+  muscles:         MuscleCredit[];
   splitCategories: SplitCategory[]; // which split bucket(s) this fills
   difficulty:      Difficulty;
   equipment:       Equipment[];     // what's required (empty = bodyweight only)
@@ -131,7 +148,7 @@ export interface ExerciseDef {
 // Currently: squat, curl, pushup (the 3 exercises our CV engine supports).
 // ↓ ADD NEW EXERCISES HERE as the CV engine gains support for them.
 
-export const EXERCISE_CATALOG: ExerciseDef[] = [
+export const EXERCISE_CATALOG = [
   {
     id:              'squat',
     displayName:     'Bodyweight Squat',
@@ -309,6 +326,29 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     progression: {
       repRange: [6, 15],
       setRange: [2, 4],
+    },
+    isFormCheckable: true,
+  },
+  // Barbell Bench Press — same tracked movement as chestPress (see
+  // barbellBenchPress's own registration in exerciseDefinitions.ts for the
+  // full trackability investigation), scoped to Barbell-only equipment and
+  // Advanced difficulty (a flat barbell bench press carries real technique/
+  // safety weight chestPress's generic dumbbell-or-barbell framing doesn't
+  // specifically call out — no rack/spotter guidance exists in this app yet,
+  // so defaulting to the more cautious difficulty tier here).
+  {
+    id:              'barbellBenchPress',
+    displayName:     'Barbell Bench Press',
+    muscleGroups:    [MuscleGroup.Chest, MuscleGroup.Arms],
+    muscles:         [Muscle.Chest, Muscle.Triceps],
+    splitCategories: [SplitCategory.Upper, SplitCategory.Push],
+    difficulty:      Difficulty.Advanced,
+    equipment:       [Equipment.Barbell],
+    defaultReps:     6,
+    defaultSets:     4,
+    progression: {
+      repRange: [4, 12],
+      setRange: [3, 5],
     },
     isFormCheckable: true,
   },
@@ -656,7 +696,13 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'bentOverRow',
     displayName:     'Bent-Over Row',
     muscleGroups:    [MuscleGroup.Back],
-    muscles:         [Muscle.Lats, Muscle.RearDelts, Muscle.Biceps],
+    // Biceps is a real assist in any pulling movement, not a co-primary
+    // mover the way lats/rear-delts are — WEIGHTED 0.45, see MuscleCredit's
+    // comment. 0.45 is a reasoned starting value (not device- or log-
+    // derived, there's no way to measure this from rep-detection data),
+    // consistent across every row variant and lat pulldown rather than
+    // guessed per-exercise.
+    muscles:         [Muscle.Lats, Muscle.RearDelts, { muscle: Muscle.Biceps, weight: 0.45 }],
     splitCategories: [SplitCategory.Upper, SplitCategory.Pull],
     difficulty:      Difficulty.Intermediate,
     equipment:       [Equipment.Dumbbell],
@@ -670,7 +716,13 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'barbellRow',
     displayName:     'Barbell Row',
     muscleGroups:    [MuscleGroup.Back],
-    muscles:         [Muscle.Lats, Muscle.RearDelts, Muscle.Biceps],
+    // Biceps is a real assist in any pulling movement, not a co-primary
+    // mover the way lats/rear-delts are — WEIGHTED 0.45, see MuscleCredit's
+    // comment. 0.45 is a reasoned starting value (not device- or log-
+    // derived, there's no way to measure this from rep-detection data),
+    // consistent across every row variant and lat pulldown rather than
+    // guessed per-exercise.
+    muscles:         [Muscle.Lats, Muscle.RearDelts, { muscle: Muscle.Biceps, weight: 0.45 }],
     splitCategories: [SplitCategory.Upper, SplitCategory.Pull],
     difficulty:      Difficulty.Intermediate,
     equipment:       [Equipment.Barbell],
@@ -684,7 +736,13 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'singleArmRow',
     displayName:     'Single-Arm Row',
     muscleGroups:    [MuscleGroup.Back],
-    muscles:         [Muscle.Lats, Muscle.RearDelts, Muscle.Biceps],
+    // Biceps is a real assist in any pulling movement, not a co-primary
+    // mover the way lats/rear-delts are — WEIGHTED 0.45, see MuscleCredit's
+    // comment. 0.45 is a reasoned starting value (not device- or log-
+    // derived, there's no way to measure this from rep-detection data),
+    // consistent across every row variant and lat pulldown rather than
+    // guessed per-exercise.
+    muscles:         [Muscle.Lats, Muscle.RearDelts, { muscle: Muscle.Biceps, weight: 0.45 }],
     splitCategories: [SplitCategory.Upper, SplitCategory.Pull],
     difficulty:      Difficulty.Beginner,
     equipment:       [Equipment.Dumbbell],
@@ -698,7 +756,13 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'invertedRow',
     displayName:     'Inverted Row',
     muscleGroups:    [MuscleGroup.Back],
-    muscles:         [Muscle.Lats, Muscle.RearDelts, Muscle.Biceps],
+    // Biceps is a real assist in any pulling movement, not a co-primary
+    // mover the way lats/rear-delts are — WEIGHTED 0.45, see MuscleCredit's
+    // comment. 0.45 is a reasoned starting value (not device- or log-
+    // derived, there's no way to measure this from rep-detection data),
+    // consistent across every row variant and lat pulldown rather than
+    // guessed per-exercise.
+    muscles:         [Muscle.Lats, Muscle.RearDelts, { muscle: Muscle.Biceps, weight: 0.45 }],
     splitCategories: [SplitCategory.Upper, SplitCategory.Pull],
     difficulty:      Difficulty.Beginner,
     equipment:       [Equipment.None],
@@ -712,7 +776,13 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'tBarRow',
     displayName:     'T-Bar Row',
     muscleGroups:    [MuscleGroup.Back],
-    muscles:         [Muscle.Lats, Muscle.RearDelts, Muscle.Biceps],
+    // Biceps is a real assist in any pulling movement, not a co-primary
+    // mover the way lats/rear-delts are — WEIGHTED 0.45, see MuscleCredit's
+    // comment. 0.45 is a reasoned starting value (not device- or log-
+    // derived, there's no way to measure this from rep-detection data),
+    // consistent across every row variant and lat pulldown rather than
+    // guessed per-exercise.
+    muscles:         [Muscle.Lats, Muscle.RearDelts, { muscle: Muscle.Biceps, weight: 0.45 }],
     splitCategories: [SplitCategory.Upper, SplitCategory.Pull],
     difficulty:      Difficulty.Intermediate,
     equipment:       [Equipment.Barbell],
@@ -726,7 +796,13 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'seatedCableRow',
     displayName:     'Seated Cable Row',
     muscleGroups:    [MuscleGroup.Back],
-    muscles:         [Muscle.Lats, Muscle.RearDelts, Muscle.Biceps],
+    // Biceps is a real assist in any pulling movement, not a co-primary
+    // mover the way lats/rear-delts are — WEIGHTED 0.45, see MuscleCredit's
+    // comment. 0.45 is a reasoned starting value (not device- or log-
+    // derived, there's no way to measure this from rep-detection data),
+    // consistent across every row variant and lat pulldown rather than
+    // guessed per-exercise.
+    muscles:         [Muscle.Lats, Muscle.RearDelts, { muscle: Muscle.Biceps, weight: 0.45 }],
     splitCategories: [SplitCategory.Upper, SplitCategory.Pull],
     difficulty:      Difficulty.Beginner,
     equipment:       [Equipment.Cable],
@@ -740,7 +816,13 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'machineRow',
     displayName:     'Machine Row',
     muscleGroups:    [MuscleGroup.Back],
-    muscles:         [Muscle.Lats, Muscle.RearDelts, Muscle.Biceps],
+    // Biceps is a real assist in any pulling movement, not a co-primary
+    // mover the way lats/rear-delts are — WEIGHTED 0.45, see MuscleCredit's
+    // comment. 0.45 is a reasoned starting value (not device- or log-
+    // derived, there's no way to measure this from rep-detection data),
+    // consistent across every row variant and lat pulldown rather than
+    // guessed per-exercise.
+    muscles:         [Muscle.Lats, Muscle.RearDelts, { muscle: Muscle.Biceps, weight: 0.45 }],
     splitCategories: [SplitCategory.Upper, SplitCategory.Pull],
     difficulty:      Difficulty.Beginner,
     equipment:       [Equipment.Machine],
@@ -824,6 +906,30 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     isFormCheckable: true,
   },
 
+  // ─── Cable pull-through ─────────────────────────────────────────────────────
+  // Added in place of hip thrust — see cablePullThrough's own registration
+  // in exerciseDefinitions.ts for the full trackability writeup (why hip
+  // thrust was skipped, why this is the trackable replacement). Glutes
+  // primary (this is specifically a glute-biased hinge variant, the reason
+  // it's a real, commonly-used hip-thrust alternative in actual programming,
+  // not just a trackability compromise), hamstrings weighted 0.6 (a full-ROM
+  // hinge engages them more than the standing kickback did), lowerBack 0.25
+  // "light" — same reasoned-not-measured weighting convention as the rest of
+  // this family (see MuscleCredit's own comment above).
+  {
+    id:              'cablePullThrough',
+    displayName:     'Cable Pull-Through',
+    muscleGroups:    [MuscleGroup.Legs, MuscleGroup.Back],
+    muscles:         [Muscle.Glutes, { muscle: Muscle.Hamstrings, weight: 0.6 }, { muscle: Muscle.LowerBack, weight: 0.25 }],
+    splitCategories: [SplitCategory.Lower],
+    difficulty:      Difficulty.Intermediate,
+    equipment:       [Equipment.Cable],
+    defaultReps:     12,
+    defaultSets:     3,
+    progression:     { repRange: [10, 20], setRange: [2, 4] },
+    isFormCheckable: true,
+  },
+
   // ─── Shoulder/arm isolation raise family ───────────────────────────────────
   {
     id:              'lateralRaise',
@@ -866,7 +972,11 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     id:              'latPulldown',
     displayName:     'Lat Pulldown',
     muscleGroups:    [MuscleGroup.Back, MuscleGroup.Arms],
-    muscles:         [Muscle.Lats, Muscle.Biceps],
+    // Biceps WEIGHTED 0.45 — see the row variants' identical comment above
+    // and MuscleCredit's own comment; this was the exercise that surfaced
+    // the missing-weighting bug in the first place (reported: biceps
+    // jumped to Gold off lat pulldown volume alone).
+    muscles:         [Muscle.Lats, { muscle: Muscle.Biceps, weight: 0.45 }],
     splitCategories: [SplitCategory.Upper, SplitCategory.Pull],
     difficulty:      Difficulty.Beginner,
     equipment:       [Equipment.Cable],
@@ -876,10 +986,86 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
     isFormCheckable: true,
   },
 
+  // ─── Standing glute kickback ────────────────────────────────────────────────
+  // Replaces gluteBridge/hipThrust — both removed, Apple Vision's body-pose
+  // model can't track a person lying down (100% frame rejection, confirmed
+  // on-device). This is the standing equivalent: same hip-extension muscle
+  // targets, but the person stays upright the whole time. Hamstrings
+  // weighted 0.5 (real secondary mover in hip extension, not co-primary with
+  // glutes) and lowerBack weighted 0.25 ("light") — same reasoned-not-measured
+  // weighting convention as the row family's biceps 0.45 (see MuscleCredit's
+  // comment above), carried over unchanged from the old gluteBridge entry
+  // since the muscles worked haven't changed, only the body position.
+  {
+    id:              'standingGluteKickback',
+    displayName:     'Standing Glute Kickback',
+    muscleGroups:    [MuscleGroup.Legs, MuscleGroup.Back],
+    muscles:         [Muscle.Glutes, { muscle: Muscle.Hamstrings, weight: 0.5 }, { muscle: Muscle.LowerBack, weight: 0.25 }],
+    splitCategories: [SplitCategory.Lower],
+    difficulty:      Difficulty.Beginner,
+    equipment:       [],
+    defaultReps:     12,
+    defaultSets:     3,
+    progression: {
+      repRange: [10, 20],
+      setRange: [2, 4],
+    },
+    isFormCheckable: true,
+  },
+
+  // ─── Face pull ──────────────────────────────────────────────────────────────
+  // Rear delts primary, traps weighted 0.5 as a real secondary mover (a face
+  // pull's scapular-retraction component works the mid traps directly, not
+  // just as incidental assistance) — same reasoned-not-measured weighting
+  // convention as the row family's biceps 0.45 / glute kickback's hamstrings
+  // 0.5 (see MuscleCredit's own comment above). Cable-only equipment — a
+  // face pull is a cable-machine (or heavy-band) exercise by definition; no
+  // dedicated Equipment.Band exists yet, and Cable is the far more common
+  // real setup.
+  {
+    id:              'facePull',
+    displayName:     'Face Pull',
+    muscleGroups:    [MuscleGroup.Shoulders, MuscleGroup.Back],
+    muscles:         [Muscle.RearDelts, { muscle: Muscle.Traps, weight: 0.5 }],
+    splitCategories: [SplitCategory.Upper, SplitCategory.Pull],
+    difficulty:      Difficulty.Beginner,
+    equipment:       [Equipment.Cable],
+    defaultReps:     15,
+    defaultSets:     3,
+    progression: {
+      repRange: [12, 20],
+      setRange: [2, 4],
+    },
+    isFormCheckable: true,
+  },
+
   // ─────────────────────────────────────────────────────────────────────────
   // ADD NEW FORM-CHECKABLE EXERCISES HERE.
   // ─────────────────────────────────────────────────────────────────────────
-];
+] as const satisfies ExerciseDef[];
+
+// The literal union of every catalog id — 'squat' | 'curl' | 'pushup' | ...
+// derived FROM the array above (as const + satisfies keeps each entry's
+// literal id type instead of widening to string), not hand-maintained.
+// This is what makes registration foolproof: EXERCISE_DEFINITIONS,
+// EXERCISE_STANDARDS, EXERCISE_UI, and SETUP_INFO are all typed as
+// Record<ExerciseId, ...> below/elsewhere, so TypeScript refuses to compile
+// if any of them is missing an entry for a catalog exercise — a build-time
+// error pointing at the exact missing exercise, instead of a runtime
+// silent-squat-fallback discovered by accident. See the ExerciseType check
+// right below for the native-bridge half of this.
+export type ExerciseId = (typeof EXERCISE_CATALOG)[number]['id'];
+
+// Compile-time proof every catalog exercise is also registered with the
+// native camera bridge's ExerciseType union (modules/athlt-camera/src/
+// index.ts) — chest press's actual bug: present in every JS-side list,
+// present in ExerciseType too as it turned out, but that's exactly the kind
+// of gap this line exists to catch the NEXT time it's actually missing.
+// If this line fails to compile, some EXERCISE_CATALOG id isn't in
+// ExerciseType yet — add it there.
+type _ExerciseIdsAreValidExerciseTypes = ExerciseId extends ExerciseType ? true : never;
+const _exerciseIdsRegisteredWithNativeBridge: _ExerciseIdsAreValidExerciseTypes = true;
+void _exerciseIdsRegisteredWithNativeBridge;
 
 // Quick lookup by id
 export function getExerciseDef(id: string): ExerciseDef | undefined {

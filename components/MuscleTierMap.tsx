@@ -27,15 +27,18 @@
 import React, { useMemo, useRef, useEffect, useId } from 'react';
 import { View, Text, Image, StyleSheet, Animated } from 'react-native';
 import type { ImageSourcePropType } from 'react-native';
+import { Image as RankEmblemImage } from 'expo-image';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Defs, LinearGradient as SvgLinearGradient, Stop, Path, Circle, Ellipse, Line, G } from 'react-native-svg';
+import Svg, { Defs, LinearGradient as SvgLinearGradient, Stop, Path, Circle, Line, G } from 'react-native-svg';
 import { Muscle } from '../constants/exercises';
 import type { Slug } from 'react-native-body-highlighter';
 import type { MuscleTiers, MuscleTierInfo, Tier } from '../lib/sessionLog';
 import { TIER_ORDER, tierIndex, VOLUME_THRESHOLDS, QUALITY_THRESHOLDS } from '../lib/sessionLog';
 import { FRONT_MUSCLE_PATHS, BACK_MUSCLE_PATHS } from './muscleShapePaths';
-import { BODY_MUSCLES_FRONT_PATHS, BODY_MUSCLES_BACK_PATHS } from './muscleShapePathsDetailed';
+import {
+  MUSCLE_MAP_FRONT_PATHS, MUSCLE_MAP_BACK_PATHS, MUSCLE_MAP_REGIONS, MUSCLE_MAP_VIEWBOX, MUSCLE_MAP_LABEL_POS,
+} from './muscleMapPaths.generated';
 import { Col, FONT, W, Sp } from '../constants/theme';
 
 // ─── Tier palette ───────────────────────────────────────────────────────────
@@ -43,7 +46,14 @@ import { Col, FONT, W, Sp } from '../constants/theme';
 // not a flat color — used by both the emblem and the SVG-fallback icon fill.
 export const TIER_META: Record<Tier, { hi: string; lo: string; ink: string; label: string }> = {
   bronze:   { hi: '#F0C9A0', lo: '#B97A42', ink: '#7A4A22', label: 'Bronze' },
-  silver:   { hi: '#F2F5F8', lo: '#AEB8C4', ink: '#69727E', label: 'Silver' },
+  // Old values (hi #F2F5F8, lo #AEB8C4, ink #69727E) were clustered in a
+  // narrow light-gray band — even ink, the darkest stop, was luminance
+  // ~113, nearly double every other tier's ink. First fix widened the
+  // range AND added a cool blue lean ("polished steel") — the range fix
+  // was right, the blue lean wasn't wanted; reverted that part to a plain
+  // grayscale silver (lo is literally CSS's own #C0C0C0 "silver"), same
+  // real hi-to-ink spread as every other tier, no added hue.
+  silver:   { hi: '#FFFFFF', lo: '#C0C0C0', ink: '#585858', label: 'Silver' },
   gold:     { hi: '#FFEBB0', lo: '#E3B94D', ink: '#96701A', label: 'Gold' },
   platinum: { hi: '#E2FBF3', lo: '#7FE0C9', ink: '#1C9C82', label: 'Platinum' },
   diamond:  { hi: '#E3F7FF', lo: '#6FD3FF', ink: '#1789B8', label: 'Diamond' },
@@ -84,106 +94,65 @@ function clamp01(v: number): number {
   return Math.max(0, Math.min(1, v));
 }
 
-// ─── Tier emblems — one distinct hand-drawn mark per tier ──────────────────
+// ─── Tier emblems — real art (assets/ranks/<tier>.png), one per tier ───────
+// Was hand-drawn SVG (a distinct shape + gradient per tier via
+// renderTierMark) — replaced with real emblem art the same way the muscle
+// tile icons already moved from code-drawn shapes to real PNGs. Filename
+// maps directly to Tier, so this table is the only place a new tier's art
+// needs registering.
+const RANK_EMBLEM_SOURCES: Record<Tier, ImageSourcePropType> = {
+  bronze:   require('../assets/ranks/bronze.png'),
+  silver:   require('../assets/ranks/silver.png'),
+  gold:     require('../assets/ranks/gold.png'),
+  platinum: require('../assets/ranks/platinum.png'),
+  diamond:  require('../assets/ranks/diamond.png'),
+  master:   require('../assets/ranks/master.png'),
+  champion: require('../assets/ranks/champion.png'),
+};
 
-function renderTierMark(tier: Tier, fill: string, meta: { hi: string; lo: string; ink: string }) {
-  switch (tier) {
-    case 'bronze':
-      return (
-        <G>
-          <Circle cx={16} cy={16} r={12} fill={fill} stroke={meta.ink} strokeWidth={1.2} />
-          <Path d="M10,18 L16,12 L22,18" fill="none" stroke={meta.hi} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
-          <Ellipse cx={12} cy={11} rx={5.5} ry={3} fill="rgba(255,255,255,0.38)" />
-        </G>
-      );
-    case 'silver':
-      return (
-        <G>
-          <Path d="M16,4 L26,9 L26,18 Q26,25 16,29 Q6,25 6,18 L6,9 Z" fill={fill} stroke={meta.ink} strokeWidth={1.2} />
-          <Line x1={16} y1={5} x2={16} y2={28} stroke={meta.hi} strokeWidth={1} opacity={0.45} />
-          <Ellipse cx={12.5} cy={10.5} rx={4.5} ry={2.4} fill="rgba(255,255,255,0.36)" />
-        </G>
-      );
-    case 'gold':
-      return (
-        <G>
-          <Path d="M9,10 L13,10 L10,2 Z" fill={meta.lo} />
-          <Path d="M23,10 L19,10 L22,2 Z" fill={meta.lo} />
-          <Circle cx={16} cy={19} r={10} fill={fill} stroke={meta.ink} strokeWidth={1.2} />
-          <Path d="M16,13 L19.5,21 L12.5,21 Z" fill={meta.hi} opacity={0.55} />
-          <Ellipse cx={12.5} cy={15.5} rx={4.5} ry={2.6} fill="rgba(255,255,255,0.35)" />
-        </G>
-      );
-    case 'platinum': {
-      const rays = [0, 45, 90, 135, 180, 225, 270, 315].map(deg => {
-        const rad = (deg * Math.PI) / 180;
-        return {
-          x1: 16 + 10.5 * Math.cos(rad), y1: 16 + 10.5 * Math.sin(rad),
-          x2: 16 + 14   * Math.cos(rad), y2: 16 + 14   * Math.sin(rad),
-        };
-      });
-      return (
-        <G>
-          <Circle cx={16} cy={16} r={8.5} fill="none" stroke={fill} strokeWidth={3} />
-          {rays.map((r, i) => (
-            <Line key={i} x1={r.x1} y1={r.y1} x2={r.x2} y2={r.y2} stroke={meta.lo} strokeWidth={1.6} strokeLinecap="round" />
-          ))}
-          <Circle cx={16} cy={16} r={4} fill={meta.hi} />
-        </G>
-      );
-    }
-    case 'diamond':
-      return (
-        <G>
-          <Path d="M8,12 L24,12 L18,6 L14,6 Z" fill={meta.hi} stroke={meta.ink} strokeWidth={0.6} />
-          <Path d="M8,12 L24,12 L16,28 Z" fill={fill} stroke={meta.ink} strokeWidth={1} />
-          <Line x1={14} y1={6} x2={16} y2={12} stroke={meta.ink} strokeWidth={0.5} opacity={0.5} />
-          <Line x1={18} y1={6} x2={16} y2={12} stroke={meta.ink} strokeWidth={0.5} opacity={0.5} />
-          <Line x1={16} y1={12} x2={16} y2={28} stroke={meta.ink} strokeWidth={0.5} opacity={0.4} />
-          <Ellipse cx={13} cy={10} rx={2.6} ry={1.4} fill="rgba(255,255,255,0.5)" />
-        </G>
-      );
-    case 'master':
-      return (
-        <G>
-          <Path
-            d="M16,3 L19.4,12.6 L29.5,12.6 L21.3,18.6 L24.4,28.5 L16,22.3 L7.6,28.5 L10.7,18.6 L2.5,12.6 L12.6,12.6 Z"
-            fill={fill}
-            stroke={meta.ink}
-            strokeWidth={1}
-            strokeLinejoin="round"
-          />
-          <Ellipse cx={13} cy={11} rx={3.2} ry={1.8} fill="rgba(255,255,255,0.4)" />
-        </G>
-      );
-    case 'champion':
-      return (
-        <G>
-          <Path d="M6,22 L26,22 L26,26 Q16,28.5 6,26 Z" fill={meta.lo} stroke={meta.ink} strokeWidth={0.8} />
-          <Path d="M6,22 L6,13 L10.5,17.5 L16,9 L21.5,17.5 L26,13 L26,22 Z" fill={fill} stroke={meta.ink} strokeWidth={1} strokeLinejoin="round" />
-          <Circle cx={6} cy={13} r={1.6} fill={meta.hi} />
-          <Circle cx={16} cy={9} r={1.8} fill={meta.hi} />
-          <Circle cx={26} cy={13} r={1.6} fill={meta.hi} />
-        </G>
-      );
-  }
-}
+// Champion's source art carries more transparent padding than the other 6
+// (measured: content fills ~67% of the canvas width vs ~73-76% for
+// bronze/silver/gold/platinum/diamond/master — the crown needed extra
+// headroom so it doesn't clip at the canvas edge), so the SAME requested
+// size renders visibly smaller than every other tier. Compensate with a
+// size-only multiplier, not a layout change — every wrapping container
+// TierEmblem renders inside centers it without clipping, so scaling just
+// the image up to match its siblings' apparent size is safe.
+// Champion's source art is genuinely a different SHAPE than the other 6 (a
+// crown, cropped tight to content: 226x320px, aspect ratio ~0.706), not
+// just smaller-with-more-padding the way it first looked — the other 6 are
+// all roughly square. A uniform width=height=size*scale box (the previous
+// fix) forced it into a SQUARE box anyway, making its container taller
+// than its siblings' and pushing its legend label down below the rest.
+// Locking HEIGHT to the same `size` every other tier gets, and computing
+// width from this real aspect ratio, keeps every emblem's height (and
+// therefore anything laid out below it, like a legend label) aligned,
+// while still rendering champion at a comparable visual scale — no
+// distortion, no wasted transparent padding.
+const CHAMPION_ASPECT_RATIO = 226 / 320;
 
-export function TierEmblem({ tier, size = 20 }: { tier: Tier; size?: number }) {
-  const uid = useId();
-  const gradId = `te-${uid}`;
-  const meta = TIER_META[tier];
+export function TierEmblem({ tier, size = 20, style }: { tier: Tier; size?: number; style?: any }) {
+  const isChampion = tier === 'champion';
+  const height = size;
+  const width = isChampion ? Math.round(size * CHAMPION_ASPECT_RATIO) : size;
+  // expo-image (already a dependency, not previously used in this file),
+  // not the core Image also used below for muscle icons — reported "rank
+  // icons load in very late," i.e. a visible blank-then-pop-in flash. Core
+  // Image has no built-in local-asset warm cache; expo-image decodes once
+  // and serves every subsequent mount (there are up to ~9 of these on
+  // screen at once — hero, 11 tile badges, legend row) from its own
+  // memory/disk cache instead of each one re-decoding independently.
+  // transition={0} additionally kills expo-image's own default fade-in,
+  // since the ask was "immediately load in," not a smoother pop-in.
   return (
-    <Svg width={size} height={size} viewBox="0 0 32 32">
-      <Defs>
-        <SvgLinearGradient id={gradId} x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0%" stopColor={meta.hi} />
-          <Stop offset="55%" stopColor={meta.lo} />
-          <Stop offset="100%" stopColor={meta.ink} />
-        </SvgLinearGradient>
-      </Defs>
-      {renderTierMark(tier, `url(#${gradId})`, meta)}
-    </Svg>
+    <RankEmblemImage
+      source={RANK_EMBLEM_SOURCES[tier]}
+      style={[{ width, height }, style]}
+      contentFit="contain"
+      cachePolicy="memory-disk"
+      priority="high"
+      transition={0}
+    />
   );
 }
 
@@ -194,15 +163,25 @@ export function TierEmblem({ tier, size = 20 }: { tier: Tier; size?: number }) {
 // one-off pixel-replace script (not checked in) that swapped the source
 // art's flat highlight color (#FF004F, sampled directly from the PNG pixels)
 // for each tier's real hex (bronze #CD7F32, silver #C0C0C0, gold #FFD700,
-// platinum #E5E4E2, diamond #4FC3F7, master #9C27B0, champion #DC143C),
-// leaving the navy/gray body silhouette AND the separate orange secondary-
-// muscle accent (present in quads/hamstrings/biceps) untouched. This
-// replaced an earlier SVG hueRotate-filter approach, which rotated the
-// WHOLE image's hue uniformly — fine for champion (already reddish) but
-// wrong for desaturated tiers like silver/platinum, which came out as
-// vivid green/blue/purple instead of muted metal. Pixel-level pre-bake is
-// exact and has no runtime cost. Still needed, no art yet: forearms, lower
-// back, calves.
+// platinum #E5E4E2, diamond #4FC3F7, master #9C27B0, champion #DC143C).
+// The base body silhouette (originally two-tone navy/slate-blue) and the
+// separate orange secondary-muscle accent (present in quads/hamstrings/
+// biceps) were ORIGINALLY left untouched by that bake, which read as "blue
+// and orange body, one muscle in rank color" instead of "neutral body, one
+// muscle highlighted." Fixed with a second one-off script (also not
+// checked in): for each muscle, diffed all 7 tier PNGs pixel-by-pixel —
+// any pixel identical across all 7 files is base art (the bake never
+// touched it, tier-independent by construction) and got luminance-
+// desaturated to gray in place; any pixel that differs between tiers is
+// the actual rank-color swap and was left completely alone. No hardcoded
+// colors or hue ranges needed, so it can't accidentally desaturate a
+// tier's own color even where a tier is itself blue (diamond) or orange
+// (bronze). This replaced an earlier SVG hueRotate-filter approach, which
+// rotated the WHOLE image's hue uniformly — fine for champion (already
+// reddish) but wrong for desaturated tiers like silver/platinum, which
+// came out as vivid green/blue/purple instead of muted metal. Pixel-level
+// pre-bake is exact and has no runtime cost. Still needed, no art yet:
+// forearms, lower back, calves.
 const MUSCLE_ICON_SOURCES: Partial<Record<Muscle, Record<Tier, ImageSourcePropType>>> = {
   [Muscle.Chest]: {
     bronze: require('../assets/images/muscle-icons/chest-bronze.png'),
@@ -388,35 +367,18 @@ function MuscleIcon({ muscle, tier, size }: { muscle: Muscle; tier?: Tier; size:
 }
 
 // ─── Body map — full front/back diagram, every trained muscle lit up at ───
-// once in its own tier's gradient. REBUILT (this round) on the same
-// muscleShapePathsDetailed.ts data as before, but rendered like the rest of
-// this page now looks — the same flat TIER_META 3-stop gradient fill the
-// tile icons and hero ring already use, clean edges, no blur/glow filter.
-// That was the actual problem with the old body map: not the underlying
-// path data, the rendering treatment not matching anything else on the
-// page. See muscleShapePathsDetailed.ts's header comment for why this
-// dataset (not a fresh one) is still the right call.
-const BODY_MAP_REGIONS: Partial<Record<Muscle, { side: 'front' | 'back'; ids: string[] }>> = {
-  [Muscle.Chest]:      { side: 'front', ids: ['chest-upper-left', 'chest-upper-right', 'chest-lower-left', 'chest-lower-right'] },
-  [Muscle.Shoulders]:  { side: 'front', ids: ['shoulder-front-left', 'shoulder-front-right', 'shoulder-side-left', 'shoulder-side-right'] },
-  [Muscle.RearDelts]:  { side: 'back',  ids: ['deltoid-rear-left', 'deltoid-rear-right'] },
-  [Muscle.Biceps]:     { side: 'front', ids: ['biceps-left', 'biceps-right'] },
-  [Muscle.Triceps]:    { side: 'back',  ids: ['triceps-long-left', 'triceps-lateral-left', 'triceps-long-right', 'triceps-lateral-right'] },
-  [Muscle.Lats]:       { side: 'back',  ids: ['lats-upper-left', 'lats-mid-left', 'lats-lower-left', 'lats-upper-right', 'lats-mid-right', 'lats-lower-right'] },
-  [Muscle.Traps]:      { side: 'back',  ids: ['traps-upper-left', 'traps-mid-left', 'traps-lower-left', 'traps-upper-right', 'traps-mid-right', 'traps-lower-right'] },
-  [Muscle.Abs]:        { side: 'front', ids: ['abs-upper-left', 'abs-upper-right', 'abs-lower-left', 'abs-lower-right'] },
-  [Muscle.Quads]:      { side: 'front', ids: ['quads-left', 'quads-right'] },
-  [Muscle.Hamstrings]: { side: 'back',  ids: ['hamstrings-medial-left', 'hamstrings-lateral-left', 'hamstrings-medial-right', 'hamstrings-lateral-right'] },
-  [Muscle.Glutes]:     { side: 'back',  ids: ['gluteus-medius-left', 'gluteus-maximus-left', 'gluteus-medius-right', 'gluteus-maximus-right'] },
-};
-
+// once in its own tier's gradient. Path data now comes from
+// muscleMapPaths.generated.ts (traced from the real muscle-map.svg.svg
+// artwork, all 14 muscles present — the old body-muscles-package dataset
+// only had regions for 11), rendered with the same flat TIER_META 3-stop
+// gradient fill the tile icons and hero ring already use.
 interface BodyMapSpec { key: string; d: string; gradId: string; meta: { hi: string; lo: string; ink: string } }
 
 function buildBodyMapSpecs(tiers: MuscleTiers, side: 'front' | 'back', uid: string): BodyMapSpec[] {
-  const table = side === 'front' ? BODY_MUSCLES_FRONT_PATHS : BODY_MUSCLES_BACK_PATHS;
+  const table = side === 'front' ? MUSCLE_MAP_FRONT_PATHS : MUSCLE_MAP_BACK_PATHS;
   const out: BodyMapSpec[] = [];
-  for (const m of Object.keys(BODY_MAP_REGIONS) as Muscle[]) {
-    const region = BODY_MAP_REGIONS[m]!;
+  for (const m of Object.keys(MUSCLE_MAP_REGIONS) as Muscle[]) {
+    const region = MUSCLE_MAP_REGIONS[m]!;
     if (region.side !== side) continue;
     const info = tiers[m];
     if (!info) continue; // untrained — not shown, not fabricated
@@ -430,40 +392,274 @@ function buildBodyMapSpecs(tiers: MuscleTiers, side: 'front' | 'back', uid: stri
   return out;
 }
 
+// ─── Rank text labels ───────────────────────────────────────────────────────
+// Color alone doesn't tell a reader WHICH rank a muscle is at (reported: "the
+// map only shows rank as a color, which doesn't look good or clear") — one
+// small text label per TRAINED muscle, sitting on that muscle's own largest
+// fragment (see MUSCLE_MAP_LABEL_POS's own comment for how the anchor point
+// was picked). Untrained muscles get no label, same "not shown, not
+// fabricated" rule buildBodyMapSpecs already follows for fill color.
+interface BodyMapLabelSpec { key: string; x: number; y: number; text: string; ink: string }
+
+function buildBodyMapLabels(tiers: MuscleTiers, side: 'front' | 'back'): BodyMapLabelSpec[] {
+  const out: BodyMapLabelSpec[] = [];
+  for (const m of Object.keys(MUSCLE_MAP_REGIONS) as Muscle[]) {
+    const region = MUSCLE_MAP_REGIONS[m]!;
+    if (region.side !== side) continue;
+    const info = tiers[m];
+    if (!info) continue;
+    const pos = MUSCLE_MAP_LABEL_POS[m];
+    if (!pos || pos.side !== side) continue;
+    out.push({ key: m, x: pos.x, y: pos.y, text: TIER_META[info.tier].label.toUpperCase(), ink: TIER_META[info.tier].ink });
+  }
+  return out;
+}
+
 function BodyMapSide({ tiers, side, width }: { tiers: MuscleTiers; side: 'front' | 'back'; width: number }) {
   const uid = useId();
   const specs = useMemo(() => buildBodyMapSpecs(tiers, side, uid), [tiers, side, uid]);
-  const allPaths = side === 'front' ? BODY_MUSCLES_FRONT_PATHS : BODY_MUSCLES_BACK_PATHS;
-  const viewBox = side === 'front' ? '0 0 35 93' : '37 0 35 93';
-  const height = Math.round((width * 93) / 35);
+  const labels = useMemo(() => buildBodyMapLabels(tiers, side), [tiers, side]);
+  const allPaths = side === 'front' ? MUSCLE_MAP_FRONT_PATHS : MUSCLE_MAP_BACK_PATHS;
+  // Silhouette (the one whole-body outline shape) rendered as its own
+  // layer, separate from every other region — it gets a bolder, wider
+  // outline than individual muscles (see the stroke widths below), so the
+  // body's outer edge reads as the "frame" and muscle boundaries read as
+  // divisions inside it, not two things fighting at the same weight.
+  const { silhouette, ...muscleRegionPaths } = allPaths;
+  const viewBox = MUSCLE_MAP_VIEWBOX[side];
+  const [vbX, vbY, vbW, vbH] = viewBox.split(' ').map(Number);
+  const height = Math.round((width * vbH) / vbW);
+  // ROOT CAUSE of "still looks wiry/thin" after the first stroke-width bump:
+  // strokeWidth was a FIXED number in the SVG's internal viewBox coordinate
+  // space (~479 units wide), but the box renders at `width` real screen
+  // pixels — a fixed viewBox-unit stroke shrinks right along with whatever
+  // `width` this side is drawn at, so it never actually got thicker on
+  // screen, it just moved with the shrink. `shrink` converts a REAL target
+  // screen-pixel thickness into the matching viewBox-unit strokeWidth, so
+  // the outline reads the same bold black weight at any card size (muscle-
+  // ranks' scale=1.0 card and recap's smaller scale=0.75 card alike).
+  // Widths themselves DOWN from the first pass (3.5/6 → 2.6/4.5) — reported
+  // "too bold." That first pass also finally exposed a SEPARATE, real bug at
+  // this weight: the traced path data itself has small bezier control-point
+  // noise (invisible at a thin hairline, reads as messy scribble/bumps once
+  // genuinely stroked bold) — fixed at the data level in
+  // muscleMapPaths.generated.ts (Ramer-Douglas-Peucker simplification), not
+  // by hiding it behind a thinner line here.
+  const shrink = vbW / width;
+  const muscleStroke     = 2.6 * shrink;
+  // 4.5 → 3 — reported "too thick" specifically on the outer body outline
+  // (the muscle-region weight above was untouched, still 2.6 — this was
+  // only ever about the silhouette's own rim being heavier than it needed
+  // to be, not the region boundaries inside it).
+  const silhouetteStroke = 3 * shrink;
   return (
+    <View style={{ width, height }}>
     <Svg width={width} height={height} viewBox={viewBox}>
       <Defs>
+        {/* userSpaceOnUse spanning the WHOLE figure (0,0 to vbW,vbH), not
+            the default objectBoundingBox (each shape's own independent 0-1
+            box) — the actual root cause of "the back looks shattered/edgy"
+            and "the front legs are just white." A trained muscle isn't one
+            shape, it's several small path fragments (traps/lats/etc are
+            each 2-6 pieces — see MUSCLE_MAP_REGIONS), and with
+            objectBoundingBox every one of those pieces restarted its own
+            independent hi-to-ink sweep, so adjacent fragments of the SAME
+            muscle had mismatched gradient angles/positions — reads as
+            separate reflective shards, not one smooth muscle. It also
+            explains the all-white patches: a small/oddly-shaped fragment
+            can easily have most of its actual area fall in its own
+            gradient's first 0-20%, all hi/near-white, purely as an
+            artifact of that shape's own bounding box, unrelated to where
+            it sits on the body. One shared coordinate space across the
+            whole figure means every fragment of a muscle picks up
+            whichever slice of ONE continuous sweep it actually sits at —
+            reads as one lit surface, and no single small piece can
+            accidentally monopolize the white end. */}
         {specs.map(s => (
-          <SvgLinearGradient key={s.gradId} id={s.gradId} x1="0" y1="0" x2="1" y2="1">
+          <SvgLinearGradient key={s.gradId} id={s.gradId} gradientUnits="userSpaceOnUse" x1={0} y1={0} x2={vbW} y2={vbH}>
             <Stop offset="0%" stopColor={s.meta.hi} />
             <Stop offset="55%" stopColor={s.meta.lo} />
             <Stop offset="100%" stopColor={s.meta.ink} />
           </SvgLinearGradient>
         ))}
       </Defs>
-      {/* Neutral silhouette — every region, untinted, so untrained muscles
-          still read as part of one coherent body, not a gap. */}
-      {Object.values(allPaths).map((d, i) => (
-        <Path key={i} d={d} fill="rgba(159,171,206,0.30)" stroke="rgba(72,79,105,0.18)" strokeWidth={0.06} />
+      {/* Whole-body silhouette outline — solid black, wide stroke. Drawn
+          first/behind everything so its rim frames the whole figure. */}
+      <Path d={silhouette} fill="#E4E6EA" stroke="#0A0A0F" strokeWidth={silhouetteStroke} strokeLinejoin="round" />
+      {/* Neutral muscle regions — every region, untinted, so untrained
+          muscles still read as part of one coherent body, not a gap.
+          OPAQUE fill — was a translucent rgba, which looked fine for the
+          single silhouette path alone but every one of the ~185 individual
+          muscle-region paths on top of it ALSO used that same translucent
+          fill, so every region's overlap with the silhouette double-
+          stacked the alpha into a visibly darker, blotchy patch — a real
+          rendering bug (reported as "the body map looks messed up"), not a
+          stylistic wash. A flat opaque color can't stack this way:
+          overlapping shapes just cleanly overwrite pixels instead of
+          compounding tint. FLAT, not a gradient — a per-shape diagonal
+          gradient (tried this round) looked fine on a few big regions but
+          turned into visual noise across the ~185 small/oddly-shaped ones,
+          especially where several meet in a tight cluster (lower back's
+          small wedge between lats and glutes reads worst) — independent
+          light/dark diagonal streaks crossing right at shape boundaries
+          reads as overlapping or broken geometry even though the
+          underlying shapes are correct (audited directly against the
+          generated path data, no actual overlap). Flat true-neutral gray
+          now — went warm/tan for a round trying to dodge Silver's own cool
+          palette, but that wasn't actually what was reported broken about
+          Silver on the body map, and the tan read as an unrelated,
+          unwanted change on its own. #E4E6EA has no warm or cool lean
+          either direction. Stroke SOLID BLACK at full opacity, width
+          bumped 1.1→3 (was reported "thin/wiry/stencil-like" at the old
+          low-opacity blue-gray hairline — a real black outline, not a
+          faint tint, is what actually reads as "defined" at this size). */}
+      {Object.values(muscleRegionPaths).map((d, i) => (
+        <Path key={i} d={d} fill="#E4E6EA" stroke="#0A0A0F" strokeWidth={muscleStroke} strokeLinejoin="round" />
       ))}
-      {/* Trained regions, tier-gradient filled, on top */}
+      {/* Trained regions, tier-gradient filled, on top. Same solid black
+          rim as the neutral pass (was a separate, fainter navy at low
+          opacity) so a trained muscle's outline doesn't go thin/pale the
+          moment it's tinted — the black rim is what's actually doing the
+          "defined shape" work, independent of fill color underneath it. */}
       {specs.map(s => (
-        <Path key={s.key} d={s.d} fill={`url(#${s.gradId})`} stroke="rgba(17,24,39,0.12)" strokeWidth={0.05} />
+        <Path key={s.key} d={s.d} fill={`url(#${s.gradId})`} stroke="#0A0A0F" strokeWidth={muscleStroke} strokeLinejoin="round" />
       ))}
     </Svg>
+    {/* Rank text labels — REAL RN <Text>, absolutely positioned over the
+        SVG, not SVG-native <Text>. This is the fix for "labels are really
+        bad": SVG <Text> was the only place in this entire file using the
+        SVG text primitive instead of RN's own — every other label here
+        (tierLegendLabel, bodyMapLabel, tileName, etc.) is plain <Text> with
+        this app's actual FONT/W tokens, and SVG <Text> silently ignores
+        that whole system (no fontFamily wired to it, so it fell back to a
+        generic system font never matching the rest of the app's
+        typography) — plus react-native-svg's alignmentBaseline centering is
+        known-unreliable specifically on iOS, which is this app's only
+        target. A plain <Text> sidesteps both problems at once: real native
+        text rendering, and the same FONT.body/W.bold/letterSpacing recipe
+        every other small caption in this file already uses. Position is
+        computed by mapping each label's viewBox-space anchor (vbX/vbY/vbW/
+        vbH) onto this side's actual rendered width/height — the same ratio
+        the Svg element itself uses to scale viewBox units to screen
+        pixels. */}
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      {labels.map(l => (
+        <RankLabel
+          key={l.key}
+          leftFrac={(l.x - vbX) / vbW}
+          topFrac={(l.y - vbY) / vbH}
+          containerWidth={width}
+          containerHeight={height}
+          text={l.text}
+          ink={l.ink}
+        />
+      ))}
+    </View>
+    </View>
   );
 }
 
-function BodyMap({ tiers, scale }: { tiers: MuscleTiers; scale: number }) {
-  const colWidth = Math.round(118 * scale);
+// One rank label — a small fixed-width, center-aligned RN <Text>, positioned
+// by its CENTER (not top-left) over the muscle's anchor point, with a solid
+// halo built from 8 offset copies underneath rather than textShadow: shadow
+// blur quality/support varies enough across RN/iOS versions that it can read
+// as a soft smudge instead of a crisp readable edge — stacked 1px-offset
+// copies always look like a solid outline regardless of shadow rendering,
+// the same "poor man's text-stroke" technique used because RN's core Text
+// has no native stroke/outline property at all (only SVG Text does, which
+// is exactly what this replaces).
+const LABEL_BOX_WIDTH = 62;
+const LABEL_FONT_SIZE = 7.5;
+const HALO_OFFSETS: [number, number][] = [
+  [-1, -1], [1, -1], [-1, 1], [1, 1], [0, -1], [0, 1], [-1, 0], [1, 0],
+];
+
+function RankLabel({
+  leftFrac, topFrac, containerWidth, containerHeight, text, ink,
+}: {
+  leftFrac: number; topFrac: number; containerWidth: number; containerHeight: number;
+  text: string; ink: string;
+}) {
+  const centerX = leftFrac * containerWidth;
+  const centerY = topFrac * containerHeight;
+  const left = centerX - LABEL_BOX_WIDTH / 2;
+  const top  = centerY - (LABEL_FONT_SIZE * 1.3) / 2;
+  return (
+    <>
+      {HALO_OFFSETS.map(([dx, dy], i) => (
+        <Text
+          key={i}
+          style={[mh.rankLabel, {
+            left: left + dx, top: top + dy, width: LABEL_BOX_WIDTH, fontSize: LABEL_FONT_SIZE,
+            color: 'rgba(255,255,255,0.95)',
+          }]}
+        >
+          {text}
+        </Text>
+      ))}
+      <Text style={[mh.rankLabel, { left, top, width: LABEL_BOX_WIDTH, fontSize: LABEL_FONT_SIZE, color: ink }]}>
+        {text}
+      </Text>
+    </>
+  );
+}
+
+// Tier legend — all 7 emblems in rank order, so the body map reads on its
+// own (recap shows BodyMap alone, no hero card/tile grid nearby with a tier
+// label on them) instead of needing the reader to already know what each
+// tier looks like.
+function TierLegendRow({ scale }: { scale: number }) {
+  // Sized (and gapped) to reliably fit 7 items on one line.
+  const emblemSize = Math.round(42 * scale);
+  // FIXED-SIZE SLOT per item, not the raw emblem — champion's true
+  // aspect ratio (~0.7, a crown, not a square shield like the other 6)
+  // means locking its height to exactly `emblemSize` (the previous fix)
+  // leaves it visibly narrower than its siblings: correctly aligned, but
+  // reported as "still slightly too small" and throwing off the row's
+  // even spacing (its slice of the row is narrower, so the gap around it
+  // reads inconsistent). A same-size slot for every item is what actually
+  // drives row layout/alignment now, so champion can render MODESTLY
+  // bigger than the slot (it isn't clipped — slot has no overflow:hidden)
+  // to compensate for its narrower shape, without perturbing anyone's
+  // position.
+  const champBoost = 1.15;
+  return (
+    <View style={[mh.tierLegendRow, { gap: Math.round(3 * scale) }]}>
+      {TIER_ORDER.map(t => (
+        <View key={t} style={mh.tierLegendItem}>
+          <View style={{ width: emblemSize, height: emblemSize, alignItems: 'center', justifyContent: 'center' }}>
+            {/* Crown's own visual weight sits toward its base (the points
+                taper to thin peaks with little mass), so mathematically
+                centering it in the slot reads slightly low/bottom-heavy
+                next to the shields' more even weight distribution — a
+                small optical nudge up, not another sizing change. */}
+            <TierEmblem
+              tier={t}
+              size={t === 'champion' ? Math.round(emblemSize * champBoost) : emblemSize}
+              style={t === 'champion' ? { marginTop: -Math.round(emblemSize * 0.08) } : undefined}
+            />
+          </View>
+          <Text style={[mh.tierLegendLabel, { fontSize: Math.round(8.5 * scale) }]}>{TIER_META[t].label}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+export function BodyMap({ tiers, scale }: { tiers: MuscleTiers; scale: number }) {
+  // Bumped 118→160→190→175 ("make it bigger" two rounds ago, then reported
+  // clipping the hands at 190 — exactly the risk flagged when 190 was set:
+  // this card's overflow:hidden was cutting the SVG's own edge because
+  // front+back at 190 ran wider than the actual available card width on a
+  // real device, not a viewBox/content-crop problem inside the SVG itself.
+  // 175 pulls back just enough to clear that. Still meaningfully bigger
+  // than the original 160 baseline. If it ever clips again, the real fix is
+  // making BodyMapSide measure its actual available width at runtime
+  // (onLayout) instead of trusting a fixed colWidth — flag it if seen.
+  const colWidth = Math.round(175 * scale);
   return (
     <View style={{ gap: Math.round(8 * scale) }}>
+      <TierLegendRow scale={scale} />
       <View style={mh.sectionHeaderRow}>
         <Text style={[mh.sectionHeader, { fontSize: Math.round(11 * scale) }]}>BODY MAP</Text>
         <Text style={[mh.sectionSub, { fontSize: Math.round(11 * scale) }]}>Front · Back</Text>
@@ -586,12 +782,20 @@ export function MuscleRankBackdrop({ tier }: { tier: Tier }) {
   const d2 = useDrift(11500, 500, true);
   const d3 = useDrift(13500, 900);
   const d4 = useDrift(10500, 300, true);
+  // Was 4 blobs all drawn from ONE tier's own hi/lo/ink — reads fine for a
+  // vivid tier, but for Silver (or any of the naturally desaturated tiers)
+  // every blob is some shade of gray, so the whole page read as colorless
+  // ("the overall ranking page still just has no color") even after the
+  // body map's own fix. 3 of the 4 blobs now pull from OTHER tiers' own
+  // real palette (not invented colors — gold's lo, diamond's lo, master's
+  // lo) for consistent richness regardless of current rank; the 4th stays
+  // tied to the user's actual tier, so it's not entirely generic.
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      <Animated.View style={[bd.blob, { width: 440, height: 440, borderRadius: 220, top: -170, left: -150, backgroundColor: meta.lo, opacity: 0.42 }, d1]} />
-      <Animated.View style={[bd.blob, { width: 340, height: 340, borderRadius: 170, top: -90, right: -120, backgroundColor: meta.hi, opacity: 0.5 }, d2]} />
-      <Animated.View style={[bd.blob, { width: 400, height: 400, borderRadius: 200, bottom: -160, left: -120, backgroundColor: meta.ink, opacity: 0.22 }, d3]} />
-      <Animated.View style={[bd.blob, { width: 320, height: 320, borderRadius: 160, bottom: -90, right: -110, backgroundColor: meta.lo, opacity: 0.3 }, d4]} />
+      <Animated.View style={[bd.blob, { width: 440, height: 440, borderRadius: 220, top: -170, left: -150, backgroundColor: TIER_META.gold.lo, opacity: 0.38 }, d1]} />
+      <Animated.View style={[bd.blob, { width: 340, height: 340, borderRadius: 170, top: -90, right: -120, backgroundColor: TIER_META.diamond.lo, opacity: 0.4 }, d2]} />
+      <Animated.View style={[bd.blob, { width: 400, height: 400, borderRadius: 200, bottom: -160, left: -120, backgroundColor: TIER_META.master.lo, opacity: 0.3 }, d3]} />
+      <Animated.View style={[bd.blob, { width: 320, height: 320, borderRadius: 160, bottom: -90, right: -110, backgroundColor: meta.lo, opacity: 0.4 }, d4]} />
       <BlurView intensity={65} tint="light" style={StyleSheet.absoluteFill} />
     </View>
   );
@@ -667,9 +871,16 @@ function MuscleTile({
 
   return (
     <FadeInView delay={index * 45} style={[mh.tile, { minHeight: Math.round(172 * scale) }]}>
+      {/* Tier-tinted card background — hi→lo, the same 2-stop recipe (and
+          same opacity, 0x70/0x30) as the hero card's own background, not a
+          hi-fading-to-transparent wash. That fade let the white glass card
+          underneath show through everywhere except one corner, so a
+          trained tile read as basically white with a faint tint instead of
+          a bronze/gold/etc. card — this keeps tier color visible across
+          the whole tile while staying well under full opacity. */}
       <LinearGradient
-        colors={[meta ? `${meta.hi}66` : 'rgba(200,206,216,0.28)', 'rgba(255,255,255,0)']}
-        start={{ x: 0.2, y: 0 }} end={{ x: 0.8, y: 1 }}
+        colors={meta ? [`${meta.hi}70`, `${meta.lo}30`] : ['rgba(200,206,216,0.28)', 'rgba(200,206,216,0.10)']}
+        start={{ x: 0.15, y: 0 }} end={{ x: 0.85, y: 1 }}
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
@@ -677,7 +888,7 @@ function MuscleTile({
       <Text style={[mh.tileName, { fontSize: Math.round(13 * scale) }]}>{MUSCLE_LABELS[muscle]}</Text>
       {info && meta ? (
         <View style={mh.tileTierRow}>
-          <TierEmblem tier={info.tier} size={Math.round(14 * scale)} />
+          <TierEmblem tier={info.tier} size={Math.round(32 * scale)} />
           <Text style={[mh.tileTierTxt, { color: meta.ink, fontSize: Math.round(11.5 * scale) }]}>{meta.label}</Text>
         </View>
       ) : (
@@ -714,10 +925,10 @@ export function MuscleTierMap({
 
   const heroMeta    = overall ? TIER_META[overall.tier] : null;
   const heroRadius  = Math.round(32 * scale);
-  const ringSize    = Math.round(136 * scale);
-  const ringStroke  = Math.round(11 * scale);
-  const emblemSize  = Math.round(58 * scale);
-  const emblemWrap  = Math.round(78 * scale);
+  const ringSize    = Math.round(172 * scale);
+  const ringStroke  = Math.round(14 * scale);
+  const emblemSize  = Math.round(100 * scale);
+  const emblemWrap  = Math.round(130 * scale);
   const nextLabel = overall && !overall.atTop ? TIER_META[TIER_ORDER[tierIndex(overall.tier) + 1]].label : null;
   const pct = overall ? Math.round(overall.progress * 100) : 0;
 
@@ -799,6 +1010,14 @@ const mh = StyleSheet.create({
   sectionHeader:    { fontWeight: W.bold, letterSpacing: 0.8, color: Col.textSub },
   sectionSub:       { fontWeight: W.medium, color: Col.textSub },
 
+  // flexWrap as a safety net — 7 fixed-size emblems at the bigger size can
+  // get tight on narrower phones; wrapping to two rows beats spilling past
+  // the card edge. justifyContent:'center' (not 'space-between') so a
+  // wrapped second row centers instead of stretching oddly.
+  tierLegendRow:   { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', rowGap: 8, paddingHorizontal: 2 },
+  tierLegendItem:  { alignItems: 'center', gap: 2 },
+  tierLegendLabel: { fontWeight: W.semi, color: Col.textSub, textTransform: 'uppercase', letterSpacing: 0.3 },
+
   bodyMapShadowWrap: {
     shadowColor: '#1C2C6E',
     shadowOffset: { width: 0, height: 8 },
@@ -809,9 +1028,22 @@ const mh = StyleSheet.create({
   bodyMapCard: {
     overflow: 'hidden',
   },
-  bodyMapRow: { flexDirection: 'row', justifyContent: 'center', gap: 22 },
+  bodyMapRow: { flexDirection: 'row', justifyContent: 'center', gap: 16 },
   bodyMapCol: { alignItems: 'center', gap: 6 },
   bodyMapLabel: { fontWeight: W.bold, letterSpacing: 0.6, color: Col.textSub },
+  // Rank text labels on the body map — same small-caps-label recipe as
+  // tierLegendLabel/bodyMapLabel above (system font via W.bold, not a
+  // FONT.display* — this is well below Sz.h3, so system font is the correct
+  // choice per this theme file's own FONT.body rule), just positioned
+  // absolutely instead of laid out in flex flow. `text` in the tier's own
+  // uppercase label already (see buildBodyMapLabels), so no textTransform
+  // needed here.
+  rankLabel: {
+    position: 'absolute',
+    fontWeight: W.bold,
+    letterSpacing: 0.3,
+    textAlign: 'center',
+  },
 
   // Shadow lives here (outer, unclipped) — `hero` below has overflow:hidden
   // for the rounded-corner blur/gradient clip, and shadow + overflow:hidden

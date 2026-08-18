@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, Pressable, ScrollView, Animated, Dimensions, NativeScrollEvent, NativeSyntheticEvent,
+  View, Text, StyleSheet, Pressable, ScrollView, Animated, Dimensions, Platform, NativeScrollEvent, NativeSyntheticEvent,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,18 +12,26 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 import ViewShot from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
-import { MuscleTierMap } from '../components/MuscleTierMap';
+import { BodyMap } from '../components/MuscleTierMap';
+// TEMPORARY Phase-1 test harness — analyzeVideoFile() has no real UI yet
+// (that's Phase 2). This is the minimum JS glue needed to actually trigger
+// and observe it: there's no way to call a native module function without
+// going through JS, and no Xcode/Console available (Windows) to watch NSLog
+// directly, so the SAME onDebugLog stream the live debug panel already uses
+// gets displayed here instead. Safe to delete once Phase 2's real picker/
+// results UI replaces it.
+import { analyzeVideoFile, addDebugLogListener } from '../modules/athlt-camera/src/index';
 import RepFeedback from '../components/RepFeedback';
 import { repFeedbackSentence } from '../lib/repFeedbackSentences';
 import {
   getAllSessions, appendSessions, groupIntoWorkouts, computeMuscleTiers,
-  muscleGroupsWorked, type SessionEntry, type MuscleTiers, type RepEventData,
+  type SessionEntry, type MuscleTiers, type RepEventData,
 } from '../lib/sessionLog';
 import { EXERCISE_DEFINITIONS } from '../constants/exerciseDefinitions';
+import type { ExerciseId } from '../constants/exercises';
 import { useWorkoutSessionStore } from '../store/workoutSessionStore';
 import type { WorkoutSummary } from '../store/workoutSessionStore';
 import { usePlanStore } from '../store/planStore';
-import type { MuscleGroup } from '../constants/exercises';
 
 // ─── Error boundary ───────────────────────────────────────────────────────────
 // The recap screen must degrade gracefully instead of taking the whole app
@@ -115,12 +123,6 @@ const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function isSameCalendarDay(ts: number): boolean {
-  const a = new Date(ts);
-  const b = new Date();
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-}
-
 function formatFullDateTime(ts: number): string {
   const datePart = new Date(ts).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
   const timePart = new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
@@ -135,14 +137,6 @@ function formatDuration(totalSec: number): string {
     return `${h}:${String(m % 60).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   }
   return `${m}:${String(s).padStart(2, '0')}`;
-}
-
-function formatMuscleGroupsLabel(groups: Set<MuscleGroup>): string {
-  if (groups.size === 0) return 'Full Body';
-  const names = Array.from(groups).map(g => g.charAt(0).toUpperCase() + g.slice(1));
-  if (names.length === 1) return names[0];
-  if (names.length === 2) return `${names[0]} & ${names[1]}`;
-  return `${names.slice(0, -1).join(', ')} & ${names[names.length - 1]}`;
 }
 
 function generateSummary(reps: number, goodReps: number): string {
@@ -410,6 +404,10 @@ export default function RecapScreen() {
   const [activePage, setActivePage]       = useState(0);
   const initialized = useRef(false);
 
+  // TEMPORARY Phase-1 test harness state — see the import comment above.
+  const [videoAnalysisLog, setVideoAnalysisLog] = useState<string[]>([]);
+  const [analyzingVideo, setAnalyzingVideo]     = useState(false);
+
   // Entrance animation — visual polish only, no bearing on data/logic.
   const heroOpac  = useRef(new Animated.Value(0)).current;
   const heroY     = useRef(new Animated.Value(14)).current;
@@ -469,7 +467,7 @@ export default function RecapScreen() {
         const exId     = exercise ?? 'unknown';
         const entry: SessionEntry = {
           ts: soloTs, exerciseId: exId,
-          displayName: EXERCISE_DEFINITIONS[exId]?.displayName ?? exId,
+          displayName: EXERCISE_DEFINITIONS[exId as ExerciseId]?.displayName ?? exId,
           reps, goodReps, pct,
         };
         if (reps > 0) await appendSessions([entry]);
@@ -488,12 +486,6 @@ export default function RecapScreen() {
       setMuscleTiers(computeMuscleTiers(allAfter));
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const highlightGroups = useMemo(
-    () => (data ? muscleGroupsWorked(data.entries) : new Set<MuscleGroup>()),
-    [data],
-  );
-  const highlightLabel = data && isSameCalendarDay(data.ts) ? 'Today' : data ? formatMuscleGroupsLabel(highlightGroups) : 'Today';
 
   // Entrance animation once real data has resolved (visual only).
   useEffect(() => {
@@ -618,6 +610,37 @@ export default function RecapScreen() {
     }
   }, [sharing, data, handleShare]);
 
+  // TEMPORARY Phase-1 test harness — runs the just-recorded video back
+  // through analyzeVideoFile() (same video, same exercise, offline this
+  // time) so its [REP]/[METRIC] log output can be diffed against what was
+  // captured live for this exact session. Phase 1 only resolves exercises
+  // against the Swift-side registry (squat, curl, pushup, lunge,
+  // jumpingJack, shoulderPress) — anything else resolves with a clear
+  // "unknown exercise" error from the native side, not a crash.
+  const handleAnalyzeVideo = useCallback(async () => {
+    if (!data?.videoUri || analyzingVideo) return;
+    const exerciseId = data.entries[0]?.exerciseId;
+    if (!exerciseId) return;
+    setAnalyzingVideo(true);
+    setVideoAnalysisLog([`Starting analysis: ${exerciseId} — ${data.videoUri}`]);
+    const sub = addDebugLogListener(({ message }) => {
+      setVideoAnalysisLog(prev => [...prev, message]);
+    });
+    try {
+      const result = await analyzeVideoFile(data.videoUri, exerciseId);
+      setVideoAnalysisLog(prev => [...prev,
+        `── done ── success=${result.success} frames=${result.frames ?? '—'} ` +
+        `reps=${result.reps ?? '—'} goodReps=${result.goodReps ?? '—'}` +
+        (result.error ? ` error=${result.error}` : ''),
+      ]);
+    } catch (e: any) {
+      setVideoAnalysisLog(prev => [...prev, `── threw ── ${e?.message ?? String(e)}`]);
+    } finally {
+      sub.remove();
+      setAnalyzingVideo(false);
+    }
+  }, [data, analyzingVideo]);
+
   const handleDone = useCallback(async () => {
     if (data?.isHistory) { router.back(); return; }
     if (isWorkoutMode) {
@@ -703,30 +726,22 @@ export default function RecapScreen() {
                   <Text style={s.headerSub}>{formatFullDateTime(data.ts)}</Text>
                 </View>
 
-                {/* Hero — muscle rank card. REPLACED the heatmap entirely
-                    (both the SVG version and the Skia thermal attempt) with
-                    a game-style tier system: Bronze->Diamond per muscle
-                    group, computed from BOTH training volume AND form
-                    quality (see computeMuscleTiers in lib/sessionLog.ts) —
-                    not just volume, which is the actual point of the
-                    feature. Sized to its own content (no flex/minHeight) —
-                    see git history for why that matters inside a
-                    ScrollView. */}
-                <GlassSurface radius={34} style={s.heroCard}>
-                  <Text style={s.heroLabel}>MUSCLE RANKS</Text>
-                  <Text style={s.heroTitle}>{highlightLabel}</Text>
-                  <View style={s.heroBody}>
-                    <RecapSectionBoundary
-                      fallback={
-                        <View style={{ alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-                          <Text style={s.cardText}>Muscle ranks couldn't load this time — your reps are still saved.</Text>
-                        </View>
-                      }
-                    >
-                      <MuscleTierMap tiers={muscleTiers} scale={0.6} />
-                    </RecapSectionBoundary>
-                  </View>
-                </GlassSurface>
+                {/* Body map only — recap intentionally shows just which
+                    muscles got worked this session, not the full ranking
+                    page (hero rank card, tier tiles). BodyMap already
+                    carries its own glass-card chrome, matching the rest of
+                    this screen's cards, so it doesn't need an outer
+                    GlassSurface wrapper. Once rank icons exist, they can
+                    join this section. */}
+                <RecapSectionBoundary
+                  fallback={
+                    <GlassSurface radius={34} style={s.heroCard}>
+                      <Text style={s.cardText}>Muscle map couldn't load this time — your reps are still saved.</Text>
+                    </GlassSurface>
+                  }
+                >
+                  <BodyMap tiers={muscleTiers} scale={0.75} />
+                </RecapSectionBoundary>
 
                 {/* Stat grid */}
                 <View style={s.statGrid}>
@@ -907,6 +922,32 @@ export default function RecapScreen() {
               </GlassSurface>
             )}
 
+            {/* TEMPORARY Phase-1 test harness — see handleAnalyzeVideo's own
+                comment. Only shown when there's a video to re-analyze. Not
+                styled as a polished feature on purpose — this is a diagnostic
+                tool for comparing log output, not the real Phase 2 UI. */}
+            {hasVideo && (
+              <GlassSurface radius={30} style={[s.detailCard, { padding: 14 }]}>
+                <Text style={s.detailCardLabel}>PHASE 1 TEST — RE-ANALYZE THIS VIDEO</Text>
+                <Pressable
+                  onPress={handleAnalyzeVideo}
+                  disabled={analyzingVideo}
+                  style={({ pressed }) => [s.debugAnalyzeBtn, (pressed || analyzingVideo) && { opacity: 0.6 }]}
+                >
+                  <Text style={s.debugAnalyzeBtnTxt}>
+                    {analyzingVideo ? 'Analyzing…' : 'Run analyzeVideoFile()'}
+                  </Text>
+                </Pressable>
+                {videoAnalysisLog.length > 0 && (
+                  <ScrollView style={s.debugLogBox} nestedScrollEnabled>
+                    {videoAnalysisLog.map((line, i) => (
+                      <Text key={i} style={s.debugLogLine}>{line}</Text>
+                    ))}
+                  </ScrollView>
+                )}
+              </GlassSurface>
+            )}
+
             {/* Actions — this page had neither before; Share here shares the
                 video file itself (contextually the point of this page),
                 Done exits the same way page 1's Done does. */}
@@ -972,9 +1013,6 @@ const s = StyleSheet.create({
     // cause of the front/back diagrams crowding each other.
     padding: 20, alignItems: 'center',
   },
-  heroLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1.4, textTransform: 'uppercase', color: C.mutedDim, alignSelf: 'flex-start' },
-  heroTitle: { fontSize: 19, fontWeight: '600', letterSpacing: -0.3, color: C.text, marginTop: 2, marginBottom: 18, alignSelf: 'flex-start' },
-  heroBody:  { alignItems: 'center', width: '100%' },
 
   statGrid: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 22, width: '100%' },
   statTile: {
@@ -1008,6 +1046,23 @@ const s = StyleSheet.create({
 
   detailCard: { padding: 18, marginBottom: 14 },
   detailCardLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1.4, textTransform: 'uppercase', color: C.mutedDim, marginBottom: 10 },
+
+  // TEMPORARY Phase-1 test harness styles — deliberately plain/utilitarian
+  // (monospace log, flat button), not this screen's usual glass/gradient
+  // language, since this card is a diagnostic tool, not a polished feature.
+  debugAnalyzeBtn: {
+    backgroundColor: 'rgba(90,110,160,0.16)', borderRadius: 12,
+    paddingVertical: 12, alignItems: 'center',
+  },
+  debugAnalyzeBtnTxt: { fontSize: 13.5, fontWeight: '600', color: C.text },
+  debugLogBox: {
+    marginTop: 12, maxHeight: 260, backgroundColor: 'rgba(19,26,46,0.06)',
+    borderRadius: 10, padding: 10,
+  },
+  debugLogLine: {
+    fontSize: 10.5, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    color: C.text, lineHeight: 15, marginBottom: 2,
+  },
 
   exRow:   { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 12 },
   exName:  { fontSize: 14.5, fontWeight: '600', color: C.text },

@@ -13,7 +13,13 @@
  * SCHEMA MIRRORS THE SWIFT TYPES — every field name matches the Swift struct/enum.
  * Metric uses tagged objects: { type: "jointAngle", a: "leftShoulder", ... }
  * Joint names are camelCase strings matching the Joint enum extension in Swift.
+ *
+ * "Keys must match ExerciseType" above is now a compile-time fact, not just a
+ * comment — EXERCISE_DEFINITIONS is typed Record<ExerciseId, ...>, so leaving
+ * out any catalog exercise is a build error, not a runtime squat fallback.
  */
+
+import type { ExerciseId } from './exercises';
 
 // ─── Metric tagged-union type ─────────────────────────────────────────────────
 
@@ -1999,15 +2005,28 @@ const LAT_PULLDOWN_ELBOW_FLARE_CHECK: FormCheckDef = {
 // PLANARITY — shoulder-elbow segment, the SAME joint pair the rep metric
 // itself tracks. Built (not just theorized) specifically for the reported
 // "turned to grab my phone, got a phantom rep": a sideways turn foreshortens
-// this exact segment in the 2D camera projection. Doesn't by itself block
-// counting (planarity only suppresses the GOOD verdict/emits its cue — see
-// ExerciseEngine.swift) but flags the frame instead of silently scoring it
-// as a normal rep. Shipped disabled, matching every other planarity check
-// in this file (SQUAT_PLANARITY, PUSHUP_PLANARITY, SHOULDER_PRESS_PLANARITY
-// are all `enabled: false` too) — the established pattern here is these need
-// a real calibration pass before going live, not a guessed minRatio turned
-// on day one. fallbackReferenceRatio reasoned from shoulder press's own
-// uarm_l/r value (0.64) — same joint pair, same rough proportions.
+// this exact segment in the 2D camera projection.
+//
+// ENABLED then REVERTED, same round: turning it on regressed normal reps —
+// it fired "FACE AWAY FROM THE CAMERA" on real, non-turned lat pulldown
+// reps and broke rep counting for an actual set, confirmed by report. Root
+// cause (reasoned, not device-confirmed): minRatio 0.75 and
+// fallbackReferenceRatio 0.64 were BORROWED from shoulder press (same
+// joint pair, same 0.64 value) — but shoulder press is front-facing, and
+// lat pulldown is back-facing with the elbow travelling down-and-back at
+// the bottom of a genuinely good rep (see LAT_PULLDOWN_REP_METRIC's own
+// comment on why the metric is elbow-based). That natural elbow travel
+// likely foreshortens the shoulder-elbow segment on EVERY real rep, not
+// just a turn, so a reference ratio calibrated on a front-facing exercise
+// with no such travel was too strict here — it couldn't tell a good rep's
+// bottom position from an actual turn. DISABLED again per explicit
+// instruction: a turn occasionally counting a rep is a far smaller problem
+// than real reps not counting during a real set. Back to matching every
+// other planarity check in this file (SQUAT_PLANARITY, PUSHUP_PLANARITY,
+// SHOULDER_PRESS_PLANARITY — all `enabled: false`) pending a real
+// calibration pass with lat-pulldown-specific device data (a [REP] log
+// from clean reps AND deliberate turns, comparing the logged planarityLog
+// ratio between them) instead of a borrowed number.
 const LAT_PULLDOWN_PLANARITY: PlanarityCheckDef[] = [
   { id: 'uarm_l', jointA: 'leftShoulder',  jointB: 'leftElbow',
     minRatio: 0.75, cue: 'FACE AWAY FROM THE CAMERA, DON\'T TURN', fallbackReferenceRatio: 0.64, enabled: false },
@@ -2076,7 +2095,22 @@ function latPulldownVariant(
     topAngle:           35,  // rest: arms overhead      (mirrors press's goodROM=55)
     repExitThreshold:   23,  // 12 below topAngle, mirrors press's exit gap
     repEnterThreshold:  19,  // 16 below topAngle, mirrors press's enter gap
-    goodROMThreshold:   6,   // worked: elbows down/back (mirrors press's topAngle=84)
+    // goodROMThreshold TIGHTENED 6→2 — reported "too lenient on incomplete
+    // reps," shallow pulls passing as good instead of getting flagged PULL
+    // DOWN FURTHER. 6 was already the mirrored-from-shoulder-press
+    // placeholder (see derivation above) with, by its own comment, "zero
+    // on-device confirmation of its own" — this is a further reasoned
+    // tightening in the reported direction, NOT a device-confirmed number
+    // either. Kept away from 0 (not floored all the way) since Vision's
+    // elbow tracking on a back-facing view is noisier than front-facing,
+    // and a threshold sitting exactly at the metric's floor would likely
+    // flag genuinely full pulls on any small tracking jitter. Send a
+    // [REP]/[METRIC] log (already logs peakAngle every rep, nothing new to
+    // add) from a few genuinely-full pulls and a few deliberately-shallow
+    // ones if this still isn't strict enough, or starts flagging real full
+    // reps, and I'll set the real number from that instead of tightening
+    // blind a second time.
+    goodROMThreshold:   2,   // worked: elbows down/back (mirrors press's topAngle=84)
     insufficientROMCue: 'PULL DOWN FURTHER',
     formChecks:      [LAT_PULLDOWN_TORSO_CHECK, LAT_PULLDOWN_ELBOW_FLARE_CHECK],
     readyGate:       PASSTHROUGH_GATE,
@@ -2153,10 +2187,273 @@ function latPulldownVariant(
   };
 }
 
-// ─── Registry ─────────────────────────────────────────────────────────────────
-// Missing key → setExerciseDefinition(null) → Swift registry fallback used.
+// ─── Standing glute kickback family ────────────────────────────────────────────
+//
+// REPLACES the old glute bridge / hip thrust family (both removed — Apple
+// Vision's body-pose model failed 100% of frames for a person lying down,
+// confirmed on-device: 178/178 frames rejected as unreliable, it's trained
+// for upright poses; see the DIAGNOSTIC comment this investigation left in
+// ExerciseEngine.swift's primaryJointConfMin/Max fields). This exercise
+// keeps the person standing the whole time instead: stand on one leg, kick
+// the working leg straight back (hip extension), side camera — same
+// upright-body requirement as every exercise that actually works.
+//
+// Reference/closest family, per the ask: the hip-hinge group (romanianDeadlift
+// etc, HINGE_REP_METRIC above) — singleLegRDL specifically is the closest
+// literal exercise already in the catalog (standing on one leg, other leg
+// extends behind the body, side camera, same "no on-device data yet"
+// situation). NOT reused verbatim, though: HINGE_REP_METRIC measures TORSO
+// angle from horizontal, which is the right signal for a hinge (torso travels
+// from vertical toward horizontal) but is near-constant here — a standing
+// kickback keeps the torso upright throughout, so torso angle barely moves
+// and can't drive rep detection. The moving joint here is the working hip
+// itself, not the torso.
+//
+// REP METRIC — jointAngle(shoulder, hip, knee) on the working leg. At rest
+// (standing, leg planted under the body) the hip-to-shoulder vector points
+// up and the hip-to-knee vector points straight down — close to a straight
+// line, i.e. close to 180°. As the leg kicks back into hip extension, the
+// knee swings posteriorly, closing the angle between those two vectors —
+// the metric DECREASES, matching the engine's hardwired decreasing-metric
+// state machine with no inversion trick needed (unlike gluteBridge's old
+// lineVsHorizontal workaround, which existed only because ITS literal
+// shoulder-hip-knee angle increased across the motion — this exercise's
+// doesn't).
+//
+// GENUINELY NEW METRIC — jointAngle with pivot=hip has never been used
+// anywhere in this codebase (grepped: every existing jointAngle pivots on
+// elbow, knee, or ankle). Zero on-device data. Per the placeholder rule,
+// topAngle/repEnterThreshold/repExitThreshold/goodROMThreshold below are
+// NOT measured — they're a rough anatomical estimate (standing ≈ 175°,
+// noticeable hip extension somewhere in the 150s-160s) spaced wide on
+// purpose so reps register regardless of the real value, not a tuned
+// number. Do 5 reps of standingGluteKickback once this reloads and send the
+// [REP]/[METRIC] log — real numbers will replace all four thresholds below.
+const STANDING_GLUTE_KICKBACK_REP_METRIC: MetricDef = {
+  type:  'average',
+  left:  { type: 'jointAngle', a: 'leftShoulder',  pivot: 'leftHip',  c: 'leftKnee'  },
+  right: { type: 'jointAngle', a: 'rightShoulder', pivot: 'rightHip', c: 'rightKnee' },
+};
 
-export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
+// FORM CHECKS ASSESSED AND NOT BUILT:
+//
+// - Leaning the torso forward / arching the lower back to fake hip
+//   extension (swinging the leg via lumbar arch instead of glute-driven hip
+//   extension): plausibly detectable in principle (lineVsVertical(hip,
+//   shoulder) is a proven pair — see HINGE_TORSO_ANGLE_CHECK above) but its
+//   72° threshold was tuned for a hinge's much larger expected torso travel,
+//   not this exercise's near-upright torso — no comparable data exists for
+//   what a "cheating lean" looks like here specifically. NOT BUILT this
+//   round, same "don't hardcode a guessed number" rule as the rep metric
+//   itself — worth adding once a real log shows what good vs. cheating reps
+//   look like on this metric.
+// - Overarching/hyperextending the lower back at the top: NOT BUILT, same
+//   verdict as the hip-hinge family's identical check — spinal CURVATURE
+//   fault, and Apple Vision has no mid-spine/lumbar landmark (only shoulder
+//   and hip as the torso's two endpoints). Can't be measured from two
+//   endpoints no matter which pair is chosen.
+// - Standing leg wobbling / losing balance: not a joint-angle fault at all
+//   (it's a stability/position fault, not an angle this Metric framework
+//   measures) — out of scope for a Layer-1 threshold check.
+// - Not kicking the leg back far enough: this IS covered, via the base
+//   goodROMThreshold/insufficientROMCue fields below (same mechanism as
+//   every other exercise's depth check) — no separate FormCheckDef needed.
+//
+// formChecks stays empty — no additional Layer-1 check cleared feasibility.
+
+// Side camera — same requiredJoints/requiredJointsAlt shape as the hip-hinge
+// family (shoulder+hip+knee+ankle per side); ankle included for camera
+// framing/future use even though the rep metric only consumes shoulder+hip+knee.
+const STANDING_GLUTE_KICKBACK_CAMERA_JOINTS_A = ['leftShoulder',  'leftHip',  'leftKnee',  'leftAnkle'];
+const STANDING_GLUTE_KICKBACK_CAMERA_JOINTS_B = ['rightShoulder', 'rightHip', 'rightKnee', 'rightAnkle'];
+
+function standingGluteKickbackVariant(
+  id:               string,
+  displayName:      string,
+  setupInstruction: string,
+): ExerciseDefinitionDef {
+  return {
+    id,
+    displayName,
+    repMetric:          STANDING_GLUTE_KICKBACK_REP_METRIC,
+    // ALL FOUR PLACEHOLDER — see the block comment above. topAngle(175) is a
+    // rough "standing straight" estimate; repEnterThreshold(155)/
+    // repExitThreshold(168) are spaced a wide 13° apart on purpose (same
+    // anti-double-count reasoning already learned the hard way for tricep/
+    // hinge/raise — narrow hysteresis gaps caused real double-count bugs in
+    // this codebase before).
+    topAngle:           175,
+    repEnterThreshold:  155,
+    repExitThreshold:   168,
+    // goodROMThreshold(150) sits just below repEnterThreshold(155) — reaching
+    // a counted rep isn't automatically "good," it needs a bit more kickback
+    // than the bare entry line. Kept close rather than far below it, per the
+    // wide/permissive-placeholder rule for a genuinely new metric — this is
+    // a starting point to replace from a real [REP] log, not a tuned value.
+    goodROMThreshold:   150,
+    insufficientROMCue: 'KICK YOUR LEG BACK FARTHER',
+    formChecks:      [],
+    readyGate:       PASSTHROUGH_GATE,
+    cameraSetup: {
+      setupInstruction,
+      requiredJoints:    STANDING_GLUTE_KICKBACK_CAMERA_JOINTS_A,
+      requiredJointsAlt: STANDING_GLUTE_KICKBACK_CAMERA_JOINTS_B,
+    },
+    minRepInterval:  0.7,
+    planarityChecks: [],
+    // No suppressApproachDetection — unlike the hip-hinge family (whose own
+    // torso rotation inflates the shoulder-hip distance signal used for
+    // approach detection), this exercise keeps the torso upright throughout,
+    // so that false-approach failure mode doesn't apply here. Leaving unset
+    // (default false), same as squat/curl/every other standing-still family.
+  };
+}
+
+// ─── Face pull ──────────────────────────────────────────────────────────────
+//
+// REFERENCE EXERCISE: the row family (ROW_REP_METRIC above — bentOverRow/
+// barbellRow/singleArmRow/invertedRow/tBarRow all share it). A face pull IS
+// a pull: arms start extended toward the cable anchor (elbow near-straight),
+// hands get pulled in toward the face while the elbows drive back and out,
+// then return to extended — the same "elbow flexes from near-straight down
+// to a bent peak, then re-extends" shape row's own metric was built for.
+// Reused directly: jointAngle(shoulder, elbow, wrist), decreasing as the
+// elbow bends — already the correct direction for the engine's hardwired
+// decreasing-metric state machine (arm extended = high angle, elbow bent at
+// peak pull = low angle), no inversion trick needed, same as row's own noted
+// direction correctness.
+//
+// COMBINATOR — bestSide, NOT row's occlusion reason (this is front-facing;
+// both arms are genuinely visible, no far-side occlusion exists here) but
+// the SAME choice shoulderPress/lateralRaise already make front-facing, for
+// the OTHER documented reason: per-frame confidence robustness (see
+// RAISE_REP_METRIC_FRONT's comment — shoulderPress uses bestSide even
+// though both arms are visible). 'average' was considered and rejected:
+// in this codebase 'average' is used for symmetric FORM-CHECK gates (row's
+// torso_swing, raise's swinging check) where blending both sides is exactly
+// the point ("is the body doing X"), not for a primary per-limb rep metric,
+// where one noisy frame from either arm would corrupt the blended reading.
+// bestSide is this codebase's actual established default for primary rep
+// metrics — followed here, not 'average'.
+//
+// FORESHORTENING CHECK: a front camera on an arm-extension movement has
+// broken a metric before (front raise's arc points straight at the camera,
+// foreshortening a LINE-orientation metric to near-nothing at full
+// extension — see RAISE_CAMERA_JOINTS_SIDE's comment). jointAngle is not
+// that same risk: it's a three-point ANGLE, not a segment's on-screen
+// orientation — the elbow's bend is still geometrically meaningful even
+// when the forearm points partly toward the lens during the extended
+// portion of a face pull, the same way row's own proven metric tolerates
+// arms that aren't perfectly parallel to the image plane. Genuinely new
+// PLACEMENT for this metric (first front-facing use of jointAngle(shoulder,
+// elbow, wrist) in this file — every prior use was side-on), so treat the
+// exact thresholds as placeholders, not the metric choice itself.
+//
+// PLACEHOLDER WARNING: topAngle/repEnterThreshold/repExitThreshold/
+// goodROMThreshold below are SEEDED from bentOverRowVariant's own
+// device-verified numbers (topAngle 168, enter/exit 100/110, goodROM 80) as
+// a reasoned starting point — same joint triad and metric type, same
+// "extended-to-bent-elbow" shape — but face pull's own start/peak angles
+// have zero on-device confirmation yet and may differ for real (face pull's
+// start reaches toward the cable at roughly face height, not hanging
+// straight down like row's start — plausibly similar since "arm extended"
+// reads close to straight either way, but not verified). Do 5 reps of
+// facePull once this reloads and send the [REP] log — real numbers replace
+// all four, not just tune them.
+const FACE_PULL_REP_METRIC: MetricDef = {
+  type:  'bestSide',
+  left:  { type: 'jointAngle', a: 'leftShoulder',  pivot: 'leftElbow',  c: 'leftWrist'  },
+  right: { type: 'jointAngle', a: 'rightShoulder', pivot: 'rightElbow', c: 'rightWrist' },
+  leftJoints:  ['leftShoulder',  'leftElbow',  'leftWrist'],
+  rightJoints: ['rightShoulder', 'rightElbow', 'rightWrist'],
+};
+
+// FORM CHECK — elbows dropping too low. A face pull's defining technique
+// cue: elbows stay AT OR ABOVE shoulder height through the pull (that's
+// what actually biases the movement toward rear delts/external rotators
+// instead of turning into a generic low row). FEASIBILITY: this is the
+// SAME primitive (normalizedVerticalGap(elbow, shoulder)) the raise family
+// already proved out and shipped — there, a "went too high" version was
+// built, confirmed technically reliable, then REMOVED because going high on
+// a LATERAL raise isn't actually a real fault (see RAISE family's "going
+// too high: REMOVED" comment — a judgment call about the fault, not a
+// feasibility failure of the metric). Face pull is the opposite case on
+// both counts: elbows dropping BELOW shoulder height (not above) IS a real,
+// commonly-cited technique fault for this specific exercise, so the same
+// proven primitive is reused here with a different condition and a genuine
+// reason to flag it. PLACEHOLDER threshold (0.05) — a small permissive gap
+// below shoulder height, not device-verified. Send a [REP] log (logs this
+// value every rep) and I'll set the real number from it.
+const FACE_PULL_ELBOW_HEIGHT_CHECK: FormCheckDef = {
+  id: 'elbow_drop', cue: 'KEEP ELBOWS HIGH',
+  metric: {
+    type:  'average',
+    left:  { type: 'normalizedVerticalGap', upper: 'leftShoulder',  lower: 'leftElbow'  },
+    right: { type: 'normalizedVerticalGap', upper: 'rightShoulder', lower: 'rightElbow' },
+  },
+  // normalizedVerticalGap(upper, lower) reads the vertical gap as a
+  // positive fraction of torso length when `upper` sits above `lower` (the
+  // proven convention — see ROW_TORSO_SWING's identical shape: shoulder
+  // above hip reads positive). Elbow AT OR ABOVE shoulder height should
+  // read near/below zero; elbow dropping below shoulder height pushes this
+  // positive. evaluateAt 'throughoutMax' — fires if the elbow drops low at
+  // ANY point during the pull, not just at the end, same "catch it anywhere
+  // in the rep" shape as row's torso_swing check.
+  evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 0.05 },
+  priority: 2, enabled: true,
+};
+// FORM CHECK — not pulling far enough: NOT a separate FormCheckDef, same as
+// every other family — covered by the base goodROMThreshold/
+// insufficientROMCue mechanism below (see bentOverRowVariant's identical
+// note). No additional check needed for this one.
+
+// Front camera — both arms genuinely visible simultaneously (unlike every
+// side-on family's A/B near/far-side alternate pattern), same single-list
+// shape as RAISE_CAMERA_JOINTS_FRONT. No hips — no torso-lean/swing check
+// is built for this exercise (out of scope for this round; a standing
+// face pull leaning back to cheat the pull is a plausible future check,
+// not attempted here since it wasn't asked for and has zero on-device
+// reasoning behind it yet).
+const FACE_PULL_CAMERA_JOINTS = [
+  'leftShoulder', 'rightShoulder', 'leftElbow', 'rightElbow', 'leftWrist', 'rightWrist',
+];
+
+function facePullVariant(
+  id:               string,
+  displayName:      string,
+  setupInstruction: string,
+): ExerciseDefinitionDef {
+  return {
+    id,
+    displayName,
+    repMetric:          FACE_PULL_REP_METRIC,
+    // SEEDED from bentOverRowVariant's own verified numbers — see the block
+    // comment above for exactly why, and why these still count as
+    // placeholders for THIS exercise despite coming from real device data
+    // on a different one.
+    topAngle:           168,
+    repEnterThreshold:  100,
+    repExitThreshold:   110,
+    goodROMThreshold:   80,
+    insufficientROMCue: 'PULL FARTHER',
+    formChecks:      [FACE_PULL_ELBOW_HEIGHT_CHECK],
+    readyGate:       PASSTHROUGH_GATE,
+    cameraSetup: {
+      setupInstruction,
+      requiredJoints: FACE_PULL_CAMERA_JOINTS,
+    },
+    minRepInterval:  0.7,
+    planarityChecks: [],
+  };
+}
+
+// ─── Registry ─────────────────────────────────────────────────────────────────
+// Record<ExerciseId, ...> — every EXERCISE_CATALOG exercise required, checked
+// at compile time. (Missing key used to mean setExerciseDefinition(null) →
+// Swift registry fallback used, silently — that path is now unreachable for
+// any catalog exercise; TypeScript won't let this object compile without one.)
+
+export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
 
   // ─── Squat ──────────────────────────────────────────────────────────────────
   //
@@ -2568,6 +2865,72 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
     ],
   },
 
+  // ─── Jumping Jack ───────────────────────────────────────────────────────────
+  //
+  // VALUES VERBATIM from ExerciseRegistry.swift — this exercise was missing
+  // from EXERCISE_DEFINITIONS entirely (caught by the ExerciseId exhaustiveness
+  // check in constants/exercises.ts, not by anyone noticing it misbehave).
+  // Unlike a genuinely-new exercise with no native definition at all, this one
+  // had been quietly running the whole time on setExerciseDefinition(null)'s
+  // "Swift registry fallback" path (ATHLTCameraModule.swift) instead of the
+  // JS-owned path every other exercise uses — functional, but invisible to
+  // and undialed by any JS-side tuning, and a step away from silently
+  // becoming a real squat-fallback bug the moment someone touches
+  // ExerciseRegistry.swift's jumpingJack case. Porting it here closes that.
+  //
+  // repMetric: average(normalizedVerticalGap(shoulder, wrist)) both arms.
+  //   = (shoulder.y − wrist.y) / torso_length. y=0 bottom, y=1 top.
+  //   CLOSED (arms at sides):  shoulder above wrist → POSITIVE (~+0.7 to +1.1)
+  //   OPEN (arms overhead):    wrist above shoulder → NEGATIVE (~−0.3 to −0.6)
+  jumpingJack: {
+    id:          'jumpingJack',
+    displayName: 'Jumping Jack',
+    repMetric: {
+      type:  'average',
+      left:  { type: 'normalizedVerticalGap', upper: 'leftShoulder',  lower: 'leftWrist'  },
+      right: { type: 'normalizedVerticalGap', upper: 'rightShoulder', lower: 'rightWrist' },
+    },
+    topAngle:           0.90,
+    repEnterThreshold:  0.30,  // arms risen above shoulder height = rep entering
+    repExitThreshold:   0.50,  // arms returned below shoulder height = rep done
+    goodROMThreshold:  -0.25,  // wrists must reach >=25% of torso above shoulder = overhead
+    insufficientROMCue: 'ARMS HIGHER',
+    formChecks: [
+      // Feet-wide check: max ankle spread while arms are in the OPEN phase.
+      // TUNE via "[Engine] [jumpingJack]" NSLog: good jack ~0.8-1.5, lazy ~0.2-0.4.
+      {
+        id: 'feet_wide', cue: 'JUMP WIDER',
+        metric: { type: 'distanceRatio', a: 'leftAnkle', b: 'rightAnkle' },
+        evaluateAt: 'throughoutMax', condition: { type: 'lessThan', value: 0.50 },
+        priority: 2, enabled: true,
+      },
+    ],
+    // PASSTHROUGH_GATE, not the Swift registry's own readyAngleMin/Max —
+    // every other exercise moved to the 3-layer setup/settle/phantom-guard
+    // approach instead of an exercise-specific ready gate (see
+    // PASSTHROUGH_GATE's own comment above); porting jumpingJack onto the
+    // same universal pattern instead of preserving its now-superseded
+    // Swift-only readyGate values.
+    readyGate: PASSTHROUGH_GATE,
+    cameraSetup: {
+      setupInstruction: 'Face the camera — stand back so head to feet are fully in frame',
+      requiredJoints: [
+        'leftShoulder', 'rightShoulder', 'leftWrist', 'rightWrist',
+        'leftHip', 'rightHip', 'leftAnkle', 'rightAnkle',
+      ],
+    },
+    calibration:    { repsNeeded: 2, enterFraction: 0.50, exitFraction: 0.25 },
+    minRepInterval: 0.45,
+    planarityChecks: [
+      // Front-facing; arm motion stays in the frontal plane. Disabled until
+      // tuned from real device data, matching every other planarity check.
+      { id: 'uarm_l', jointA: 'leftShoulder',  jointB: 'leftElbow',
+        minRatio: 0.75, cue: 'FACE CAMERA', fallbackReferenceRatio: 0.64, enabled: false },
+      { id: 'uarm_r', jointA: 'rightShoulder', jointB: 'rightElbow',
+        minRatio: 0.75, cue: 'FACE CAMERA', fallbackReferenceRatio: 0.64, enabled: false },
+    ],
+  },
+
   // ─── Bicep Curl ─────────────────────────────────────────────────────────────
   //
   // VALUES VERBATIM from ExerciseRegistry.swift (post planarity-removal).
@@ -2754,6 +3117,89 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
     'Stand or lie sideways to the camera — shoulder, elbow, and wrist visible',
   ),
 
+  // ─── Barbell Bench Press (flat) ─────────────────────────────────────────────
+  //
+  // REFERENCE EXERCISE: chestPressVariant() above, reused VERBATIM — no new
+  // metric, no new thresholds, no new form checks. This IS a chest press
+  // (elbow bends toward ~90° lowering the bar to the chest, extends pressing
+  // back up) — same joint triad (shoulder-elbow-wrist), same jointAngle
+  // metric, same bestSide combinator, same lockout check, same elbow-flare
+  // planarity check. A separate named entry rather than pointing the catalog
+  // at chestPress directly because "Barbell Bench Press" is asked for as its
+  // own prominent, correctly-labeled exercise (equipment scoped to Barbell
+  // only, not Dumbbell+Barbell) — the underlying tracked movement and code
+  // path are identical, deliberately, not duplicated.
+  //
+  // TRACKABILITY — investigated honestly, not assumed either way:
+  //
+  // The concern: this is a LYING-DOWN exercise, and this codebase already
+  // has one confirmed floor-lying failure on record (the old gluteBridge —
+  // 178/178 frames rejected as unreliable, 100%, on-device). Bench press
+  // is NOT that same setup, but it isn't automatically safe either — here's
+  // the honest comparison, not a guess:
+  //
+  // WHAT'S DIFFERENT (reasons for more confidence than gluteBridge):
+  //   - ELEVATED, not floor-flat. A bench sits ~15-17in off the ground —
+  //     from a side camera at roughly the exercise's own height, the
+  //     person's silhouette is separated from the floor line, closer to
+  //     how a seated/reclined pose looks than a person flattened onto the
+  //     ground the camera is also resting on (gluteBridge's actual framing).
+  //   - The joints this metric needs (shoulder, elbow, wrist) sit on the
+  //     UPPER body, held up in open air above the torso for the whole rep
+  //     — not resting on/near the bench or floor the way gluteBridge's
+  //     hip/knee/ankle were pressed into the ground plane.
+  //   - This exact camera setup (side-on, shoulder/elbow/wrist, person
+  //     reclined on a bench) is NOT untested in this codebase — chestPress
+  //     above already ships with "Stand or lie sideways" as a supported
+  //     setup instruction. Building barbellBenchPress on the identical
+  //     metric doesn't introduce a new unverified bet; it's the SAME bet
+  //     chestPress already made, from one more angle.
+  //
+  // WHAT'S NOT RESOLVED (real, separate risks a floor bridge didn't have):
+  //   - General finding from the literature (not specific to Apple Vision,
+  //     but the closest evidence available — no public data exists on
+  //     VNDetectHumanBodyPoseRequest's reclined-pose accuracy specifically):
+  //     pose models across frameworks are trained predominantly on upright
+  //     poses, and horizontal/reclined poses are consistently reported as a
+  //     harder case, independent of elevation. Elevation likely helps; it
+  //     is not proven to fully fix the underlying issue.
+  //   - NEW occlusion risk unique to bench press, not shared with gluteBridge
+  //     at all: a barbell press is bilateral and stays roughly in-plane with
+  //     the body's centerline (both elbows flare out to the SAME sides,
+  //     symmetric), so from a strict side camera the near arm can occlude
+  //     the far arm for a real fraction of the rep — worse than a hinge or
+  //     squat, where the body's natural side-on profile keeps the near-side
+  //     limb clearly separated. Already mitigated structurally, not newly
+  //     patched here: CHEST_PRESS_REP_METRIC uses bestSide (not curl's
+  //     'minimum'), meaning the engine already only trusts whichever arm is
+  //     actually confidently tracked, per-frame — see that metric's own
+  //     comment. A barbell/rack briefly crossing in front of the wrist is
+  //     the same class of occlusion the engine's confidence gating already
+  //     exists to handle, not a new problem needing new code.
+  //   - Barbell-specific positive: a barbell's path is far more constrained
+  //     than dumbbells (fixed bar, both hands locked to it, minimal lateral
+  //     wobble) — if anything, this should make the elbow-angle metric MORE
+  //     consistent rep to rep than a dumbbell chest press, not less.
+  //
+  // VERDICT: genuinely uncertain, reasoned as far as it can be without a
+  // real device test — NOT a guess either direction, and NOT presented as
+  // confirmed working. Shipping it because the honest case for "elevated +
+  // upper-body joints in open air" is real and meaningfully different from
+  // the confirmed floor failure, and because the ONLY way gluteBridge's
+  // actual failure was ever discovered was by building it and reading the
+  // log, not by reasoning alone. Do 5 reps once this reloads and check the
+  // debug log for "[REP] rejected — tracking unreliable for X/Y frames" —
+  // the engine's built-in confidence gate (>50% of a rep's frames unreliable
+  // rejects it, same mechanism that caught gluteBridge) surfaces exactly
+  // this failure mode automatically, no extra instrumentation needed. If it
+  // rejects most/all reps the same way gluteBridge did, that's the honest
+  // answer and this entry should come back out.
+  barbellBenchPress: chestPressVariant(
+    'barbellBenchPress',
+    'Barbell Bench Press',
+    'Lie on a bench, side-on to the camera — shoulder, elbow, and wrist in frame',
+  ),
+
   // ─── Lunge-family variants ──────────────────────────────────────────────────
   //
   // All clone the lunge template VERBATIM. reviewed: false.
@@ -2925,6 +3371,40 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
     // being measured — same repMetric and placeholder thresholds as the rest.
   ),
 
+  // ─── Cable pull-through ─────────────────────────────────────────────────────
+  // ADDED IN PLACE OF HIP THRUST. The ask was hip thrust (shoulders on a
+  // bench, hips drive up) — investigated honestly, not built: the confirmed
+  // gluteBridge failure (178/178 frames rejected, 100%, on-device) reads as
+  // a whole-body SILHOUETTE recognition failure, not a single-joint
+  // occlusion issue — Vision fundamentally not parsing "person reclined,
+  // side view, close to the ground" as a valid pose at all. A hip thrust's
+  // BOTTOM position — where every rep starts, and where the engine needs a
+  // reliable rest reading before it can even recognize a rep beginning — is
+  // nearly the same overall silhouette as gluteBridge's: hips low, knees
+  // bent, feet planted, torso low and diagonal. Elevating the SHOULDERS
+  // onto a bench doesn't change that picture at the bottom of the rep; only
+  // the top (hips fully extended) gets meaningfully more upright, and a rep
+  // detector needs both ends of the range working, not just one. Recommended
+  // skipping the rebuild rather than shipping something with a specific,
+  // reasoned expectation of repeating the same failure — user confirmed.
+  //
+  // This is the trackable replacement: same hip-extension muscle target
+  // (glutes/hamstrings), same STANDING-the-whole-time property that already
+  // fixed the glute-bridge/hip-thrust problem for standingGluteKickback, but
+  // closer to hip thrust's actual loading pattern (bilateral, loaded
+  // through a full hip hinge, not a single-leg kickback). A cable
+  // pull-through IS a hip hinge — anchor low behind the body, hinge forward
+  // reaching back through the legs, then drive the hips forward to standing
+  // — mechanically the same torso-angle movement romanianDeadlift/deadlift/
+  // kettlebellSwing already track, just loaded from behind instead of in
+  // front. hingeVariant() reused VERBATIM, zero new metric, zero new risk:
+  // the person never leaves standing at any point in the rep.
+  cablePullThrough: hingeVariant(
+    'cablePullThrough',
+    'Cable Pull-Through',
+    'Stand sideways to the camera — full body in frame, hips and shoulders visible',
+  ),
+
   // ─── Shoulder/arm isolation raise family ───────────────────────────────────
   //
   // lateralRaise is the template — placeholder thresholds are meant to be
@@ -2980,5 +3460,26 @@ export const EXERCISE_DEFINITIONS: Record<string, ExerciseDefinitionDef> = {
     'latPulldown',
     'Lat Pulldown',
     'Back to the camera — sit back so both arms are fully in frame overhead to shoulders',
+  ),
+
+  // ─── Standing glute kickback ─────────────────────────────────────────────────
+  // See standingGluteKickbackVariant() and its comments above for the full
+  // investigate-first reasoning (why gluteBridge/hipThrust were removed,
+  // metric direction, camera, form-check feasibility) and the explicit
+  // placeholder-threshold warning.
+  standingGluteKickback: standingGluteKickbackVariant(
+    'standingGluteKickback',
+    'Standing Glute Kickback',
+    'Stand sideways to the camera — hip, knee, and ankle in frame',
+  ),
+
+  // ─── Face pull ────────────────────────────────────────────────────────────────
+  // See facePullVariant() and its comments above for the full investigate-
+  // first reasoning (reference exercise: the row family; combinator choice;
+  // foreshortening feasibility; the explicit placeholder-threshold warning).
+  facePull: facePullVariant(
+    'facePull',
+    'Face Pull',
+    'Face the camera — stand back so both arms are fully in frame',
   ),
 };

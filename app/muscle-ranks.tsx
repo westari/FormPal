@@ -51,7 +51,7 @@ export default function MuscleRanksScreen() {
             <Text style={s.title}>Standing</Text>
           </View>
 
-          <MuscleTierMap tiers={tiers} scale={0.9} />
+          <MuscleTierMap tiers={tiers} scale={1.0} />
 
           <Pressable onPress={() => Linking.openURL(MUSCLE_ICON_ATTRIBUTION.url)} style={s.attribution} hitSlop={8}>
             <Text style={s.attributionTxt}>{MUSCLE_ICON_ATTRIBUTION.text}</Text>

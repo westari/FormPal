@@ -10,7 +10,7 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Pressable, Platform,
+  View, Text, StyleSheet, ScrollView, Pressable, Platform, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -581,6 +581,29 @@ export default function TrainScreen() {
     // TODO: open workout edit view
   }
 
+  // ROOT CAUSE (found investigating "chest press never shows up in Start
+  // Workout" even after every registration fix landed): regenerate() was
+  // already in the store, but nothing anywhere in the app ever called it
+  // except AllDoneCard, reachable only once a plan's entire 4 weeks are
+  // finished. A plan is generated ONCE from the catalog at creation time
+  // and never re-derived — any exercise added (or fixed) after that stays
+  // permanently invisible to an existing in-progress plan, no matter what
+  // the catalog/registration code says, since Start Workout reads the
+  // frozen stored plan, not the live catalog. This is the first
+  // manually-reachable regenerate path for a plan that isn't finished yet.
+  // Confirmed first — generatePlan() doesn't preserve currentWorkoutIndex,
+  // so this restarts progress through the current plan from day 1.
+  function confirmRegenerate() {
+    Alert.alert(
+      'Regenerate Plan?',
+      'This rebuilds your plan from scratch using the latest exercises — including any added since your plan was created. Your progress through the current plan restarts from day 1.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Regenerate', style: 'destructive', onPress: () => regenerate() },
+      ],
+    );
+  }
+
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -602,6 +625,11 @@ export default function TrainScreen() {
               <Text style={s.subtitle}>{planSubtitle}</Text>
             ) : (
               <Text style={s.subtitle}>Your personal plan</Text>
+            )}
+            {plan && (
+              <Pressable onPress={confirmRegenerate} hitSlop={8}>
+                <Text style={s.regenerateLink}>Regenerate plan (picks up new exercises)</Text>
+              </Pressable>
             )}
           </View>
 
@@ -692,6 +720,7 @@ const s = StyleSheet.create({
     color:         C.text,
   },
   subtitle: { fontSize: 13.5, fontWeight: W.medium, letterSpacing: 0.1, color: C.textSub },
+  regenerateLink: { fontSize: 11.5, fontWeight: W.medium, color: C.textSub, textDecorationLine: 'underline', marginTop: 2 },
 
   // Loading skeleton
   skeletonCard: {

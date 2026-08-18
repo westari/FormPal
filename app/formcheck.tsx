@@ -29,8 +29,9 @@ import {
 } from '../modules/athlt-camera/src/index';
 import { EXERCISE_STANDARDS } from '../constants/exerciseStandards';
 import { EXERCISE_DEFINITIONS } from '../constants/exerciseDefinitions';
+import type { ExerciseId } from '../constants/exercises';
 import { getCalibration, applyOverride } from '../lib/calibration/store';
-import { handleRepAudio } from '../lib/audioFeedback';
+import { handleRepAudio, playReadyCue } from '../lib/audioFeedback';
 import { useAudioSettingsStore } from '../store/audioSettingsStore';
 import type { DebugStatsEvent, RepEvent, ExerciseType } from '../modules/athlt-camera/src/index';
 
@@ -57,7 +58,11 @@ async function logSessionVideo(uri: string) {
   } catch {}
 }
 
-const SETUP_INFO: Record<string, { icon: string; title: string; sub: string }> = {
+// Record<ExerciseId, ...> — every catalog exercise required, checked at
+// compile time. A missing entry here was the LITERAL mechanism of the
+// squat fallback (see exerciseType below: `exercise in SETUP_INFO ? exercise
+// : 'squat'`) — now impossible to ship without an entry for every exercise.
+const SETUP_INFO: Record<ExerciseId, { icon: string; title: string; sub: string }> = {
   // Side-view exercises
   squat:               { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame — ankle to shoulder' },
   lunge:               { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame — ankle to shoulder' },
@@ -89,9 +94,17 @@ const SETUP_INFO: Record<string, { icon: string; title: string; sub: string }> =
   arnoldPress:           { icon: 'camera.fill', title: 'Face the camera',                         sub: 'Stand back — arms and shoulders in frame' },
   dumbbellShoulderPress: { icon: 'camera.fill', title: 'Face the camera',                         sub: 'Stand back — arms and shoulders in frame' },
   machineShoulderPress:  { icon: 'camera.fill', title: 'Face the camera',                         sub: 'Stand back — arms and shoulders in frame' },
-  // Chest press (new family, this round) — side camera, matching the raise/
-  // tricep/row families' own "Stand sideways" convention.
-  chestPress:            { icon: 'arrow.left.and.right', title: 'Stand sideways',                 sub: 'Shoulder, elbow, and wrist in frame' },
+  // Chest press — unlike the squat/tricep/row side-camera families, this one
+  // is normally done LYING DOWN (bench/floor dumbbell press), not standing;
+  // the exerciseDefinitions.ts cameraSetup.setupInstruction already said
+  // "Stand or lie sideways" — this copy just hadn't matched it, and reading
+  // "Stand sideways" while lying on a bench is what prompted the complaint.
+  chestPress:            { icon: 'arrow.left.and.right', title: 'Stand or lie sideways',           sub: 'Shoulder, elbow, and wrist in frame' },
+  // Copy matched EXACTLY to exerciseDefinitions.ts's own setupInstruction
+  // text (see the comment on chestPress just above — a mismatch here once
+  // already caused a real complaint, "stand sideways" shown while the
+  // person was actually lying on a bench).
+  barbellBenchPress:     { icon: 'arrow.left.and.right', title: 'Lie on a bench, side-on',          sub: 'Shoulder, elbow, and wrist in frame' },
   jumpingJack:           { icon: 'camera.fill', title: 'Face the camera',                         sub: 'Full body in frame — arms and legs visible' },
   // Close-grip push-up (push-up family) — same as other push-up variants
   closegripPushup:          { icon: 'iphone', title: 'Phone on the floor, to your side',          sub: 'Get in position — shoulders and hands in frame' },
@@ -121,6 +134,18 @@ const SETUP_INFO: Record<string, { icon: string; title: string; sub: string }> =
   // for the full orientation investigation). Grip variants removed — one
   // exercise only.
   latPulldown: { icon: 'camera.fill', title: 'Back to the camera', sub: 'Sit back — both arms in frame, overhead to shoulders' },
+  // Standing glute kickback — side-on camera, standing (replaces the old
+  // gluteBridge/hipThrust, which required lying down and never worked —
+  // Apple Vision's body-pose model can't track a person lying down).
+  standingGluteKickback: { icon: 'arrow.left.and.right', title: 'Stand sideways', sub: 'Hip, knee, and ankle in frame' },
+  // Face pull — front-facing, both arms visible at once (no near/far-side
+  // ambiguity, unlike every side-on pull family). Copy matched to
+  // facePullVariant()'s own setupInstruction, same convention as chestPress/
+  // barbellBenchPress above.
+  facePull: { icon: 'camera.fill', title: 'Face the camera', sub: 'Stand back — both arms fully in frame' },
+  // Cable pull-through — same side-on, standing camera copy as the rest of
+  // the hip-hinge family (romanianDeadlift/deadlift/etc above).
+  cablePullThrough: { icon: 'arrow.left.and.right', title: 'Stand sideways', sub: 'Full body in frame — hips and shoulders visible' },
 };
 
 // ─── Debug log panel — set false to hide without removing code ────────────────
@@ -272,6 +297,11 @@ export default function FormCheckScreen() {
         if (!isTrackingRef.current) {
           isTrackingRef.current = true;
           setPhase('setup-done');
+          // Spoken cue right at the settle moment — see playReadyCue's own
+          // comment for why this needs to work for every exercise, not just
+          // back-facing ones (the user can't see this screen change either
+          // way if they're not looking at the phone).
+          playReadyCue();
           if (setupDoneTimer.current) clearTimeout(setupDoneTimer.current);
           setupDoneTimer.current = setTimeout(async () => {
             if (!mounted) return;

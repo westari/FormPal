@@ -4,15 +4,23 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SymbolView } from 'expo-symbols';
-import { EXERCISE_CATALOG } from '../constants/exercises';
+import { EXERCISE_CATALOG, type ExerciseId } from '../constants/exercises';
 
-const EXERCISE_UI: Record<string, { symbol: string; grad: [string, string] }> = {
+// Record<ExerciseId, ...>, not Record<string, ...> — every catalog exercise
+// required to have an icon/gradient, checked at compile time. A missing
+// entry used to mean the exercise silently didn't render in this list at
+// all (see the `if (!ui) return null` below) — now it's a build error.
+const EXERCISE_UI: Record<ExerciseId, { symbol: string; grad: [string, string] }> = {
   squat:             { symbol: 'figure.strengthtraining.traditional', grad: ['#FFC24B', '#FF7A2E'] },
   pushup:            { symbol: 'figure.core.training',               grad: ['#67CEFF', '#0A6CFF'] },
   curl:              { symbol: 'dumbbell.fill',                      grad: ['#48E08A', '#12B59A'] },
   lunge:             { symbol: 'figure.step.training',               grad: ['#C084FC', '#7C3AED'] },
   shoulderPress:     { symbol: 'figure.arms.open',                   grad: ['#F97316', '#DC2626'] },
   chestPress:        { symbol: 'dumbbell.fill',                      grad: ['#FF8A65', '#C62828'] },
+  // Barbell Bench Press — same warm red-orange family as chestPress (same
+  // tracked movement), one shade darker/more saturated to read as the more
+  // "serious barbell" version rather than a visually unrelated exercise.
+  barbellBenchPress: { symbol: 'dumbbell.fill',                      grad: ['#F4511E', '#8E0000'] },
   jumpingJack:       { symbol: 'figure.jumprope',                    grad: ['#FF6B35', '#FF2D55'] },
   // Curl-family variants — same dumbbell icon, distinct greens/teals to group visually
   hammerCurl:        { symbol: 'dumbbell.fill', grad: ['#4ADE80', '#059669'] },
@@ -67,6 +75,16 @@ const EXERCISE_UI: Record<string, { symbol: string; grad: [string, string] }> = 
   frontRaise:   { symbol: 'figure.arms.open', grad: ['#FEF08A', '#A16207'] },
   // Lat pulldown — indigo/violet, distinct from row's steel-blue and lunge's purple
   latPulldown: { symbol: 'dumbbell.fill', grad: ['#818CF8', '#3730A3'] },
+  // Standing glute kickback — rose/pink, distinct from the hip-hinge family's
+  // crimson (different movement pattern: extension, not a hinge)
+  standingGluteKickback: { symbol: 'figure.core.training', grad: ['#FDA4AF', '#E11D48'] },
+  // Face pull — teal/cyan, distinct from every other pull family's palette
+  // (row's steel-blue, lat pulldown's indigo)
+  facePull: { symbol: 'figure.arms.open', grad: ['#2DD4BF', '#0F766E'] },
+  // Cable pull-through — same hip-hinge family palette as
+  // romanianDeadlift/deadlift/etc (crimson/rose), one step further toward
+  // the dark end since it's the most posterior-chain-loaded of the group
+  cablePullThrough: { symbol: 'figure.strengthtraining.traditional', grad: ['#F43F5E', '#7F1D3B'] },
 };
 
 export default function ExercisePickerScreen() {

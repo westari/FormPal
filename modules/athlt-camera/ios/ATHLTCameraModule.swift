@@ -419,6 +419,46 @@ public class ATHLTCameraModule: Module {
                 }
             }
         }
+
+        // MARK: – analyzeVideoFile (Phase 1: video-file input, offline) ──────────
+        //
+        // Runs an already-recorded video through the EXACT SAME
+        // runPoseDetection → engine.ingest path live camera frames use — see
+        // doAnalyzeVideoFile below for the full reasoning (pacing, orientation,
+        // why no engine changes were needed). PHASE 1 LIMITATION: exerciseId
+        // resolves ONLY against ExerciseRegistry (the Swift-side fallback
+        // definitions — squat/curl/pushup/lunge/jumpingJack/shoulderPress).
+        // setExercise's JS-authored-definition override path
+        // (setExerciseDefinition) is a separate JS→native round trip this
+        // native-only phase deliberately doesn't wire up yet — any exercise
+        // added only in constants/exerciseDefinitions.ts (everything built
+        // this session: barbellBenchPress, facePull, cablePullThrough,
+        // standingGluteKickback, etc.) is NOT available here until Phase 2.
+        AsyncFunction("analyzeVideoFile") { (uri: String, exerciseId: String, promise: Promise) in
+            self.inferenceQueue.async {
+                guard self.captureSession == nil else {
+                    promise.resolve(["success": false,
+                        "error": "A live camera session is active — stop it before analyzing a video file (both paths share the same engine/inferenceQueue)."])
+                    return
+                }
+                guard let def = ExerciseRegistry.definition(for: exerciseId) else {
+                    promise.resolve(["success": false,
+                        "error": "Unknown exercise '\(exerciseId)' for Phase 1 — only Swift-registry exercises work until Phase 2 wires setExerciseDefinition into this path: squat, curl, pushup, lunge, jumpingJack, shoulderPress."])
+                    return
+                }
+                self.currentExercise = exerciseId
+                self.engine          = ExerciseEngine(definition: def)
+                self.wireEngineCallbacks()
+                self.currentDef      = def
+                self.universalEngine.reset()
+                let relevantJoints = Array(Set(def.repMetric.referencedJoints()))
+                self.universalEngine.setRelevantJoints(relevantJoints)
+                self.universalEngine.log = { [weak self] msg in
+                    self?.sendEvent("onDebugLog", ["message": msg])
+                }
+                self.doAnalyzeVideoFile(uri: uri, promise: promise)
+            }
+        }
     }
 
     // MARK: – Engine callback wiring ──────────────────────────────────────────
@@ -730,16 +770,32 @@ public class ATHLTCameraModule: Module {
     //   - SETUP (isSetupComplete = false): runs calibration check, emits onSetupStatus
     //   - ACTIVE (isSetupComplete = true): runs rep counting, emits onRepDetected
 
-    private func runPoseDetection(pixelBuffer: CVPixelBuffer, timestamp: Double) {
+    // `orientation` defaults to .up so the live call site (which relies on the
+    // capture connection's videoOrientation=.portrait already pre-rotating the
+    // buffer — see configureSession) is completely unchanged. Video-file
+    // analysis is the only caller that ever passes something else — see
+    // doAnalyzeVideoFile below for why a file needs this explicitly computed
+    // instead of assumed.
+    private func runPoseDetection(pixelBuffer: CVPixelBuffer, timestamp: Double,
+                                   orientation: CGImagePropertyOrientation = .up) {
         totalFramesAnalyzed += 1
 
         if totalFramesAnalyzed <= 3 {
             let w = CVPixelBufferGetWidth(pixelBuffer); let h = CVPixelBufferGetHeight(pixelBuffer)
+            // NOTE for video-file analysis: this check is meaningless there —
+            // it looks at the RAW pixel buffer's storage dimensions, which for
+            // a portrait-recorded file are typically landscape BY DESIGN
+            // (rotation lives in the track's preferredTransform, applied via
+            // the `orientation` param above, not by changing the buffer's
+            // actual storage layout). Seeing "landscape — check orientation"
+            // during a video-file run is expected, not a signal something's
+            // wrong — doAnalyzeVideoFile logs the resolved orientation
+            // separately, that's the value to actually check.
             NSLog("[GymCamera] pixel buffer %d×%d (%@)", w, h, h > w ? "portrait ✓" : "landscape — check orientation")
         }
 
         let request = VNDetectHumanBodyPoseRequest()
-        let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .up, options: [:])
+        let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: orientation, options: [:])
         let avT0 = CACurrentMediaTime()
         do { try handler.perform([request]) } catch {
             NSLog("[GymCamera] pose error: %@", error.localizedDescription); return
@@ -786,6 +842,150 @@ public class ATHLTCameraModule: Module {
                 videoHeight: CGFloat(CVPixelBufferGetHeight(pixelBuffer)),
                 isMirrored:  currentPosition == .front
             ))
+        }
+    }
+
+    // MARK: – Video-file analysis (Phase 1) ────────────────────────────────────
+    //
+    // Reads an already-recorded video via AVAssetReader and feeds it through
+    // the EXACT SAME runPoseDetection → engine.ingest path live camera frames
+    // use (called above from handleSampleBuffer's inferenceQueue.async block;
+    // called here from the analyzeVideoFile AsyncFunction, already on
+    // inferenceQueue by the time this runs). Same VNDetectHumanBodyPoseRequest,
+    // same ExerciseEngine, same wireEngineCallbacks() event wiring — a file and
+    // a live frame look identical to everything downstream of this function.
+    //
+    // ENGINE STATE — investigated, not assumed: ExerciseEngine's SETUP phase
+    // (see the class's own header comment) only requires required-joints
+    // visibility held for ~2 seconds, and calibration (where configured) now
+    // rides along on real counted reps rather than consuming a block of
+    // uncounted ones first — so a fresh engine fed a normal recording reaches
+    // ACTIVE and starts counting within the first couple of video-seconds on
+    // its own, no special-casing needed. The one honest caveat: if the
+    // person's first real rep happens inside that opening ~2s SETUP window,
+    // it won't count — the same way it wouldn't during a live session's own
+    // setup phase. Not a bug in this function, just worth knowing before
+    // comparing rep counts on a very tightly-trimmed clip.
+    //
+    // PACING — the real reason this exists as a loop with Thread.sleep rather
+    // than draining copyNextSampleBuffer() as fast as possible: UniversalQualityEngine
+    // buffers frames by real Date() and filters its swing-detection window by
+    // real elapsed seconds (see ingestFrame/onRepCompleted in
+    // UniversalQualityEngine.swift) — a documented, already-once-buggy
+    // real-wall-clock dependency (see runPoseDetection's own comment on the
+    // `date` vs Date() split above). Reading frames as fast as the disk allows
+    // would compress an 8-second rep into a fraction of a real second,
+    // collapsing that window and silently breaking swing detection again, for
+    // a different reason than the epoch-mismatch bug already fixed once.
+    // Sleeping to keep wall-clock elapsed in step with the video's own
+    // presentation-time elapsed keeps every real-time assumption downstream
+    // intact, at the cost of a file taking roughly its own real length to
+    // analyze — still far faster than physically performing the exercise.
+    private func doAnalyzeVideoFile(uri: String, promise: Promise) {
+        let url: URL
+        if let parsed = URL(string: uri), parsed.scheme != nil {
+            url = parsed
+        } else {
+            url = URL(fileURLWithPath: uri)
+        }
+
+        let asset = AVURLAsset(url: url)
+        guard let track = asset.tracks(withMediaType: .video).first else {
+            promise.resolve(["success": false, "error": "No video track found at \(url.lastPathComponent)"])
+            return
+        }
+
+        // ORIENTATION — AVAssetReader delivers RAW sensor-storage pixel data;
+        // unlike live capture (whose connection-level videoOrientation=
+        // .portrait makes AVCaptureVideoDataOutput deliver already-rotated
+        // buffers — see configureSession), a file's rotation lives separately
+        // in the track's preferredTransform, which AVAssetReader does NOT
+        // apply on its own. Decomposed below into the matching
+        // CGImagePropertyOrientation so Vision reads each frame the right way
+        // up — the same correction the capture connection does implicitly
+        // for the live path.
+        let orientation = Self.orientation(from: track.preferredTransform)
+
+        guard let reader = try? AVAssetReader(asset: asset) else {
+            promise.resolve(["success": false, "error": "Could not create AVAssetReader for \(url.lastPathComponent)"])
+            return
+        }
+        let outputSettings: [String: Any] = [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+        ]
+        let trackOutput = AVAssetReaderTrackOutput(track: track, outputSettings: outputSettings)
+        trackOutput.alwaysCopiesSampleData = false
+        guard reader.canAdd(trackOutput) else {
+            promise.resolve(["success": false, "error": "Could not add track output"])
+            return
+        }
+        reader.add(trackOutput)
+        guard reader.startReading() else {
+            promise.resolve(["success": false,
+                "error": "AVAssetReader failed to start: \(reader.error?.localizedDescription ?? "unknown")"])
+            return
+        }
+
+        sendEvent("onDebugLog", ["message":
+            "[VIDEO-ANALYZE] starting '\(url.lastPathComponent)' as '\(currentExercise)' " +
+            "orientation=\(orientation.rawValue) (0=up 1=down 2=left 3=right — matches CGImagePropertyOrientation)"])
+
+        var frameCount        = 0
+        var firstVideoTime: Double?
+        let wallClockStart = CACurrentMediaTime()
+
+        while reader.status == .reading {
+            guard let sampleBuffer = trackOutput.copyNextSampleBuffer() else { break }
+            guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { continue }
+
+            let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+            let videoTime: Double = pts.timescale > 0 ? Double(pts.value) / Double(pts.timescale) : 0
+            if firstVideoTime == nil { firstVideoTime = videoTime }
+            let videoElapsed = videoTime - (firstVideoTime ?? 0)
+
+            // Real-time pacing — see the block comment above. Sleeps only when
+            // reading has gotten AHEAD of real elapsed time; never sleeps
+            // negative, so a slow device that's already behind just proceeds
+            // at its own best pace instead of trying to catch up abruptly.
+            let wallElapsed = CACurrentMediaTime() - wallClockStart
+            let toSleep = videoElapsed - wallElapsed
+            if toSleep > 0 { Thread.sleep(forTimeInterval: toSleep) }
+
+            frameCount += 1
+            CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+            runPoseDetection(pixelBuffer: pixelBuffer, timestamp: videoTime, orientation: orientation)
+            CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly)
+        }
+
+        let finalStatus = reader.status
+        let success     = finalStatus == .completed
+        sendEvent("onDebugLog", ["message":
+            "[VIDEO-ANALYZE] done — \(frameCount) frames processed, reader.status=\(finalStatus.rawValue) " +
+            "(1=reading 2=completed 3=failed 4=cancelled), reps=\(engine.totalReps) good=\(engine.goodReps)"])
+
+        promise.resolve([
+            "success":  success,
+            "frames":   frameCount,
+            "reps":     engine.totalReps,
+            "goodReps": engine.goodReps,
+            "error":    success ? NSNull() : (reader.error?.localizedDescription ?? "reader ended with status \(finalStatus.rawValue)") as Any,
+        ])
+    }
+
+    // Standard AVAssetTrack.preferredTransform → CGImagePropertyOrientation
+    // decomposition (the four values a phone-recorded video's transform
+    // actually takes — arbitrary/skewed transforms aren't handled, matching
+    // the well-known limitation of this exact technique everywhere it's
+    // used). Not device-verified yet — the FIRST real test is what confirms
+    // this mapping is right for this app's own recordings; if pose detection
+    // comes back empty/garbage on a file that tracked fine live, check this
+    // mapping first, before suspecting anything else.
+    private static func orientation(from transform: CGAffineTransform) -> CGImagePropertyOrientation {
+        switch (transform.a, transform.b, transform.c, transform.d) {
+        case (0, 1, -1, 0):  return .right  // 90° CW  — typical portrait recording
+        case (0, -1, 1, 0):  return .left   // 90° CCW — portrait, opposite winding
+        case (-1, 0, 0, -1): return .down   // 180°    — upside-down landscape
+        default:             return .up     // identity — landscape, right-side up
         }
     }
 

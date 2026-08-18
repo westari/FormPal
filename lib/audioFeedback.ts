@@ -291,6 +291,29 @@ export async function listAvailableVoices(): Promise<SpeechNS.Voice[]> {
   }
 }
 
+// ─── Setup-ready cue ─────────────────────────────────────────────────────────
+//
+// Spoken "Ready" the instant setup/settle passes and tracking is about to
+// begin. Added for exercises like lat pulldown where the user's back is to
+// the camera and they can't see the on-screen setup progress at all — this
+// is the only signal they get that reps are now being counted, so it needs
+// to work everywhere, not just that one exercise (wired generically in
+// formcheck.tsx's setup-status listener, not per-exercise).
+//
+// Spoken via the SAME expo-speech path milestone rep counts already use
+// (speak(), above) rather than a new chime sound effect — no new audio
+// asset to generate/record, no native rebuild: expo-speech is already
+// linked (rep-count announcements already prove it works). Gated on
+// audioEnabled only (the master mute), not voiceFrequency — that setting
+// controls correction/count VERBOSITY during the set; this is a one-time
+// setup signal, not a rep-by-rep choice, so it stays on whenever audio
+// isn't muted entirely.
+export function playReadyCue(): void {
+  const { audioEnabled } = useAudioSettingsStore.getState();
+  if (!audioEnabled) return;
+  speak('Ready');
+}
+
 // ─── Rep event entry point ──────────────────────────────────────────────────
 //
 // Wire this into the same addRepListener callback that drives the on-screen

@@ -40,6 +40,7 @@ import {
   isNativeModuleLinked,
 } from '../modules/athlt-camera/src/index';
 import type { ExerciseType } from '../modules/athlt-camera/src/index';
+import type { ExerciseId } from '../constants/exercises';
 import { EXERCISE_DEFINITIONS } from '../constants/exerciseDefinitions';
 import type { ExerciseDefinitionDef, FormCheckDef } from '../constants/exerciseDefinitions';
 import { parseRepLogLine, parseModuleRepMarker, type ParsedCalibRep } from '../lib/calibration/parseRepLog';
@@ -136,8 +137,8 @@ export default function CalibrateScreen() {
   const notLinked = !isNativeModuleLinked();
 
   const [phase, setPhase] = useState<Phase>('pickExercise');
-  const [exerciseId, setExerciseId] = useState<string | null>(
-    params.exercise && params.exercise in EXERCISE_DEFINITIONS ? params.exercise : null,
+  const [exerciseId, setExerciseId] = useState<ExerciseId | null>(
+    params.exercise && params.exercise in EXERCISE_DEFINITIONS ? (params.exercise as ExerciseId) : null,
   );
   const [existingRecord, setExistingRecord] = useState<CalibrationRecord | null>(null);
   const [validateMode, setValidateMode] = useState(false);
@@ -410,7 +411,7 @@ export default function CalibrateScreen() {
     const calibratedAt = Date.now();
     const targetIds = [exerciseId, ...selectedFamily];
     for (const targetId of targetIds) {
-      const targetDef = EXERCISE_DEFINITIONS[targetId];
+      const targetDef = EXERCISE_DEFINITIONS[targetId as ExerciseId];
       const overrides = targetId === exerciseId
         ? overridesRef.current
         : narrowOverrideForTarget(overridesRef.current, def, targetDef);
@@ -479,7 +480,7 @@ export default function CalibrateScreen() {
         <Text style={s.h1}>Calibrate an Exercise</Text>
         <Text style={s.subtitle}>Pick an exercise — you'll demonstrate a few reps and the tool learns the thresholds.</Text>
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
-          {Object.keys(EXERCISE_DEFINITIONS).map(id => {
+          {(Object.keys(EXERCISE_DEFINITIONS) as ExerciseId[]).map(id => {
             const rec = calibList[id];
             return (
               <Pressable
@@ -586,7 +587,7 @@ export default function CalibrateScreen() {
               {familyMembers.map(id => (
                 <FamilyRow
                   key={id}
-                  label={EXERCISE_DEFINITIONS[id].displayName}
+                  label={EXERCISE_DEFINITIONS[id as ExerciseId].displayName}
                   checked={selectedFamily.has(id)}
                   onToggle={() => toggleFamilyMember(id)}
                 />
@@ -603,7 +604,7 @@ export default function CalibrateScreen() {
             .map(id => (
               <FamilyRow
                 key={id}
-                label={EXERCISE_DEFINITIONS[id].displayName}
+                label={EXERCISE_DEFINITIONS[id as ExerciseId].displayName}
                 checked={selectedFamily.has(id)}
                 onToggle={() => toggleFamilyMember(id)}
               />

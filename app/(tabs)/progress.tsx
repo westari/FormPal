@@ -449,7 +449,7 @@ function MuscleRankPreview({ sessions }: { sessions: SessionEntry[] }) {
               const info = tiers[m];
               return (
                 <View key={m} style={mm.previewItem}>
-                  {info ? <TierEmblem tier={info.tier} size={22} /> : <View style={mm.emptyEmblem} />}
+                  {info ? <TierEmblem tier={info.tier} size={42} /> : <View style={mm.emptyEmblem} />}
                   <Text style={mm.previewLabel}>{MUSCLE_LABELS[m]}</Text>
                 </View>
               );
@@ -482,7 +482,7 @@ const mm = StyleSheet.create({
   previewRow:     { flexDirection: 'row', justifyContent: 'space-between' },
   previewItem:    { alignItems: 'center', gap: 5 },
   previewLabel:   { fontSize: 9.5, fontWeight: W.semi, color: C.textSub },
-  emptyEmblem:    { width: 22, height: 22, borderRadius: 11, backgroundColor: C.border },
+  emptyEmblem:    { width: 42, height: 42, borderRadius: 21, backgroundColor: C.border },
   moreChip:       { width: 22, height: 22, borderRadius: 11, backgroundColor: C.border, alignItems: 'center', justifyContent: 'center' },
   moreChipTxt:    { fontSize: 9.5, fontWeight: W.bold, color: C.textSub },
 });

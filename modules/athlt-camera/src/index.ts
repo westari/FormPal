@@ -142,7 +142,19 @@ export type ExerciseType =
   // Lat pulldown (vertical pull, elbow-angle metric — front-facing, seated)
   | 'latPulldown'
   // Chest press (dumbbell/bench press, side camera, elbow-angle metric)
-  | 'chestPress';
+  | 'chestPress'
+  // Barbell Bench Press — same elbow-angle metric/code path as chestPress,
+  // scoped to a barbell-specific catalog entry (see its own registration in
+  // constants/exerciseDefinitions.ts for the full trackability writeup)
+  | 'barbellBenchPress'
+  // Standing glute kickback (hip extension, side camera, shoulder-hip-knee angle metric)
+  | 'standingGluteKickback'
+  // Face pull (rear delt/upper back pull, front camera, elbow-angle metric)
+  | 'facePull'
+  // Cable pull-through (hinge family, side camera, torso-angle metric) —
+  // added in place of hip thrust, see its registration in
+  // constants/exerciseDefinitions.ts for the trackability reasoning
+  | 'cablePullThrough';
 
 export async function setExercise(type: ExerciseType): Promise<void> {
   if (!ATHLTCameraNative) return;
@@ -207,6 +219,25 @@ export async function startTracking(): Promise<void> {
 export async function stopTracking(): Promise<SessionStats> {
   if (!ATHLTCameraNative) return { reps: 0, goodReps: 0, videoUri: null };
   return ATHLTCameraNative.stopTracking();
+}
+
+// ─── Video-file analysis (Phase 1) ─────────────────────────────────────────────
+// Runs an already-recorded video through the exact same pose/rep/form pipeline
+// live camera frames use — see analyzeVideoFile's own doc comment in
+// ATHLTCameraModule.swift for the full reasoning. PHASE 1 LIMITATION: exerciseId
+// only resolves against the Swift-side ExerciseRegistry fallback definitions —
+// squat, curl, pushup, lunge, jumpingJack, shoulderPress. Any exercise that
+// only exists in constants/exerciseDefinitions.ts (everything added this
+// session) isn't available here yet — that needs Phase 2's setExerciseDefinition
+// wiring. Must not be called while a live camera session is active (native side
+// guards this — resolves success:false with an explanation instead of racing
+// the shared engine).
+export async function analyzeVideoFile(
+  uri: string,
+  exerciseId: string
+): Promise<{ success: boolean; frames?: number; reps?: number; goodReps?: number; error?: string }> {
+  if (!ATHLTCameraNative) return { success: false, error: 'native module not available' };
+  return ATHLTCameraNative.analyzeVideoFile(uri, exerciseId);
 }
 
 // ─── Events ───────────────────────────────────────────────────────────────────

@@ -189,6 +189,15 @@ final class ExerciseEngine {
     // gate in runStateMachine's .inRep completion path for how these are used.
     private var primaryUnreliableFrames: Int = 0
     private var primaryTotalFrames:      Int = 0
+    // DIAGNOSTIC (glute bridge investigation — 178/178 frames unreliable,
+    // 100%, on-device): the rejection message only ever reported the
+    // aggregate pass/fail count, never the actual per-joint confidence
+    // Vision was producing — no way to tell "Vision found this person but
+    // wasn't confident" from "Vision essentially found nothing" without
+    // this. Min/max confidence seen per referenced joint across the whole
+    // (possibly-rejected) rep, reset alongside the counters above.
+    private var primaryJointConfMin: [Joint: Float] = [:]
+    private var primaryJointConfMax: [Joint: Float] = [:]
 
     // ── Planarity / foreshortening gate ───────────────────────────────────────
     // calibratedSegmentRefs: max segmentLengthRatio per check learned during calibration.
@@ -1116,9 +1125,20 @@ final class ExerciseEngine {
                 if primaryTotalFrames > 0 {
                     let unreliableFraction = Double(primaryUnreliableFrames) / Double(primaryTotalFrames)
                     guard unreliableFraction <= 0.5 else {
+                        // Per-joint min/max confidence across the whole rejected
+                        // rep — see primaryJointConfMin/Max's doc comment. Tells
+                        // apart "Vision never found this joint at all" (max ~0)
+                        // from "Vision found it but wasn't confident enough"
+                        // (max sits under FORM_CHECK_MIN_CONF but above 0).
+                        let jointStr = def.repMetric.referencedJoints().map { j -> String in
+                            let lo = primaryJointConfMin[j] ?? 0
+                            let hi = primaryJointConfMax[j] ?? 0
+                            return "\(j)=[\(String(format: "%.2f", lo))-\(String(format: "%.2f", hi))]"
+                        }.joined(separator: " ")
                         let msg = "[REP] rejected — tracking unreliable for " +
                                   "\(primaryUnreliableFrames)/\(primaryTotalFrames) frames " +
-                                  "(\(String(format: "%.0f", unreliableFraction * 100))%), not counted"
+                                  "(\(String(format: "%.0f", unreliableFraction * 100))%), not counted " +
+                                  "| joint conf (min-max over rep): \(jointStr)"
                         NSLog("[Engine] [%@] %@", def.id, msg)
                         onDebugLog?(msg)
                         repPhase = .atTop
@@ -1400,6 +1420,8 @@ final class ExerciseEngine {
         confDrops               = [:]
         primaryUnreliableFrames = 0
         primaryTotalFrames      = 0
+        primaryJointConfMin     = [:]
+        primaryJointConfMax     = [:]
     }
 
     // DIAGNOSTIC (Fix 5.1 investigation — tricep elbow_drift inconsistency):
@@ -1422,6 +1444,12 @@ final class ExerciseEngine {
         primaryTotalFrames += 1
         if !isMetricReliable(def.repMetric, pose: pose, minConf: Self.FORM_CHECK_MIN_CONF) {
             primaryUnreliableFrames += 1
+        }
+        // See primaryJointConfMin/Max's doc comment above.
+        for joint in def.repMetric.referencedJoints() {
+            let conf = pose[joint]?.confidence ?? 0
+            primaryJointConfMin[joint] = min(primaryJointConfMin[joint] ?? 1,  conf)
+            primaryJointConfMax[joint] = max(primaryJointConfMax[joint] ?? 0,  conf)
         }
         for check in def.formChecks where check.enabled {
             guard isReliable(check: check, pose: pose) else {

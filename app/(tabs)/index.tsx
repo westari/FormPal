@@ -740,6 +740,14 @@ export default function HomeScreen() {
             </View>
           </View>
 
+          {/* ── DEV: Feedback UI Preview ──────────────────────────────── */}
+          <Pressable
+            onPress={() => router.push('/feedback-preview' as any)}
+            style={s.devBtn}
+          >
+            <Text style={s.devBtnTxt}>[DEV] Feedback UI Preview</Text>
+          </Pressable>
+
         </ScrollView>
       </ScreenBackground>
     </>
@@ -879,4 +887,16 @@ const s = StyleSheet.create({
     paddingVertical: Sp.lg,
     paddingHorizontal: Sp.lg,
   },
+
+  // DEV button
+  devBtn: {
+    alignSelf:       'center',
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius:    10,
+    borderWidth:     1,
+    borderColor:     'rgba(0,0,0,0.10)',
+    backgroundColor: 'rgba(0,0,0,0.04)',
+  },
+  devBtnTxt: { fontSize: 12, color: C.textSub, fontWeight: W.medium },
 });

@@ -14,7 +14,7 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getExerciseDef, MuscleGroup, Muscle } from '../constants/exercises';
+import { getExerciseDef, MuscleGroup, Muscle, muscleCreditParts } from '../constants/exercises';
 
 export const SESSION_LOG_KEY = 'formpal_session_log';
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -234,9 +234,13 @@ export function computeMuscleTiers(sessions: SessionEntry[]): MuscleTiers {
     // SessionEntry only tracks form quality per EXERCISE, not per muscle
     // within it, so this is the honest granularity available, not an
     // approximation of something more precise we're choosing not to show.
-    for (const m of def.muscles) {
-      volume[m]     = (volume[m] ?? 0) + s.reps * decay;
-      goodVolume[m] = (goodVolume[m] ?? 0) + s.goodReps * decay;
+    // weight (see MuscleCredit) scales BOTH volume and goodVolume equally,
+    // so a secondary muscle's good-rep RATIO is unaffected — only how much
+    // volume it contributes toward its own tier.
+    for (const entry of def.muscles) {
+      const { muscle: m, weight } = muscleCreditParts(entry);
+      volume[m]     = (volume[m] ?? 0) + s.reps * decay * weight;
+      goodVolume[m] = (goodVolume[m] ?? 0) + s.goodReps * decay * weight;
     }
   }
 

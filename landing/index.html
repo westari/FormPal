@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FormPal — Real form feedback, every rep</title>
+  <meta name="description" content="FormPal gives you live form feedback on every rep, right from your phone camera. Free. No wearables. Coming to iOS.">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    /* === TOKENS === */
+    :root {
+      --bg:    #F6F4F1;
+      --bg2:   #EDEAE6;
+      --bdr:   #DDD9D4;
+      --txt:   #1B1916;
+      --sub:   #6B6560;
+      --muted: #ABA69F;
+      --bbg:   #1B1916;
+      --btxt:  #F6F4F1;
+      --fbg:   #FFFFFF;
+    }
+    @media(prefers-color-scheme:dark){
+      :root{
+        --bg:#0E0D0B;--bg2:#161411;--bdr:#252220;
+        --txt:#EDE8E2;--sub:#7D7870;--muted:#3C3935;
+        --bbg:#EDE8E2;--btxt:#0E0D0B;--fbg:#161411;
+      }
+    }
+    :root[data-theme="dark"]{
+      --bg:#0E0D0B;--bg2:#161411;--bdr:#252220;
+      --txt:#EDE8E2;--sub:#7D7870;--muted:#3C3935;
+      --bbg:#EDE8E2;--btxt:#0E0D0B;--fbg:#161411;
+    }
+    :root[data-theme="light"]{
+      --bg:#F6F4F1;--bg2:#EDEAE6;--bdr:#DDD9D4;
+      --txt:#1B1916;--sub:#6B6560;--muted:#ABA69F;
+      --bbg:#1B1916;--btxt:#F6F4F1;--fbg:#FFFFFF;
+    }
+
+    /* === RESET === */
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{overflow-x:hidden;scroll-behavior:smooth}
+    body{
+      background:var(--bg);color:var(--txt);
+      font-family:'DM Sans',system-ui,-apple-system,sans-serif;
+      -webkit-font-smoothing:antialiased;min-height:100dvh;
+    }
+
+    .pg{max-width:580px;margin:0 auto;padding:0 24px}
+
+    /* === NAV === */
+    .nav{
+      position:sticky;top:0;z-index:100;
+      background:var(--bg);border-bottom:1px solid var(--bdr);
+    }
+    .nav-in{
+      max-width:580px;margin:0 auto;padding:0 24px;
+      height:52px;display:flex;align-items:center;justify-content:space-between;
+    }
+    .nav-logo{display:flex;align-items:center;gap:9px;text-decoration:none;color:var(--txt)}
+    .nav-mark{
+      width:22px;height:22px;border-radius:6px;
+      background:var(--txt);flex-shrink:0;display:block;
+      object-fit:contain;
+    }
+    /* swap above for: <img src="logo.png" class="nav-mark" alt=""> */
+    .nav-name{font-size:14px;font-weight:600;letter-spacing:0.005em}
+    .nav-tag{font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted)}
+
+    /* === HERO === */
+    .hero{padding:52px 0 48px;border-bottom:1px solid var(--bdr)}
+    .hero-eye{
+      font-size:11px;font-weight:600;letter-spacing:0.14em;
+      text-transform:uppercase;color:var(--muted);margin-bottom:20px;
+    }
+    .headline{
+      font-family:'Bebas Neue',system-ui,sans-serif;
+      font-size:clamp(68px,19vw,108px);
+      line-height:0.87;letter-spacing:0.01em;
+      text-transform:uppercase;text-wrap:balance;
+      font-weight:400;margin-bottom:28px;
+    }
+    .hero-sub{
+      font-size:17px;line-height:1.60;color:var(--sub);
+      max-width:340px;margin-bottom:40px;
+    }
+
+    /* === FORM === */
+    .fw{display:flex;flex-direction:column;gap:10px}
+    .ei{
+      width:100%;padding:17px 20px;
+      background:var(--fbg);border:1px solid var(--bdr);
+      border-radius:12px;font-size:16px;font-family:inherit;
+      color:var(--txt);outline:none;transition:border-color .15s;
+    }
+    .ei::placeholder{color:var(--muted)}
+    .ei:focus{border-color:var(--sub)}
+    .btn{
+      width:100%;padding:17px 28px;
+      background:var(--bbg);color:var(--btxt);
+      border:none;border-radius:12px;
+      font-size:15px;font-weight:600;font-family:inherit;
+      letter-spacing:0.02em;cursor:pointer;white-space:nowrap;
+      transition:opacity .15s;
+    }
+    .btn:hover{opacity:.84}
+    .btn:active{opacity:.68}
+    .btn:disabled{opacity:.44;cursor:default}
+    .btn:focus-visible{outline:2px solid var(--txt);outline-offset:3px}
+    .form-note{font-size:13px;color:var(--muted);margin-top:14px}
+
+    /* === SUCCESS === */
+    .succ{display:none;padding:4px 0 8px}
+    .succ.on{display:block}
+    .succ-h{
+      font-family:'Bebas Neue',system-ui,sans-serif;
+      font-size:54px;line-height:0.87;letter-spacing:0.01em;
+      text-transform:uppercase;font-weight:400;margin-bottom:10px;
+    }
+    .succ-b{font-size:16px;line-height:1.55;color:var(--sub)}
+
+    /* === FEATURES === */
+    .feats{padding:52px 0;border-bottom:1px solid var(--bdr)}
+    .sec-lbl{
+      font-size:11px;font-weight:600;letter-spacing:0.14em;
+      text-transform:uppercase;color:var(--muted);margin-bottom:36px;
+    }
+    .feat-grid{display:grid;grid-template-columns:1fr}
+    .feat{
+      display:grid;grid-template-columns:96px 1fr;
+      padding:20px 0;border-top:1px solid var(--bdr);
+    }
+    .feat:last-child{border-bottom:1px solid var(--bdr)}
+    .feat-lbl{
+      font-size:10px;font-weight:600;letter-spacing:0.14em;
+      text-transform:uppercase;color:var(--muted);padding-top:3px;
+    }
+    .feat-txt{font-size:16px;font-weight:500;line-height:1.47;color:var(--txt)}
+
+    /* === VISUAL === */
+    .vis{padding:52px 0;border-bottom:1px solid var(--bdr)}
+    .vis-slot{
+      width:100%;aspect-ratio:4/5;
+      background:var(--bg2);border:1px solid var(--bdr);
+      border-radius:20px;overflow:hidden;
+      position:relative;display:flex;align-items:center;justify-content:center;
+    }
+    .vis-img{
+      position:absolute;inset:0;width:100%;height:100%;
+      object-fit:cover;display:block;
+    }
+    .vis-ph{
+      font-size:11px;font-weight:600;letter-spacing:0.1em;
+      text-transform:uppercase;color:var(--muted);
+      text-align:center;line-height:1.9;padding:32px;
+    }
+
+    /* === CTA === */
+    .cta{padding:64px 0 72px}
+    .cta-head{
+      font-family:'Bebas Neue',system-ui,sans-serif;
+      font-size:clamp(52px,14vw,76px);
+      line-height:0.87;letter-spacing:0.01em;
+      text-transform:uppercase;text-wrap:balance;
+      font-weight:400;margin-bottom:32px;
+    }
+
+    /* === FOOTER === */
+    footer{border-top:1px solid var(--bdr);padding:28px 0 32px}
+    .foot{
+      max-width:580px;margin:0 auto;padding:0 24px;
+      display:flex;align-items:center;justify-content:space-between;
+      flex-wrap:wrap;gap:12px;
+    }
+    .f-brand{display:flex;align-items:center;gap:8px;text-decoration:none;color:var(--muted)}
+    .f-sq{
+      width:18px;height:18px;border-radius:5px;
+      background:var(--muted);flex-shrink:0;display:block;
+      object-fit:contain;
+    }
+    /* swap above for: <img src="logo.png" class="f-sq" alt=""> */
+    .f-name{font-size:13px;font-weight:600;letter-spacing:0.02em}
+    .f-copy{font-size:12px;color:var(--muted)}
+
+    /* === WIDE === */
+    @media(min-width:540px){
+      .fw{flex-direction:row;align-items:stretch}
+      .ei{flex:1}
+      .btn{width:auto}
+
+      .feat-grid{grid-template-columns:repeat(3,1fr)}
+      .feat{
+        grid-template-columns:1fr;
+        padding:24px 20px 24px 0;
+        border-right:1px solid var(--bdr);
+        border-bottom:none;
+      }
+      .feat:last-child{border-right:none;border-bottom:none}
+      .feat-lbl{margin-bottom:14px;padding-top:0}
+    }
+
+    /* === LANDSCAPE PHONE === */
+    @media(orientation:landscape) and (max-height:520px){
+      .nav-in{height:44px}
+      .hero{padding:28px 0 32px}
+      .headline{font-size:clamp(52px,13vh,72px)}
+      .hero-sub{font-size:15px;margin-bottom:24px}
+      .feats{padding:32px 0}
+      .vis{padding:32px 0}
+      .vis-slot{aspect-ratio:16/9;max-height:180px}
+      .cta{padding:40px 0 48px}
+      .cta-head{font-size:clamp(42px,11vh,58px)}
+    }
+
+    @media(prefers-reduced-motion:no-preference){
+      .succ.on{animation:up .28s ease both}
+      @keyframes up{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+    }
+  </style>
+</head>
+<body>
+
+<!-- Netlify bot-detection form (hidden, static HTML required) -->
+<form name="waitlist" netlify netlify-honeypot="bot-field" hidden>
+  <input type="email" name="email">
+  <input type="text" name="bot-field">
+</form>
+
+<nav class="nav">
+  <div class="nav-in">
+    <a href="#" class="nav-logo" aria-label="FormPal home">
+      <span class="nav-mark"></span>
+      <span class="nav-name">FormPal</span>
+    </a>
+    <span class="nav-tag">Coming to iOS</span>
+  </div>
+</nav>
+
+<main>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="pg">
+      <p class="hero-eye">Early Access</p>
+      <h1 class="headline">Your phone camera is your form coach</h1>
+      <p class="hero-sub">Live feedback on every rep, right from your camera. Free. No wearables.</p>
+
+      <div id="fhw">
+        <form id="fh" name="waitlist" data-netlify="true" data-netlify-honeypot="bot-field" novalidate>
+          <input type="hidden" name="form-name" value="waitlist">
+          <input type="text" name="bot-field" style="display:none" aria-hidden="true" tabindex="-1">
+          <div class="fw">
+            <input class="ei" type="email" name="email"
+              placeholder="Your email address"
+              required autocomplete="email" inputmode="email"
+              aria-label="Email address">
+            <button class="btn" type="submit">Join the waitlist</button>
+          </div>
+        </form>
+        <p class="form-note">Be first to know when FormPal launches.</p>
+      </div>
+
+      <div id="sh" class="succ" role="status" aria-live="polite">
+        <p class="succ-h">You're on<br>the list.</p>
+        <p class="succ-b">We'll let you know the moment FormPal is ready.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section class="feats">
+    <div class="pg">
+      <p class="sec-lbl">What you get</p>
+      <div class="feat-grid">
+        <div class="feat">
+          <span class="feat-lbl">Coaching</span>
+          <p class="feat-txt">Instant audio cues when your form breaks down — in real time</p>
+        </div>
+        <div class="feat">
+          <span class="feat-lbl">Library</span>
+          <p class="feat-txt">30+ exercises and growing — squats, rows, curls, push-ups, and more</p>
+        </div>
+        <div class="feat">
+          <span class="feat-lbl">Private</span>
+          <p class="feat-txt">All analysis happens on-device. Nothing leaves your phone</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- VISUAL -->
+  <section class="vis">
+    <div class="pg">
+      <div class="vis-slot">
+        <img src="hero.png" class="vis-img" alt="FormPal in action" onerror="this.style.display='none'">
+        <p class="vis-ph">Drop hero.png here<br>4 : 5 ratio recommended</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- BOTTOM CTA -->
+  <section class="cta">
+    <div class="pg">
+      <h2 class="cta-head">Fix your form.<br>It's free.</h2>
+
+      <div id="fcw">
+        <form id="fc" name="waitlist" data-netlify="true" data-netlify-honeypot="bot-field" novalidate>
+          <input type="hidden" name="form-name" value="waitlist">
+          <input type="text" name="bot-field" style="display:none" aria-hidden="true" tabindex="-1">
+          <div class="fw">
+            <input class="ei" type="email" name="email"
+              placeholder="Your email address"
+              required autocomplete="email" inputmode="email"
+              aria-label="Email address">
+            <button class="btn" type="submit">Join the waitlist</button>
+          </div>
+        </form>
+        <p class="form-note">Be first to know when FormPal launches.</p>
+      </div>
+
+      <div id="sc" class="succ" role="status" aria-live="polite">
+        <p class="succ-h">You're on<br>the list.</p>
+        <p class="succ-b">We'll let you know the moment FormPal is ready.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="foot">
+    <a href="#" class="f-brand" aria-label="FormPal">
+      <span class="f-sq"></span>
+      <span class="f-name">FormPal</span>
+    </a>
+    <span class="f-copy">© 2026</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+  function allDone(){
+    var fhw=document.getElementById('fhw'),
+        sh =document.getElementById('sh'),
+        fcw=document.getElementById('fcw'),
+        sc =document.getElementById('sc');
+    if(fhw) fhw.style.display='none';
+    if(sh)  sh.classList.add('on');
+    if(fcw) fcw.style.display='none';
+    if(sc)  sc.classList.add('on');
+  }
+
+  function wire(id){
+    var f=document.getElementById(id);
+    if(!f) return;
+    f.addEventListener('submit',function(e){
+      e.preventDefault();
+      var ei=f.querySelector('[type="email"]');
+      var v=ei?ei.value.trim():'';
+      if(!v||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)){ei&&ei.focus();return;}
+      var b=f.querySelector('button[type="submit"]');
+      b.disabled=true; b.textContent='Joining…';
+
+      var body=new URLSearchParams();
+      body.append('form-name','waitlist');
+      body.append('email',v);
+      body.append('bot-field','');
+
+      fetch('/',{
+        method:'POST',
+        headers:{'Content-Type':'application/x-www-form-urlencoded'},
+        body:body.toString()
+      }).then(function(r){
+        if(r.ok){ allDone(); }
+        else{
+          b.disabled=false; b.textContent='Join the waitlist';
+          alert('Something went wrong. Please try again.');
+        }
+      }).catch(function(){
+        b.disabled=false; b.textContent='Join the waitlist';
+        alert('Network error. Please try again.');
+      });
+    });
+  }
+
+  wire('fh');
+  wire('fc');
+})();
+</script>
+
+</body>
+</html>

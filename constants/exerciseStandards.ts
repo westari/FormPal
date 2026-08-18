@@ -15,6 +15,8 @@
  * and do a JS reload to verify — no rebuild needed.
  */
 
+import type { ExerciseId } from './exercises';
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 // Mirror the Swift ExerciseStandard / JointAngleCheck structs.
 // Field names must match exactly — Swift parses these keys by string.
@@ -657,7 +659,16 @@ function latPulldownStandard(exerciseId: string): ExerciseStandardDef {
   };
 }
 
-export const EXERCISE_STANDARDS: Record<string, ExerciseStandardDef> = {
+// Partial, not exhaustive — unlike EXERCISE_DEFINITIONS, a Layer 2 standard
+// is genuinely optional per exercise (the whole push-up family and
+// jumpingJack don't have one yet, by design, not by oversight — confirmed
+// by diffing EXERCISE_CATALOG against this object's keys, not guessed).
+// Record<ExerciseId, ...> here would force fabricating standards (peak/
+// start angles, tempo, top faults) for 8 exercises with zero device data
+// behind them, which is exactly what this repo's own investigate-first
+// process says not to do. Still constrained to ExerciseId (not string) so
+// a typo'd/renamed key is a compile error either way.
+export const EXERCISE_STANDARDS: Partial<Record<ExerciseId, ExerciseStandardDef>> = {
 
   // ─── Squat ────────────────────────────────────────────────────────────────
   //

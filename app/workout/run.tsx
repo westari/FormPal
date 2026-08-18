@@ -33,13 +33,23 @@ import ScreenBackground from '../../components/ScreenBackground';
 import { useWorkoutSessionStore } from '../../store/workoutSessionStore';
 import type { RepEventData } from '../../lib/sessionLog';
 import { FONT, W, Sp, R, Elev, Col } from '../../constants/theme';
+import { getExerciseDef } from '../../constants/exercises';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const FORMCHECK_EXERCISES = new Set(['squat', 'curl', 'pushup']);
-
+// ROOT CAUSE (found investigating "chest press silently skips form tracking
+// inside a workout"): this used to be its own hardcoded Set(['squat', 'curl',
+// 'pushup']) — a second, silently-stale copy of exactly what ExerciseDef.
+// isFormCheckable (constants/exercises.ts) already tracks per exercise (every
+// catalog entry is isFormCheckable: true). Any exercise added to the catalog
+// without ALSO being added here — chest press, lat pulldown, all ~46 others
+// that were never in the 3-item Set — silently took the "non-CV" branch
+// below (instant-complete, no camera) instead of erroring, which looks
+// exactly like "the exercise doesn't work" with no error anywhere. Reading
+// the flag directly off the shared exercise def makes this permanently
+// impossible to go stale — there's no second list left to forget.
 function isFormCheckable(exerciseId: string): boolean {
-  return FORMCHECK_EXERCISES.has(exerciseId);
+  return getExerciseDef(exerciseId)?.isFormCheckable === true;
 }
 
 function fmtSec(s: number): string {
