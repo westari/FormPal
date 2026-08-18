@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, Pressable, ScrollView, Animated, Dimensions, Platform, NativeScrollEvent, NativeSyntheticEvent,
+  View, Text, StyleSheet, Pressable, ScrollView, Animated, Dimensions, Platform, NativeScrollEvent, NativeSyntheticEvent, Share,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -641,6 +641,19 @@ export default function RecapScreen() {
     }
   }, [data, analyzingVideo]);
 
+  // Log text was too long to select/copy by hand on a phone — RN's own
+  // Share API (no new dependency; expo-sharing, already imported above for
+  // the video file, only shares FILE uris, not raw text) hands the full log
+  // straight to the native share sheet (Messages/Mail/AirDrop/"Copy" all
+  // work as share-sheet targets), which is the simplest reliable way to get
+  // it off the phone.
+  const handleShareLogs = useCallback(async () => {
+    if (videoAnalysisLog.length === 0) return;
+    try {
+      await Share.share({ message: videoAnalysisLog.join('\n') });
+    } catch {}
+  }, [videoAnalysisLog]);
+
   const handleDone = useCallback(async () => {
     if (data?.isHistory) { router.back(); return; }
     if (isWorkoutMode) {
@@ -939,11 +952,19 @@ export default function RecapScreen() {
                   </Text>
                 </Pressable>
                 {videoAnalysisLog.length > 0 && (
-                  <ScrollView style={s.debugLogBox} nestedScrollEnabled>
-                    {videoAnalysisLog.map((line, i) => (
-                      <Text key={i} style={s.debugLogLine}>{line}</Text>
-                    ))}
-                  </ScrollView>
+                  <>
+                    <ScrollView style={s.debugLogBox} nestedScrollEnabled>
+                      {videoAnalysisLog.map((line, i) => (
+                        <Text key={i} style={s.debugLogLine}>{line}</Text>
+                      ))}
+                    </ScrollView>
+                    <Pressable
+                      onPress={handleShareLogs}
+                      style={({ pressed }) => [s.debugShareBtn, pressed && { opacity: 0.6 }]}
+                    >
+                      <Text style={s.debugShareBtnTxt}>Share Logs</Text>
+                    </Pressable>
+                  </>
                 )}
               </GlassSurface>
             )}
@@ -1063,6 +1084,11 @@ const s = StyleSheet.create({
     fontSize: 10.5, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     color: C.text, lineHeight: 15, marginBottom: 2,
   },
+  debugShareBtn: {
+    marginTop: 8, backgroundColor: 'rgba(90,110,160,0.10)', borderRadius: 10,
+    paddingVertical: 10, alignItems: 'center',
+  },
+  debugShareBtnTxt: { fontSize: 12.5, fontWeight: '600', color: C.mutedDim },
 
   exRow:   { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 12 },
   exName:  { fontSize: 14.5, fontWeight: '600', color: C.text },

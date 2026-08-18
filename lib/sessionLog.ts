@@ -167,21 +167,59 @@ export const TIER_ORDER: Tier[] = ['bronze', 'silver', 'gold', 'platinum', 'diam
 
 export function tierIndex(t: Tier): number { return TIER_ORDER.indexOf(t); }
 
-// Volume thresholds — decayed weighted rep count (same 14-day half-life
-// curve as computeOverallMuscleScores above), but ABSOLUTE, not relative to
-// your own max. Relative-to-max would mean your single most-trained muscle
-// always reads as "maxed" even on a nearly-empty account — these are real
-// rep-count anchors instead, reasoned round numbers (not device-verified —
-// this is a product/gamification choice, not a CV threshold — adjust freely
-// based on how it feels once real usage data exists).
+// Decay half-life for the ACTIVE/current tier — was 14 days, which meant a
+// single 2-week break cut decayed volume in half. Bumped to 120 days
+// (~8.5x gentler) per explicit ask: "a vacation shouldn't tank someone" —
+// a short break should barely move the active rank, only many weeks/months
+// of real absence should. At H=120: a 2-week gap retains ~92% of value, a
+// 1-month gap ~84%, a 3-month gap ~60%, a 6-month gap ~35%. This does NOT
+// affect goodRatio (see computeMuscleTiers) — numerator and denominator
+// decay identically, so their ratio is already decay-invariant between
+// sessions regardless of half-life.
+const DECAY_HALF_LIFE_DAYS = 120;
+
+// Volume thresholds — decayed weighted rep count, ABSOLUTE (not relative to
+// your own max — see the old comment this replaces for why).
+//
+// RETUNED this round to fix a real, provable bug: the old thresholds hit
+// Platinum in ~1 month of normal training — way too fast for a "serious
+// lifter" tier. Recalculated against the actual finite-time decay curve
+// (V(T) = SS·(1 − 2^(−T/H)), where SS = dailyRate × H/ln2 is the steady-
+// state ceiling a constant rate converges to) for a realistic reference
+// user: one muscle trained 2x/week, ~30 good reps/session ≈ 8.57 reps/day
+// → SS ≈ 1484 at H=120.
+//
+// The math has a real constraint worth being explicit about: at ANY fixed
+// half-life, a CONSTANT training rate converges to its steady state within
+// a few half-lives (~87% there by 3×H) — it can't keep climbing forever.
+// So "Diamond in 8-12 months" isn't the reference rate's decay integral
+// literally still rising at month 10 in isolation; it's calibrated so that
+// EXACTLY the reference rate approaches these values only that slowly
+// (this IS still real math, just closer to the asymptote than to zero —
+// see the exact day-counts below), and reaching Platinum+ in practice means
+// sustaining MORE than the bare reference rate, which is exactly the design
+// goal (higher tiers require more/harder training, not just more calendar
+// time at the same effort).
+//
+// Time-to-tier for the reference rate (8.57 reps/day, H=120 days):
+//   Bronze    ~50    →  ~6 days     (first session or two)
+//   Silver    ~230   →  ~29 days    (~1 month)
+//   Gold      ~520   →  ~75 days    (~2.5 months)
+//   Platinum  ~900   →  ~162 days   (~5.5 months)
+//   Diamond   ~1200  →  ~287 days   (~9.5 months)
+//   Master    ~1350  →  ~416 days   (~14 months)
+//   Champion  ~1450  →  ~655 days   (~22 months, and only at PERFECT
+//                        adherence — any real inconsistency pushes this
+//                        further out or out of reach, matching "only the
+//                        top 1-2% ever get there")
 export const VOLUME_THRESHOLDS: [Tier, number][] = [
-  ['champion', 700],
-  ['master',   400],
-  ['diamond',  200],
-  ['platinum', 100],
-  ['gold',      50],
-  ['silver',    20],
-  ['bronze',     1],
+  ['champion', 1450],
+  ['master',   1350],
+  ['diamond',  1200],
+  ['platinum',  900],
+  ['gold',      520],
+  ['silver',    230],
+  ['bronze',     50],
 ];
 
 // Good-rep ratio thresholds (0-1). Deliberately demanding at the top —
@@ -208,7 +246,8 @@ function tierFromQuality(q: number): Tier {
 }
 
 export interface MuscleTierInfo {
-  tier:      Tier;
+  tier:      Tier; // ACTIVE rank — decays with inactivity (gentle, see DECAY_HALF_LIFE_DAYS), but floors at Bronze rather than disappearing once ever earned
+  peakTier:  Tier; // PEAK rank — the highest tier this muscle has EVER reached, permanent, never decays. Display as a "Peak: X" badge alongside the active tier.
   volume:    number; // decayed weighted rep count (absolute, not normalized)
   goodRatio: number; // 0-1 — recency-weighted good/total, same decay applied to both
 }
@@ -221,38 +260,77 @@ export interface MuscleTierInfo {
 export type MuscleTiers = Partial<Record<Muscle, MuscleTierInfo>>;
 
 export function computeMuscleTiers(sessions: SessionEntry[]): MuscleTiers {
-  const now = Date.now();
-  const volume:     Record<string, number> = {};
-  const goodVolume: Record<string, number> = {};
+  const now    = Date.now();
+  const lambda = Math.LN2 / DECAY_HALF_LIFE_DAYS;
 
+  // Group each session's per-muscle contribution (reps/goodReps scaled by
+  // MuscleCredit weight — see that type's own comment) by muscle,
+  // chronologically. Needed (not just the old single flat pass) so PEAK
+  // tier can be derived below: An exercise's good-rep ratio applies to
+  // every muscle it targets — SessionEntry only tracks form quality per
+  // EXERCISE, not per muscle within it, so this is the honest granularity
+  // available, not an approximation of something more precise we're
+  // choosing not to show.
+  const byMuscle = new Map<Muscle, { ts: number; reps: number; goodReps: number }[]>();
   for (const s of sessions) {
     const def = getExerciseDef(s.exerciseId);
     if (!def) continue; // exerciseId missing/unknown — can't attribute muscles
-    const ageDays = (now - s.ts) / DAY_MS;
-    const decay   = Math.exp((-ageDays * Math.LN2) / 14);
-    // An exercise's good-rep ratio applies to every muscle it targets —
-    // SessionEntry only tracks form quality per EXERCISE, not per muscle
-    // within it, so this is the honest granularity available, not an
-    // approximation of something more precise we're choosing not to show.
-    // weight (see MuscleCredit) scales BOTH volume and goodVolume equally,
-    // so a secondary muscle's good-rep RATIO is unaffected — only how much
-    // volume it contributes toward its own tier.
     for (const entry of def.muscles) {
       const { muscle: m, weight } = muscleCreditParts(entry);
-      volume[m]     = (volume[m] ?? 0) + s.reps * decay * weight;
-      goodVolume[m] = (goodVolume[m] ?? 0) + s.goodReps * decay * weight;
+      const arr = byMuscle.get(m) ?? [];
+      arr.push({ ts: s.ts, reps: s.reps * weight, goodReps: s.goodReps * weight });
+      byMuscle.set(m, arr);
     }
   }
 
   const out: MuscleTiers = {};
-  for (const m of Object.keys(volume) as Muscle[]) {
-    const v = volume[m];
-    const volTier = tierFromVolume(v);
-    if (!volTier) continue; // below Bronze — not shown, not fabricated
-    const goodRatio = v > 0 ? (goodVolume[m] ?? 0) / v : 0;
-    const qualTier  = tierFromQuality(goodRatio);
-    const finalTier = tierIndex(qualTier) < tierIndex(volTier) ? qualTier : volTier;
-    out[m] = { tier: finalTier, volume: v, goodRatio };
+  for (const [m, entries] of byMuscle) {
+    entries.sort((a, b) => a.ts - b.ts);
+    let vol = 0, goodVol = 0;
+    let lastTs = entries[0].ts;
+    let peakTier: Tier | null = null;
+
+    // Walk sessions chronologically. Decayed volume is at a LOCAL MAXIMUM
+    // right after each session (it only shrinks between sessions, never
+    // grows on its own), so evaluating the tier at each session's own
+    // timestamp and tracking the running max gives the true all-time peak
+    // in one forward pass — no need to replay day-by-day. goodRatio doesn't
+    // even need decaying between sessions for this (see DECAY_HALF_LIFE_DAYS'
+    // comment — it's decay-invariant), so this is exact, not approximated.
+    for (const e of entries) {
+      const gapDays = (e.ts - lastTs) / DAY_MS;
+      const decay   = Math.exp(-lambda * gapDays);
+      vol     = vol * decay + e.reps;
+      goodVol = goodVol * decay + e.goodReps;
+      lastTs  = e.ts;
+
+      const volTier = tierFromVolume(vol);
+      if (volTier) {
+        const ratio     = vol > 0 ? goodVol / vol : 0;
+        const qualTier  = tierFromQuality(ratio);
+        const localTier = tierIndex(qualTier) < tierIndex(volTier) ? qualTier : volTier;
+        if (!peakTier || tierIndex(localTier) > tierIndex(peakTier)) peakTier = localTier;
+      }
+    }
+
+    if (!peakTier) continue; // never crossed Bronze, ever — not shown, not fabricated
+
+    // Decay forward from the last session to now for the current/active value.
+    const decayToNow = Math.exp(-lambda * (now - lastTs) / DAY_MS);
+    vol     *= decayToNow;
+    goodVol *= decayToNow;
+    const goodRatio = vol > 0 ? goodVol / vol : 0;
+
+    // Active tier floors at Bronze once ever earned — a long-enough absence
+    // dulls the rank toward the bottom, it doesn't erase the muscle from
+    // the map entirely. peakTier (above) is the permanent record of how
+    // high it actually got.
+    const rawVolTier  = tierFromVolume(vol);
+    const currentTier = rawVolTier
+      ? (tierIndex(tierFromQuality(goodRatio)) < tierIndex(rawVolTier) ? tierFromQuality(goodRatio) : rawVolTier)
+      : 'bronze';
+
+    out[m] = { tier: currentTier, peakTier, volume: vol, goodRatio };
   }
   return out;
 }

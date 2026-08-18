@@ -399,25 +399,55 @@ function buildBodyMapSpecs(tiers: MuscleTiers, side: 'front' | 'back', uid: stri
 // SHEEN: a soft diagonal highlight band laid over the same tier gradient,
 // escalating in strength/complexity by rank so tiers read apart by how the
 // muscle actually LOOKS (flat matte vs. bright crossed metallic sheen), not
-// by reading a word. Same whole-figure userSpaceOnUse coordinate trick the
-// base gradient already uses (see its own comment) — a per-fragment sheen
-// would show the exact same "disjointed shard" seams that trick was built to
-// avoid, so the sheen shares that one continuous coordinate space too, just
-// on a different (diagonal, corner-to-corner) axis than the base gradient's
-// vertical one, so it reads as a single light sweep crossing the figure.
-// Escalation is a plain progression (bronze flat → champion brightest
-// crossed double-sheen), not seven unrelated patterns — a rank system's
-// materials getting visibly richer as you climb is the same "this is a
-// nicer thing to look at than that one" reasoning tier colors already lean
-// on, applied to a second dimension besides just color.
+// by reading a word. Escalation is a plain progression (bronze flat →
+// champion brightest crossed double-sheen), not seven unrelated patterns —
+// a rank system's materials getting visibly richer as you climb is the same
+// "this is a nicer thing to look at than that one" reasoning tier colors
+// already lean on, applied to a second dimension besides just color.
+//
+// COORDINATE SPACE — objectBoundingBox (each fragment's own 0-1 box), NOT
+// the whole-figure userSpaceOnUse space the base color gradient uses.
+// Reported: "silver looks different front vs back." Root cause was
+// literally that shared space — the sheen's bright band was fixed at the
+// diagonal midpoint of the WHOLE FIGURE, so which part of the band a given
+// muscle's fragments actually fell under depended entirely on where that
+// muscle happens to sit on the body, not on its tier. Two different
+// muscles both ranked silver (say, one on the front figure, one on the
+// back) sit at two different positions along that one shared diagonal, so
+// they picked up two different slices of it — same tier, visibly different
+// sheen. objectBoundingBox re-centers the same band on EVERY fragment's own
+// box, so "silver" always means the exact same relative highlight
+// regardless of anatomical position or which figure it's on. This does NOT
+// bring back the old "disjointed shard" problem the base gradient's shared
+// space was built to solve — that was about a full hi-to-ink COLOR sweep
+// creating stark brightness jumps between adjacent same-muscle fragments;
+// a soft single-band highlight at consistent relative strength per fragment
+// doesn't create that same discontinuity, since the base color underneath
+// is still shared/continuous.
+// REWORKED this round — the dashed-vs-solid outline distinction (below,
+// where untrained regions used to get strokeDasharray) was removed per
+// explicit ask ("I don't like the dotted look" — go back to solid lines for
+// everything). The tier signal now has to be carried ENTIRELY by material
+// richness: a trained muscle gets a real 3-stop color gradient + this sheen
+// overlay, an untrained one gets a flat, sheen-less fill — so "ranked" vs
+// "not ranked" reads as "polished metal" vs "flat plastic," not stroke
+// style. Opacities bumped up across the board (bronze went from 0 to a real
+// value — previously it had NO sheen at all, indistinguishable from
+// untrained's flat look once dashing is gone) so every earned tier reads as
+// visibly shinier than an untrained muscle. Silver is a deliberate
+// exception to the otherwise-monotonic climb: bumped ABOVE gold's own
+// opacity and given the "double" crossed-sheen treatment (previously
+// reserved for diamond+) specifically because it was called out by name —
+// silver is a literal reflective metal, so it should read as the shiniest
+// low-tier material even though gold ranks higher.
 const TIER_SHEEN: Record<Tier, { opacity: number; double: boolean }> = {
-  bronze:   { opacity: 0,     double: false },
-  silver:   { opacity: 0.18,  double: false },
-  gold:     { opacity: 0.26,  double: false },
-  platinum: { opacity: 0.32,  double: false },
-  diamond:  { opacity: 0.30,  double: true  },
-  master:   { opacity: 0.36,  double: true  },
-  champion: { opacity: 0.44,  double: true  },
+  bronze:   { opacity: 0.16,  double: false },
+  silver:   { opacity: 0.46,  double: true  },
+  gold:     { opacity: 0.34,  double: false },
+  platinum: { opacity: 0.40,  double: true  },
+  diamond:  { opacity: 0.44,  double: true  },
+  master:   { opacity: 0.50,  double: true  },
+  champion: { opacity: 0.60,  double: true  },
 };
 
 function BodyMapSide({ tiers, side, width }: { tiers: MuscleTiers; side: 'front' | 'back'; width: number }) {
@@ -498,23 +528,24 @@ function BodyMapSide({ tiers, side, width }: { tiers: MuscleTiers; side: 'front'
           </SvgLinearGradient>
         ))}
         {/* Sheen gradients — see TIER_SHEEN's own comment for why this
-            replaces the text labels. Same userSpaceOnUse whole-figure space
-            as the base gradient above, but a DIAGONAL axis (corner to
-            corner) instead of the base gradient's vertical one, so it reads
-            as one light sweep crossing the whole figure rather than the
-            base tint. Narrow bright band via 4 stops (transparent → peak →
-            transparent) centered at the diagonal midpoint. "double" tiers
-            (diamond/master/champion) get a SECOND gradient on the counter
-            diagonal at half strength, crossing the first — that crossing is
-            the whole visual difference between "single metallic sheen" and
-            "faceted/multi-sheen" tiers, no clipped hatch-line geometry
-            needed to get there. */}
+            replaces the text labels, and for why these are
+            objectBoundingBox (each fragment's own 0-1 box), NOT the base
+            gradient's shared whole-figure space — that's the actual fix for
+            "silver looks different front vs back." x1/y1/x2/y2 in 0-1
+            fractional units, diagonal corner-to-corner across whichever
+            fragment this gets applied to. Narrow bright band via 5 stops
+            (transparent → peak → transparent) centered at the diagonal
+            midpoint. "double" tiers (diamond/master/champion) get a SECOND
+            gradient on the counter diagonal at reduced strength, crossing
+            the first — that crossing is the whole visual difference
+            between "single metallic sheen" and "faceted/multi-sheen"
+            tiers, no clipped hatch-line geometry needed to get there. */}
         {specs.map(s => {
           const sheen = TIER_SHEEN[s.tier];
           if (sheen.opacity <= 0) return null;
           return (
             <React.Fragment key={`${s.gradId}-sheen`}>
-              <SvgLinearGradient id={`${s.gradId}-sheenA`} gradientUnits="userSpaceOnUse" x1={0} y1={vbH} x2={vbW} y2={0}>
+              <SvgLinearGradient id={`${s.gradId}-sheenA`} x1="0" y1="1" x2="1" y2="0">
                 <Stop offset="0%" stopColor="#FFFFFF" stopOpacity={0} />
                 <Stop offset="42%" stopColor="#FFFFFF" stopOpacity={0} />
                 <Stop offset="50%" stopColor="#FFFFFF" stopOpacity={sheen.opacity} />
@@ -522,7 +553,7 @@ function BodyMapSide({ tiers, side, width }: { tiers: MuscleTiers; side: 'front'
                 <Stop offset="100%" stopColor="#FFFFFF" stopOpacity={0} />
               </SvgLinearGradient>
               {sheen.double && (
-                <SvgLinearGradient id={`${s.gradId}-sheenB`} gradientUnits="userSpaceOnUse" x1={0} y1={0} x2={vbW} y2={vbH}>
+                <SvgLinearGradient id={`${s.gradId}-sheenB`} x1="0" y1="0" x2="1" y2="1">
                   <Stop offset="0%" stopColor="#FFFFFF" stopOpacity={0} />
                   <Stop offset="42%" stopColor="#FFFFFF" stopOpacity={0} />
                   <Stop offset="50%" stopColor="#FFFFFF" stopOpacity={sheen.opacity * 0.55} />
@@ -557,19 +588,19 @@ function BodyMapSide({ tiers, side, width }: { tiers: MuscleTiers; side: 'front'
           light/dark diagonal streaks crossing right at shape boundaries
           reads as overlapping or broken geometry even though the
           underlying shapes are correct (audited directly against the
-          generated path data, no actual overlap). Flat true-neutral gray
-          now — went warm/tan for a round trying to dodge Silver's own cool
-          palette, but that wasn't actually what was reported broken about
-          Silver on the body map, and the tan read as an unrelated,
-          unwanted change on its own. #E4E6EA has no warm or cool lean
-          either direction. */}
+          generated path data, no actual overlap).
+          SOLID stroke, same as every trained region — the dashed variant
+          tried here previously was reported as an unwanted "dotted" look.
+          The tier signal is now carried entirely by material richness (flat
+          fill here vs. a real gradient + TIER_SHEEN overlay on trained
+          regions below), not by stroke style — see TIER_SHEEN's own comment. */}
       {Object.values(muscleRegionPaths).map((d, i) => (
-        <Path key={i} d={d} fill="#E4E6EA" stroke={muscleStrokeColor} strokeWidth={muscleStroke} strokeLinejoin="miter" />
+        <Path
+          key={i} d={d} fill="#DADDE2"
+          stroke={muscleStrokeColor} strokeWidth={muscleStroke} strokeLinejoin="miter"
+        />
       ))}
-      {/* Trained regions, tier-gradient filled, on top. Same rim treatment
-          as the neutral pass so a trained muscle's outline doesn't change
-          weight the moment it's tinted — the outline is doing the "defined
-          shape" work, independent of fill color underneath it. */}
+      {/* Trained regions, tier-gradient filled, on top. */}
       {specs.map(s => (
         <Path key={s.key} d={s.d} fill={`url(#${s.gradId})`} stroke={muscleStrokeColor} strokeWidth={muscleStroke} strokeLinejoin="miter" />
       ))}
@@ -833,6 +864,18 @@ export function computeOverallStanding(tiers: MuscleTiers): OverallStanding | nu
   return { muscle, tier: info.tier, progress: Math.min(volProgress, qualProgress), atTop: false };
 }
 
+// The highest PEAK tier ever reached, across every tracked muscle — a
+// permanent "personal best" badge, independent of computeOverallStanding's
+// weakest-link CURRENT tier (which can and will decay/dip while this never
+// does). See MuscleTierInfo.peakTier's own comment in lib/sessionLog.ts.
+export function computeOverallPeak(tiers: MuscleTiers): Tier | null {
+  const infos = Object.values(tiers) as MuscleTierInfo[];
+  if (infos.length === 0) return null;
+  let best = infos[0].peakTier;
+  for (const info of infos) if (tierIndex(info.peakTier) > tierIndex(best)) best = info.peakTier;
+  return best;
+}
+
 function tileProgress(info: MuscleTierInfo): number {
   const idx = tierIndex(info.tier);
   if (idx === TIER_ORDER.length - 1) return 1;
@@ -875,9 +918,19 @@ function MuscleTile({
       <MuscleIcon muscle={muscle} tier={info?.tier} size={thumbSize} />
       <Text style={[mh.tileName, { fontSize: Math.round(13 * scale) }]}>{MUSCLE_LABELS[muscle]}</Text>
       {info && meta ? (
-        <View style={mh.tileTierRow}>
-          <TierEmblem tier={info.tier} size={Math.round(32 * scale)} />
-          <Text style={[mh.tileTierTxt, { color: meta.ink, fontSize: Math.round(11.5 * scale) }]}>{meta.label}</Text>
+        <View style={{ alignItems: 'center' }}>
+          <View style={mh.tileTierRow}>
+            <TierEmblem tier={info.tier} size={Math.round(32 * scale)} />
+            <Text style={[mh.tileTierTxt, { color: meta.ink, fontSize: Math.round(11.5 * scale) }]}>{meta.label}</Text>
+          </View>
+          {/* Peak caption — only when it's actually above the current active
+              tier (i.e. this muscle has decayed off its all-time best),
+              otherwise showing "Peak: Gold" right under "Gold" is redundant. */}
+          {tierIndex(info.peakTier) > tierIndex(info.tier) && (
+            <Text style={[mh.tilePeakTxt, { color: TIER_META[info.peakTier].ink, fontSize: Math.round(9.5 * scale) }]}>
+              Peak: {TIER_META[info.peakTier].label}
+            </Text>
+          )}
         </View>
       ) : (
         <Text style={[mh.tileUntrained, { fontSize: Math.round(11.5 * scale) }]}>Untrained</Text>
@@ -902,6 +955,7 @@ export function MuscleTierMap({
 }) {
   const isEmpty = Object.keys(tiers).length === 0;
   const overall = useMemo(() => computeOverallStanding(tiers), [tiers]);
+  const overallPeak = useMemo(() => computeOverallPeak(tiers), [tiers]);
 
   if (isEmpty) {
     return (
@@ -965,6 +1019,20 @@ export function MuscleTierMap({
                 <Text style={[mh.heroMeterLabel, { fontSize: Math.round(12.5 * scale) }]}>
                   {pct}% to <Text style={[mh.heroNextName, { color: heroMeta.ink, fontSize: Math.round(12.5 * scale) }]}>{nextLabel}</Text>
                 </Text>
+              )}
+
+              {/* Peak badge — permanent personal-best across every muscle,
+                  independent of the (decaying) current standing above. Only
+                  shown when it's actually a different, higher tier than the
+                  current headline — otherwise it's just noise repeating the
+                  same word twice. */}
+              {overallPeak && tierIndex(overallPeak) > tierIndex(overall.tier) && (
+                <View style={[mh.peakBadge, { marginTop: Math.round(10 * scale) }]}>
+                  <TierEmblem tier={overallPeak} size={Math.round(16 * scale)} />
+                  <Text style={[mh.peakBadgeTxt, { fontSize: Math.round(11 * scale), color: TIER_META[overallPeak].ink }]}>
+                    Peak: {TIER_META[overallPeak].label}
+                  </Text>
+                </View>
               )}
             </View>
           </View>
@@ -1048,6 +1116,14 @@ const mh = StyleSheet.create({
   heroTierName:   { fontFamily: FONT.displayBlack, letterSpacing: -0.8, marginTop: 18, textAlign: 'center' },
   heroMeterLabel: { color: Col.textSub, fontWeight: W.semi, marginTop: 6, textAlign: 'center' },
   heroNextName:   { fontWeight: W.bold },
+  peakBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingVertical: 5, paddingHorizontal: 10, borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.55)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.8)',
+  },
+  peakBadgeTxt: { fontWeight: W.bold, letterSpacing: 0.2 },
+  tilePeakTxt:  { fontWeight: W.semi, marginTop: 1 },
 
   grid: {
     flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between',

@@ -7,7 +7,9 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { SymbolView } from 'expo-symbols';
+import { StatusBar } from 'expo-status-bar';
 import GlassButton from '../../components/GlassButton';
+import AppBackground from '../../components/AppBackground';
 
 const ACTIONS = [
   { id: 'form',    symbol: 'camera.fill',                         label: 'Quick Form Check' },
@@ -87,19 +89,39 @@ export default function PlusScreen() {
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents={visible ? 'auto' : 'none'}>
+      {/* Root layout defaults to StatusBar style="light" (white icons) for
+          this app's normally-dark screens — invisible against the new light
+          background here. Same override recap.tsx/muscle-ranks.tsx already
+          use for their own light backgrounds. Gated on `visible` — this is
+          a TAB screen (stays mounted, just faded in/out via animation, per
+          the useFocusEffect above), not a stack screen that naturally
+          mounts/unmounts, so an unconditional override here would still be
+          fighting for the status bar style even while a different (dark)
+          tab is the one actually showing. */}
+      {visible && <StatusBar style="dark" />}
 
       {/*
-        Dark base ALWAYS rendered outside the animated wrapper.
-        This means the instant the plus tab becomes active (even before JS
-        animation starts), there is a solid #0A0B0C background — never white.
+        Base ALWAYS rendered outside the animated wrapper — same reasoning
+        as before (the instant the plus tab becomes active, even before JS
+        animation starts, there's a real background, never a flash of white/
+        black while the blur fades in), just the light gradient+blob
+        treatment now instead of solid #0A0B0C — reported as inconsistent
+        with recap/after-workout's premium light look. Same shared
+        component those screens use (see AppBackground's own comment).
       */}
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: '#0A0B0C' }]} />
+      <AppBackground />
 
-      {/* Blur + scrim fade in/out on top of the dark base */}
+      {/* Blur + scrim fade in/out on top of the base. tint flipped
+          light→ (was "dark") to match the light background — a dark blur
+          tint here would muddy the blobs into a gray smear instead of
+          softly frosting them. Scrim also lightened (was a black 0.45 dim,
+          the exact "always dark" thing being fixed) to a soft white wash —
+          still recedes the background a touch once open, without darkening
+          it. */}
       <TouchableWithoutFeedback onPress={dismiss}>
         <Animated.View style={[StyleSheet.absoluteFill, { opacity: scrim }]}>
-          <BlurView intensity={55} tint="dark" style={StyleSheet.absoluteFill} />
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.45)' }]} />
+          <BlurView intensity={55} tint="light" style={StyleSheet.absoluteFill} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,255,255,0.28)' }]} />
         </Animated.View>
       </TouchableWithoutFeedback>
 
@@ -151,6 +173,14 @@ const s = StyleSheet.create({
   actLabel: {
     fontSize:   17,
     fontWeight: '600',
-    color:      '#F0F0F2',
+    // Was near-white (#F0F0F2) for the old solid-black background — flipped
+    // to a dark navy for the new light blob background. Matches recap.tsx's
+    // own C.text exactly (#131a2e), same convention: dark text straight on
+    // the gradient, no backing chip, since the whole palette stays light
+    // enough throughout for that to read fine (recap's own text does the
+    // same). The circular GlassButton icons next to it are unchanged and
+    // stay near-white — they sit on GlassButton's own dark glass surface,
+    // not on this background, so they still need light contrast.
+    color:      '#131a2e',
   },
 });

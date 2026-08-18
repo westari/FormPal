@@ -26,8 +26,9 @@
  */
 
 import { EXERCISE_CATALOG, LOCATION_EQUIPMENT, SPLIT_THRESHOLDS,
-         SplitCategory, type ExerciseDef } from '../constants/exercises';
+         SplitCategory, muscleCreditParts, type ExerciseDef, type Muscle } from '../constants/exercises';
 import { goalParams }                        from './goalParams';
+import { TIER_ORDER, tierIndex, type MuscleTiers } from './sessionLog';
 import type { Plan, Workout, PlannedExercise, PlanProfile,
               ExerciseProgressionState, SplitType } from '../types/plan';
 
@@ -71,9 +72,12 @@ function selectSplit(eligible: ExerciseDef[], daysPerWeek: number): SplitType {
   const countIn = (cat: SplitCategory) =>
     eligible.filter(ex => ex.splitCategories.includes(cat)).length;
 
-  // Push/Pull/Legs: needs 6+ days and >= MIN in each of Push, Pull, Lower
+  // Push/Pull/Legs: needs 5+ days and >= MIN in each of Push, Pull, Lower
+  // (was 6 — 5-6 days/week is the actual PPL convention this was meant to
+  // match; 6 was an off-by-one that silently fell back to Upper/Lower for
+  // every 5-day profile instead).
   if (
-    daysPerWeek >= 6 &&
+    daysPerWeek >= 5 &&
     countIn(SplitCategory.Push)  >= MIN &&
     countIn(SplitCategory.Pull)  >= MIN &&
     countIn(SplitCategory.Lower) >= MIN
@@ -102,6 +106,83 @@ function rotate<T>(arr: T[], by: number): T[] {
   return [...arr.slice(shift), ...arr.slice(0, shift)];
 }
 
+// ─── Movement families (for de-dup + within-family rotation) ────────────────
+// Groups the catalog's own "-family variants" blocks (see constants/
+// exercises.ts's section comments — squat/pushup/shoulder-press/lunge/row/
+// hinge/raise families are already grouped there, just not machine-
+// readable). Kept HERE rather than as a new field on ExerciseDef: this is
+// purely a plan-generation concern (which variants are interchangeable for
+// "don't schedule two squats in one session"), not a fact about the
+// exercise itself that other consumers (form-check, CV engine) need. An id
+// missing from this map is its own singleton family (no de-dup partner).
+const MOVEMENT_FAMILY: Record<string, string> = {
+  squat: 'squat', gobletSquat: 'squat', airSquat: 'squat', frontSquat: 'squat', backSquat: 'squat', sumoSquat: 'squat',
+  pushup: 'pushup', kneePushup: 'pushup', inclinePushup: 'pushup', widePushup: 'pushup', diamondPushup: 'pushup', declinePushup: 'pushup', closegripPushup: 'pushup',
+  curl: 'curl', hammerCurl: 'curl', concentrationCurl: 'curl', preacherCurl: 'curl', reverseCurl: 'curl', cableCurl: 'curl',
+  lunge: 'lunge', splitSquat: 'lunge', reverseLunge: 'lunge', stepUp: 'lunge', bulgarianSplitSquat: 'lunge',
+  shoulderPress: 'shoulderPress', overheadPress: 'shoulderPress', arnoldPress: 'shoulderPress', dumbbellShoulderPress: 'shoulderPress', machineShoulderPress: 'shoulderPress',
+  chestPress: 'chestPress', barbellBenchPress: 'chestPress',
+  tricepPushdown: 'tricep', overheadTricepExtension: 'tricep', skullcrusher: 'tricep',
+  bentOverRow: 'row', barbellRow: 'row', singleArmRow: 'row', invertedRow: 'row', tBarRow: 'row', seatedCableRow: 'row', machineRow: 'row',
+  romanianDeadlift: 'hinge', deadlift: 'hinge', goodMorning: 'hinge', kettlebellSwing: 'hinge', singleLegRDL: 'hinge', cablePullThrough: 'hinge',
+  lateralRaise: 'raise', frontRaise: 'raise',
+};
+function movementFamily(ex: ExerciseDef): string {
+  return MOVEMENT_FAMILY[ex.id] ?? ex.id;
+}
+
+// ─── Rank-weighted exercise scoring ───────────────────────────────────────────
+// Untrained muscles score highest, Champion lowest — the generator should
+// prioritize whatever's weakest, the same "weakest link" logic the rank UI
+// itself already uses (see computeOverallStanding in MuscleTierMap.tsx).
+// An exercise's score sums this priority across every muscle it targets,
+// weighted by MuscleCredit (a primary mover counts more than an assist).
+function musclePriority(muscle: Muscle, tiers: MuscleTiers): number {
+  const info = tiers[muscle];
+  if (!info) return TIER_ORDER.length; // untrained — highest priority of all
+  return TIER_ORDER.length - 1 - tierIndex(info.tier);
+}
+
+function exerciseScore(ex: ExerciseDef, tiers: MuscleTiers): number {
+  return ex.muscles.reduce((sum, entry) => {
+    const { muscle, weight } = muscleCreditParts(entry);
+    return sum + musclePriority(muscle, tiers) * weight;
+  }, 0);
+}
+
+// Caps how many exercises land in one session — the pool used to be handed
+// through unfiltered (a "Legs Day" pool of e.g. all matching catalog
+// entries), which meant no rank-driven variety could show through; a real
+// session has a bounded number of slots to actually compete for.
+const MAX_EXERCISES_PER_SESSION = 6;
+
+// Picks which exercises fill a session: group the pool by movement family,
+// rank families by their best (i.e. weakest-muscle-serving) score, take the
+// top MAX_EXERCISES_PER_SESSION families, and rotate WHICH specific variant
+// represents each family using `rotationSeed`. This is what makes plans
+// vary: the FAMILY chosen every week is still driven by the user's actual
+// rank profile (so two users with different weak muscles get different
+// plans), but the SPECIFIC exercise for a given family rotates across
+// weeks/sessions (so the same user doesn't see the exact same list every
+// week) — e.g. week 1 gets airSquat, week 2 gets backSquat, for the same
+// "squat" family slot.
+function selectExercises(pool: ExerciseDef[], tiers: MuscleTiers, rotationSeed: number): ExerciseDef[] {
+  const families = new Map<string, ExerciseDef[]>();
+  for (const ex of pool) {
+    const fam = movementFamily(ex);
+    const arr = families.get(fam) ?? [];
+    arr.push(ex);
+    families.set(fam, arr);
+  }
+
+  const ranked = Array.from(families.values())
+    .map(exs => ({ exs, score: Math.max(...exs.map(ex => exerciseScore(ex, tiers))) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, MAX_EXERCISES_PER_SESSION);
+
+  return ranked.map(({ exs }, i) => exs[(rotationSeed + i) % exs.length]);
+}
+
 // ─── Workout builder ──────────────────────────────────────────────────────────
 
 function buildWorkout(
@@ -112,6 +193,7 @@ function buildWorkout(
   startReps:    number,
   startSets:    number,
   restSeconds:  number,
+  tiers:        MuscleTiers,
 ): Workout {
   let pool:       ExerciseDef[];
   let splitLabel: string;
@@ -141,8 +223,14 @@ function buildWorkout(
     rationale         = [PUSH_RATIONALE, PULL_RATIONALE, LEGS_RATIONALE][bucketIndex];
   }
 
-  // Rotate exercise order each session — different exercise gets the "prime" slot
-  const ordered = rotate(pool, sessionIndex);
+  // Rank-weighted, family-deduped selection (see selectExercises) — picks
+  // which movement families actually fill this session, biased toward the
+  // user's weakest-ranked muscles, then rotates which specific variant
+  // represents each family so the same user's plan varies week to week.
+  const selected = selectExercises(pool, tiers, sessionIndex);
+  // Rotate the chosen list's ORDER too — different exercise still gets the
+  // "prime" first slot each session, same reasoning as before.
+  const ordered = rotate(selected, sessionIndex);
 
   const exercises: PlannedExercise[] = ordered.map(ex => ({
     exerciseId:         ex.id,
@@ -169,7 +257,11 @@ function buildWorkout(
 // The store auto-regenerates when the user approaches the end.
 const PLAN_WEEKS = 4;
 
-export function generatePlan(profile: PlanProfile): Plan {
+// `tiers` defaults to empty — a brand-new user with no session history has
+// no rank profile yet, and every muscle scoring as equally "untrained"
+// (see musclePriority) degrades gracefully to plain catalog order, so this
+// is backward compatible for day-one plans.
+export function generatePlan(profile: PlanProfile, tiers: MuscleTiers = {}): Plan {
   const params = goalParams(profile.goal, profile.experience);
 
   // Filter catalog to exercises reachable at this location
@@ -188,7 +280,7 @@ export function generatePlan(profile: PlanProfile): Plan {
   const totalSessions = profile.daysPerWeek * PLAN_WEEKS;
 
   const workouts: Workout[] = Array.from({ length: totalSessions }, (_, i) =>
-    buildWorkout(i, eligible, splitType, profile, params.startReps, params.startSets, params.restSeconds)
+    buildWorkout(i, eligible, splitType, profile, params.startReps, params.startSets, params.restSeconds, tiers)
   );
 
   // Initialize progression state for every eligible exercise

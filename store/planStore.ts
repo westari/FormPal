@@ -20,6 +20,7 @@ import { applyWorkoutProgression }            from '../lib/progression';
 import { savePlan, loadPlan, saveProfile,
          loadProfile, clearPlan }             from '../lib/planStorage';
 import { getExerciseDef }                     from '../constants/exercises';
+import { getAllSessions, computeMuscleTiers } from '../lib/sessionLog';
 import type { Plan, Workout, PlanProfile }    from '../types/plan';
 
 interface PlanState {
@@ -60,7 +61,13 @@ export const usePlanStore = create<PlanState>()((set, get) => ({
   // ── Create plan ───────────────────────────────────────────────────────────
 
   createPlan: async (profile: PlanProfile) => {
-    const plan = generatePlan(profile);
+    // Pull the user's real muscle-rank profile so the generator can bias
+    // toward their weakest muscles from the very first plan — see
+    // selectExercises in lib/planGenerator.ts. Empty for a brand-new user,
+    // which degrades gracefully (every muscle reads as equally untrained).
+    const sessions = await getAllSessions();
+    const tiers    = computeMuscleTiers(sessions);
+    const plan     = generatePlan(profile, tiers);
     await Promise.all([savePlan(plan), saveProfile(profile)]);
     set({ plan, profile });
   },
@@ -70,7 +77,9 @@ export const usePlanStore = create<PlanState>()((set, get) => ({
   regenerate: async () => {
     const { profile } = get();
     if (!profile) return;
-    const plan = generatePlan(profile);
+    const sessions = await getAllSessions();
+    const tiers    = computeMuscleTiers(sessions);
+    const plan     = generatePlan(profile, tiers);
     await savePlan(plan);
     set({ plan });
   },

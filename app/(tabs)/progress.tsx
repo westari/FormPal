@@ -33,7 +33,7 @@ import Svg, {
 import { FONT, Sp, W } from '../../constants/theme';
 import Ring from '../../components/Ring';
 import ScreenBackground from '../../components/ScreenBackground';
-import { TierEmblem, MUSCLE_LABELS, MUSCLE_DISPLAY_ORDER } from '../../components/MuscleTierMap';
+import { BodyMap } from '../../components/MuscleTierMap';
 import {
   getAllSessions, groupIntoWorkouts, computeMuscleTiers,
   type SessionEntry, type WorkoutGroup,
@@ -405,24 +405,24 @@ const ifc = StyleSheet.create({
   insightBold: { fontWeight: W.bold },
 });
 
-// ─── MuscleRankPreview ──────────────────────────────────────────────────────
-// REPLACED the old full MuscleMapCard (the entire body diagram + legend +
-// list, dropped mid-page between the chart and milestones) — reported as
-// too crowded. This is a compact preview only: one small tier emblem per
-// muscle group, tap to open the full dedicated page (app/muscle-ranks.tsx)
-// for the real diagram/legend/list. Moved to the TOP of the page, above the
-// form chart, per the explicit ask.
-
-const PREVIEW_MUSCLE_CAP = 6;
-
-function MuscleRankPreview({ sessions }: { sessions: SessionEntry[] }) {
+// ─── MuscleMapPreview ───────────────────────────────────────────────────────
+// REPLACES the old tile-row preview (one small tier emblem per muscle,
+// capped at 6 + a "+N" tally) with the actual BodyMap diagram — per explicit
+// ask: "show the MUSCLE BODY MAP as a preview... tapping it opens the full
+// standings page." BodyMap is the same component muscle-ranks.tsx and
+// recap.tsx already render (front+back diagram + tier legend row) — reused
+// directly, not a new one-off, at a compact scale so it doesn't reintroduce
+// the "too crowded" problem the ORIGINAL full MuscleMapCard (this exact
+// diagram PLUS a legend list PLUS a per-muscle list, all at once) was
+// reported for and replaced because of. BodyMap alone is a fraction of that:
+// diagram + legend row, no per-muscle list underneath (that's what tapping
+// through to /muscle-ranks is for). No separate empty-state text needed —
+// BodyMap already reads as "nothing trained yet" on its own (an all-neutral-
+// gray figure), same as how recap.tsx and muscle-ranks.tsx both already rely
+// on that same fallback with zero special-casing.
+function MuscleMapPreview({ sessions }: { sessions: SessionEntry[] }) {
   const router = useRouter();
   const tiers = useMemo(() => computeMuscleTiers(sessions), [sessions]);
-  const isEmpty = sessions.length === 0;
-  const trainedPreview = useMemo(() => {
-    const trained = MUSCLE_DISPLAY_ORDER.filter(m => tiers[m]);
-    return { shown: trained.slice(0, PREVIEW_MUSCLE_CAP), extra: Math.max(0, trained.length - PREVIEW_MUSCLE_CAP) };
-  }, [tiers]);
 
   return (
     <Pressable
@@ -437,33 +437,13 @@ function MuscleRankPreview({ sessions }: { sessions: SessionEntry[] }) {
           </View>
           <SymbolView name="chevron.right" size={13} tintColor={C.textDim} type="monochrome" style={{ width: 13, height: 13 }} />
         </View>
-
-        {isEmpty ? (
-          <Text style={mm.emptySub}>Log a session to start earning ranks</Text>
-        ) : (
-          <View style={mm.previewRow}>
-            {/* 14 individual muscles (was 6 broad groups) don't fit one
-                non-wrapping row — show only what's actually trained, capped,
-                with a "+N" tally for the rest (visible on the full page). */}
-            {trainedPreview.shown.map(m => {
-              const info = tiers[m];
-              return (
-                <View key={m} style={mm.previewItem}>
-                  {info ? <TierEmblem tier={info.tier} size={42} /> : <View style={mm.emptyEmblem} />}
-                  <Text style={mm.previewLabel}>{MUSCLE_LABELS[m]}</Text>
-                </View>
-              );
-            })}
-            {trainedPreview.extra > 0 && (
-              <View style={mm.previewItem}>
-                <View style={mm.moreChip}>
-                  <Text style={mm.moreChipTxt}>+{trainedPreview.extra}</Text>
-                </View>
-                <Text style={mm.previewLabel}>more</Text>
-              </View>
-            )}
-          </View>
-        )}
+        {/* pointerEvents="none" — the whole card is already one Pressable
+            (tap anywhere to open /muscle-ranks); BodyMap has no interactive
+            elements of its own, this just stops it from ever intercepting
+            the tap on some inner element. */}
+        <View pointerEvents="none">
+          <BodyMap tiers={tiers} scale={0.6} />
+        </View>
       </View>
     </Pressable>
   );
@@ -478,13 +458,6 @@ const mm = StyleSheet.create({
   header:         { gap: 2 },
   title:          { fontSize: 15.5, fontWeight: W.bold, letterSpacing: -0.2, color: C.text },
   sub:            { fontSize: 11, fontWeight: W.medium, color: C.textSub },
-  emptySub:       { fontSize: 13, color: C.textSub, textAlign: 'center', paddingVertical: 10 },
-  previewRow:     { flexDirection: 'row', justifyContent: 'space-between' },
-  previewItem:    { alignItems: 'center', gap: 5 },
-  previewLabel:   { fontSize: 9.5, fontWeight: W.semi, color: C.textSub },
-  emptyEmblem:    { width: 42, height: 42, borderRadius: 21, backgroundColor: C.border },
-  moreChip:       { width: 22, height: 22, borderRadius: 11, backgroundColor: C.border, alignItems: 'center', justifyContent: 'center' },
-  moreChipTxt:    { fontSize: 9.5, fontWeight: W.bold, color: C.textSub },
 });
 
 // ─── MilestoneCard ────────────────────────────────────────────────────────────
@@ -663,9 +636,9 @@ export default function ProgressScreen() {
             <Text style={s.sub}>Your form score and training history.</Text>
           </View>
 
-          {/* ── MUSCLE RANK PREVIEW — moved above the chart, per explicit ask.
+          {/* ── MUSCLE MAP PREVIEW — moved above the chart, per explicit ask.
               Compact only; tap opens the full dedicated page. ──────────── */}
-          <MuscleRankPreview sessions={sessions} />
+          <MuscleMapPreview sessions={sessions} />
 
           {/* ── FORM TREND CHART ──────────────────────────────────────── */}
           <View>

@@ -948,6 +948,15 @@ final class ExerciseEngine {
             if !hasSettled {
                 preSettleFrameCount += 1
                 settleCandidateTop = max(settleCandidateTop, angle)
+                // Per-frame trace — same diagnostic purpose as .inRep's own
+                // trace above, covering the PRE-settle window instead: shows
+                // exactly what angle values the engine saw before it locked
+                // in a "rest" anchor, which is what determines whether that
+                // anchor was ever genuinely at rest or (the bug this was
+                // added to catch) already mid-motion.
+                onDebugLog?("[SETTLE-TRACE] \(def.id) angle=\(String(format: "%.4f", angle)) " +
+                            "settleCandidateTop=\(String(format: "%.4f", settleCandidateTop)) " +
+                            "framesSeen=\(preSettleFrameCount)")
 
                 if angle > effectiveExitThreshold {
                     settledTopFrames = min(settledTopFrames + 1, Self.SETTLE_FRAMES + 2)
@@ -1021,6 +1030,20 @@ final class ExerciseEngine {
             }
 
         case .inRep:
+            // Per-frame metric trace — DIAGNOSTIC for comparing what the video-
+            // file path actually samples per rep against what live capture
+            // sampled for the identical set (see the "video path phantom-
+            // rejects real reps" investigation). Logged for every frame across
+            // the whole .inRep window, which is bounded to roughly one rep's
+            // real duration (a couple of seconds) even on a live session, so
+            // this can't flood the log the way a continuous per-frame trace
+            // over the whole session would. Logged BEFORE the pose-gap guard
+            // below so a skipped/gated frame still shows up here — otherwise
+            // "gaps" in the sampled range would be invisible in this trace.
+            onDebugLog?("[REP-TRACE] \(def.id) angle=\(String(format: "%.4f", angle)) " +
+                        "repMinAngle=\(String(format: "%.4f", repMinAngle)) " +
+                        "framesSincePoseGap=\(framesSincePoseGap)")
+
             // Same framesSincePoseGap gate as entry, applied to BOTH the min-angle
             // tracking and the completion check — a garbled post-gap frame must not
             // corrupt repMinAngle (the recorded depth) even if it doesn't complete

@@ -641,6 +641,27 @@ function shoulderPressVariant(
     calibration:     { repsNeeded: 2, enterFraction: 0.50, exitFraction: 0.25 },
     minRepInterval:  0.5,
     planarityChecks: SHOULDER_PRESS_PLANARITY,
+    // ADDED — video-file re-analysis investigation (analyzeVideoFile Phase 1
+    // test): a fresh engine analyzing a pre-recorded clip starts its own
+    // independent SETUP+settle sequence from frame 0 of the file, which can
+    // land at a different point in the person's actual rep cadence than the
+    // ORIGINAL live session's setup did. Real device log: a 4-rep shoulder
+    // press video had every rep phantom-rejected because the settle/resync
+    // path (ExerciseEngine.swift's "resync on first real rep attempt") had
+    // locked repTopValue to 59.23 — BELOW repEnterThreshold(68) itself, a
+    // self-evidently invalid "rest" reading (you can't be at rest already
+    // past the enter threshold). This is the exact failure mode
+    // latPulldownVariant()'s own settleAnchorMinFraction was built for (see
+    // that field's comment in ExerciseDefinition.swift and its 0.3 value
+    // below) — REUSED here verbatim, not a new guess: latPulldown's own
+    // registration explicitly reuses shoulderPress's rep-detection mirrored,
+    // so the same anchor-quality gate applies symmetrically. Requires the
+    // settle anchor to sit >= goodROMThreshold + (topAngle-goodROMThreshold)
+    // * 0.3 = 55 + 8.7 = 63.7 before it's accepted as a genuine "arms
+    // overhead" rest reading — 59.23 would now correctly be REJECTED
+    // (engine keeps waiting for a real overhead frame) instead of locking in
+    // a broken anchor that dooms every subsequent rep in the clip.
+    settleAnchorMinFraction: 0.3,
   };
 }
 
@@ -2771,6 +2792,12 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     // 35→60→55 — see shoulderPressVariant()'s comment for the real-press log this is based on.
     goodROMThreshold:   55,
     insufficientROMCue: 'PRESS HIGHER',
+    // See shoulderPressVariant()'s identical field for the full writeup —
+    // fixes a real video-re-analysis bug where the settle/resync path locked
+    // onto a repTopValue (59.23) below repEnterThreshold(68) itself,
+    // phantom-rejecting every rep in the clip. Same 0.3 value latPulldown
+    // already uses for this exact failure mode.
+    settleAnchorMinFraction: 0.3,
 
     formChecks: [
       {
