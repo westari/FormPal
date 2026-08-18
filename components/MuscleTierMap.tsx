@@ -37,7 +37,7 @@ import type { MuscleTiers, MuscleTierInfo, Tier } from '../lib/sessionLog';
 import { TIER_ORDER, tierIndex, VOLUME_THRESHOLDS, QUALITY_THRESHOLDS } from '../lib/sessionLog';
 import { FRONT_MUSCLE_PATHS, BACK_MUSCLE_PATHS } from './muscleShapePaths';
 import {
-  MUSCLE_MAP_FRONT_PATHS, MUSCLE_MAP_BACK_PATHS, MUSCLE_MAP_REGIONS, MUSCLE_MAP_VIEWBOX, MUSCLE_MAP_LABEL_POS,
+  MUSCLE_MAP_FRONT_PATHS, MUSCLE_MAP_BACK_PATHS, MUSCLE_MAP_REGIONS, MUSCLE_MAP_VIEWBOX,
 } from './muscleMapPaths.generated';
 import { Col, FONT, W, Sp } from '../constants/theme';
 
@@ -372,7 +372,7 @@ function MuscleIcon({ muscle, tier, size }: { muscle: Muscle; tier?: Tier; size:
 // artwork, all 14 muscles present — the old body-muscles-package dataset
 // only had regions for 11), rendered with the same flat TIER_META 3-stop
 // gradient fill the tile icons and hero ring already use.
-interface BodyMapSpec { key: string; d: string; gradId: string; meta: { hi: string; lo: string; ink: string } }
+interface BodyMapSpec { key: string; d: string; gradId: string; tier: Tier; meta: { hi: string; lo: string; ink: string } }
 
 function buildBodyMapSpecs(tiers: MuscleTiers, side: 'front' | 'back', uid: string): BodyMapSpec[] {
   const table = side === 'front' ? MUSCLE_MAP_FRONT_PATHS : MUSCLE_MAP_BACK_PATHS;
@@ -386,39 +386,43 @@ function buildBodyMapSpecs(tiers: MuscleTiers, side: 'front' | 'back', uid: stri
     for (const id of region.ids) {
       const d = table[id];
       if (!d) continue;
-      out.push({ key: `${m}-${id}`, d, gradId: `bm-${uid}-${m}-${id}`, meta });
+      out.push({ key: `${m}-${id}`, d, gradId: `bm-${uid}-${m}-${id}`, tier: info.tier, meta });
     }
   }
   return out;
 }
 
-// ─── Rank text labels ───────────────────────────────────────────────────────
-// Color alone doesn't tell a reader WHICH rank a muscle is at (reported: "the
-// map only shows rank as a color, which doesn't look good or clear") — one
-// small text label per TRAINED muscle, sitting on that muscle's own largest
-// fragment (see MUSCLE_MAP_LABEL_POS's own comment for how the anchor point
-// was picked). Untrained muscles get no label, same "not shown, not
-// fabricated" rule buildBodyMapSpecs already follows for fill color.
-interface BodyMapLabelSpec { key: string; x: number; y: number; text: string; ink: string }
-
-function buildBodyMapLabels(tiers: MuscleTiers, side: 'front' | 'back'): BodyMapLabelSpec[] {
-  const out: BodyMapLabelSpec[] = [];
-  for (const m of Object.keys(MUSCLE_MAP_REGIONS) as Muscle[]) {
-    const region = MUSCLE_MAP_REGIONS[m]!;
-    if (region.side !== side) continue;
-    const info = tiers[m];
-    if (!info) continue;
-    const pos = MUSCLE_MAP_LABEL_POS[m];
-    if (!pos || pos.side !== side) continue;
-    out.push({ key: m, x: pos.x, y: pos.y, text: TIER_META[info.tier].label.toUpperCase(), ink: TIER_META[info.tier].ink });
-  }
-  return out;
-}
+// ─── Per-tier texture, not text ─────────────────────────────────────────────
+// Text labels ("SILVER", "GOLD" spelled out on the muscle) were the wrong
+// read on the original ask ("distinct visual treatment," not a word) and
+// looked bad on top of that — removed entirely, replaced with a material
+// SHEEN: a soft diagonal highlight band laid over the same tier gradient,
+// escalating in strength/complexity by rank so tiers read apart by how the
+// muscle actually LOOKS (flat matte vs. bright crossed metallic sheen), not
+// by reading a word. Same whole-figure userSpaceOnUse coordinate trick the
+// base gradient already uses (see its own comment) — a per-fragment sheen
+// would show the exact same "disjointed shard" seams that trick was built to
+// avoid, so the sheen shares that one continuous coordinate space too, just
+// on a different (diagonal, corner-to-corner) axis than the base gradient's
+// vertical one, so it reads as a single light sweep crossing the figure.
+// Escalation is a plain progression (bronze flat → champion brightest
+// crossed double-sheen), not seven unrelated patterns — a rank system's
+// materials getting visibly richer as you climb is the same "this is a
+// nicer thing to look at than that one" reasoning tier colors already lean
+// on, applied to a second dimension besides just color.
+const TIER_SHEEN: Record<Tier, { opacity: number; double: boolean }> = {
+  bronze:   { opacity: 0,     double: false },
+  silver:   { opacity: 0.18,  double: false },
+  gold:     { opacity: 0.26,  double: false },
+  platinum: { opacity: 0.32,  double: false },
+  diamond:  { opacity: 0.30,  double: true  },
+  master:   { opacity: 0.36,  double: true  },
+  champion: { opacity: 0.44,  double: true  },
+};
 
 function BodyMapSide({ tiers, side, width }: { tiers: MuscleTiers; side: 'front' | 'back'; width: number }) {
   const uid = useId();
   const specs = useMemo(() => buildBodyMapSpecs(tiers, side, uid), [tiers, side, uid]);
-  const labels = useMemo(() => buildBodyMapLabels(tiers, side), [tiers, side]);
   const allPaths = side === 'front' ? MUSCLE_MAP_FRONT_PATHS : MUSCLE_MAP_BACK_PATHS;
   // Silhouette (the one whole-body outline shape) rendered as its own
   // layer, separate from every other region — it gets a bolder, wider
@@ -427,7 +431,7 @@ function BodyMapSide({ tiers, side, width }: { tiers: MuscleTiers; side: 'front'
   // divisions inside it, not two things fighting at the same weight.
   const { silhouette, ...muscleRegionPaths } = allPaths;
   const viewBox = MUSCLE_MAP_VIEWBOX[side];
-  const [vbX, vbY, vbW, vbH] = viewBox.split(' ').map(Number);
+  const [, , vbW, vbH] = viewBox.split(' ').map(Number);
   const height = Math.round((width * vbH) / vbW);
   // ROOT CAUSE of "still looks wiry/thin" after the first stroke-width bump:
   // strokeWidth was a FIXED number in the SVG's internal viewBox coordinate
@@ -446,12 +450,23 @@ function BodyMapSide({ tiers, side, width }: { tiers: MuscleTiers; side: 'front'
   // muscleMapPaths.generated.ts (Ramer-Douglas-Peucker simplification), not
   // by hiding it behind a thinner line here.
   const shrink = vbW / width;
-  const muscleStroke     = 2.6 * shrink;
-  // 4.5 → 3 — reported "too thick" specifically on the outer body outline
-  // (the muscle-region weight above was untouched, still 2.6 — this was
-  // only ever about the silhouette's own rim being heavier than it needed
-  // to be, not the region boundaries inside it).
-  const silhouetteStroke = 3 * shrink;
+  // ROUND joins reported "too cartoonish/hand-drawn" — the path data is
+  // straight-edged polygons now (RDP-simplified, see muscleMapPaths.
+  // generated.ts), and a round join puts a visible little bubble at every
+  // vertex of an angular shape, which is exactly a thick-marker/coloring-
+  // book signature, not a clean vector one. MITER (the SVG default, sharp
+  // corners) is the actual fix here, not a width change alone.
+  // Width DOWN again (2.6/3 → 2.0/2.4) and color softened from solid
+  // #0A0A0F to a translucent dark charcoal — pure black at full opacity is
+  // the other half of "cartoon outline"; a dark-but-not-ink stroke reads as
+  // a refined edge instead of a comic-panel line, while staying meaningfully
+  // heavier than the original 1.1px/low-opacity hairline that was reported
+  // "wiry" in the first place. Silhouette stays the visibly bolder of the
+  // two (the outer "frame"), muscle regions lighter (internal divisions).
+  const muscleStroke     = 2.0 * shrink;
+  const silhouetteStroke = 2.4 * shrink;
+  const muscleStrokeColor     = 'rgba(15,18,28,0.55)';
+  const silhouetteStrokeColor = 'rgba(10,12,18,0.78)';
   return (
     <View style={{ width, height }}>
     <Svg width={width} height={height} viewBox={viewBox}>
@@ -482,10 +497,48 @@ function BodyMapSide({ tiers, side, width }: { tiers: MuscleTiers; side: 'front'
             <Stop offset="100%" stopColor={s.meta.ink} />
           </SvgLinearGradient>
         ))}
+        {/* Sheen gradients — see TIER_SHEEN's own comment for why this
+            replaces the text labels. Same userSpaceOnUse whole-figure space
+            as the base gradient above, but a DIAGONAL axis (corner to
+            corner) instead of the base gradient's vertical one, so it reads
+            as one light sweep crossing the whole figure rather than the
+            base tint. Narrow bright band via 4 stops (transparent → peak →
+            transparent) centered at the diagonal midpoint. "double" tiers
+            (diamond/master/champion) get a SECOND gradient on the counter
+            diagonal at half strength, crossing the first — that crossing is
+            the whole visual difference between "single metallic sheen" and
+            "faceted/multi-sheen" tiers, no clipped hatch-line geometry
+            needed to get there. */}
+        {specs.map(s => {
+          const sheen = TIER_SHEEN[s.tier];
+          if (sheen.opacity <= 0) return null;
+          return (
+            <React.Fragment key={`${s.gradId}-sheen`}>
+              <SvgLinearGradient id={`${s.gradId}-sheenA`} gradientUnits="userSpaceOnUse" x1={0} y1={vbH} x2={vbW} y2={0}>
+                <Stop offset="0%" stopColor="#FFFFFF" stopOpacity={0} />
+                <Stop offset="42%" stopColor="#FFFFFF" stopOpacity={0} />
+                <Stop offset="50%" stopColor="#FFFFFF" stopOpacity={sheen.opacity} />
+                <Stop offset="58%" stopColor="#FFFFFF" stopOpacity={0} />
+                <Stop offset="100%" stopColor="#FFFFFF" stopOpacity={0} />
+              </SvgLinearGradient>
+              {sheen.double && (
+                <SvgLinearGradient id={`${s.gradId}-sheenB`} gradientUnits="userSpaceOnUse" x1={0} y1={0} x2={vbW} y2={vbH}>
+                  <Stop offset="0%" stopColor="#FFFFFF" stopOpacity={0} />
+                  <Stop offset="42%" stopColor="#FFFFFF" stopOpacity={0} />
+                  <Stop offset="50%" stopColor="#FFFFFF" stopOpacity={sheen.opacity * 0.55} />
+                  <Stop offset="58%" stopColor="#FFFFFF" stopOpacity={0} />
+                  <Stop offset="100%" stopColor="#FFFFFF" stopOpacity={0} />
+                </SvgLinearGradient>
+              )}
+            </React.Fragment>
+          );
+        })}
       </Defs>
-      {/* Whole-body silhouette outline — solid black, wide stroke. Drawn
-          first/behind everything so its rim frames the whole figure. */}
-      <Path d={silhouette} fill="#E4E6EA" stroke="#0A0A0F" strokeWidth={silhouetteStroke} strokeLinejoin="round" />
+      {/* Whole-body silhouette outline — drawn first/behind everything so
+          its rim frames the whole figure. Dark charcoal, not solid black —
+          see muscleStrokeColor/silhouetteStrokeColor's own comment above
+          for why (reported "too cartoonish/hand-drawn"). */}
+      <Path d={silhouette} fill="#E4E6EA" stroke={silhouetteStrokeColor} strokeWidth={silhouetteStroke} strokeLinejoin="miter" />
       {/* Neutral muscle regions — every region, untinted, so untrained
           muscles still read as part of one coherent body, not a gap.
           OPAQUE fill — was a translucent rgba, which looked fine for the
@@ -509,98 +562,33 @@ function BodyMapSide({ tiers, side, width }: { tiers: MuscleTiers; side: 'front'
           palette, but that wasn't actually what was reported broken about
           Silver on the body map, and the tan read as an unrelated,
           unwanted change on its own. #E4E6EA has no warm or cool lean
-          either direction. Stroke SOLID BLACK at full opacity, width
-          bumped 1.1→3 (was reported "thin/wiry/stencil-like" at the old
-          low-opacity blue-gray hairline — a real black outline, not a
-          faint tint, is what actually reads as "defined" at this size). */}
+          either direction. */}
       {Object.values(muscleRegionPaths).map((d, i) => (
-        <Path key={i} d={d} fill="#E4E6EA" stroke="#0A0A0F" strokeWidth={muscleStroke} strokeLinejoin="round" />
+        <Path key={i} d={d} fill="#E4E6EA" stroke={muscleStrokeColor} strokeWidth={muscleStroke} strokeLinejoin="miter" />
       ))}
-      {/* Trained regions, tier-gradient filled, on top. Same solid black
-          rim as the neutral pass (was a separate, fainter navy at low
-          opacity) so a trained muscle's outline doesn't go thin/pale the
-          moment it's tinted — the black rim is what's actually doing the
-          "defined shape" work, independent of fill color underneath it. */}
+      {/* Trained regions, tier-gradient filled, on top. Same rim treatment
+          as the neutral pass so a trained muscle's outline doesn't change
+          weight the moment it's tinted — the outline is doing the "defined
+          shape" work, independent of fill color underneath it. */}
       {specs.map(s => (
-        <Path key={s.key} d={s.d} fill={`url(#${s.gradId})`} stroke="#0A0A0F" strokeWidth={muscleStroke} strokeLinejoin="round" />
+        <Path key={s.key} d={s.d} fill={`url(#${s.gradId})`} stroke={muscleStrokeColor} strokeWidth={muscleStroke} strokeLinejoin="miter" />
       ))}
+      {/* Sheen overlay pass — fill only, no stroke (would double the rim
+          weight for no reason). Drawn last so the highlight sits on top of
+          the tier color it's modulating, same "one continuous sweep" logic
+          as the base gradient. */}
+      {specs.map(s => {
+        const sheen = TIER_SHEEN[s.tier];
+        if (sheen.opacity <= 0) return null;
+        return (
+          <React.Fragment key={`${s.key}-sheen`}>
+            <Path d={s.d} fill={`url(#${s.gradId}-sheenA)`} />
+            {sheen.double && <Path d={s.d} fill={`url(#${s.gradId}-sheenB)`} />}
+          </React.Fragment>
+        );
+      })}
     </Svg>
-    {/* Rank text labels — REAL RN <Text>, absolutely positioned over the
-        SVG, not SVG-native <Text>. This is the fix for "labels are really
-        bad": SVG <Text> was the only place in this entire file using the
-        SVG text primitive instead of RN's own — every other label here
-        (tierLegendLabel, bodyMapLabel, tileName, etc.) is plain <Text> with
-        this app's actual FONT/W tokens, and SVG <Text> silently ignores
-        that whole system (no fontFamily wired to it, so it fell back to a
-        generic system font never matching the rest of the app's
-        typography) — plus react-native-svg's alignmentBaseline centering is
-        known-unreliable specifically on iOS, which is this app's only
-        target. A plain <Text> sidesteps both problems at once: real native
-        text rendering, and the same FONT.body/W.bold/letterSpacing recipe
-        every other small caption in this file already uses. Position is
-        computed by mapping each label's viewBox-space anchor (vbX/vbY/vbW/
-        vbH) onto this side's actual rendered width/height — the same ratio
-        the Svg element itself uses to scale viewBox units to screen
-        pixels. */}
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {labels.map(l => (
-        <RankLabel
-          key={l.key}
-          leftFrac={(l.x - vbX) / vbW}
-          topFrac={(l.y - vbY) / vbH}
-          containerWidth={width}
-          containerHeight={height}
-          text={l.text}
-          ink={l.ink}
-        />
-      ))}
     </View>
-    </View>
-  );
-}
-
-// One rank label — a small fixed-width, center-aligned RN <Text>, positioned
-// by its CENTER (not top-left) over the muscle's anchor point, with a solid
-// halo built from 8 offset copies underneath rather than textShadow: shadow
-// blur quality/support varies enough across RN/iOS versions that it can read
-// as a soft smudge instead of a crisp readable edge — stacked 1px-offset
-// copies always look like a solid outline regardless of shadow rendering,
-// the same "poor man's text-stroke" technique used because RN's core Text
-// has no native stroke/outline property at all (only SVG Text does, which
-// is exactly what this replaces).
-const LABEL_BOX_WIDTH = 62;
-const LABEL_FONT_SIZE = 7.5;
-const HALO_OFFSETS: [number, number][] = [
-  [-1, -1], [1, -1], [-1, 1], [1, 1], [0, -1], [0, 1], [-1, 0], [1, 0],
-];
-
-function RankLabel({
-  leftFrac, topFrac, containerWidth, containerHeight, text, ink,
-}: {
-  leftFrac: number; topFrac: number; containerWidth: number; containerHeight: number;
-  text: string; ink: string;
-}) {
-  const centerX = leftFrac * containerWidth;
-  const centerY = topFrac * containerHeight;
-  const left = centerX - LABEL_BOX_WIDTH / 2;
-  const top  = centerY - (LABEL_FONT_SIZE * 1.3) / 2;
-  return (
-    <>
-      {HALO_OFFSETS.map(([dx, dy], i) => (
-        <Text
-          key={i}
-          style={[mh.rankLabel, {
-            left: left + dx, top: top + dy, width: LABEL_BOX_WIDTH, fontSize: LABEL_FONT_SIZE,
-            color: 'rgba(255,255,255,0.95)',
-          }]}
-        >
-          {text}
-        </Text>
-      ))}
-      <Text style={[mh.rankLabel, { left, top, width: LABEL_BOX_WIDTH, fontSize: LABEL_FONT_SIZE, color: ink }]}>
-        {text}
-      </Text>
-    </>
   );
 }
 
@@ -1031,19 +1019,6 @@ const mh = StyleSheet.create({
   bodyMapRow: { flexDirection: 'row', justifyContent: 'center', gap: 16 },
   bodyMapCol: { alignItems: 'center', gap: 6 },
   bodyMapLabel: { fontWeight: W.bold, letterSpacing: 0.6, color: Col.textSub },
-  // Rank text labels on the body map — same small-caps-label recipe as
-  // tierLegendLabel/bodyMapLabel above (system font via W.bold, not a
-  // FONT.display* — this is well below Sz.h3, so system font is the correct
-  // choice per this theme file's own FONT.body rule), just positioned
-  // absolutely instead of laid out in flex flow. `text` in the tier's own
-  // uppercase label already (see buildBodyMapLabels), so no textTransform
-  // needed here.
-  rankLabel: {
-    position: 'absolute',
-    fontWeight: W.bold,
-    letterSpacing: 0.3,
-    textAlign: 'center',
-  },
 
   // Shadow lives here (outer, unclipped) — `hero` below has overflow:hidden
   // for the rounded-corner blur/gradient clip, and shadow + overflow:hidden

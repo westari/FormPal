@@ -692,6 +692,24 @@ public class ATHLTCameraModule: Module {
             if conn.isVideoOrientationSupported { conn.videoOrientation = .portrait }
             if conn.isVideoMirroringSupported   { conn.isVideoMirrored  = (position == .front) }
         }
+        // ROOT CAUSE of Phase 1's "reps=0, orientation defaulted to .up"
+        // report: this exact same orientation/mirroring setup was only ever
+        // applied to dataOutput's connection (the live-frame path) — the
+        // MOVIE output's own connection was never configured at all, left at
+        // whatever AVFoundation's unconfigured default is. That's why a
+        // recorded file's preferredTransform didn't match any of
+        // doAnalyzeVideoFile's three explicit orientation cases and fell
+        // through to the default (.up, rawValue 1 — see that function's own
+        // comment on why the ORIGINAL debug log's "0=up 1=down..." legend
+        // was simply wrong, not just the orientation itself): the live path
+        // and the recording path were never actually symmetric. Matching
+        // the recording connection to the live one now so every future
+        // recording's on-disk transform means the same thing this app's own
+        // playback/re-analysis code already assumes.
+        if let movieConn = movieOut.connection(with: .video) {
+            if movieConn.isVideoOrientationSupported { movieConn.videoOrientation = .portrait }
+            if movieConn.isVideoMirroringSupported   { movieConn.isVideoMirrored  = (position == .front) }
+        }
 
         session.commitConfiguration()
         captureSession = session
@@ -725,6 +743,12 @@ public class ATHLTCameraModule: Module {
         if let conn = output.connection(with: .video) {
             if conn.isVideoOrientationSupported { conn.videoOrientation = .portrait }
             if conn.isVideoMirroringSupported   { conn.isVideoMirrored  = (newPos == .front) }
+        }
+        // Same fix as configureSession — keep the recording connection's
+        // orientation/mirroring symmetric with the live one after a flip too.
+        if let movieConn = movieOutput?.connection(with: .video) {
+            if movieConn.isVideoOrientationSupported { movieConn.videoOrientation = .portrait }
+            if movieConn.isVideoMirroringSupported   { movieConn.isVideoMirrored  = (newPos == .front) }
         }
         session.commitConfiguration()
         currentPosition = newPos
@@ -776,8 +800,18 @@ public class ATHLTCameraModule: Module {
     // analysis is the only caller that ever passes something else — see
     // doAnalyzeVideoFile below for why a file needs this explicitly computed
     // instead of assumed.
+    //
+    // `onPoseDetected` — nil for the live call site (zero behavior change),
+    // set only by doAnalyzeVideoFile so it can log raw joint positions/
+    // confidence without duplicating any detection logic to get at them.
+    // Called with personFound=false (pose=nil) on a no-detection frame too,
+    // so a video-file run can tell "Vision found nobody at all" apart from
+    // "found somebody, but the joints don't look like a real pose" (e.g. a
+    // rotated frame reading as thin/malformed) — exactly the ask: "see if
+    // the pose is being detected but rotated vs. not detected at all."
     private func runPoseDetection(pixelBuffer: CVPixelBuffer, timestamp: Double,
-                                   orientation: CGImagePropertyOrientation = .up) {
+                                   orientation: CGImagePropertyOrientation = .up,
+                                   onPoseDetected: ((Pose?) -> Void)? = nil) {
         totalFramesAnalyzed += 1
 
         if totalFramesAnalyzed <= 3 {
@@ -813,6 +847,7 @@ public class ATHLTCameraModule: Module {
             personDetected = false
             engine.notePersonMissing(timestamp: date)
             maybeEmitDebugStats()
+            onPoseDetected?(nil)
             if isSkeletonVisible {
                 ATHLTPoseBuffer.shared.clear()
                 DispatchQueue.main.async {
@@ -825,6 +860,7 @@ public class ATHLTCameraModule: Module {
         personDetected = true
         let obs  = results.max(by: { $0.confidence < $1.confidence }) ?? results[0]
         let pose = extractPose(obs)
+        onPoseDetected?(pose)
 
         engine.ingest(pose: pose, timestamp: date)
         if let univMetric = currentDef.repMetric.measure(pose: pose) {
@@ -904,7 +940,25 @@ public class ATHLTCameraModule: Module {
         // CGImagePropertyOrientation so Vision reads each frame the right way
         // up — the same correction the capture connection does implicitly
         // for the live path.
-        let orientation = Self.orientation(from: track.preferredTransform)
+        //
+        // FIRST BUG FOUND HERE (not the mapping itself): the debug log used
+        // to print "orientation=\(orientation.rawValue) (0=up 1=down 2=left
+        // 3=right)" — a fabricated legend that was never checked against the
+        // real enum. CGImagePropertyOrientation's actual raw values (ImageIO)
+        // are up=1, upMirrored=2, down=3, downMirrored=4, leftMirrored=5,
+        // right=6, rightMirrored=7, left=8 — nothing like a 0-3 sequence. A
+        // logged "orientation=1" therefore meant .up (the switch below's
+        // DEFAULT fallback case), not "down" as previously annotated — i.e.
+        // the transform never matched any of the three explicit cases at
+        // all, not "matched the wrong one." Logging the orientation's real
+        // NAME plus the raw transform components below so this can't be
+        // misread again.
+        let transform   = track.preferredTransform
+        let orientation = Self.orientation(from: transform)
+        sendEvent("onDebugLog", ["message":
+            "[VIDEO-ANALYZE] preferredTransform a=\(transform.a) b=\(transform.b) " +
+            "c=\(transform.c) d=\(transform.d) tx=\(transform.tx) ty=\(transform.ty) " +
+            "→ orientation=.\(Self.orientationName(orientation)) (rawValue=\(orientation.rawValue))"])
 
         guard let reader = try? AVAssetReader(asset: asset) else {
             promise.resolve(["success": false, "error": "Could not create AVAssetReader for \(url.lastPathComponent)"])
@@ -927,12 +981,21 @@ public class ATHLTCameraModule: Module {
         }
 
         sendEvent("onDebugLog", ["message":
-            "[VIDEO-ANALYZE] starting '\(url.lastPathComponent)' as '\(currentExercise)' " +
-            "orientation=\(orientation.rawValue) (0=up 1=down 2=left 3=right — matches CGImagePropertyOrientation)"])
+            "[VIDEO-ANALYZE] starting '\(url.lastPathComponent)' as '\(currentExercise)'"])
 
         var frameCount        = 0
         var firstVideoTime: Double?
         let wallClockStart = CACurrentMediaTime()
+        // Throttled joint dump — every ~15th analyzed frame (roughly once a
+        // second at this app's ~10fps analysis rate, see frameSkip), not
+        // every frame, so the log stays readable over a multi-second clip.
+        // This is what actually answers "detected but rotated vs. not
+        // detected at all": nose/shoulder/hip/ankle y-order for an upright
+        // person should read nose < shoulder < hip < ankle (Vision's y
+        // increases downward in image space); a 90°-rotated frame instead
+        // clusters them at similar y with spread-out x, or Vision simply
+        // finds nobody.
+        var poseLogCounter = 0
 
         while reader.status == .reading {
             guard let sampleBuffer = trackOutput.copyNextSampleBuffer() else { break }
@@ -952,8 +1015,24 @@ public class ATHLTCameraModule: Module {
             if toSleep > 0 { Thread.sleep(forTimeInterval: toSleep) }
 
             frameCount += 1
+            poseLogCounter += 1
+            let shouldLogPose = poseLogCounter % 15 == 0
             CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
-            runPoseDetection(pixelBuffer: pixelBuffer, timestamp: videoTime, orientation: orientation)
+            runPoseDetection(pixelBuffer: pixelBuffer, timestamp: videoTime, orientation: orientation,
+                onPoseDetected: { [weak self] pose in
+                    guard shouldLogPose, let self else { return }
+                    guard let pose else {
+                        self.sendEvent("onDebugLog", ["message":
+                            "[VIDEO-POSE] frame \(frameCount) t=\(String(format: "%.2f", videoTime))s — no person detected"])
+                        return
+                    }
+                    let jointStr = Joint.allCases.compactMap { j -> String? in
+                        guard let p = pose[j] else { return nil }
+                        return "\(j)=(\(String(format: "%.2f", p.x)),\(String(format: "%.2f", p.y)),c=\(String(format: "%.2f", p.confidence)))"
+                    }.joined(separator: " ")
+                    self.sendEvent("onDebugLog", ["message":
+                        "[VIDEO-POSE] frame \(frameCount) t=\(String(format: "%.2f", videoTime))s — \(jointStr)"])
+                })
             CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly)
         }
 
@@ -986,6 +1065,23 @@ public class ATHLTCameraModule: Module {
         case (0, -1, 1, 0):  return .left   // 90° CCW — portrait, opposite winding
         case (-1, 0, 0, -1): return .down   // 180°    — upside-down landscape
         default:             return .up     // identity — landscape, right-side up
+        }
+    }
+
+    // Human-readable name for logging — see doAnalyzeVideoFile's comment on
+    // why printing the raw enum value alone (or worse, a hand-written and
+    // WRONG numeric legend) is exactly how this got misdiagnosed once already.
+    private static func orientationName(_ o: CGImagePropertyOrientation) -> String {
+        switch o {
+        case .up:            return "up"
+        case .upMirrored:    return "upMirrored"
+        case .down:          return "down"
+        case .downMirrored:  return "downMirrored"
+        case .leftMirrored:  return "leftMirrored"
+        case .right:         return "right"
+        case .rightMirrored: return "rightMirrored"
+        case .left:          return "left"
+        @unknown default:    return "unknown(\(o.rawValue))"
         }
     }
 
