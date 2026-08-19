@@ -1582,7 +1582,10 @@ const s = StyleSheet.create({
   // option's label starting at the same x position regardless of glyph width.
   optIcon:      { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   optIconBadge: { borderRadius: 14, overflow: 'hidden', backgroundColor: L.card, borderWidth: 1, borderColor: L.border },
-  optIconImg:   { width: 44, height: 44 },
+  // Smaller than optIconBadge's 44×44 on purpose — filling the badge exactly
+  // (cover, edge-to-edge) cropped these icons' own glyphs at the edges.
+  // Leaving margin inside the same-size badge keeps the glyph fully visible.
+  optIconImg:   { width: 32, height: 32 },
   optTxt:     { fontSize: 15, fontWeight: W.medium, color: L.text, letterSpacing: -0.2 },
   optTxtSel:  { fontWeight: W.semi },
   optSublabel:{ fontSize: 12, color: L.textSub, marginTop: 2 },
