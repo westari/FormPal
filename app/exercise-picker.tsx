@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SymbolView } from 'expo-symbols';
@@ -90,6 +90,10 @@ const EXERCISE_UI: Record<ExerciseId, { symbol: string; grad: [string, string] }
 export default function ExercisePickerScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  // Optional redirect target (e.g. `/analyze-video`) — defaults to the
+  // existing `/formcheck` behavior when absent, so every current call site
+  // is unaffected.
+  const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
 
   return (
     <ScrollView
@@ -121,7 +125,7 @@ export default function ExercisePickerScreen() {
             <Pressable
               key={ex.id}
               style={({ pressed }) => [s.card, pressed && { opacity: 0.75 }]}
-              onPress={() => router.push(`/formcheck?exercise=${ex.id}` as any)}
+              onPress={() => router.push(`${returnTo || '/formcheck'}?exercise=${ex.id}` as any)}
             >
               <LinearGradient
                 colors={ui.grad}

@@ -221,23 +221,29 @@ export async function stopTracking(): Promise<SessionStats> {
   return ATHLTCameraNative.stopTracking();
 }
 
-// ─── Video-file analysis (Phase 1) ─────────────────────────────────────────────
+// ─── Video-file analysis (Phase 2) ─────────────────────────────────────────────
 // Runs an already-recorded video through the exact same pose/rep/form pipeline
 // live camera frames use — see analyzeVideoFile's own doc comment in
-// ATHLTCameraModule.swift for the full reasoning. PHASE 1 LIMITATION: exerciseId
-// only resolves against the Swift-side ExerciseRegistry fallback definitions —
-// squat, curl, pushup, lunge, jumpingJack, shoulderPress. Any exercise that
-// only exists in constants/exerciseDefinitions.ts (everything added this
-// session) isn't available here yet — that needs Phase 2's setExerciseDefinition
-// wiring. Must not be called while a live camera session is active (native side
-// guards this — resolves success:false with an explanation instead of racing
-// the shared engine).
+// ATHLTCameraModule.swift for the full reasoning. `definition` should be the
+// exercise's entry from constants/exerciseDefinitions.ts's EXERCISE_DEFINITIONS
+// (optionally with a calibration override applied via lib/calibration/store's
+// applyOverride, same as formcheck.tsx does for live sessions) — pass null only
+// for an exercise genuinely not yet in that catalog, which falls back to the
+// Swift-side ExerciseRegistry (squat, curl, pushup, lunge, jumpingJack,
+// shoulderPress). Must not be called while a live camera session is active
+// (native side guards this — resolves success:false with an explanation
+// instead of racing the shared engine).
 export async function analyzeVideoFile(
   uri: string,
-  exerciseId: string
+  exerciseId: string,
+  definition: Record<string, unknown> | null = null
 ): Promise<{ success: boolean; frames?: number; reps?: number; goodReps?: number; error?: string }> {
   if (!ATHLTCameraNative) return { success: false, error: 'native module not available' };
-  return ATHLTCameraNative.analyzeVideoFile(uri, exerciseId);
+  return ATHLTCameraNative.analyzeVideoFile(
+    uri,
+    exerciseId,
+    definition !== null ? JSON.stringify(definition) : null
+  );
 }
 
 // ─── Events ───────────────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, Pressable, ScrollView, Animated, Dimensions, Platform, NativeScrollEvent, NativeSyntheticEvent, Share,
+  View, Text, StyleSheet, Pressable, ScrollView, Animated, Dimensions, NativeScrollEvent, NativeSyntheticEvent,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,14 +13,6 @@ import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 import ViewShot from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import { BodyMap } from '../components/MuscleTierMap';
-// TEMPORARY Phase-1 test harness — analyzeVideoFile() has no real UI yet
-// (that's Phase 2). This is the minimum JS glue needed to actually trigger
-// and observe it: there's no way to call a native module function without
-// going through JS, and no Xcode/Console available (Windows) to watch NSLog
-// directly, so the SAME onDebugLog stream the live debug panel already uses
-// gets displayed here instead. Safe to delete once Phase 2's real picker/
-// results UI replaces it.
-import { analyzeVideoFile, addDebugLogListener } from '../modules/athlt-camera/src/index';
 import RepFeedback from '../components/RepFeedback';
 import { repFeedbackSentence } from '../lib/repFeedbackSentences';
 import {
@@ -404,10 +396,6 @@ export default function RecapScreen() {
   const [activePage, setActivePage]       = useState(0);
   const initialized = useRef(false);
 
-  // TEMPORARY Phase-1 test harness state — see the import comment above.
-  const [videoAnalysisLog, setVideoAnalysisLog] = useState<string[]>([]);
-  const [analyzingVideo, setAnalyzingVideo]     = useState(false);
-
   // Entrance animation — visual polish only, no bearing on data/logic.
   const heroOpac  = useRef(new Animated.Value(0)).current;
   const heroY     = useRef(new Animated.Value(14)).current;
@@ -609,50 +597,6 @@ export default function RecapScreen() {
       setSharing(false);
     }
   }, [sharing, data, handleShare]);
-
-  // TEMPORARY Phase-1 test harness — runs the just-recorded video back
-  // through analyzeVideoFile() (same video, same exercise, offline this
-  // time) so its [REP]/[METRIC] log output can be diffed against what was
-  // captured live for this exact session. Phase 1 only resolves exercises
-  // against the Swift-side registry (squat, curl, pushup, lunge,
-  // jumpingJack, shoulderPress) — anything else resolves with a clear
-  // "unknown exercise" error from the native side, not a crash.
-  const handleAnalyzeVideo = useCallback(async () => {
-    if (!data?.videoUri || analyzingVideo) return;
-    const exerciseId = data.entries[0]?.exerciseId;
-    if (!exerciseId) return;
-    setAnalyzingVideo(true);
-    setVideoAnalysisLog([`Starting analysis: ${exerciseId} — ${data.videoUri}`]);
-    const sub = addDebugLogListener(({ message }) => {
-      setVideoAnalysisLog(prev => [...prev, message]);
-    });
-    try {
-      const result = await analyzeVideoFile(data.videoUri, exerciseId);
-      setVideoAnalysisLog(prev => [...prev,
-        `── done ── success=${result.success} frames=${result.frames ?? '—'} ` +
-        `reps=${result.reps ?? '—'} goodReps=${result.goodReps ?? '—'}` +
-        (result.error ? ` error=${result.error}` : ''),
-      ]);
-    } catch (e: any) {
-      setVideoAnalysisLog(prev => [...prev, `── threw ── ${e?.message ?? String(e)}`]);
-    } finally {
-      sub.remove();
-      setAnalyzingVideo(false);
-    }
-  }, [data, analyzingVideo]);
-
-  // Log text was too long to select/copy by hand on a phone — RN's own
-  // Share API (no new dependency; expo-sharing, already imported above for
-  // the video file, only shares FILE uris, not raw text) hands the full log
-  // straight to the native share sheet (Messages/Mail/AirDrop/"Copy" all
-  // work as share-sheet targets), which is the simplest reliable way to get
-  // it off the phone.
-  const handleShareLogs = useCallback(async () => {
-    if (videoAnalysisLog.length === 0) return;
-    try {
-      await Share.share({ message: videoAnalysisLog.join('\n') });
-    } catch {}
-  }, [videoAnalysisLog]);
 
   const handleDone = useCallback(async () => {
     if (data?.isHistory) { router.back(); return; }
@@ -935,39 +879,19 @@ export default function RecapScreen() {
               </GlassSurface>
             )}
 
-            {/* TEMPORARY Phase-1 test harness — see handleAnalyzeVideo's own
-                comment. Only shown when there's a video to re-analyze. Not
-                styled as a polished feature on purpose — this is a diagnostic
-                tool for comparing log output, not the real Phase 2 UI. */}
-            {hasVideo && (
-              <GlassSurface radius={30} style={[s.detailCard, { padding: 14 }]}>
-                <Text style={s.detailCardLabel}>PHASE 1 TEST — RE-ANALYZE THIS VIDEO</Text>
-                <Pressable
-                  onPress={handleAnalyzeVideo}
-                  disabled={analyzingVideo}
-                  style={({ pressed }) => [s.debugAnalyzeBtn, (pressed || analyzingVideo) && { opacity: 0.6 }]}
-                >
-                  <Text style={s.debugAnalyzeBtnTxt}>
-                    {analyzingVideo ? 'Analyzing…' : 'Run analyzeVideoFile()'}
-                  </Text>
-                </Pressable>
-                {videoAnalysisLog.length > 0 && (
-                  <>
-                    <ScrollView style={s.debugLogBox} nestedScrollEnabled>
-                      {videoAnalysisLog.map((line, i) => (
-                        <Text key={i} style={s.debugLogLine}>{line}</Text>
-                      ))}
-                    </ScrollView>
-                    <Pressable
-                      onPress={handleShareLogs}
-                      style={({ pressed }) => [s.debugShareBtn, pressed && { opacity: 0.6 }]}
-                    >
-                      <Text style={s.debugShareBtnTxt}>Share Logs</Text>
-                    </Pressable>
-                  </>
-                )}
-              </GlassSurface>
-            )}
+            {/* Entry point into the real video-analysis flow (app/analyze-video.tsx)
+                — replaces the old inline "run analyzeVideoFile()" debug harness.
+                Always shown, not gated on hasVideo: this analyzes ANY video
+                picked from the photo library, not just this session's own clip. */}
+            <GlassSurface radius={30} style={[s.detailCard, { padding: 14 }]}>
+              <Text style={s.detailCardLabel}>GOT A SET ON VIDEO?</Text>
+              <Pressable
+                onPress={() => router.push('/analyze-video' as any)}
+                style={({ pressed }) => [s.analyzeVideoBtn, pressed && { opacity: 0.7 }]}
+              >
+                <Text style={s.analyzeVideoBtnTxt}>Analyze a Video</Text>
+              </Pressable>
+            </GlassSurface>
 
             {/* Actions — this page had neither before; Share here shares the
                 video file itself (contextually the point of this page),
@@ -1068,27 +992,11 @@ const s = StyleSheet.create({
   detailCard: { padding: 18, marginBottom: 14 },
   detailCardLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1.4, textTransform: 'uppercase', color: C.mutedDim, marginBottom: 10 },
 
-  // TEMPORARY Phase-1 test harness styles — deliberately plain/utilitarian
-  // (monospace log, flat button), not this screen's usual glass/gradient
-  // language, since this card is a diagnostic tool, not a polished feature.
-  debugAnalyzeBtn: {
+  analyzeVideoBtn: {
     backgroundColor: 'rgba(90,110,160,0.16)', borderRadius: 12,
     paddingVertical: 12, alignItems: 'center',
   },
-  debugAnalyzeBtnTxt: { fontSize: 13.5, fontWeight: '600', color: C.text },
-  debugLogBox: {
-    marginTop: 12, maxHeight: 260, backgroundColor: 'rgba(19,26,46,0.06)',
-    borderRadius: 10, padding: 10,
-  },
-  debugLogLine: {
-    fontSize: 10.5, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    color: C.text, lineHeight: 15, marginBottom: 2,
-  },
-  debugShareBtn: {
-    marginTop: 8, backgroundColor: 'rgba(90,110,160,0.10)', borderRadius: 10,
-    paddingVertical: 10, alignItems: 'center',
-  },
-  debugShareBtnTxt: { fontSize: 12.5, fontWeight: '600', color: C.mutedDim },
+  analyzeVideoBtnTxt: { fontSize: 13.5, fontWeight: '600', color: C.text },
 
   exRow:   { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 12 },
   exName:  { fontSize: 14.5, fontWeight: '600', color: C.text },

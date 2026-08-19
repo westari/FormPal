@@ -420,42 +420,63 @@ public class ATHLTCameraModule: Module {
             }
         }
 
-        // MARK: – analyzeVideoFile (Phase 1: video-file input, offline) ──────────
+        // MARK: – analyzeVideoFile (Phase 2: JS-definition-driven) ───────────────
         //
         // Runs an already-recorded video through the EXACT SAME
         // runPoseDetection → engine.ingest path live camera frames use — see
         // doAnalyzeVideoFile below for the full reasoning (pacing, orientation,
-        // why no engine changes were needed). PHASE 1 LIMITATION: exerciseId
-        // resolves ONLY against ExerciseRegistry (the Swift-side fallback
-        // definitions — squat/curl/pushup/lunge/jumpingJack/shoulderPress).
-        // setExercise's JS-authored-definition override path
-        // (setExerciseDefinition) is a separate JS→native round trip this
-        // native-only phase deliberately doesn't wire up yet — any exercise
-        // added only in constants/exerciseDefinitions.ts (everything built
-        // this session: barbellBenchPress, facePull, cablePullThrough,
-        // standingGluteKickback, etc.) is NOT available here until Phase 2.
-        AsyncFunction("analyzeVideoFile") { (uri: String, exerciseId: String, promise: Promise) in
+        // why no engine changes were needed). PHASE 2: `definitionJson`, when
+        // provided, is parsed with the EXACT SAME ExerciseDefinition.parse(from:)
+        // the live setExerciseDefinition path already uses — any exercise in
+        // constants/exerciseDefinitions.ts works here now, with its real tuned
+        // JS thresholds, not just the 6 hardcoded in ExerciseRegistry. Passing
+        // nil falls back to ExerciseRegistry (matching Phase 1 behavior) for
+        // exercises not yet in the JS catalog. This also closes the native-drift
+        // hole: video analysis now reads the SAME source of truth as live
+        // camera, so a JS threshold fix reaches both paths on the next reload,
+        // not just live.
+        AsyncFunction("analyzeVideoFile") { (uri: String, exerciseId: String, definitionJson: String?, promise: Promise) in
             self.inferenceQueue.async {
                 guard self.captureSession == nil else {
                     promise.resolve(["success": false,
                         "error": "A live camera session is active — stop it before analyzing a video file (both paths share the same engine/inferenceQueue)."])
                     return
                 }
-                guard let def = ExerciseRegistry.definition(for: exerciseId) else {
+
+                var def: ExerciseDefinition? = nil
+                var defSource = "registry"
+                if let jsonStr = definitionJson,
+                   let data    = jsonStr.data(using: .utf8),
+                   let raw     = try? JSONSerialization.jsonObject(with: data),
+                   let dict    = raw as? [String: Any] {
+                    if let (parsed, summary) = ExerciseDefinition.parse(from: dict) {
+                        def = parsed
+                        defSource = "JSON"
+                        self.sendEvent("onDebugLog", ["message": "[DEF-LOAD] video analysis loaded '\(parsed.id)' from JSON: \(summary)"])
+                    } else {
+                        self.sendEvent("onDebugLog", ["message":
+                            "[DEF-LOAD] ERROR: failed to parse '\(exerciseId)' definition for video analysis — falling back to Swift registry"])
+                    }
+                }
+                if def == nil { def = ExerciseRegistry.definition(for: exerciseId) }
+
+                guard let resolvedDef = def else {
                     promise.resolve(["success": false,
-                        "error": "Unknown exercise '\(exerciseId)' for Phase 1 — only Swift-registry exercises work until Phase 2 wires setExerciseDefinition into this path: squat, curl, pushup, lunge, jumpingJack, shoulderPress."])
+                        "error": "Unknown exercise '\(exerciseId)' — not in constants/exerciseDefinitions.ts (no definitionJson provided/parseable) and not in the Swift registry."])
                     return
                 }
-                self.currentExercise = exerciseId
-                self.engine          = ExerciseEngine(definition: def)
+                self.currentExercise = resolvedDef.id
+                self.engine          = ExerciseEngine(definition: resolvedDef)
                 self.wireEngineCallbacks()
-                self.currentDef      = def
+                self.currentDef      = resolvedDef
                 self.universalEngine.reset()
-                let relevantJoints = Array(Set(def.repMetric.referencedJoints()))
+                let relevantJoints = Array(Set(resolvedDef.repMetric.referencedJoints()))
                 self.universalEngine.setRelevantJoints(relevantJoints)
                 self.universalEngine.log = { [weak self] msg in
                     self?.sendEvent("onDebugLog", ["message": msg])
                 }
+                NSLog("[GymCamera] analyzeVideoFile: '%@' resolved from %@ (%@)",
+                      resolvedDef.id, defSource, resolvedDef.displayName)
                 self.doAnalyzeVideoFile(uri: uri, promise: promise)
             }
         }
