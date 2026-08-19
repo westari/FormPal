@@ -1,19 +1,64 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Platform, ScrollView,
-  Animated, TextInput, KeyboardAvoidingView, ActivityIndicator, PanResponder,
+  Animated, ActivityIndicator, PanResponder, Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 import { Picker } from '@react-native-picker/picker';
 import * as Haptics from 'expo-haptics';
 import Svg, { Path as SvgPath, Text as SvgText, Circle as SvgCircle } from 'react-native-svg';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import ScreenBackground from '../components/ScreenBackground';
+import AppBackground from '../components/AppBackground';
 import { FONT, W, Col, Elev } from '../constants/theme';
 
 export const ONBOARDING_KEY = 'formpal_onboarding_complete';
+
+// ── Custom answer-choice icons ──────────────────────────────────────────────
+// From assets/icons — only used where a concept actually matches an answer
+// choice. A few questions (sex, days-count, duration, trainingLocation's
+// "Home"/"Mix of both", several equipment-machine options) have no matching
+// icon in this set and keep their SF Symbol. assets/icons/streak.webp has
+// "30 streak" baked into the image itself (literal text pixels) — not
+// reusable as a generic icon, left out entirely.
+const ICON = {
+  heart:  require('../assets/icons/heart.webp'),
+  person: require('../assets/icons/person.webp'),
+  muscle: require('../assets/icons/muscle.webp'),
+  calm:   require('../assets/icons/calm.webp'),
+  days:   require('../assets/icons/days.webp'),
+  run:    require('../assets/icons/run.webp'),
+  gym:    require('../assets/icons/gym.webp'),
+  scale:  require('../assets/icons/scale.webp'),
+  camera: require('../assets/icons/camera.webp'),
+  arm:    require('../assets/icons/arm.webp'),
+  allGood:   require('../assets/icons/allgood.webp'),
+  hip:       require('../assets/icons/hip.webp'),
+  wrist:     require('../assets/icons/wrist.webp'),
+  neck:      require('../assets/icons/neck.webp'),
+  shoulder:  require('../assets/icons/shoulder.webp'),
+  knee:      require('../assets/icons/knee.webp'),
+  notSure:   require('../assets/icons/notsure.webp'),
+  fire:      require('../assets/icons/fire.webp'),
+  scared:    require('../assets/icons/scared.webp'),
+  noResults: require('../assets/icons/progressquestion.webp'),
+  date:      require('../assets/icons/date.webp'),
+  good:      require('../assets/icons/good.webp'),
+  bodyweight: require('../assets/icons/bodyweight.webp'),
+  bench:      require('../assets/icons/bench.webp'),
+  pullupBar:  require('../assets/icons/pullupbar.webp'),
+  kettlebell: require('../assets/icons/kettlebell.webp'),
+  bands:      require('../assets/icons/bands.webp'),
+  dumbbell:   require('../assets/icons/dumbell.webp'),
+  barbell:      require('../assets/icons/barbellandplates.webp'),
+  expertGym:    require('../assets/icons/gymexpert.webp'),
+  intermediateGym: require('../assets/icons/gymintermediate.webp'),
+  someExpGym:   require('../assets/icons/gymsomeexperience.webp'),
+  beginnerGym:  require('../assets/icons/gymbeginner.webp'),
+  home:         require('../assets/icons/home.webp'),
+} as const;
 
 // ── Light theme palette ────────────────────────────────────────────────────────
 
@@ -53,13 +98,33 @@ function Sym({ name, size, color }: { name: string; size: number; color: string 
   return <SymbolView name={name as any} size={size} tintColor={color} type="monochrome" style={{ width: size, height: size }} />;
 }
 
+// Every onboarding screen (welcome, each question, mypal intro, building,
+// projection, payoff) used ScreenBackground's plain subtle gradient — asked
+// to switch to the same bright colorful-blob background recap.tsx/the
+// after-workout screen/the plus tab already use (AppBackground), for visual
+// consistency across the app's light-theme screens. AppBackground itself is
+// an absolute-fill layer, not a flex:1 wrapping container the way
+// ScreenBackground was, so this local wrapper keeps every call site below
+// (still just `<OnboardingBackground>children</OnboardingBackground>`)
+// unchanged. Local to this file, not a change to ScreenBackground.tsx itself
+// — that component is still used as-is by ~9 other screens app-wide, which
+// weren't part of this ask.
+function OnboardingBackground({ children }: { children: React.ReactNode }) {
+  return (
+    <View style={{ flex: 1 }}>
+      <AppBackground />
+      {children}
+    </View>
+  );
+}
+
 // ── Step definitions ───────────────────────────────────────────────────────────
 
-interface OptionDef { label: string; sfSymbol?: string; sublabel?: string; }
+interface OptionDef { label: string; sfSymbol?: string; sublabel?: string; customIcon?: any; }
 interface Step {
   id:             string;
   section:        string;
-  type:           'select' | 'multiselect' | 'wheel' | 'text' | 'slider';
+  type:           'select' | 'multiselect' | 'wheel' | 'slider' | 'ruler' | 'interstitial';
   question:       string;
   subtitle?:      string;
   options?:       OptionDef[];
@@ -72,35 +137,47 @@ const STEPS: Step[] = [
   // ── About You
   { id: 'age',    section: 'About You', type: 'wheel',  wheelKind: 'age',    question: 'How old are you?' },
   { id: 'height', section: 'About You', type: 'wheel',  wheelKind: 'height', question: 'How tall are you?' },
-  { id: 'weight', section: 'About You', type: 'text',   question: 'What do you weigh?' },
+  // Was a plain number TextInput — now the tick-mark ruler (see
+  // WeightRulerSlider) directly on this same question, not a separate page.
+  { id: 'weight', section: 'About You', type: 'ruler',  question: 'What do you weigh?' },
   { id: 'sex', section: 'About You', type: 'select', question: "What's your sex?", options: [
     { label: 'Male',   sfSymbol: 'person.fill' },
     { label: 'Female', sfSymbol: 'person.fill' },
   ]},
 
+  // Section-transition interstitial — no input, just a beat that reflects
+  // the answers just given back at the user before moving on. See the
+  // 'interstitial' render branch below for how title/body get computed
+  // per-id (aboutYouRecap/goalRecap/experienceRecap/trainingRecap).
+  { id: 'afterAboutYou', section: 'About You', type: 'interstitial', question: '' },
+
   // ── Your Goal (short, distinct options)
+  // customIcon (from assets/icons, see ICON above) takes priority over
+  // sfSymbol in the option renderer below — sfSymbol stays as the fallback.
   { id: 'goal', section: 'Your Goal', type: 'multiselect', question: 'What are your goals?', options: [
-    { label: 'Build muscle',    sfSymbol: 'dumbbell.fill' },
-    { label: 'Lose weight',     sfSymbol: 'flame.fill'    },
-    { label: 'Get stronger',    sfSymbol: 'bolt.fill'     },
-    { label: 'Improve form',    sfSymbol: 'camera.fill'   },
-    { label: 'Stay consistent', sfSymbol: 'repeat'        },
+    { label: 'Build muscle',    sfSymbol: 'dumbbell.fill', customIcon: ICON.muscle },
+    { label: 'Lose weight',     sfSymbol: 'flame.fill',    customIcon: ICON.scale  },
+    { label: 'Get stronger',    sfSymbol: 'bolt.fill',     customIcon: ICON.arm    },
+    { label: 'Improve form',    sfSymbol: 'camera.fill',   customIcon: ICON.camera },
+    { label: 'Stay consistent', sfSymbol: 'repeat',        customIcon: ICON.days   },
   ]},
   { id: 'motivation', section: 'Your Goal', type: 'multiselect', question: 'What draws you to fitness?', options: [
-    { label: 'Feel healthier',       sfSymbol: 'heart.fill'  },
-    { label: 'Look & feel confident', sfSymbol: 'star.fill'  },
-    { label: 'Get strong',           sfSymbol: 'bolt.fill'   },
-    { label: 'Reduce stress',        sfSymbol: 'leaf.fill'   },
-    { label: 'Build a habit',        sfSymbol: 'repeat'      },
-    { label: 'Sports & performance', sfSymbol: 'figure.run'  },
+    { label: 'Feel healthier',       sfSymbol: 'heart.fill', customIcon: ICON.heart  },
+    { label: 'Look & feel confident', sfSymbol: 'star.fill', customIcon: ICON.person },
+    { label: 'Get strong',           sfSymbol: 'bolt.fill',  customIcon: ICON.gym    },
+    { label: 'Reduce stress',        sfSymbol: 'leaf.fill',  customIcon: ICON.calm   },
+    { label: 'Build a habit',        sfSymbol: 'repeat',     customIcon: ICON.days   },
+    { label: 'Sports & performance', sfSymbol: 'figure.run', customIcon: ICON.run    },
   ]},
+
+  { id: 'afterGoal', section: 'Your Goal', type: 'interstitial', question: '' },
 
   // ── Your Experience (short main label + tiny sublabel)
   { id: 'experience', section: 'Your Experience', type: 'select', question: 'Your experience level?', options: [
-    { label: 'Beginner',        sublabel: 'Never really worked out',   sfSymbol: '1.circle.fill' },
-    { label: 'Some experience', sublabel: 'Tried it, not consistent',  sfSymbol: '2.circle.fill' },
-    { label: 'Intermediate',    sublabel: 'Train semi-regularly',      sfSymbol: '3.circle.fill' },
-    { label: 'Advanced',        sublabel: 'Train consistently',        sfSymbol: '4.circle.fill' },
+    { label: 'Beginner',        sublabel: 'Never really worked out',   sfSymbol: '1.circle.fill', customIcon: ICON.beginnerGym     },
+    { label: 'Some experience', sublabel: 'Tried it, not consistent',  sfSymbol: '2.circle.fill', customIcon: ICON.someExpGym      },
+    { label: 'Intermediate',    sublabel: 'Train semi-regularly',      sfSymbol: '3.circle.fill', customIcon: ICON.intermediateGym },
+    { label: 'Advanced',        sublabel: 'Train consistently',        sfSymbol: '4.circle.fill', customIcon: ICON.expertGym       },
   ]},
   {
     id: 'injuries', section: 'Your Experience', type: 'multiselect',
@@ -108,13 +185,13 @@ const STEPS: Step[] = [
     subtitle: "We'll keep your plan safe and avoid aggravating these.",
     clearAllOption: "None — I'm good",
     options: [
-      { label: 'Knees',            sfSymbol: 'figure.walk'                          },
-      { label: 'Shoulders',        sfSymbol: 'figure.strengthtraining.traditional'  },
-      { label: 'Lower back',       sfSymbol: 'figure.cooldown'                      },
-      { label: 'Wrists',           sfSymbol: 'hand.raised.fill'                     },
-      { label: 'Neck',             sfSymbol: 'person.fill'                          },
-      { label: 'Hips',             sfSymbol: 'figure.run'                           },
-      { label: "None — I'm good",  sfSymbol: 'checkmark.circle.fill'               },
+      { label: 'Knees',            sfSymbol: 'figure.walk',        customIcon: ICON.knee     },
+      { label: 'Shoulders',        sfSymbol: 'figure.arms.open',   customIcon: ICON.shoulder },
+      { label: 'Lower back',       sfSymbol: 'figure.cooldown'                               },
+      { label: 'Wrists',           sfSymbol: 'hand.raised.fill',   customIcon: ICON.wrist    },
+      { label: 'Neck',             sfSymbol: 'figure.stand',       customIcon: ICON.neck     },
+      { label: 'Hips',             sfSymbol: 'figure.run',         customIcon: ICON.hip      },
+      { label: "None — I'm good",  sfSymbol: 'checkmark.circle.fill', customIcon: ICON.good  },
     ],
   },
   // TODO: plan generator should avoid/modify exercises based on injuries[]
@@ -122,20 +199,22 @@ const STEPS: Step[] = [
     question: 'Anything getting in your way?',
     clearAllOption: 'Nothing — just ready to start',
     options: [
-      { label: 'Not sure what to do',          sfSymbol: 'questionmark.circle.fill' },
-      { label: 'Staying consistent',           sfSymbol: 'repeat'                   },
-      { label: 'Gym anxiety',                  sfSymbol: 'shield.fill'              },
-      { label: 'Not seeing results',           sfSymbol: 'minus.circle.fill'        },
-      { label: 'Finding time',                 sfSymbol: 'clock.fill'               },
-      { label: 'Nothing — just ready to start', sfSymbol: 'checkmark.circle.fill'  },
+      { label: 'Not sure what to do',          sfSymbol: 'questionmark.circle.fill', customIcon: ICON.notSure   },
+      { label: 'Staying consistent',           sfSymbol: 'repeat',                   customIcon: ICON.days      },
+      { label: 'Gym anxiety',                  sfSymbol: 'shield.fill',              customIcon: ICON.scared    },
+      { label: 'Not seeing results',           sfSymbol: 'minus.circle.fill',        customIcon: ICON.noResults },
+      { label: 'Finding time',                 sfSymbol: 'clock.fill',               customIcon: ICON.date      },
+      { label: 'Nothing — just ready to start', sfSymbol: 'checkmark.circle.fill',   customIcon: ICON.fire      },
     ],
   },
 
+  { id: 'afterExperience', section: 'Your Experience', type: 'interstitial', question: '' },
+
   // ── Your Training
   { id: 'trainingLocation', section: 'Your Training', type: 'select', question: 'Where do you train?', options: [
-    { label: 'Home',       sfSymbol: 'house.fill'                          },
-    { label: 'Gym',        sfSymbol: 'figure.strengthtraining.traditional' },
-    { label: 'Mix of both', sfSymbol: 'shuffle'                            },
+    { label: 'Home',       sfSymbol: 'house.fill', customIcon: ICON.home                    },
+    { label: 'Gym',        sfSymbol: 'figure.strengthtraining.traditional', customIcon: ICON.gym },
+    { label: 'Mix of both', sfSymbol: 'shuffle'                                            },
   ]},
   {
     id: 'homeSplit', section: 'Your Training', type: 'slider',
@@ -148,13 +227,13 @@ const STEPS: Step[] = [
     showIf: (a) => a.trainingLocation === 'Home' || a.trainingLocation === 'Mix of both',
     clearAllOption: 'Nothing — bodyweight only',
     options: [
-      { label: 'Dumbbells',              sfSymbol: 'dumbbell.fill'     },
-      { label: 'Resistance bands',       sfSymbol: 'bolt.fill'         },
-      { label: 'Kettlebells',            sfSymbol: 'dumbbell.fill'     },
-      { label: 'Pull-up bar',            sfSymbol: 'figure.gymnastics' },
-      { label: 'Bench',                  sfSymbol: 'rectangle.fill'    },
-      { label: 'Barbell & plates',       sfSymbol: 'dumbbell.fill'     },
-      { label: 'Nothing — bodyweight only', sfSymbol: 'hand.raised.fill' },
+      { label: 'Dumbbells',              sfSymbol: 'dumbbell.fill',                      customIcon: ICON.dumbbell   },
+      { label: 'Resistance bands',       sfSymbol: 'figure.flexibility',                 customIcon: ICON.bands      },
+      { label: 'Kettlebells',            sfSymbol: 'figure.strengthtraining.functional', customIcon: ICON.kettlebell },
+      { label: 'Pull-up bar',            sfSymbol: 'figure.gymnastics',                  customIcon: ICON.pullupBar  },
+      { label: 'Bench',                  sfSymbol: 'rectangle.fill',                     customIcon: ICON.bench      },
+      { label: 'Barbell & plates',       sfSymbol: 'figure.strengthtraining.traditional', customIcon: ICON.barbell },
+      { label: 'Nothing — bodyweight only', sfSymbol: 'figure.walk', customIcon: ICON.bodyweight },
     ],
   },
   {
@@ -163,13 +242,15 @@ const STEPS: Step[] = [
     showIf: (a) => a.trainingLocation === 'Gym' || a.trainingLocation === 'Mix of both',
     clearAllOption: 'It has everything',
     options: [
-      { label: 'Free weights',       sfSymbol: 'dumbbell.fill'                      },
+      { label: 'Free weights',       sfSymbol: 'dumbbell.fill', customIcon: ICON.dumbbell },
       { label: 'Cable machines',     sfSymbol: 'figure.strengthtraining.functional' },
-      { label: 'Leg machines',       sfSymbol: 'figure.run'                         },
+      { label: 'Leg machines',       sfSymbol: 'figure.walk'                        },
       { label: 'Chest / press machines', sfSymbol: 'figure.strengthtraining.traditional' },
-      { label: 'Back / row machines', sfSymbol: 'figure.gymnastics'                },
-      { label: 'Squat rack',         sfSymbol: 'dumbbell.fill'                      },
-      { label: 'It has everything',  sfSymbol: 'checkmark.circle.fill'              },
+      // Was figure.gymnastics (bars/rings, not a rowing machine) — figure.rower
+      // is the literal rowing-machine glyph.
+      { label: 'Back / row machines', sfSymbol: 'figure.rower'                      },
+      { label: 'Squat rack',         sfSymbol: 'figure.cross.training'              },
+      { label: 'It has everything',  sfSymbol: 'checkmark.circle.fill', customIcon: ICON.allGood },
     ],
   },
   // TODO: pass trainingLocation, homeSplit, homeEquipment[], gymMissingEquipment[] to planGenerator
@@ -190,6 +271,8 @@ const STEPS: Step[] = [
     { label: '75+ min',   sfSymbol: 'clock.fill' },
   ]},
 
+  { id: 'afterTraining', section: 'Your Training', type: 'interstitial', question: '' },
+
   // ── Reminders
   { id: 'notifications', section: 'Reminders', type: 'select', question: 'Reminders on training days?', options: [
     { label: 'Yes please', sfSymbol: 'bell.fill'       },
@@ -197,12 +280,15 @@ const STEPS: Step[] = [
   ]},
 ];
 
+// Was a literal engineering task list ("Reading your answers," "Setting
+// your difficulty") — describes what the outcome of each step MEANS for
+// the user instead of the mechanical action taken.
 const LOADING_STEPS = [
-  'Reading your answers',
-  'Picking your exercises',
-  'Setting your difficulty',
-  'Laying out your week',
-  'Finishing your plan',
+  'Matching exercises to your goals',
+  'Calibrating so every rep is achievable, not overwhelming',
+  'Building a week you can actually stick to',
+  'Getting your camera coach ready',
+  'Almost there — your first win starts here',
 ];
 
 function getVisibleSteps(a: Record<string, any>): Step[] {
@@ -233,17 +319,20 @@ function buildPlan(a: Record<string, any>): { focus: string; exercises: WorkoutE
   return { focus: 'Full Body', exercises };
 }
 
+// Shared with goalRecap below — hoisted out of projectionLine so both read
+// the exact same mapping instead of keeping two copies in sync by hand.
+const GOAL_WORD: Record<string, string> = {
+  'Build muscle':    'building muscle',
+  'Lose weight':     'losing weight',
+  'Get stronger':    'getting noticeably stronger',
+  'Improve form':    'mastering your form',
+  'Stay consistent': 'building a lasting habit',
+};
+
 function projectionLine(a: Record<string, any>): string {
   const goals   = (a.goal as string[]) ?? [];
   const primary = goals[0] ?? '';
-  const goalWord: Record<string, string> = {
-    'Build muscle':    'building muscle',
-    'Lose weight':     'losing weight',
-    'Get stronger':    'getting noticeably stronger',
-    'Improve form':    'mastering your form',
-    'Stay consistent': 'building a lasting habit',
-  };
-  const word    = goalWord[primary] ?? 'hitting your goal';
+  const word    = GOAL_WORD[primary] ?? 'hitting your goal';
   const daysNum = parseInt((a.days as string) ?? '3') || 3;
   return `Training ${daysNum} day${daysNum !== 1 ? 's' : ''} a week, you're on track to start seeing real progress toward ${word} in about 8 weeks.`;
 }
@@ -258,6 +347,307 @@ function motivationLine(a: Record<string, any>): string {
     return 'Strength is built one rep at a time. Your plan starts here.';
   return 'Track every rep. Build the habit. See the change.';
 }
+
+// ── Section-transition interstitials ──────────────────────────────────────────
+// One per section boundary (see the 'afterAboutYou'/'afterGoal'/
+// 'afterExperience'/'afterTraining' entries in STEPS above). Each gets its
+// OWN small bespoke animated moment — not the same component reused four
+// times — matched to what that section actually collected:
+//   afterAboutYou   → StatsMoment (age + weight counters)
+//   afterGoal       → ComparisonMoment (bad-form vs good-form bars, matches
+//                      a reference screen the user supplied)
+//   afterExperience → LevelTrack (progress dots along a beginner→advanced line)
+//   afterTraining   → WeekDots (days-per-week dot row)
+// The goalRecap headline below cites the actual research finding rather
+// than a made-up multiplier: a 2024 meta-analysis (Wolf et al., 24 studies)
+// found full-ROM vs partial-ROM growth is close overall, but SHORTENED
+// partials (stopping before full range) specifically underperform — which
+// is exactly the failure mode FormPal's rep tracking catches. No invented
+// numbers ("2x", "join 2M people") — this app has no data to back a stat
+// like that, and a made-up figure would be dishonest marketing.
+
+interface StatsRecap { variant: 'stats'; age: string; weight: number; headline: string; }
+interface BarsRecap  { variant: 'bars';  leftLabel: string; rightLabel: string; headline: string; }
+interface LevelRecap { variant: 'level'; levels: string[]; selectedIndex: number; headline: string; }
+interface WeekRecap  { variant: 'week';  totalDays: number; activeDays: number; headline: string; }
+type Recap = StatsRecap | BarsRecap | LevelRecap | WeekRecap;
+
+// weight is now shown here (previously captured on the 'weight' ruler step
+// and then never shown back anywhere else in the flow, unlike age).
+function aboutYouRecap(a: Record<string, any>): StatsRecap {
+  const age    = (a.age as string) ?? '16';
+  const weight = typeof a.weight === 'number' ? a.weight : 160;
+  return {
+    variant:  'stats',
+    age,
+    weight,
+    headline: 'Built around your exact stats — not a one-size-fits-all plan.',
+  };
+}
+
+function goalRecap(a: Record<string, any>): BarsRecap {
+  return {
+    variant:    'bars',
+    leftLabel:  'Bad form',
+    rightLabel: 'Good form',
+    headline:   'Cut a rep short, cut your gains — FormPal keeps every rep full range.',
+  };
+}
+
+// Must match the 'experience' step's option order in STEPS above.
+const EXPERIENCE_TRACK = ['Beginner', 'Some experience', 'Intermediate', 'Advanced'];
+const EXPERIENCE_SHORT = ['Beginner', 'Some XP', 'Solid', 'Advanced'];
+
+function experienceRecap(a: Record<string, any>): LevelRecap {
+  const idx = Math.max(0, EXPERIENCE_TRACK.indexOf((a.experience as string) ?? ''));
+  return {
+    variant:       'level',
+    levels:        EXPERIENCE_SHORT,
+    selectedIndex: idx,
+    headline:      "We'll build around exactly where you're starting from.",
+  };
+}
+
+function trainingRecap(a: Record<string, any>): WeekRecap {
+  const daysNum = parseInt((a.days as string) ?? '3') || 3;
+  return {
+    variant:    'week',
+    totalDays:  7,
+    activeDays: daysNum,
+    headline:   `${daysNum} day${daysNum !== 1 ? 's' : ''} a week — that's your rhythm now.`,
+  };
+}
+
+// ── ComparisonMoment — two-bar "bad form vs good form" beat, one headline ─────
+// Matches a reference screen the user supplied (short light pill vs tall
+// dark pill, uppercase labels underneath, bold headline below). Used ONLY
+// for the 'afterGoal' interstitial. Bars animate to a FIXED height ratio
+// (not driven by any real numeric stat — see the no-fabricated-stats note
+// above). Label/headline text intentionally uses the SYSTEM font (same as
+// the answer-choice options, s.optTxt below) rather than the Bricolage
+// display font used elsewhere in onboarding — reported as the wrong feel
+// for this particular screen.
+const BAR_MAX_H = 210;
+const BAR_W     = 92;
+
+function ComparisonMoment({ leftLabel, rightLabel, headline }: { leftLabel: string; rightLabel: string; headline: string }) {
+  const leftH       = useRef(new Animated.Value(0)).current;
+  const rightH      = useRef(new Animated.Value(0)).current;
+  const textOpacity = useRef(new Animated.Value(0)).current;
+  const textY       = useRef(new Animated.Value(14)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(leftH,  { toValue: 1, duration: 500, delay: 150, useNativeDriver: false }),
+      Animated.timing(rightH, { toValue: 1, duration: 650, delay: 150, useNativeDriver: false }),
+    ]).start();
+    Animated.parallel([
+      Animated.timing(textOpacity, { toValue: 1, duration: 380, delay: 550, useNativeDriver: true }),
+      Animated.timing(textY,       { toValue: 0, duration: 380, delay: 550, useNativeDriver: true }),
+    ]).start();
+    // Re-run whenever the content changes — this component stays mounted
+    // across different interstitial steps sharing the same render branch,
+    // so without resetting here the SECOND interstitial you reach would
+    // render with no entrance animation at all (values already at rest).
+    return () => {
+      leftH.setValue(0); rightH.setValue(0);
+      textOpacity.setValue(0); textY.setValue(14);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leftLabel, rightLabel, headline]);
+
+  const leftHeight  = leftH.interpolate({ inputRange: [0, 1], outputRange: [0, BAR_MAX_H * 0.34] });
+  const rightHeight = rightH.interpolate({ inputRange: [0, 1], outputRange: [0, BAR_MAX_H] });
+
+  return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 28, height: BAR_MAX_H, marginBottom: 20 }}>
+        <Animated.View style={{ width: BAR_W, height: leftHeight, borderRadius: BAR_W / 2, backgroundColor: L.card, borderWidth: 1, borderColor: L.border, ...({ boxShadow: Elev.low.shadow } as any) }} />
+        <Animated.View style={{ width: BAR_W, height: rightHeight, borderRadius: BAR_W / 2, overflow: 'hidden', ...({ boxShadow: Elev.medium.shadow } as any) }}>
+          <LinearGradient colors={['#3A3F4C', L.btnDark, '#05070D']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flex: 1 }} />
+        </Animated.View>
+      </View>
+      <View style={{ flexDirection: 'row', gap: 28, marginBottom: 28 }}>
+        <Text style={cm.label}>{leftLabel}</Text>
+        <Text style={[cm.label, cm.labelDark]}>{rightLabel}</Text>
+      </View>
+      <Animated.View style={{ opacity: textOpacity, transform: [{ translateY: textY }] }}>
+        <Text style={cm.headline}>{headline}</Text>
+      </Animated.View>
+    </View>
+  );
+}
+
+const cm = StyleSheet.create({
+  label:     { width: BAR_W, textAlign: 'center', fontSize: 12, fontWeight: W.semi, letterSpacing: 0.4, color: L.textDim, textTransform: 'uppercase' },
+  labelDark: { color: L.text, fontWeight: W.bold },
+  headline:  { fontSize: 22, fontWeight: W.bold, color: L.text, letterSpacing: -0.4, textAlign: 'center', lineHeight: 29 },
+});
+
+// ── StatsMoment — animated age/weight counters, one headline ──────────────────
+// afterAboutYou only. Two numbers scale/fade in together, a thin accent line
+// draws in under each, then the headline slides up. Same system-font
+// treatment as ComparisonMoment's text (see note above).
+function StatsMoment({ age, weight, headline }: { age: string; weight: number; headline: string }) {
+  const scale       = useRef(new Animated.Value(0.85)).current;
+  const opacity      = useRef(new Animated.Value(0)).current;
+  const lineW        = useRef(new Animated.Value(0)).current;
+  const textOpacity  = useRef(new Animated.Value(0)).current;
+  const textY        = useRef(new Animated.Value(14)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(scale,   { toValue: 1, friction: 7, tension: 60, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 1, duration: 320, useNativeDriver: true }),
+    ]).start(() => {
+      Animated.timing(lineW, { toValue: 1, duration: 450, useNativeDriver: false }).start();
+    });
+    Animated.parallel([
+      Animated.timing(textOpacity, { toValue: 1, duration: 380, delay: 420, useNativeDriver: true }),
+      Animated.timing(textY,       { toValue: 0, duration: 380, delay: 420, useNativeDriver: true }),
+    ]).start();
+    return () => {
+      scale.setValue(0.85); opacity.setValue(0); lineW.setValue(0);
+      textOpacity.setValue(0); textY.setValue(14);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [age, weight, headline]);
+
+  const lineWidth = lineW.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] });
+
+  return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
+      <Animated.View style={{ flexDirection: 'row', gap: 40, opacity, transform: [{ scale }], marginBottom: 28 }}>
+        <View style={{ alignItems: 'center' }}>
+          <Text style={sm.num}>{age}</Text>
+          <View style={sm.lineTrack}><Animated.View style={[sm.lineFill, { width: lineWidth }]} /></View>
+          <Text style={sm.cap}>YEARS OLD</Text>
+        </View>
+        <View style={{ alignItems: 'center' }}>
+          <Text style={sm.num}>{Math.round(weight)}</Text>
+          <View style={sm.lineTrack}><Animated.View style={[sm.lineFill, { width: lineWidth }]} /></View>
+          <Text style={sm.cap}>LB</Text>
+        </View>
+      </Animated.View>
+      <Animated.View style={{ opacity: textOpacity, transform: [{ translateY: textY }] }}>
+        <Text style={sm.headline}>{headline}</Text>
+      </Animated.View>
+    </View>
+  );
+}
+
+const sm = StyleSheet.create({
+  num:       { fontSize: 52, fontWeight: W.bold, color: L.text, letterSpacing: -1 },
+  lineTrack: { width: 56, height: 3, borderRadius: 1.5, backgroundColor: 'rgba(17,24,39,0.08)', overflow: 'hidden', marginTop: 8, marginBottom: 10 },
+  lineFill:  { height: '100%', backgroundColor: L.accent },
+  cap:       { fontSize: 11, fontWeight: W.semi, color: L.textDim, letterSpacing: 0.5 },
+  headline:  { fontSize: 22, fontWeight: W.bold, color: L.text, letterSpacing: -0.4, textAlign: 'center', lineHeight: 29 },
+});
+
+// ── LevelTrack — animated dots along a beginner→advanced line, one headline ───
+// afterExperience only. A fill line draws to the selected level, dots pop in
+// with a stagger (the selected one leads), then the headline slides up.
+function LevelTrack({ levels, selectedIndex, headline }: { levels: string[]; selectedIndex: number; headline: string }) {
+  const fillW        = useRef(new Animated.Value(0)).current;
+  const dotScales     = useRef(levels.map(() => new Animated.Value(0))).current;
+  const textOpacity  = useRef(new Animated.Value(0)).current;
+  const textY        = useRef(new Animated.Value(14)).current;
+
+  useEffect(() => {
+    const targetPct = levels.length > 1 ? selectedIndex / (levels.length - 1) : 0;
+    Animated.timing(fillW, { toValue: targetPct, duration: 600, delay: 150, useNativeDriver: false }).start();
+    Animated.stagger(90, dotScales.map(v =>
+      Animated.spring(v, { toValue: 1, friction: 6, tension: 60, useNativeDriver: true })
+    )).start();
+    Animated.parallel([
+      Animated.timing(textOpacity, { toValue: 1, duration: 380, delay: 550, useNativeDriver: true }),
+      Animated.timing(textY,       { toValue: 0, duration: 380, delay: 550, useNativeDriver: true }),
+    ]).start();
+    return () => {
+      fillW.setValue(0);
+      dotScales.forEach(v => v.setValue(0));
+      textOpacity.setValue(0); textY.setValue(14);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [levels, selectedIndex, headline]);
+
+  const fillWidth = fillW.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] });
+
+  return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 }}>
+      <View style={{ width: '100%', height: 24, justifyContent: 'center', marginBottom: 12 }}>
+        <View style={lt.track}><Animated.View style={[lt.fill, { width: fillWidth }]} /></View>
+        <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          {levels.map((lbl, i) => (
+            <Animated.View key={lbl} style={[lt.dot, i <= selectedIndex && lt.dotActive, { transform: [{ scale: dotScales[i] }] }]} />
+          ))}
+        </View>
+      </View>
+      <View style={{ flexDirection: 'row', width: '100%', marginBottom: 28 }}>
+        {levels.map((lbl, i) => (
+          <Text key={lbl} style={[lt.label, i === selectedIndex && lt.labelActive]}>{lbl}</Text>
+        ))}
+      </View>
+      <Animated.View style={{ opacity: textOpacity, transform: [{ translateY: textY }] }}>
+        <Text style={lt.headline}>{headline}</Text>
+      </Animated.View>
+    </View>
+  );
+}
+
+const lt = StyleSheet.create({
+  track:      { height: 3, borderRadius: 1.5, backgroundColor: 'rgba(17,24,39,0.08)', overflow: 'hidden', width: '100%' },
+  fill:       { height: '100%', backgroundColor: L.accent, borderRadius: 1.5 },
+  dot:        { width: 14, height: 14, borderRadius: 7, backgroundColor: L.card, borderWidth: 2, borderColor: 'rgba(17,24,39,0.14)' },
+  dotActive:  { backgroundColor: L.accent, borderColor: L.accent },
+  label:      { flex: 1, fontSize: 11, fontWeight: W.semi, color: L.textDim, letterSpacing: 0.2, textAlign: 'center' },
+  labelActive:{ color: L.text, fontWeight: W.bold },
+  headline:   { fontSize: 22, fontWeight: W.bold, color: L.text, letterSpacing: -0.4, textAlign: 'center', lineHeight: 29 },
+});
+
+// ── WeekDots — animated day-per-week dot row, one headline ────────────────────
+// afterTraining only. 7 dots pop in with a stagger, `activeDays` of them
+// filled, then the headline slides up.
+function WeekDots({ totalDays, activeDays, headline }: { totalDays: number; activeDays: number; headline: string }) {
+  const scales       = useRef(Array.from({ length: totalDays }, () => new Animated.Value(0))).current;
+  const textOpacity  = useRef(new Animated.Value(0)).current;
+  const textY        = useRef(new Animated.Value(14)).current;
+
+  useEffect(() => {
+    Animated.stagger(80, scales.map(v =>
+      Animated.spring(v, { toValue: 1, friction: 6, tension: 70, useNativeDriver: true })
+    )).start();
+    const settleDelay = 150 + totalDays * 80;
+    Animated.parallel([
+      Animated.timing(textOpacity, { toValue: 1, duration: 380, delay: settleDelay, useNativeDriver: true }),
+      Animated.timing(textY,       { toValue: 0, duration: 380, delay: settleDelay, useNativeDriver: true }),
+    ]).start();
+    return () => {
+      scales.forEach(v => v.setValue(0));
+      textOpacity.setValue(0); textY.setValue(14);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalDays, activeDays, headline]);
+
+  return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
+      <View style={{ flexDirection: 'row', gap: 10, marginBottom: 28 }}>
+        {scales.map((v, i) => (
+          <Animated.View key={i} style={[wd.dot, i < activeDays && wd.dotActive, { transform: [{ scale: v }] }]} />
+        ))}
+      </View>
+      <Animated.View style={{ opacity: textOpacity, transform: [{ translateY: textY }] }}>
+        <Text style={wd.headline}>{headline}</Text>
+      </Animated.View>
+    </View>
+  );
+}
+
+const wd = StyleSheet.create({
+  dot:       { width: 30, height: 30, borderRadius: 15, backgroundColor: L.card, borderWidth: 1.5, borderColor: L.border },
+  dotActive: { backgroundColor: L.accent, borderColor: L.accent },
+  headline:  { fontSize: 22, fontWeight: W.bold, color: L.text, letterSpacing: -0.4, textAlign: 'center', lineHeight: 29 },
+});
 
 // ── AnimatedOption ─────────────────────────────────────────────────────────────
 
@@ -448,6 +838,159 @@ function HomeSplitSlider({ value, onChange }: { value: number; onChange: (v: num
   );
 }
 
+// ── WeightRulerSlider — tick-mark ruler for entering weight directly on the
+// "What do you weigh?" question (was a separate desired-weight page relative
+// to a current weight — collapsed into ONE absolute-range ruler on this one
+// question instead, per explicit ask: "I didn't want an extra weight page").
+//
+// FIXED-CENTER-MARKER design, not "static ruler, moving marker" (the first
+// pass) — the marker sits still at the exact horizontal center of the
+// viewport and the whole tick strip translates underneath it as you drag,
+// same mental model as a real ruler/date-picker scroll. This is what makes
+// a WIDE absolute range (70-400 lbs, so it covers any real adult weight)
+// actually work: a static ruler that size has to start centered on the
+// midpoint of the WHOLE range (235 lbs) with no way to show a normal
+// starting value on screen — translating the strip instead means the
+// current value can always be centered, at any point in the range.
+// PanResponder (not a real ScrollView) so this can still directly drive an
+// Animated.Value for the two-tone dark/light fill split the exact same way
+// HomeSplitSlider does — dark ticks are simply "everything from the start
+// of the range up to the current value," clipped via an overflow:hidden
+// Animated-width container, and because that container is a CHILD of the
+// same translating strip, its dark edge always lands exactly under the
+// fixed marker with no extra math.
+//
+// SIZE — reported too small/cramped on the first pass. TICK_GAP roughly
+// tripled (6 → 18px per lb) and every dimension (track height, tick
+// heights, marker, the big number) scaled up to match — a genuinely
+// "zoomed in" ruler you scrub through, not a shrunk-down decoration.
+const WEIGHT_MIN   = 70;  // lbs — wide enough to cover essentially any real adult weight
+const WEIGHT_MAX   = 400;
+const TICK_GAP      = 18; // px per 1 lb
+const TICK_TRACK_H  = 84;
+
+function WeightRulerSlider({ value, onChange }: {
+  value: number; onChange: (v: number) => void;
+}) {
+  const trackWidth = (WEIGHT_MAX - WEIGHT_MIN) * TICK_GAP;
+  const pxFromValue = (v: number) => Math.max(0, Math.min(trackWidth, (v - WEIGHT_MIN) * TICK_GAP));
+  const valueFromPx = (px: number) => WEIGHT_MIN + px / TICK_GAP;
+
+  const [displayVal, setDisplayVal] = useState(value);
+  const [viewportWidth, setViewportWidth] = useState(340); // real value lands via onLayout below
+
+  const valuePx  = useRef(new Animated.Value(pxFromValue(value))).current;
+  const startRef = useRef(pxFromValue(value));
+  // Tracks the last WHOLE lb the drag crossed, so the haptic tick fires once
+  // per pound crossed — not once per pixel/frame. See onPanResponderMove.
+  const lastTickRef = useRef(Math.round(value));
+
+  // One-time sync on mount — same limitation HomeSplitSlider's own comment
+  // already documents (doesn't resync if `value` changes from elsewhere
+  // after mount), kept consistent rather than solving it differently here.
+  useEffect(() => {
+    valuePx.setValue(pxFromValue(value));
+    setDisplayVal(value);
+    lastTickRef.current = Math.round(value);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder:  () => true,
+      onPanResponderGrant: () => {
+        startRef.current = (valuePx as any)._value ?? pxFromValue(value);
+      },
+      onPanResponderMove: (_, gs) => {
+        // Dragging LEFT reveals higher numbers at center (same feel as
+        // scrolling a horizontal picker) — subtract dx, not add it.
+        const raw  = startRef.current - gs.dx;
+        const next = Math.max(0, Math.min(trackWidth, raw));
+        valuePx.setValue(next);
+        const v = Math.round(valueFromPx(next) * 10) / 10;
+        setDisplayVal(v);
+        onChange(v);
+        // Haptic "ruler tick" — felt, not heard: selectionAsync is the
+        // exact light-tick feedback iOS pickers/rulers use, distinct from
+        // impactAsync's heavier bump. Fires once per whole pound crossed.
+        const wholeLb = Math.round(v);
+        if (wholeLb !== lastTickRef.current) {
+          lastTickRef.current = wholeLb;
+          void Haptics.selectionAsync();
+        }
+      },
+      onPanResponderRelease: (_, gs) => {
+        const raw  = startRef.current - gs.dx;
+        const next = Math.max(0, Math.min(trackWidth, raw));
+        const v = Math.round(valueFromPx(next) * 10) / 10;
+        valuePx.setValue(pxFromValue(v));
+        setDisplayVal(v);
+        onChange(v);
+      },
+    })
+  ).current;
+
+  // The strip's own translateX — keeps `valuePx` centered under the fixed
+  // marker at any drag position (see this component's own comment above).
+  const stripTranslateX = valuePx.interpolate({
+    inputRange:  [0, trackWidth],
+    outputRange: [viewportWidth / 2, viewportWidth / 2 - trackWidth],
+  });
+
+  const ticks = useMemo(() => {
+    const out: { left: number; major: boolean }[] = [];
+    const range = WEIGHT_MAX - WEIGHT_MIN;
+    for (let i = 0; i <= range; i++) out.push({ left: i * TICK_GAP, major: i % 10 === 0 });
+    return out;
+  }, []);
+
+  return (
+    <View style={{ alignItems: 'center', marginTop: 20 }}>
+      <Text style={{ fontFamily: FONT.displayBold, fontSize: 60, color: L.text, letterSpacing: -1.5, marginBottom: 36 }}>
+        {displayVal.toFixed(1)} <Text style={{ fontSize: 24, fontWeight: W.semi, color: L.textDim }}>lbs</Text>
+      </Text>
+
+      <View
+        style={{ width: '100%', height: TICK_TRACK_H, overflow: 'hidden' }}
+        onLayout={(e) => setViewportWidth(e.nativeEvent.layout.width)}
+        {...panResponder.panHandlers}
+      >
+        <Animated.View style={{ width: trackWidth, height: TICK_TRACK_H, transform: [{ translateX: stripTranslateX }] }}>
+          {/* Light base layer — every tick, always visible */}
+          {ticks.map((t, i) => (
+            <View key={i} style={{
+              position: 'absolute', left: t.left, bottom: 0,
+              width: 3, height: t.major ? 44 : 24,
+              backgroundColor: 'rgba(17,24,39,0.14)', borderRadius: 1.5,
+            }} />
+          ))}
+          {/* Dark overlay — from the start of the range up to the current
+              value, so it always reaches exactly to the fixed marker below
+              regardless of where the strip has scrolled to. */}
+          <Animated.View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: valuePx, overflow: 'hidden' }}>
+            {ticks.map((t, i) => (
+              <View key={i} style={{
+                position: 'absolute', left: t.left, bottom: 0,
+                width: 3, height: t.major ? 44 : 24,
+                backgroundColor: L.btnDark, borderRadius: 1.5,
+              }} />
+            ))}
+          </Animated.View>
+        </Animated.View>
+
+        {/* Marker — fixed at the exact center of the viewport, never moves.
+            Sibling of the translating strip (not a child of it), pointer
+            events off so it never intercepts the drag. */}
+        <View pointerEvents="none" style={{
+          position: 'absolute', bottom: 0, left: viewportWidth / 2 - 2,
+          width: 4, height: 60, backgroundColor: L.btnDark, borderRadius: 2,
+        }} />
+      </View>
+    </View>
+  );
+}
+
 const sl = StyleSheet.create({
   iconBox: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   track:   { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, flexDirection: 'row', borderRadius: TRACK_H / 2, overflow: 'hidden', backgroundColor: '#EBEBF0' },
@@ -603,7 +1146,6 @@ export default function OnboardingScreen() {
   const [appState,  setAppState]  = useState<AppState>('welcome');
   const [stepIndex, setStepIndex] = useState(0);
   const [answers,   setAnswers]   = useState<Record<string, any>>({});
-  const [textInput, setTextInput] = useState('');
   const [plan,      setPlan]      = useState<{ focus: string; exercises: WorkoutExercise[] } | null>(null);
   const [loadStep,  setLoadStep]  = useState(0);
   const [loadPct,   setLoadPct]   = useState(0);
@@ -652,8 +1194,6 @@ export default function OnboardingScreen() {
   const advance = (ans: Record<string, any>) => {
     const vis = getVisibleSteps(ans);
     if (stepIndex < vis.length - 1) {
-      const next = vis[stepIndex + 1];
-      if (next.type === 'text') setTextInput((ans[next.id] as string) || '');
       animTrans('forward', () => setStepIndex(i => i + 1));
     } else {
       setAppState('mypal');
@@ -662,8 +1202,6 @@ export default function OnboardingScreen() {
 
   const goBack = () => {
     if (stepIndex > 0) {
-      const prev = visibleSteps[stepIndex - 1];
-      if (prev.type === 'text') setTextInput((answers[prev.id] as string) || '');
       animTrans('back', () => setStepIndex(i => i - 1));
     } else {
       setAppState('welcome');
@@ -703,7 +1241,7 @@ export default function OnboardingScreen() {
 
   if (appState === 'welcome') {
     return (
-      <ScreenBackground>
+      <OnboardingBackground>
         <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
           <ScrollView contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 28, justifyContent: 'center' }} showsVerticalScrollIndicator={false}>
             <View style={{ alignItems: 'center', marginBottom: 20 }}>
@@ -711,13 +1249,17 @@ export default function OnboardingScreen() {
             </View>
             <Text style={s.wordmarkBig}>FORMPAL</Text>
             <Text style={s.welcomeTitle}>Your AI form coach, plus a plan built for you.</Text>
-            <Text style={s.welcomeSub}>Answer a few quick questions and I'll build your first workout — then I'll check every rep.</Text>
+            {/* Was "Answer a few quick questions and I'll build your first
+                workout — then I'll check every rep" — led with the
+                mechanism (questions, workout-building, rep-checking)
+                instead of what it gets you. Outcome-first now. */}
+            <Text style={s.welcomeSub}>Train with confidence, knowing every rep is done right — no more guessing if your form's holding you back.</Text>
             <TouchableOpacity style={s.primaryBtn} onPress={() => { haptic(Haptics.ImpactFeedbackStyle.Medium); setStepIndex(0); setAppState('onboarding'); }} activeOpacity={0.85}>
               <Text style={s.primaryBtnTxt}>Build my plan</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>
-      </ScreenBackground>
+      </OnboardingBackground>
     );
   }
 
@@ -745,7 +1287,7 @@ export default function OnboardingScreen() {
       const defaultVal = isHeight ? `5'8"` : '16';
       const wheelVal   = (answers[st.id] as string) || defaultVal;
       return (
-        <ScreenBackground>
+        <OnboardingBackground>
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
             {header}
             <View style={{ paddingHorizontal: 24, paddingTop: 20, flex: 1 }}>
@@ -760,49 +1302,16 @@ export default function OnboardingScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </ScreenBackground>
+        </OnboardingBackground>
       );
     }
 
-    // Text (weight)
-    if (st.type === 'text') {
-      return (
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <ScreenBackground>
-            <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
-              {header}
-              <View style={{ paddingHorizontal: 24, paddingTop: 20, flex: 1 }}>
-                <Text style={s.qq}>{st.question}</Text>
-                <View style={{ alignItems: 'center', marginTop: 40, flexDirection: 'row', justifyContent: 'center', gap: 10 }}>
-                  <TextInput
-                    value={textInput}
-                    onChangeText={(v) => setTextInput(v.replace(/[^0-9]/g, ''))}
-                    keyboardType="number-pad"
-                    maxLength={3}
-                    style={{ fontSize: 56, fontWeight: W.bold, color: textInput ? L.text : L.textDim, textAlign: 'center', minWidth: 110, letterSpacing: -2 }}
-                    placeholder="000"
-                    placeholderTextColor={L.textDim}
-                    autoFocus
-                  />
-                  <Text style={{ fontSize: 22, fontWeight: W.semi, color: L.textDim, paddingBottom: 10 }}>lbs</Text>
-                </View>
-              </View>
-              <View style={s.bn}>
-                <TouchableOpacity style={[s.cb, !textInput && s.cbDisabled]} disabled={!textInput} onPress={() => { const next = { ...answers, [st.id]: textInput }; setAnswers(next); setTextInput(''); advance(next); }} activeOpacity={0.85}>
-                  <Text style={[s.ct, !textInput && s.ctDisabled]}>Continue</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </ScreenBackground>
-        </KeyboardAvoidingView>
-      );
-    }
 
     // Slider (home/gym split)
     if (st.type === 'slider') {
       const sliderVal = typeof answers[st.id] === 'number' ? (answers[st.id] as number) : 50;
       return (
-        <ScreenBackground>
+        <OnboardingBackground>
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
             {header}
             <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 20, paddingBottom: 140 }} showsVerticalScrollIndicator={false}>
@@ -817,7 +1326,58 @@ export default function OnboardingScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </ScreenBackground>
+        </OnboardingBackground>
+      );
+    }
+
+    // Ruler (desired weight, relative to the already-entered current weight)
+    if (st.type === 'ruler') {
+      const rulerVal = typeof answers[st.id] === 'number' ? (answers[st.id] as number) : 160;
+      return (
+        <OnboardingBackground>
+          <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
+            {header}
+            <View style={{ paddingHorizontal: 24, paddingTop: 20, flex: 1 }}>
+              <Text style={s.qq}>{st.question}</Text>
+              <WeightRulerSlider
+                value={rulerVal}
+                onChange={(v) => setAnswers({ ...answers, [st.id]: v })}
+              />
+            </View>
+            <View style={s.bn}>
+              <TouchableOpacity style={s.cb} onPress={() => advance({ ...answers, [st.id]: rulerVal })} activeOpacity={0.85}>
+                <Text style={s.ct}>Continue</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </OnboardingBackground>
+      );
+    }
+
+    // Interstitial — no input, just a beat between sections that reflects
+    // the answers just given back at the user (see the recap functions
+    // above STEPS, and this file's own note on why no fabricated stats).
+    if (st.type === 'interstitial') {
+      const recap =
+        st.id === 'afterAboutYou'   ? aboutYouRecap(answers)   :
+        st.id === 'afterGoal'       ? goalRecap(answers)       :
+        st.id === 'afterExperience' ? experienceRecap(answers) :
+        trainingRecap(answers);
+      return (
+        <OnboardingBackground>
+          <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
+            {header}
+            {recap.variant === 'bars'  ? <ComparisonMoment leftLabel={recap.leftLabel} rightLabel={recap.rightLabel} headline={recap.headline} /> :
+             recap.variant === 'stats' ? <StatsMoment age={recap.age} weight={recap.weight} headline={recap.headline} /> :
+             recap.variant === 'level' ? <LevelTrack levels={recap.levels} selectedIndex={recap.selectedIndex} headline={recap.headline} /> :
+             <WeekDots totalDays={recap.totalDays} activeDays={recap.activeDays} headline={recap.headline} />}
+            <View style={s.bn}>
+              <TouchableOpacity style={s.cb} onPress={() => advance(answers)} activeOpacity={0.85}>
+                <Text style={s.ct}>Continue</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </OnboardingBackground>
       );
     }
 
@@ -827,7 +1387,7 @@ export default function OnboardingScreen() {
     const isNotif    = st.id === 'notifications';
 
     return (
-      <ScreenBackground>
+      <OnboardingBackground>
         {/* Notification overlay — absolute, never pushes content */}
         {isNotif && <NotificationBanner topOffset={insets.top} />}
 
@@ -842,8 +1402,18 @@ export default function OnboardingScreen() {
                 const sym = o.sfSymbol || 'person.fill';
                 return (
                   <AnimatedOption key={`${st.id}-${o.label}`} index={i} style={[s.opt, sel && s.optSel]} onPress={() => handleSelect(o.label)}>
-                    <View style={[s.optIcon, sel && s.optIconSel]}>
-                      <Sym name={sym} size={18} color={sel ? L.accent : L.textSub} />
+                    <View style={[s.optIcon, o.customIcon && s.optIconBadge]}>
+                      {o.customIcon
+                        // No tintColor here — these webp icons render as a
+                        // solid grey box instead of the silhouette when
+                        // tinted (alpha channel isn't coming through), so
+                        // show them plain. Most of these have an opaque
+                        // white background baked into the image (not
+                        // transparent) — clipped into optIconBadge's rounded
+                        // square via overflow:hidden instead of showing as a
+                        // stark white square against the row.
+                        ? <Image source={o.customIcon} style={s.optIconImg} resizeMode="cover" />
+                        : <Sym name={sym} size={24} color={sel ? L.accent : L.textSub} />}
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={[s.optTxt, sel && s.optTxtSel]}>{o.label}</Text>
@@ -865,7 +1435,7 @@ export default function OnboardingScreen() {
             </View>
           )}
         </View>
-      </ScreenBackground>
+      </OnboardingBackground>
     );
   }
 
@@ -873,9 +1443,9 @@ export default function OnboardingScreen() {
 
   if (appState === 'mypal') {
     return (
-      <ScreenBackground>
+      <OnboardingBackground>
         <MyPalIntroContent onContinue={() => { haptic(Haptics.ImpactFeedbackStyle.Medium); setPlan(buildPlan(answers)); setAppState('building'); }} />
-      </ScreenBackground>
+      </OnboardingBackground>
     );
   }
 
@@ -883,7 +1453,7 @@ export default function OnboardingScreen() {
 
   if (appState === 'building') {
     return (
-      <ScreenBackground>
+      <OnboardingBackground>
         <View style={{ flex: 1, paddingTop: insets.top + 40, paddingBottom: insets.bottom, paddingHorizontal: 28 }}>
           <View style={{ marginBottom: 44 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
@@ -912,7 +1482,7 @@ export default function OnboardingScreen() {
             })}
           </View>
         </View>
-      </ScreenBackground>
+      </OnboardingBackground>
     );
   }
 
@@ -921,7 +1491,7 @@ export default function OnboardingScreen() {
   if (appState === 'projection') {
     const daysNum = parseInt((answers.days as string) ?? '3') || 3;
     return (
-      <ScreenBackground>
+      <OnboardingBackground>
         <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
           <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
             <Text style={s.qq}>Here's what training {daysNum} day{daysNum !== 1 ? 's' : ''} a week looks like.</Text>
@@ -934,7 +1504,7 @@ export default function OnboardingScreen() {
             </TouchableOpacity>
           </View>
         </View>
-      </ScreenBackground>
+      </OnboardingBackground>
     );
   }
 
@@ -942,7 +1512,7 @@ export default function OnboardingScreen() {
 
   if (appState === 'payoff') {
     return (
-      <ScreenBackground>
+      <OnboardingBackground>
         <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
           <ScrollView contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
             <View style={s.projRow}>
@@ -981,7 +1551,7 @@ export default function OnboardingScreen() {
             </TouchableOpacity>
           </View>
         </View>
-      </ScreenBackground>
+      </OnboardingBackground>
     );
   }
 
@@ -1005,17 +1575,27 @@ const s = StyleSheet.create({
   // Options
   opt:        { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: L.card, borderRadius: 16, borderWidth: 1, borderColor: L.border, paddingHorizontal: 16, paddingVertical: 14, marginBottom: 10, ...({ boxShadow: Elev.low.shadow } as any) },
   optSel:     { borderColor: L.accent, backgroundColor: L.accentSoft },
-  optIcon:    { width: 36, height: 36, borderRadius: 10, backgroundColor: L.iconBg, alignItems: 'center', justifyContent: 'center' },
-  optIconSel: { backgroundColor: 'rgba(10,132,255,0.12)' },
+  // No boxed background — selection is already conveyed by the icon's own
+  // color (accent when selected, muted gray otherwise, see the render
+  // above), so the gray square backdrop was pure redundant chrome, not
+  // carrying its own information. Fixed-width slot only, to keep every
+  // option's label starting at the same x position regardless of glyph width.
+  optIcon:      { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  optIconBadge: { borderRadius: 14, overflow: 'hidden', backgroundColor: L.card, borderWidth: 1, borderColor: L.border },
+  optIconImg:   { width: 44, height: 44 },
   optTxt:     { fontSize: 15, fontWeight: W.medium, color: L.text, letterSpacing: -0.2 },
   optTxtSel:  { fontWeight: W.semi },
   optSublabel:{ fontSize: 12, color: L.textSub, marginTop: 2 },
   radio:      { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: 'rgba(17,24,39,0.12)', alignItems: 'center', justifyContent: 'center' },
   radioSel:   { backgroundColor: L.accent, borderColor: L.accent },
 
-  // Bottom bar
-  bn:         { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 24, paddingBottom: 24, paddingTop: 16, backgroundColor: L.navBar, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: L.border },
-  cb:         { backgroundColor: L.btnDark, borderRadius: 100, paddingVertical: 18, alignItems: 'center' },
+  // Bottom bar — no background/border now, just the button floating directly
+  // on AppBackground's colorful gradient (was an opaque white bar with a
+  // hairline top border, reported as an unwanted "white box"). The button
+  // itself (cb, solid dark pill) still reads clearly without a backing
+  // surface, so nothing here was actually load-bearing for legibility.
+  bn:         { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 24, paddingBottom: 24, paddingTop: 16 },
+  cb:         { backgroundColor: L.btnDark, borderRadius: 100, paddingVertical: 18, alignItems: 'center', ...({ boxShadow: Elev.medium.shadow } as any) },
   cbDisabled: { backgroundColor: '#EBEBF0' },
   ct:         { fontFamily: FONT.displayBold, fontSize: 16, color: '#fff', letterSpacing: 0.1 },
   ctDisabled: { color: L.textDim },
