@@ -12,6 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AppBackground from '../components/AppBackground';
+import StructuredPlanInterstitial from '../components/StructuredPlanInterstitial';
 import { FONT, W, Col, Elev } from '../constants/theme';
 
 export const ONBOARDING_KEY = 'formpal_onboarding_complete';
@@ -58,6 +59,15 @@ const ICON = {
   someExpGym:   require('../assets/icons/gymsomeexperience.webp'),
   beginnerGym:  require('../assets/icons/gymbeginner.webp'),
   home:         require('../assets/icons/home.webp'),
+  female:       require('../assets/icons/female.webp'),
+  male:         require('../assets/icons/male.webp'),
+  mixOfBoth:    require('../assets/icons/mixofboth.webp'),
+  back:         require('../assets/icons/back.webp'),
+  squatMachine:  require('../assets/icons/squatmachine.webp'),
+  backMachine:   require('../assets/icons/backmachine.webp'),
+  chestMachine:  require('../assets/icons/chestmachine.webp'),
+  legMachine:    require('../assets/icons/legmachine.webp'),
+  cableMachine:  require('../assets/icons/cablemachine.webp'),
 } as const;
 
 // ── Light theme palette ────────────────────────────────────────────────────────
@@ -141,8 +151,8 @@ const STEPS: Step[] = [
   // WeightRulerSlider) directly on this same question, not a separate page.
   { id: 'weight', section: 'About You', type: 'ruler',  question: 'What do you weigh?' },
   { id: 'sex', section: 'About You', type: 'select', question: "What's your sex?", options: [
-    { label: 'Male',   sfSymbol: 'person.fill' },
-    { label: 'Female', sfSymbol: 'person.fill' },
+    { label: 'Male',   sfSymbol: 'person.fill', customIcon: ICON.male   },
+    { label: 'Female', sfSymbol: 'person.fill', customIcon: ICON.female },
   ]},
 
   // Section-transition interstitial — no input, just a beat that reflects
@@ -187,7 +197,7 @@ const STEPS: Step[] = [
     options: [
       { label: 'Knees',            sfSymbol: 'figure.walk',        customIcon: ICON.knee     },
       { label: 'Shoulders',        sfSymbol: 'figure.arms.open',   customIcon: ICON.shoulder },
-      { label: 'Lower back',       sfSymbol: 'figure.cooldown'                               },
+      { label: 'Lower back',       sfSymbol: 'figure.cooldown', customIcon: ICON.back        },
       { label: 'Wrists',           sfSymbol: 'hand.raised.fill',   customIcon: ICON.wrist    },
       { label: 'Neck',             sfSymbol: 'figure.stand',       customIcon: ICON.neck     },
       { label: 'Hips',             sfSymbol: 'figure.run',         customIcon: ICON.hip      },
@@ -214,7 +224,7 @@ const STEPS: Step[] = [
   { id: 'trainingLocation', section: 'Your Training', type: 'select', question: 'Where do you train?', options: [
     { label: 'Home',       sfSymbol: 'house.fill', customIcon: ICON.home                    },
     { label: 'Gym',        sfSymbol: 'figure.strengthtraining.traditional', customIcon: ICON.gym },
-    { label: 'Mix of both', sfSymbol: 'shuffle'                                            },
+    { label: 'Mix of both', sfSymbol: 'shuffle', customIcon: ICON.mixOfBoth                 },
   ]},
   {
     id: 'homeSplit', section: 'Your Training', type: 'slider',
@@ -243,13 +253,13 @@ const STEPS: Step[] = [
     clearAllOption: 'It has everything',
     options: [
       { label: 'Free weights',       sfSymbol: 'dumbbell.fill', customIcon: ICON.dumbbell },
-      { label: 'Cable machines',     sfSymbol: 'figure.strengthtraining.functional' },
-      { label: 'Leg machines',       sfSymbol: 'figure.walk'                        },
-      { label: 'Chest / press machines', sfSymbol: 'figure.strengthtraining.traditional' },
+      { label: 'Cable machines',     sfSymbol: 'figure.strengthtraining.functional', customIcon: ICON.cableMachine },
+      { label: 'Leg machines',       sfSymbol: 'figure.walk', customIcon: ICON.legMachine            },
+      { label: 'Chest / press machines', sfSymbol: 'figure.strengthtraining.traditional', customIcon: ICON.chestMachine },
       // Was figure.gymnastics (bars/rings, not a rowing machine) — figure.rower
       // is the literal rowing-machine glyph.
-      { label: 'Back / row machines', sfSymbol: 'figure.rower'                      },
-      { label: 'Squat rack',         sfSymbol: 'figure.cross.training'              },
+      { label: 'Back / row machines', sfSymbol: 'figure.rower', customIcon: ICON.backMachine          },
+      { label: 'Squat rack',         sfSymbol: 'figure.cross.training', customIcon: ICON.squatMachine },
       { label: 'It has everything',  sfSymbol: 'checkmark.circle.fill', customIcon: ICON.allGood },
     ],
   },
@@ -270,6 +280,14 @@ const STEPS: Step[] = [
     { label: '60 min',    sfSymbol: 'clock.fill' },
     { label: '75+ min',   sfSymbol: 'clock.fill' },
   ]},
+
+  // Full-screen sell moment (own progress bar + CTA, rendered outside the
+  // shared header/footer — see the 'planStat' special-case in the render
+  // switch below) right after they commit to a training structure —
+  // reinforces why the days/duration they just picked matters, before the
+  // personalized WeekDots recap. Additive, not a replacement for
+  // 'afterTraining' below.
+  { id: 'planStat', section: 'Your Training', type: 'interstitial', question: '' },
 
   { id: 'afterTraining', section: 'Your Training', type: 'interstitial', question: '' },
 
@@ -1358,6 +1376,14 @@ export default function OnboardingScreen() {
     // the answers just given back at the user (see the recap functions
     // above STEPS, and this file's own note on why no fabricated stats).
     if (st.type === 'interstitial') {
+      // Full-screen sell moment — supplies its own progress bar/CTA, so it
+      // bypasses the shared header/footer every other interstitial uses
+      // below. Real onboarding `progress` passed in instead of its own
+      // standalone default.
+      if (st.id === 'planStat') {
+        return <StructuredPlanInterstitial progress={progress} onContinue={() => advance(answers)} />;
+      }
+
       const recap =
         st.id === 'afterAboutYou'   ? aboutYouRecap(answers)   :
         st.id === 'afterGoal'       ? goalRecap(answers)       :
