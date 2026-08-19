@@ -701,14 +701,30 @@ enum ExerciseRegistry {
 
         minRepInterval: 0.5,
 
+        // Disabled: shoulder press is FRONT-FACING (cameraSetup above says
+        // "face the camera," not side-on). A foreshortened upper-arm segment
+        // here means the user turned side-on (wrong) OR — confirmed by a real
+        // device log where reps 1 and 4 were genuinely good form and still
+        // failed — that the elbow naturally moves closer to the camera as the
+        // arm locks out overhead, which is expected good-form motion, not a
+        // camera-angle problem. The cue "TURN SIDE-ON" was also backwards for
+        // this exercise. This exact fix (disable + "FACE THE CAMERA" cue) was
+        // already made in constants/exerciseDefinitions.ts's shoulderPress —
+        // ported here now; native had silently diverged and kept firing.
         planarityChecks: [
-            // Shoulder press: upper arm both sides must be in-plane.
-            // Fails when user stands at an angle to the camera instead of facing it.
             PlanarityCheck(id: "uarm_l", jointA: .leftShoulder,  jointB: .leftElbow,
-                           minRatio: 0.75, cue: "TURN SIDE-ON", fallbackReferenceRatio: 0.64),
+                           minRatio: 0.75, cue: "FACE THE CAMERA", fallbackReferenceRatio: 0.64, enabled: false),
             PlanarityCheck(id: "uarm_r", jointA: .rightShoulder, jointB: .rightElbow,
-                           minRatio: 0.75, cue: "TURN SIDE-ON", fallbackReferenceRatio: 0.64),
+                           minRatio: 0.75, cue: "FACE THE CAMERA", fallbackReferenceRatio: 0.64, enabled: false),
         ],
+
+        // Was unset (default 0.30). Real device log: a genuine first rep
+        // produced movementPastEntry=2.5881 against required=3.9000
+        // (|68-55|*0.30) and was phantom-rejected. 0.18 clears that exact
+        // data point with a modest margin (required≈2.34) without zeroing
+        // the guard out. ONE real data point — revisit if more phantom-log
+        // data (real or actually-noise) comes in from further testing.
+        phantomGuardFraction: 0.18,
 
         // Ported from constants/exerciseDefinitions.ts's shoulderPress — this native
         // registry definition never had it set (defaulted to nil/no gate), so it was

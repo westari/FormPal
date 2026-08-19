@@ -2798,6 +2798,14 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     // phantom-rejecting every rep in the clip. Same 0.3 value latPulldown
     // already uses for this exact failure mode.
     settleAnchorMinFraction: 0.3,
+    // Was unset (default 0.30). Real device log (video-analysis path, same
+    // repMetric/thresholds as this definition): a genuine first rep produced
+    // movementPastEntry=2.5881 against required=3.9000 (|68-55|*0.30) and was
+    // phantom-rejected. 0.18 clears that exact data point with a modest
+    // margin (required≈2.34). Ported to native ExerciseRegistry.swift's
+    // shoulderPress too, so video and live paths behave identically. ONE
+    // real data point — revisit if more phantom-log data comes in.
+    phantomGuardFraction: 0.18,
 
     formChecks: [
       {
