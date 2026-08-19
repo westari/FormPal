@@ -841,7 +841,24 @@ public class ATHLTCameraModule: Module {
                                                          exerciseId: currentExercise)
         }
 
-        let date = Date(timeIntervalSince1970: timestamp > 0 ? timestamp : CACurrentMediaTime())
+        // Was Date(timeIntervalSince1970: timestamp>0 ? timestamp : CACurrentMediaTime()) —
+        // mixed timebases with no shared epoch, AND a per-frame discontinuity: `timestamp`
+        // is the video's own presentation time for video-file analysis (starts at 0.0) or
+        // camera uptime for live capture, but presentation time == 0.0 on a video's very
+        // first frame makes `timestamp > 0` FALSE, so THAT ONE frame fell through to
+        // CACurrentMediaTime() (device uptime, ~10^5-10^6 seconds) while every later frame
+        // used the small `timestamp` value directly. If SETUP's hold timer captured its
+        // `start` on that first frame (see runSetupCheck's setupPhaseState = .holding),
+        // every later frame's `elapsed = timestamp.timeIntervalSince(start)` computed a
+        // huge NEGATIVE duration and the 2-second hold could never complete — SETUP stuck
+        // forever, exactly matching a video with confident tracking but zero settle/rep
+        // activity. Real wall-clock Date() has no epoch mismatch and, for video-file
+        // analysis specifically, still advances in step with real elapsed time because
+        // doAnalyzeVideoFile's own pacing loop (see its PACING comment) sleeps to keep
+        // wall-clock elapsed in sync with the video's presentation-time elapsed — same
+        // reasoning already applied to universalEngine.ingestFrame below, now applied to
+        // engine.ingest()/notePersonMissing() too.
+        let date = Date()
 
         guard let results = request.results as? [VNHumanBodyPoseObservation], !results.isEmpty else {
             personDetected = false

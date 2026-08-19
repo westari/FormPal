@@ -672,6 +672,12 @@ final class ExerciseEngine {
             case .pending:
                 NSLog("[Engine] [%@] Setup: all joints visible — starting %.0fs hold",
                       def.id, Self.SETUP_HOLD_DURATION)
+                // NSLog-only messages in this function are invisible on Windows (no
+                // Xcode/Console) — the same failure mode that made a whole video
+                // analysis pass show zero trace of anything. Mirrored to onDebugLog
+                // so recap.tsx's debug panel actually shows SETUP transitions.
+                onDebugLog?("[SETUP] \(def.id) all joints visible — starting \(Int(Self.SETUP_HOLD_DURATION))s hold " +
+                            "at timestamp=\(timestamp.timeIntervalSince1970)")
                 let logJoints: [Joint] = (!missingMain.isEmpty && setup.requiredJointsAlt != nil)
                     ? (setup.requiredJointsAlt ?? []) : setup.requiredJoints
                 for joint in logJoints {
@@ -686,8 +692,17 @@ final class ExerciseEngine {
             case .holding(let start):
                 let elapsed = timestamp.timeIntervalSince(start)
                 holdProgress = min(1.0, elapsed / Self.SETUP_HOLD_DURATION)
+                // Per-frame trace of the hold timer itself — this is the direct
+                // test of the timestamp-mismatch hypothesis: elapsed should climb
+                // smoothly to 2.0 in lockstep with real frames arriving. A negative
+                // or wildly jumping value here means the timestamp fed into
+                // engine.ingest() is still broken, not the settle/rep logic below it.
+                onDebugLog?("[SETUP-TRACE] \(def.id) elapsed=\(String(format: "%.4f", elapsed)) " +
+                            "holdProgress=\(String(format: "%.2f", holdProgress)) " +
+                            "start=\(start.timeIntervalSince1970) now=\(timestamp.timeIntervalSince1970)")
                 if elapsed >= Self.SETUP_HOLD_DURATION {
                     NSLog("[Engine] [%@] Setup PASSED", def.id)
+                    onDebugLog?("[SETUP] \(def.id) PASSED — entering ACTIVE")
                     onSetupUpdate?(SetupStatus(allJointsVisible: true, holdProgress: 1.0,
                                                passed: true, hint: ""))
                     transitionFromSetup()
@@ -698,6 +713,12 @@ final class ExerciseEngine {
             if case .holding = setupPhaseState {
                 NSLog("[Engine] [%@] Setup: hold broken — missing [%@]",
                       def.id, missingJoints.map { "\($0)" }.joined(separator: ","))
+                onDebugLog?("[SETUP] \(def.id) hold broken — missing [\(missingJoints.map { "\($0)" }.joined(separator: ","))]")
+            } else {
+                // Steady-state "never had all required joints even once" case —
+                // previously had NO log at all, not even NSLog, so a video stuck
+                // here from frame 1 looked identical to one stuck mid-hold.
+                onDebugLog?("[SETUP-TRACE] \(def.id) pending — missing [\(missingJoints.map { "\($0)" }.joined(separator: ","))]")
             }
             setupPhaseState = .pending
             holdProgress    = 0.0

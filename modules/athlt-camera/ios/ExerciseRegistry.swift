@@ -626,7 +626,16 @@ enum ExerciseRegistry {
         topAngle:           84,
         repEnterThreshold:  68,    // arm 22° above horizontal — press has begun
         repExitThreshold:   72,    // arm back to 18° above horizontal — rep done
-        goodROMThreshold:   20,    // must reach within 20° of vertical overhead
+        // Was 20 — stale, never updated after this was retuned to 55 in
+        // constants/exerciseDefinitions.ts from a real device log: bottom
+        // angles across 7 reps were 41, 46, 65, 63, 4.9, 63, 41 — genuine
+        // full presses cluster at ≤46°, short presses sit at 63-65°. 55 sits
+        // with clear margin above the full-press cluster and below the
+        // short-press cluster. Same repMetric/convention here (lineVsVertical,
+        // 0°=overhead) as the JS definition this was ported from, so the
+        // value transfers directly — not a different scale needing its own
+        // native-specific number.
+        goodROMThreshold:   55,    // must reach within 55° of vertical overhead
         insufficientROMCue: "PRESS HIGHER",
 
         formChecks: [
@@ -699,6 +708,14 @@ enum ExerciseRegistry {
                            minRatio: 0.75, cue: "TURN SIDE-ON", fallbackReferenceRatio: 0.64),
             PlanarityCheck(id: "uarm_r", jointA: .rightShoulder, jointB: .rightElbow,
                            minRatio: 0.75, cue: "TURN SIDE-ON", fallbackReferenceRatio: 0.64),
-        ]
+        ],
+
+        // Ported from constants/exerciseDefinitions.ts's shoulderPress — this native
+        // registry definition never had it set (defaulted to nil/no gate), so it was
+        // never actually engaged despite the JS copy carrying it since its own "0.3"
+        // fix. Fixes a video-re-analysis bug where the settle/resync path could lock
+        // onto a repTopValue below repEnterThreshold itself, phantom-rejecting every
+        // rep in the clip. Same 0.3 value latPulldown uses for this exact failure mode.
+        settleAnchorMinFraction: 0.3
     )
 }
