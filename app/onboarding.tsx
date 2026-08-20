@@ -4,15 +4,18 @@ import {
   Animated, ActivityIndicator, PanResponder, Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Asset } from 'expo-asset';
 import { SymbolView } from 'expo-symbols';
 import { Picker } from '@react-native-picker/picker';
 import * as Haptics from 'expo-haptics';
 import Svg, { Path as SvgPath, Text as SvgText, Circle as SvgCircle } from 'react-native-svg';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AppBackground from '../components/AppBackground';
-import StructuredPlanInterstitial from '../components/StructuredPlanInterstitial';
+import PlanGrowthMoment from '../components/PlanGrowthMoment';
+import EffortResultsMoment from '../components/EffortResultsMoment';
+import FormMuscleMoment from '../components/FormMuscleMoment';
+import InjuryRiskMoment from '../components/InjuryRiskMoment';
 import { FONT, W, Col, Elev } from '../constants/theme';
 
 export const ONBOARDING_KEY = 'formpal_onboarding_complete';
@@ -155,10 +158,9 @@ const STEPS: Step[] = [
     { label: 'Female', sfSymbol: 'person.fill', customIcon: ICON.female },
   ]},
 
-  // Section-transition interstitial — no input, just a beat that reflects
-  // the answers just given back at the user before moving on. See the
-  // 'interstitial' render branch below for how title/body get computed
-  // per-id (aboutYouRecap/goalRecap/experienceRecap/trainingRecap).
+  // Section-transition interstitial — no input, just a fixed sell-moment
+  // screen. See the 'interstitial' render branch below for which
+  // components/ file backs each id.
   { id: 'afterAboutYou', section: 'About You', type: 'interstitial', question: '' },
 
   // ── Your Goal (short, distinct options)
@@ -281,14 +283,6 @@ const STEPS: Step[] = [
     { label: '75+ min',   sfSymbol: 'clock.fill' },
   ]},
 
-  // Full-screen sell moment (own progress bar + CTA, rendered outside the
-  // shared header/footer — see the 'planStat' special-case in the render
-  // switch below) right after they commit to a training structure —
-  // reinforces why the days/duration they just picked matters, before the
-  // personalized WeekDots recap. Additive, not a replacement for
-  // 'afterTraining' below.
-  { id: 'planStat', section: 'Your Training', type: 'interstitial', question: '' },
-
   { id: 'afterTraining', section: 'Your Training', type: 'interstitial', question: '' },
 
   // ── Reminders
@@ -337,8 +331,6 @@ function buildPlan(a: Record<string, any>): { focus: string; exercises: WorkoutE
   return { focus: 'Full Body', exercises };
 }
 
-// Shared with goalRecap below — hoisted out of projectionLine so both read
-// the exact same mapping instead of keeping two copies in sync by hand.
 const GOAL_WORD: Record<string, string> = {
   'Build muscle':    'building muscle',
   'Lose weight':     'losing weight',
@@ -368,304 +360,15 @@ function motivationLine(a: Record<string, any>): string {
 
 // ── Section-transition interstitials ──────────────────────────────────────────
 // One per section boundary (see the 'afterAboutYou'/'afterGoal'/
-// 'afterExperience'/'afterTraining' entries in STEPS above). Each gets its
-// OWN small bespoke animated moment — not the same component reused four
-// times — matched to what that section actually collected:
-//   afterAboutYou   → StatsMoment (age + weight counters)
-//   afterGoal       → ComparisonMoment (bad-form vs good-form bars, matches
-//                      a reference screen the user supplied)
-//   afterExperience → LevelTrack (progress dots along a beginner→advanced line)
-//   afterTraining   → WeekDots (days-per-week dot row)
-// The goalRecap headline below cites the actual research finding rather
-// than a made-up multiplier: a 2024 meta-analysis (Wolf et al., 24 studies)
-// found full-ROM vs partial-ROM growth is close overall, but SHORTENED
-// partials (stopping before full range) specifically underperform — which
-// is exactly the failure mode FormPal's rep tracking catches. No invented
-// numbers ("2x", "join 2M people") — this app has no data to back a stat
-// like that, and a made-up figure would be dishonest marketing.
-
-interface StatsRecap { variant: 'stats'; age: string; weight: number; headline: string; }
-interface BarsRecap  { variant: 'bars';  leftLabel: string; rightLabel: string; headline: string; }
-interface LevelRecap { variant: 'level'; levels: string[]; selectedIndex: number; headline: string; }
-interface WeekRecap  { variant: 'week';  totalDays: number; activeDays: number; headline: string; }
-type Recap = StatsRecap | BarsRecap | LevelRecap | WeekRecap;
-
-// weight is now shown here (previously captured on the 'weight' ruler step
-// and then never shown back anywhere else in the flow, unlike age).
-function aboutYouRecap(a: Record<string, any>): StatsRecap {
-  const age    = (a.age as string) ?? '16';
-  const weight = typeof a.weight === 'number' ? a.weight : 160;
-  return {
-    variant:  'stats',
-    age,
-    weight,
-    headline: 'Built around your exact stats — not a one-size-fits-all plan.',
-  };
-}
-
-function goalRecap(a: Record<string, any>): BarsRecap {
-  return {
-    variant:    'bars',
-    leftLabel:  'Bad form',
-    rightLabel: 'Good form',
-    headline:   'Cut a rep short, cut your gains — FormPal keeps every rep full range.',
-  };
-}
-
-// Must match the 'experience' step's option order in STEPS above.
-const EXPERIENCE_TRACK = ['Beginner', 'Some experience', 'Intermediate', 'Advanced'];
-const EXPERIENCE_SHORT = ['Beginner', 'Some XP', 'Solid', 'Advanced'];
-
-function experienceRecap(a: Record<string, any>): LevelRecap {
-  const idx = Math.max(0, EXPERIENCE_TRACK.indexOf((a.experience as string) ?? ''));
-  return {
-    variant:       'level',
-    levels:        EXPERIENCE_SHORT,
-    selectedIndex: idx,
-    headline:      "We'll build around exactly where you're starting from.",
-  };
-}
-
-function trainingRecap(a: Record<string, any>): WeekRecap {
-  const daysNum = parseInt((a.days as string) ?? '3') || 3;
-  return {
-    variant:    'week',
-    totalDays:  7,
-    activeDays: daysNum,
-    headline:   `${daysNum} day${daysNum !== 1 ? 's' : ''} a week — that's your rhythm now.`,
-  };
-}
-
-// ── ComparisonMoment — two-bar "bad form vs good form" beat, one headline ─────
-// Matches a reference screen the user supplied (short light pill vs tall
-// dark pill, uppercase labels underneath, bold headline below). Used ONLY
-// for the 'afterGoal' interstitial. Bars animate to a FIXED height ratio
-// (not driven by any real numeric stat — see the no-fabricated-stats note
-// above). Label/headline text intentionally uses the SYSTEM font (same as
-// the answer-choice options, s.optTxt below) rather than the Bricolage
-// display font used elsewhere in onboarding — reported as the wrong feel
-// for this particular screen.
-const BAR_MAX_H = 210;
-const BAR_W     = 92;
-
-function ComparisonMoment({ leftLabel, rightLabel, headline }: { leftLabel: string; rightLabel: string; headline: string }) {
-  const leftH       = useRef(new Animated.Value(0)).current;
-  const rightH      = useRef(new Animated.Value(0)).current;
-  const textOpacity = useRef(new Animated.Value(0)).current;
-  const textY       = useRef(new Animated.Value(14)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(leftH,  { toValue: 1, duration: 500, delay: 150, useNativeDriver: false }),
-      Animated.timing(rightH, { toValue: 1, duration: 650, delay: 150, useNativeDriver: false }),
-    ]).start();
-    Animated.parallel([
-      Animated.timing(textOpacity, { toValue: 1, duration: 380, delay: 550, useNativeDriver: true }),
-      Animated.timing(textY,       { toValue: 0, duration: 380, delay: 550, useNativeDriver: true }),
-    ]).start();
-    // Re-run whenever the content changes — this component stays mounted
-    // across different interstitial steps sharing the same render branch,
-    // so without resetting here the SECOND interstitial you reach would
-    // render with no entrance animation at all (values already at rest).
-    return () => {
-      leftH.setValue(0); rightH.setValue(0);
-      textOpacity.setValue(0); textY.setValue(14);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [leftLabel, rightLabel, headline]);
-
-  const leftHeight  = leftH.interpolate({ inputRange: [0, 1], outputRange: [0, BAR_MAX_H * 0.34] });
-  const rightHeight = rightH.interpolate({ inputRange: [0, 1], outputRange: [0, BAR_MAX_H] });
-
-  return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 28, height: BAR_MAX_H, marginBottom: 20 }}>
-        <Animated.View style={{ width: BAR_W, height: leftHeight, borderRadius: BAR_W / 2, backgroundColor: L.card, borderWidth: 1, borderColor: L.border, ...({ boxShadow: Elev.low.shadow } as any) }} />
-        <Animated.View style={{ width: BAR_W, height: rightHeight, borderRadius: BAR_W / 2, overflow: 'hidden', ...({ boxShadow: Elev.medium.shadow } as any) }}>
-          <LinearGradient colors={['#3A3F4C', L.btnDark, '#05070D']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flex: 1 }} />
-        </Animated.View>
-      </View>
-      <View style={{ flexDirection: 'row', gap: 28, marginBottom: 28 }}>
-        <Text style={cm.label}>{leftLabel}</Text>
-        <Text style={[cm.label, cm.labelDark]}>{rightLabel}</Text>
-      </View>
-      <Animated.View style={{ opacity: textOpacity, transform: [{ translateY: textY }] }}>
-        <Text style={cm.headline}>{headline}</Text>
-      </Animated.View>
-    </View>
-  );
-}
-
-const cm = StyleSheet.create({
-  label:     { width: BAR_W, textAlign: 'center', fontSize: 12, fontWeight: W.semi, letterSpacing: 0.4, color: L.textDim, textTransform: 'uppercase' },
-  labelDark: { color: L.text, fontWeight: W.bold },
-  headline:  { fontSize: 22, fontWeight: W.bold, color: L.text, letterSpacing: -0.4, textAlign: 'center', lineHeight: 29 },
-});
-
-// ── StatsMoment — animated age/weight counters, one headline ──────────────────
-// afterAboutYou only. Two numbers scale/fade in together, a thin accent line
-// draws in under each, then the headline slides up. Same system-font
-// treatment as ComparisonMoment's text (see note above).
-function StatsMoment({ age, weight, headline }: { age: string; weight: number; headline: string }) {
-  const scale       = useRef(new Animated.Value(0.85)).current;
-  const opacity      = useRef(new Animated.Value(0)).current;
-  const lineW        = useRef(new Animated.Value(0)).current;
-  const textOpacity  = useRef(new Animated.Value(0)).current;
-  const textY        = useRef(new Animated.Value(14)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.spring(scale,   { toValue: 1, friction: 7, tension: 60, useNativeDriver: true }),
-      Animated.timing(opacity, { toValue: 1, duration: 320, useNativeDriver: true }),
-    ]).start(() => {
-      Animated.timing(lineW, { toValue: 1, duration: 450, useNativeDriver: false }).start();
-    });
-    Animated.parallel([
-      Animated.timing(textOpacity, { toValue: 1, duration: 380, delay: 420, useNativeDriver: true }),
-      Animated.timing(textY,       { toValue: 0, duration: 380, delay: 420, useNativeDriver: true }),
-    ]).start();
-    return () => {
-      scale.setValue(0.85); opacity.setValue(0); lineW.setValue(0);
-      textOpacity.setValue(0); textY.setValue(14);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [age, weight, headline]);
-
-  const lineWidth = lineW.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] });
-
-  return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
-      <Animated.View style={{ flexDirection: 'row', gap: 40, opacity, transform: [{ scale }], marginBottom: 28 }}>
-        <View style={{ alignItems: 'center' }}>
-          <Text style={sm.num}>{age}</Text>
-          <View style={sm.lineTrack}><Animated.View style={[sm.lineFill, { width: lineWidth }]} /></View>
-          <Text style={sm.cap}>YEARS OLD</Text>
-        </View>
-        <View style={{ alignItems: 'center' }}>
-          <Text style={sm.num}>{Math.round(weight)}</Text>
-          <View style={sm.lineTrack}><Animated.View style={[sm.lineFill, { width: lineWidth }]} /></View>
-          <Text style={sm.cap}>LB</Text>
-        </View>
-      </Animated.View>
-      <Animated.View style={{ opacity: textOpacity, transform: [{ translateY: textY }] }}>
-        <Text style={sm.headline}>{headline}</Text>
-      </Animated.View>
-    </View>
-  );
-}
-
-const sm = StyleSheet.create({
-  num:       { fontSize: 52, fontWeight: W.bold, color: L.text, letterSpacing: -1 },
-  lineTrack: { width: 56, height: 3, borderRadius: 1.5, backgroundColor: 'rgba(17,24,39,0.08)', overflow: 'hidden', marginTop: 8, marginBottom: 10 },
-  lineFill:  { height: '100%', backgroundColor: L.accent },
-  cap:       { fontSize: 11, fontWeight: W.semi, color: L.textDim, letterSpacing: 0.5 },
-  headline:  { fontSize: 22, fontWeight: W.bold, color: L.text, letterSpacing: -0.4, textAlign: 'center', lineHeight: 29 },
-});
-
-// ── LevelTrack — animated dots along a beginner→advanced line, one headline ───
-// afterExperience only. A fill line draws to the selected level, dots pop in
-// with a stagger (the selected one leads), then the headline slides up.
-function LevelTrack({ levels, selectedIndex, headline }: { levels: string[]; selectedIndex: number; headline: string }) {
-  const fillW        = useRef(new Animated.Value(0)).current;
-  const dotScales     = useRef(levels.map(() => new Animated.Value(0))).current;
-  const textOpacity  = useRef(new Animated.Value(0)).current;
-  const textY        = useRef(new Animated.Value(14)).current;
-
-  useEffect(() => {
-    const targetPct = levels.length > 1 ? selectedIndex / (levels.length - 1) : 0;
-    Animated.timing(fillW, { toValue: targetPct, duration: 600, delay: 150, useNativeDriver: false }).start();
-    Animated.stagger(90, dotScales.map(v =>
-      Animated.spring(v, { toValue: 1, friction: 6, tension: 60, useNativeDriver: true })
-    )).start();
-    Animated.parallel([
-      Animated.timing(textOpacity, { toValue: 1, duration: 380, delay: 550, useNativeDriver: true }),
-      Animated.timing(textY,       { toValue: 0, duration: 380, delay: 550, useNativeDriver: true }),
-    ]).start();
-    return () => {
-      fillW.setValue(0);
-      dotScales.forEach(v => v.setValue(0));
-      textOpacity.setValue(0); textY.setValue(14);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [levels, selectedIndex, headline]);
-
-  const fillWidth = fillW.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] });
-
-  return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 }}>
-      <View style={{ width: '100%', height: 24, justifyContent: 'center', marginBottom: 12 }}>
-        <View style={lt.track}><Animated.View style={[lt.fill, { width: fillWidth }]} /></View>
-        <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          {levels.map((lbl, i) => (
-            <Animated.View key={lbl} style={[lt.dot, i <= selectedIndex && lt.dotActive, { transform: [{ scale: dotScales[i] }] }]} />
-          ))}
-        </View>
-      </View>
-      <View style={{ flexDirection: 'row', width: '100%', marginBottom: 28 }}>
-        {levels.map((lbl, i) => (
-          <Text key={lbl} style={[lt.label, i === selectedIndex && lt.labelActive]}>{lbl}</Text>
-        ))}
-      </View>
-      <Animated.View style={{ opacity: textOpacity, transform: [{ translateY: textY }] }}>
-        <Text style={lt.headline}>{headline}</Text>
-      </Animated.View>
-    </View>
-  );
-}
-
-const lt = StyleSheet.create({
-  track:      { height: 3, borderRadius: 1.5, backgroundColor: 'rgba(17,24,39,0.08)', overflow: 'hidden', width: '100%' },
-  fill:       { height: '100%', backgroundColor: L.accent, borderRadius: 1.5 },
-  dot:        { width: 14, height: 14, borderRadius: 7, backgroundColor: L.card, borderWidth: 2, borderColor: 'rgba(17,24,39,0.14)' },
-  dotActive:  { backgroundColor: L.accent, borderColor: L.accent },
-  label:      { flex: 1, fontSize: 11, fontWeight: W.semi, color: L.textDim, letterSpacing: 0.2, textAlign: 'center' },
-  labelActive:{ color: L.text, fontWeight: W.bold },
-  headline:   { fontSize: 22, fontWeight: W.bold, color: L.text, letterSpacing: -0.4, textAlign: 'center', lineHeight: 29 },
-});
-
-// ── WeekDots — animated day-per-week dot row, one headline ────────────────────
-// afterTraining only. 7 dots pop in with a stagger, `activeDays` of them
-// filled, then the headline slides up.
-function WeekDots({ totalDays, activeDays, headline }: { totalDays: number; activeDays: number; headline: string }) {
-  const scales       = useRef(Array.from({ length: totalDays }, () => new Animated.Value(0))).current;
-  const textOpacity  = useRef(new Animated.Value(0)).current;
-  const textY        = useRef(new Animated.Value(14)).current;
-
-  useEffect(() => {
-    Animated.stagger(80, scales.map(v =>
-      Animated.spring(v, { toValue: 1, friction: 6, tension: 70, useNativeDriver: true })
-    )).start();
-    const settleDelay = 150 + totalDays * 80;
-    Animated.parallel([
-      Animated.timing(textOpacity, { toValue: 1, duration: 380, delay: settleDelay, useNativeDriver: true }),
-      Animated.timing(textY,       { toValue: 0, duration: 380, delay: settleDelay, useNativeDriver: true }),
-    ]).start();
-    return () => {
-      scales.forEach(v => v.setValue(0));
-      textOpacity.setValue(0); textY.setValue(14);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [totalDays, activeDays, headline]);
-
-  return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
-      <View style={{ flexDirection: 'row', gap: 10, marginBottom: 28 }}>
-        {scales.map((v, i) => (
-          <Animated.View key={i} style={[wd.dot, i < activeDays && wd.dotActive, { transform: [{ scale: v }] }]} />
-        ))}
-      </View>
-      <Animated.View style={{ opacity: textOpacity, transform: [{ translateY: textY }] }}>
-        <Text style={wd.headline}>{headline}</Text>
-      </Animated.View>
-    </View>
-  );
-}
-
-const wd = StyleSheet.create({
-  dot:       { width: 30, height: 30, borderRadius: 15, backgroundColor: L.card, borderWidth: 1.5, borderColor: L.border },
-  dotActive: { backgroundColor: L.accent, borderColor: L.accent },
-  headline:  { fontSize: 22, fontWeight: W.bold, color: L.text, letterSpacing: -0.4, textAlign: 'center', lineHeight: 29 },
-});
+// 'afterExperience'/'afterTraining' entries in STEPS above). Each is a
+// dedicated component imported from components/ (PlanGrowthMoment,
+// EffortResultsMoment, FormMuscleMoment, InjuryRiskMoment) rebuilt from a
+// standalone HTML reference the user supplied — see each component's own
+// header comment for what it replaced and why. Wired up in the
+// 'interstitial' render branch below; no per-step content computed here
+// since none of the four reflect the user's own answers back at them
+// (unlike the StatsMoment/ComparisonMoment/LevelTrack/WeekDots recaps they
+// replaced).
 
 // ── AnimatedOption ─────────────────────────────────────────────────────────────
 
@@ -899,6 +602,13 @@ function WeightRulerSlider({ value, onChange }: {
 
   const valuePx  = useRef(new Animated.Value(pxFromValue(value))).current;
   const startRef = useRef(pxFromValue(value));
+  // Dims the big number while actively dragging (it was re-rendering on
+  // every pixel of movement and visibly lagging behind the — natively
+  // driven — ruler strip during a fast scrub) and holds it dimmed for a
+  // beat after release before settling back to full opacity, instead of
+  // snapping back the instant your finger lifts.
+  const numberOpacity = useRef(new Animated.Value(1)).current;
+  const settleTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Tracks the last WHOLE lb the drag crossed, so the haptic tick fires once
   // per pound crossed — not once per pixel/frame. See onPanResponderMove.
   const lastTickRef = useRef(Math.round(value));
@@ -910,6 +620,7 @@ function WeightRulerSlider({ value, onChange }: {
     valuePx.setValue(pxFromValue(value));
     setDisplayVal(value);
     lastTickRef.current = Math.round(value);
+    return () => { if (settleTimeout.current) clearTimeout(settleTimeout.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -919,6 +630,8 @@ function WeightRulerSlider({ value, onChange }: {
       onMoveShouldSetPanResponder:  () => true,
       onPanResponderGrant: () => {
         startRef.current = (valuePx as any)._value ?? pxFromValue(value);
+        if (settleTimeout.current) clearTimeout(settleTimeout.current);
+        Animated.timing(numberOpacity, { toValue: 0.32, duration: 120, useNativeDriver: true }).start();
       },
       onPanResponderMove: (_, gs) => {
         // Dragging LEFT reveals higher numbers at center (same feel as
@@ -945,6 +658,9 @@ function WeightRulerSlider({ value, onChange }: {
         valuePx.setValue(pxFromValue(v));
         setDisplayVal(v);
         onChange(v);
+        settleTimeout.current = setTimeout(() => {
+          Animated.timing(numberOpacity, { toValue: 1, duration: 380, useNativeDriver: true }).start();
+        }, 1000);
       },
     })
   ).current;
@@ -965,9 +681,9 @@ function WeightRulerSlider({ value, onChange }: {
 
   return (
     <View style={{ alignItems: 'center', marginTop: 20 }}>
-      <Text style={{ fontFamily: FONT.displayBold, fontSize: 60, color: L.text, letterSpacing: -1.5, marginBottom: 36 }}>
+      <Animated.Text style={{ opacity: numberOpacity, fontFamily: FONT.displayBold, fontSize: 60, color: L.text, letterSpacing: -1.5, marginBottom: 36 }}>
         {displayVal.toFixed(1)} <Text style={{ fontSize: 24, fontWeight: W.semi, color: L.textDim }}>lbs</Text>
-      </Text>
+      </Animated.Text>
 
       <View
         style={{ width: '100%', height: TICK_TRACK_H, overflow: 'hidden' }}
@@ -1167,6 +883,9 @@ export default function OnboardingScreen() {
   const [plan,      setPlan]      = useState<{ focus: string; exercises: WorkoutExercise[] } | null>(null);
   const [loadStep,  setLoadStep]  = useState(0);
   const [loadPct,   setLoadPct]   = useState(0);
+  // Tap-feedback only, for single-select questions — see handleSelect below
+  // for why this exists separately from `answers`.
+  const [justSelected, setJustSelected] = useState<string | null>(null);
 
   const fadeAnim  = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
@@ -1174,6 +893,16 @@ export default function OnboardingScreen() {
   const visibleSteps = getVisibleSteps(answers);
   const currentStep  = visibleSteps[stepIndex];
   const progress     = visibleSteps.length > 0 ? (stepIndex + 1) / visibleSteps.length : 0;
+
+  // Preload every answer-choice icon up front. They're already require()'d
+  // (so Metro bundles them), but each <Image> still decodes lazily the
+  // first time it mounts — clicking through screens fast enough outran that
+  // decode and showed a blank/glitchy icon for a frame. Asset.loadAsync
+  // forces them into the native image cache once, here, before any of them
+  // are ever shown.
+  useEffect(() => {
+    Asset.loadAsync(Object.values(ICON)).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (appState !== 'building') return;
@@ -1219,6 +948,7 @@ export default function OnboardingScreen() {
   };
 
   const goBack = () => {
+    setJustSelected(null);
     if (stepIndex > 0) {
       animTrans('back', () => setStepIndex(i => i - 1));
     } else {
@@ -1243,9 +973,24 @@ export default function OnboardingScreen() {
         setAnswers({ ...answers, [st.id]: next });
       }
     } else {
-      const next = { ...answers, [st.id]: opt };
-      setAnswers(next);
-      setTimeout(() => advance(next), 300);
+      // Single-select auto-advance: previously called setAnswers(next)
+      // immediately, then advanced 300ms later. But `visibleSteps` (and
+      // therefore `currentStep`) is recomputed from `answers` on every
+      // render — for any question with a showIf further down the list
+      // (homeSplit, homeEquipment, gymMissingEquipment...), that immediate
+      // answers update could change which step landed at the SAME
+      // stepIndex mid-delay, flashing that step's content for the rest of
+      // the 300ms before advance() finally moved stepIndex forward.
+      // justSelected gives the tapped option its immediate visual
+      // highlight without touching `answers` (and therefore
+      // `visibleSteps`) until the actual navigation happens.
+      setJustSelected(opt);
+      setTimeout(() => {
+        const next = { ...answers, [st.id]: opt };
+        setAnswers(next);
+        advance(next);
+        setJustSelected(null);
+      }, 300);
     }
   };
 
@@ -1376,39 +1121,33 @@ export default function OnboardingScreen() {
     // the answers just given back at the user (see the recap functions
     // above STEPS, and this file's own note on why no fabricated stats).
     if (st.type === 'interstitial') {
-      // Full-screen sell moment — supplies its own progress bar/CTA, so it
-      // bypasses the shared header/footer every other interstitial uses
-      // below. Real onboarding `progress` passed in instead of its own
-      // standalone default.
-      if (st.id === 'planStat') {
-        return <StructuredPlanInterstitial progress={progress} onContinue={() => advance(answers)} />;
+      // Each of the 4 rebuilt interstitials owns its own full-screen layout
+      // (see their individual files in components/) but takes the SAME
+      // shared header (back button + progress bar) and CTA behavior every
+      // other onboarding step uses, so navigation and progress stay
+      // consistent even though the content is bespoke per screen.
+      const Content =
+        st.id === 'afterAboutYou'   ? PlanGrowthMoment   :
+        st.id === 'afterGoal'       ? EffortResultsMoment :
+        st.id === 'afterExperience' ? FormMuscleMoment    :
+        InjuryRiskMoment; // afterTraining
+      const content = <Content header={header} insets={insets} onContinue={() => advance(answers)} />;
+      // The photo-driven screens (FormMuscleMoment, InjuryRiskMoment) sit on
+      // a plain white page, not AppBackground's colorful blob gradient —
+      // the blobs read as clutter behind a real photo. The other two keep
+      // the blob background the rest of onboarding uses.
+      if (st.id === 'afterExperience' || st.id === 'afterTraining') {
+        return <View style={{ flex: 1, backgroundColor: L.bg }}>{content}</View>;
       }
-
-      const recap =
-        st.id === 'afterAboutYou'   ? aboutYouRecap(answers)   :
-        st.id === 'afterGoal'       ? goalRecap(answers)       :
-        st.id === 'afterExperience' ? experienceRecap(answers) :
-        trainingRecap(answers);
-      return (
-        <OnboardingBackground>
-          <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
-            {header}
-            {recap.variant === 'bars'  ? <ComparisonMoment leftLabel={recap.leftLabel} rightLabel={recap.rightLabel} headline={recap.headline} /> :
-             recap.variant === 'stats' ? <StatsMoment age={recap.age} weight={recap.weight} headline={recap.headline} /> :
-             recap.variant === 'level' ? <LevelTrack levels={recap.levels} selectedIndex={recap.selectedIndex} headline={recap.headline} /> :
-             <WeekDots totalDays={recap.totalDays} activeDays={recap.activeDays} headline={recap.headline} />}
-            <View style={s.bn}>
-              <TouchableOpacity style={s.cb} onPress={() => advance(answers)} activeOpacity={0.85}>
-                <Text style={s.ct}>Continue</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </OnboardingBackground>
-      );
+      return <OnboardingBackground>{content}</OnboardingBackground>;
     }
 
     // Select / multiselect — notification overlay is absolute (not in scroll)
-    const isSel      = (o: string) => { const a = answers[st.id]; return Array.isArray(a) ? a.includes(o) : a === o; };
+    const isSel      = (o: string) => {
+      if (st.type === 'select' && justSelected !== null) return o === justSelected;
+      const a = answers[st.id];
+      return Array.isArray(a) ? a.includes(o) : a === o;
+    };
     const multiReady = st.type === 'multiselect' && Array.isArray(answers[st.id]) && (answers[st.id] as string[]).length > 0;
     const isNotif    = st.id === 'notifications';
 
