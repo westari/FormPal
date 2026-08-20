@@ -13,6 +13,7 @@ import AppBackground from '../../components/AppBackground';
 
 const ACTIONS = [
   { id: 'form',    symbol: 'camera.fill',                         label: 'Quick Form Check' },
+  { id: 'analyze', symbol: 'video.badge.plus',                    label: 'Analyze a Video'  },
   { id: 'workout', symbol: 'figure.strengthtraining.traditional', label: 'Start Workout'    },
   { id: 'log',     symbol: 'square.and.pencil',                   label: 'Log a Session'    },
   { id: 'mypal',   symbol: 'sparkles',                            label: 'Ask MyPal'        },
@@ -77,6 +78,9 @@ export default function PlusScreen() {
     if (id === 'form') {
       didNavigate.current = true;
       animOut(() => { setVisible(false); router.push('/exercise-picker' as any); });
+    } else if (id === 'analyze') {
+      didNavigate.current = true;
+      animOut(() => { setVisible(false); router.push('/analyze-video' as any); });
     } else if (id === 'mypal') {
       didNavigate.current = true;
       animOut(() => { setVisible(false); router.push('/mypal'); });

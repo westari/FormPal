@@ -81,11 +81,14 @@ export default function AnalyzeVideoScreen() {
     const repSub = addRepListener((rep: RepEvent) => {
       setLiveReps(rep.reps);
       setLiveGoodReps(rep.goodReps);
-      repEvents.push({
-        timeSec: (Date.now() - analyzeStartedAt.current) / 1000,
-        good: rep.good,
-        reason: rep.reason,
-      });
+      // Prefer the video's own clock (rep.videoTimeSec) — wall-clock time
+      // since this call started drifts from the video's actual timeline by
+      // however long native setup took before the analysis loop began,
+      // which was throwing off recap's rep markers/overlay. Falls back to
+      // the old approximation only against a stale native build that
+      // hasn't been rebuilt with the videoTimeSec field yet.
+      const timeSec = rep.videoTimeSec ?? (Date.now() - analyzeStartedAt.current) / 1000;
+      repEvents.push({ timeSec, good: rep.good, reason: rep.reason });
     });
 
     try {
@@ -106,6 +109,13 @@ export default function AnalyzeVideoScreen() {
       if (!result.success) {
         setStatus('error');
         setErrorMsg(result.error ?? 'Analysis failed — no further detail from the engine.');
+        return;
+      }
+
+      const finalReps = result.reps ?? repEvents.length;
+      if (finalReps === 0) {
+        setStatus('error');
+        setErrorMsg("We couldn't detect any reps — make sure your full body is visible and the camera angle matches how you'd film the exercise.");
         return;
       }
 

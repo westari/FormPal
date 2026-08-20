@@ -92,6 +92,13 @@ public class ATHLTCameraModule: Module {
     private var engine: ExerciseEngine = ExerciseEngine(definition: ExerciseRegistry.squat)
     private var personDetected  = false
 
+    // Set only while doAnalyzeVideoFile's loop is running (nil during a live
+    // session) — the video file's own internal presentation timestamp for
+    // the frame currently being processed. onRepDetected reads this so a
+    // rep's reported time is the VIDEO's clock, not wall-clock time on the
+    // JS side (see onRepDetected below for why those two diverge).
+    private var currentVideoTimeSec: Double? = nil
+
     // MARK: – Latest debug values (cached for 1-second throttled emission)
     private var lastDebugAngle:    Double           = 180.0
     private var lastDebugFormVals: [String: Double] = [:]
@@ -502,6 +509,14 @@ public class ATHLTCameraModule: Module {
                 "reps":       result.totalReps,
                 "goodReps":   result.goodReps,
                 "timestamp":  Date().timeIntervalSince1970 * 1000.0,
+                // Only non-nil during video-file analysis (see
+                // currentVideoTimeSec's own comment) — the video's own
+                // internal clock for this rep, not wall-clock time. JS uses
+                // this instead of approximating with Date.now() deltas,
+                // which drift from the video's actual timeline by however
+                // long native setup (asset/reader open, first-frame decode)
+                // took before the analysis loop started.
+                "videoTimeSec": (self.currentVideoTimeSec as Any?) ?? NSNull(),
             ])
             // Per-rep debug log — emitted as onDebugLog so JS/Metro can display it on Windows.
             let formEntries = result.formValues.sorted(by: { $0.key < $1.key })
@@ -1043,6 +1058,9 @@ public class ATHLTCameraModule: Module {
             let videoTime: Double = pts.timescale > 0 ? Double(pts.value) / Double(pts.timescale) : 0
             if firstVideoTime == nil { firstVideoTime = videoTime }
             let videoElapsed = videoTime - (firstVideoTime ?? 0)
+            // Relative to the first frame (i.e. starts at 0), matching how
+            // the JS side's player.currentTime reads during playback.
+            currentVideoTimeSec = videoElapsed
 
             // Real-time pacing — see the block comment above. Sleeps only when
             // reading has gotten AHEAD of real elapsed time; never sleeps
@@ -1079,6 +1097,9 @@ public class ATHLTCameraModule: Module {
         sendEvent("onDebugLog", ["message":
             "[VIDEO-ANALYZE] done — \(frameCount) frames processed, reader.status=\(finalStatus.rawValue) " +
             "(1=reading 2=completed 3=failed 4=cancelled), reps=\(engine.totalReps) good=\(engine.goodReps)"])
+        // Back to nil so a live session started afterward doesn't inherit a
+        // stale video timestamp.
+        currentVideoTimeSec = nil
 
         promise.resolve([
             "success":  success,

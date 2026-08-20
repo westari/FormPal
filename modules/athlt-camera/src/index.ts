@@ -21,6 +21,12 @@ export interface RepEvent {
   reps: number;         // total reps this session
   goodReps: number;     // good reps this session
   timestamp: number;    // ms
+  /** Video-file analysis only (null during a live session) — the rep's
+   *  timestamp on the VIDEO's own clock, in seconds. Use this instead of
+   *  approximating from wall-clock time: JS-side elapsed time since the
+   *  analyzeVideoFile() call includes native asset/reader setup overhead
+   *  the video's own timeline doesn't have, so the two drift apart. */
+  videoTimeSec: number | null;
 }
 
 /** Emitted ~once per second while tracking. */
