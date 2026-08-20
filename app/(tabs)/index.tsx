@@ -748,6 +748,16 @@ export default function HomeScreen() {
             <Text style={s.devBtnTxt}>[DEV] Feedback UI Preview</Text>
           </Pressable>
 
+          {/* ── TEMP: kinetic-typography onboarding style test — see
+              app/onboarding-test.tsx. Doesn't touch the real onboarding
+              flow; delete this Pressable + that file to remove. ────────── */}
+          <Pressable
+            onPress={() => router.push('/onboarding-test' as any)}
+            style={s.devBtn}
+          >
+            <Text style={s.devBtnTxt}>Test New Onboarding</Text>
+          </Pressable>
+
         </ScrollView>
       </ScreenBackground>
     </>
