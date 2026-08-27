@@ -442,7 +442,15 @@ public class ATHLTCameraModule: Module {
         // hole: video analysis now reads the SAME source of truth as live
         // camera, so a JS threshold fix reaches both paths on the next reload,
         // not just live.
-        AsyncFunction("analyzeVideoFile") { (uri: String, exerciseId: String, definitionJson: String?, promise: Promise) in
+        // orientationOverride — dev-only escape hatch for testing which
+        // CGImagePropertyOrientation actually matches live capture for a
+        // given exercise's camera setup, WITHOUT a native rebuild per guess.
+        // nil (the normal/default case) uses doAnalyzeVideoFile's own
+        // forced-.right default. Pass "up"/"down"/"left"/"right" from JS
+        // (see analyze-video.tsx's dev orientation picker) to try the other
+        // 3 cases — this native plumbing is the one-time rebuild; every
+        // orientation guess after that is JS-only/reload-only.
+        AsyncFunction("analyzeVideoFile") { (uri: String, exerciseId: String, definitionJson: String?, orientationOverride: String?, promise: Promise) in
             self.inferenceQueue.async {
                 guard self.captureSession == nil else {
                     promise.resolve(["success": false,
@@ -484,7 +492,7 @@ public class ATHLTCameraModule: Module {
                 }
                 NSLog("[GymCamera] analyzeVideoFile: '%@' resolved from %@ (%@)",
                       resolvedDef.id, defSource, resolvedDef.displayName)
-                self.doAnalyzeVideoFile(uri: uri, promise: promise)
+                self.doAnalyzeVideoFile(uri: uri, orientationOverride: orientationOverride, promise: promise)
             }
         }
     }
@@ -970,7 +978,7 @@ public class ATHLTCameraModule: Module {
     // presentation-time elapsed keeps every real-time assumption downstream
     // intact, at the cost of a file taking roughly its own real length to
     // analyze — still far faster than physically performing the exercise.
-    private func doAnalyzeVideoFile(uri: String, promise: Promise) {
+    private func doAnalyzeVideoFile(uri: String, orientationOverride: String? = nil, promise: Promise) {
         let url: URL
         if let parsed = URL(string: uri), parsed.scheme != nil {
             url = parsed
@@ -1006,12 +1014,58 @@ public class ATHLTCameraModule: Module {
         // all, not "matched the wrong one." Logging the orientation's real
         // NAME plus the raw transform components below so this can't be
         // misread again.
-        let transform   = track.preferredTransform
-        let orientation = Self.orientation(from: transform)
+        let transform        = track.preferredTransform
+        let fileOrientation  = Self.orientation(from: transform)
+        // LIVE-VS-VIDEO MISMATCH FIX (root cause traced this round, not
+        // guessed): live capture NEVER uses the file's/track's real
+        // orientation at all — configureSession hardcodes
+        // dataOutput's connection to videoOrientation=.portrait
+        // UNCONDITIONALLY, regardless of how the phone is actually being
+        // held. For a landscape-propped pushup setup (this file's exercise
+        // definitions are explicitly built around "the phone is rotated 90°
+        // on its side" — see PUSHUP's repMetric comment), that hardcoded
+        // forcing takes the sensor's native landscape buffer and rotates it
+        // 90° into a portrait-shaped buffer BEFORE Vision ever sees it —
+        // i.e. Vision always sees the same fixed rotation, never the true
+        // physical orientation.
+        // A video recorded by THIS app's own in-app camera already matches
+        // that assumption (the movieConn.videoOrientation=.portrait fix a
+        // few lines up in configureSession keeps recordings self-consistent
+        // with live). But this app's video-upload flow
+        // (analyze-video.tsx → ImagePicker.launchImageLibraryAsync) pulls
+        // from the Photos library — almost certainly recorded by the stock
+        // Camera app, which writes a preferredTransform reflecting the
+        // phone's TRUE physical orientation, not live's hardcoded one. For
+        // the identical physical landscape pushup setup, decomposing that
+        // real transform (→ .up/.down, "already landscape, no rotation
+        // needed") and handing Vision the RAW landscape buffer as-is is a
+        // full 90° off from what live hands Vision for the same footage —
+        // same downstream engine, differently-rotated input.
+        // FIX: stop trusting the file's own transform to pick Vision's
+        // orientation. Use the SAME orientation forcing live effectively
+        // applies instead — CGImagePropertyOrientation.right (90° CW),
+        // which is exactly what a rear-camera recording forced into
+        // .portrait decomposes to (see the .right case's own comment below,
+        // and the movieConn fix above that relies on this same mapping).
+        // .right is a first attempt, not device-confirmed — orientationOverride
+        // (from analyzeVideoFile's JS caller) lets the other 3 cases be tried
+        // from a JS-only control (see analyze-video.tsx), no rebuild needed
+        // once THIS plumbing has shipped once.
+        let forced: CGImagePropertyOrientation
+        switch orientationOverride {
+        case "up":    forced = .up
+        case "down":  forced = .down
+        case "left":  forced = .left
+        case "right": forced = .right
+        default:      forced = .right   // default/normal case — matches live's forced .portrait
+        }
+        let orientation = forced
+        let overrideNote = orientationOverride != nil ? "override='\(orientationOverride!)'" : "no override, using default"
         sendEvent("onDebugLog", ["message":
             "[VIDEO-ANALYZE] preferredTransform a=\(transform.a) b=\(transform.b) " +
             "c=\(transform.c) d=\(transform.d) tx=\(transform.tx) ty=\(transform.ty) " +
-            "→ orientation=.\(Self.orientationName(orientation)) (rawValue=\(orientation.rawValue))"])
+            "→ file's own orientation=.\(Self.orientationName(fileOrientation)) (rawValue=\(fileOrientation.rawValue)), " +
+            "FORCED to .\(Self.orientationName(orientation)) (\(overrideNote))"])
 
         guard let reader = try? AVAssetReader(asset: asset) else {
             promise.resolve(["success": false, "error": "Could not create AVAssetReader for \(url.lastPathComponent)"])

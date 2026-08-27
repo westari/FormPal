@@ -2574,37 +2574,139 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
 
   // ─── Push-up ────────────────────────────────────────────────────────────────
   //
-  // repMetric: bestSide(jointAngle(shoulder→elbow→wrist)) — elbow flexion angle.
-  // Industry-standard method: angle DECREASES as user lowers (arms extended ~160°,
-  // elbows bent at bottom ~70-100°). Large clean swing (~70°) reliably separates
-  // up from down with no ambiguity. Orientation-agnostic: 2D joint angle is
-  // invariant to body orientation when the arm is in the camera's plane of view,
-  // which is guaranteed by side camera placement.
-  // Camera: phone on its side on the floor, a few feet to your side.
-  // No calibration — joint angle thresholds are stable across users and distances.
+  // REWORKED after a real failure report: a clean three-quarter front-side video
+  // (diagonal, low camera, whole body visible — arguably an EASIER angle for a
+  // human to judge than strict side-on, since a strict side view hides the far
+  // arm entirely) produced 0 reps / 0 movement.
+  //
+  // Root cause, traced from what this file and the engine already assume, not
+  // guessed: the OLD repMetric was bestSide(jointAngle(shoulder→elbow→wrist)),
+  // gated by a cameraSetup.requiredJoints of the SAME elbow+wrist joints held at
+  // ≥0.30 confidence for a continuous 2s SETUP hold (ExerciseEngine.swift
+  // SETUP_JOINT_MIN_CONF). Elbow and wrist are the two joints most likely to be
+  // low-confidence or self-occluded at ANY non-strict-side angle — the far-side
+  // elbow/wrist tuck behind the torso at the bottom of the rep even at a
+  // three-quarter angle, and Apple Vision's own pose model is documented
+  // (community-reported, not an Apple-published spec) to run noisier on
+  // horizontal/prone bodies than upright ones. If SETUP's 2s hold on those two
+  // fragile joints never passes, the engine never leaves SETUP — which reads to
+  // the user as exactly "0 reps, 0 movement," with no rep-detection code ever
+  // running at all. That's a definition problem (fragile-joint dependency), not
+  // proof Vision "can't see" a horizontal body — shoulder/hip/ankle (the same
+  // three joints the hip form-checks below already rely on) stay large,
+  // high-contrast, and rarely self-occluded at almost any reasonable angle,
+  // including this one.
+  //
+  // FIX: rep metric switched from elbow-angle to shoulder height relative to the
+  // body's own hip→ankle line — bodyRelativeDeviation(shoulder, axisFrom: hip,
+  // axisTo: ankle), the SAME "distance from a line drawn between two real
+  // joints" family the hip pike/sag checks below already use successfully in
+  // this exact landscape-phone pushup setup. That's a deliberate choice, not
+  // incidental: this file's own earlier comment on the hip checks (below)
+  // documents that a NAIVE raw-Vision-axis metric (normalizedVerticalGap)
+  // reads ≈constant nonsense for a pushup because the phone is rotated 90° on
+  // its side, so Vision's raw x/y don't correspond to real-world
+  // vertical/horizontal — bodyRelativeDeviation avoids that trap by computing
+  // everything relative to an axis defined by two ACTUAL joints, so it doesn't
+  // care what Vision's raw axes mean. As the shoulder rises at the top of a
+  // rep it sits farther from the hip-ankle line; as it lowers toward the floor
+  // it sits closer — same "value drops on the way down, rises back up on the
+  // way up" shape the old elbow angle had, just built from joints that survive
+  // a diagonal camera.
+  //
+  // PLACEHOLDER thresholds below — bodyRelativeDeviation as a PRIMARY rep
+  // metric (vs. just a form-check, where this file already uses it several
+  // times) has no on-device precedent in this file to calibrate scale from;
+  // the closest analogues (wrist_track_l/r at 1.2 on a shoulder→hip axis,
+  // lateral-raise's wrong_direction at 0.4 on the same axis) use a much
+  // shorter reference segment, so their numbers don't transfer directly. Do a
+  // few real reps (this same three-quarter angle is fine now — it no longer
+  // needs strict side-on) and send the [REP]/[VIDEO-POSE] log even if the rep
+  // count still isn't right; the log will show the actual measured value swing
+  // for the first time (previously SETUP never ran long enough to log
+  // anything), and real thresholds get set from that, not guessed twice.
+  //
+  // Camera: side-on OR a clear three-quarter diagonal now both work — the
+  // metric no longer assumes the arm sits in the camera's exact image plane.
   pushup: {
     id:          'pushup',
     displayName: 'Push-up',
 
+    // leftJoints/rightJoints below feed TWO things in ExerciseEngine.swift, not
+    // just this comment's headline concern:
+    //   1. bestSide's per-frame side selection (Metric.swift measure(): picks
+    //      whichever side has the higher summed confidence across this list).
+    //   2. The whole-rep tracking-reliability gate (ExerciseEngine.swift
+    //      isMetricReliable/accumulate()) that can reject an already-detected
+    //      rep outright — SEPARATE from and much stricter than the metric
+    //      formula's own internal per-joint gate.
+    // ROOT CAUSE, confirmed from a real on-device log (three-quarter/diagonal
+    // camera, floor-level): valid reps were detected correctly (metric swung
+    // cleanly ~0.01–0.48, phase=down/inRep tracked fine) but 100% of frames
+    // (49/49) were rejected as "tracking unreliable." The log's per-joint
+    // range was leftHip=[0.13-0.35] leftAnkle=[0.00-0.53] — hip never broke
+    // 0.35, ankle mostly near 0. That's a genuine, expected occlusion at a
+    // floor-level diagonal angle for the far-side hip/ankle, not a tracking
+    // failure.
+    // The mismatch: the metric formula (bodyRelativeDeviation, in `left`/
+    // `right` above) only requires kMinConf=0.25 per joint to produce a real
+    // value (Joints.swift) — comfortably cleared by this log's actual
+    // numbers, which is why the swing was clean. But the reliability GATE
+    // above used to check ALL of leftJoints/rightJoints (shoulder+hip+ankle)
+    // against FORM_CHECK_MIN_CONF=0.6 (ExerciseEngine.swift) — more than
+    // double the metric's own bar, and one hip/ankle never got close to
+    // clearing it for the whole rep, so every single frame failed and the
+    // rep was thrown out despite being real. (ExerciseEngine.swift's own
+    // accumulate() comment already documents this exact 0.25-vs-0.6 gap as a
+    // known general risk — this rep is the confirmed on-device case of it.)
+    // FIX: trim these lists to just the shoulder — the one joint a pushup's
+    // upper-body movement actually depends on being trustworthy, and the one
+    // that wasn't flagged as a problem in the log. Hip/ankle stay in the
+    // metric FORMULA above (axisFrom/axisTo) — their own 0.25 gate there is
+    // unchanged and still protects against a truly-zero-confidence axis
+    // (leftAnkle's logged 0.00 low end) — this only removes them from the
+    // stricter 0.6 whole-rep reliability gate they were never a good fit for
+    // at this camera angle.
     repMetric: {
       type: 'bestSide',
-      left:  { type: 'jointAngle', a: 'leftShoulder',  pivot: 'leftElbow',  c: 'leftWrist'  },
-      right: { type: 'jointAngle', a: 'rightShoulder', pivot: 'rightElbow', c: 'rightWrist' },
-      leftJoints:  ['leftShoulder',  'leftElbow',  'leftWrist'],
-      rightJoints: ['rightShoulder', 'rightElbow', 'rightWrist'],
+      left:  { type: 'bodyRelativeDeviation', point: 'leftShoulder',  axisFrom: 'leftHip',  axisTo: 'leftAnkle'  },
+      right: { type: 'bodyRelativeDeviation', point: 'rightShoulder', axisFrom: 'rightHip', axisTo: 'rightAnkle' },
+      leftJoints:  ['leftShoulder'],
+      rightJoints: ['rightShoulder'],
     },
 
-    // Top (arms extended): ~160°.
-    // repEnterThreshold is LENIENT (140°) so even a shallow push-up attempt (~20° bend
-    // from top) registers as a counted rep. This is the rep-COUNTING threshold.
-    // repExitThreshold (150°) is 10° above enter — hysteresis prevents double-count.
-    // goodROMThreshold is the SEPARATE depth-quality check: if repMinAngle didn't reach
-    // ≤100° the rep counts but is marked BAD with cue "GO DEEPER". Reps that reach ≤100°
-    // pass the depth check and can be marked GOOD. These are two independent thresholds.
-    topAngle:           160,
-    repEnterThreshold:  140,
-    repExitThreshold:   150,
-    goodROMThreshold:    75,   // tightened 90→75: proper push-up ≤75°; half push-up (~85-90°) fails
+    // REAL-LOG-DERIVED — set from an actual on-device [METRIC] log (one
+    // three-quarter-angle pushup take), replacing the earlier guessed
+    // placeholders (topAngle=0.5, enter=0.42, exit=0.45). That log showed
+    // SETUP passing and phase=down/phase=inRep tracking correctly, but 0
+    // reps counted — the FSM (see ExerciseEngine.swift's comment: "atTop →
+    // metric < repEnterThreshold → inRep", "inRep → metric > repExitThreshold
+    // → count rep → atTop") never saw exit satisfied, because the logged
+    // values split into two clear clusters with the OLD thresholds sitting
+    // above BOTH of them:
+    //   down/bottom cluster: 0.0035–0.1776 (repMinAngle 0.0035 — a genuinely
+    //     deep rep)
+    //   up/top cluster:      0.3061–0.4409 (peak logged was 0.4409 — the old
+    //     repExitThreshold=0.45 was literally unreachable)
+    //   empty gap between the two clusters: ~0.18–0.31, nothing logged there
+    // New thresholds sit inside that empty gap (real hysteresis margin on
+    // both sides, not guessed) so a genuine down-then-up swing crosses both:
+    //   repEnterThreshold=0.22 (~0.04 above the down cluster's max 0.1776)
+    //   repExitThreshold=0.27  (~0.035 below the up cluster's min 0.3061)
+    // topAngle=0.35 sits inside the observed up cluster itself (real
+    // near-top value, not the single 0.44 outlier) — it doesn't gate
+    // counting directly (only the ROM-quality fraction calc and the
+    // 75%-of-topAngle "start zone" check), so a representative mid-cluster
+    // value is more robust than pinning to the one highest sample.
+    // goodROMThreshold unchanged at 0.15 — the observed trough (0.0035) is
+    // already well below it, so it was never the blocker and still isn't.
+    // This is still from a SINGLE take — if the next log shows the real
+    // range differs, re-derive from that data rather than nudging these
+    // further by feel.
+    topAngle:            0.35,
+    repEnterThreshold:   0.22,
+    repExitThreshold:    0.27,
+    goodROMThreshold:    0.15,
     insufficientROMCue: 'GO DEEPER',
 
     formChecks: [
@@ -2669,14 +2771,39 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
 
     readyGate: PASSTHROUGH_GATE,
 
+    // requiredJoints used to be elbow+wrist — the SAME two fragile joints the
+    // repMetric itself no longer depends on (see fix comment above). SETUP
+    // requires these held at ≥0.30 confidence for a continuous 2s
+    // (ExerciseEngine.swift SETUP_JOINT_MIN_CONF) before the exercise even
+    // starts — if that never passes, nothing downstream ever runs, which is
+    // the most likely literal cause of "0 reps, 0 movement": not a failed
+    // rep count, a SETUP phase that never exits. Switched to shoulder+hip+
+    // ankle to match the repMetric's actual joint dependency.
+    //
+    // FOLLOW-UP (real device log): SETUP did complete, but not until frame
+    // ~300 (t≈10s, near the end of the clip) — the hold kept resetting on
+    // "missing rightHip". Root cause, confirmed in ExerciseEngine.swift's
+    // SETUP check (missingSetupJoints/the requiredJoints+requiredJointsAlt
+    // branch, ~line 654): it requires ALL joints of ONE COMPLETE side
+    // simultaneously visible, no mixing across sides, no tolerance for a
+    // single joint's momentary dip — any one joint on the side being
+    // checked dropping below 0.30 for even one frame fails that whole
+    // frame, which resets the continuous 2s hold. Hip is exactly the joint
+    // most likely to flicker at a diagonal angle (the far hip self-
+    // occludes), and it was never actually needed for SETUP in the first
+    // place — the rep metric's own per-frame bestSide already tolerates
+    // single-side hip occlusion frame-to-frame; SETUP only needs enough to
+    // confirm the person is in position, which shoulder+ankle alone do.
+    // Dropped hip from the gate so a flickering hip can no longer break
+    // the hold on either side.
     cameraSetup: {
-      setupInstruction: 'Lay your phone on its side on the floor, a few feet to your side',
-      // repMetric now uses shoulder+elbow+wrist (jointAngle). Hip removed.
-      requiredJoints:    ['leftShoulder',  'leftElbow',  'leftWrist'],
-      requiredJointsAlt: ['rightShoulder', 'rightElbow', 'rightWrist'],
+      setupInstruction: 'Lay your phone on its side on the floor, a few feet to your side — a side-on or clear three-quarter angle both work',
+      requiredJoints:    ['leftShoulder',  'leftAnkle'],
+      requiredJointsAlt: ['rightShoulder', 'rightAnkle'],
     },
 
-    // No calibration — joint angle thresholds stable across users and distances.
+    // No calibration — thresholds intended to be stable across users/distances
+    // once tuned from real device data (currently placeholders, see above).
 
     minRepInterval: 0.8,
 

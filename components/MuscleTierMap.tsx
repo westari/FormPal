@@ -450,7 +450,7 @@ const TIER_SHEEN: Record<Tier, { opacity: number; double: boolean }> = {
   champion: { opacity: 0.60,  double: true  },
 };
 
-function BodyMapSide({ tiers, side, width }: { tiers: MuscleTiers; side: 'front' | 'back'; width: number }) {
+export function BodyMapSide({ tiers, side, width }: { tiers: MuscleTiers; side: 'front' | 'back'; width: number }) {
   const uid = useId();
   const specs = useMemo(() => buildBodyMapSpecs(tiers, side, uid), [tiers, side, uid]);
   const allPaths = side === 'front' ? MUSCLE_MAP_FRONT_PATHS : MUSCLE_MAP_BACK_PATHS;
@@ -665,7 +665,7 @@ function TierLegendRow({ scale }: { scale: number }) {
   );
 }
 
-export function BodyMap({ tiers, scale }: { tiers: MuscleTiers; scale: number }) {
+export function BodyMap({ tiers, scale, showLegend = true }: { tiers: MuscleTiers; scale: number; showLegend?: boolean }) {
   // Bumped 118→160→190→175 ("make it bigger" two rounds ago, then reported
   // clipping the hands at 190 — exactly the risk flagged when 190 was set:
   // this card's overflow:hidden was cutting the SVG's own edge because
@@ -678,7 +678,7 @@ export function BodyMap({ tiers, scale }: { tiers: MuscleTiers; scale: number })
   const colWidth = Math.round(175 * scale);
   return (
     <View style={{ gap: Math.round(8 * scale) }}>
-      <TierLegendRow scale={scale} />
+      {showLegend && <TierLegendRow scale={scale} />}
       <View style={mh.sectionHeaderRow}>
         <Text style={[mh.sectionHeader, { fontSize: Math.round(11 * scale) }]}>BODY MAP</Text>
         <Text style={[mh.sectionSub, { fontSize: Math.round(11 * scale) }]}>Front · Back</Text>

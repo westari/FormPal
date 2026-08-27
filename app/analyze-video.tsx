@@ -11,7 +11,7 @@
 // the results screen is really recap.tsx's existing, already-polished UI —
 // not a second results screen to build and keep in sync.
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, Alert, Share } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
@@ -19,7 +19,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import ScreenBackground from '../components/ScreenBackground';
 import Card from '../components/Card';
-import { analyzeVideoFile, addRepListener, type RepEvent } from '../modules/athlt-camera/src/index';
+import { analyzeVideoFile, addRepListener, addDebugLogListener, clearDebugLog, type RepEvent } from '../modules/athlt-camera/src/index';
 import { EXERCISE_CATALOG, type ExerciseId } from '../constants/exercises';
 import { EXERCISE_DEFINITIONS } from '../constants/exerciseDefinitions';
 import { getCalibration, applyOverride } from '../lib/calibration/store';
@@ -38,6 +38,38 @@ export default function AnalyzeVideoScreen() {
   const [errorMsg,   setErrorMsg]   = useState<string | null>(null);
   const [liveReps,     setLiveReps]     = useState(0);
   const [liveGoodReps, setLiveGoodReps] = useState(0);
+
+  // DEV-ONLY orientation override — see analyzeVideoFile's own doc comment
+  // in modules/athlt-camera/src/index.ts. 'right' matches the native
+  // default (what live capture's forced .portrait connection is believed
+  // to correspond to) — the other 3 exist purely to test the remaining
+  // possibilities without a native rebuild per guess, now that this one
+  // rebuild has shipped the plumbing. Remove once the right orientation is
+  // confirmed and hardcoded back on the native side.
+  const [devOrientation, setDevOrientation] = useState<'up' | 'down' | 'left' | 'right'>('right');
+
+  // Full debug log buffer for this screen's lifetime — same accumulation
+  // formcheck.tsx's SessionLogReview does with sessionLogRef, so a failed
+  // analysis (0 reps, or a real error) can still be shared: this was
+  // previously only reachable from recap.tsx, which a failed/0-rep
+  // analysis never navigates to (see the error-card Share button below).
+  const debugLogRef = useRef<string[]>([]);
+  useEffect(() => {
+    const sub = addDebugLogListener(e => { debugLogRef.current.push(e.message); });
+    return () => sub.remove();
+  }, []);
+
+  const shareLog = () => {
+    const header = [
+      '=== ATHLT Video Analysis Debug Log ===',
+      `Exercise: ${exerciseName ?? exerciseId ?? 'unknown'}`,
+      `Date: ${new Date().toLocaleDateString()}`,
+      `Result: ${liveReps} rep${liveReps === 1 ? '' : 's'} / ${liveGoodReps} good`,
+      '=======================================',
+      '',
+    ].join('\n');
+    Share.share({ message: header + debugLogRef.current.join('\n') });
+  };
 
   // Returning from exercise-picker?returnTo=/analyze-video — pick up its choice.
   useEffect(() => {
@@ -75,6 +107,10 @@ export default function AnalyzeVideoScreen() {
     setErrorMsg(null);
     setLiveReps(0);
     setLiveGoodReps(0);
+    // Fresh log for THIS run — otherwise Share Logs on recap.tsx (which
+    // reads the module-level buffer, not this screen's own debugLogRef)
+    // would include leftover lines from a previous attempt.
+    clearDebugLog();
 
     const repEvents: { timeSec: number; good: boolean; reason: string }[] = [];
     analyzeStartedAt.current = Date.now();
@@ -103,7 +139,7 @@ export default function AnalyzeVideoScreen() {
       // structurally satisfy Record<string, unknown> — same pre-existing
       // mismatch formcheck.tsx's setExerciseDefinition(defEntry) call has;
       // both are plain serializable objects at runtime, just cast here.
-      const result = await analyzeVideoFile(videoUri, exerciseId, defEntry as Record<string, unknown> | null);
+      const result = await analyzeVideoFile(videoUri, exerciseId, defEntry as Record<string, unknown> | null, devOrientation);
       repSub.remove();
 
       if (!result.success) {
@@ -198,6 +234,28 @@ export default function AnalyzeVideoScreen() {
             </Pressable>
           </Card>
 
+          {/* DEV-ONLY — orientation test picker. Lets the pushup video-vs-live
+              rotation mismatch be tested across all 4 CGImagePropertyOrientation
+              cases with just a re-run, no native rebuild per guess — see
+              devOrientation's own comment above. Remove once confirmed. */}
+          <Card style={styles.stepCard}>
+            <Text style={styles.stepLabel}>DEV · VIDEO ORIENTATION</Text>
+            <View style={styles.orientRow}>
+              {(['up', 'down', 'left', 'right'] as const).map(o => (
+                <Pressable
+                  key={o}
+                  onPress={() => setDevOrientation(o)}
+                  disabled={status === 'analyzing'}
+                  style={[styles.orientBtn, devOrientation === o && styles.orientBtnActive]}
+                >
+                  <Text style={[styles.orientBtnText, devOrientation === o && styles.orientBtnTextActive]}>
+                    {o}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </Card>
+
           {/* Analyzing state */}
           {status === 'analyzing' && (
             <Card style={styles.stepCard} elevation="low">
@@ -219,6 +277,13 @@ export default function AnalyzeVideoScreen() {
             <Card style={styles.stepCard} elevation="low">
               <Text style={styles.errorTitle}>Couldn't analyze that video</Text>
               <Text style={styles.errorBody}>{errorMsg}</Text>
+              <Pressable
+                onPress={shareLog}
+                style={({ pressed }) => [styles.shareLogBtn, pressed && { opacity: 0.7 }]}
+              >
+                <SymbolView name="square.and.arrow.up" size={14} tintColor={styles.accent.color} type="monochrome" style={{ width: 14, height: 14 }} />
+                <Text style={styles.shareLogBtnText}>Share Logs</Text>
+              </Pressable>
             </Card>
           )}
         </ScrollView>
@@ -281,12 +346,26 @@ const styles = StyleSheet.create({
   exerciseRowText: { fontFamily: FONT.body, fontSize: Sz.body, fontWeight: W.semi, color: Col.text },
   exerciseRowPlaceholder: { color: Col.textDim, fontWeight: W.regular },
 
+  orientRow: { flexDirection: 'row', gap: Sp.sm },
+  orientBtn: {
+    flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: R.inner,
+    borderWidth: 1, borderColor: 'rgba(17,24,39,0.10)',
+  },
+  orientBtnActive: { backgroundColor: CTA_DARK, borderColor: CTA_DARK },
+  orientBtnText: { fontFamily: FONT.body, fontSize: Sz.small, fontWeight: W.semi, color: Col.text, textTransform: 'capitalize' },
+  orientBtnTextActive: { color: '#fff' },
+
   analyzingRow: { flexDirection: 'row', alignItems: 'center', gap: Sp.md },
   analyzingTitle: { fontFamily: FONT.body, fontSize: Sz.body, fontWeight: W.semi, color: Col.text, marginBottom: 2 },
   analyzingSub: { fontSize: Sz.small, color: Col.textSub, lineHeight: 18 },
 
   errorTitle: { fontFamily: FONT.body, fontSize: Sz.body, fontWeight: W.bold, color: Col.low, marginBottom: 4 },
   errorBody: { fontSize: Sz.small, color: Col.textSub, lineHeight: 18 },
+  shareLogBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
+    marginTop: Sp.md, paddingVertical: 6,
+  },
+  shareLogBtnText: { fontFamily: FONT.body, fontSize: Sz.small, fontWeight: W.semi, color: '#2E7DFF' },
 
   accent: { color: '#2E7DFF' },
 

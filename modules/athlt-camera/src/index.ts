@@ -239,16 +239,24 @@ export async function stopTracking(): Promise<SessionStats> {
 // shoulderPress). Must not be called while a live camera session is active
 // (native side guards this — resolves success:false with an explanation
 // instead of racing the shared engine).
+// orientationOverride — dev-only, lets a caller (see analyze-video.tsx's
+// dev orientation picker) force which CGImagePropertyOrientation
+// doAnalyzeVideoFile uses on the native side, instead of its own default.
+// One of 'up' | 'down' | 'left' | 'right'; omit/undefined for the default.
+// Exists so testing the 4 possible orientations for a given camera setup
+// doesn't require a native rebuild per guess — only the plumbing itself did.
 export async function analyzeVideoFile(
   uri: string,
   exerciseId: string,
-  definition: Record<string, unknown> | null = null
+  definition: Record<string, unknown> | null = null,
+  orientationOverride?: 'up' | 'down' | 'left' | 'right'
 ): Promise<{ success: boolean; frames?: number; reps?: number; goodReps?: number; error?: string }> {
   if (!ATHLTCameraNative) return { success: false, error: 'native module not available' };
   return ATHLTCameraNative.analyzeVideoFile(
     uri,
     exerciseId,
-    definition !== null ? JSON.stringify(definition) : null
+    definition !== null ? JSON.stringify(definition) : null,
+    orientationOverride ?? null
   );
 }
 
@@ -308,6 +316,37 @@ export function addDebugLogListener(
 ): EventSubscription {
   if (!nativeEmitter) return { remove: () => {} };
   return nativeEmitter.addListener('onDebugLog', callback);
+}
+
+// ─── Module-level debug log buffer ─────────────────────────────────────────────
+// A "Share Logs" button needs to reach these lines from wherever the user
+// actually ends up (recap.tsx after a successful analysis, or the error
+// card on analyze-video.tsx itself for a failed one) — a component-scoped
+// ref only survives as long as that ONE screen stays mounted, and recap.tsx
+// is a different screen entirely by the time results land there. This
+// buffer is populated automatically as soon as this module loads (not only
+// while some screen happens to be listening), so it's there regardless of
+// which screen the user is on when they hit Share Logs.
+const MAX_DEBUG_LOG_LINES = 4000;
+let debugLogBuffer: string[] = [];
+if (nativeEmitter) {
+  nativeEmitter.addListener('onDebugLog', (e: DebugLogEvent) => {
+    debugLogBuffer.push(e.message);
+    if (debugLogBuffer.length > MAX_DEBUG_LOG_LINES) {
+      debugLogBuffer = debugLogBuffer.slice(-MAX_DEBUG_LOG_LINES);
+    }
+  });
+}
+
+/** Full debug log accumulated since the app started (or since the last clearDebugLog()). */
+export function getDebugLog(): string[] {
+  return debugLogBuffer;
+}
+
+/** Called after a live session or video analysis starts, so old logs from
+ *  a previous run don't get shared alongside a new one. */
+export function clearDebugLog(): void {
+  debugLogBuffer = [];
 }
 
 // ─── Native View ──────────────────────────────────────────────────────────────

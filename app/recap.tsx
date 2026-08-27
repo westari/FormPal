@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, Pressable, ScrollView, Animated, Dimensions, NativeScrollEvent, NativeSyntheticEvent,
+  View, Text, StyleSheet, Pressable, ScrollView, Animated, Dimensions, NativeScrollEvent, NativeSyntheticEvent, Share,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,6 +24,7 @@ import type { ExerciseId } from '../constants/exercises';
 import { useWorkoutSessionStore } from '../store/workoutSessionStore';
 import type { WorkoutSummary } from '../store/workoutSessionStore';
 import { usePlanStore } from '../store/planStore';
+import { getDebugLog } from '../modules/athlt-camera/src/index';
 
 // ─── Error boundary ───────────────────────────────────────────────────────────
 // The recap screen must degrade gracefully instead of taking the whole app
@@ -598,6 +599,28 @@ export default function RecapScreen() {
     }
   }, [sharing, data, handleShare]);
 
+  // Reads the module-level buffer in modules/athlt-camera/src/index.ts —
+  // NOT a local ref — because this screen is reached by navigating away
+  // from wherever the analysis actually ran (formcheck.tsx for a live
+  // session, analyze-video.tsx for an upload), so a component-scoped log
+  // buffer on either of those screens would already be gone by the time
+  // the user is here. See getDebugLog's own doc comment for why this
+  // exists: recap.tsx previously had no way to surface these logs at all,
+  // even though this is where most analyses actually land (only a hard
+  // failure or a 0-rep result stays on analyze-video.tsx's own error card).
+  const shareLogs = useCallback(() => {
+    const log = getDebugLog();
+    const header = [
+      '=== ATHLT Debug Log ===',
+      `Exercise: ${data?.entries?.[0]?.exerciseId ?? exercise ?? 'unknown'}`,
+      `Date: ${new Date().toLocaleDateString()}`,
+      `Reps: ${data?.totalReps ?? 0} (${data?.totalGoodReps ?? 0} good)`,
+      '========================',
+      '',
+    ].join('\n');
+    Share.share({ message: header + (log.length ? log.join('\n') : '(no debug log captured this run)') });
+  }, [data, exercise]);
+
   const handleDone = useCallback(async () => {
     if (data?.isHistory) { router.back(); return; }
     if (isWorkoutMode) {
@@ -751,6 +774,20 @@ export default function RecapScreen() {
                 </Pressable>
               </GlassSurface>
             </View>
+
+            {/* Debug log export — not meaningful for a past (history-mode)
+                session, only a just-completed one. See shareLogs' own doc
+                comment for why this lives here and not just on
+                analyze-video.tsx's error card. */}
+            {!data.isHistory && (
+              <Pressable
+                onPress={shareLogs}
+                style={({ pressed }) => [s.shareLogsBtn, pressed && { opacity: 0.6 }]}
+              >
+                <SymbolView name="square.and.arrow.up" size={13} tintColor={C.muted} type="monochrome" style={{ width: 13, height: 13 }} />
+                <Text style={s.shareLogsBtnTxt}>Share Logs</Text>
+              </Pressable>
+            )}
           </Animated.View>
         </ScrollView>
 
@@ -980,6 +1017,11 @@ const s = StyleSheet.create({
   doneChip:      { height: 48 },
   doneChipInner: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   doneChipTxt:   { fontSize: 15.5, fontWeight: '500', color: C.mutedDim },
+  shareLogsBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    marginTop: 14, paddingVertical: 6,
+  },
+  shareLogsBtnTxt: { fontSize: 13, fontWeight: '500', color: C.muted },
 
   cardText: { fontSize: 15, fontWeight: '500', color: C.text, lineHeight: 22, letterSpacing: -0.1 },
 
