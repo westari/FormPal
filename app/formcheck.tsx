@@ -353,27 +353,14 @@ function PositioningGuide({
   );
 }
 
-// ─── Rep counter — same Liquid Glass frame as the guide box ──────────────────
+// ─── Rep counter — bare number + label, no frame ─────────────────────────────
 function RepCounter({ reps, goodReps }: { reps: number; goodReps: number }) {
-  const [size, setSize] = useState({ w: 0, h: 0 });
-  const R = 30;
   return (
     <View style={s.repBlock} pointerEvents="none">
-      <View
-        onLayout={(e) => setSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
-        style={s.repCard}
-      >
-        <BlurView intensity={26} tint="systemThinMaterialDark" style={[StyleSheet.absoluteFillObject, { borderRadius: R, borderCurve: 'continuous', overflow: 'hidden' }]}>
-          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(16,18,22,0.28)' }]} />
-        </BlurView>
-        <LiquidFrame w={size.w} h={size.h} radius={R} thickness={6} />
-        <View style={s.repPanelInner}>
-          <Text style={s.repNum}>{reps}</Text>
-          <View style={s.repSubRow}>
-            <View style={s.repDot} />
-            <Text style={s.repSub}>{goodReps} good</Text>
-          </View>
-        </View>
+      <Text style={s.repNum}>{reps}</Text>
+      <View style={s.repSubRow}>
+        <View style={s.repDot} />
+        <Text style={s.repSub}>{goodReps} good</Text>
       </View>
     </View>
   );
@@ -1034,20 +1021,18 @@ const s = StyleSheet.create({
   outOfPlaneInner: { paddingHorizontal: 22, paddingVertical: 11 },
   outOfPlaneText:  { fontFamily: F.bold, fontSize: 16, color: C.warn, letterSpacing: 0.3 },
 
-  // Rep count — fixed near the top, clear of the top bar.
-  repBlock:      { position: 'absolute', top: '12%', left: 0, right: 0, alignItems: 'center' },
-  repCard: {
-    alignSelf: 'center', borderRadius: 30, borderCurve: 'continuous',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 14 }, shadowOpacity: 0.4, shadowRadius: 26,
-  },
-  repPanelInner: { paddingHorizontal: 44, paddingTop: 14, paddingBottom: 18, alignItems: 'center' },
-  repNum:        {
-    fontFamily: F.extra, fontSize: 104, lineHeight: 110, color: '#fff', letterSpacing: -2,
-    textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 14,
+  // Rep count — bare, no frame; own shadow for legibility over the camera.
+  repBlock:  { position: 'absolute', top: '12%', left: 0, right: 0, alignItems: 'center' },
+  repNum:    {
+    fontFamily: F.extra, fontSize: 108, lineHeight: 114, color: '#fff', letterSpacing: -2,
+    textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 18,
   },
   repSubRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
   repDot:    { width: 8, height: 8, borderRadius: 4, backgroundColor: C.good },
-  repSub:    { fontFamily: F.bold, fontSize: 15, color: 'rgba(255,255,255,0.9)', letterSpacing: 0.3 },
+  repSub:    {
+    fontFamily: F.bold, fontSize: 15, color: 'rgba(255,255,255,0.92)', letterSpacing: 0.3,
+    textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 10,
+  },
   debugPanel: { position: 'absolute', bottom: 140, left: 16, backgroundColor: C.glass, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, minWidth: 210, borderWidth: 1, borderColor: C.border },
   bottomBar:  { position: 'absolute', bottom: 0, left: 0, right: 0, alignItems: 'center', paddingTop: 12, paddingHorizontal: 24, gap: 12 },
   hint:       { color: C.muted, fontSize: 13 },
