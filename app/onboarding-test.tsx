@@ -41,12 +41,21 @@ import Svg, {
   Path as SvgPath, Text as SvgText, Circle as SvgCircle, Line as SvgLine,
   Defs, LinearGradient as SvgLinearGradient, Stop,
 } from 'react-native-svg';
+import { WebView } from 'react-native-webview';
 import * as Haptics from 'expo-haptics';
 import AppBackground from '../components/AppBackground';
 import { Col } from '../constants/theme';
 import { BodyMapSide, MuscleRankBackdrop } from '../components/MuscleTierMap';
 import { Muscle } from '../constants/exercises';
 import type { MuscleTiers, Tier } from '../lib/sessionLog';
+import {
+  ATHLTCameraView, isNativeModuleLinked,
+  startSession, stopSession, startTracking, stopTracking,
+  setExercise, setExerciseDefinition,
+  addRepListener, addSetupStatusListener, addErrorListener,
+} from '../modules/athlt-camera/src/index';
+import { EXERCISE_DEFINITIONS } from '../constants/exerciseDefinitions';
+import { PUSHUP_ICON, SQUAT_ICON, PULLUP_ICON } from '../assets/onboarding/onbIcons';
 
 const ACCENT   = '#2E7DFF';
 const DARK     = '#0B1020';
@@ -144,9 +153,13 @@ type Turn =
   | (TurnBase & { kind: 'mathLine'; segments: Segment[]; checkIn: string; special?: 'lockIn' })
   | (TurnBase & { kind: 'wastedRepsPayoff' })
   | (TurnBase & { kind: 'reversalScreen' })
-  // The whole rank run (6 screens) is full-screen overlays, same pattern
-  // as wastedRepsPayoff/reversalScreen — none of these render through the
+  // The whole rank run is full-screen overlays, same pattern as
+  // wastedRepsPayoff/reversalScreen — none of these render through the
   // normal ActiveTurn/PastTurn scrolling-turn path at all.
+  // rankWheelIntro is the single "FormPal has ranks" wheel screen that now
+  // stands in for the old rankIntro→rankFloating→rankFilling trio (those
+  // three components are still defined below but no longer in FLOW).
+  | (TurnBase & { kind: 'rankWheelIntro' })
   | (TurnBase & { kind: 'rankIntro' })
   | (TurnBase & { kind: 'rankFloating' })
   | (TurnBase & { kind: 'rankFilling' })
@@ -154,7 +167,18 @@ type Turn =
   | (TurnBase & { kind: 'rankReveal' })
   | (TurnBase & { kind: 'rankProjection' })
   | (TurnBase & { kind: 'reviews'; prompt: string })
-  | (TurnBase & { kind: 'planReveal'; prompt: string });
+  | (TurnBase & { kind: 'planReveal'; prompt: string })
+  // ── Back-half rebuild (strength assessment → paywall handoff) — same
+  // full-screen-overlay pattern as the rank run above, none render through
+  // the normal ActiveTurn/PastTurn scrolling path.
+  | (TurnBase & { kind: 'calculatingRank' })
+  | (TurnBase & { kind: 'rankPlaceholder' })
+  | (TurnBase & { kind: 'demoPrompt' })
+  | (TurnBase & { kind: 'demoRun' })
+  | (TurnBase & { kind: 'demoVerdict' })
+  | (TurnBase & { kind: 'calculatingMath' })
+  | (TurnBase & { kind: 'cinematicMath' })
+  | (TurnBase & { kind: 'paywallPlaceholder' });
 
 const fact = (id: string, segments: Segment[], visual?: 'effortBars' | 'planChart'): Turn => ({ id, kind: 'fact', segments, visual });
 
@@ -327,18 +351,13 @@ const FLOW: Turn[] = [
     { label: '75+ min', sfSymbol: 'clock.fill', customIcon: ICON.seventyFiveMin },
   ]},
 
-  // ── MIDDLE-OF-FLOW math beat — injury math. `days` and `trainDuration`
-  // (asked early, near the basics) are both known by now, so its numbers
-  // are real, not placeholders. Deliberately far from the wasted-reps peak
-  // below — that one moved to the very end, this one stays here as a
-  // value beat between ordinary questions, never adjacent to it.
-  { id: 'injuryReveal', kind: 'mathReveal', variant: 'injury' },
-  // Connecting beat — bridges the fingerprint lock-in wash back into the
-  // ordinary flow instead of cutting straight to the next question.
-  fact('injuryToCardio', [
-    { text: "You're locked in. Now let's see where you stand..." },
-  ]),
-
+  // Injury math used to have its own mid-flow section here (its own
+  // fingerprint hold-to-commit included) — REMOVED, it was a duplicate.
+  // The injury lines now live in exactly ONE place: folded into
+  // CinematicMathScreen's 8-line sequence at the end (see FLOW's
+  // 'cinematicMath' entry below). buildInjuryLines/LockInButton/LockInWash
+  // are left defined but unused — not deleted, since removing them isn't
+  // part of what broke here.
   { id: 'cardio', kind: 'select', prompt: 'Do you do any cardio or other training?', options: [
     { label: 'Yes, regularly', sfSymbol: 'figure.run', customIcon: ICON.running },
     { label: 'Sometimes', sfSymbol: 'figure.walk', customIcon: ICON.walking },
@@ -384,44 +403,64 @@ const FLOW: Turn[] = [
   ]},
 
   // ── Hope beat — every question has been asked; nothing below is a
-  // question again. Rank system (6 full-screen beats: intro → floating →
-  // filling → assess → reveal → projection) / reviews come BEFORE the math
-  // peak, so the flow ends on the wasted-reps payoff and the turn, with
-  // nothing between that and plan generation. No photos anywhere.
-  { id: 'rankIntro', kind: 'rankIntro' },
-  { id: 'rankFloating', kind: 'rankFloating' },
-  { id: 'rankFilling', kind: 'rankFilling' },
+  // question again. THE RANK RUN, in order, each screen its EXACT
+  // Claude-designed HTML artifact rendered verbatim in a WebView (see
+  // OnboardingWebScreen / ONB_HTML):
+  //   rankWheelIntro ....... assets/onboarding/rankwheel.html
+  //   rankAssess ........... assets/onboarding/strengthassessment.html
+  //   rankReveal ........... assets/onboarding/rankreveal.html
+  //   demoPrompt ........... assets/onboarding/liveformcheck.html
+  // then the live camera demo run / verdict / math / reversal / plan /
+  // paywall as before. The old native rank screens (RankIntro/Floating/
+  // Filling/RankAssessScreen/RankPlaceholderScreen/RankReveal/Projection)
+  // and CalculatingRankScreen stay defined below, just unused — the
+  // "Calculating your rank" beat was removed, assessment goes straight to
+  // the reveal.
+  { id: 'rankWheelIntro', kind: 'rankWheelIntro' },
   { id: 'rankAssess', kind: 'rankAssess' },
   { id: 'rankReveal', kind: 'rankReveal' },
-  { id: 'rankProjection', kind: 'rankProjection' },
-  // Connecting beat — bridges the big rank moment back into the ordinary
-  // flow instead of cutting straight to "You're in good company."
-  fact('rankToReviews', [
-    { text: 'Alright — now let\'s build the plan to get you there.' },
-  ]),
-  { id: 'reviews', kind: 'reviews', prompt: "You're in good company." },
 
-  // ── THE PEAK — the % question is glued directly to the reveal that
-  // follows it (one unit, never split apart). The turn's own prompt IS the
-  // math's first real step (the flat assumption), not a "did you know" /
-  // "one more thing" throat-clear. Three parts, three separate beats:
-  //   A) wastedRepsReveal — normal typed build-up, same mechanism/autoscroll
-  //      as every other turn, ends cold on "barely built anything."
-  //   B) wastedRepsPayoff — full-screen cinematic count-up, no FormPal
-  //      mention, pure emotional impact.
-  //   C) formPalReversal — separate full-screen beat, hands the potential
-  //      back. White background with the same colorful blob decoration as
-  //      every question (AppBackground), deliberately the opposite of B's
-  //      dark screen.
-  // Nothing after this run except plan generation.
-  { id: 'formGuess', kind: 'guessSlider', prompt: 'Out of every rep you do, how many do you think are actually high quality — with good form?' },
-  { id: 'wastedRepsReveal', kind: 'mathReveal', variant: 'wastedReps' },
-  { id: 'wastedRepsPayoff', kind: 'wastedRepsPayoff' },
+  // Demo prompt: their choice of push-ups or squats, or skip straight to
+  // the slider. Tapping a panel goes straight into the live camera check.
+  { id: 'demoPrompt', kind: 'demoPrompt' },
+  // 5 — demo run: only if they didn't skip. Camera placeholder + simulated
+  // live rep counter (real camera/engine wiring plugs in where marked).
+  { id: 'demoRun', kind: 'demoRun', showIf: a => a.demoSkipped !== true },
+  // 6 — verdict: branches on the demo's own outcome (see DemoVerdictScreen).
+  // A bad demo sets answers.demoGoodReps/demoReps for real use in the math
+  // below and skips the slider entirely (see formGuess's showIf); a clean
+  // demo (or a skip) falls through to the slider instead.
+  { id: 'demoVerdict', kind: 'demoVerdict', showIf: a => a.demoSkipped !== true },
+  // 7 — the slider, CONDITIONAL: only when there's no real demo number to
+  // use instead (skipped, or a clean 5/5 that doesn't reflect fatigue).
+  { id: 'formGuess', kind: 'guessSlider', prompt: 'Out of every rep you do, how many do you think are actually good form?',
+    showIf: a => a.demoSkipped === true || (typeof a.demoGoodReps === 'number' && a.demoGoodReps >= (a.demoReps ?? 5)),
+  },
+
+  // 8 — calculating: short processing beat, same light/AppBackground-blobs
+  // look as everything else in this run.
+  { id: 'calculatingMath', kind: 'calculatingMath' },
+  // 9 — THE MATH. Reuses FullScreenMoment (the exact same proven component
+  // the original wasted-reps payoff used) — white/blobs background,
+  // one-line-at-a-time fade, Continue once the last line settles. Reads
+  // getRealFormPct() (the demo's real number if they did badly, the
+  // slider's otherwise) fed into the SAME computeWastedReps this file
+  // already used, plus the injury-sideline lines folded in — injury's OLD
+  // mid-flow section is gone (was a duplicate), this is now the only place
+  // it appears.
+  { id: 'cinematicMath', kind: 'cinematicMath' },
+  // 10 — reversal: same FullScreenMoment shell, no wash (follows straight
+  // on from the math, same as the original Part B→C convention).
   { id: 'formPalReversal', kind: 'reversalScreen' },
 
-  // Last screen before a paywall would go — not building the paywall
-  // itself, just the hand-off point.
+  // 11 — generating the plan: same light world, no wash needed (nothing in
+  // this whole run changes theme except the one dark→light wash at
+  // calculatingRank, step 2). PlanReveal's own steps now call back to
+  // their rank and the real wasted-reps number, not just the generic 4
+  // steps it had before.
   { id: 'planReveal', kind: 'planReveal', prompt: "Alright — let's put it all together." },
+  // 12 — PLACEHOLDER for the real paywall (built separately).
+  { id: 'paywallPlaceholder', kind: 'paywallPlaceholder' },
 ];
 
 // ── Wheel data (age/height/rank-assessment counts) ──────────────────────
@@ -571,30 +610,82 @@ const rulerStyles = StyleSheet.create({
 
 // ── Typewriter ───────────────────────────────────────────────────────────
 
+// Was setInterval incrementing a fixed STEP (briefly 2 characters/tick, to
+// cut re-render frequency) — that traded one problem for another: a FIXED
+// multi-char step reads as "typing in chunks," which is exactly the
+// "chaotic/multiple letters at once" complaint. The real fix for the
+// original choppiness was never the step size, it was that every tick
+// forced the surrounding layout to reflow as the Text's own box grew line
+// by line (see ReservedTypeBox below, which now owns that fix directly by
+// pre-reserving the final rendered height so a growing Text never moves
+// anything around it).
+//
+// With that solved, this can go back to a true one-character-at-a-time
+// reveal — driven by requestAnimationFrame against REAL elapsed time
+// (target = floor(elapsed / TYPE_SPEED_MS)) rather than a naive per-tick
+// counter increment. That self-corrects: a JS-thread hiccup (heavy work
+// elsewhere, e.g. the math section's other concurrent animations) makes
+// the NEXT frame jump to wherever it should actually be by now, instead of
+// silently drifting behind or — the setInterval failure mode — coalescing
+// several queued fires into one batched multi-character jump.
 function useTypewriter(fullText: string, active: boolean, onWord: () => void, onDone: () => void) {
   const [count, setCount] = useState(active ? 0 : fullText.length);
   useEffect(() => {
     if (!active) { setCount(fullText.length); return; }
     setCount(0);
-    let i = 0;
-    // Was 1 character per 20ms tick — 50 setCount calls/sec, each one
-    // forcing a text-reflow layout pass on the growing Text. That layout
-    // thrash at that frequency was the actual "choppy," not the animation
-    // math. Batching 2 characters per tick at 2x the interval keeps the
-    // same overall typing pace (same total duration) with HALF the
-    // re-renders.
-    const STEP = 2;
-    const id = setInterval(() => {
-      const next = Math.min(i + STEP, fullText.length);
-      for (let j = i; j < next; j++) { if (fullText[j] === ' ') onWord(); }
-      i = next;
-      setCount(i);
-      if (i >= fullText.length) { clearInterval(id); onDone(); }
-    }, TYPE_SPEED_MS * STEP);
-    return () => clearInterval(id);
+    let raf = 0;
+    let cancelled = false;
+    let shown = 0;
+    const start = Date.now();
+    const tick = () => {
+      if (cancelled) return;
+      const target = Math.min(fullText.length, Math.floor((Date.now() - start) / TYPE_SPEED_MS));
+      if (target > shown) {
+        for (let j = shown; j < target; j++) { if (fullText[j] === ' ') onWord(); }
+        shown = target;
+        setCount(target);
+      }
+      if (target >= fullText.length) { onDone(); return; }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => { cancelled = true; cancelAnimationFrame(raf); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fullText, active]);
   return count;
+}
+
+// ── ReservedTypeBox — pre-measures the FULL (final) text's rendered height
+// once via an invisible off-screen copy, then locks that as the visible
+// typing box's minHeight. Without this, a multi-line prompt grows its own
+// box taller line by line AS it types, pushing everything below it down
+// continuously — that continuous reflow (not the character-reveal timing)
+// was the original source of "choppy." Now the box is already full height
+// before the first letter appears; typing just fills in already-reserved
+// space, so nothing around it ever moves.
+function ReservedTypeBox({ segments, count, style, accentStyle, cursorShow }: {
+  segments: Segment[]; count: number; style: any; accentStyle?: any; cursorShow: boolean;
+}) {
+  const fullText = useMemo(() => segments.map(s => s.text).join(''), [segments]);
+  const [minH, setMinH] = useState(0);
+  // Reset on a genuinely new text (new turn) — a stale taller minHeight
+  // from the PREVIOUS turn briefly reserving too much space reads as an
+  // odd gap for one frame, worse than the brief re-measure it replaces.
+  useEffect(() => { setMinH(0); }, [fullText]);
+  return (
+    <View style={{ minHeight: minH || undefined }}>
+      <Text
+        style={[style, styles.typeMeasurer]}
+        onLayout={e => setMinH(h => Math.max(h, e.nativeEvent.layout.height))}
+      >
+        {fullText}
+      </Text>
+      <View style={styles.typeRow}>
+        <TypedSegments segments={segments} count={count} style={style} accentStyle={accentStyle} />
+        <BlinkCursor show={cursorShow} />
+      </View>
+    </View>
+  );
 }
 
 function TypedSegments({ segments, count, style, accentStyle = styles.accent }: { segments: Segment[]; count: number; style: any; accentStyle?: any }) {
@@ -862,7 +953,20 @@ const RANKS_ASCENDING = [...RANKS].reverse();
 // All 6 rank-run screens — full-screen overlays, never rendered through
 // the normal ActiveTurn/PastTurn scrolling-turn path. Used everywhere the
 // screen needs to check "is this turn one of the full-screen rank beats."
-const RANK_FULLSCREEN_KINDS = new Set(['rankIntro', 'rankFloating', 'rankFilling', 'rankAssess', 'rankReveal', 'rankProjection']);
+// Every full-screen-overlay turn kind in this file — none of these render
+// through the normal ActiveTurn/PastTurn scrolling path. Was
+// RANK_FULLSCREEN_KINDS (rank-only) with wastedRepsPayoff/reversalScreen
+// handled as separate ad-hoc `&&` checks alongside it at each of the 3
+// call sites below — folded into one set instead now that the back-half
+// rebuild adds 8 more full-screen kinds; repeating `&& kind !== 'x'` nine
+// more times per call site wasn't worth it.
+const FULLSCREEN_KINDS = new Set([
+  'rankWheelIntro',
+  'rankIntro', 'rankFloating', 'rankFilling', 'rankAssess', 'rankReveal', 'rankProjection',
+  'wastedRepsPayoff', 'reversalScreen',
+  'calculatingRank', 'rankPlaceholder', 'demoPrompt', 'demoRun', 'demoVerdict',
+  'calculatingMath', 'cinematicMath', 'paywallPlaceholder',
+]);
 // Sizing matches the reference build (FormPal Ranks.html) 1:1 at its own
 // 390px mockup width: 210px card, 168px badge orb, cards overlapping by
 // 18px on each side (CSS `margin: 0 -18px`). Scaled proportionally for
@@ -990,12 +1094,273 @@ function tiersForRank(tier: Tier | null): MuscleTiers {
   ) as MuscleTiers;
 }
 
+// ── OnboardingWebScreen — renders one of the EXACT Claude-designed HTML
+// artifacts (assets/onboarding/*.html) full-screen in a WebView, byte-for-
+// byte unchanged. This is the whole rank run now — rank wheel → strength
+// assessment → rank reveal — plus the live-form-check demo prompt: each is
+// its own artifact file, and the only code around it is a tiny injected
+// click-listener that turns a tap on the artifact's own CTA button into a
+// plain string message. onMsg maps that to the flow action.
+//   'advance'          — "Start at Bronze" / "Continue" / "Start climbing"
+//   'pushup' / 'squat' — a Push-ups / Squats panel (or "Start 5 …") tap
+//   'skip'             — "Skip for now"
+// Injected once the artifact page loads. Without editing the .html:
+//  1. BRIDGE — capture-phase listeners on `document` (survive the bundler's
+//     documentElement.replaceWith): a click → nav message, and touchstart →
+//     '__tap' for instant press haptic.
+//  2. SCROLL HAPTIC — a selection tick each time the rank wheel snaps to a
+//     new badge ([data-rank-track] is the carousel scroller).
+//  3. STRIP THE PHONE-FRAME — the artifacts are a fixed 472×1024 mockup with
+//     their own fake iOS status bar, bezel radius, drop shadow, home-
+//     indicator, and a #f4f4f2 page behind. Hide all of that + the mockup's
+//     own animated blur-blob backdrop, make every frame element transparent
+//     so the app's real AppBackground blobs show through instead of white,
+//     force the CTA pill to a solid vibrant blue (the mockup's 42%-opacity
+//     blue reads grey off its blobs), and zoom the card to real viewport
+//     width. The MutationObserver is debounced and disconnects after a few
+//     seconds so it can't thrash reflow and stomp the entrance animations
+//     (the "reach Gold by Nov 14" line-draw).
+const ONBOARDING_WEB_INJECT = `
+(function () {
+  function post(m) { try { window.ReactNativeWebView.postMessage(m); } catch (e) {} }
+  function btnFor(el) {
+    for (var i = 0; el && i < 6; i++, el = el.parentElement) {
+      var role = el.getAttribute && el.getAttribute('role');
+      if (role === 'button' || el.tagName === 'BUTTON') return el;
+    }
+    return null;
+  }
+  document.addEventListener('pointerdown', function (e) { if (btnFor(e.target)) post('__tap'); }, true);
+  document.addEventListener('touchstart', function (e) { if (btnFor(e.target)) post('__tap'); }, true);
+  document.addEventListener('click', function (e) {
+    var b = btnFor(e.target);
+    if (!b) return;
+    // A selection panel (Push-ups / Squats on the demo prompt) — let the
+    // page's own handler just highlight it; do NOT navigate. Only the CTA
+    // below advances.
+    var oc = b.getAttribute('sc-camel-on-click') || '';
+    if (b.getAttribute('data-glass') === 'panel' || /pick/i.test(oc)) return;
+    var t = (b.textContent || '').replace(/\\s+/g, ' ').trim();
+    if (/^Skip for now/i.test(t)) return post('skip');
+    // demo-prompt CTA — resolve to whichever panel is selected (default push-up)
+    if (b.getAttribute('data-cta') !== null || /^Start 5 /i.test(t)) {
+      var sel = document.querySelector('[data-glass="panel"][data-selected="1"]');
+      var st = (sel && sel.textContent || '') + ' ' + t;
+      return post(/squat/i.test(st) ? 'squat' : 'pushup');
+    }
+    if (/^(Start at Bronze|Continue|Start climbing|Find my rank|Next|Done)\\b/i.test(t)) return post('advance');
+  }, true);
+
+  var CARD = 'div[style*="width: 472px"][style*="height: 1024px"]';
+  var WRAP = 'div[style*="min-height: 100vh"][style*="padding: 40px 24px"]';
+  var BAR  = 'div[style*="justify-content: space-between"][style*="padding: 22px 34px 0"]';
+  var CSS = ''
+    // no white — the app's AppBackground blobs show through the transparent
+    // WebView. overflow:hidden everywhere: fit() scales the whole page to
+    // the viewport so nothing ever needs to scroll.
+    + 'html{margin:0!important;padding:0!important;background:transparent!important;overflow:hidden!important;height:100%!important;width:100%!important;}'
+    + 'body{margin:0!important;padding:0!important;background:transparent!important;overflow:hidden!important;}'
+    + WRAP + '{min-height:1024px!important;height:1024px!important;padding:0!important;display:block!important;background:transparent!important;overflow:hidden!important;}'
+    + CARD + '{width:472px!important;height:1024px!important;border-radius:0!important;box-shadow:none!important;margin:0!important;background:transparent!important;}'
+    // the mockup's own fake iOS status bar, its fake (dead) back + progress
+    // row, and its fake home indicator — the app draws a real back button
+    + BAR + '{display:none!important;}'
+    + 'div[style*="gap: 18px"][style*="padding: 26px 34px 0"]{display:none!important;}'
+    + 'div[style*="width: 140px"][style*="height: 5px"]{display:none!important;}'
+    // the mockup's own animated blur-blob backdrop — drop it; the real
+    // AppBackground replaces it and it was the biggest source of WebView jank
+    + 'div[style*="filter: blur(52px)"]{display:none!important;}'
+    // CTA pill — always solid vibrant blue + glow, even if the page toggles
+    // it to a disabled/grey state. (Excludes the ghost "Skip" pill.)
+    + 'div[role="button"][style*="height: 62px"][style*="border-radius: 31px"]:not([data-glass="pill"]){background:#007AFF!important;opacity:1!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;box-shadow:0 14px 34px rgba(0,122,255,0.42)!important;}'
+    // bump the screen headline a touch
+    + 'div[style*="font-size: 34px"][style*="letter-spacing: -0.6px"]{font-size:39px!important;line-height:44px!important;}'
+    // give the line-graph SVG its own layer so its stroke animation doesn't
+    // invalidate the whole scaled page each frame
+    + 'svg{will-change:transform;}';
+
+  function ensure() {
+    if (document.getElementById('__rn_css')) return;
+    var s = document.createElement('style');
+    s.id = '__rn_css';
+    s.textContent = CSS;
+    (document.head || document.documentElement).appendChild(s);
+  }
+  // Haptic tick whenever ANY snap scroller (the rank wheel, and the
+  // push-up / pull-up / squat number wheels) lands on a new item.
+  function wireScrollHaptics() {
+    var scrollers = document.querySelectorAll('[data-rank-track],[style*="scroll-snap-type"]');
+    for (var s = 0; s < scrollers.length; s++) {
+      (function (sc) {
+        if (sc.__rnHap) return;
+        sc.__rnHap = 1;
+        var last = -1;
+        sc.addEventListener('scroll', function () {
+          var kids = sc.children;
+          if (!kids.length) return;
+          var horiz = sc.scrollWidth - sc.clientWidth > sc.scrollHeight - sc.clientHeight;
+          var mid = horiz ? sc.scrollLeft + sc.clientWidth / 2 : sc.scrollTop + sc.clientHeight / 2;
+          var best = 0, bd = 1e9;
+          for (var i = 0; i < kids.length; i++) {
+            var k = kids[i];
+            var c = horiz ? k.offsetLeft + k.offsetWidth / 2 : k.offsetTop + k.offsetHeight / 2;
+            var d = Math.abs(c - mid);
+            if (d < bd) { bd = d; best = i; }
+          }
+          if (best !== last) { last = best; post('__tick'); }
+        }, { passive: true });
+      })(scrollers[s]);
+    }
+  }
+  function fit() {
+    ensure();
+    wireScrollHaptics();
+    var vw = window.innerWidth, vh = window.innerHeight;
+    if (!vw || !vh) return;
+    // Scale the ENTIRE page (body = the 472×1024 mockup) as one block to
+    // fit the viewport — contain. One transform, set once, so the SVG
+    // line-graph composites cleanly. Leftover space = the app's blobs.
+    var S = Math.min(vw / 472, vh / 1024);
+    var b = document.body;
+    if (!b || b.__rnFit === S) return;
+    b.__rnFit = S;
+    b.style.setProperty('width', '472px', 'important');
+    b.style.setProperty('height', '1024px', 'important');
+    b.style.setProperty('position', 'absolute', 'important');
+    b.style.setProperty('top', '0', 'important');
+    b.style.setProperty('left', Math.round((vw - 472 * S) / 2) + 'px', 'important');
+    b.style.setProperty('transform', 'scale(' + S + ')', 'important');
+    b.style.setProperty('transform-origin', 'top left', 'important');
+  }
+  fit();
+  var deb;
+  var obs = new MutationObserver(function () { clearTimeout(deb); deb = setTimeout(fit, 120); });
+  obs.observe(document, { childList: true, subtree: true });
+  window.addEventListener('resize', fit);
+  [30, 120, 320, 700].forEach(function (d) { setTimeout(fit, d); });
+  setTimeout(function () { obs.disconnect(); }, 1500);  // let the entrance animations run undisturbed
+  true;
+})();
+`;
+
+// Per-screen icon wiring, appended to ONBOARDING_WEB_INJECT. The artifacts
+// can't reach RN asset URLs, so the transparent icons ride in as base64
+// data URIs (assets/onboarding/onbIcons.ts). Both retry on a few timeouts
+// because the artifact renders async after unpack.
+const LIVEFORMCHECK_ICONS_JS = `
+(function () {
+  function apply() {
+    var p = document.querySelector('img[alt="Push-up"]');
+    var s = document.querySelector('img[alt="Squat"]');
+    if (p && !p.__rn) { p.__rn = 1; p.src = ${JSON.stringify(PUSHUP_ICON)}; p.style.setProperty('mix-blend-mode', 'normal', 'important'); }
+    if (s && !s.__rn) { s.__rn = 1; s.src = ${JSON.stringify(SQUAT_ICON)};  s.style.setProperty('mix-blend-mode', 'normal', 'important'); }
+    return !!(p && p.__rn && s && s.__rn);
+  }
+  if (!apply()) [120, 350, 700, 1400, 2600].forEach(function (d) { setTimeout(apply, d); });
+})();
+`;
+const STRENGTH_ICONS_JS = `
+(function () {
+  var MAP = { 'Push-ups': ${JSON.stringify(PUSHUP_ICON)}, 'Pull-ups': ${JSON.stringify(PULLUP_ICON)}, 'Squats': ${JSON.stringify(SQUAT_ICON)} };
+  function apply() {
+    var labels = document.querySelectorAll('div[style*="text-align: center"][style*="font-size: 15px"]');
+    var hit = 0;
+    for (var i = 0; i < labels.length; i++) {
+      var el = labels[i];
+      var k = (el.textContent || '').trim();
+      if (!MAP[k]) continue;
+      if (el.__rnIcon) { hit++; continue; }
+      el.__rnIcon = 1;
+      el.style.display = 'flex'; el.style.flexDirection = 'column'; el.style.alignItems = 'center';
+      var img = document.createElement('img');
+      img.src = MAP[k];
+      img.style.cssText = 'width:36px;height:36px;object-fit:contain;display:block;margin:0 0 6px';
+      el.insertBefore(img, el.firstChild);
+      hit++;
+    }
+    return hit >= 3;
+  }
+  if (!apply()) [150, 400, 800, 1600, 3000].forEach(function (d) { setTimeout(apply, d); });
+})();
+`;
+
+function OnboardingWebScreen({ source, onMsg, onBack, extraJs }: {
+  source: number;
+  onMsg: (msg: string) => void;
+  onBack?: () => void;
+  extraJs?: string;
+}) {
+  const insets = useSafeAreaInsets();
+  // Only the WebView fades in — the opaque AppBackground under it covers the
+  // previous screen instantly, so nothing flashes through during the fade.
+  const fade = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const a = Animated.timing(fade, { toValue: 1, duration: 240, easing: Easing.out(Easing.quad), useNativeDriver: true });
+    a.start();
+    return () => a.stop();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <View style={[styles.momentOverlay, { backgroundColor: '#f4f4f2' }]}>
+      <AppBackground />
+      <Animated.View style={{ flex: 1, marginTop: insets.top, opacity: fade }}>
+      <WebView
+        source={source as any}
+        originWhitelist={['*']}
+        injectedJavaScript={extraJs ? ONBOARDING_WEB_INJECT + '\n' + extraJs : ONBOARDING_WEB_INJECT}
+        onMessage={(e) => {
+          const m = e.nativeEvent.data;
+          if (m === '__tap' || m === '__tick') { Haptics.selectionAsync(); return; }
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          onMsg(m);
+        }}
+        style={[styles.onbWeb, { backgroundColor: 'transparent' }]}
+        opaque={false}
+        scrollEnabled
+        bounces={false}
+        overScrollMode="never"
+        decelerationRate="normal"
+        androidLayerType="hardware"
+        nestedScrollEnabled
+        setSupportMultipleWindows={false}
+        allowFileAccess
+        allowFileAccessFromFileURLs
+        allowUniversalAccessFromFileURLs
+        javaScriptEnabled
+        domStorageEnabled
+        cacheEnabled
+      />
+      </Animated.View>
+      {onBack && (
+        <Pressable
+          onPress={() => { Haptics.selectionAsync(); onBack(); }}
+          hitSlop={12}
+          style={[styles.onbBackBtn, { top: insets.top + 8 }]}
+        >
+          <View style={styles.backCircle}>
+            <SymbolView name="chevron.left" size={15} tintColor="#fff" type="monochrome" style={{ width: 15, height: 15 }} />
+          </View>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
+const ONB_HTML = {
+  rankWheel: require('../assets/onboarding/rankwheel.html'),
+  strengthAssessment: require('../assets/onboarding/strengthassessment.html'),
+  rankReveal: require('../assets/onboarding/rankreveal.html'),
+  liveFormCheck: require('../assets/onboarding/liveformcheck.html'),
+} as const;
+
 // ── SCREEN 1 — intro. Matches the reference build (FormPal Ranks.html)
 // exactly: light background (same AppBackground blob art as every other
 // question — NOT the dark rank shell; that starts at screen 2), no heading
 // copy, just the coverflow reel with a flexible spacer pushing it toward
 // the bottom, then "Find my rank." The dark world begins on the NEXT
 // screen, so that's now the one that washes in (see RankFloatingScreen).
+// NOTE: no longer in FLOW — the rank run now renders the exact HTML
+// artifacts via OnboardingWebScreen (rankwheel.html etc.). Kept defined
+// for reference, same as RankReveal/RankProjection/RankAssessScreen.
 function RankIntroScreen({ onDone }: { onDone: () => void }) {
   return (
     <WashIn>
@@ -1207,8 +1572,8 @@ function computeRankProjection(rank: string): { nextRank: string; dateLabel: str
 }
 
 // ── The rank reveal — the most important screen in this whole run. Full-
-// screen (outside the ScrollView, like WastedRepsPayoff/ReversalScreen),
-// two phases: a short "calculating" build-up, then the actual reveal —
+// screen (outside the ScrollView, like ReversalScreen), two phases: a
+// short "calculating" build-up, then the actual reveal —
 // their real rank badge bouncing in with a color burst behind it, their
 // name attached, haptic success on the moment it lands. Uses the SAME
 // computeStartingRank the projection screen right after it reads from, so
@@ -1458,12 +1823,20 @@ function PlanReveal({ answers, onConfirm, instant = false }: { answers: Record<s
   const name = answers.name as string | undefined;
   const goal = Array.isArray(answers.goal) && answers.goal.length ? String(answers.goal[0]).toLowerCase() : 'your goals';
   const days = (answers.days as string | undefined) ?? '4 days';
+  // Callbacks to what they actually told us — their rank (from the
+  // strength assessment) and the real wasted-reps number the cinematic
+  // math just showed them (same getRealFormPct/computeWastedReps that
+  // screen used, so this always agrees with what they just saw).
+  const rank = useMemo(() => computeStartingRank(answers), [answers]);
+  const wastedM = useMemo(() => computeWastedReps({ ...answers, formGuess: getRealFormPct(answers) }), [answers]);
   const steps = useMemo(() => [
     `Analyzing ${name ? `${name}'s` : 'your'} answers`,
+    `Factoring in your ${rank} rank`,
     `Building around ${goal}`,
     `Setting your ${days}-a-week schedule`,
+    `Remembering: ${wastedM.wasted.toLocaleString()} reps you don't have to waste again`,
     'Calibrating form-check thresholds',
-  ], [name, goal, days]);
+  ], [name, rank, goal, days, wastedM]);
 
   const [doneCount, setDoneCount] = useState(instant ? steps.length : 0);
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -1743,6 +2116,34 @@ function computeWastedReps(answers: Record<string, any>): WastedRepsMath {
   return { trainDurationLabel, justStarting, freq, durationLabel, repsPerSession, pct, weeks, weeksPlain, totalSessions, totalReps, wasted };
 }
 
+// The REAL form-quality number for the final math run (CinematicMathScreen)
+// and the plan-reveal callback — whichever of the two actual sources this
+// user has, never a guessed blend of both:
+//   - A bad demo (DemoVerdictScreen) already IS a real, observed number —
+//     use it as-is, no slider involved (formGuess's own showIf skips the
+//     slider turn entirely in this case, so answers.formGuess stays unset).
+//   - A clean demo or a skipped one falls through to the slider instead —
+//     answers.formGuess is the real source there.
+// formGuess is checked FIRST, not the demo fields — BUG FIX: a demo answer
+// never gets cleared once set, so on a CLEAN demo (5/5) both demoGoodReps
+// AND (after the slider) formGuess end up populated at once. Checking the
+// demo fields first meant the slider's own answer — the number the user
+// actually just entered, the whole point of asking it — was silently
+// ignored every time, always overridden by the demo's 100%. formGuess only
+// ever gets set by actually answering the slider, so it's the more
+// specific, more recent signal whenever it's present; the demo fields only
+// matter on the path where the slider was never shown at all.
+// Doesn't touch computeWastedReps itself (still reads answers.formGuess
+// directly) — callers needing the REAL number pass
+// { ...answers, formGuess: getRealFormPct(answers) } into it instead.
+function getRealFormPct(answers: Record<string, any>): number {
+  if (typeof answers.formGuess === 'number') return answers.formGuess;
+  if (typeof answers.demoGoodReps === 'number' && typeof answers.demoReps === 'number' && answers.demoReps > 0) {
+    return Math.round((answers.demoGoodReps / answers.demoReps) * 100);
+  }
+  return 70; // shouldn't happen given the flow always sets one or the other — same fallback as the slider's own default
+}
+
 // Merges a few short, related sentence-groups into ONE line/tap — was one
 // tap per single sentence, which meant 6-9 check-ins per math turn and
 // reportedly felt too broken-up. Groups a couple of related sentences per
@@ -2009,7 +2410,17 @@ function WashIn({ children }: { children: React.ReactNode }) {
   const translateY = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const screenH = Dimensions.get('window').height;
-    const anim = Animated.timing(translateY, { toValue: -screenH, duration: 520, delay: 80, easing: Easing.out(Easing.cubic), useNativeDriver: false });
+    // useNativeDriver:true — this animates ONLY transform (no layout
+    // props), and it needs to be the one exception to this file's usual
+    // JS-driven-for-reliability convention (see RankLadder's own comment):
+    // that convention exists for scroll-COUPLED interpolations, which this
+    // isn't. This specific animation runs at the exact moment a new
+    // full-screen component is mounting — real JS-thread work (unmount the
+    // old turn, mount the new one, run its effects) competing with a
+    // JS-driven animation for the same thread is the textbook cause of a
+    // stuttery transition. Moving it to the native UI thread makes it
+    // immune to that contention.
+    const anim = Animated.timing(translateY, { toValue: -screenH, duration: 520, delay: 80, easing: Easing.out(Easing.cubic), useNativeDriver: true });
     anim.start();
     return () => anim.stop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2026,7 +2437,11 @@ function WashIn({ children }: { children: React.ReactNode }) {
 // out, next line fades in. The LAST line fades in and stays (doesn't fade
 // out) — onDone fires once it's settled, so the caller can bring in a
 // Continue button after.
-function FadeSequence({ lines, textStyle, onDone }: { lines: string[]; textStyle: any; onDone: () => void }) {
+// `peakIndex` (optional) — fires a stronger notification haptic instead of
+// the usual light selection tick when that one line lands, for a sequence's
+// single emotional peak (see CinematicMathScreen). Omit for every existing
+// caller — default behavior (plain selectionAsync on every line) unchanged.
+function FadeSequence({ lines, textStyle, onDone, peakIndex }: { lines: string[]; textStyle: any; onDone: () => void; peakIndex?: number }) {
   const [index, setIndex] = useState(0);
   const opacity = useRef(new Animated.Value(0)).current;
 
@@ -2037,7 +2452,11 @@ function FadeSequence({ lines, textStyle, onDone }: { lines: string[]; textStyle
     const fadeIn = Animated.timing(opacity, { toValue: 1, duration: 450, useNativeDriver: false });
     fadeIn.start(({ finished }) => {
       if (!finished) return;
-      Haptics.selectionAsync();
+      if (index === peakIndex) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      } else {
+        Haptics.selectionAsync();
+      }
       if (isLast) { onDone(); return; }
       // Was a 1150ms hold — reported as going too quick to actually read.
       holdTimer = setTimeout(() => {
@@ -2094,37 +2513,454 @@ function FullScreenMoment({ lines, onDone, wash = true }: { lines: string[]; onD
   return wash ? <WashIn>{content}</WashIn> : content;
 }
 
-// ── PART B — the wasted-reps payoff. Reads from computeWastedReps — the
-// SAME function Part A's build-up used — so these numbers always match
-// what the build-up just walked through. No FormPal mention anywhere in
-// this screen — pure emotional impact; the reversal is PART C, right after.
-// PART A now ends right at the sessions-count line — reported as coming
-// "too late" when the full-screen moment used to wait for total-reps/lot-
-// of-work/wasted to type out first. Those three now open THIS screen
-// instead, so the full-screen moment starts immediately after the sessions
-// line, then builds all the way through to the emotional payoff in one
-// continuous run.
-function WastedRepsPayoff({ answers, onDone }: { answers: Record<string, any>; onDone: () => void }) {
-  const m = useMemo(() => computeWastedReps(answers), [answers]);
-  const lines = useMemo(() => [
-    `That's about ${m.totalReps.toLocaleString()} reps.`,
-    "That's a lot of work.",
-    `But at ${m.pct}% good form, ${m.wasted.toLocaleString()} of them barely built anything.`,
-    "That's months of muscle — gone.",
-    `With correct form, those ${m.wasted.toLocaleString()} reps would have built nearly twice the muscle.`,
-  ], [m]);
+// ── STEP 9 — THE MATH. Reuses FullScreenMoment UNCHANGED — the exact same
+// proven component the original wasted-reps payoff used (white background,
+// AppBackground blobs, one-line-at-a-time FadeSequence, Continue button
+// once the last line settles). A custom dark/no-button version of this was
+// tried and it broke (skipped straight past the build-up) — this reverts
+// to the known-working mechanism instead of debugging a bespoke one.
+// Reads getRealFormPct() (the demo's real number if they did badly, the
+// slider's otherwise) fed into the SAME computeWastedReps this file
+// already used for the old wasted-reps payoff, plus the injury-sideline
+// lines folded into the SAME sequence (previously a separate mid-flow
+// section, now removed — see FLOW's own comment on that removal).
+function CinematicMathScreen({ answers, onDone }: { answers: Record<string, any>; onDone: () => void }) {
+  const m = useMemo(() => computeWastedReps({ ...answers, formGuess: getRealFormPct(answers) }), [answers]);
+  // Was one line stating the final rep count with no arithmetic shown
+  // before it — reported as "randomly states the number." Then rebuilt
+  // once already (reps/session → sessions/year → total) but STILL stated
+  // "156 sessions a year" as a fact instead of showing the ×52 that
+  // produces it — reported again as "still guessing." Every multiplication
+  // is now its own explicit line (second-grade simple: "4 × 52 = 208" as
+  // its own sentence, not folded into a bigger one) so nothing is ever
+  // just stated — every number on screen is the direct result of the
+  // number and the operation on the line right before it. All values come
+  // from `m` (computeWastedReps) — nothing new computed, this only makes
+  // the existing multiplication visible one step at a time.
+  const lines = useMemo(() => {
+    const sessionsPerYear = Math.round(m.freq * 52);
+    const repsPerYear = m.repsPerSession * sessionsPerYear;
+    const opener = m.justStarting
+      ? `Let's imagine you do ${m.repsPerSession} reps a session.`
+      : `Okay, so you said you do ${m.repsPerSession} reps a session.`;
+    const trainLine = m.justStarting
+      ? `And let's say you train ${dayWord(m.freq)} a week.`
+      : `You train ${dayWord(m.freq)} a week.`;
+    return [
+      opener,
+      trainLine,
+      'There are 52 weeks in a year.',
+      `${m.freq} × 52 = ${sessionsPerYear} sessions a year.`,
+      `${m.repsPerSession} reps × ${sessionsPerYear} sessions = ${repsPerYear.toLocaleString()} reps a year.`,
+      `Do that for ${m.weeksPlain}, and that's about ${m.totalReps.toLocaleString()} reps total.`,
+      `You said ${m.pct}% of them are good form.`,
+      `That means ${m.wasted.toLocaleString()} of them barely built anything.`,
+      "That's months of muscle — gone.",
+      "But that's not it.",
+      'Every gym injury is a 4-6 week sideline.',
+      'After just 4 weeks off, you start losing the strength you built.',
+      'So one injury = months of progress, undone.',
+    ];
+  }, [m]);
   return <FullScreenMoment lines={lines} onDone={onDone} />;
 }
 
-// ── PART C — the reversal. Same shell as PART B, hands the potential back
-// instead of dwelling in the loss. No wash — follows straight on from B.
+// ── STEP 10 — the reversal. Same FullScreenMoment shell as the math, no
+// wash — follows straight on (same convention the original Part B→C had).
 function ReversalScreen({ onDone }: { onDone: () => void }) {
   const lines = useMemo(() => [
-    "But wait — it's not too late.",
+    "But it's not too late.",
     'FormPal checks every rep.',
     'So from today, every one counts — and you build nearly 2x the muscle.',
   ], []);
   return <FullScreenMoment lines={lines} onDone={onDone} wash={false} />;
+}
+
+// ── STEP 2 — calculating rank. Short anticipation beat. Same white/
+// AppBackground-blobs look as every other question screen (NOT the dark
+// RankShell rankAssess just used) — washes in for that reason, since this
+// is the one real light↔dark boundary left in this run (everything after
+// this point stays light all the way to the paywall placeholder). Three
+// staggered pulsing dots rather than a single spinner, closer to a real
+// "working on it" read than a bare pulse.
+function CalculatingRankScreen({ onDone }: { onDone: () => void }) {
+  const dots = useRef([0, 1, 2].map(() => new Animated.Value(0.4))).current;
+  useEffect(() => {
+    const loops = dots.map((d, i) => Animated.loop(Animated.sequence([
+      Animated.timing(d, { toValue: 1, duration: 420, delay: i * 140, useNativeDriver: true }),
+      Animated.timing(d, { toValue: 0.4, duration: 420, useNativeDriver: true }),
+    ])));
+    loops.forEach(l => l.start());
+    const t = setTimeout(() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onDone(); }, 2400);
+    return () => { loops.forEach(l => l.stop()); clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <WashIn>
+      <View style={styles.momentOverlay}>
+        <AppBackground />
+        <View style={styles.calcCenter}>
+          <View style={styles.calcDotsRow}>
+            {dots.map((d, i) => (
+              <Animated.View key={i} style={[styles.calcDot, { opacity: d, transform: [{ scale: d }] }]} />
+            ))}
+          </View>
+          <Text style={styles.calcTxt}>Calculating your rank...</Text>
+        </View>
+      </View>
+    </WashIn>
+  );
+}
+
+// ── STEP 3 — PLACEHOLDER for the real rank reveal + projection (Claude
+// Design, drop in later). Same light world as calculatingRank before it,
+// no wash. Deliberately plain — this is a placeholder, not a screen worth
+// polishing.
+function RankPlaceholderScreen({ onDone }: { onDone: () => void }) {
+  return (
+    <View style={styles.momentOverlay}>
+      <AppBackground />
+      <View style={styles.calcCenter}>
+        <SymbolView name="rectangle.dashed" size={34} tintColor={Col.textDim} type="monochrome" style={{ width: 34, height: 34 }} />
+        <Text style={styles.placeholderTitleLight}>Rank screens go here</Text>
+        <Text style={styles.placeholderBodyLight}>Designed separately in Claude Design — drop in later.</Text>
+      </View>
+      <View style={styles.momentBtnWrap}>
+        <BounceBtn style={styles.continueBtn} onPress={onDone}>
+          <Text style={styles.continueBtnTxt}>Continue</Text>
+        </BounceBtn>
+      </View>
+    </View>
+  );
+}
+
+// ── STEP 4 — demo prompt. Faithful rebuild of the standalone reference
+// (FormPal Live Form Check.html): light AppBackground blob world, a "LIVE
+// FORM CHECK" glass pill with a pulsing red dot, "Want to see it work?" +
+// "Do 5 reps and watch FormPal check your form live.", then two glass
+// exercise panels (Push-ups / Squats, each with an icon tile and a setup
+// hint), and a "Skip for now" ghost.
+// Per the explicit ask, there is NO intermediate "Start 5 reps" button —
+// tapping a panel goes STRAIGHT into the live camera form check for that
+// exercise (DemoRunScreen), which auto-finishes after 5 reps. Skipping sets
+// answers.demoSkipped so demoRun/demoVerdict's own showIf both skip past
+// them to the slider.
+function DemoPromptScreen({ onDone }: { onDone: (exercise: 'pushup' | 'squat' | null) => void }) {
+  const pulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(pulse, { toValue: 0.25, duration: 900, useNativeDriver: true }),
+      Animated.timing(pulse, { toValue: 1, duration: 900, useNativeDriver: true }),
+    ]));
+    loop.start();
+    return () => loop.stop();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const start = (ex: 'pushup' | 'squat') => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    onDone(ex);
+  };
+  const skip = () => { Haptics.selectionAsync(); onDone(null); };
+
+  const panels: { ex: 'pushup' | 'squat'; label: string; hint: string; symbol: string }[] = [
+    { ex: 'pushup', label: 'Push-ups', hint: 'Phone on the floor, side on', symbol: 'figure.strengthtraining.traditional' },
+    { ex: 'squat', label: 'Squats', hint: 'Phone propped up, 2m back', symbol: 'figure.strengthtraining.functional' },
+  ];
+
+  return (
+    <WashIn>
+      <View style={styles.momentOverlay}>
+        <AppBackground />
+        <View style={styles.demoPromptWrap}>
+          <BlurView intensity={26} tint="light" style={styles.demoLivePill}>
+            <Animated.View style={[styles.demoLiveDot, { opacity: pulse }]} />
+            <Text style={styles.demoLivePillTxt}>LIVE FORM CHECK</Text>
+          </BlurView>
+          <Text style={styles.demoPromptTitle}>Want to see it work?</Text>
+          <Text style={styles.demoPromptBody}>Do 5 reps and watch FormPal check your form live.</Text>
+
+          <View style={styles.demoPanelStack}>
+            {panels.map(p => (
+              <BounceBtn key={p.ex} style={styles.demoPanelBtn} onPress={() => start(p.ex)}>
+                <BlurView intensity={24} tint="light" style={styles.demoPanel}>
+                  <View style={styles.demoPanelTile}>
+                    <SymbolView name={p.symbol as any} size={30} tintColor={DARK} type="monochrome" style={{ width: 30, height: 30 }} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.demoPanelLabel}>{p.label}</Text>
+                    <Text style={styles.demoPanelHint}>{p.hint}</Text>
+                  </View>
+                  <SymbolView name="chevron.right" size={15} tintColor={Col.textDim} type="monochrome" style={{ width: 15, height: 15 }} />
+                </BlurView>
+              </BounceBtn>
+            ))}
+          </View>
+
+          <Pressable onPress={skip} hitSlop={12} style={styles.demoSkipWrap}>
+            <Text style={styles.demoSkipTxt}>Skip for now</Text>
+          </Pressable>
+        </View>
+      </View>
+    </WashIn>
+  );
+}
+
+// ── STEP 5 — demo run. Live camera form check for the picked exercise.
+// Opens the real ATHLTCamera (same native module app/formcheck.tsx uses),
+// runs its setup-hold → tracking flow, counts real reps, and auto-finishes
+// the instant DEMO_TARGET_REPS clean-or-not reps are seen — handing the
+// real reps / goodReps / cue to DemoVerdictScreen (which feeds the math).
+//
+// This is a deliberately lean slice of formcheck.tsx's session handling: no
+// calibration-rep phase, no audio cues, no video save, no diagnostic mode —
+// just permission → camera → setup hold → count 5 → stop. When the native
+// module isn't linked (Expo Go / simulator) it falls back to the original
+// timed simulation so the flow still runs end-to-end there.
+const DEMO_BAD_CUES = ["your hips didn't reach depth", 'your knees caved in', 'your elbows flared out', 'you cut the rep short'];
+const DEMO_TARGET_REPS = 5;
+
+// Maps the engine's terse per-rep reason (e.g. "GO DEEPER") to the
+// sentence-fragment shape DemoVerdictScreen renders ("… didn't count — X").
+function demoCueFromReason(reason: string): string | null {
+  const r = (reason || '').trim().toUpperCase();
+  if (!r || r === 'GOOD') return null;
+  const map: Record<string, string> = {
+    'GO DEEPER': "you didn't reach depth",
+    'CHEST UP': 'your chest dropped',
+    'KNEES IN': 'your knees caved in',
+    'ELBOWS IN': 'your elbows flared out',
+    'BACK STRAIGHT': 'your back rounded',
+    'SHORT REP': 'you cut the rep short',
+    'LOCK OUT': "you didn't lock out",
+  };
+  return map[r] ?? reason.toLowerCase();
+}
+
+function DemoRunSimulated({ exercise, onDone }: { exercise: 'pushup' | 'squat'; onDone: (reps: number, goodReps: number, cue: string | null) => void }) {
+  const [count, setCount] = useState(0);
+  const outcome = useRef<{ good: number; cue: string | null } | null>(null);
+  if (!outcome.current) {
+    const isGood = Math.random() < 0.55;
+    outcome.current = isGood
+      ? { good: 5, cue: null }
+      : { good: 2 + Math.floor(Math.random() * 2), cue: DEMO_BAD_CUES[Math.floor(Math.random() * DEMO_BAD_CUES.length)] };
+  }
+  useEffect(() => {
+    let i = 0;
+    const id = setInterval(() => {
+      i += 1;
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setCount(i);
+      if (i >= DEMO_TARGET_REPS) {
+        clearInterval(id);
+        setTimeout(() => onDone(DEMO_TARGET_REPS, outcome.current!.good, outcome.current!.cue), 500);
+      }
+    }, 650);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const exName = exercise === 'pushup' ? 'Push-up' : 'Squat';
+  return (
+    <View style={styles.momentOverlay}>
+      <AppBackground />
+      <View style={styles.demoCenter}>
+        <Text style={styles.demoRunTitle}>{exName} — Demo</Text>
+        <View style={styles.demoCameraCard}>
+          <SymbolView name="camera.fill" size={26} tintColor="rgba(11,16,32,0.3)" type="monochrome" style={{ width: 26, height: 26 }} />
+          <Text style={styles.demoCameraTxt}>Camera unavailable here</Text>
+          <Text style={styles.demoCameraSub}>Simulated — run a dev build for the real check</Text>
+        </View>
+        <Text style={styles.demoRunCount}>{count}<Text style={styles.demoRunCountOf}> / {DEMO_TARGET_REPS}</Text></Text>
+      </View>
+    </View>
+  );
+}
+
+function DemoRunLive({ exercise, onDone }: { exercise: 'pushup' | 'squat'; onDone: (reps: number, goodReps: number, cue: string | null) => void }) {
+  const [count, setCount] = useState(0);
+  const [phase, setPhase] = useState<'starting' | 'setup' | 'tracking' | 'error'>('starting');
+  const [hint, setHint] = useState('');
+  const goodRef = useRef(0);
+  const lastCueRef = useRef<string | null>(null);
+  const trackingRef = useRef(false);
+  const finishedRef = useRef(false);
+
+  const finish = (reps: number) => {
+    if (finishedRef.current) return;
+    finishedRef.current = true;
+    void stopTracking().catch(() => {});
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setTimeout(() => onDone(reps, Math.min(goodRef.current, reps), lastCueRef.current), 450);
+  };
+
+  useEffect(() => {
+    let mounted = true;
+    let graceTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const errSub = addErrorListener(e => {
+      if (!mounted || finishedRef.current) return;
+      setPhase('error');
+      // Bail to a clean pass so the rest of the flow still runs.
+      finishedRef.current = true;
+      setTimeout(() => onDone(DEMO_TARGET_REPS, DEMO_TARGET_REPS, null), 900);
+    });
+
+    const setupSub = addSetupStatusListener(ev => {
+      if (!mounted || finishedRef.current) return;
+      setHint(ev.hint || '');
+      if (ev.passed && !trackingRef.current) {
+        trackingRef.current = true;
+        setPhase('setup');
+        if (graceTimer) clearTimeout(graceTimer);
+        graceTimer = setTimeout(async () => {
+          if (!mounted || finishedRef.current) return;
+          await startTracking().catch(() => {});
+          if (mounted) setPhase('tracking');
+        }, 1000);
+      }
+    });
+
+    const repSub = addRepListener(rep => {
+      if (!mounted || finishedRef.current) return;
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      goodRef.current = rep.goodReps;
+      if (!rep.good) {
+        const c = demoCueFromReason(rep.reason);
+        if (c) lastCueRef.current = c;
+      }
+      setCount(rep.reps);
+      if (rep.reps >= DEMO_TARGET_REPS) finish(DEMO_TARGET_REPS);
+    });
+
+    startSession().then(async res => {
+      if (!mounted) return;
+      if (!res.success) { setPhase('error'); return; }
+      await setExercise(exercise);
+      await setExerciseDefinition((EXERCISE_DEFINITIONS as Record<string, any>)[exercise] ?? null);
+      if (mounted) setPhase('setup');
+    }).catch(() => { if (mounted) setPhase('error'); });
+
+    return () => {
+      mounted = false;
+      if (graceTimer) clearTimeout(graceTimer);
+      errSub.remove(); setupSub.remove(); repSub.remove();
+      void stopSession().catch(() => {});
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const exName = exercise === 'pushup' ? 'Push-up' : 'Squat';
+  const status =
+    phase === 'error'    ? 'Camera unavailable' :
+    phase === 'tracking' ? `${exName}s — go` :
+    hint || 'Get your whole body in the frame';
+
+  return (
+    <View style={styles.momentOverlay}>
+      <ATHLTCameraView style={StyleSheet.absoluteFillObject} />
+      <LinearGradient
+        colors={['rgba(0,0,0,0.45)', 'rgba(0,0,0,0)', 'rgba(0,0,0,0.55)']}
+        locations={[0, 0.4, 1]}
+        style={StyleSheet.absoluteFillObject}
+        pointerEvents="none"
+      />
+      <View style={styles.demoLiveOverlay} pointerEvents="none">
+        <Text style={styles.demoLiveStatus}>{status}</Text>
+        <Text style={styles.demoLiveCount}>{count}<Text style={styles.demoLiveCountOf}> / {DEMO_TARGET_REPS}</Text></Text>
+      </View>
+    </View>
+  );
+}
+
+function DemoRunScreen({ exercise, onDone }: { exercise: 'pushup' | 'squat'; onDone: (reps: number, goodReps: number, cue: string | null) => void }) {
+  return isNativeModuleLinked()
+    ? <DemoRunLive exercise={exercise} onDone={onDone} />
+    : <DemoRunSimulated exercise={exercise} onDone={onDone} />;
+}
+
+// ── STEP 6 — verdict. Win-win branch: a bad demo shows the real number
+// straight (and that number IS what feeds the math, step 9 — no slider
+// needed, see formGuess's showIf); a clean demo hands off to the slider
+// instead, framed around fatigue rather than re-asking the same thing.
+function DemoVerdictScreen({ answers, onDone }: { answers: Record<string, any>; onDone: () => void }) {
+  const reps = (answers.demoReps as number | undefined) ?? 5;
+  const good = (answers.demoGoodReps as number | undefined) ?? 5;
+  const cue = answers.demoCue as string | null | undefined;
+  const bad = good < reps;
+  const exercise = answers.demoExercise === 'pushup' ? 'push-up' : 'squat';
+
+  useEffect(() => {
+    Haptics.notificationAsync(bad ? Haptics.NotificationFeedbackType.Warning : Haptics.NotificationFeedbackType.Success);
+  }, [bad]);
+
+  return (
+    <View style={styles.momentOverlay}>
+      <AppBackground />
+      <View style={styles.demoCenter}>
+        {bad ? (
+          <>
+            <Text style={styles.verdictBig}>{reps} reps.</Text>
+            <Text style={styles.verdictBody}>
+              <Text style={styles.accent}>{reps - good} didn't count</Text> — {cue ?? 'your form broke down'}.
+            </Text>
+          </>
+        ) : (
+          <>
+            <Text style={styles.verdictBig}>5 / 5.</Text>
+            <Text style={styles.verdictBody}>
+              Nice — solid form on that {exercise}. But that's one lift, fresh.{'\n\n'}
+              Across everything you do, when you're tired at rep 10 — how many are actually clean?
+            </Text>
+          </>
+        )}
+        <BounceBtn style={styles.continueBtn} onPress={onDone}>
+          <Text style={styles.continueBtnTxt}>Continue</Text>
+        </BounceBtn>
+      </View>
+    </View>
+  );
+}
+
+// ── STEP 8 — calculating (the math). Short processing beat, same light/
+// AppBackground-blobs look as everything around it — no wash, no theme
+// change, this whole run stays light.
+function CalculatingMathScreen({ onDone }: { onDone: () => void }) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const anim = Animated.timing(opacity, { toValue: 1, duration: 420, useNativeDriver: true });
+    anim.start();
+    const t = setTimeout(onDone, 1700);
+    return () => { anim.stop(); clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <View style={styles.momentOverlay}>
+      <AppBackground />
+      <View style={styles.calcCenter}>
+        <Animated.Text style={[styles.calcTxt, { opacity }]}>Analyzing your reps...</Animated.Text>
+      </View>
+    </View>
+  );
+}
+
+// ── STEP 12 — PLACEHOLDER for the real paywall (built separately). Same
+// light world as planReveal before it, no wash. A "Restart flow" button is
+// a dev convenience for re-testing this file repeatedly, not part of the
+// real onboarding.
+function PaywallPlaceholderScreen({ onRestart }: { onRestart: () => void }) {
+  return (
+    <View style={styles.momentOverlay}>
+      <AppBackground />
+      <View style={styles.demoCenter}>
+        <SymbolView name="lock.rectangle.fill" size={32} tintColor={Col.textDim} type="monochrome" style={{ width: 32, height: 32 }} />
+        <Text style={styles.placeholderTitleLight}>Paywall</Text>
+        <Text style={styles.placeholderBodyLight}>Built separately — drop in here.</Text>
+        <Pressable onPress={onRestart} style={styles.restartBtn} hitSlop={8}>
+          <Text style={styles.restartBtnTxt}>Restart flow</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
 }
 
 // The post-answer response — types out with the EXACT same mechanism and
@@ -2138,10 +2974,7 @@ function ReactionLine({ text, onDone }: { text: string; onDone: () => void }) {
   const segments: Segment[] = useMemo(() => [{ text }], [text]);
   const count = useTypewriter(text, true, () => void Haptics.selectionAsync(), onDone);
   return (
-    <View style={styles.typeRow}>
-      <TypedSegments segments={segments} count={count} style={styles.activeLine} />
-      <BlinkCursor show={count < text.length} />
-    </View>
+    <ReservedTypeBox segments={segments} count={count} style={styles.activeLine} cursorShow={count < text.length} />
   );
 }
 
@@ -2158,6 +2991,36 @@ function BlinkCursor({ show }: { show: boolean }) {
   }, [show]);
   if (!show) return null;
   return <Animated.Text style={[styles.cursor, { opacity }]}>|</Animated.Text>;
+}
+
+// ── CenteredFadeInLine — the one line right before the fingerprint
+// (mathLine's special:'lockIn'). Deliberately NOT typed like every other
+// line in this flow: a plain, centered fade-in instead, so this specific
+// moment reads as a settled statement rather than another question being
+// typed out. `instant` (true when this turn was already typingDone before
+// this component even mounted — a back-navigation revisit) skips the fade
+// entirely and shows it already-settled, matching how the typewriter path
+// already treats a revisited turn.
+function CenteredFadeInLine({ segments, style, accentStyle, instant, onDone }: {
+  segments: Segment[]; style: any; accentStyle?: any; instant: boolean; onDone: () => void;
+}) {
+  const opacity = useRef(new Animated.Value(instant ? 1 : 0)).current;
+  useEffect(() => {
+    if (instant) { onDone(); return; }
+    const anim = Animated.timing(opacity, { toValue: 1, duration: 650, useNativeDriver: true });
+    anim.start(({ finished }) => { if (finished) onDone(); });
+    return () => anim.stop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <Animated.View style={[styles.lockInLineWrap, { opacity }]}>
+      <Text style={[style, styles.lockInLineText]}>
+        {segments.map((seg, i) => (
+          <Text key={i} style={seg.accent ? accentStyle : undefined}>{seg.text}</Text>
+        ))}
+      </Text>
+    </Animated.View>
+  );
 }
 
 // ── Option icon — customIcon (webp) takes priority, sfSymbol is the
@@ -2464,7 +3327,7 @@ export default function OnboardingTestScreen() {
   const [nameInput, setNameInput]   = useState('');
   const [wheelVal, setWheelVal]     = useState('');
   const [rulerVal, setRulerVal]     = useState(160);
-  const [guessPct, setGuessPct]     = useState(50);
+  const [guessPct, setGuessPct]     = useState(70);
   const [guessTouched, setGuessTouched] = useState(false);
   const [selectTemp, setSelectTemp] = useState<string | null>(null);
   // Locks the ScrollView for the duration of a slider drag — see
@@ -2519,7 +3382,7 @@ export default function OnboardingTestScreen() {
       setWheelVal(typeof existing === 'string' ? existing : (wheelDefaults[current.wheelKind] ?? '18'));
     }
     if (current?.kind === 'ruler') setRulerVal(typeof existing === 'number' ? existing : 160);
-    if (current?.kind === 'guessSlider') { setGuessPct(typeof existing === 'number' ? existing : 50); setGuessTouched(existing != null); }
+    if (current?.kind === 'guessSlider') { setGuessPct(typeof existing === 'number' ? existing : 70); setGuessTouched(existing != null); }
     if (current?.kind === 'select' || current?.kind === 'locationBubbles') setSelectTemp(typeof existing === 'string' ? existing : null);
     else setSelectTemp(null);
     if (current?.kind === 'text') setNameInput(typeof existing === 'string' ? existing : '');
@@ -2541,10 +3404,10 @@ export default function OnboardingTestScreen() {
   // Dev-only shortcut for testing the rank section without walking the
   // whole flow every time — jumps straight to the rank intro screen.
   // Rank screens are full-screen overlays gated purely on turn kind (see
-  // RANK_FULLSCREEN_KINDS), not on typingDoneId, so no typewriter state to
+  // FULLSCREEN_KINDS), not on typingDoneId, so no typewriter state to
   // fake here the way goBack has to.
   const skipToRanks = () => {
-    const idx = visibleFlow.findIndex(t => t.id === 'rankIntro');
+    const idx = visibleFlow.findIndex(t => t.id === 'rankWheelIntro');
     if (idx < 0) return;
     setReactionPending(null);
     setTurnIndex(idx);
@@ -2723,6 +3586,36 @@ export default function OnboardingTestScreen() {
     setTurnIndex(i => i + 1);
   };
 
+  // demoPrompt: pick an exercise → open the REAL form-check screen
+  // (app/formcheck.tsx) for it, or skip. Either way the in-flow demo
+  // run/verdict are marked skipped so the flow continues to the slider on
+  // return; the actual live check happens in the real screen, not an
+  // embedded stand-in.
+  const confirmDemoPrompt = (exercise: 'pushup' | 'squat' | null) => {
+    setAnswers(a => ({ ...a, demoExercise: exercise ?? undefined, demoSkipped: true }));
+    setTurnIndex(i => i + 1);
+    if (exercise) {
+      router.push({ pathname: '/formcheck', params: { exercise, returnTo: '/onboarding-test' } });
+    }
+  };
+
+  // demoRun: records the simulated (or, once wired, real) rep result —
+  // DemoVerdictScreen, getRealFormPct, and the cinematic math all read
+  // these same 3 fields.
+  const confirmDemoRun = (reps: number, goodReps: number, cue: string | null) => {
+    setAnswers(a => ({ ...a, demoReps: reps, demoGoodReps: goodReps, demoCue: cue }));
+    setTurnIndex(i => i + 1);
+  };
+
+  // Dev convenience for re-testing this file repeatedly from the paywall
+  // placeholder — not part of the real onboarding.
+  const resetFlow = () => {
+    setAnswers({});
+    setTurnIndex(0);
+    setTypingDoneId(null);
+    setReactionPending(null);
+  };
+
   // Injury math's "lock it in" moment — captures the turn id at the moment
   // the hold completes (not read fresh from `current` later), so the wash's
   // eventual advance always targets the right turn regardless of anything
@@ -2801,7 +3694,7 @@ export default function OnboardingTestScreen() {
               <PastTurn key={t.id + i} turn={t} answer={answers[t.id]} answers={answers} />
             ))}
 
-            {current && !RANK_FULLSCREEN_KINDS.has(current.kind) && current.kind !== 'wastedRepsPayoff' && current.kind !== 'reversalScreen' && (
+            {current && !FULLSCREEN_KINDS.has(current.kind) && (
               <View
                 key={current.id}
                 onLayout={(e) => { activeTurnYRef.current = e.nativeEvent.layout.y; pinActiveTurn(e.nativeEvent.layout.y); }}
@@ -2871,17 +3764,18 @@ export default function OnboardingTestScreen() {
           )}
         </View>
 
-        {/* PART B — the wasted-reps payoff. Deliberately NOT inside the
-            ScrollView: a full-screen cinematic beat with its own count-up,
-            not another chat turn to autoscroll to. Absolutely positioned
-            over everything (header included) so it reads as its own
-            screen, then unmounts the instant the turn advances. */}
-        {current?.kind === 'wastedRepsPayoff' && (
-          <WastedRepsPayoff answers={answers} onDone={() => confirmInert(current.id)} />
-        )}
-
+        {/* Full-screen overlay beats — absolutely positioned over
+            everything (header included), never inside the ScrollView, so
+            each reads as its own screen and unmounts the instant the turn
+            advances. rankReveal/rankProjection are kept below (dead code,
+            not in FLOW anymore) purely as reference for the real Claude-
+            Design rank screens — rankPlaceholder stands in for both now. */}
         {current?.kind === 'reversalScreen' && (
           <ReversalScreen onDone={() => confirmInert(current.id)} />
+        )}
+
+        {current?.kind === 'rankWheelIntro' && (
+          <OnboardingWebScreen source={ONB_HTML.rankWheel} onMsg={() => confirmInert(current.id)} onBack={goBack} />
         )}
 
         {current?.kind === 'rankIntro' && (
@@ -2897,15 +3791,54 @@ export default function OnboardingTestScreen() {
         )}
 
         {current?.kind === 'rankAssess' && (
-          <RankAssessScreen onDone={confirmRankAssess} />
+          <OnboardingWebScreen source={ONB_HTML.strengthAssessment} onMsg={() => confirmInert(current.id)} onBack={goBack} extraJs={STRENGTH_ICONS_JS} />
         )}
 
         {current?.kind === 'rankReveal' && (
-          <RankRevealScreen answers={answers} onDone={() => confirmInert(current.id)} />
+          <OnboardingWebScreen source={ONB_HTML.rankReveal} onMsg={() => confirmInert(current.id)} onBack={goBack} />
         )}
 
         {current?.kind === 'rankProjection' && (
           <RankProjectionScreen answers={answers} onDone={() => confirmInert(current.id)} />
+        )}
+
+        {/* ── Back-half rebuild (strength assessment → paywall handoff) ── */}
+
+        {current?.kind === 'calculatingRank' && (
+          <CalculatingRankScreen onDone={() => confirmInert(current.id)} />
+        )}
+
+        {current?.kind === 'rankPlaceholder' && (
+          <RankPlaceholderScreen onDone={() => confirmInert(current.id)} />
+        )}
+
+        {current?.kind === 'demoPrompt' && (
+          <OnboardingWebScreen
+            source={ONB_HTML.liveFormCheck}
+            onBack={goBack}
+            extraJs={LIVEFORMCHECK_ICONS_JS}
+            onMsg={(m) => confirmDemoPrompt(m === 'pushup' || m === 'squat' ? m : null)}
+          />
+        )}
+
+        {current?.kind === 'demoRun' && (
+          <DemoRunScreen exercise={(answers.demoExercise as 'pushup' | 'squat' | undefined) ?? 'pushup'} onDone={confirmDemoRun} />
+        )}
+
+        {current?.kind === 'demoVerdict' && (
+          <DemoVerdictScreen answers={answers} onDone={() => confirmInert(current.id)} />
+        )}
+
+        {current?.kind === 'calculatingMath' && (
+          <CalculatingMathScreen onDone={() => confirmInert(current.id)} />
+        )}
+
+        {current?.kind === 'cinematicMath' && (
+          <CinematicMathScreen answers={answers} onDone={() => confirmInert(current.id)} />
+        )}
+
+        {current?.kind === 'paywallPlaceholder' && (
+          <PaywallPlaceholderScreen onRestart={resetFlow} />
         )}
 
         {lockIn && (
@@ -2936,7 +3869,7 @@ function PastTurn({ turn, answer, answers }: { turn: Turn; answer: any; answers:
   // Every full-screen beat (wasted-reps payoff, reversal, and all 6 rank
   // screens) is its own cinematic screen, never a scrollable chat turn —
   // nothing to show once it's history.
-  if (turn.kind === 'wastedRepsPayoff' || turn.kind === 'reversalScreen' || RANK_FULLSCREEN_KINDS.has(turn.kind)) return null;
+  if (FULLSCREEN_KINDS.has(turn.kind)) return null;
   // Plain summary ONLY — the reaction/response is a separate, transient
   // thing (ReactionLine, typed out live on the still-active turn, see
   // commitAndAdvance) that never persists into history. What's left behind
@@ -3004,6 +3937,13 @@ function ActiveTurn({
   const segments: Segment[] = turn.kind === 'fact' || turn.kind === 'mathLine' ? turn.segments
     : 'prompt' in turn ? [{ text: turn.prompt }] : [];
   const fullText = segments.map(s => s.text).join('');
+  // The one line before the fingerprint (mathLine's special:'lockIn') is
+  // deliberately NOT typed — see CenteredFadeInLine below and its render
+  // branch. useTypewriter is still called unconditionally (rules of hooks)
+  // but with active=false for this turn, so it just resolves count to the
+  // full length without ever running the RAF loop or firing onDone —
+  // CenteredFadeInLine calls onDone itself once its own fade-in settles.
+  const isLockInLine = turn.kind === 'mathLine' && turn.special === 'lockIn';
   // Was hardcoded `true` — meant EVERY mount retyped from scratch, even
   // when goBack had already marked this turn's id as typingDoneId before
   // it mounted (a fresh `key={current.id}` remount doesn't care what
@@ -3012,7 +3952,7 @@ function ActiveTurn({
   // its full text instantly — see useTypewriter's `active ? 0 : fullText.length`
   // initial state — while a genuinely new turn (typingDone starts false)
   // still types out normally.
-  const count = useTypewriter(fullText, !typingDone, onWord, onDone);
+  const count = useTypewriter(fullText, !isLockInLine && !typingDone, onWord, onDone);
 
   // Whether a reaction to the just-picked answer is currently typing out on
   // THIS turn — see ReactionLine below and commitAndAdvance in the screen
@@ -3024,20 +3964,28 @@ function ActiveTurn({
 
   return (
     <View style={styles.activeTurn}>
-      <View style={styles.typeRow}>
-        <TypedSegments
+      {isLockInLine ? (
+        <CenteredFadeInLine
+          segments={segments}
+          style={styles.activeLine}
+          accentStyle={styles.revealAccent}
+          instant={typingDone}
+          onDone={onDone}
+        />
+      ) : (
+        <ReservedTypeBox
           segments={segments}
           count={count}
           style={styles.activeLine}
           accentStyle={turn.kind === 'mathLine' ? styles.revealAccent : undefined}
+          cursorShow={!typingDone}
         />
-        <BlinkCursor show={!typingDone} />
-      </View>
+      )}
 
       {reactionActive && <ReactionLine text={reactionText!} onDone={onReactionTyped} />}
 
       {typingDone && !reactionActive && turn.kind === 'fact' && turn.visual === 'effortBars' && <EntranceFade><EffortBars /></EntranceFade>}
-      {typingDone && !reactionActive && turn.kind === 'fact' && turn.visual === 'planChart' && <PlanGrowthChart />}
+      {typingDone && !reactionActive && turn.kind === 'fact' && turn.visual === 'planChart' && <EntranceFade><PlanGrowthChart /></EntranceFade>}
 
       {typingDone && !reactionActive && turn.kind === 'fact' && (
         <BounceBtn style={styles.continueBtn} onPress={() => onConfirmInert(turn.id)}>
@@ -3051,11 +3999,13 @@ function ActiveTurn({
           answer pill it's just the check-in word with a small side arrow —
           no white box, no background, minimal. */}
       {typingDone && !reactionActive && turn.kind === 'mathLine' && turn.special !== 'lockIn' && (
-        <View style={styles.mathCheckInRow}>
-          <Pressable onPress={() => onConfirmInert(turn.id)} hitSlop={12}>
-            <Text style={styles.mathCheckInTxt}>{turn.checkIn}  ›</Text>
-          </Pressable>
-        </View>
+        <EntranceFade>
+          <View style={styles.mathCheckInRow}>
+            <Pressable onPress={() => onConfirmInert(turn.id)} hitSlop={12}>
+              <Text style={styles.mathCheckInTxt}>{turn.checkIn}  ›</Text>
+            </Pressable>
+          </View>
+        </EntranceFade>
       )}
 
 
@@ -3238,6 +4188,14 @@ const styles = StyleSheet.create({
 
   activeTurn: { marginBottom: 32 },
   typeRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end' },
+  // Off-screen, full-text copy ReservedTypeBox measures against — same
+  // width as the real typing row (both are plain block children of the
+  // same unstyled-width parent) so it wraps identically, but positioned
+  // absolute + invisible so it never affects layout itself, only reports
+  // its own height via onLayout.
+  typeMeasurer: { position: 'absolute', left: 0, right: 0, opacity: 0 },
+  lockInLineWrap: { width: '100%', alignItems: 'center', paddingVertical: 28 },
+  lockInLineText: { textAlign: 'center' },
   activeLine: { fontSize: 25, lineHeight: 32, fontWeight: '300', color: Col.text, letterSpacing: -0.3 },
   accent: { color: ACCENT, fontWeight: '500' },
   cursor: { fontSize: 25, fontWeight: '300', color: ACCENT, marginLeft: 1 },
@@ -3287,6 +4245,8 @@ const styles = StyleSheet.create({
   // weights/sizes/accent colors, "black-and-white" text on a colorful
   // background.
   momentOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 50, backgroundColor: '#fff' },
+  onbWeb: { flex: 1, backgroundColor: '#f4f4f2' },
+  onbBackBtn: { position: 'absolute', left: 20, zIndex: 60 },
   momentCenter: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
   // Bumped weight (500→600) and added a soft white text-shadow — the
   // colorful blob background sits right behind this text, and a plain
@@ -3298,6 +4258,93 @@ const styles = StyleSheet.create({
   },
   momentBtnWrap: { position: 'absolute', left: 24, right: 24, bottom: 40 },
   washPanel: { backgroundColor: '#fff', zIndex: 60, borderBottomWidth: 2, borderBottomColor: '#111' },
+
+  // ── Back-half rebuild — every screen here shares the SAME light,
+  // AppBackground-blobs look (momentOverlay) and the SAME continueBtn/
+  // continueBtnTxt as the rest of the file. No dark theme, no bespoke
+  // components — see FLOW's own step-by-step comments for where each lands.
+  calcCenter: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 18 },
+  calcDotsRow: { flexDirection: 'row', gap: 10 },
+  calcDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: ACCENT },
+  calcTxt: { fontSize: 19, fontWeight: '500', color: Col.text, textAlign: 'center' },
+  placeholderTitleLight: { fontSize: 20, fontWeight: '700', color: Col.text, textAlign: 'center', marginTop: 4 },
+  placeholderBodyLight: { fontSize: 14, color: Col.textSub, textAlign: 'center', paddingHorizontal: 32, lineHeight: 20 },
+  restartBtn: { marginTop: 22, paddingVertical: 8, paddingHorizontal: 16 },
+  restartBtnTxt: { fontSize: 13, fontWeight: '600', color: Col.textSub },
+
+  demoCenter: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28, gap: 14 },
+  demoPromptTitle: { fontSize: 26, fontWeight: '700', color: Col.text, textAlign: 'center', letterSpacing: -0.4 },
+  demoPromptBody: { fontSize: 15, lineHeight: 21, color: Col.textSub, textAlign: 'center', marginBottom: 8 },
+  demoPromptRow: { flexDirection: 'row', gap: 12, width: '100%', marginBottom: 8 },
+  demoPromptPill: {
+    flex: 1, borderRadius: 16, borderWidth: 1.5, borderColor: 'rgba(17,24,39,0.10)',
+    paddingVertical: 18, alignItems: 'center', backgroundColor: '#fff',
+  },
+  demoPromptPillSel: { borderColor: DARK, backgroundColor: DARK },
+  demoPromptPillTxt: { fontSize: 15, fontWeight: '600', color: Col.text },
+  demoPromptPillTxtSel: { color: '#fff' },
+  demoSkipWrap: { marginTop: 4, padding: 8 },
+  demoSkipTxt: { fontSize: 14, fontWeight: '500', color: Col.textDim },
+
+  demoRunTitle: { fontSize: 20, fontWeight: '700', color: Col.text, marginBottom: 4 },
+  demoCameraCard: {
+    width: '100%', height: 160, borderRadius: 20, backgroundColor: 'rgba(11,16,32,0.05)',
+    borderWidth: 1, borderColor: 'rgba(11,16,32,0.08)', alignItems: 'center', justifyContent: 'center', gap: 4,
+  },
+  demoCameraTxt: { fontSize: 14, fontWeight: '600', color: 'rgba(11,16,32,0.4)' },
+  demoCameraSub: { fontSize: 11.5, fontWeight: '500', color: 'rgba(11,16,32,0.24)' },
+  demoRunCount: { fontSize: 64, fontWeight: '800', color: Col.text, letterSpacing: -1.5, marginTop: 6 },
+  demoRunCountOf: { fontSize: 28, fontWeight: '400', color: Col.textDim },
+
+  // ── Live form check prompt (FormPal Live Form Check.html) ──────────────
+  demoPromptWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
+  demoLivePill: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, paddingHorizontal: 15,
+    borderRadius: 999, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)', marginBottom: 20,
+  },
+  demoLiveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#FF3B30' },
+  demoLivePillTxt: { fontSize: 11.5, fontWeight: '600', letterSpacing: 0.6, color: 'rgba(26,26,28,0.7)' },
+  demoPanelStack: { width: '100%', gap: 14, marginTop: 6 },
+  demoPanelBtn: { width: '100%' },
+  demoPanel: {
+    flexDirection: 'row', alignItems: 'center', gap: 16, padding: 18, borderRadius: 26, overflow: 'hidden',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)',
+  },
+  demoPanelTile: {
+    width: 60, height: 60, borderRadius: 18, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.45)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.6)',
+  },
+  demoPanelLabel: { fontSize: 20, fontWeight: '400', color: '#1A1A1C', letterSpacing: -0.3 },
+  demoPanelHint: { fontSize: 13.5, fontWeight: '300', color: 'rgba(26,26,28,0.55)', marginTop: 2 },
+
+  // ── Live form check run — camera overlay ──────────────────────────────
+  demoLiveOverlay: { position: 'absolute', left: 0, right: 0, bottom: 64, alignItems: 'center', gap: 6 },
+  demoLiveStatus: { fontSize: 16, fontWeight: '600', color: 'rgba(255,255,255,0.9)', textShadowColor: 'rgba(0,0,0,0.4)', textShadowRadius: 6 },
+  demoLiveCount: { fontSize: 72, fontWeight: '800', color: '#fff', letterSpacing: -2, textShadowColor: 'rgba(0,0,0,0.35)', textShadowRadius: 10 },
+  demoLiveCountOf: { fontSize: 30, fontWeight: '400', color: 'rgba(255,255,255,0.7)' },
+
+  // ── "FormPal has ranks" rank wheel (FormPal Rank Wheel.html) ──────────
+  rankWheelHead: { paddingHorizontal: 34, paddingTop: 40 },
+  rankWheelPill: {
+    alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 15,
+    borderRadius: 999, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)', marginBottom: 18,
+  },
+  rankWheelPillTxt: { fontSize: 11.5, fontWeight: '600', letterSpacing: 0.6, color: 'rgba(26,26,28,0.7)' },
+  rankWheelTitle: { fontSize: 34, fontWeight: '300', color: '#1A1A1C', letterSpacing: -0.6 },
+  rankWheelStage: { flex: 1, justifyContent: 'center', paddingHorizontal: 20 },
+  rankWheelPanel: {
+    borderRadius: 40, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)',
+    paddingVertical: 20, alignItems: 'center', justifyContent: 'center',
+  },
+  rankWheelRays: { position: 'absolute', width: 320, height: 320, alignItems: 'center', justifyContent: 'center' },
+  rankWheelWord: {
+    position: 'absolute', fontSize: 72, fontWeight: '500', letterSpacing: -2.4,
+    color: 'rgba(26,26,28,0.10)',
+  },
+  rankWheelReel: { alignSelf: 'stretch' },
+
+  verdictBig: { fontSize: 34, fontWeight: '800', color: Col.text, letterSpacing: -0.6, textAlign: 'center' },
+  verdictBody: { fontSize: 16, lineHeight: 23, color: Col.textSub, textAlign: 'center', marginBottom: 6 },
 
   rankScroll: { marginTop: 22 },
   // No card background — just the badge + name floating on the page's own

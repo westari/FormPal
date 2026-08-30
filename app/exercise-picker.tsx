@@ -85,6 +85,18 @@ const EXERCISE_UI: Record<ExerciseId, { symbol: string; grad: [string, string] }
   // romanianDeadlift/deadlift/etc (crimson/rose), one step further toward
   // the dark end since it's the most posterior-chain-loaded of the group
   cablePullThrough: { symbol: 'figure.strengthtraining.traditional', grad: ['#F43F5E', '#7F1D3B'] },
+  // Pull-up — dedicated calisthenics SF Symbol, deep indigo (distinct from
+  // lunge's purple and lat pulldown's own indigo)
+  pullup: { symbol: 'figure.pull.up', grad: ['#818CF8', '#312E81'] },
+  // Calf raise — emerald/green, its own family (no other lower-body
+  // exercise uses green)
+  calfRaise: { symbol: 'figure.strengthtraining.functional', grad: ['#6EE7B7', '#047857'] },
+  // Leg curl (machine) — teal, distinct from squat's amber-orange lower-body family
+  legCurl: { symbol: 'figure.strengthtraining.traditional', grad: ['#5EEAD4', '#0D9488'] },
+  // Crunch / Russian twist — both core.training, amber vs. rotation-icon
+  // violet so the two ab exercises don't read identically at a glance
+  crunch: { symbol: 'figure.core.training', grad: ['#FCD34D', '#B45309'] },
+  russianTwist: { symbol: 'arrow.triangle.2.circlepath', grad: ['#C4B5FD', '#5B21B6'] },
 };
 
 export default function ExercisePickerScreen() {

@@ -84,6 +84,13 @@ export default function PlusScreen() {
     } else if (id === 'mypal') {
       didNavigate.current = true;
       animOut(() => { setVisible(false); router.push('/mypal'); });
+    } else if (id === 'workout') {
+      // Was falling through to the generic "Coming soon" alert despite
+      // app/workout/index.tsx + app/workout/run.tsx already being fully
+      // built and wired to real plan/session stores — just never connected
+      // from this menu tile.
+      didNavigate.current = true;
+      animOut(() => { setVisible(false); router.push('/workout' as any); });
     } else {
       Alert.alert('Coming soon');
     }

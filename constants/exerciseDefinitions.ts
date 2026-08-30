@@ -154,6 +154,25 @@ export interface ExerciseDefinitionDef {
   // lat pulldown vs. a press sharing the same wrist/elbow-vs-shoulder
   // metric shape in opposite temporal order — see latPulldownVariant()).
   settleAnchorMinFraction?: number;
+  // Max fraction of a completed rep's in-rep frames that may be
+  // primary-metric-unreliable (a joint below the 0.6 reliability floor)
+  // before the WHOLE rep is discarded as "[REP] rejected — tracking
+  // unreliable" (see ExerciseEngine.swift's tracking-reliability gate).
+  // Default 0.5 (omit for every normal exercise) — the value the pushup /
+  // lat-pulldown walk-away fix was tuned against; do NOT loosen it globally.
+  // crunch overrides it up: a device log confirmed a real crunch lying flat
+  // runs ~67% of frames below the floor (Apple Vision shoulder confidence
+  // tops out ~0.67 lying down) and was having every such rep deleted.
+  repReliabilityMaxUnreliableFraction?: number;
+  // Orientation of the on-screen positioning-guide box shown during SETUP in
+  // app/formcheck.tsx (a dimmed surround with a clear target rectangle the
+  // user lines up inside). 'standing' = tall upright box for a standing
+  // person; 'floor' = wide low box for a person on the ground (plank /
+  // lying). Purely presentational — the actual "am I in position" gate is
+  // still the native SETUP joint-visibility check; this just tells the user
+  // WHERE. Omit → formcheck.tsx falls back to a per-exercise default
+  // (FLOOR_GUIDE set), which is 'standing' for anything not listed.
+  guideBox?: 'standing' | 'floor';
 }
 
 // ─── Shared passthrough ready gate ───────────────────────────────────────────
@@ -2631,6 +2650,7 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
   pushup: {
     id:          'pushup',
     displayName: 'Push-up',
+    guideBox:    'floor',
 
     // leftJoints/rightJoints below feed TWO things in ExerciseEngine.swift, not
     // just this comment's headline concern:
@@ -3644,4 +3664,466 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     'Face Pull',
     'Face the camera — stand back so both arms are fully in frame',
   ),
+
+  // ─── Pull-up ────────────────────────────────────────────────────────────────
+  //
+  // REFERENCE EXERCISE: pushup's repMetric (bodyRelativeDeviation + bestSide,
+  // leftJoints/rightJoints trimmed to the reliable joints only — see that
+  // entry's own comment for the full history behind this shape). Pull-up
+  // shares pushup's exact problem, in a different joint: the WRIST occludes
+  // (gripping the bar, often right at/behind the head at the top of the
+  // rep), not the ankle. Same fix, different joint — measure something that
+  // changes with the movement WITHOUT ever needing the wrist.
+  //
+  // METRIC CHOICE: elbow's perpendicular deviation from the hip→shoulder
+  // line (the torso's own long axis) — bodyRelativeDeviation(point: elbow,
+  // axisFrom: hip, axisTo: shoulder). At a dead hang (rest), the arm
+  // reaches up and out overhead, so the elbow sits FAR from the torso's own
+  // axis — large deviation. At the top of a pull-up (chin over bar), the
+  // elbows drive down and back close alongside the ribs — the elbow sits
+  // NEAR the torso axis — small deviation. This is orientation-agnostic
+  // (built from real joint-to-joint geometry, not raw Vision x/y) the same
+  // way pushup's own metric is, and never touches the wrist. Legs are
+  // deliberately absent from this metric and its joints entirely, per the
+  // explicit ask — a pull-up's legs can dangle, tuck, or kick, none of
+  // which should affect rep detection.
+  pullup: {
+    id:          'pullup',
+    displayName: 'Pull-up',
+
+    repMetric: {
+      type: 'bestSide',
+      left:  { type: 'bodyRelativeDeviation', point: 'leftElbow',  axisFrom: 'leftHip',  axisTo: 'leftShoulder'  },
+      right: { type: 'bodyRelativeDeviation', point: 'rightElbow', axisFrom: 'rightHip', axisTo: 'rightShoulder' },
+      // Reliability-gate joints (see pushup's identical fix and its own
+      // comment for why) — shoulder, elbow, hip only. NOT wrist (occludes
+      // at the top) and NOT ankle/knee (legs excluded on purpose).
+      leftJoints:  ['leftShoulder',  'leftElbow',  'leftHip'],
+      rightJoints: ['rightShoulder', 'rightElbow', 'rightHip'],
+    },
+
+    // PLACEHOLDER — no existing exercise uses elbow-vs-torso-axis deviation
+    // as a PRIMARY rep signal, so there's no verified scale to calibrate
+    // from the way squat/curl's angle metrics had. Deliberately wide gap
+    // between enter/exit and topAngle so a real down-then-up swing
+    // registers regardless of where the true numbers land. Do a few real
+    // pull-ups (or send a video) and read the [REP-TRACE]/[REP] log — set
+    // the real numbers from that, not from this guess.
+    topAngle:            0.55,   // PLACEHOLDER — dead-hang value (large deviation)
+    repEnterThreshold:   0.35,   // PLACEHOLDER
+    repExitThreshold:    0.42,   // PLACEHOLDER
+    goodROMThreshold:    0.18,   // PLACEHOLDER — "chin over bar" depth
+    insufficientROMCue: 'PULL HIGHER',
+
+    // Anti-kipping/swing check — same lineVsVertical(hip→shoulder) pattern
+    // curl's lean_back check already uses successfully, just repurposed: a
+    // pull-up done with a big kipping swing tips the torso well off
+    // vertical. Threshold copied from curl's own (20°) as a starting point,
+    // not re-derived — flag if it fires on a normal strict pull-up.
+    formChecks: [
+      {
+        id: 'kip_swing', cue: 'STOP SWINGING',
+        metric: {
+          type:  'average',
+          left:  { type: 'lineVsVertical', from: 'leftHip',  to: 'leftShoulder'  },
+          right: { type: 'lineVsVertical', from: 'rightHip', to: 'rightShoulder' },
+        },
+        evaluateAt: 'throughoutMax', condition: { type: 'greaterThan', value: 20 },
+        priority: 4, enabled: true,
+      },
+    ],
+    readyGate: PASSTHROUGH_GATE,
+
+    cameraSetup: {
+      setupInstruction: "Face the camera — shoulders, elbows, and hips in frame (hands on the bar don't need to be)",
+      requiredJoints: ['leftShoulder', 'rightShoulder', 'leftElbow', 'rightElbow', 'leftHip', 'rightHip'],
+    },
+
+    minRepInterval:  0.6,
+    planarityChecks: [],
+  },
+
+  // ─── Calf raise ─────────────────────────────────────────────────────────────
+  //
+  // FEASIBILITY FLAG — read this before trusting anything below it: this
+  // app's tracked joint set (Joint enum, Joints.swift) has NO heel or toe
+  // joint at all — the lowest point tracked is the ANKLE. A calf raise's
+  // real motion (heel lifting a few inches while the ball of the foot stays
+  // planted) barely moves the ANKLE joint itself — the ankle sits close to
+  // the pivot of that motion, not its end, so its own vertical travel is
+  // small relative to full body height, plausibly on the same order as
+  // Vision's own per-frame joint-position jitter. Of everything added this
+  // round, this is the one most likely to simply not register — genuinely
+  // uncertain, not a guess either way. Send a real device log immediately
+  // rather than assuming this works.
+  //
+  // METRIC: normalizedVerticalGap(upper: knee, lower: ankle) — as the ankle
+  // rises (heel lift), the knee-to-ankle vertical gap shrinks slightly
+  // (knee stays put, ankle moves up toward it). bestSide across both legs
+  // so whichever leg the camera reads more clearly drives the value.
+  calfRaise: {
+    id:          'calfRaise',
+    displayName: 'Calf Raise',
+
+    repMetric: {
+      type: 'bestSide',
+      left:  { type: 'normalizedVerticalGap', upper: 'leftKnee',  lower: 'leftAnkle'  },
+      right: { type: 'normalizedVerticalGap', upper: 'rightKnee', lower: 'rightAnkle' },
+      leftJoints:  ['leftKnee',  'leftAnkle'],
+      rightJoints: ['rightKnee', 'rightAnkle'],
+    },
+
+    // PLACEHOLDER — and unusually TIGHT on purpose, not wide like every
+    // other exercise added this round: the real problem here isn't
+    // hysteresis margin, it's that the whole physical range of motion is
+    // small. A wide gap would very likely never be crossed at all. These
+    // numbers assume the knee-ankle gap shrinks by only a few percent of
+    // torso-normalized scale during a real heel raise — an assumption, not
+    // a measurement. Send a real log FIRST for this one specifically — if
+    // the observed swing is even smaller than this already-tight band, no
+    // threshold fix will save it and this exercise may not be trackable
+    // with this app's joint set at all.
+    topAngle:            0.10,    // PLACEHOLDER — heels-down baseline
+    repEnterThreshold:   0.07,    // PLACEHOLDER — tight gap, not wide, on purpose
+    repExitThreshold:    0.085,   // PLACEHOLDER
+    goodROMThreshold:    0.03,    // PLACEHOLDER — full heel raise
+    insufficientROMCue: 'HIGHER RAISE',
+
+    // No form check — with only knee/ankle available and the primary
+    // signal already this thin, an unverified form check stacked on top
+    // would just be a second guess on top of the first. Nothing here meets
+    // this file's own feasibility bar (see rule 4 in this project's
+    // CLAUDE.md — check feasibility before building a form check).
+    formChecks: [],
+    readyGate: PASSTHROUGH_GATE,
+
+    cameraSetup: {
+      setupInstruction: 'Stand side-on to the camera — knees and ankles in frame',
+      requiredJoints: ['leftKnee', 'rightKnee', 'leftAnkle', 'rightAnkle'],
+    },
+
+    minRepInterval:  0.4,
+    planarityChecks: [],
+  },
+
+  // ─── Leg curl (machine) ─────────────────────────────────────────────────────
+  //
+  // REFERENCE EXERCISE: squat's own repMetric — the SAME hip-knee-ankle
+  // jointAngle, averaged left/right (not bestSide — a machine leg curl
+  // usually loads both legs symmetrically, matching squat's own choice for
+  // the same reason). A leg curl is squat's knee-angle measurement run from
+  // a seated/lying position instead of standing: the angle formula itself
+  // is a pure 3-point geometric angle and doesn't care whether the body is
+  // upright or seated, so this transfers directly — same joints, same
+  // metric type, same combinator.
+  legCurl: {
+    id:          'legCurl',
+    displayName: 'Leg Curl (Machine)',
+
+    repMetric: {
+      type:  'average',
+      left:  { type: 'jointAngle', a: 'leftHip',  pivot: 'leftKnee',  c: 'leftAnkle'  },
+      right: { type: 'jointAngle', a: 'rightHip', pivot: 'rightKnee', c: 'rightAnkle' },
+    },
+
+    // PLACEHOLDER, but scaled directly off squat's own VERIFIED numbers
+    // (topAngle 160 / enter 150 / exit 155 / goodROM 90) since this is
+    // literally the same 3-joint angle — about as close to "verified" as a
+    // placeholder can start. What's genuinely unverified: a MACHINE leg
+    // curl's true achievable range may differ from a standing squat's (pad/
+    // carriage geometry often stops short of squat's 90° "parallel" depth)
+    // — goodROMThreshold especially may need loosening. You mentioned
+    // testing this one by video since it needs a machine — send that log
+    // and these get set from real numbers, not this borrowed scale.
+    topAngle:            160,   // PLACEHOLDER (borrowed from squat's own verified value)
+    repEnterThreshold:   150,   // PLACEHOLDER
+    repExitThreshold:    155,   // PLACEHOLDER
+    goodROMThreshold:     90,   // PLACEHOLDER — may not be reachable on every machine, watch the log
+    insufficientROMCue: 'CURL FURTHER',
+
+    // No form check — a machine already constrains the movement path
+    // mechanically (unlike a free-weight squat, where back lean/knee cave
+    // are real independent faults worth checking); nothing analogous is
+    // reliably measurable here with the available joints.
+    formChecks: [],
+    readyGate: PASSTHROUGH_GATE,
+
+    cameraSetup: {
+      setupInstruction: "Side-on to the camera — hip, knee, and ankle in frame (the machine partially blocking the leg is expected)",
+      requiredJoints: ['leftHip', 'rightHip', 'leftKnee', 'rightKnee', 'leftAnkle', 'rightAnkle'],
+    },
+
+    minRepInterval:  0.5,
+    planarityChecks: [],
+  },
+
+  // ─── Crunch ─────────────────────────────────────────────────────────────────
+  //
+  // FEASIBILITY FLAG, stronger than a normal placeholder warning: this app
+  // has a CONFIRMED on-device failure for a lying-down exercise already.
+  // gluteBridge/hipThrust were built, tested, and REMOVED because Apple
+  // Vision's body-pose detector rejected 100% of frames — not "low
+  // confidence," genuinely couldn't find a person at all lying flat on the
+  // floor (see standingGluteKickback's own comment in constants/
+  // exercises.ts for that history). A crunch is also lying down. It MAY
+  // fare differently — knees bent and feet planted gives a more open,
+  // side-on silhouette than a flat hip thrust, and camera angle matters a
+  // lot here — but that's a hope, not something verifiable without a
+  // device test. The FIRST thing to check on a real log isn't rep counting
+  // or thresholds — it's literally whether "[VIDEO-POSE] ... no person
+  // detected" shows up at all. If it does, no threshold fix here will help;
+  // this needs a different camera angle at minimum, and may share
+  // gluteBridge's fate outright.
+  //
+  // METRIC: distanceRatio(a: shoulder, b: knee) — NOT bodyRelativeDeviation
+  // despite the ask suggesting it (matching pushup's exact primitive).
+  // Worked through why: bodyRelativeDeviation(shoulder, axisFrom: hip,
+  // axisTo: knee) has the WRONG polarity here. Lying flat (rest), the
+  // shoulder sits nearly ON the hip→knee line — a SMALL deviation; curled
+  // up (the work position), the shoulder moves AWAY from that line — a
+  // LARGE deviation. But this engine's rep state machine is hardwired the
+  // other way for every exercise (topAngle/rest = the LARGE value, a rep
+  // ENTERS when the value DROPS) — bodyRelativeDeviation would need rest to
+  // be large, which it isn't here. distanceRatio doesn't have this problem:
+  // it's a plain 2D image distance (shoulder-to-knee), which is naturally
+  // LARGE lying flat (torso fully laid out, shoulder far from the bent
+  // knee) and shrinks as the shoulder physically moves toward the knees
+  // during the curl — correct polarity, and — like bodyRelativeDeviation —
+  // doesn't decompose into vertical/horizontal components at all, so it's
+  // just as orientation-agnostic as what was asked for, by a different
+  // route.
+  crunch: {
+    id:          'crunch',
+    displayName: 'Crunch',
+    guideBox:    'floor',
+
+    repMetric: {
+      type: 'bestSide',
+      left:  { type: 'distanceRatio', a: 'leftShoulder',  b: 'leftKnee'  },
+      right: { type: 'distanceRatio', a: 'rightShoulder', b: 'rightKnee' },
+      // Shoulder only — same reliability-gate trim pushup's fix and
+      // pull-up above both use, for the same reason: don't let the whole
+      // rep get thrown out by a hip/knee confidence dip this metric's own
+      // internal 0.25 floor (Joints.swift's kMinConf) already tolerates.
+      leftJoints:  ['leftShoulder'],
+      rightJoints: ['rightShoulder'],
+    },
+
+    // PLACEHOLDER — genuinely novel: no existing exercise uses distanceRatio
+    // as a PRIMARY rep metric (its one other use, segmentLengthRatio, is a
+    // foreshortening-gate special case per that primitive's own doc
+    // comment, not a calibrated rep signal). These numbers assume a
+    // shoulder-to-knee distance around 1.3-1.5x torso height lying flat,
+    // shrinking toward ~0.7x at a real crunch peak — a reasoned estimate
+    // from body proportions, not a measurement. Wide gap on purpose so a
+    // REAL-LOG-DERIVED (one on-device take, side-on floor level) — replaces
+    // the earlier guessed placeholders (enter 1.0 / exit 1.2 / rom 0.7). That
+    // log: rep #1 counted GOOD (polarity + swing correct); the observed
+    // values are a noisy continuum, not two clean clusters:
+    //   genuine rest (lying flat): ~1.87–2.15, single-frame noise dips to ~1.37
+    //   crunch bottom:             ~0.50–0.68
+    //   transition band:           ~0.85–1.4 (0.89, 0.95, 1.05, 1.22, 1.27…)
+    // enter/exit widened slightly to 0.95 / 1.30 (from 1.0 / 1.2) for real
+    // hysteresis on both sides of the transition band, so single-frame noise
+    // between rest and a crunch can't flap the atTop↔inRep state (the
+    // pushup-fix method). A real crunch (~0.5) still clears enter; the return
+    // to flat (~2.0) still clears exit. goodROMThreshold 0.70→0.85 so a
+    // genuine crunch bottoming at ~0.68 still grades as full ROM instead of
+    // nagging CURL HIGHER — this does NOT gate counting (a rep counts on the
+    // enter→exit crossing regardless of ROM).
+    // topAngle LEFT at 1.5 on purpose (not raised to the real ~2.0 rest
+    // value): it feeds the ACTIVITY "start zone" resume check as 0.75×topAngle
+    // = 1.125, and the noisy rest floor (~1.37, with dips) needs that bar
+    // LOW to recover if inactivity-suppression ever engages. A slightly
+    // over-credited ROM% is harmless; a too-high resume bar is not.
+    topAngle:            1.50,
+    repEnterThreshold:   0.95,
+    repExitThreshold:    1.30,
+    goodROMThreshold:    0.85,
+    insufficientROMCue: 'COME UP HIGHER',
+
+    // FORM CUES — what's detectable from a side-on lying pose, and what isn't:
+    //
+    //  ✓ "Curl up higher" — ALREADY covered, not a formCheck: the built-in
+    //    ROM grading (goodROMThreshold 0.85 + insufficientROMCue 'CURL
+    //    HIGHER') already flags a shallow rep as bad with that cue. Nothing
+    //    to add here.
+    //
+    //  ✓ "Keep legs down" (added below) — leg-drive / momentum shows as the
+    //    knee ANGLE opening (thigh pushing toward straight) at some point in
+    //    the rep. jointAngle(hip,knee,ankle) is ~independent of the torso
+    //    curl, so a big knee-angle spike is a decent proxy for "the legs
+    //    moved." maximum(L,R) so either leg triggers it; the default 0.6
+    //    formCheckMinConf gate means unreliable far-leg frames are simply
+    //    dropped (check goes silent, no false cue) rather than misfiring.
+    //    THRESHOLD IS A PLACEHOLDER — no verified exercise anchors "the knee
+    //    should stay still during an ab movement." 2.85 rad (~163°) only
+    //    catches gross extension; re-set it from the crunch_legs value in a
+    //    real [REP] log (do 5 clean + 5 with obvious leg drive, compare).
+    //
+    //  ✗ "Slow it down / don't be jerky" — SKIPPED. FormCheckDef can only
+    //    compare a metric's max/min/atBottom against a fixed number; it has
+    //    no rep-duration or jerk condition. The engine computes dur/jerk
+    //    internally ([UNIV] log line) but there's no definition-level cue for
+    //    it — adding one is native engine work (EAS build), not a reload.
+    //
+    //  ✗ "Don't pull with your arms / don't yank your neck" — SKIPPED.
+    //    Lying side-on the wrists/elbows self-occlude (hands are usually
+    //    behind the head) so an arm-pull check has nothing trustworthy to
+    //    read. The `nose` joint IS tracked and visible at the top of the
+    //    curl, so a neck-yank check is *calibratable later* from a labelled
+    //    log — but shipping it blind, with no anchor for "normal head
+    //    position vs a yank," is exactly the random-false-feedback case this
+    //    file's feasibility rule says to skip.
+    formChecks: [
+      {
+        id:         'crunch_legs',
+        cue:        'KEEP LEGS DOWN',
+        metric: {
+          type:  'maximum',
+          left:  { type: 'jointAngle', a: 'leftHip',  pivot: 'leftKnee',  c: 'leftAnkle'  },
+          right: { type: 'jointAngle', a: 'rightHip', pivot: 'rightKnee', c: 'rightAnkle' },
+        },
+        evaluateAt: 'throughoutMax',
+        condition:  { type: 'greaterThan', value: 2.85 },  // PLACEHOLDER ~163° — calibrate from [REP] log
+        priority:   3,   // below ROM-override (4): "CURL HIGHER" wins if the rep is also shallow
+        enabled:    true,
+      },
+    ],
+    readyGate: PASSTHROUGH_GATE,
+
+    // SETUP fix — same class as pushup's. The old gate required all four of
+    // both shoulders + both knees continuously visible for a 2s hold before
+    // ACTIVE; lying side-on, the FAR shoulder and FAR knee self-occlude, so
+    // the hold kept resetting on "missing rightShoulder/rightKnee" → slow to
+    // lock on (log symptom #1). SETUP only needs enough to confirm the
+    // person is in position, and the engine's SETUP check wants ONE complete
+    // side (no cross-side mixing) — so give it the NEAR side's shoulder+knee,
+    // with the other side as the alternate. The rep metric's own per-frame
+    // bestSide already tolerates single-side occlusion frame to frame.
+    cameraSetup: {
+      setupInstruction: 'Lie on your back, camera on the floor a few feet to your side — one shoulder and one knee in frame',
+      requiredJoints:    ['leftShoulder',  'leftKnee'],
+      requiredJointsAlt: ['rightShoulder', 'rightKnee'],
+    },
+
+    // Lying flat, Vision self-occludes the far side and briefly loses the
+    // whole person mid-rep (log: framesSincePoseGap resets right at the top
+    // of rep #1). Default 3 frames (~0.3s) abandons an in-progress rep on
+    // that flicker. Raised to 6 (~0.6-0.8s at the ~8fps this pose runs at) so
+    // a normal occlusion blink no longer kills the rep — same log-confirmed
+    // exception tricep already carries.
+    missingPersonGraceFrames: 6,
+
+    // At the ~8fps Vision manages for a floor pose, requiring 3 consecutive
+    // frames above repExitThreshold to trust a rep as complete makes each
+    // rep resolve slowly — rep #1 took 5.2s — which is what let the 8s
+    // native inactivity-suppression fire and then deadlock counting. The
+    // return-to-flat of a crunch is a brief, near-ballistic moment; 2 frames
+    // is the sanctioned per-exercise override for exactly that (see
+    // kettlebellSwing). Faster rep resolution keeps the inactivity gap under
+    // 8s so suppression never engages.
+    exitConfirmFrames: 2,
+
+    // LOG-DERIVED (8/30/2026 device take): a genuine crunch was rejected —
+    // "[REP] rejected — tracking unreliable for 8/12 frames (67%)" with
+    // leftShoulder confidence ranging [0.28-0.67], rightShoulder [0.00-0.30].
+    // Lying flat, Apple Vision's shoulder confidence simply doesn't clear the
+    // 0.6 reliability floor for most of a rep, so the default 0.5 cutoff
+    // deletes real reps. 0.9 keeps the gate's real purpose (catch a rep
+    // logged while the user walked away — that runs ~100% unreliable) while
+    // letting a normal lying-down crunch count.
+    repReliabilityMaxUnreliableFraction: 0.9,
+
+    minRepInterval:  0.5,
+    planarityChecks: [],
+  },
+
+  // ─── Russian twist ──────────────────────────────────────────────────────────
+  //
+  // HONESTY FLAG — the highest-risk exercise added this round, as asked.
+  // Buildable with existing primitives (no new Metric type needed), but
+  // this is a genuine best-effort construction, not a confident one.
+  //
+  // METRIC: signedDeviationFromLine(point: wrist, lineFrom: hip, lineTo:
+  // shoulder) — the wrist's signed left/right position relative to the
+  // torso's own vertical axis. As both hands (held together) swing from
+  // one side to the other, the wrist crosses from strongly positive to
+  // strongly negative (or vice versa) through near-zero at center. This
+  // tracks the visible PROXY for the twist (hand position) rather than
+  // true 3D torso rotation, which a single 2D camera can't measure
+  // directly — but the proxy should move regardless of whether the twist
+  // is arm-driven or torso-driven, so that's less of a concern than it
+  // first seems.
+  //
+  // SIGN CONVENTION, unverified: signedDeviationFromLine's own doc comment
+  // in Metric.swift already says "sign depends on camera orientation —
+  // verify with NSLog on first device test," same caveat pushup's hip_pike/
+  // hip_sag checks carry. If this reads backwards on a real test (counts
+  // reps on the wrong side, or never enters at all), swap
+  // repEnterThreshold/repExitThreshold's sign convention — don't assume the
+  // numbers below are correct until confirmed.
+  //
+  // COUNTING CONVENTION — this is the part actually forced by the engine,
+  // not chosen freely, so it gets stated plainly: this engine's state
+  // machine only supports ONE shape — a value that starts high (topAngle/
+  // rest), drops below repEnterThreshold once (enters the rep), then rises
+  // back above repExitThreshold once (completes it). A twist has no such
+  // single rest point; it oscillates continuously side to side, and
+  // signedDeviationFromLine only has ONE topAngle-shaped "rest" available
+  // to it — one extreme. So: topAngle is set at one extreme (arbitrarily,
+  // "fully twisted right" — see the sign caveat above), the rep enters as
+  // the value drops through center toward the OTHER extreme, and completes
+  // as it rises back up through center to the starting side. That makes
+  // ONE counted rep = one full twist to one side AND back — the "left+right
+  // = one rep" option, chosen because it's the only shape this engine's
+  // current single-threshold FSM can express, not because it's the more
+  // natural way to count a twist by hand.
+  russianTwist: {
+    id:          'russianTwist',
+    displayName: 'Russian Twist',
+
+    repMetric: {
+      type: 'bestSide',
+      left:  { type: 'signedDeviationFromLine', point: 'leftWrist',  lineFrom: 'leftHip',  lineTo: 'leftShoulder'  },
+      right: { type: 'signedDeviationFromLine', point: 'rightWrist', lineFrom: 'rightHip', lineTo: 'rightShoulder' },
+      // Deliberately NOT trimmed to exclude wrist here, unlike pull-up/
+      // pushup — the wrist IS the point being measured, it can't be
+      // excluded from the joints that must be reliable for this exercise
+      // the way it could be excluded there.
+      leftJoints:  ['leftShoulder',  'leftHip',  'leftWrist'],
+      rightJoints: ['rightShoulder', 'rightHip', 'rightWrist'],
+    },
+
+    // PLACEHOLDER, lowest confidence of anything added this round — see
+    // the honesty flag above for why. Scale borrowed loosely from
+    // signedDeviationFromLine's other real use (pushup's hip_pike/hip_sag,
+    // 0.035/-0.08) but scaled UP substantially: those measure subtle
+    // unwanted piking, this measures a large DELIBERATE arm swing, which
+    // should produce a much bigger signal if the sign convention holds at
+    // all. goodROMThreshold is negative on purpose — it requires the twist
+    // to genuinely cross past center to the opposite side, not just wobble
+    // near it.
+    topAngle:            0.40,    // PLACEHOLDER — fully twisted to the starting side
+    repEnterThreshold:   0.10,    // PLACEHOLDER — crossing toward center
+    repExitThreshold:    0.20,    // PLACEHOLDER
+    goodROMThreshold:   -0.15,    // PLACEHOLDER — genuinely past center, not a guess at "how far"
+    insufficientROMCue: 'TWIST FURTHER',
+
+    // No form check — every plausible fault (leaning too far back, feet
+    // lifting, not rotating fully) either duplicates the rep metric itself
+    // or has no reliable measurement with the available joints. Adding one
+    // now would compound an already-uncertain rep metric with a second
+    // unverified guess.
+    formChecks: [],
+    readyGate: PASSTHROUGH_GATE,
+
+    cameraSetup: {
+      setupInstruction: 'Face the camera, seated — shoulders, hips, and hands in frame',
+      requiredJoints: ['leftShoulder', 'rightShoulder', 'leftHip', 'rightHip', 'leftWrist', 'rightWrist'],
+    },
+
+    minRepInterval:  0.6,
+    planarityChecks: [],
+  },
 };

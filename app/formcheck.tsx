@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, Animated, Pressable, ScrollView, Share,
+  View, Text, StyleSheet, Animated, Pressable, ScrollView, Share, Platform, Easing,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import GlassButton from '../components/GlassButton';
 import RepFeedback from '../components/RepFeedback';
@@ -45,6 +47,15 @@ const C = {
   good:   '#4ADE80',
   warn:   '#FB923C',
   border: 'rgba(255,255,255,0.08)',
+};
+
+// App display font — Bricolage Grotesque, loaded in app/_layout.tsx. The
+// camera overlays were rendering in the bare system font, which read as
+// off-brand next to the rest of the app.
+const F = {
+  regular: 'BricolageGrotesque_400Regular',
+  bold:    'BricolageGrotesque_700Bold',
+  extra:   'BricolageGrotesque_800ExtraBold',
 };
 
 const VIDEO_LOG_KEY = 'formpal_video_log';
@@ -146,7 +157,142 @@ const SETUP_INFO: Record<ExerciseId, { icon: string; title: string; sub: string 
   // Cable pull-through — same side-on, standing camera copy as the rest of
   // the hip-hinge family (romanianDeadlift/deadlift/etc above).
   cablePullThrough: { icon: 'arrow.left.and.right', title: 'Stand sideways', sub: 'Full body in frame — hips and shoulders visible' },
+  // Pull-up — front-facing, matches pullup's own cameraSetup.setupInstruction
+  // in exerciseDefinitions.ts (shoulders/elbows/hips visible, hands don't
+  // need to be — that's the whole point of the wrist-free metric).
+  pullup: { icon: 'camera.fill', title: 'Face the camera', sub: "Shoulders, elbows, and hips in frame — hands don't need to be" },
+  // Calf raise — side-on, matches its own setupInstruction. See that
+  // exercise's own comment for the "may not be reliably trackable at all"
+  // feasibility flag — this copy doesn't hide that from the setup screen,
+  // it's just the standard side-on instruction the metric itself needs.
+  calfRaise: { icon: 'arrow.left.and.right', title: 'Stand sideways', sub: 'Knees and ankles in frame' },
+  // Leg curl (machine) — side-on, matches its own setupInstruction.
+  legCurl: { icon: 'arrow.left.and.right', title: 'Set camera to your side', sub: 'Hip, knee, and ankle in frame' },
+  // Crunch — lying down, side-on. Matches its own setupInstruction; see
+  // that exercise's comment for the confirmed on-device
+  // lying-pose-detection risk this shares with the removed gluteBridge.
+  crunch: { icon: 'arrow.left.and.right', title: 'Lie on your back, camera to your side', sub: 'Shoulders and knees in frame' },
+  // Russian twist — front-facing, seated. Matches its own setupInstruction.
+  russianTwist: { icon: 'camera.fill', title: 'Face the camera, seated', sub: 'Shoulders, hips, and hands in frame' },
 };
+
+// ─── Positioning-guide box orientation ───────────────────────────────────────
+// The exercise definition's `guideBox` ('standing' | 'floor') is the override;
+// this set is the practical default for the floor/horizontal exercises that
+// don't set it. Anything not here and without a definition value → 'standing'.
+const FLOOR_GUIDE = new Set<string>([
+  'pushup', 'kneePushup', 'inclinePushup', 'widePushup', 'diamondPushup',
+  'declinePushup', 'closegripPushup', 'crunch', 'skullcrusher', 'barbellBenchPress',
+]);
+
+function guideBoxFor(id: string): 'standing' | 'floor' {
+  return (EXERCISE_DEFINITIONS as Record<string, { guideBox?: 'standing' | 'floor' }>)[id]?.guideBox
+    ?? (FLOOR_GUIDE.has(id) ? 'floor' : 'standing');
+}
+
+// ─── Liquid Glass panel ─────────────────────────────────────────────────────
+// Apple's Liquid Glass (iOS 26) is a THIN, mostly-clear material: you see the
+// content behind it, softened — the "glass" read comes from the EDGE, not a
+// heavy frost. So: expo-blur's real `systemThinMaterialDark` (the same UIKit
+// material Apple's own menus use), only a whisper of dark scrim for white-text
+// legibility over a bright camera, a bright specular highlight along the top
+// edge, a crisp light rim, a continuous (squircle) corner curve, and a soft
+// wide drop shadow to float it. No dark slab fill — that reads as a card, not
+// glass.
+function GlassPanel({ children, style, radius = 28 }: {
+  children?: React.ReactNode;
+  style?: any;
+  radius?: number;
+}) {
+  return (
+    <View style={[gp.shadow, { borderRadius: radius, borderCurve: 'continuous' }, style]}>
+      <BlurView
+        intensity={28}
+        tint="systemThinMaterialDark"
+        style={[gp.clip, { borderRadius: radius, borderCurve: 'continuous' }]}
+      >
+        {/* legibility scrim — a soft neutral grey wash, kept light so it still
+            reads as glass, not a card */}
+        <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(24,26,30,0.34)' }]} />
+        {/* specular highlight raking across the top edge — the glass "tell" */}
+        <LinearGradient
+          colors={['rgba(255,255,255,0.5)', 'rgba(255,255,255,0.12)', 'rgba(255,255,255,0)']}
+          locations={[0, 0.12, 0.5]}
+          start={{ x: 0.1, y: 0 }} end={{ x: 0.6, y: 1 }}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+        {children}
+        {/* crisp light rim, a touch brighter along the top */}
+        <View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFillObject, { borderRadius: radius, borderCurve: 'continuous', borderWidth: 1, borderColor: 'rgba(255,255,255,0.22)' }]}
+        />
+        <View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFillObject, { borderRadius: radius, borderCurve: 'continuous', borderTopWidth: 1, borderColor: 'rgba(255,255,255,0.45)' }]}
+        />
+      </BlurView>
+    </View>
+  );
+}
+const gp = StyleSheet.create({
+  shadow: { shadowColor: '#000', shadowOffset: { width: 0, height: 16 }, shadowOpacity: 0.38, shadowRadius: 34, elevation: 12 },
+  clip:   { overflow: 'hidden' },
+});
+
+// ─── Positioning-guide box overlay ───────────────────────────────────────────
+// One clean rounded-rect outline with a continuous (squircle) corner curve —
+// no dimming, no corner brackets. A single stroked outline reads clean,
+// matches the Liquid Glass panels, and tells the user roughly where to line
+// up. It goes green with a glow the instant SETUP's joint check passes, then
+// STAYS on screen through the set as the frame the rep count lives inside —
+// so it reads as the live training area, not a throwaway setup graphic.
+// Sized generously (legs / full standing body fit inside). Purely visual —
+// doesn't hit-test joints (that's native).
+function PositioningGuide({
+  box, ready, children,
+}: { box: 'standing' | 'floor'; ready: boolean; children?: React.ReactNode }) {
+  const rect = box === 'floor'
+    ? { top: '31%', bottom: '5%', side: '4%' }
+    : { top: '6%',  bottom: '7%', side: '9%' };
+  const line = ready ? C.good : 'rgba(255,255,255,0.9)';
+  const R    = 32;
+
+  // Subtle breathe while waiting (0.86 -> 1); locks solid green on ready.
+  const pulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (ready) { pulse.stopAnimation(); pulse.setValue(1); return; }
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(pulse, { toValue: 0.86, duration: 1200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      Animated.timing(pulse, { toValue: 1,    duration: 1200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+    ]));
+    loop.start();
+    return () => loop.stop();
+  }, [ready, pulse]);
+
+  return (
+    <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+      <Animated.View
+        style={{
+          position: 'absolute',
+          top: rect.top as any, bottom: rect.bottom as any,
+          left: rect.side as any, right: rect.side as any,
+          borderRadius: R, borderCurve: 'continuous',
+          borderWidth: 2, borderColor: line,
+          backgroundColor: ready ? 'rgba(74,222,128,0.05)' : 'transparent',
+          opacity: pulse,
+          alignItems: 'center', justifyContent: 'center',
+          ...(ready
+            ? { shadowColor: C.good, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.9, shadowRadius: 20, elevation: 8 }
+            : null),
+        }}
+      >
+        {children}
+      </Animated.View>
+    </View>
+  );
+}
 
 // ─── Debug log panel — set false to hide without removing code ────────────────
 const DEBUG_LOG_ENABLED = true;
@@ -515,31 +661,56 @@ export default function FormCheckScreen() {
         <RepFeedback good={feedback.good} reason={feedback.reason} seq={feedback.seq} onComplete={() => setFeedback(null)} />
       )}
 
-      {/* SETUP overlay — same clean layout as the calibration tool's setup
-          screen (app/calibrate.tsx): centered icon + title + hint + a slim
-          progress bar, no corner brackets or boxed panels. */}
+      {/* Positioning-guide box — visible while getting into position. The
+          border goes green the instant SETUP's joint check passes, then stays
+          up through the set with the rep count living inside it. */}
+      {(phase === 'setup' || phase === 'starting' || phase === 'setup-done' || phase === 'tracking') && (
+        <PositioningGuide
+          box={guideBoxFor(exerciseType)}
+          ready={setupAllVisible || phase === 'setup-done' || phase === 'tracking'}
+        >
+          {showRepCounter && (
+            <View style={s.repInBox} pointerEvents="none">
+              <Text style={s.repNum}>{reps}</Text>
+              <View style={s.repSubRow}>
+                <View style={s.repDot} />
+                <Text style={s.repSub}>{goodReps} good</Text>
+              </View>
+            </View>
+          )}
+        </PositioningGuide>
+      )}
+
+      {/* SETUP instruction — one glass panel above the guide box. No progress
+          bar (removed on request); the box turning green + "Hold still" is the
+          feedback. */}
       {phase === 'setup' && (
         <View style={s.setupOverlay} pointerEvents="none">
-          <View style={s.setupIconWrap}>
-            <SymbolView name={SETUP_INFO[exerciseType].icon as any} size={28} tintColor={C.text} type="monochrome" style={{ width: 28, height: 28 }} />
-          </View>
-          <Text style={s.setupTitle}>{SETUP_INFO[exerciseType].title}</Text>
-          <Text style={s.setupHint}>
-            {setupHint || (setupAllVisible ? 'Hold still while we lock on…' : SETUP_INFO[exerciseType].sub)}
-          </Text>
-          <View style={s.progressTrack}>
-            <View style={[s.progressFill, { width: `${Math.round(setupHoldProgress * 100)}%` as any }]} />
-          </View>
+          <GlassPanel radius={30} style={s.setupPanel}>
+            <View style={s.setupPanelInner}>
+              <Text style={s.setupBig}>
+                {setupAllVisible ? 'Hold still…' : 'Line yourself up'}
+              </Text>
+              <Text style={s.setupHint}>
+                {setupHint
+                  || (setupAllVisible
+                        ? 'Locking on — keep steady'
+                        : `${SETUP_INFO[exerciseType].title} · ${SETUP_INFO[exerciseType].sub}`)}
+              </Text>
+            </View>
+          </GlassPanel>
         </View>
       )}
 
-      {/* "You're all set!" */}
+      {/* Ready → tracking */}
       {phase === 'setup-done' && (
         <View style={s.setupDoneOverlay} pointerEvents="none">
-          <View style={s.setupSuccessCard}>
-            <SymbolView name="checkmark.circle.fill" size={44} tintColor={C.good} type="monochrome" style={{ width: 44, height: 44 }} />
-            <Text style={s.setupSuccessText}>You're all set!</Text>
-          </View>
+          <GlassPanel radius={999} style={s.setupSuccessCard}>
+            <View style={s.setupSuccessInner}>
+              <SymbolView name="checkmark.circle.fill" size={40} tintColor={C.good} type="monochrome" style={{ width: 40, height: 40 }} />
+              <Text style={s.setupSuccessText}>Ready — go!</Text>
+            </View>
+          </GlassPanel>
         </View>
       )}
 
@@ -549,7 +720,9 @@ export default function FormCheckScreen() {
           <SymbolView name="chevron.left" size={18} tintColor={C.text} type="monochrome" style={{ width: 18, height: 18 }} />
         </GlassButton>
         <Text style={s.title}>
-          {EXERCISE_DEFINITIONS[exerciseType]?.displayName ?? exerciseType} Form Check
+          {phase === 'setup' || phase === 'setup-done' || phase === 'starting'
+            ? ''
+            : `${EXERCISE_DEFINITIONS[exerciseType]?.displayName ?? exerciseType} Form Check`}
         </Text>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <GlassButton circular={40} onPress={handleToggleMute}>
@@ -571,13 +744,8 @@ export default function FormCheckScreen() {
         </View>
       )}
 
-      {/* Rep counter */}
-      {showRepCounter && (
-        <View style={s.repBlock}>
-          <Text style={s.repNum}>{reps}</Text>
-          <Text style={s.repSub}>{goodReps} good</Text>
-        </View>
-      )}
+      {/* Rep counter now lives INSIDE the positioning box (see PositioningGuide
+          children above) — no separate floating panel. */}
 
       {/* Live metric readout — push-up elbow angle, or raise-family arm angle */}
       {showPushupMetric && (
@@ -599,7 +767,11 @@ export default function FormCheckScreen() {
       {/* Live planarity hint */}
       {isTracking && !!stats?.outOfPlaneCue && (
         <View style={s.outOfPlaneHint} pointerEvents="none">
-          <Text style={s.outOfPlaneText}>{stats.outOfPlaneCue}</Text>
+          <GlassPanel radius={999} style={s.outOfPlaneGlass}>
+            <View style={s.outOfPlaneInner}>
+              <Text style={s.outOfPlaneText}>{stats.outOfPlaneCue}</Text>
+            </View>
+          </GlassPanel>
         </View>
       )}
 
@@ -780,18 +952,27 @@ function logLineStyle(type: ReturnType<typeof logLineType>) {
 const s = StyleSheet.create({
   root:       { flex: 1, backgroundColor: '#000' },
   topBar:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 8 },
-  title:      { fontSize: 16, fontWeight: '600', color: C.text },
+  title:      { fontFamily: F.bold, fontSize: 15, color: C.text, letterSpacing: 0.2 },
   errorCard:  { position: 'absolute', left: 24, right: 24, top: '38%', backgroundColor: C.glass, borderRadius: 16, padding: 24, borderWidth: 1, borderColor: C.border },
   errorText:  { color: C.warn, fontSize: 14, lineHeight: 22, textAlign: 'center' },
-  outOfPlaneHint: { position: 'absolute', top: '43%', left: 0, right: 0, alignItems: 'center' },
-  outOfPlaneText: {
-    fontSize: 18, fontWeight: '700', color: C.warn, backgroundColor: 'rgba(10,11,12,0.80)',
-    paddingHorizontal: 20, paddingVertical: 10, borderRadius: 100,
-    borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(251,146,60,0.35)', overflow: 'hidden',
+  outOfPlaneHint:  { position: 'absolute', top: '43%', left: 0, right: 0, alignItems: 'center' },
+  outOfPlaneGlass: { alignSelf: 'center' },
+  outOfPlaneInner: { paddingHorizontal: 22, paddingVertical: 11 },
+  outOfPlaneText:  { fontFamily: F.bold, fontSize: 16, color: C.warn, letterSpacing: 0.3 },
+
+  // Rep count — lives inside the positioning box, no panel behind it, so it
+  // carries its own shadow for legibility over the camera.
+  repInBox:  { alignItems: 'center' },
+  repNum:    {
+    fontFamily: F.extra, fontSize: 128, lineHeight: 134, color: '#fff', letterSpacing: -2,
+    textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 16,
   },
-  repBlock:  { position: 'absolute', top: '18%', left: 0, right: 0, alignItems: 'center' },
-  repNum:    { fontSize: 140, fontWeight: '800', lineHeight: 144, color: '#fff' },
-  repSub:    { fontSize: 20, fontWeight: '600', color: C.muted, marginTop: 6 },
+  repSubRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
+  repDot:    { width: 8, height: 8, borderRadius: 4, backgroundColor: C.good },
+  repSub:    {
+    fontFamily: F.bold, fontSize: 16, color: 'rgba(255,255,255,0.9)', letterSpacing: 0.3,
+    textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 8,
+  },
   debugPanel: { position: 'absolute', bottom: 140, left: 16, backgroundColor: C.glass, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, minWidth: 210, borderWidth: 1, borderColor: C.border },
   bottomBar:  { position: 'absolute', bottom: 0, left: 0, right: 0, alignItems: 'center', paddingTop: 12, paddingHorizontal: 24, gap: 12 },
   hint:       { color: C.muted, fontSize: 13 },
@@ -812,34 +993,24 @@ const s = StyleSheet.create({
   metricStateDown: { color: C.good },
   metricThresh:    { fontFamily: 'Menlo', fontSize: 8, color: C.dim, marginTop: 2 },
 
-  // ── Setup overlay ─────────────────────────────────────────────────────────
-  // Same clean layout/spacing/styling as the calibration tool's setup screen
-  // (app/calibrate.tsx) — centered icon + title + hint + a slim progress bar.
+  // ── Setup overlay — one frosted-glass panel, floating high so it clears
+  // both the standing and the floor guide box. ────────────────────────────
   setupOverlay: {
     ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center', alignItems: 'center', gap: 12, paddingHorizontal: 32,
+    justifyContent: 'flex-start', alignItems: 'center',
+    paddingHorizontal: 24, paddingTop: '24%',
   },
-  setupDoneOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
-  setupIconWrap: {
-    width: 56, height: 56, borderRadius: 28, backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: StyleSheet.hairlineWidth, borderColor: C.border,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 4,
-  },
-  setupTitle: { fontSize: 22, fontWeight: '700', color: C.text },
-  setupHint:  { fontSize: 15, color: C.muted, textAlign: 'center' },
-  progressTrack: {
-    width: 220, height: 6, backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 3, overflow: 'hidden', marginTop: 8,
-  },
-  progressFill: { height: 6, backgroundColor: C.good, borderRadius: 3 },
+  setupPanel:      { alignSelf: 'center', maxWidth: 360 },
+  setupPanelInner: { paddingHorizontal: 28, paddingTop: 20, paddingBottom: 22, alignItems: 'center', gap: 8 },
+  setupBig:        { fontFamily: F.extra, fontSize: 25, color: '#fff', textAlign: 'center' },
+  setupHint:       { fontFamily: F.regular, fontSize: 14, color: 'rgba(255,255,255,0.86)', textAlign: 'center', lineHeight: 20 },
 
-  // ── "You're all set!" card ────────────────────────────────────────────────
-  setupSuccessCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    paddingHorizontal: 32, paddingVertical: 22, backgroundColor: 'rgba(10,11,12,0.90)',
-    borderRadius: 100, borderWidth: 1, borderColor: 'rgba(74,222,128,0.28)',
-  },
-  setupSuccessText: { fontSize: 24, fontWeight: '800', color: C.good },
+  setupDoneOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
+
+  // ── "Ready — go!" pill ───────────────────────────────────────────────────
+  setupSuccessCard:  { alignSelf: 'center' },
+  setupSuccessInner: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 30, paddingVertical: 18 },
+  setupSuccessText:  { fontFamily: F.extra, fontSize: 21, color: C.good },
 });
 
 const d = StyleSheet.create({

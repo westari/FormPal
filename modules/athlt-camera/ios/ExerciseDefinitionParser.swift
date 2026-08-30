@@ -66,6 +66,7 @@ extension ExerciseDefinition {
         else if let v = dict["missingPersonGraceFrames"] as? Double { missingPersonGraceFrames = Int(v) }
         else { missingPersonGraceFrames = 3 }
         let settleAnchorMinFraction = dict["settleAnchorMinFraction"] as? Double
+        let repReliabilityMaxUnreliableFraction = dict["repReliabilityMaxUnreliableFraction"] as? Double ?? 0.5
 
         let def = ExerciseDefinition(
             id:                        id,
@@ -86,7 +87,8 @@ extension ExerciseDefinition {
             phantomGuardFraction:      phantomGuardFraction,
             exitConfirmFrames:         exitConfirmFrames,
             missingPersonGraceFrames:  missingPersonGraceFrames,
-            settleAnchorMinFraction:   settleAnchorMinFraction
+            settleAnchorMinFraction:   settleAnchorMinFraction,
+            repReliabilityMaxUnreliableFraction: repReliabilityMaxUnreliableFraction
         )
 
         let metricType = repMetricDict["type"] as? String ?? "?"

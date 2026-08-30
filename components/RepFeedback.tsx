@@ -112,17 +112,15 @@ const CARD_R = 32;
 function GlassCard({ good, reason }: { good: boolean; reason: string }) {
   return (
     <View style={card.shadow}>
-      <BlurView intensity={65} tint="dark" style={card.blur}>
+      <BlurView intensity={28} tint="systemThinMaterialDark" style={card.blur}>
+        {/* light neutral scrim so text stays crisp — not a dark slab */}
+        <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(24,26,30,0.34)' }]} />
+        {/* specular highlight raking the top edge — the Liquid Glass "tell" */}
         <LinearGradient
-          colors={[
-            'rgba(255,255,255,0.22)',
-            'rgba(255,255,255,0.07)',
-            'rgba(255,255,255,0.00)',
-            'rgba(255,255,255,0.04)',
-          ]}
-          locations={[0, 0.30, 0.65, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
+          colors={['rgba(255,255,255,0.5)', 'rgba(255,255,255,0.12)', 'rgba(255,255,255,0)']}
+          locations={[0, 0.12, 0.5]}
+          start={{ x: 0.1, y: 0 }}
+          end={{ x: 0.6, y: 1 }}
           style={StyleSheet.absoluteFill}
           pointerEvents="none"
         />
@@ -143,6 +141,7 @@ function GlassCard({ good, reason }: { good: boolean; reason: string }) {
         </Text>
 
         <View style={card.border} pointerEvents="none" />
+        <View style={card.borderTop} pointerEvents="none" />
       </BlurView>
     </View>
   );
@@ -152,16 +151,18 @@ const card = StyleSheet.create({
   shadow: {
     width:        CARD_W,
     borderRadius: CARD_R,
+    borderCurve:  'continuous',
     ...Platform.select({ ios: {
       shadowColor:   '#000',
-      shadowOffset:  { width: 0, height: 12 },
-      shadowOpacity: 0.50,
-      shadowRadius:  28,
+      shadowOffset:  { width: 0, height: 16 },
+      shadowOpacity: 0.38,
+      shadowRadius:  34,
     }}),
   },
   blur: {
     width:             CARD_W,
     borderRadius:      CARD_R,
+    borderCurve:       'continuous',
     overflow:          'hidden',
     paddingTop:        18,
     paddingBottom:     30,
@@ -175,8 +176,8 @@ const card = StyleSheet.create({
     alignSelf:     'flex-start',
   },
   headerTxt: {
-    fontSize:      13,
-    fontWeight:    '700',
+    fontFamily:    'BricolageGrotesque_700Bold',
+    fontSize:      12,
     color:         'rgba(255,255,255,0.62)',
     letterSpacing: 2,
   },
@@ -189,18 +190,25 @@ const card = StyleSheet.create({
   },
   orbWrap: { marginBottom: 20 },
   cue: {
-    fontSize:      26,
-    fontWeight:    '700',
-    color:         'rgba(255,255,255,0.95)',
-    textAlign:     'center',
-    letterSpacing: -0.3,
-    lineHeight:    31,
+    fontFamily: 'BricolageGrotesque_800ExtraBold',
+    fontSize:   25,
+    color:      'rgba(255,255,255,0.96)',
+    textAlign:  'center',
+    lineHeight: 30,
   },
   border: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: CARD_R,
+    borderCurve:  'continuous',
     borderWidth:  1,
-    borderColor:  'rgba(255,255,255,0.20)',
+    borderColor:  'rgba(255,255,255,0.22)',
+  },
+  borderTop: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius:  CARD_R,
+    borderCurve:   'continuous',
+    borderTopWidth: 1,
+    borderColor:   'rgba(255,255,255,0.45)',
   },
 });
 

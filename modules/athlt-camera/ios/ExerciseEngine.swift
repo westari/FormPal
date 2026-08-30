@@ -1162,13 +1162,17 @@ final class ExerciseEngine {
                 // machinery already built for form checks (see accumulate()) — applied
                 // here to def.repMetric itself, and used as an actual GATE, not just a
                 // diagnostic, since this exact failure is now proven, not speculative.
-                // Threshold (50%) is deliberately generous — only rejects when tracking
-                // was unreliable for the MAJORITY of the rep, so a normal brief
-                // occlusion (e.g. tricep's forearm-crossing-torso moment) doesn't
-                // accidentally trip this on legitimate reps.
+                // Threshold defaults to 50% — deliberately generous, only rejects
+                // when tracking was unreliable for the MAJORITY of the rep, so a
+                // normal brief occlusion (e.g. tricep's forearm-crossing-torso
+                // moment) doesn't accidentally trip this on legitimate reps. It's
+                // a per-exercise override (def.repReliabilityMaxUnreliableFraction):
+                // crunch raises it because a real crunch lying flat legitimately
+                // runs ~60-70% below the 0.6 confidence floor (shoulder conf tops
+                // out ~0.67 lying down) — see that field's doc comment.
                 if primaryTotalFrames > 0 {
                     let unreliableFraction = Double(primaryUnreliableFrames) / Double(primaryTotalFrames)
-                    guard unreliableFraction <= 0.5 else {
+                    guard unreliableFraction <= def.repReliabilityMaxUnreliableFraction else {
                         // Per-joint min/max confidence across the whole rejected
                         // rep — see primaryJointConfMin/Max's doc comment. Tells
                         // apart "Vision never found this joint at all" (max ~0)

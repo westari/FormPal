@@ -1039,6 +1039,117 @@ export const EXERCISE_CATALOG = [
     isFormCheckable: true,
   },
 
+  // ─── Pull-up ────────────────────────────────────────────────────────────────
+  // Biceps weighted 0.45 — same convention as latPulldown/the row family
+  // (see MuscleCredit's own comment above): a real secondary mover in any
+  // vertical/horizontal pull, not just incidental assistance.
+  {
+    id:              'pullup',
+    displayName:     'Pull-up',
+    muscleGroups:    [MuscleGroup.Back, MuscleGroup.Arms],
+    muscles:         [Muscle.Lats, { muscle: Muscle.Biceps, weight: 0.45 }],
+    splitCategories: [SplitCategory.Upper, SplitCategory.Pull],
+    difficulty:      Difficulty.Intermediate,
+    equipment:       [Equipment.PullupBar],
+    defaultReps:     8,
+    defaultSets:     3,
+    progression: {
+      repRange: [5, 15],
+      setRange: [2, 4],
+    },
+    isFormCheckable: true,
+  },
+
+  // ─── Calf raise ─────────────────────────────────────────────────────────────
+  // See its registration in constants/exerciseDefinitions.ts for an
+  // explicit feasibility flag — this app has no heel/toe joint at all, and
+  // this may not be reliably trackable regardless of thresholds.
+  {
+    id:              'calfRaise',
+    displayName:     'Calf Raise',
+    muscleGroups:    [MuscleGroup.Legs],
+    muscles:         [Muscle.Calves],
+    splitCategories: [SplitCategory.Lower],
+    difficulty:      Difficulty.Beginner,
+    equipment:       [],
+    defaultReps:     15,
+    defaultSets:     3,
+    progression: {
+      repRange: [12, 25],
+      setRange: [2, 4],
+    },
+    isFormCheckable: true,
+  },
+
+  // ─── Leg curl (machine) ─────────────────────────────────────────────────────
+  // Glutes weighted 0.3 — real but lesser secondary mover in knee flexion
+  // (same reasoned-not-measured weighting convention as the row family's
+  // biceps 0.45 / glute kickback's hamstrings 0.5, see MuscleCredit above).
+  {
+    id:              'legCurl',
+    displayName:     'Leg Curl (Machine)',
+    muscleGroups:    [MuscleGroup.Legs],
+    muscles:         [Muscle.Hamstrings, { muscle: Muscle.Glutes, weight: 0.3 }],
+    splitCategories: [SplitCategory.Lower],
+    difficulty:      Difficulty.Beginner,
+    equipment:       [Equipment.Machine],
+    defaultReps:     12,
+    defaultSets:     3,
+    progression: {
+      repRange: [10, 20],
+      setRange: [2, 4],
+    },
+    isFormCheckable: true,
+  },
+
+  // ─── Crunch ─────────────────────────────────────────────────────────────────
+  // No SplitCategory.Core bucket exists yet (only Upper/Lower/Push/Pull) —
+  // Upper is the closest available fit, not a precise one. See its
+  // registration in constants/exerciseDefinitions.ts for a real, confirmed
+  // (not hypothetical) tracking risk this shares with the removed
+  // gluteBridge: Vision has failed 100% of frames on a lying-down pose
+  // before, on-device.
+  {
+    id:              'crunch',
+    displayName:     'Crunch',
+    muscleGroups:    [MuscleGroup.Core],
+    muscles:         [Muscle.Abs],
+    splitCategories: [SplitCategory.Upper],
+    difficulty:      Difficulty.Beginner,
+    equipment:       [],
+    defaultReps:     15,
+    defaultSets:     3,
+    progression: {
+      repRange: [12, 25],
+      setRange: [2, 4],
+    },
+    isFormCheckable: true,
+  },
+
+  // ─── Russian twist ──────────────────────────────────────────────────────────
+  // Targets obliques primarily — no Muscle.Obliques exists yet (see the
+  // Muscle enum's own comment on scope), so Abs is the closest available
+  // credit, not a precise one. See its registration in
+  // constants/exerciseDefinitions.ts for the rotational-tracking honesty
+  // flag — this is the highest-risk exercise added this round. One rep =
+  // one full twist to one side and back (see that comment for why).
+  {
+    id:              'russianTwist',
+    displayName:     'Russian Twist',
+    muscleGroups:    [MuscleGroup.Core],
+    muscles:         [Muscle.Abs],
+    splitCategories: [SplitCategory.Upper],
+    difficulty:      Difficulty.Intermediate,
+    equipment:       [],
+    defaultReps:     12,
+    defaultSets:     3,
+    progression: {
+      repRange: [10, 20],
+      setRange: [2, 4],
+    },
+    isFormCheckable: true,
+  },
+
   // ─────────────────────────────────────────────────────────────────────────
   // ADD NEW FORM-CHECKABLE EXERCISES HERE.
   // ─────────────────────────────────────────────────────────────────────────

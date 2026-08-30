@@ -6,13 +6,14 @@
  * and the big "Start" button that kicks off the run flow.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
   Pressable,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,6 +22,19 @@ import ScreenBackground from '../../components/ScreenBackground';
 import { usePlanStore } from '../../store/planStore';
 import { useWorkoutSessionStore } from '../../store/workoutSessionStore';
 import { FONT, W, Sp, R, Elev, Col } from '../../constants/theme';
+import type { PlanProfile } from '../../types/plan';
+
+// TEMP, pre-auth: there's no real account/onboarding-profile flow feeding
+// createPlan() yet, so "no workout scheduled" is the permanent, only state
+// this screen can ever reach right now — not an edge case. This lets it be
+// tested end-to-end today; remove once real profile creation exists and
+// PlanProfile is coming from an actual user, not a hardcoded stand-in.
+const TEST_PROFILE: PlanProfile = {
+  goal:        'general',
+  experience:  'beginner',
+  daysPerWeek: 4,
+  location:    'home',
+};
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -77,18 +91,45 @@ function ExRow({
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
 export default function WorkoutOverviewScreen() {
-  const router    = useRouter();
-  const insets    = useSafeAreaInsets();
-  const getNext   = usePlanStore(s => s.getNextWorkout);
-  const startSess = useWorkoutSessionStore(s => s.startWorkout);
-  const workout   = getNext();
+  const router     = useRouter();
+  const insets     = useSafeAreaInsets();
+  const getNext    = usePlanStore(s => s.getNextWorkout);
+  const createPlan = usePlanStore(s => s.createPlan);
+  const startSess  = useWorkoutSessionStore(s => s.startWorkout);
+  const workout    = getNext();
+  const [creatingTestPlan, setCreatingTestPlan] = useState(false);
+
+  // getNextWorkout is read once at mount (see workout's own selector above —
+  // it subscribes to the function reference, not to `plan`, so this screen
+  // won't auto-re-render when createPlan() resolves). router.replace forces
+  // a fresh mount of this same screen, which re-reads getNextWorkout() and
+  // picks up the plan that createPlan just saved.
+  const handleGenerateTestPlan = async () => {
+    setCreatingTestPlan(true);
+    try {
+      await createPlan(TEST_PROFILE);
+      router.replace('/workout' as any);
+    } finally {
+      setCreatingTestPlan(false);
+    }
+  };
 
   if (!workout) {
-    // Should never happen via normal nav, but handle gracefully
+    // Not really an edge case right now — see TEST_PROFILE's comment above.
     return (
       <ScreenBackground>
         <View style={[s.center, { paddingTop: insets.top }]}>
           <Text style={s.noWorkout}>No workout scheduled.</Text>
+          <Text style={s.noWorkoutSub}>
+            There's no account/profile system yet, so no real plan exists to pull from.
+          </Text>
+          <Pressable onPress={handleGenerateTestPlan} disabled={creatingTestPlan} style={s.testPlanBtn}>
+            {creatingTestPlan ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={s.testPlanBtnTxt}>Generate a Test Plan</Text>
+            )}
+          </Pressable>
           <Pressable onPress={() => router.back()} style={s.backBtn}>
             <Text style={s.backBtnTxt}>Go back</Text>
           </Pressable>
@@ -203,7 +244,17 @@ function StatChip({ icon, label }: { icon: string; label: string }) {
 
 const s = StyleSheet.create({
   center:    { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Sp.md },
-  noWorkout: { fontSize: 16, color: Col.textSub },
+  noWorkout: { fontSize: 16, fontWeight: W.semi, color: Col.text },
+  noWorkoutSub: {
+    fontSize: 13.5, color: Col.textSub, textAlign: 'center', lineHeight: 19,
+    marginTop: 6, marginBottom: Sp.md, paddingHorizontal: Sp.lg,
+  },
+  testPlanBtn: {
+    backgroundColor: '#0b1020', borderRadius: R.pill, paddingHorizontal: Sp.xl, paddingVertical: 14,
+    marginBottom: Sp.sm, minWidth: 200, alignItems: 'center',
+    boxShadow: Elev.medium.shadow,
+  } as any,
+  testPlanBtnTxt: { fontSize: 15, fontWeight: W.bold, color: '#fff' },
   backBtn:   { paddingHorizontal: Sp.lg, paddingVertical: Sp.sm, borderRadius: R.pill, backgroundColor: Col.card },
   backBtnTxt:{ fontSize: 15, fontWeight: W.semi, color: Col.text },
 

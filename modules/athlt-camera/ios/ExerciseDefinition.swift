@@ -229,6 +229,21 @@ struct ExerciseDefinition {
     // wrist/elbow-vs-shoulder metric shape, just opposite temporal order).
     let settleAnchorMinFraction: Double?
 
+    // ── Tracking-reliability gate cutoff (per-exercise override) ──────────────
+    // Max fraction of a completed rep's .inRep frames that may be
+    // primary-metric-unreliable before the whole rep is thrown out as
+    // "[REP] rejected — tracking unreliable" (see ExerciseEngine.swift's
+    // tracking-reliability gate). Default 0.5 is the value the pushup / lat
+    // pulldown "walked away" fix was tuned against — it must NOT be loosened
+    // globally. Crunch overrides it up: lying flat, Apple Vision's shoulder
+    // confidence tops out around 0.6-0.7 and routinely dips below the 0.6
+    // reliability floor mid-rep, so a perfectly real crunch legitimately runs
+    // ~60-70% "unreliable" frames and was being deleted. A device log
+    // confirmed exactly this (leftShoulder=[0.28-0.67], 8/12 frames, rep
+    // rejected). Raised for crunch only; the walk-away case it guards against
+    // still runs ~100% unreliable and is still caught.
+    let repReliabilityMaxUnreliableFraction: Double
+
     init(id: String, displayName: String,
          repMetric: Metric,
          topAngle: Double, repEnterThreshold: Double, repExitThreshold: Double,
@@ -243,7 +258,8 @@ struct ExerciseDefinition {
          phantomGuardFraction: Double = 0.30,
          exitConfirmFrames: Int = 3,
          missingPersonGraceFrames: Int = 3,
-         settleAnchorMinFraction: Double? = nil) {
+         settleAnchorMinFraction: Double? = nil,
+         repReliabilityMaxUnreliableFraction: Double = 0.5) {
         self.id                        = id
         self.displayName               = displayName
         self.repMetric                 = repMetric
@@ -263,5 +279,6 @@ struct ExerciseDefinition {
         self.exitConfirmFrames         = exitConfirmFrames
         self.missingPersonGraceFrames  = missingPersonGraceFrames
         self.settleAnchorMinFraction   = settleAnchorMinFraction
+        self.repReliabilityMaxUnreliableFraction = repReliabilityMaxUnreliableFraction
     }
 }

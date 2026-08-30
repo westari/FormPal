@@ -160,7 +160,27 @@ export type ExerciseType =
   // Cable pull-through (hinge family, side camera, torso-angle metric) —
   // added in place of hip thrust, see its registration in
   // constants/exerciseDefinitions.ts for the trackability reasoning
-  | 'cablePullThrough';
+  | 'cablePullThrough'
+  // Pull-up (vertical body-vs-torso-axis metric, front camera, wrist
+  // deliberately excluded — occludes gripping the bar)
+  | 'pullup'
+  // Calf raise (small ankle-vs-knee vertical gap, side camera) — no
+  // heel/toe joint exists in this app's tracked joint set (Joints.swift);
+  // see its registration for the explicit "may not be trackable at all"
+  // feasibility flag
+  | 'calfRaise'
+  // Leg curl / machine (hip-knee-ankle angle, same metric as squat, side
+  // camera — machine may partially occlude the leg)
+  | 'legCurl'
+  // Crunch (shoulder-to-knee distanceRatio, front/side camera) — lying
+  // down; see its registration for the confirmed-on-device
+  // lying-pose-detection risk this shares with the removed gluteBridge
+  | 'crunch'
+  // Russian twist (signed wrist deviation from the hip-shoulder axis,
+  // front camera) — rotational movement, the hardest tracking case added
+  // this round; one rep = one full twist to one side and back, see its
+  // registration for why
+  | 'russianTwist';
 
 export async function setExercise(type: ExerciseType): Promise<void> {
   if (!ATHLTCameraNative) return;
