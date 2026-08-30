@@ -3953,33 +3953,63 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     goodROMThreshold:    0.85,
     insufficientROMCue: 'GO HIGHER',
 
-    // FORM CUES — what's detectable from a side-on lying pose, and what isn't:
+    // FORM CUES. Kept per explicit request, but both thresholds are LOOSE
+    // PLACEHOLDERS set ABOVE the user's own observed clean-rep readings so
+    // they stop false-firing. Real values pending a labelled log: 5 clean +
+    // 5 obvious leg-kick + 5 obvious arm-swing crunches, then compare the
+    // crunch_legs / crunch_arms values. If a fault's readings don't separate
+    // from clean reps (i.e. the signal is just noise — a real risk here,
+    // Vision struggles with a planted foot and hands-behind-head lying flat),
+    // that check comes back out.
     //
-    //  ✓ "Go higher" — covered without a formCheck by the built-in ROM
-    //    grading (goodROMThreshold 0.85 + insufficientROMCue 'GO HIGHER').
+    //  ✓ "Go higher" — separately covered by ROM grading (goodROMThreshold
+    //    0.85 + insufficientROMCue 'GO HIGHER'), not a formCheck.
     //
-    //  ✗ "Keep legs down" — TRIED AND REMOVED (device log 8/30/2026).
-    //    jointAngle(hip,knee,ankle) lying flat side-on returned garbage:
-    //    crunch_legs read 32.5 then 36.2 on two normal reps (a real knee
-    //    angle is ~90° bent / ~170° straight — 32 isn't one in any unit),
-    //    with 8-15 confidence drops per rep. Vision can't place the ankle
-    //    reliably when the foot is planted and foreshortened, so the angle
-    //    is noise that always clears any threshold → "KEEP LEGS DOWN" fired
-    //    on every rep regardless of the legs. Lowering formCheckMinConf only
-    //    let more garbage through. There is no reliable leg-drive signal
-    //    available from FormCheckDef primitives here. Genuine detection would
-    //    need the native Universal Quality Engine's anchor-compensation flag
-    //    (it does spot knee movement — "rightKnee moved 73.89× baseline") to
-    //    be wired into the rep verdict, which is an engine change (EAS
-    //    build), not a definition tweak.
+    //  ~ "Keep legs down" — device log (8/30/2026): crunch_legs read 32.5
+    //    and 36.2 on two CLEAN reps (jointAngle hip-knee-ankle; the ankle is
+    //    poorly tracked planted + foreshortened, so treat the unit as
+    //    opaque). Threshold was 2.85 → fired every rep. Raised to 55
+    //    (~1.5× the highest clean reading seen) so clean reps pass; a real
+    //    leg kick straightening the knee should push it higher still. If it
+    //    doesn't, this stays silent (harmless) until the calibration log.
+    //
+    //  ~ "Don't swing arms" — NO device data yet. distanceRatio(wrist,
+    //    shoulder): hands near the head ≈ small, arms flung forward for
+    //    momentum ≈ large. 1.30 is a first guess at "clearly reaching past
+    //    the head"; calibrate from the log.
     //
     //  ✗ "Slow it down / don't be jerky" — SKIPPED. FormCheckDef has no
     //    rep-duration or jerk condition (engine-internal only).
-    //
-    //  ✗ "Don't pull with your arms / don't yank your neck" — SKIPPED.
-    //    Wrists/elbows self-occlude behind the head side-on; no trustworthy
-    //    read, and no anchor for "normal vs yank."
-    formChecks: [],
+    formChecks: [
+      {
+        id:         'crunch_legs',
+        cue:        'KEEP LEGS DOWN',
+        metric: {
+          type:  'maximum',
+          left:  { type: 'jointAngle', a: 'leftHip',  pivot: 'leftKnee',  c: 'leftAnkle'  },
+          right: { type: 'jointAngle', a: 'rightHip', pivot: 'rightKnee', c: 'rightAnkle' },
+        },
+        evaluateAt:       'throughoutMax',
+        condition:        { type: 'greaterThan', value: 55 },  // PLACEHOLDER — above clean-rep readings of 32.5/36.2; calibrate from a leg-kick log
+        priority:         3,
+        enabled:          true,
+        formCheckMinConf: 0.35,
+      },
+      {
+        id:         'crunch_arms',
+        cue:        'DON\'T SWING ARMS',
+        metric: {
+          type:  'maximum',
+          left:  { type: 'distanceRatio', a: 'leftWrist',  b: 'leftShoulder'  },
+          right: { type: 'distanceRatio', a: 'rightWrist', b: 'rightShoulder' },
+        },
+        evaluateAt:       'throughoutMax',
+        condition:        { type: 'greaterThan', value: 1.30 },  // PLACEHOLDER — no device data yet; calibrate from an arm-swing log
+        priority:         2,
+        enabled:          true,
+        formCheckMinConf: 0.35,
+      },
+    ],
     readyGate: PASSTHROUGH_GATE,
 
     // SETUP fix — same class as pushup's. The old gate required all four of
