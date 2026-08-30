@@ -4052,94 +4052,76 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
 
   // ─── Russian twist ──────────────────────────────────────────────────────────
   //
-  // HONESTY FLAG — the highest-risk exercise added this round, as asked.
-  // Buildable with existing primitives (no new Metric type needed), but
-  // this is a genuine best-effort construction, not a confident one.
+  // SIDE-ON REBUILD. The front-facing version was abandoned: a raised
+  // waist-high front camera is not a setup a normal person can rig, and a
+  // floor-level front phone just stares at the shins. Everything below is now
+  // built for the SAME camera position as crunch — phone on the floor a few
+  // feet to the side — because that's the only placement the user can
+  // actually achieve.
   //
-  // METRIC: signedDeviationFromLine(point: wrist, lineFrom: hip, lineTo:
-  // shoulder) — the wrist's signed left/right position relative to the
-  // torso's own vertical axis. As both hands (held together) swing from
-  // one side to the other, the wrist crosses from strongly positive to
-  // strongly negative (or vice versa) through near-zero at center. This
-  // tracks the visible PROXY for the twist (hand position) rather than
-  // true 3D torso rotation, which a single 2D camera can't measure
-  // directly — but the proxy should move regardless of whether the twist
-  // is arm-driven or torso-driven, so that's less of a concern than it
-  // first seems.
+  // METRIC (side-on): signedDeviationFromLine(point: nearShoulder,
+  // lineFrom: nearHip, lineTo: nearKnee) — the near shoulder's signed
+  // perpendicular offset from the thigh line. Twisting the torso toward the
+  // camera swings the near shoulder one way (fore/aft in the image);
+  // twisting away swings it the other way; neutral sits in between. Shoulder
+  // + hip + knee are the joints crunch proved usable side-on (~0.3-0.7
+  // confidence) — the WRIST is dropped entirely (hands clasped at the chest
+  // are routinely occluded by the thighs when leaned back, which is what
+  // sank the old wrist metric).
   //
-  // SIGN CONVENTION, unverified: signedDeviationFromLine's own doc comment
-  // in Metric.swift already says "sign depends on camera orientation —
-  // verify with NSLog on first device test," same caveat pushup's hip_pike/
-  // hip_sag checks carry. If this reads backwards on a real test (counts
-  // reps on the wrong side, or never enters at all), swap
-  // repEnterThreshold/repExitThreshold's sign convention — don't assume the
-  // numbers below are correct until confirmed.
-  //
-  // COUNTING CONVENTION — this is the part actually forced by the engine,
-  // not chosen freely, so it gets stated plainly: this engine's state
-  // machine only supports ONE shape — a value that starts high (topAngle/
-  // rest), drops below repEnterThreshold once (enters the rep), then rises
-  // back above repExitThreshold once (completes it). A twist has no such
-  // single rest point; it oscillates continuously side to side, and
-  // signedDeviationFromLine only has ONE topAngle-shaped "rest" available
-  // to it — one extreme. So: topAngle is set at one extreme (arbitrarily,
-  // "fully twisted right" — see the sign caveat above), the rep enters as
-  // the value drops through center toward the OTHER extreme, and completes
-  // as it rises back up through center to the starting side. That makes
-  // ONE counted rep = one full twist to one side AND back — the "left+right
-  // = one rep" option, chosen because it's the only shape this engine's
-  // current single-threshold FSM can express, not because it's the more
-  // natural way to count a twist by hand.
+  // EVERY THRESHOLD BELOW IS A PURE PLACEHOLDER with ONE job: make *some*
+  // rep register on any oscillation that crosses zero, so a calibration log
+  // can be captured. There is no device data for this configuration — sign,
+  // scale and even whether the signal is cleanly signed are all unverified.
+  // Do ~15 twists, send the session log, and the real enter / exit /
+  // topAngle / goodROM get set from the [METRIC] russianTwist value= stream
+  // (or this exercise gets parked if the signal turns out to be unusable).
   russianTwist: {
     id:          'russianTwist',
     displayName: 'Russian Twist',
+    guideBox:    'floor',
 
     repMetric: {
       type: 'bestSide',
-      left:  { type: 'signedDeviationFromLine', point: 'leftWrist',  lineFrom: 'leftHip',  lineTo: 'leftShoulder'  },
-      right: { type: 'signedDeviationFromLine', point: 'rightWrist', lineFrom: 'rightHip', lineTo: 'rightShoulder' },
-      // Deliberately NOT trimmed to exclude wrist here, unlike pull-up/
-      // pushup — the wrist IS the point being measured, it can't be
-      // excluded from the joints that must be reliable for this exercise
-      // the way it could be excluded there.
-      leftJoints:  ['leftShoulder',  'leftHip',  'leftWrist'],
-      rightJoints: ['rightShoulder', 'rightHip', 'rightWrist'],
+      left:  { type: 'signedDeviationFromLine', point: 'leftShoulder',  lineFrom: 'leftHip',  lineTo: 'leftKnee'  },
+      right: { type: 'signedDeviationFromLine', point: 'rightShoulder', lineFrom: 'rightHip', lineTo: 'rightKnee' },
+      // Near side only — far side is fully occluded side-on (crunch log
+      // confirmed far-side joints at ~0.0-0.3). bestSide picks whichever
+      // side Vision can actually see.
+      leftJoints:  ['leftShoulder',  'leftHip',  'leftKnee'],
+      rightJoints: ['rightShoulder', 'rightHip', 'rightKnee'],
     },
 
-    // PLACEHOLDER, lowest confidence of anything added this round — see
-    // the honesty flag above for why. Scale borrowed loosely from
-    // signedDeviationFromLine's other real use (pushup's hip_pike/hip_sag,
-    // 0.035/-0.08) but scaled UP substantially: those measure subtle
-    // unwanted piking, this measures a large DELIBERATE arm swing, which
-    // should produce a much bigger signal if the sign convention holds at
-    // all. goodROMThreshold is negative on purpose — it requires the twist
-    // to genuinely cross past center to the opposite side, not just wobble
-    // near it.
-    topAngle:            0.40,    // PLACEHOLDER — fully twisted to the starting side
-    repEnterThreshold:   0.10,    // PLACEHOLDER — crossing toward center
-    repExitThreshold:    0.20,    // PLACEHOLDER
-    goodROMThreshold:   -0.15,    // PLACEHOLDER — genuinely past center, not a guess at "how far"
+    // PLACEHOLDERS — see the block comment. Deliberately tiny and centred on
+    // zero so ANY twist oscillation that crosses centre registers a rep,
+    // regardless of the real amplitude or sign. NOT a guess at real values.
+    topAngle:            0.05,    // PLACEHOLDER — near centre; real ≈ one twist extreme (TBD from log)
+    repEnterThreshold:  -0.03,    // PLACEHOLDER — just past centre toward the other side
+    repExitThreshold:    0.02,    // PLACEHOLDER — back across centre
+    goodROMThreshold:   -0.08,    // PLACEHOLDER — meaningfully past centre
     insufficientROMCue: 'TWIST FURTHER',
 
-    // No form check — every plausible fault (leaning too far back, feet
-    // lifting, not rotating fully) either duplicates the rep metric itself
-    // or has no reliable measurement with the available joints. Adding one
-    // now would compound an already-uncertain rep metric with a second
-    // unverified guess.
+    // No form check — the rep metric itself is still unverified; layering a
+    // second unverified guess on top would only add noise. Revisit once the
+    // rep signal is calibrated.
     formChecks: [],
     readyGate: PASSTHROUGH_GATE,
 
-    // CAMERA PLACEMENT — the reported failure was "camera only sees my legs."
-    // A phone on the floor a few feet ahead looks straight into your shins
-    // when you're seated and leaned back, and never sees the torso. The metric
-    // measures LEFT/RIGHT hand position relative to the torso axis, which is
-    // only visible from the FRONT (side-on, that motion is toward/away from
-    // the lens — depth — and a 2D camera can't see it). So it must be a raised
-    // front view: camera roughly waist-high, ~7 ft ahead, tilted down.
+    // Side-on, seated, leaned back — same camera as crunch.
     cameraSetup: {
-      setupInstruction: 'Raise the camera to about waist height, ~7 ft in front, tilted down — sit facing it so your shoulders, hips, and hands stay in frame',
-      requiredJoints: ['leftShoulder', 'rightShoulder', 'leftHip', 'rightHip', 'leftWrist', 'rightWrist'],
+      setupInstruction: 'Sit side-on to the camera, phone on the floor a few feet to your side — one shoulder, hip, and knee in frame',
+      requiredJoints:    ['leftShoulder',  'leftHip',  'leftKnee'],
+      requiredJointsAlt: ['rightShoulder', 'rightHip', 'rightKnee'],
     },
+
+    // Side-on self-occlusion mid-rep — same log-confirmed exception crunch
+    // and tricep carry.
+    missingPersonGraceFrames: 6,
+
+    // Side-on seated: shoulder/hip/knee confidence sits under the 0.6
+    // reliability floor for much of a rep (crunch proved this). Without this
+    // the tracking-reliability gate deletes real reps. 0.9, same as crunch.
+    repReliabilityMaxUnreliableFraction: 0.9,
 
     minRepInterval:  0.6,
     planarityChecks: [],
