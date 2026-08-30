@@ -3990,7 +3990,7 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
           right: { type: 'jointAngle', a: 'rightHip', pivot: 'rightKnee', c: 'rightAnkle' },
         },
         evaluateAt:       'throughoutMax',
-        condition:        { type: 'greaterThan', value: 55 },  // PLACEHOLDER — above clean-rep readings of 32.5/36.2; calibrate from a leg-kick log
+        condition:        { type: 'greaterThan', value: 70 },  // PLACEHOLDER — a clean rep read 53.8 at lim 55 (too close); calibrate once rep counting works
         priority:         3,
         enabled:          true,
         formCheckMinConf: 0.35,
@@ -4004,7 +4004,7 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
           right: { type: 'distanceRatio', a: 'rightWrist', b: 'rightShoulder' },
         },
         evaluateAt:       'throughoutMax',
-        condition:        { type: 'greaterThan', value: 1.30 },  // PLACEHOLDER — no device data yet; calibrate from an arm-swing log
+        condition:        { type: 'greaterThan', value: 1.65 },  // PLACEHOLDER — a rep read 1.43 and was flagged; not enough data (only 1 rep counted). Calibrate once rep counting works
         priority:         2,
         enabled:          true,
         formCheckMinConf: 0.35,
@@ -4021,8 +4021,15 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     // side (no cross-side mixing) — so give it the NEAR side's shoulder+knee,
     // with the other side as the alternate. The rep metric's own per-frame
     // bestSide already tolerates single-side occlusion frame to frame.
+    // CAMERA DISTANCE MATTERS (device log 8/30/2026 — 1 of 10 reps counted):
+    // the engine resets its rep-entry gate whenever a rep-metric joint is
+    // within 5% of the frame edge (isNearFrameEdge → framesSincePoseGap = 0).
+    // Lying flat with your body filling the frame, a knee sits right at the
+    // edge every frame, so the gate never clears and reps don't register.
+    // Back the phone off so your WHOLE body — head through knees — has clear
+    // margin on all sides.
     cameraSetup: {
-      setupInstruction: 'Lie on your back, camera on the floor a few feet to your side — one shoulder and one knee in frame',
+      setupInstruction: 'Lie on your back, phone on the floor to your side — back it up so your whole body, head to knees, sits well inside the frame with room to spare',
       requiredJoints:    ['leftShoulder',  'leftKnee'],
       requiredJointsAlt: ['rightShoulder', 'rightKnee'],
     },
