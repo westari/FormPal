@@ -1,16 +1,18 @@
 // RepFeedback — a single 3D Liquid Glass orb (check / X) over the camera view.
-// No card, no border, no label — just the mark, as a glass control would look
-// on iOS 26. Props unchanged: { good, reason, seq, onComplete }.
+// No card, no border, no label — just the mark, rendered as a glass sphere
+// would look on iOS 26. Props unchanged: { good, reason, seq, onComplete }.
 
 import React, { useRef, useEffect } from 'react';
 import { View, StyleSheet, Animated, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Path as SvgPath, Line as SvgLine } from 'react-native-svg';
+import Svg, {
+  Defs, RadialGradient, LinearGradient as SvgLinearGradient, Stop,
+  Circle, Ellipse, Path as SvgPath, G,
+} from 'react-native-svg';
 
 const GREEN = '#32d74b';
 const RED   = '#ff453a';
-const ORB   = 150;
+const ORB   = 152;
 
 // ─── 3D Liquid Glass orb ─────────────────────────────────────────────────────
 
@@ -18,58 +20,70 @@ function GlassOrb({ good }: { good: boolean }) {
   const tint = good ? GREEN : RED;
 
   return (
-    <View style={[orb.lift, { shadowColor: '#000' }]}>
+    <View style={[orb.lift]}>
       <View style={[orb.glow, { shadowColor: tint }]}>
-        <BlurView intensity={32} tint="systemThinMaterialDark" style={orb.clip}>
-          {/* faint colour wash */}
-          <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { backgroundColor: `${tint}1F` }]} />
+        <BlurView intensity={26} tint="systemThinMaterialDark" style={orb.clip}>
+          <Svg width={ORB} height={ORB} viewBox="0 0 100 100">
+            <Defs>
+              {/* domed body: white hotspot top-left → tint → shaded edge */}
+              <RadialGradient id="dome" cx="34%" cy="26%" r="82%">
+                <Stop offset="0"    stopColor="#ffffff" stopOpacity="0.95" />
+                <Stop offset="0.28" stopColor="#ffffff" stopOpacity="0.35" />
+                <Stop offset="0.55" stopColor={tint}    stopOpacity="0.30" />
+                <Stop offset="0.82" stopColor={tint}    stopOpacity="0.20" />
+                <Stop offset="1"    stopColor="#000000" stopOpacity="0.42" />
+              </RadialGradient>
+              {/* underside shadow — the bottom of the sphere */}
+              <RadialGradient id="under" cx="50%" cy="94%" r="60%">
+                <Stop offset="0"   stopColor="#000000" stopOpacity="0.45" />
+                <Stop offset="0.7" stopColor="#000000" stopOpacity="0.10" />
+                <Stop offset="1"   stopColor="#000000" stopOpacity="0" />
+              </RadialGradient>
+              {/* sharp wet highlight near the top */}
+              <RadialGradient id="spec" cx="50%" cy="50%" r="50%">
+                <Stop offset="0"   stopColor="#ffffff" stopOpacity="0.9" />
+                <Stop offset="0.6" stopColor="#ffffff" stopOpacity="0.25" />
+                <Stop offset="1"   stopColor="#ffffff" stopOpacity="0" />
+              </RadialGradient>
+              {/* beveled rim: light at top, dark at bottom */}
+              <SvgLinearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0"    stopColor="#ffffff" stopOpacity="0.85" />
+                <Stop offset="0.5"  stopColor="#ffffff" stopOpacity="0.15" />
+                <Stop offset="1"    stopColor="#000000" stopOpacity="0.45" />
+              </SvgLinearGradient>
+            </Defs>
 
-          {/* domed 3D shading: bright top-left → clear → shaded bottom-right */}
-          <LinearGradient
-            colors={[
-              'rgba(255,255,255,0.62)',
-              'rgba(255,255,255,0.14)',
-              'rgba(255,255,255,0.00)',
-              'rgba(0,0,0,0.20)',
-            ]}
-            locations={[0, 0.30, 0.60, 1]}
-            start={{ x: 0.16, y: 0.06 }}
-            end={{ x: 0.86, y: 1 }}
-            style={StyleSheet.absoluteFill}
-            pointerEvents="none"
-          />
+            <Circle cx="50" cy="50" r="50" fill="url(#dome)" />
+            <Circle cx="50" cy="50" r="50" fill="url(#under)" />
+            <Ellipse cx="38" cy="24" rx="26" ry="15" fill="url(#spec)" />
+            <Circle cx="50" cy="50" r="48.5" fill="none" stroke="url(#rim)" strokeWidth="2.4" />
+            <Circle cx="50" cy="50" r="49.4" fill="none" stroke={tint} strokeOpacity="0.35" strokeWidth="1" />
 
-          {/* tight wet-glass sheen near the top */}
-          <LinearGradient
-            colors={['rgba(255,255,255,0.75)', 'rgba(255,255,255,0)']}
-            locations={[0, 1]}
-            start={{ x: 0.5, y: 0 }}
-            end={{ x: 0.5, y: 0.32 }}
-            style={StyleSheet.absoluteFill}
-            pointerEvents="none"
-          />
-
-          {/* the mark — carries its own shadow so it sits ON the glass */}
-          <View style={orb.iconCenter}>
-            <Svg width={72} height={72} viewBox="0 0 24 24">
+            {/* the mark — dark drop copy under a white top copy = raised look */}
+            <G transform="translate(50 51)">
               {good ? (
-                <SvgPath
-                  d="M 3.5 12 L 9.5 18 L 20.5 5.5"
-                  stroke="white" strokeWidth={2.8}
-                  strokeLinecap="round" strokeLinejoin="round" fill="none"
-                />
+                <>
+                  <SvgPath d="M -18 1 L -6 13 L 20 -14" transform="translate(0 2)"
+                    stroke="#000000" strokeOpacity="0.28" strokeWidth="7"
+                    strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                  <SvgPath d="M -18 1 L -6 13 L 20 -14"
+                    stroke="#ffffff" strokeWidth="6.4"
+                    strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                </>
               ) : (
                 <>
-                  <SvgLine x1={5} y1={5} x2={19} y2={19} stroke="white" strokeWidth={2.8} strokeLinecap="round" />
-                  <SvgLine x1={19} y1={5} x2={5} y2={19} stroke="white" strokeWidth={2.8} strokeLinecap="round" />
+                  <G transform="translate(0 2)" stroke="#000000" strokeOpacity="0.28" strokeWidth="7" strokeLinecap="round">
+                    <SvgPath d="M -15 -15 L 15 15" />
+                    <SvgPath d="M 15 -15 L -15 15" />
+                  </G>
+                  <G stroke="#ffffff" strokeWidth="6.4" strokeLinecap="round">
+                    <SvgPath d="M -15 -15 L 15 15" />
+                    <SvgPath d="M 15 -15 L -15 15" />
+                  </G>
                 </>
               )}
-            </Svg>
-          </View>
-
-          {/* colour rim catching light + brighter top edge */}
-          <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, orb.rim, { borderColor: `${tint}D0` }]} />
-          <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, orb.rimTop]} />
+            </G>
+          </Svg>
         </BlurView>
       </View>
     </View>
@@ -77,35 +91,21 @@ function GlassOrb({ good }: { good: boolean }) {
 }
 
 const orb = StyleSheet.create({
-  // dark drop shadow — lifts the orb off the scene
   lift: {
     width: ORB, height: ORB, borderRadius: ORB / 2,
     ...Platform.select({ ios: {
-      shadowOffset: { width: 0, height: 14 }, shadowOpacity: 0.4, shadowRadius: 26,
+      shadowColor: '#000', shadowOffset: { width: 0, height: 16 }, shadowOpacity: 0.45, shadowRadius: 28,
     } }),
   },
-  // coloured glow — green/red halo
   glow: {
     width: ORB, height: ORB, borderRadius: ORB / 2,
     ...Platform.select({ ios: {
-      shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.75, shadowRadius: 22,
+      shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 24,
     } }),
   },
   clip: {
     width: ORB, height: ORB, borderRadius: ORB / 2,
     overflow: 'hidden', alignItems: 'center', justifyContent: 'center',
-  },
-  iconCenter: {
-    ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center',
-    ...Platform.select({ ios: {
-      shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 6,
-    } }),
-  },
-  rim: {
-    borderRadius: ORB / 2, borderWidth: 1.5,
-  },
-  rimTop: {
-    borderRadius: ORB / 2, borderTopWidth: 1.5, borderColor: 'rgba(255,255,255,0.55)',
   },
 });
 

@@ -254,8 +254,8 @@ function PositioningGuide({
   box, ready, children,
 }: { box: 'standing' | 'floor'; ready: boolean; children?: React.ReactNode }) {
   const rect = box === 'floor'
-    ? { top: '31%', bottom: '5%', side: '4%' }
-    : { top: '6%',  bottom: '7%', side: '9%' };
+    ? { top: '33%', bottom: '5%',  side: '4%'  }
+    : { top: '16%', bottom: '7%',  side: '9%'  };
   const line = ready ? C.good : 'rgba(255,255,255,0.9)';
   const R    = 32;
 
@@ -661,44 +661,42 @@ export default function FormCheckScreen() {
         <RepFeedback good={feedback.good} reason={feedback.reason} seq={feedback.seq} onComplete={() => setFeedback(null)} />
       )}
 
-      {/* Positioning-guide box — visible while getting into position. The
-          border goes green the instant SETUP's joint check passes, then stays
-          up through the set with the rep count living inside it. */}
+      {/* Positioning-guide box. Border goes green the instant SETUP's joint
+          check passes, then stays up through the set. During SETUP the
+          instruction panel is centred INSIDE the box so it never crosses the
+          border. The rep counter is its own element up top (below). */}
       {(phase === 'setup' || phase === 'starting' || phase === 'setup-done' || phase === 'tracking') && (
         <PositioningGuide
           box={guideBoxFor(exerciseType)}
           ready={setupAllVisible || phase === 'setup-done' || phase === 'tracking'}
         >
-          {showRepCounter && (
-            <View style={s.repInBox} pointerEvents="none">
-              <Text style={s.repNum}>{reps}</Text>
-              <View style={s.repSubRow}>
-                <View style={s.repDot} />
-                <Text style={s.repSub}>{goodReps} good</Text>
+          {phase === 'setup' && (
+            <GlassPanel radius={30} style={s.setupPanel}>
+              <View style={s.setupPanelInner}>
+                <Text style={s.setupBig}>
+                  {setupAllVisible ? 'Hold still…' : 'Line yourself up'}
+                </Text>
+                <Text style={s.setupHint}>
+                  {setupHint
+                    || (setupAllVisible
+                          ? 'Locking on — keep steady'
+                          : `${SETUP_INFO[exerciseType].title} · ${SETUP_INFO[exerciseType].sub}`)}
+                </Text>
               </View>
-            </View>
+            </GlassPanel>
           )}
         </PositioningGuide>
       )}
 
-      {/* SETUP instruction — one glass panel above the guide box. No progress
-          bar (removed on request); the box turning green + "Hold still" is the
-          feedback. */}
-      {phase === 'setup' && (
-        <View style={s.setupOverlay} pointerEvents="none">
-          <GlassPanel radius={30} style={s.setupPanel}>
-            <View style={s.setupPanelInner}>
-              <Text style={s.setupBig}>
-                {setupAllVisible ? 'Hold still…' : 'Line yourself up'}
-              </Text>
-              <Text style={s.setupHint}>
-                {setupHint
-                  || (setupAllVisible
-                        ? 'Locking on — keep steady'
-                        : `${SETUP_INFO[exerciseType].title} · ${SETUP_INFO[exerciseType].sub}`)}
-              </Text>
-            </View>
-          </GlassPanel>
+      {/* Rep counter — fixed near the top, above the box border so it never
+          clumps into it. Carries its own shadow (no panel). */}
+      {showRepCounter && (
+        <View style={s.repBlock} pointerEvents="none">
+          <Text style={s.repNum}>{reps}</Text>
+          <View style={s.repSubRow}>
+            <View style={s.repDot} />
+            <Text style={s.repSub}>{goodReps} good</Text>
+          </View>
         </View>
       )}
 
@@ -960,11 +958,10 @@ const s = StyleSheet.create({
   outOfPlaneInner: { paddingHorizontal: 22, paddingVertical: 11 },
   outOfPlaneText:  { fontFamily: F.bold, fontSize: 16, color: C.warn, letterSpacing: 0.3 },
 
-  // Rep count — lives inside the positioning box, no panel behind it, so it
-  // carries its own shadow for legibility over the camera.
-  repInBox:  { alignItems: 'center' },
+  // Rep count — fixed near the top, no panel, carries its own shadow.
+  repBlock:  { position: 'absolute', top: '9%', left: 0, right: 0, alignItems: 'center' },
   repNum:    {
-    fontFamily: F.extra, fontSize: 128, lineHeight: 134, color: '#fff', letterSpacing: -2,
+    fontFamily: F.extra, fontSize: 116, lineHeight: 122, color: '#fff', letterSpacing: -2,
     textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 16,
   },
   repSubRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
@@ -993,14 +990,9 @@ const s = StyleSheet.create({
   metricStateDown: { color: C.good },
   metricThresh:    { fontFamily: 'Menlo', fontSize: 8, color: C.dim, marginTop: 2 },
 
-  // ── Setup overlay — one frosted-glass panel, floating high so it clears
-  // both the standing and the floor guide box. ────────────────────────────
-  setupOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'flex-start', alignItems: 'center',
-    paddingHorizontal: 24, paddingTop: '24%',
-  },
-  setupPanel:      { alignSelf: 'center', maxWidth: 360 },
+  // ── Setup instruction — centred inside the guide box (see PositioningGuide
+  // children), so it never crosses the box border. ───────────────────────
+  setupPanel:      { alignSelf: 'center', maxWidth: 320, marginHorizontal: 16 },
   setupPanelInner: { paddingHorizontal: 28, paddingTop: 20, paddingBottom: 22, alignItems: 'center', gap: 8 },
   setupBig:        { fontFamily: F.extra, fontSize: 25, color: '#fff', textAlign: 'center' },
   setupHint:       { fontFamily: F.regular, fontSize: 14, color: 'rgba(255,255,255,0.86)', textAlign: 'center', lineHeight: 20 },
