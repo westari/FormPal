@@ -3955,63 +3955,31 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
 
     // FORM CUES — what's detectable from a side-on lying pose, and what isn't:
     //
-    //  ✓ "Curl up higher" — ALREADY covered, not a formCheck: the built-in
-    //    ROM grading (goodROMThreshold 0.85 + insufficientROMCue 'CURL
-    //    HIGHER') already flags a shallow rep as bad with that cue. Nothing
-    //    to add here.
+    //  ✓ "Go higher" — covered without a formCheck by the built-in ROM
+    //    grading (goodROMThreshold 0.85 + insufficientROMCue 'GO HIGHER').
     //
-    //  ✓ "Keep legs down" (added below) — leg-drive / momentum shows as the
-    //    knee ANGLE opening (thigh pushing toward straight) at some point in
-    //    the rep. jointAngle(hip,knee,ankle) is ~independent of the torso
-    //    curl, so a big knee-angle spike is a decent proxy for "the legs
-    //    moved." maximum(L,R) so either leg triggers it; the default 0.6
-    //    formCheckMinConf gate means unreliable far-leg frames are simply
-    //    dropped (check goes silent, no false cue) rather than misfiring.
-    //    THRESHOLD IS A PLACEHOLDER — no verified exercise anchors "the knee
-    //    should stay still during an ab movement." 2.85 rad (~163°) only
-    //    catches gross extension; re-set it from the crunch_legs value in a
-    //    real [REP] log (do 5 clean + 5 with obvious leg drive, compare).
+    //  ✗ "Keep legs down" — TRIED AND REMOVED (device log 8/30/2026).
+    //    jointAngle(hip,knee,ankle) lying flat side-on returned garbage:
+    //    crunch_legs read 32.5 then 36.2 on two normal reps (a real knee
+    //    angle is ~90° bent / ~170° straight — 32 isn't one in any unit),
+    //    with 8-15 confidence drops per rep. Vision can't place the ankle
+    //    reliably when the foot is planted and foreshortened, so the angle
+    //    is noise that always clears any threshold → "KEEP LEGS DOWN" fired
+    //    on every rep regardless of the legs. Lowering formCheckMinConf only
+    //    let more garbage through. There is no reliable leg-drive signal
+    //    available from FormCheckDef primitives here. Genuine detection would
+    //    need the native Universal Quality Engine's anchor-compensation flag
+    //    (it does spot knee movement — "rightKnee moved 73.89× baseline") to
+    //    be wired into the rep verdict, which is an engine change (EAS
+    //    build), not a definition tweak.
     //
-    //  ✗ "Slow it down / don't be jerky" — SKIPPED. FormCheckDef can only
-    //    compare a metric's max/min/atBottom against a fixed number; it has
-    //    no rep-duration or jerk condition. The engine computes dur/jerk
-    //    internally ([UNIV] log line) but there's no definition-level cue for
-    //    it — adding one is native engine work (EAS build), not a reload.
+    //  ✗ "Slow it down / don't be jerky" — SKIPPED. FormCheckDef has no
+    //    rep-duration or jerk condition (engine-internal only).
     //
     //  ✗ "Don't pull with your arms / don't yank your neck" — SKIPPED.
-    //    Lying side-on the wrists/elbows self-occlude (hands are usually
-    //    behind the head) so an arm-pull check has nothing trustworthy to
-    //    read. The `nose` joint IS tracked and visible at the top of the
-    //    curl, so a neck-yank check is *calibratable later* from a labelled
-    //    log — but shipping it blind, with no anchor for "normal head
-    //    position vs a yank," is exactly the random-false-feedback case this
-    //    file's feasibility rule says to skip.
-    formChecks: [
-      {
-        id:         'crunch_legs',
-        cue:        'KEEP LEGS DOWN',
-        metric: {
-          type:  'maximum',
-          left:  { type: 'jointAngle', a: 'leftHip',  pivot: 'leftKnee',  c: 'leftAnkle'  },
-          right: { type: 'jointAngle', a: 'rightHip', pivot: 'rightKnee', c: 'rightAnkle' },
-        },
-        evaluateAt: 'throughoutMax',
-        condition:  { type: 'greaterThan', value: 2.85 },  // PLACEHOLDER ~163° — calibrate from [REP] log
-        priority:   3,   // below ROM-override (4): "GO HIGHER" wins if the rep is also shallow
-        enabled:    true,
-        // Was silently producing NO value on every rep (device log: "(no form
-        // checks)"): the default 0.6 floor demands hip+knee+ankle all clear it
-        // on one side, and lying flat the ankle (foot planted, foreshortened)
-        // and far-side joints sit under that. Same log showed the knee itself
-        // at 0.62-0.70 — usable — so the check just needs a lower floor to read
-        // at all. 0.35 ≈ the engine's own kMinConf tier. The leg-drive fault is
-        // a big, gross knee-angle swing toward straight, so a slightly noisier
-        // input still separates "knees bent, held" from "legs kicked out."
-        // Once this reads, the [REP] line logs crunch_legs=<value> — do 5 clean
-        // + 5 with obvious leg drive and the 2.85 threshold gets set for real.
-        formCheckMinConf: 0.35,
-      },
-    ],
+    //    Wrists/elbows self-occlude behind the head side-on; no trustworthy
+    //    read, and no anchor for "normal vs yank."
+    formChecks: [],
     readyGate: PASSTHROUGH_GATE,
 
     // SETUP fix — same class as pushup's. The old gate required all four of
