@@ -28,7 +28,12 @@ export interface SessionEntry {
   displayName: string;
   reps:        number;
   goodReps:    number;
-  pct:         number; // 0-100 form score for this exercise
+  pct:         number; // 0-100 form score for this exercise (meaningless when formChecked === false)
+  // false = a 'repCounter' exercise (see exerciseDefinitions.ts's `mode`): reps
+  // were counted but form was NOT judged. Such entries contribute VOLUME to
+  // muscle ranks but never a quality score, and are excluded from every
+  // form-score aggregate. Omitted/true on every pre-existing entry (back-compat).
+  formChecked?: boolean;
 }
 
 // Per-rep good/bad + cue, EPHEMERAL only — never persisted into SessionEntry/
@@ -67,6 +72,7 @@ export async function getAllSessions(): Promise<SessionEntry[]> {
       reps:        e.reps ?? 0,
       goodReps:    e.goodReps ?? 0,
       pct:         e.pct ?? 0,
+      formChecked: e.formChecked ?? true,
     }));
   } catch {
     return [];
@@ -88,6 +94,14 @@ export async function appendSessions(entries: SessionEntry[]): Promise<void> {
 // app/recap.tsx), so grouping by exact ts reconstructs "one workout" without
 // needing a separate workoutId field.
 
+// Only the entries whose form was actually judged — the set every form-score
+// aggregate (trend charts, "best form", weighted %) should run over. A
+// 'repCounter' exercise's reps still count as training volume elsewhere, but
+// its pct is meaningless and must never enter a score average.
+export function scoredSessions(sessions: SessionEntry[]): SessionEntry[] {
+  return sessions.filter(e => e.formChecked !== false);
+}
+
 export function groupIntoWorkouts(sessions: SessionEntry[]): WorkoutGroup[] {
   const byTs = new Map<number, SessionEntry[]>();
   for (const e of sessions) {
@@ -97,9 +111,13 @@ export function groupIntoWorkouts(sessions: SessionEntry[]): WorkoutGroup[] {
   }
   return Array.from(byTs.entries())
     .map(([ts, entries]) => {
+      // totalReps is real training volume — every rep, judged or not.
       const totalReps     = entries.reduce((a, e) => a + e.reps, 0);
-      const totalGoodReps = entries.reduce((a, e) => a + e.goodReps, 0);
-      const pct           = totalReps > 0 ? Math.round((totalGoodReps / totalReps) * 100) : 0;
+      // The % and "good reps" only reflect exercises whose form was judged.
+      const scored        = entries.filter(e => e.formChecked !== false);
+      const scoredReps    = scored.reduce((a, e) => a + e.reps, 0);
+      const totalGoodReps = scored.reduce((a, e) => a + e.goodReps, 0);
+      const pct           = scoredReps > 0 ? Math.round((totalGoodReps / scoredReps) * 100) : 0;
       return { ts, entries, totalReps, totalGoodReps, pct };
     })
     .sort((a, b) => b.ts - a.ts);
@@ -271,22 +289,42 @@ export function computeMuscleTiers(sessions: SessionEntry[]): MuscleTiers {
   // EXERCISE, not per muscle within it, so this is the honest granularity
   // available, not an approximation of something more precise we're
   // choosing not to show.
-  const byMuscle = new Map<Muscle, { ts: number; reps: number; goodReps: number }[]>();
+  // reps      = training volume, EVERY rep (judged or 'repCounter').
+  // qualReps  = only reps whose form was judged — the denominator for goodRatio.
+  // goodReps  = judged reps that hit good form.
+  // A muscle trained only via rep-counter exercises accrues volume but has
+  // qualReps 0, so its quality gate is simply not applied (see below).
+  const byMuscle = new Map<Muscle, { ts: number; reps: number; qualReps: number; goodReps: number }[]>();
   for (const s of sessions) {
     const def = getExerciseDef(s.exerciseId);
     if (!def) continue; // exerciseId missing/unknown — can't attribute muscles
+    const judged = s.formChecked !== false;
     for (const entry of def.muscles) {
       const { muscle: m, weight } = muscleCreditParts(entry);
       const arr = byMuscle.get(m) ?? [];
-      arr.push({ ts: s.ts, reps: s.reps * weight, goodReps: s.goodReps * weight });
+      arr.push({
+        ts: s.ts,
+        reps:     s.reps * weight,
+        qualReps: judged ? s.reps * weight : 0,
+        goodReps: judged ? s.goodReps * weight : 0,
+      });
       byMuscle.set(m, arr);
     }
   }
 
+  // quality tier from a possibly-absent ratio: null (no judged reps yet) means
+  // "don't gate on quality" — the muscle ranks on volume alone until it has
+  // form-checked training to judge.
+  const gatedTier = (volTier: Tier, ratio: number | null): Tier => {
+    if (ratio === null) return volTier;
+    const qt = tierFromQuality(ratio);
+    return tierIndex(qt) < tierIndex(volTier) ? qt : volTier;
+  };
+
   const out: MuscleTiers = {};
   for (const [m, entries] of byMuscle) {
     entries.sort((a, b) => a.ts - b.ts);
-    let vol = 0, goodVol = 0;
+    let vol = 0, qualVol = 0, goodVol = 0;
     let lastTs = entries[0].ts;
     let peakTier: Tier | null = null;
 
@@ -301,14 +339,14 @@ export function computeMuscleTiers(sessions: SessionEntry[]): MuscleTiers {
       const gapDays = (e.ts - lastTs) / DAY_MS;
       const decay   = Math.exp(-lambda * gapDays);
       vol     = vol * decay + e.reps;
+      qualVol = qualVol * decay + e.qualReps;
       goodVol = goodVol * decay + e.goodReps;
       lastTs  = e.ts;
 
       const volTier = tierFromVolume(vol);
       if (volTier) {
-        const ratio     = vol > 0 ? goodVol / vol : 0;
-        const qualTier  = tierFromQuality(ratio);
-        const localTier = tierIndex(qualTier) < tierIndex(volTier) ? qualTier : volTier;
+        const ratio     = qualVol > 0 ? goodVol / qualVol : null;
+        const localTier = gatedTier(volTier, ratio);
         if (!peakTier || tierIndex(localTier) > tierIndex(peakTier)) peakTier = localTier;
       }
     }
@@ -318,8 +356,9 @@ export function computeMuscleTiers(sessions: SessionEntry[]): MuscleTiers {
     // Decay forward from the last session to now for the current/active value.
     const decayToNow = Math.exp(-lambda * (now - lastTs) / DAY_MS);
     vol     *= decayToNow;
+    qualVol *= decayToNow;
     goodVol *= decayToNow;
-    const goodRatio = vol > 0 ? goodVol / vol : 0;
+    const goodRatio = qualVol > 0 ? goodVol / qualVol : 0;
 
     // Active tier floors at Bronze once ever earned — a long-enough absence
     // dulls the rank toward the bottom, it doesn't erase the muscle from
@@ -327,7 +366,7 @@ export function computeMuscleTiers(sessions: SessionEntry[]): MuscleTiers {
     // high it actually got.
     const rawVolTier  = tierFromVolume(vol);
     const currentTier = rawVolTier
-      ? (tierIndex(tierFromQuality(goodRatio)) < tierIndex(rawVolTier) ? tierFromQuality(goodRatio) : rawVolTier)
+      ? gatedTier(rawVolTier, qualVol > 0 ? goodRatio : null)
       : 'bronze';
 
     out[m] = { tier: currentTier, peakTier, volume: vol, goodRatio };

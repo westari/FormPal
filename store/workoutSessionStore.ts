@@ -23,7 +23,11 @@ export interface ExerciseResult {
   displayName: string;
   reps:        number;
   goodReps:    number;
-  formScore:   number;    // 0–100
+  formScore:   number;    // 0–100 (0 and ignored when formChecked === false)
+  // false = a 'repCounter' exercise (exerciseDefinitions.ts `mode`): reps were
+  // counted, form was not judged. Excluded from overallFormScore / totalGoodReps
+  // in the summary and saved to the session log with formChecked:false.
+  formChecked: boolean;
   skipped:     boolean;
   completed:   boolean;
   // Per-rep good/bad/cue breakdown, EPHEMERAL (this store is already
@@ -66,8 +70,9 @@ interface WorkoutSessionState {
   /** Begin a new workout session (replaces any existing one). */
   startWorkout: (workout: Workout) => void;
 
-  /** Record a completed exercise result and advance the index. */
-  completeExercise: (exerciseId: string, reps: number, goodReps: number, repEvents?: RepEventData[]) => void;
+  /** Record a completed exercise result and advance the index. `formChecked`
+   *  false = a rep-counter exercise (reps only, form not judged). */
+  completeExercise: (exerciseId: string, reps: number, goodReps: number, repEvents?: RepEventData[], formChecked?: boolean) => void;
 
   /** Mark the current exercise skipped and advance. */
   skipCurrentExercise: () => void;
@@ -91,8 +96,11 @@ interface WorkoutSessionState {
 function computeSummary(session: WorkoutSession): WorkoutSummary {
   const completed    = session.results.filter(r => r.completed);
   const totalReps    = completed.reduce((a, r) => a + r.reps, 0);
-  const totalGood    = completed.reduce((a, r) => a + r.goodReps, 0);
-  const overallScore = totalReps > 0 ? Math.round((totalGood / totalReps) * 100) : 0;
+  // Form % and "good reps" only reflect the exercises whose form was judged.
+  const scored       = completed.filter(r => r.formChecked);
+  const scoredReps   = scored.reduce((a, r) => a + r.reps, 0);
+  const totalGood    = scored.reduce((a, r) => a + r.goodReps, 0);
+  const overallScore = scoredReps > 0 ? Math.round((totalGood / scoredReps) * 100) : 0;
   const finishedAt   = Date.now();
 
   return {
@@ -129,6 +137,7 @@ export const useWorkoutSessionStore = create<WorkoutSessionState>()((set, get) =
           reps:        0,
           goodReps:    0,
           formScore:   0,
+          formChecked: true,
           skipped:     false,
           completed:   false,
           repEvents:   [],
@@ -137,16 +146,16 @@ export const useWorkoutSessionStore = create<WorkoutSessionState>()((set, get) =
     });
   },
 
-  completeExercise: (exerciseId: string, reps: number, goodReps: number, repEvents: RepEventData[] = []) => {
+  completeExercise: (exerciseId: string, reps: number, goodReps: number, repEvents: RepEventData[] = [], formChecked = true) => {
     const { session } = get();
     if (!session) return;
 
     const idx = session.results.findIndex(r => r.exerciseId === exerciseId);
     if (idx === -1) return;
 
-    const formScore = reps > 0 ? Math.round((goodReps / reps) * 100) : 0;
+    const formScore = formChecked && reps > 0 ? Math.round((goodReps / reps) * 100) : 0;
     const updated   = [...session.results];
-    updated[idx]    = { ...updated[idx], reps, goodReps, formScore, completed: true, skipped: false, repEvents };
+    updated[idx]    = { ...updated[idx], reps, goodReps, formScore, formChecked, completed: true, skipped: false, repEvents };
 
     set({
       session: {

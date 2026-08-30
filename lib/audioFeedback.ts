@@ -320,12 +320,22 @@ export function playReadyCue(): void {
 // RepFeedback badge (see app/formcheck.tsx) — same event, same cue text,
 // spoken instead of (or in addition to, for milestones) shown.
 
-export function handleRepAudio(good: boolean, reason: string, goodReps: number): void {
+// formChecked === false → a 'repCounter' exercise: no corrective speech ever,
+// just a rep chime + the milestone count (announced off `count`, which the
+// caller passes as TOTAL reps in that case, since there's no good/bad split).
+export function handleRepAudio(good: boolean, reason: string, count: number, formChecked = true): void {
+  if (!formChecked) {
+    playGoodRepChime();
+    if (count > 0 && count % COUNT_ANNOUNCE_INTERVAL === 0) {
+      setTimeout(() => speakRepCount(count), 300);
+    }
+    return;
+  }
   if (good) {
     playGoodRepChime();
-    if (goodReps > 0 && goodReps % COUNT_ANNOUNCE_INTERVAL === 0) {
+    if (count > 0 && count % COUNT_ANNOUNCE_INTERVAL === 0) {
       // Small delay so the count doesn't talk over the chime's tail.
-      setTimeout(() => speakRepCount(goodReps), 300);
+      setTimeout(() => speakRepCount(count), 300);
     }
   } else {
     speakCorrection(reason);

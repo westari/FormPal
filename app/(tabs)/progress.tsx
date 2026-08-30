@@ -35,7 +35,7 @@ import Ring from '../../components/Ring';
 import ScreenBackground from '../../components/ScreenBackground';
 import { BodyMap } from '../../components/MuscleTierMap';
 import {
-  getAllSessions, groupIntoWorkouts, computeMuscleTiers,
+  getAllSessions, groupIntoWorkouts, computeMuscleTiers, scoredSessions,
   type SessionEntry, type WorkoutGroup,
 } from '../../lib/sessionLog';
 
@@ -204,7 +204,8 @@ function InteractiveFormChart({
   const filtered = useMemo(() => {
     const now = Date.now();
     const cut = tab === 'week' ? now - SEVEN_DAYS_MS : tab === 'month' ? now - THIRTY_DAYS_MS : 0;
-    return [...sessions].filter(e => e.ts >= cut).sort((a, b) => a.ts - b.ts);
+    // Form trend = only form-checked sessions; rep-counter reps have no score.
+    return scoredSessions(sessions).filter(e => e.ts >= cut).sort((a, b) => a.ts - b.ts);
   }, [sessions, tab]);
 
   const pts = useMemo(() => {
@@ -465,7 +466,8 @@ const mm = StyleSheet.create({
 function MilestoneCard({ sessions }: { sessions: SessionEntry[] }) {
   if (sessions.length === 0) return null;
 
-  const best     = sessions.reduce((a, b) => b.pct > a.pct ? b : a);
+  const scored   = scoredSessions(sessions);
+  const best     = scored.length ? scored.reduce((a, b) => b.pct > a.pct ? b : a) : null;
   const mostReps = sessions.reduce((a, b) => b.reps > a.reps ? b : a);
   const streak   = calcStreak(sessions);
   const total    = sessions.reduce((s, e) => s + e.reps, 0);
@@ -475,8 +477,8 @@ function MilestoneCard({ sessions }: { sessions: SessionEntry[] }) {
       icon: 'trophy.fill',
       grad: C.formGrad,
       label: 'Best form',
-      value: `${best.pct}%`,
-      sub: formatShort(best.ts),
+      value: best ? `${best.pct}%` : '—',
+      sub: best ? formatShort(best.ts) : 'no scored reps yet',
     },
     {
       icon: 'bolt.fill',

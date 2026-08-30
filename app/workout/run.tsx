@@ -77,6 +77,7 @@ export default function WorkoutRunScreen() {
     reps?:       string;
     goodReps?:   string;
     events?:     string;
+    mode?:       string;   // 'repCounter' when the just-finished exercise's form wasn't judged
   }>();
 
   // Store actions
@@ -99,7 +100,7 @@ export default function WorkoutRunScreen() {
     if (processed.current) return;
     processed.current = true;
 
-    const { exerciseId, reps: repsStr, goodReps: goodStr, events: eventsStr } = params;
+    const { exerciseId, reps: repsStr, goodReps: goodStr, events: eventsStr, mode } = params;
 
     if (!session) {
       // No active session — navigate back
@@ -114,7 +115,7 @@ export default function WorkoutRunScreen() {
       let repEvents: RepEventData[] = [];
       try { repEvents = eventsStr ? JSON.parse(eventsStr) : []; } catch { repEvents = []; }
 
-      completeExercise(exerciseId, reps, goodReps, repEvents);
+      completeExercise(exerciseId, reps, goodReps, repEvents, mode !== 'repCounter');
 
       // Read updated store state synchronously
       const updated = useWorkoutSessionStore.getState();
@@ -199,9 +200,11 @@ export default function WorkoutRunScreen() {
         },
       });
     } else {
-      // Non-CV exercise: record full target reps immediately as "completed"
+      // Non-CV exercise: record full target reps immediately as "completed".
+      // Form was never judged here — mark it rep-count-only so it doesn't
+      // land in the workout as "100% good form".
       const reps = ex.targetSets * ex.targetReps;
-      completeExercise(ex.exerciseId, reps, reps);
+      completeExercise(ex.exerciseId, reps, reps, [], false);
 
       const updated = useWorkoutSessionStore.getState();
       if (!updated.hasMoreExercises()) {

@@ -116,7 +116,7 @@ function formatShort(ts: number) {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type SessionEntry = { ts: number; reps: number; goodReps: number; pct: number };
+type SessionEntry = { ts: number; reps: number; goodReps: number; pct: number; formChecked?: boolean };
 
 // ─── Pill dropdown options ─────────────────────────────────────────────────────
 
@@ -325,7 +325,8 @@ function FormChart({
     const cut  = tab === 'week'  ? now - SEVEN_DAYS_MS
                : tab === 'month' ? now - THIRTY_DAYS_MS
                : 0;
-    return [...sessions].filter(e => e.ts >= cut).sort((a, b) => a.ts - b.ts);
+    // Form trend = form-checked sessions only; rep-counter reps have no score.
+    return sessions.filter(e => e.formChecked !== false && e.ts >= cut).sort((a, b) => a.ts - b.ts);
   }, [sessions, tab]);
 
   if (filtered.length < 2) {
@@ -476,11 +477,14 @@ export default function HomeScreen() {
 
   // ── Derived metrics ──────────────────────────────────────────────────────────
 
+  // Form score = form-checked sessions only; rep-counter reps have no score.
+  const scoredSessionsList = useMemo(() => sessions.filter(e => e.formChecked !== false), [sessions]);
+
   const formScore = useMemo<number | null>(() => {
-    if (sessions.length === 0) return null;
-    const last5 = sessions.slice(-5);
+    if (scoredSessionsList.length === 0) return null;
+    const last5 = scoredSessionsList.slice(-5);
     return Math.round(last5.reduce((a, e) => a + e.pct, 0) / last5.length);
-  }, [sessions]);
+  }, [scoredSessionsList]);
 
   const weekCount = useMemo(() => {
     const cut = Date.now() - SEVEN_DAYS_MS;
@@ -488,9 +492,9 @@ export default function HomeScreen() {
   }, [sessions]);
 
   const avgGoodPct = useMemo<number | null>(() => {
-    if (sessions.length === 0) return null;
-    return Math.round(sessions.reduce((a, e) => a + e.pct, 0) / sessions.length);
-  }, [sessions]);
+    if (scoredSessionsList.length === 0) return null;
+    return Math.round(scoredSessionsList.reduce((a, e) => a + e.pct, 0) / scoredSessionsList.length);
+  }, [scoredSessionsList]);
 
   const reversedSessions = useMemo(() => [...sessions].reverse(), [sessions]);
 

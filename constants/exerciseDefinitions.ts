@@ -102,6 +102,17 @@ export interface PlanarityCheckDef {
 export interface ExerciseDefinitionDef {
   id:                 string;
   displayName:        string;
+  // Two-tier tracking:
+  //   'formCheck'  (default, omit) — the camera can see this movement well
+  //     enough to both count reps AND judge form. Shows ✓/✗ cues, and its
+  //     good-rep ratio feeds muscle ranks / form scores.
+  //   'repCounter' — the camera can reliably COUNT reps but NOT judge form
+  //     (machine-occluded, hard-to-track path, etc.). formcheck.tsx shows a
+  //     clean rep count with no ✓/✗, and downstream (sessionLog, ranks,
+  //     recap, stats) treats these reps as VOLUME ONLY — they never
+  //     contribute a form-quality score. Lets a plan include any movement
+  //     without faking coaching or corrupting ranks.
+  mode?:             'formCheck' | 'repCounter';
   repMetric:          MetricDef;
   topAngle:           number;
   repEnterThreshold:  number;
@@ -4127,3 +4138,28 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     planarityChecks: [],
   },
 };
+
+// ─── Tracking-tier helpers ───────────────────────────────────────────────────
+// See ExerciseDefinitionDef.mode. Anything not in EXERCISE_DEFINITIONS, or
+// without an explicit mode, is treated as 'formCheck'.
+export function exerciseMode(id: string): 'formCheck' | 'repCounter' {
+  return (EXERCISE_DEFINITIONS as Record<string, ExerciseDefinitionDef | undefined>)[id]?.mode ?? 'formCheck';
+}
+
+export function isRepCounterExercise(id: string): boolean {
+  return exerciseMode(id) === 'repCounter';
+}
+
+// ─── Initial rep-counter set ─────────────────────────────────────────────────
+// Movements the camera can COUNT but not reliably JUDGE from the one workable
+// camera angle: cable/machine work where the apparatus occludes the joints, a
+// back-to-camera pulldown, side-on isolation work with a near-collapsed 2D
+// signal, and the twist (still uncalibrated). Adjust freely — flipping an id
+// here is the whole switch. Applied post-declaration so it stays a one-liner
+// list instead of a `mode:` line buried in each block.
+(['facePull', 'latPulldown', 'seatedCableRow', 'machineRow', 'cablePullThrough',
+  'standingGluteKickback', 'calfRaise', 'legCurl', 'russianTwist'] as const)
+  .forEach((id) => {
+    const def = (EXERCISE_DEFINITIONS as Record<string, ExerciseDefinitionDef | undefined>)[id];
+    if (def) def.mode = 'repCounter';
+  });

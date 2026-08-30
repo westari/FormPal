@@ -165,6 +165,7 @@ export default function AnalyzeVideoScreen() {
           videoUri,
           events:      JSON.stringify(repEvents),
           durationSec: String(durationSec),
+          mode:        (EXERCISE_DEFINITIONS[exerciseId]?.mode ?? 'formCheck') === 'repCounter' ? 'repCounter' : 'formCheck',
         },
       });
     } catch (e: any) {

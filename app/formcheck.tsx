@@ -354,14 +354,20 @@ function PositioningGuide({
 }
 
 // ─── Rep counter — bare number + label, no frame ─────────────────────────────
-function RepCounter({ reps, goodReps }: { reps: number; goodReps: number }) {
+// repCounterOnly: this exercise's form isn't judged (see exerciseDefinitions
+// `mode`), so show a neutral "REP COUNTER" tag instead of a good-rep count.
+function RepCounter({ reps, goodReps, repCounterOnly }: { reps: number; goodReps: number; repCounterOnly: boolean }) {
   return (
     <View style={s.repBlock} pointerEvents="none">
       <Text style={s.repNum}>{reps}</Text>
-      <View style={s.repSubRow}>
-        <View style={s.repDot} />
-        <Text style={s.repSub}>{goodReps} good</Text>
-      </View>
+      {repCounterOnly ? (
+        <Text style={s.repCounterTag}>REP COUNTER · FORM NOT SCORED</Text>
+      ) : (
+        <View style={s.repSubRow}>
+          <View style={s.repDot} />
+          <Text style={s.repSub}>{goodReps} good</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -405,6 +411,9 @@ export default function FormCheckScreen() {
     workoutExerciseId?: string;
   }>();
   const exerciseType = (exercise in SETUP_INFO ? exercise : 'squat') as ExerciseType;
+  // 'repCounter' exercises: still count reps live, but no ✓/✗ coaching and no
+  // form score reaches ranks/stats. See exerciseDefinitions.ts `mode`.
+  const repCounterOnly = (EXERCISE_DEFINITIONS[exerciseType]?.mode ?? 'formCheck') === 'repCounter';
 
   const [phase,    setPhase]    = useState<Phase>('idle');
   const [error,    setError]    = useState<string | null>(null);
@@ -616,8 +625,14 @@ export default function FormCheckScreen() {
       setGoodReps(rep.goodReps);
       flashAnim.setValue(1);
       Animated.timing(flashAnim, { toValue: 0, duration: 700, useNativeDriver: true }).start();
-      setFeedback({ good: rep.good, reason: rep.reason, seq: ++feedbackSeq.current });
-      handleRepAudio(rep.good, rep.reason, rep.goodReps);
+      if (repCounterOnly) {
+        // Reps only — no ✓/✗ orb, no corrective speech. Just a rep tick + the
+        // milestone count announcement, driven by total reps.
+        handleRepAudio(true, '', rep.reps, false);
+      } else {
+        setFeedback({ good: rep.good, reason: rep.reason, seq: ++feedbackSeq.current });
+        handleRepAudio(rep.good, rep.reason, rep.goodReps);
+      }
       const timeSec = startTimestamp.current != null
         ? (Date.now() - startTimestamp.current) / 1000 : 0;
       repEvents.current.push({ timeSec, good: rep.good, reason: rep.reason });
@@ -645,6 +660,7 @@ export default function FormCheckScreen() {
           // Feeds recap.tsx's rep breakdown section for workout mode — see
           // store/workoutSessionStore.ts's ExerciseResult.repEvents.
           events:     JSON.stringify(repEvents.current),
+          mode:       repCounterOnly ? 'repCounter' : 'formCheck',
         },
       });
     } else {
@@ -659,10 +675,11 @@ export default function FormCheckScreen() {
           videoUri: navParams.videoUri,
           events:   JSON.stringify(repEvents.current),
           durationSec: String(durationSec),
+          mode:     repCounterOnly ? 'repCounter' : 'formCheck',
         },
       });
     }
-  }, [router, returnTo, workoutExerciseId, exerciseType]);
+  }, [router, returnTo, workoutExerciseId, exerciseType, repCounterOnly]);
 
   const handleStop = useCallback(async () => {
     setPhase('stopping');
@@ -761,7 +778,7 @@ export default function FormCheckScreen() {
       )}
 
       {/* Rep counter — fixed near the top, same Liquid Glass frame as the box. */}
-      {showRepCounter && <RepCounter reps={reps} goodReps={goodReps} />}
+      {showRepCounter && <RepCounter reps={reps} goodReps={goodReps} repCounterOnly={repCounterOnly} />}
 
       {/* Ready → tracking */}
       {phase === 'setup-done' && (
@@ -1031,6 +1048,11 @@ const s = StyleSheet.create({
   repDot:    { width: 8, height: 8, borderRadius: 4, backgroundColor: C.good },
   repSub:    {
     fontFamily: F.bold, fontSize: 15, color: 'rgba(255,255,255,0.92)', letterSpacing: 0.3,
+    textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 10,
+  },
+  repCounterTag: {
+    fontFamily: F.bold, fontSize: 11, color: 'rgba(255,255,255,0.62)', letterSpacing: 1.4,
+    marginTop: 4,
     textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 10,
   },
   debugPanel: { position: 'absolute', bottom: 140, left: 16, backgroundColor: C.glass, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, minWidth: 210, borderWidth: 1, borderColor: C.border },

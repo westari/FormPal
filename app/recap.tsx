@@ -72,6 +72,16 @@ interface RecapData {
   // no duration recorded per past session — stays undefined there, and the
   // Time stat tile is simply omitted rather than showing a fabricated number.
   durationSec?:    number;
+  // Solo mode only: false = a 'repCounter' exercise (form not judged). The
+  // recap then shows the rep count but suppresses the form % / good-rep
+  // framing, and the saved SessionEntry carries formChecked:false so ranks
+  // and stats treat it as volume-only. Workout mode carries this per entry.
+  formChecked?:    boolean;
+  // Any judged reps at all in this recap? false → the Form % tile shows "—"
+  // and the summary sentence drops the good-form framing. Covers all three
+  // modes (solo repCounter, an all-repCounter workout, an all-repCounter
+  // history group).
+  hasFormData:     boolean;
 }
 
 // ─── Palette — liquid-glass light theme, matches the pasted mockup ───────────
@@ -132,9 +142,10 @@ function formatDuration(totalSec: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-function generateSummary(reps: number, goodReps: number): string {
+function generateSummary(reps: number, goodReps: number, hasFormData = true): string {
   const pct = reps > 0 ? Math.round((goodReps / reps) * 100) : 0;
   if (reps === 0)  return 'No reps were detected this session. Try positioning the phone so your full body is visible from the side.';
+  if (!hasFormData) return `${reps} reps counted. Form wasn't scored for this session — these are rep-counter movements, so they build training volume without a form grade.`;
   if (pct === 100) return `Clean session — all ${reps} reps hit good form. That kind of consistency is what builds real strength over time.`;
   if (pct >= 80)   return `Solid work. ${goodReps} of your ${reps} reps (${pct}%) hit good form.`;
   if (pct >= 50)   return `You hit good form on ${goodReps} of ${reps} reps (${pct}%). Slow down the rep and focus on full range of motion.`;
@@ -422,12 +433,16 @@ export default function RecapScreen() {
           .map(r => ({
             ts: summary.finishedAt, exerciseId: r.exerciseId, displayName: r.displayName,
             reps: r.reps, goodReps: r.goodReps, pct: r.formScore,
+            formChecked: r.formChecked,
           }));
         if (entries.length > 0) await appendSessions(entries);
 
         const repEventsByExercise: Record<string, RepEventData[]> = {};
         for (const r of summary.results) {
-          if (r.completed && r.repEvents && r.repEvents.length > 0) {
+          // repCounter exercises have per-rep good/bad flags from native, but
+          // we're not judging their form — don't feed them into the ✓/✗
+          // breakdown.
+          if (r.completed && r.formChecked && r.repEvents && r.repEvents.length > 0) {
             repEventsByExercise[r.exerciseId] = r.repEvents;
           }
         }
@@ -437,6 +452,7 @@ export default function RecapScreen() {
           totalReps: summary.totalReps, totalGoodReps: summary.totalGoodReps,
           pct: summary.overallFormScore, isHistory: false, workoutSummary: summary,
           durationSec: summary.durationSeconds, repEventsByExercise,
+          hasFormData: summary.results.some(r => r.completed && r.formChecked),
         });
       } else if (isHistoryMode) {
         const all    = await getAllSessions();
@@ -447,26 +463,31 @@ export default function RecapScreen() {
           ts: group.ts, entries: group.entries,
           totalReps: group.totalReps, totalGoodReps: group.totalGoodReps,
           pct: group.pct, isHistory: true,
+          hasFormData: group.entries.some(e => e.formChecked !== false),
         });
       } else {
-        const reps     = parseInt(repsStr ?? '0', 10);
-        const goodReps = parseInt(goodRepsStr ?? '0', 10);
-        const pct      = reps > 0 ? Math.round((goodReps / reps) * 100) : 0;
-        const soloTs   = Date.now();
-        const exId     = exercise ?? 'unknown';
+        const reps        = parseInt(repsStr ?? '0', 10);
+        const goodReps    = parseInt(goodRepsStr ?? '0', 10);
+        const formChecked = mode !== 'repCounter';
+        const pct         = formChecked && reps > 0 ? Math.round((goodReps / reps) * 100) : 0;
+        const soloTs      = Date.now();
+        const exId        = exercise ?? 'unknown';
         const entry: SessionEntry = {
           ts: soloTs, exerciseId: exId,
           displayName: EXERCISE_DEFINITIONS[exId as ExerciseId]?.displayName ?? exId,
-          reps, goodReps, pct,
+          reps, goodReps, pct, formChecked,
         };
         if (reps > 0) await appendSessions([entry]);
         const parsedDuration = durationSecParam != null ? parseInt(durationSecParam, 10) : undefined;
         setData({
           ts: soloTs, entries: reps > 0 ? [entry] : [],
-          totalReps: reps, totalGoodReps: goodReps, pct,
+          totalReps: reps, totalGoodReps: goodReps, pct, formChecked,
+          hasFormData: formChecked,
           videoUri: typeof videoUriParam === 'string' && videoUriParam.length > 0 ? videoUriParam : undefined,
-          repEvents: repEventsParam, isHistory: false,
-          repEventsByExercise: repEventsParam.length > 0 ? { [exId]: repEventsParam } : undefined,
+          // repCounter: suppress the per-rep ✓/✗ timeline + breakdown entirely.
+          repEvents: formChecked ? repEventsParam : [],
+          isHistory: false,
+          repEventsByExercise: formChecked && repEventsParam.length > 0 ? { [exId]: repEventsParam } : undefined,
           durationSec: parsedDuration != null && !isNaN(parsedDuration) ? parsedDuration : undefined,
         });
       }
@@ -614,7 +635,7 @@ export default function RecapScreen() {
       '=== ATHLT Debug Log ===',
       `Exercise: ${data?.entries?.[0]?.exerciseId ?? exercise ?? 'unknown'}`,
       `Date: ${new Date().toLocaleDateString()}`,
-      `Reps: ${data?.totalReps ?? 0} (${data?.totalGoodReps ?? 0} good)`,
+      `Reps: ${data?.totalReps ?? 0}${data?.hasFormData ? ` (${data?.totalGoodReps ?? 0} good)` : ' (form not scored)'}`,
       '========================',
       '',
     ].join('\n');
@@ -735,9 +756,9 @@ export default function RecapScreen() {
                   </GlassSurface>
                   <GlassSurface radius={20} style={s.statTile}>
                     <Text style={[s.statVal, { color: C.good }]}>
-                      {data.totalReps > 0 ? `${data.pct}%` : '—'}
+                      {data.hasFormData && data.totalReps > 0 ? `${data.pct}%` : '—'}
                     </Text>
-                    <Text style={s.statLbl}>Form</Text>
+                    <Text style={s.statLbl}>{data.hasFormData ? 'Form' : 'Form n/a'}</Text>
                   </GlassSurface>
                   {data.durationSec != null && (
                     <GlassSurface radius={20} style={s.statTile}>
@@ -817,7 +838,7 @@ export default function RecapScreen() {
             {data.totalReps > 0 && (
               <GlassSurface radius={30} style={s.detailCard}>
                 <Text style={s.detailCardLabel}>OVERVIEW</Text>
-                <Text style={s.cardText}>{generateSummary(data.totalReps, data.totalGoodReps)}</Text>
+                <Text style={s.cardText}>{generateSummary(data.totalReps, data.totalGoodReps, data.hasFormData)}</Text>
               </GlassSurface>
             )}
 
@@ -832,7 +853,11 @@ export default function RecapScreen() {
                         {r.completed && <Text style={s.exMeta}>{r.reps} reps</Text>}
                         {r.skipped   && <Text style={[s.exMeta, { color: C.muted }]}>Skipped</Text>}
                       </View>
-                      {r.completed && r.reps > 0 && <Text style={s.exScore}>{r.formScore}%</Text>}
+                      {r.completed && r.reps > 0 && (
+                        r.formChecked
+                          ? <Text style={s.exScore}>{r.formScore}%</Text>
+                          : <Text style={[s.exScore, { color: C.muted }]}>rep count</Text>
+                      )}
                     </View>
                     {i < breakdown.length - 1 && <View style={s.divider} />}
                   </React.Fragment>
