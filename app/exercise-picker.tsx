@@ -5,6 +5,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SymbolView } from 'expo-symbols';
 import { EXERCISE_CATALOG, type ExerciseId } from '../constants/exercises';
+import AppBackground from '../components/AppBackground';
+import GlassSurface from '../components/GlassSurface';
 
 const F = {
   regular: 'BricolageGrotesque_400Regular',
@@ -112,13 +114,7 @@ export default function ExercisePickerScreen() {
 
   return (
     <View style={s.root}>
-      <LinearGradient
-        colors={['#E8F1FF', '#EFEAFF', '#E9FBF2', '#FFF4EA']}
-        locations={[0, 0.38, 0.7, 1]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
+      <AppBackground />
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{
@@ -151,24 +147,26 @@ export default function ExercisePickerScreen() {
             return (
               <Pressable
                 key={ex.id}
-                style={({ pressed }) => [s.card, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
+                style={({ pressed }) => [s.cardWrap, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
                 onPress={() => router.push(`${returnTo || '/formcheck'}?exercise=${ex.id}` as any)}
               >
-                <LinearGradient
-                  colors={ui.grad}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={s.iconBox}
-                >
-                  <SymbolView
-                    name={ui.symbol as any}
-                    type="monochrome"
-                    style={{ width: 26, height: 26 }}
-                    tintColor="#fff"
-                  />
-                </LinearGradient>
-                <Text style={s.cardName} numberOfLines={2}>{ex.displayName}</Text>
-                <Text style={s.cardSub} numberOfLines={1}>{ex.muscleGroups.join(' · ')}</Text>
+                <GlassSurface radius={22} style={s.card}>
+                  <LinearGradient
+                    colors={ui.grad}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={s.iconBox}
+                  >
+                    <SymbolView
+                      name={ui.symbol as any}
+                      type="monochrome"
+                      style={{ width: 26, height: 26 }}
+                      tintColor="#fff"
+                    />
+                  </LinearGradient>
+                  <Text style={s.cardName} numberOfLines={2}>{ex.displayName}</Text>
+                  <Text style={s.cardSub} numberOfLines={1}>{ex.muscleGroups.join(' · ')}</Text>
+                </GlassSurface>
               </Pressable>
             );
           })}
@@ -217,22 +215,14 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    rowGap: 12,
+    rowGap: 14,
   },
+  cardWrap: { width: '48%' },
   card: {
-    width: '48%',
     minHeight: 138,
-    backgroundColor: '#fff',
-    borderRadius: 22,
-    borderCurve: 'continuous',
     padding: 16,
     gap: 10,
     alignItems: 'flex-start',
-    shadowColor: '#4A5468',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 3,
   },
   iconBox: {
     width: 52,

@@ -19,6 +19,8 @@ import { SymbolView } from 'expo-symbols';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { FONT, Sp, W } from '../../constants/theme';
+import AppBackground from '../../components/AppBackground';
+import GlassSurface from '../../components/GlassSurface';
 import { usePlanStore } from '../../store/planStore';
 import { EXERCISE_CATALOG, Equipment, MuscleGroup } from '../../constants/exercises';
 import type { Workout, PlannedExercise, Plan } from '../../types/plan';
@@ -31,8 +33,6 @@ const BF = {
   extra:   'BricolageGrotesque_800ExtraBold',
 };
 
-// Same colored wash as app/exercise-picker.tsx.
-const PICKER_GRAD = ['#E8F1FF', '#EFEAFF', '#E9FBF2', '#FFF4EA'] as const;
 
 // ─── Design tokens — exact match of home screen ───────────────────────────────
 
@@ -49,16 +49,9 @@ const C = {
   midBg:   'rgba(255,159,10,0.12)',
 };
 
-const SHADOW_HIGH = Platform.OS === 'ios' ? {
-  boxShadow: '0px 1.5px 3px rgba(16,24,40,0.05), 0px 5px 12px rgba(16,24,40,0.05), 0px 20px 36px rgba(28,40,90,0.22), inset 0px 1px 0px rgba(255,255,255,0.95)',
-} as any : {};
-
+// Non-glass shadow, still used by the CTA button + loading skeleton.
 const SHADOW_MED = Platform.OS === 'ios' ? {
   boxShadow: '0px 1px 1.5px rgba(16,24,40,0.05), 0px 8px 18px rgba(28,40,90,0.15), inset 0px 1px 0px rgba(255,255,255,0.9)',
-} as any : {};
-
-const SHADOW_ROW = Platform.OS === 'ios' ? {
-  boxShadow: '0px 1px 1.5px rgba(16,24,40,0.05), 0px 8px 18px rgba(28,40,90,0.12), inset 0px 1px 0px rgba(255,255,255,0.9)',
 } as any : {};
 
 // ─── Practice section ─────────────────────────────────────────────────────────
@@ -114,7 +107,7 @@ const sh = StyleSheet.create({
 /** Empty state when no plan exists yet */
 function NoPlanCard({ onPress }: { onPress: () => void }) {
   return (
-    <View style={[np.card, SHADOW_HIGH]}>
+    <GlassSurface radius={28} style={np.card}>
       {/* Illustration placeholder */}
       <View style={np.illustrationBox}>
         <SymbolView
@@ -131,15 +124,11 @@ function NoPlanCard({ onPress }: { onPress: () => void }) {
       <Pressable style={np.btn} onPress={onPress}>
         <Text style={np.btnTxt}>Create your plan →</Text>
       </Pressable>
-    </View>
+    </GlassSurface>
   );
 }
 const np = StyleSheet.create({
   card: {
-    backgroundColor: C.card,
-    borderRadius: 28,
-    borderWidth: 1,
-    borderColor: C.border,
     padding: 28,
     alignItems: 'center',
     gap: 12,
@@ -169,7 +158,7 @@ const np = StyleSheet.create({
 /** All-done state when every workout is completed */
 function AllDoneCard({ onRegenerate }: { onRegenerate: () => void }) {
   return (
-    <View style={[nd.card, SHADOW_MED]}>
+    <GlassSurface radius={24} style={nd.card}>
       <View style={nd.iconBox}>
         <SymbolView name="checkmark.seal.fill" type="multicolor" style={{ width: 36, height: 36 }} />
       </View>
@@ -178,13 +167,12 @@ function AllDoneCard({ onRegenerate }: { onRegenerate: () => void }) {
       <Pressable style={nd.btn} onPress={onRegenerate}>
         <Text style={nd.btnTxt}>Generate new plan</Text>
       </Pressable>
-    </View>
+    </GlassSurface>
   );
 }
 const nd = StyleSheet.create({
   card: {
-    backgroundColor: C.card, borderRadius: 24, borderWidth: 1,
-    borderColor: C.border, padding: 24, alignItems: 'center', gap: 10,
+    padding: 24, alignItems: 'center', gap: 10,
   },
   iconBox: {
     width: 60, height: 60, borderRadius: 18, backgroundColor: C.goodBg,
@@ -257,7 +245,7 @@ function TodayCard({
   const exCount = workout.exercises.length;
 
   return (
-    <View style={[tc.card, SHADOW_HIGH]}>
+    <GlassSurface radius={28} style={tc.card}>
       {/* Header row */}
       <View style={tc.headerRow}>
         <View style={tc.labelChip}>
@@ -319,15 +307,11 @@ function TodayCard({
           <Text style={tc.startTxt}>Start workout</Text>
         </LinearGradient>
       </Pressable>
-    </View>
+    </GlassSurface>
   );
 }
 const tc = StyleSheet.create({
   card: {
-    backgroundColor: C.card,
-    borderRadius: 28,
-    borderWidth: 1,
-    borderColor: C.border,
     padding: 22,
     gap: 16,
   },
@@ -404,7 +388,7 @@ function WeekSchedule({
           const isUpcoming = !isDone && !isCurrent;
 
           return (
-            <View key={w.id} style={[ws.sessionRow, SHADOW_ROW, isCurrent && ws.sessionRowActive]}>
+            <GlassSurface key={w.id} radius={18} style={ws.sessionRow}>
               {/* Session number bubble */}
               <View style={[ws.numBubble, isDone && ws.numBubbleDone, isCurrent && ws.numBubbleActive]}>
                 {isDone ? (
@@ -434,7 +418,7 @@ function WeekSchedule({
               {isDone && (
                 <Text style={ws.doneTxt}>✓</Text>
               )}
-            </View>
+            </GlassSurface>
           );
         })}
       </View>
@@ -458,16 +442,10 @@ const ws = StyleSheet.create({
   },
   pipDone:    { backgroundColor: C.good },
   pipActive:  { backgroundColor: C.accent },
-  sessionList: { gap: 8 },
+  sessionList: { gap: 10 },
   sessionRow: {
     flexDirection: 'row', alignItems: 'center', gap: 13,
-    backgroundColor: C.card,
-    borderRadius: 18, borderWidth: 1, borderColor: C.border,
     padding: 14, paddingHorizontal: 16,
-  },
-  sessionRowActive: {
-    borderColor: 'rgba(10,132,255,0.18)',
-    backgroundColor: 'rgba(10,132,255,0.02)',
   },
   numBubble: {
     width: 34, height: 34, borderRadius: 10,
@@ -505,36 +483,30 @@ function PracticeCard({ id, name, muscleGroups, onPress }: {
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [pc.card, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
+      style={({ pressed }) => [pc.wrap, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
     >
-      <LinearGradient
-        colors={ui.grad}
-        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-        style={pc.iconBox}
-      >
-        <SymbolView name={ui.symbol as any} type="monochrome"
-          style={{ width: 26, height: 26 }} tintColor="#fff" />
-      </LinearGradient>
-      <Text style={pc.name} numberOfLines={2}>{name}</Text>
-      <Text style={pc.sub} numberOfLines={1}>{muscleGroups.join(' · ')}</Text>
+      <GlassSurface radius={22} style={pc.card}>
+        <LinearGradient
+          colors={ui.grad}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+          style={pc.iconBox}
+        >
+          <SymbolView name={ui.symbol as any} type="monochrome"
+            style={{ width: 26, height: 26 }} tintColor="#fff" />
+        </LinearGradient>
+        <Text style={pc.name} numberOfLines={2}>{name}</Text>
+        <Text style={pc.sub} numberOfLines={1}>{muscleGroups.join(' · ')}</Text>
+      </GlassSurface>
     </Pressable>
   );
 }
 const pc = StyleSheet.create({
+  wrap: { width: '48%' },
   card: {
-    width: '48%',
     minHeight: 138,
-    backgroundColor: '#fff',
-    borderRadius: 22,
-    borderCurve: 'continuous',
     padding: 16,
     gap: 10,
     alignItems: 'flex-start',
-    shadowColor: '#4A5468',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 3,
   },
   iconBox: {
     width: 52, height: 52,
@@ -630,13 +602,7 @@ export default function TrainScreen() {
     <>
       <StatusBar style="dark" />
       <View style={s.bg}>
-        <LinearGradient
-          colors={PICKER_GRAD}
-          locations={[0, 0.38, 0.7, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
+        <AppBackground />
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[
