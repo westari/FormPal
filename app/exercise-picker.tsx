@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SymbolView } from 'expo-symbols';
 import { EXERCISE_CATALOG, type ExerciseId } from '../constants/exercises';
-import AppBackground from '../components/AppBackground';
+import LiquidBackdrop from '../components/LiquidBackdrop';
 import GlassSurface from '../components/GlassSurface';
 
 const F = {
@@ -114,7 +114,7 @@ export default function ExercisePickerScreen() {
 
   return (
     <View style={s.root}>
-      <AppBackground />
+      <LiquidBackdrop />
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{
