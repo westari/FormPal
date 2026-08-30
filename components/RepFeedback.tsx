@@ -3,7 +3,7 @@
 // would look on iOS 26. Props unchanged: { good, reason, seq, onComplete }.
 
 import React, { useRef, useEffect } from 'react';
-import { View, StyleSheet, Animated, Platform } from 'react-native';
+import { View, Text, StyleSheet, Animated, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
 import Svg, {
   Defs, RadialGradient, LinearGradient as SvgLinearGradient, Stop,
@@ -113,7 +113,7 @@ const orb = StyleSheet.create({
 
 export default function RepFeedback({
   good,
-  reason: _reason,
+  reason,
   seq: repSeq,
   onComplete,
 }: {
@@ -151,8 +151,11 @@ export default function RepFeedback({
       style={[StyleSheet.absoluteFill, rf.overlay, { opacity }]}
       pointerEvents="none"
     >
-      <Animated.View style={{ transform: [{ scale }] }}>
+      <Animated.View style={{ transform: [{ scale }], alignItems: 'center' }}>
         <GlassOrb good={good} />
+        {!good && !!reason && (
+          <Text style={rf.cue} numberOfLines={2}>{reason}</Text>
+        )}
       </Animated.View>
     </Animated.View>
   );
@@ -160,4 +163,16 @@ export default function RepFeedback({
 
 const rf = StyleSheet.create({
   overlay: { alignItems: 'center', justifyContent: 'center' },
+  cue: {
+    marginTop: 20,
+    maxWidth: 300,
+    fontFamily: 'BricolageGrotesque_800ExtraBold',
+    fontSize: 24,
+    color: '#fff',
+    textAlign: 'center',
+    lineHeight: 29,
+    textShadowColor: 'rgba(0,0,0,0.55)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 12,
+  },
 });

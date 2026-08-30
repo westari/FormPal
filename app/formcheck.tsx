@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Defs, LinearGradient as SvgLinearGradient, Stop, Rect } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import GlassButton from '../components/GlassButton';
 import RepFeedback from '../components/RepFeedback';
@@ -242,24 +243,24 @@ const gp = StyleSheet.create({
 });
 
 // ─── Positioning-guide box overlay ───────────────────────────────────────────
-// One clean rounded-rect outline with a continuous (squircle) corner curve —
-// no dimming, no corner brackets. A single stroked outline reads clean,
-// matches the Liquid Glass panels, and tells the user roughly where to line
-// up. It goes green with a glow the instant SETUP's joint check passes, then
-// STAYS on screen through the set as the frame the rep count lives inside —
-// so it reads as the live training area, not a throwaway setup graphic.
-// Sized generously (legs / full standing body fit inside). Purely visual —
-// doesn't hit-test joints (that's native).
+// Rounded-rect frame drawn with an SVG gradient stroke so it carries the same
+// beveled-glass vibe as the RepFeedback orb — light along the top edge, fading
+// through mid, dark along the bottom — over a faint glass tint, with a soft
+// outer glow. Goes green (+ green glow) the instant SETUP's joint check
+// passes, then stays through the set. Sized generously (legs / full standing
+// body fit inside). Purely visual — doesn't hit-test joints (that's native).
 function PositioningGuide({
   box, ready, children,
 }: { box: 'standing' | 'floor'; ready: boolean; children?: React.ReactNode }) {
   const rect = box === 'floor'
     ? { top: '33%', bottom: '5%',  side: '4%'  }
     : { top: '16%', bottom: '7%',  side: '9%'  };
-  const line = ready ? C.good : 'rgba(255,255,255,0.9)';
-  const R    = 32;
+  const R  = 34;
+  const SW = 3;
 
-  // Subtle breathe while waiting (0.86 -> 1); locks solid green on ready.
+  const [size, setSize] = useState({ w: 0, h: 0 });
+
+  // Subtle breathe while waiting (0.86 -> 1); locks solid on ready.
   const pulse = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     if (ready) { pulse.stopAnimation(); pulse.setValue(1); return; }
@@ -271,23 +272,46 @@ function PositioningGuide({
     return () => loop.stop();
   }, [ready, pulse]);
 
+  const topStop = ready ? '#8affb0' : '#ffffff';
+  const midStop = ready ? C.good    : '#ffffff';
+
   return (
     <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
       <Animated.View
+        onLayout={(e) => setSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
         style={{
           position: 'absolute',
           top: rect.top as any, bottom: rect.bottom as any,
           left: rect.side as any, right: rect.side as any,
           borderRadius: R, borderCurve: 'continuous',
-          borderWidth: 2, borderColor: line,
-          backgroundColor: ready ? 'rgba(74,222,128,0.05)' : 'transparent',
+          backgroundColor: ready ? 'rgba(50,215,75,0.06)' : 'rgba(255,255,255,0.02)',
           opacity: pulse,
           alignItems: 'center', justifyContent: 'center',
-          ...(ready
-            ? { shadowColor: C.good, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.9, shadowRadius: 20, elevation: 8 }
-            : null),
+          shadowColor: ready ? C.good : '#000',
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: ready ? 0.9 : 0.45,
+          shadowRadius: ready ? 24 : 16,
+          elevation: 8,
         }}
       >
+        {size.w > 0 && (
+          <Svg width={size.w} height={size.h} style={StyleSheet.absoluteFill}>
+            <Defs>
+              <SvgLinearGradient id="boxrim" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0"   stopColor={topStop} stopOpacity="0.95" />
+                <Stop offset="0.5" stopColor={midStop} stopOpacity="0.34" />
+                <Stop offset="1"   stopColor="#000000" stopOpacity="0.42" />
+              </SvgLinearGradient>
+            </Defs>
+            <Rect
+              x={SW / 2} y={SW / 2}
+              width={size.w - SW} height={size.h - SW}
+              rx={R} ry={R}
+              fill="none"
+              stroke="url(#boxrim)" strokeWidth={SW}
+            />
+          </Svg>
+        )}
         {children}
       </Animated.View>
     </View>
@@ -688,15 +712,19 @@ export default function FormCheckScreen() {
         </PositioningGuide>
       )}
 
-      {/* Rep counter — fixed near the top, above the box border so it never
-          clumps into it. Carries its own shadow (no panel). */}
+      {/* Rep counter — fixed near the top on its own glass slab (matches the
+          panel / orb vibe), below the top bar so it doesn't collide with it. */}
       {showRepCounter && (
         <View style={s.repBlock} pointerEvents="none">
-          <Text style={s.repNum}>{reps}</Text>
-          <View style={s.repSubRow}>
-            <View style={s.repDot} />
-            <Text style={s.repSub}>{goodReps} good</Text>
-          </View>
+          <GlassPanel radius={30} style={s.repPanel}>
+            <View style={s.repPanelInner}>
+              <Text style={s.repNum}>{reps}</Text>
+              <View style={s.repSubRow}>
+                <View style={s.repDot} />
+                <Text style={s.repSub}>{goodReps} good</Text>
+              </View>
+            </View>
+          </GlassPanel>
         </View>
       )}
 
@@ -718,7 +746,7 @@ export default function FormCheckScreen() {
           <SymbolView name="chevron.left" size={18} tintColor={C.text} type="monochrome" style={{ width: 18, height: 18 }} />
         </GlassButton>
         <Text style={s.title} numberOfLines={1}>
-          {phase === 'setup' || phase === 'setup-done' || phase === 'starting'
+          {phase === 'tracking' || phase === 'setup' || phase === 'setup-done' || phase === 'starting'
             ? ''
             : (EXERCISE_DEFINITIONS[exerciseType]?.displayName ?? exerciseType)}
         </Text>
@@ -958,18 +986,17 @@ const s = StyleSheet.create({
   outOfPlaneInner: { paddingHorizontal: 22, paddingVertical: 11 },
   outOfPlaneText:  { fontFamily: F.bold, fontSize: 16, color: C.warn, letterSpacing: 0.3 },
 
-  // Rep count — fixed near the top, no panel, carries its own shadow.
-  repBlock:  { position: 'absolute', top: '9%', left: 0, right: 0, alignItems: 'center' },
-  repNum:    {
-    fontFamily: F.extra, fontSize: 116, lineHeight: 122, color: '#fff', letterSpacing: -2,
-    textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 16,
+  // Rep count — fixed near the top on a glass slab, clear of the top bar.
+  repBlock:      { position: 'absolute', top: '12%', left: 0, right: 0, alignItems: 'center' },
+  repPanel:      { alignSelf: 'center' },
+  repPanelInner: { paddingHorizontal: 40, paddingTop: 12, paddingBottom: 16, alignItems: 'center' },
+  repNum:        {
+    fontFamily: F.extra, fontSize: 104, lineHeight: 110, color: '#fff', letterSpacing: -2,
+    textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 14,
   },
   repSubRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
   repDot:    { width: 8, height: 8, borderRadius: 4, backgroundColor: C.good },
-  repSub:    {
-    fontFamily: F.bold, fontSize: 16, color: 'rgba(255,255,255,0.9)', letterSpacing: 0.3,
-    textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 8,
-  },
+  repSub:    { fontFamily: F.bold, fontSize: 15, color: 'rgba(255,255,255,0.9)', letterSpacing: 0.3 },
   debugPanel: { position: 'absolute', bottom: 140, left: 16, backgroundColor: C.glass, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, minWidth: 210, borderWidth: 1, borderColor: C.border },
   bottomBar:  { position: 'absolute', bottom: 0, left: 0, right: 0, alignItems: 'center', paddingTop: 12, paddingHorizontal: 24, gap: 12 },
   hint:       { color: C.muted, fontSize: 13 },
