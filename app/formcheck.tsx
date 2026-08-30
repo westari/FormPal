@@ -175,8 +175,6 @@ const SETUP_INFO: Record<ExerciseId, { icon: string; title: string; sub: string 
   // that exercise's comment for the confirmed on-device
   // lying-pose-detection risk this shares with the removed gluteBridge.
   crunch: { icon: 'arrow.left.and.right', title: 'Lie on your back, camera to your side', sub: 'Shoulders and knees in frame' },
-  // Russian twist — front-facing, seated. Matches its own setupInstruction.
-  russianTwist: { icon: 'arrow.left.and.right', title: 'Sit side-on, camera on the floor', sub: 'One shoulder, hip, and knee in frame' },
 };
 
 // ─── Positioning-guide box orientation ───────────────────────────────────────

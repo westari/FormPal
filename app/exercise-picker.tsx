@@ -93,10 +93,7 @@ const EXERCISE_UI: Record<ExerciseId, { symbol: string; grad: [string, string] }
   calfRaise: { symbol: 'figure.strengthtraining.functional', grad: ['#6EE7B7', '#047857'] },
   // Leg curl (machine) — teal, distinct from squat's amber-orange lower-body family
   legCurl: { symbol: 'figure.strengthtraining.traditional', grad: ['#5EEAD4', '#0D9488'] },
-  // Crunch / Russian twist — both core.training, amber vs. rotation-icon
-  // violet so the two ab exercises don't read identically at a glance
   crunch: { symbol: 'figure.core.training', grad: ['#FCD34D', '#B45309'] },
-  russianTwist: { symbol: 'arrow.triangle.2.circlepath', grad: ['#C4B5FD', '#5B21B6'] },
 };
 
 export default function ExercisePickerScreen() {

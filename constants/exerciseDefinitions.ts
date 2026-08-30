@@ -4061,82 +4061,16 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     planarityChecks: [],
   },
 
-  // ─── Russian twist ──────────────────────────────────────────────────────────
-  //
-  // SIDE-ON REBUILD. The front-facing version was abandoned: a raised
-  // waist-high front camera is not a setup a normal person can rig, and a
-  // floor-level front phone just stares at the shins. Everything below is now
-  // built for the SAME camera position as crunch — phone on the floor a few
-  // feet to the side — because that's the only placement the user can
-  // actually achieve.
-  //
-  // METRIC (side-on): signedDeviationFromLine(point: nearShoulder,
-  // lineFrom: nearHip, lineTo: nearKnee) — the near shoulder's signed
-  // perpendicular offset from the thigh line. Twisting the torso toward the
-  // camera swings the near shoulder one way (fore/aft in the image);
-  // twisting away swings it the other way; neutral sits in between. Shoulder
-  // + hip + knee are the joints crunch proved usable side-on (~0.3-0.7
-  // confidence) — the WRIST is dropped entirely (hands clasped at the chest
-  // are routinely occluded by the thighs when leaned back, which is what
-  // sank the old wrist metric).
-  //
-  // EVERY THRESHOLD BELOW IS A PURE PLACEHOLDER with ONE job: make *some*
-  // rep register on any oscillation that crosses zero, so a calibration log
-  // can be captured. There is no device data for this configuration — sign,
-  // scale and even whether the signal is cleanly signed are all unverified.
-  // Do ~15 twists, send the session log, and the real enter / exit /
-  // topAngle / goodROM get set from the [METRIC] russianTwist value= stream
-  // (or this exercise gets parked if the signal turns out to be unusable).
-  russianTwist: {
-    id:          'russianTwist',
-    displayName: 'Russian Twist',
-    guideBox:    'floor',
-
-    repMetric: {
-      type: 'bestSide',
-      left:  { type: 'signedDeviationFromLine', point: 'leftShoulder',  lineFrom: 'leftHip',  lineTo: 'leftKnee'  },
-      right: { type: 'signedDeviationFromLine', point: 'rightShoulder', lineFrom: 'rightHip', lineTo: 'rightKnee' },
-      // Near side only — far side is fully occluded side-on (crunch log
-      // confirmed far-side joints at ~0.0-0.3). bestSide picks whichever
-      // side Vision can actually see.
-      leftJoints:  ['leftShoulder',  'leftHip',  'leftKnee'],
-      rightJoints: ['rightShoulder', 'rightHip', 'rightKnee'],
-    },
-
-    // PLACEHOLDERS — see the block comment. Deliberately tiny and centred on
-    // zero so ANY twist oscillation that crosses centre registers a rep,
-    // regardless of the real amplitude or sign. NOT a guess at real values.
-    topAngle:            0.05,    // PLACEHOLDER — near centre; real ≈ one twist extreme (TBD from log)
-    repEnterThreshold:  -0.03,    // PLACEHOLDER — just past centre toward the other side
-    repExitThreshold:    0.02,    // PLACEHOLDER — back across centre
-    goodROMThreshold:   -0.08,    // PLACEHOLDER — meaningfully past centre
-    insufficientROMCue: 'TWIST FURTHER',
-
-    // No form check — the rep metric itself is still unverified; layering a
-    // second unverified guess on top would only add noise. Revisit once the
-    // rep signal is calibrated.
-    formChecks: [],
-    readyGate: PASSTHROUGH_GATE,
-
-    // Side-on, seated, leaned back — same camera as crunch.
-    cameraSetup: {
-      setupInstruction: 'Sit side-on to the camera, phone on the floor a few feet to your side — one shoulder, hip, and knee in frame',
-      requiredJoints:    ['leftShoulder',  'leftHip',  'leftKnee'],
-      requiredJointsAlt: ['rightShoulder', 'rightHip', 'rightKnee'],
-    },
-
-    // Side-on self-occlusion mid-rep — same log-confirmed exception crunch
-    // and tricep carry.
-    missingPersonGraceFrames: 6,
-
-    // Side-on seated: shoulder/hip/knee confidence sits under the 0.6
-    // reliability floor for much of a rep (crunch proved this). Without this
-    // the tracking-reliability gate deletes real reps. 0.9, same as crunch.
-    repReliabilityMaxUnreliableFraction: 0.9,
-
-    minRepInterval:  0.6,
-    planarityChecks: [],
-  },
+  // ─── Russian twist — REMOVED ────────────────────────────────────────────────
+  // Parked as untrackable. A twist is rotation about a vertical axis; from a
+  // side-on phone that's almost pure depth-axis motion, which a monocular 2D
+  // camera cannot see. Device log (8/30/2026, side-on) confirmed it: the
+  // near-shoulder-vs-thigh signal sat flat at ~-0.22 ±0.04 through a full set
+  // of twists — no oscillation, no zero-crossing, 0 reps. The front view
+  // could see it (hands sweep left↔right across frame) but needs a raised
+  // camera position that isn't realistic. No metric available here works, so
+  // the exercise is out of EXERCISE_CATALOG / SETUP_INFO / the picker rather
+  // than shipping something that silently never counts.
 };
 
 // ─── Tracking-tier helpers ───────────────────────────────────────────────────
@@ -4158,7 +4092,7 @@ export function isRepCounterExercise(id: string): boolean {
 // here is the whole switch. Applied post-declaration so it stays a one-liner
 // list instead of a `mode:` line buried in each block.
 (['facePull', 'latPulldown', 'seatedCableRow', 'machineRow', 'cablePullThrough',
-  'standingGluteKickback', 'calfRaise', 'legCurl', 'russianTwist'] as const)
+  'standingGluteKickback', 'calfRaise', 'legCurl'] as const)
   .forEach((id) => {
     const def = (EXERCISE_DEFINITIONS as Record<string, ExerciseDefinitionDef | undefined>)[id];
     if (def) def.mode = 'repCounter';

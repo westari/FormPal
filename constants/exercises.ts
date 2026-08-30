@@ -1126,29 +1126,9 @@ export const EXERCISE_CATALOG = [
     isFormCheckable: true,
   },
 
-  // ─── Russian twist ──────────────────────────────────────────────────────────
-  // Targets obliques primarily — no Muscle.Obliques exists yet (see the
-  // Muscle enum's own comment on scope), so Abs is the closest available
-  // credit, not a precise one. See its registration in
-  // constants/exerciseDefinitions.ts for the rotational-tracking honesty
-  // flag — this is the highest-risk exercise added this round. One rep =
-  // one full twist to one side and back (see that comment for why).
-  {
-    id:              'russianTwist',
-    displayName:     'Russian Twist',
-    muscleGroups:    [MuscleGroup.Core],
-    muscles:         [Muscle.Abs],
-    splitCategories: [SplitCategory.Upper],
-    difficulty:      Difficulty.Intermediate,
-    equipment:       [],
-    defaultReps:     12,
-    defaultSets:     3,
-    progression: {
-      repRange: [10, 20],
-      setRange: [2, 4],
-    },
-    isFormCheckable: true,
-  },
+  // Russian twist was here — removed as untrackable (rotation about a vertical
+  // axis is invisible to a monocular side-on camera; device log confirmed a
+  // dead-flat signal). See the REMOVED note in constants/exerciseDefinitions.ts.
 
   // ─────────────────────────────────────────────────────────────────────────
   // ADD NEW FORM-CHECKABLE EXERCISES HERE.

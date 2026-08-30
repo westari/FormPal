@@ -175,12 +175,11 @@ export type ExerciseType =
   // Crunch (shoulder-to-knee distanceRatio, front/side camera) — lying
   // down; see its registration for the confirmed-on-device
   // lying-pose-detection risk this shares with the removed gluteBridge
-  | 'crunch'
-  // Russian twist (signed wrist deviation from the hip-shoulder axis,
-  // front camera) — rotational movement, the hardest tracking case added
-  // this round; one rep = one full twist to one side and back, see its
-  // registration for why
-  | 'russianTwist';
+  | 'crunch';
+  // Russian twist was here — removed as untrackable (a twist is rotation
+  // about a vertical axis; a monocular side-on camera can't see it, and the
+  // front view needs an impractical raised camera). Device-log confirmed a
+  // dead-flat signal. See constants/exerciseDefinitions.ts's REMOVED note.
 
 export async function setExercise(type: ExerciseType): Promise<void> {
   if (!ATHLTCameraNative) return;
