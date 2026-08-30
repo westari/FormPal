@@ -6,6 +6,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SymbolView } from 'expo-symbols';
 import { EXERCISE_CATALOG, type ExerciseId } from '../constants/exercises';
 
+const F = {
+  regular: 'BricolageGrotesque_400Regular',
+  bold:    'BricolageGrotesque_700Bold',
+  extra:   'BricolageGrotesque_800ExtraBold',
+};
+
 // Record<ExerciseId, ...>, not Record<string, ...> — every catalog exercise
 // required to have an icon/gradient, checked at compile time. A missing
 // entry used to mean the exercise silently didn't render in this list at
@@ -105,134 +111,147 @@ export default function ExercisePickerScreen() {
   const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
 
   return (
-    <ScrollView
-      style={s.root}
-      contentContainerStyle={{ paddingTop: insets.top + 20, paddingBottom: insets.bottom + 32 }}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={s.header}>
-        <Pressable onPress={() => router.back()} style={s.backBtn}>
-          <SymbolView
-            name="chevron.left"
-            size={18}
-            tintColor="#F0F0F2"
-            type="monochrome"
-            style={{ width: 18, height: 18 }}
-          />
-        </Pressable>
-        <View style={{ gap: 2 }}>
-          <Text style={s.title}>Form Check</Text>
-          <Text style={s.sub}>What are you working on?</Text>
+    <View style={s.root}>
+      <LinearGradient
+        colors={['#E8F1FF', '#EFEAFF', '#E9FBF2', '#FFF4EA']}
+        locations={[0, 0.38, 0.7, 1]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          paddingTop: insets.top + 20,
+          paddingBottom: insets.bottom + 32,
+          paddingHorizontal: 18,
+        }}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={s.header}>
+          <Pressable onPress={() => router.back()} style={s.backBtn}>
+            <SymbolView
+              name="chevron.left"
+              size={18}
+              tintColor="#1B1B1F"
+              type="monochrome"
+              style={{ width: 18, height: 18 }}
+            />
+          </Pressable>
+          <View style={{ gap: 2 }}>
+            <Text style={s.title}>Form Check</Text>
+            <Text style={s.sub}>What are you working on?</Text>
+          </View>
         </View>
-      </View>
 
-      <View style={s.list}>
-        {EXERCISE_CATALOG.map(ex => {
-          const ui = EXERCISE_UI[ex.id];
-          if (!ui) return null;
-          return (
-            <Pressable
-              key={ex.id}
-              style={({ pressed }) => [s.card, pressed && { opacity: 0.75 }]}
-              onPress={() => router.push(`${returnTo || '/formcheck'}?exercise=${ex.id}` as any)}
-            >
-              <LinearGradient
-                colors={ui.grad}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={s.iconBox}
+        <View style={s.grid}>
+          {EXERCISE_CATALOG.map(ex => {
+            const ui = EXERCISE_UI[ex.id];
+            if (!ui) return null;
+            return (
+              <Pressable
+                key={ex.id}
+                style={({ pressed }) => [s.card, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
+                onPress={() => router.push(`${returnTo || '/formcheck'}?exercise=${ex.id}` as any)}
               >
-                <SymbolView
-                  name={ui.symbol as any}
-                  type="monochrome"
-                  style={{ width: 26, height: 26 }}
-                  tintColor="#fff"
-                />
-              </LinearGradient>
-              <View style={s.cardMid}>
-                <Text style={s.cardName}>{ex.displayName}</Text>
-                <Text style={s.cardSub}>{ex.muscleGroups.join(' · ')}</Text>
-              </View>
-              <SymbolView
-                name="chevron.right"
-                size={15}
-                tintColor="#62626A"
-                type="monochrome"
-                style={{ width: 15, height: 15 }}
-              />
-            </Pressable>
-          );
-        })}
-      </View>
-    </ScrollView>
+                <LinearGradient
+                  colors={ui.grad}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={s.iconBox}
+                >
+                  <SymbolView
+                    name={ui.symbol as any}
+                    type="monochrome"
+                    style={{ width: 26, height: 26 }}
+                    tintColor="#fff"
+                  />
+                </LinearGradient>
+                <Text style={s.cardName} numberOfLines={2}>{ex.displayName}</Text>
+                <Text style={s.cardSub} numberOfLines={1}>{ex.muscleGroups.join(' · ')}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
 const s = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#0A0B0C',
-    paddingHorizontal: 20,
+    backgroundColor: '#EDF1F8',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
-    marginBottom: 32,
+    gap: 14,
+    marginBottom: 22,
   },
   backBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(255,255,255,0.07)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#4A5468',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.14,
+    shadowRadius: 10,
+    elevation: 2,
   },
   title: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#F0F0F2',
-    letterSpacing: -0.5,
+    fontFamily: F.extra,
+    fontSize: 24,
+    color: '#16171B',
+    letterSpacing: -0.4,
   },
   sub: {
+    fontFamily: F.regular,
     fontSize: 13.5,
-    color: '#9A9AA2',
+    color: '#6B6B73',
   },
-  list: {
-    gap: 12,
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    rowGap: 12,
   },
   card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    padding: 18,
-    backgroundColor: '#15161A',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    width: '48%',
+    minHeight: 138,
+    backgroundColor: '#fff',
+    borderRadius: 22,
+    borderCurve: 'continuous',
+    padding: 16,
+    gap: 10,
+    alignItems: 'flex-start',
+    shadowColor: '#4A5468',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 3,
   },
   iconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    borderCurve: 'continuous',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cardMid: {
-    flex: 1,
-    gap: 3,
-  },
   cardName: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#F0F0F2',
+    fontFamily: F.bold,
+    fontSize: 15.5,
+    color: '#16171B',
     letterSpacing: -0.2,
   },
   cardSub: {
-    fontSize: 12.5,
-    color: '#9A9AA2',
+    fontFamily: F.regular,
+    fontSize: 11.5,
+    color: '#8A8A92',
     textTransform: 'capitalize',
   },
 });
