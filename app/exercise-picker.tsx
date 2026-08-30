@@ -16,7 +16,7 @@ const F = {
 // required to have an icon/gradient, checked at compile time. A missing
 // entry used to mean the exercise silently didn't render in this list at
 // all (see the `if (!ui) return null` below) — now it's a build error.
-const EXERCISE_UI: Record<ExerciseId, { symbol: string; grad: [string, string] }> = {
+export const EXERCISE_UI: Record<ExerciseId, { symbol: string; grad: [string, string] }> = {
   squat:             { symbol: 'figure.strengthtraining.traditional', grad: ['#FFC24B', '#FF7A2E'] },
   pushup:            { symbol: 'figure.core.training',               grad: ['#67CEFF', '#0A6CFF'] },
   curl:              { symbol: 'dumbbell.fill',                      grad: ['#48E08A', '#12B59A'] },

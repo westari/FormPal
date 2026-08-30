@@ -19,10 +19,20 @@ import { SymbolView } from 'expo-symbols';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { FONT, Sp, W } from '../../constants/theme';
-import ScreenBackground from '../../components/ScreenBackground';
 import { usePlanStore } from '../../store/planStore';
-import { EXERCISE_CATALOG, Equipment } from '../../constants/exercises';
+import { EXERCISE_CATALOG, Equipment, MuscleGroup } from '../../constants/exercises';
 import type { Workout, PlannedExercise, Plan } from '../../types/plan';
+import { EXERCISE_UI } from '../exercise-picker';
+
+// Bricolage Grotesque — matches the exercise-picker tiles.
+const BF = {
+  regular: 'BricolageGrotesque_400Regular',
+  bold:    'BricolageGrotesque_700Bold',
+  extra:   'BricolageGrotesque_800ExtraBold',
+};
+
+// Same colored wash as app/exercise-picker.tsx.
+const PICKER_GRAD = ['#E8F1FF', '#EFEAFF', '#E9FBF2', '#FFF4EA'] as const;
 
 // ─── Design tokens — exact match of home screen ───────────────────────────────
 
@@ -58,13 +68,6 @@ const FILTER_BODYWEIGHT = 'Bodyweight';
 const FILTER_DUMBBELL   = 'Dumbbell';
 const FILTERS = [FILTER_ALL, FILTER_BODYWEIGHT, FILTER_DUMBBELL] as const;
 type Filter = typeof FILTERS[number];
-
-// Border color per equipment category (shown ONLY as border — not background)
-const EQUIP_BORDER: Record<string, string> = {
-  bodyweight: '#30D158',   // green
-  dumbbell:   '#0a84ff',   // blue
-  machine:    '#FF9F0A',   // orange
-};
 
 // SFSymbols for exercise catalog items
 const EXERCISE_SYMBOL: Record<string, string> = {
@@ -488,44 +491,61 @@ const ws = StyleSheet.create({
   doneTxt:       { fontSize: 16, color: C.good },
 });
 
-/** Practice exercise card (2-col grid) */
-function PracticeCard({ id, name, equipment, onPress }: {
-  id:        string;
-  name:      string;
-  equipment: Equipment[];
-  onPress:   () => void;
+/** Practice exercise card (2-col grid) — matches the exercise-picker tile:
+ *  white card, soft shadow, gradient icon box on top, name + muscle groups. */
+function PracticeCard({ id, name, muscleGroups, onPress }: {
+  id:           string;
+  name:         string;
+  muscleGroups: MuscleGroup[];
+  onPress:      () => void;
 }) {
-  const cat    = equipCategory(equipment);
-  const border = EQUIP_BORDER[cat] ?? EQUIP_BORDER.bodyweight;
-  const sym    = EXERCISE_SYMBOL[id] ?? 'figure.walk';
+  const ui = (EXERCISE_UI as Record<string, { symbol: string; grad: [string, string] } | undefined>)[id]
+    ?? { symbol: 'figure.walk', grad: ['#CBD5E1', '#64748B'] as [string, string] };
 
   return (
-    <Pressable onPress={onPress} style={[pc.card, SHADOW_MED, { borderColor: border }]}>
-      {/* Placeholder image area */}
-      <View style={pc.imgBox}>
-        <LinearGradient
-          colors={['#f4f5f8', '#eceef3']}
-          style={pc.imgGrad}
-        >
-          <SymbolView name={sym as any} type="monochrome"
-            style={{ width: 32, height: 32 }} tintColor="#b0b5bf" />
-        </LinearGradient>
-      </View>
-      <Text style={pc.name} numberOfLines={1}>{name}</Text>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [pc.card, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
+    >
+      <LinearGradient
+        colors={ui.grad}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+        style={pc.iconBox}
+      >
+        <SymbolView name={ui.symbol as any} type="monochrome"
+          style={{ width: 26, height: 26 }} tintColor="#fff" />
+      </LinearGradient>
+      <Text style={pc.name} numberOfLines={2}>{name}</Text>
+      <Text style={pc.sub} numberOfLines={1}>{muscleGroups.join(' · ')}</Text>
     </Pressable>
   );
 }
 const pc = StyleSheet.create({
   card: {
-    flex: 1, backgroundColor: C.card,
-    borderRadius: 18, borderWidth: 1.5,
-    overflow: 'hidden',
+    width: '48%',
+    minHeight: 138,
+    backgroundColor: '#fff',
+    borderRadius: 22,
+    borderCurve: 'continuous',
+    padding: 16,
+    gap: 10,
+    alignItems: 'flex-start',
+    shadowColor: '#4A5468',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 3,
   },
-  imgBox:  { width: '100%', aspectRatio: 1.5 },
-  imgGrad: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  name:    {
-    fontSize: 13.5, fontWeight: W.semi, color: C.text,
-    letterSpacing: -0.2, padding: 12, paddingTop: 10,
+  iconBox: {
+    width: 52, height: 52,
+    borderRadius: 16, borderCurve: 'continuous',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  name: {
+    fontFamily: BF.bold, fontSize: 15.5, color: '#16171B', letterSpacing: -0.2,
+  },
+  sub: {
+    fontFamily: BF.regular, fontSize: 11.5, color: '#8A8A92', textTransform: 'capitalize',
   },
 });
 
@@ -609,7 +629,14 @@ export default function TrainScreen() {
   return (
     <>
       <StatusBar style="dark" />
-      <ScreenBackground>
+      <View style={s.bg}>
+        <LinearGradient
+          colors={PICKER_GRAD}
+          locations={[0, 0.38, 0.7, 1]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[
@@ -682,25 +709,20 @@ export default function TrainScreen() {
 
             {/* 2-column exercise grid */}
             <View style={s.practiceGrid}>
-              {practiceExercises.map((ex, i) => (
-                <View key={ex.id} style={s.practiceCell}>
-                  <PracticeCard
-                    id={ex.id}
-                    name={ex.displayName}
-                    equipment={ex.equipment}
-                    onPress={() => openPractice(ex.id)}
-                  />
-                </View>
+              {practiceExercises.map(ex => (
+                <PracticeCard
+                  key={ex.id}
+                  id={ex.id}
+                  name={ex.displayName}
+                  muscleGroups={ex.muscleGroups}
+                  onPress={() => openPractice(ex.id)}
+                />
               ))}
-              {/* Fill last row if odd count */}
-              {practiceExercises.length % 2 !== 0 && (
-                <View style={s.practiceCell} />
-              )}
             </View>
           </View>
 
         </ScrollView>
-      </ScreenBackground>
+      </View>
     </>
   );
 }
@@ -708,6 +730,7 @@ export default function TrainScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
+  bg:     { flex: 1, backgroundColor: '#EDF1F8' },
   scroll: { gap: Sp.lg, paddingHorizontal: 16 },
 
   // 1. Header
@@ -746,8 +769,7 @@ const s = StyleSheet.create({
   practiceGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
-    paddingHorizontal: 0,
+    justifyContent: 'space-between',
+    rowGap: 12,
   },
-  practiceCell: { width: '47.5%' },
 });
