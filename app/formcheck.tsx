@@ -719,10 +719,10 @@ export default function FormCheckScreen() {
         <GlassButton circular={40} onPress={handleBack}>
           <SymbolView name="chevron.left" size={18} tintColor={C.text} type="monochrome" style={{ width: 18, height: 18 }} />
         </GlassButton>
-        <Text style={s.title}>
+        <Text style={s.title} numberOfLines={1}>
           {phase === 'setup' || phase === 'setup-done' || phase === 'starting'
             ? ''
-            : `${EXERCISE_DEFINITIONS[exerciseType]?.displayName ?? exerciseType} Form Check`}
+            : (EXERCISE_DEFINITIONS[exerciseType]?.displayName ?? exerciseType)}
         </Text>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <GlassButton circular={40} onPress={handleToggleMute}>
@@ -952,7 +952,7 @@ function logLineStyle(type: ReturnType<typeof logLineType>) {
 const s = StyleSheet.create({
   root:       { flex: 1, backgroundColor: '#000' },
   topBar:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 8 },
-  title:      { fontFamily: F.bold, fontSize: 15, color: C.text, letterSpacing: 0.2 },
+  title:      { flex: 1, textAlign: 'center', marginHorizontal: 10, fontFamily: F.bold, fontSize: 15, color: C.text, letterSpacing: 0.2 },
   errorCard:  { position: 'absolute', left: 24, right: 24, top: '38%', backgroundColor: C.glass, borderRadius: 16, padding: 24, borderWidth: 1, borderColor: C.border },
   errorText:  { color: C.warn, fontSize: 14, lineHeight: 22, textAlign: 'center' },
   outOfPlaneHint:  { position: 'absolute', top: '43%', left: 0, right: 0, alignItems: 'center' },

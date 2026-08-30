@@ -1,222 +1,119 @@
-// RepFeedback — liquid glass feedback card, overlaid on the exercise camera view.
-// Props unchanged: { good, reason, onComplete } — formcheck.tsx needs no edits.
+// RepFeedback — a single 3D Liquid Glass orb (check / X) over the camera view.
+// No card, no border, no label — just the mark, as a glass control would look
+// on iOS 26. Props unchanged: { good, reason, seq, onComplete }.
 
 import React, { useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, Animated, Platform } from 'react-native';
+import { View, StyleSheet, Animated, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path as SvgPath, Line as SvgLine } from 'react-native-svg';
 
-// ─── Tokens ───────────────────────────────────────────────────────────────────
-
 const GREEN = '#32d74b';
 const RED   = '#ff453a';
+const ORB   = 150;
 
-// ─── MyPal star ───────────────────────────────────────────────────────────────
-
-function Star() {
-  return (
-    <Svg width={12} height={12} viewBox="0 0 24 24">
-      <SvgPath
-        d="M12 2.5l1.7 5.3 5.3 1.7-5.3 1.7L12 16.5l-1.7-5.3L5 9.5l5.3-1.7z"
-        fill="rgba(255,255,255,0.70)"
-      />
-      <SvgPath
-        d="M18.5 14l.8 2.4 2.4.8-2.4.8-.8 2.4-.8-2.4-2.4-.8 2.4-.8z"
-        fill="rgba(255,255,255,0.70)"
-      />
-    </Svg>
-  );
-}
-
-// ─── Glass orb (check or X) ───────────────────────────────────────────────────
-
-const ORB = 130;
+// ─── 3D Liquid Glass orb ─────────────────────────────────────────────────────
 
 function GlassOrb({ good }: { good: boolean }) {
-  const glow = good ? GREEN : RED;
+  const tint = good ? GREEN : RED;
 
   return (
-    <View style={[orb.shadow, { shadowColor: glow }]}>
-      <View style={[orb.circle, { borderColor: `${glow}90` }]}>
-        <View style={[StyleSheet.absoluteFill, orb.base]} />
-        <LinearGradient
-          colors={[
-            'rgba(255,255,255,0.58)',
-            'rgba(255,255,255,0.14)',
-            'rgba(255,255,255,0.02)',
-            'rgba(255,255,255,0.06)',
-          ]}
-          locations={[0, 0.38, 0.65, 1]}
-          start={{ x: 0.12, y: 0 }}
-          end={{ x: 0.88, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
-        <View style={orb.iconCenter}>
-          <Svg width={66} height={66} viewBox="0 0 24 24">
-            {good ? (
-              <SvgPath
-                d="M 3.5 12 L 9.5 18 L 20.5 5.5"
-                stroke="white"
-                strokeWidth={2.6}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                fill="none"
-              />
-            ) : (
-              <>
-                <SvgLine
-                  x1={5} y1={5} x2={19} y2={19}
-                  stroke="white" strokeWidth={2.6} strokeLinecap="round"
+    <View style={[orb.lift, { shadowColor: '#000' }]}>
+      <View style={[orb.glow, { shadowColor: tint }]}>
+        <BlurView intensity={32} tint="systemThinMaterialDark" style={orb.clip}>
+          {/* faint colour wash */}
+          <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { backgroundColor: `${tint}1F` }]} />
+
+          {/* domed 3D shading: bright top-left → clear → shaded bottom-right */}
+          <LinearGradient
+            colors={[
+              'rgba(255,255,255,0.62)',
+              'rgba(255,255,255,0.14)',
+              'rgba(255,255,255,0.00)',
+              'rgba(0,0,0,0.20)',
+            ]}
+            locations={[0, 0.30, 0.60, 1]}
+            start={{ x: 0.16, y: 0.06 }}
+            end={{ x: 0.86, y: 1 }}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+          />
+
+          {/* tight wet-glass sheen near the top */}
+          <LinearGradient
+            colors={['rgba(255,255,255,0.75)', 'rgba(255,255,255,0)']}
+            locations={[0, 1]}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 0.32 }}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+          />
+
+          {/* the mark — carries its own shadow so it sits ON the glass */}
+          <View style={orb.iconCenter}>
+            <Svg width={72} height={72} viewBox="0 0 24 24">
+              {good ? (
+                <SvgPath
+                  d="M 3.5 12 L 9.5 18 L 20.5 5.5"
+                  stroke="white" strokeWidth={2.8}
+                  strokeLinecap="round" strokeLinejoin="round" fill="none"
                 />
-                <SvgLine
-                  x1={19} y1={5} x2={5} y2={19}
-                  stroke="white" strokeWidth={2.6} strokeLinecap="round"
-                />
-              </>
-            )}
-          </Svg>
-        </View>
+              ) : (
+                <>
+                  <SvgLine x1={5} y1={5} x2={19} y2={19} stroke="white" strokeWidth={2.8} strokeLinecap="round" />
+                  <SvgLine x1={19} y1={5} x2={5} y2={19} stroke="white" strokeWidth={2.8} strokeLinecap="round" />
+                </>
+              )}
+            </Svg>
+          </View>
+
+          {/* colour rim catching light + brighter top edge */}
+          <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, orb.rim, { borderColor: `${tint}D0` }]} />
+          <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, orb.rimTop]} />
+        </BlurView>
       </View>
     </View>
   );
 }
 
 const orb = StyleSheet.create({
-  shadow: {
-    width:        ORB,
-    height:       ORB,
-    borderRadius: ORB / 2,
+  // dark drop shadow — lifts the orb off the scene
+  lift: {
+    width: ORB, height: ORB, borderRadius: ORB / 2,
     ...Platform.select({ ios: {
-      shadowOffset:  { width: 0, height: 0 },
-      shadowOpacity: 0.70,
-      shadowRadius:  20,
-    }}),
+      shadowOffset: { width: 0, height: 14 }, shadowOpacity: 0.4, shadowRadius: 26,
+    } }),
   },
-  circle: {
-    width:        ORB,
-    height:       ORB,
-    borderRadius: ORB / 2,
-    borderWidth:  1.5,
-    overflow:     'hidden',
-  },
-  base:       { backgroundColor: 'rgba(255,255,255,0.10)' },
-  iconCenter: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
-});
-
-// ─── Liquid glass card ────────────────────────────────────────────────────────
-
-const CARD_W = 270;
-const CARD_R = 32;
-
-function GlassCard({ good, reason }: { good: boolean; reason: string }) {
-  return (
-    <View style={card.shadow}>
-      <BlurView intensity={28} tint="systemThinMaterialDark" style={card.blur}>
-        {/* light neutral scrim so text stays crisp — not a dark slab */}
-        <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(24,26,30,0.34)' }]} />
-        {/* specular highlight raking the top edge — the Liquid Glass "tell" */}
-        <LinearGradient
-          colors={['rgba(255,255,255,0.5)', 'rgba(255,255,255,0.12)', 'rgba(255,255,255,0)']}
-          locations={[0, 0.12, 0.5]}
-          start={{ x: 0.1, y: 0 }}
-          end={{ x: 0.6, y: 1 }}
-          style={StyleSheet.absoluteFill}
-          pointerEvents="none"
-        />
-
-        <View style={card.header}>
-          <Star />
-          <Text style={card.headerTxt}>MYPAL</Text>
-        </View>
-
-        <View style={card.divider} />
-
-        <View style={card.orbWrap}>
-          <GlassOrb good={good} />
-        </View>
-
-        <Text style={card.cue} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.70}>
-          {good ? 'Solid form.' : reason}
-        </Text>
-
-        <View style={card.border} pointerEvents="none" />
-        <View style={card.borderTop} pointerEvents="none" />
-      </BlurView>
-    </View>
-  );
-}
-
-const card = StyleSheet.create({
-  shadow: {
-    width:        CARD_W,
-    borderRadius: CARD_R,
-    borderCurve:  'continuous',
+  // coloured glow — green/red halo
+  glow: {
+    width: ORB, height: ORB, borderRadius: ORB / 2,
     ...Platform.select({ ios: {
-      shadowColor:   '#000',
-      shadowOffset:  { width: 0, height: 16 },
-      shadowOpacity: 0.38,
-      shadowRadius:  34,
-    }}),
+      shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.75, shadowRadius: 22,
+    } }),
   },
-  blur: {
-    width:             CARD_W,
-    borderRadius:      CARD_R,
-    borderCurve:       'continuous',
-    overflow:          'hidden',
-    paddingTop:        18,
-    paddingBottom:     30,
-    paddingHorizontal: 14,
-    alignItems:        'center',
+  clip: {
+    width: ORB, height: ORB, borderRadius: ORB / 2,
+    overflow: 'hidden', alignItems: 'center', justifyContent: 'center',
   },
-  header: {
-    flexDirection: 'row',
-    alignItems:    'center',
-    gap:           5,
-    alignSelf:     'flex-start',
+  iconCenter: {
+    ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center',
+    ...Platform.select({ ios: {
+      shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 6,
+    } }),
   },
-  headerTxt: {
-    fontFamily:    'BricolageGrotesque_700Bold',
-    fontSize:      12,
-    color:         'rgba(255,255,255,0.62)',
-    letterSpacing: 2,
+  rim: {
+    borderRadius: ORB / 2, borderWidth: 1.5,
   },
-  divider: {
-    width:           '100%',
-    height:          StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(255,255,255,0.14)',
-    marginTop:       12,
-    marginBottom:    20,
-  },
-  orbWrap: { marginBottom: 20 },
-  cue: {
-    fontFamily: 'BricolageGrotesque_800ExtraBold',
-    fontSize:   25,
-    color:      'rgba(255,255,255,0.96)',
-    textAlign:  'center',
-    lineHeight: 30,
-  },
-  border: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: CARD_R,
-    borderCurve:  'continuous',
-    borderWidth:  1,
-    borderColor:  'rgba(255,255,255,0.22)',
-  },
-  borderTop: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius:  CARD_R,
-    borderCurve:   'continuous',
-    borderTopWidth: 1,
-    borderColor:   'rgba(255,255,255,0.45)',
+  rimTop: {
+    borderRadius: ORB / 2, borderTopWidth: 1.5, borderColor: 'rgba(255,255,255,0.55)',
   },
 });
 
-// ─── RepFeedback overlay ──────────────────────────────────────────────────────
+// ─── RepFeedback overlay ─────────────────────────────────────────────────────
 
 export default function RepFeedback({
   good,
-  reason,
+  reason: _reason,
   seq: repSeq,
   onComplete,
 }: {
@@ -226,37 +123,26 @@ export default function RepFeedback({
   onComplete: () => void;
 }) {
   const opacity = useRef(new Animated.Value(0)).current;
+  const scale   = useRef(new Animated.Value(0.8)).current;
   const current = useRef<Animated.CompositeAnimation | null>(null);
 
-  // Root cause #1 (fixed previously): the parent used to remount this
-  // component on every rep (a growing `key` prop), which hard-cut whatever
-  // was on screen and restarted a fresh 150ms fade-in — at a fast tempo, each
-  // new rep's card could itself get cut off before its own fade-in finished.
-  // Fixed by keeping one mounted instance and updating in place instead.
-  //
-  // Root cause #2 (still happening after that fix): this effect depended on
-  // [good, reason] — but consecutive reps very often produce the IDENTICAL
-  // cue ("GOOD" followed by another "GOOD" is the normal case for a healthy
-  // set). React's dependency comparison saw no change in VALUE and simply
-  // didn't re-run the effect, so the second rep's verdict never restarted the
-  // animation — it silently rode out whatever was left of the first rep's.
-  // At slow tempo this never showed up (feedback fully completes and unmounts
-  // to null between reps, so the next rep is always a fresh mount regardless
-  // of dependencies) — only at fast tempo, where this in-place-update path is
-  // what's actually running. Fix: depend on `seq`, a plain incrementing
-  // number the parent bumps on every rep regardless of whether the cue text
-  // repeats, so the effect (and the guaranteed-visible restart) always fires.
+  // Depend on `seq` (not [good, reason]) so back-to-back identical verdicts
+  // still restart the animation — see git history for the full root-cause note.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     current.current?.stop();
     opacity.setValue(1);
-    const seq = Animated.sequence([
-      Animated.delay(good ? 900 : 1100),
-      Animated.timing(opacity, { toValue: 0, duration: 380, useNativeDriver: true }),
+    scale.setValue(0.8);
+    const anim = Animated.sequence([
+      Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 6, tension: 120 }),
+      Animated.delay(good ? 700 : 900),
+      Animated.parallel([
+        Animated.timing(opacity, { toValue: 0, duration: 360, useNativeDriver: true }),
+        Animated.timing(scale,   { toValue: 0.9, duration: 360, useNativeDriver: true }),
+      ]),
     ]);
-    current.current = seq;
-    seq.start(({ finished }) => { if (finished) onComplete(); });
-
+    current.current = anim;
+    anim.start(({ finished }) => { if (finished) onComplete(); });
     return () => { current.current?.stop(); };
   }, [repSeq]);
 
@@ -265,7 +151,9 @@ export default function RepFeedback({
       style={[StyleSheet.absoluteFill, rf.overlay, { opacity }]}
       pointerEvents="none"
     >
-      <GlassCard good={good} reason={reason} />
+      <Animated.View style={{ transform: [{ scale }] }}>
+        <GlassOrb good={good} />
+      </Animated.View>
     </Animated.View>
   );
 }
