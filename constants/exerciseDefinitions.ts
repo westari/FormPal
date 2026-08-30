@@ -3940,7 +3940,7 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     repEnterThreshold:   0.95,
     repExitThreshold:    1.30,
     goodROMThreshold:    0.85,
-    insufficientROMCue: 'COME UP HIGHER',
+    insufficientROMCue: 'GO HIGHER',
 
     // FORM CUES — what's detectable from a side-on lying pose, and what isn't:
     //
@@ -3986,8 +3986,19 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
         },
         evaluateAt: 'throughoutMax',
         condition:  { type: 'greaterThan', value: 2.85 },  // PLACEHOLDER ~163° — calibrate from [REP] log
-        priority:   3,   // below ROM-override (4): "CURL HIGHER" wins if the rep is also shallow
+        priority:   3,   // below ROM-override (4): "GO HIGHER" wins if the rep is also shallow
         enabled:    true,
+        // Was silently producing NO value on every rep (device log: "(no form
+        // checks)"): the default 0.6 floor demands hip+knee+ankle all clear it
+        // on one side, and lying flat the ankle (foot planted, foreshortened)
+        // and far-side joints sit under that. Same log showed the knee itself
+        // at 0.62-0.70 — usable — so the check just needs a lower floor to read
+        // at all. 0.35 ≈ the engine's own kMinConf tier. The leg-drive fault is
+        // a big, gross knee-angle swing toward straight, so a slightly noisier
+        // input still separates "knees bent, held" from "legs kicked out."
+        // Once this reads, the [REP] line logs crunch_legs=<value> — do 5 clean
+        // + 5 with obvious leg drive and the 2.85 threshold gets set for real.
+        formCheckMinConf: 0.35,
       },
     ],
     readyGate: PASSTHROUGH_GATE,

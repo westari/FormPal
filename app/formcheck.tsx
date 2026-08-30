@@ -715,8 +715,14 @@ export default function FormCheckScreen() {
   // makes the live metric vs enter/exit/rom thresholds visible on-screen while
   // actually doing reps, not just in the post-session log.
   const isTricepFamily = ['tricepPushdown', 'overheadTricepExtension', 'skullcrusher'].includes(exerciseType);
-  const showPushupMetric = (isPushupFamily || isRaiseFamily || isTricepFamily) && isTracking && liveMetric != null;
-  const liveMetricLabel = isPushupFamily ? 'ELBOW ANGLE' : isTricepFamily ? 'FOREARM ANGLE' : 'ARM ANGLE';
+  // Russian twist ships with pure-placeholder thresholds (signedDeviationFromLine,
+  // sign + scale both unverified) — surface the live value on-screen so a real
+  // calibration pass is possible: read the number at each hard twist and at
+  // centre, that's the data to set enter/exit/topAngle/rom from.
+  const isTwistFamily = exerciseType === 'russianTwist';
+  const showPushupMetric = (isPushupFamily || isRaiseFamily || isTricepFamily || isTwistFamily) && isTracking && liveMetric != null;
+  const liveMetricLabel = isPushupFamily ? 'ELBOW ANGLE' : isTricepFamily ? 'FOREARM ANGLE' : isTwistFamily ? 'TWIST VALUE' : 'ARM ANGLE';
+  const fmtMetric = (n: number) => isTwistFamily ? n.toFixed(3) : `${n.toFixed(1)}°`;
 
   return (
     <View style={s.root}>
@@ -808,20 +814,20 @@ export default function FormCheckScreen() {
       {/* Rep counter now lives INSIDE the positioning box (see PositioningGuide
           children above) — no separate floating panel. */}
 
-      {/* Live metric readout — push-up elbow angle, or raise-family arm angle */}
+      {/* Live metric readout — elbow/arm angle, or the raw twist value */}
       {showPushupMetric && (
         <View style={s.metricReadout} pointerEvents="none">
           <Text style={s.metricLabel}>{liveMetricLabel}</Text>
           <Text style={[s.metricValue, liveMetric!.state === 'down' && s.metricValueDown]}>
-            {liveMetric!.value.toFixed(1)}°
+            {fmtMetric(liveMetric!.value)}
           </Text>
           <Text style={[s.metricState, liveMetric!.state === 'down' && s.metricStateDown]}>
             {liveMetric!.state === 'down' ? '▼  IN REP' : liveMetric!.state === 'up' ? '▲  AT TOP' : '·  WAITING'}
           </Text>
           <Text style={s.metricThresh}>
-            {'enter<'}{Math.round(liveMetric!.enter)}°{'  exit>'}{Math.round(liveMetric!.exit)}°
+            {'enter<'}{fmtMetric(liveMetric!.enter)}{'  exit>'}{fmtMetric(liveMetric!.exit)}
           </Text>
-          <Text style={s.metricThresh}>good rom {'≤'} {Math.round(liveMetric!.rom)}°</Text>
+          <Text style={s.metricThresh}>good rom {'≤'} {fmtMetric(liveMetric!.rom)}</Text>
         </View>
       )}
 
