@@ -4026,10 +4026,17 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     // within 5% of the frame edge (isNearFrameEdge → framesSincePoseGap = 0).
     // Lying flat with your body filling the frame, a knee sits right at the
     // edge every frame, so the gate never clears and reps don't register.
-    // Back the phone off so your WHOLE body — head through knees — has clear
-    // margin on all sides.
+    // FRAMING IS A KNIFE-EDGE for a lying pose (device logs 8/30/2026):
+    //  - too close → a knee sits within 5% of the frame edge every frame →
+    //    isNearFrameEdge resets the rep-entry gate → reps never register.
+    //  - too far → the figure is too small / low-contrast for Apple Vision's
+    //    body-pose detector, which then drops the person entirely for
+    //    multi-frame stretches ("rep abandoned — person left frame") and
+    //    emits garbage single-frame values.
+    // Target: body filling roughly two-thirds of the frame, centred, with a
+    // hand's width of margin at head and feet, and good even light on you.
     cameraSetup: {
-      setupInstruction: 'Lie on your back, phone on the floor to your side — back it up so your whole body, head to knees, sits well inside the frame with room to spare',
+      setupInstruction: 'Lie on your back, phone on the floor to your side, ~3-4 ft away. Fill about two-thirds of the frame — a little gap at your head and feet, good light on you',
       requiredJoints:    ['leftShoulder',  'leftKnee'],
       requiredJointsAlt: ['rightShoulder', 'rightKnee'],
     },
