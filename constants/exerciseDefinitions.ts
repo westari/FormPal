@@ -4129,8 +4129,15 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     formChecks: [],
     readyGate: PASSTHROUGH_GATE,
 
+    // CAMERA PLACEMENT — the reported failure was "camera only sees my legs."
+    // A phone on the floor a few feet ahead looks straight into your shins
+    // when you're seated and leaned back, and never sees the torso. The metric
+    // measures LEFT/RIGHT hand position relative to the torso axis, which is
+    // only visible from the FRONT (side-on, that motion is toward/away from
+    // the lens — depth — and a 2D camera can't see it). So it must be a raised
+    // front view: camera roughly waist-high, ~7 ft ahead, tilted down.
     cameraSetup: {
-      setupInstruction: 'Face the camera, seated — shoulders, hips, and hands in frame',
+      setupInstruction: 'Raise the camera to about waist height, ~7 ft in front, tilted down — sit facing it so your shoulders, hips, and hands stay in frame',
       requiredJoints: ['leftShoulder', 'rightShoulder', 'leftHip', 'rightHip', 'leftWrist', 'rightWrist'],
     },
 

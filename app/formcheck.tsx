@@ -176,7 +176,7 @@ const SETUP_INFO: Record<ExerciseId, { icon: string; title: string; sub: string 
   // lying-pose-detection risk this shares with the removed gluteBridge.
   crunch: { icon: 'arrow.left.and.right', title: 'Lie on your back, camera to your side', sub: 'Shoulders and knees in frame' },
   // Russian twist — front-facing, seated. Matches its own setupInstruction.
-  russianTwist: { icon: 'camera.fill', title: 'Face the camera, seated', sub: 'Shoulders, hips, and hands in frame' },
+  russianTwist: { icon: 'camera.fill', title: 'Raise camera to waist height, ~7 ft ahead', sub: 'Sit facing it — shoulders, hips, hands in frame' },
 };
 
 // ─── Positioning-guide box orientation ───────────────────────────────────────
@@ -715,14 +715,8 @@ export default function FormCheckScreen() {
   // makes the live metric vs enter/exit/rom thresholds visible on-screen while
   // actually doing reps, not just in the post-session log.
   const isTricepFamily = ['tricepPushdown', 'overheadTricepExtension', 'skullcrusher'].includes(exerciseType);
-  // Russian twist ships with pure-placeholder thresholds (signedDeviationFromLine,
-  // sign + scale both unverified) — surface the live value on-screen so a real
-  // calibration pass is possible: read the number at each hard twist and at
-  // centre, that's the data to set enter/exit/topAngle/rom from.
-  const isTwistFamily = exerciseType === 'russianTwist';
-  const showPushupMetric = (isPushupFamily || isRaiseFamily || isTricepFamily || isTwistFamily) && isTracking && liveMetric != null;
-  const liveMetricLabel = isPushupFamily ? 'ELBOW ANGLE' : isTricepFamily ? 'FOREARM ANGLE' : isTwistFamily ? 'TWIST VALUE' : 'ARM ANGLE';
-  const fmtMetric = (n: number) => isTwistFamily ? n.toFixed(3) : `${n.toFixed(1)}°`;
+  const showPushupMetric = (isPushupFamily || isRaiseFamily || isTricepFamily) && isTracking && liveMetric != null;
+  const liveMetricLabel = isPushupFamily ? 'ELBOW ANGLE' : isTricepFamily ? 'FOREARM ANGLE' : 'ARM ANGLE';
 
   return (
     <View style={s.root}>
@@ -814,20 +808,20 @@ export default function FormCheckScreen() {
       {/* Rep counter now lives INSIDE the positioning box (see PositioningGuide
           children above) — no separate floating panel. */}
 
-      {/* Live metric readout — elbow/arm angle, or the raw twist value */}
+      {/* Live metric readout — push-up elbow angle, or raise-family arm angle */}
       {showPushupMetric && (
         <View style={s.metricReadout} pointerEvents="none">
           <Text style={s.metricLabel}>{liveMetricLabel}</Text>
           <Text style={[s.metricValue, liveMetric!.state === 'down' && s.metricValueDown]}>
-            {fmtMetric(liveMetric!.value)}
+            {liveMetric!.value.toFixed(1)}°
           </Text>
           <Text style={[s.metricState, liveMetric!.state === 'down' && s.metricStateDown]}>
             {liveMetric!.state === 'down' ? '▼  IN REP' : liveMetric!.state === 'up' ? '▲  AT TOP' : '·  WAITING'}
           </Text>
           <Text style={s.metricThresh}>
-            {'enter<'}{fmtMetric(liveMetric!.enter)}{'  exit>'}{fmtMetric(liveMetric!.exit)}
+            {'enter<'}{Math.round(liveMetric!.enter)}°{'  exit>'}{Math.round(liveMetric!.exit)}°
           </Text>
-          <Text style={s.metricThresh}>good rom {'≤'} {fmtMetric(liveMetric!.rom)}</Text>
+          <Text style={s.metricThresh}>good rom {'≤'} {Math.round(liveMetric!.rom)}°</Text>
         </View>
       )}
 
