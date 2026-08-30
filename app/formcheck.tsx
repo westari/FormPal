@@ -7,7 +7,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Defs, LinearGradient as SvgLinearGradient, Stop, Rect } from 'react-native-svg';
+import Svg, {
+  Defs, LinearGradient as SvgLinearGradient, RadialGradient, Stop, Rect, Ellipse,
+} from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import GlassButton from '../components/GlassButton';
 import RepFeedback from '../components/RepFeedback';
@@ -242,21 +244,74 @@ const gp = StyleSheet.create({
   clip:   { overflow: 'hidden' },
 });
 
+// ─── Liquid Glass frame ──────────────────────────────────────────────────────
+// A thick beveled rounded-rect "glass tube" edge, same visual language as the
+// RepFeedback orb's rim: a vertical bevel gradient (bright top → faint mid →
+// dark bottom), a bright inner hairline, a dark outer hairline for depth, and
+// a soft specular glint along the top edge. Drawn as an absolutely-positioned
+// SVG overlay sized to its parent (pass measured w/h). `accent` tints the
+// bevel (e.g. green when the guide box is locked on).
+function LiquidFrame({
+  w, h, radius, thickness, accent,
+}: { w: number; h: number; radius: number; thickness: number; accent?: string }) {
+  if (w <= 0 || h <= 0) return null;
+  const T   = thickness;
+  const hi  = accent ?? '#ffffff';
+  const rID = `lf${Math.round(radius)}_${Math.round(w)}x${Math.round(h)}`;
+  return (
+    <Svg width={w} height={h} style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Defs>
+        <SvgLinearGradient id={`${rID}-bevel`} x1="0" y1="0" x2="0.12" y2="1">
+          <Stop offset="0"    stopColor={hi}      stopOpacity="1" />
+          <Stop offset="0.36" stopColor={hi}      stopOpacity="0.34" />
+          <Stop offset="0.7"  stopColor={hi}      stopOpacity="0.14" />
+          <Stop offset="1"    stopColor="#000000" stopOpacity="0.52" />
+        </SvgLinearGradient>
+        <SvgLinearGradient id={`${rID}-inner`} x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0"   stopColor="#ffffff" stopOpacity="0.92" />
+          <Stop offset="0.45" stopColor="#ffffff" stopOpacity="0.06" />
+          <Stop offset="1"   stopColor="#ffffff" stopOpacity="0" />
+        </SvgLinearGradient>
+        <RadialGradient id={`${rID}-glint`} cx="50%" cy="50%" r="50%">
+          <Stop offset="0" stopColor="#ffffff" stopOpacity="0.9" />
+          <Stop offset="1" stopColor="#ffffff" stopOpacity="0" />
+        </RadialGradient>
+      </Defs>
+
+      {/* faint outer dark line — separates the frame from the scene */}
+      <Rect x={0.75} y={0.75} width={w - 1.5} height={h - 1.5} rx={radius} ry={radius}
+        fill="none" stroke="#000000" strokeOpacity="0.35" strokeWidth={1.25} />
+
+      {/* thick beveled body */}
+      <Rect x={T / 2} y={T / 2} width={w - T} height={h - T}
+        rx={Math.max(radius - T / 2, 4)} ry={Math.max(radius - T / 2, 4)}
+        fill="none" stroke={`url(#${rID}-bevel)`} strokeWidth={T} />
+
+      {/* bright inner hairline riding just inside the bevel */}
+      <Rect x={T - 1} y={T - 1} width={w - 2 * (T - 1)} height={h - 2 * (T - 1)}
+        rx={Math.max(radius - T, 3)} ry={Math.max(radius - T, 3)}
+        fill="none" stroke={`url(#${rID}-inner)`} strokeWidth={1.5} />
+
+      {/* specular glint on the top edge */}
+      <Ellipse cx={w * 0.3} cy={T * 0.62} rx={Math.min(w * 0.24, 100)} ry={T * 0.5}
+        fill={`url(#${rID}-glint)`} />
+    </Svg>
+  );
+}
+
 // ─── Positioning-guide box overlay ───────────────────────────────────────────
-// Rounded-rect frame drawn with an SVG gradient stroke so it carries the same
-// beveled-glass vibe as the RepFeedback orb — light along the top edge, fading
-// through mid, dark along the bottom — over a faint glass tint, with a soft
-// outer glow. Goes green (+ green glow) the instant SETUP's joint check
-// passes, then stays through the set. Sized generously (legs / full standing
-// body fit inside). Purely visual — doesn't hit-test joints (that's native).
+// A thick Liquid Glass frame (see LiquidFrame) over a faint glass tint with a
+// soft outer glow — same look as the RepFeedback orb's rim. Goes green
+// (+ green glow) the instant SETUP's joint check passes, then stays through
+// the set. Sized generously (legs / full standing body fit inside). Purely
+// visual — doesn't hit-test joints (that's native).
 function PositioningGuide({
   box, ready, children,
 }: { box: 'standing' | 'floor'; ready: boolean; children?: React.ReactNode }) {
   const rect = box === 'floor'
     ? { top: '33%', bottom: '5%',  side: '4%'  }
     : { top: '16%', bottom: '7%',  side: '9%'  };
-  const R  = 34;
-  const SW = 3;
+  const R = 36;
 
   const [size, setSize] = useState({ w: 0, h: 0 });
 
@@ -272,9 +327,6 @@ function PositioningGuide({
     return () => loop.stop();
   }, [ready, pulse]);
 
-  const topStop = ready ? '#8affb0' : '#ffffff';
-  const midStop = ready ? C.good    : '#ffffff';
-
   return (
     <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
       <Animated.View
@@ -284,36 +336,45 @@ function PositioningGuide({
           top: rect.top as any, bottom: rect.bottom as any,
           left: rect.side as any, right: rect.side as any,
           borderRadius: R, borderCurve: 'continuous',
-          backgroundColor: ready ? 'rgba(50,215,75,0.06)' : 'rgba(255,255,255,0.02)',
+          backgroundColor: ready ? 'rgba(50,215,75,0.07)' : 'rgba(255,255,255,0.025)',
           opacity: pulse,
           alignItems: 'center', justifyContent: 'center',
           shadowColor: ready ? C.good : '#000',
           shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: ready ? 0.9 : 0.45,
-          shadowRadius: ready ? 24 : 16,
+          shadowOpacity: ready ? 0.95 : 0.5,
+          shadowRadius: ready ? 26 : 18,
           elevation: 8,
         }}
       >
-        {size.w > 0 && (
-          <Svg width={size.w} height={size.h} style={StyleSheet.absoluteFill}>
-            <Defs>
-              <SvgLinearGradient id="boxrim" x1="0" y1="0" x2="0" y2="1">
-                <Stop offset="0"   stopColor={topStop} stopOpacity="0.95" />
-                <Stop offset="0.5" stopColor={midStop} stopOpacity="0.34" />
-                <Stop offset="1"   stopColor="#000000" stopOpacity="0.42" />
-              </SvgLinearGradient>
-            </Defs>
-            <Rect
-              x={SW / 2} y={SW / 2}
-              width={size.w - SW} height={size.h - SW}
-              rx={R} ry={R}
-              fill="none"
-              stroke="url(#boxrim)" strokeWidth={SW}
-            />
-          </Svg>
-        )}
+        <LiquidFrame w={size.w} h={size.h} radius={R} thickness={8} accent={ready ? '#8affb0' : undefined} />
         {children}
       </Animated.View>
+    </View>
+  );
+}
+
+// ─── Rep counter — same Liquid Glass frame as the guide box ──────────────────
+function RepCounter({ reps, goodReps }: { reps: number; goodReps: number }) {
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  const R = 30;
+  return (
+    <View style={s.repBlock} pointerEvents="none">
+      <View
+        onLayout={(e) => setSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
+        style={s.repCard}
+      >
+        <BlurView intensity={26} tint="systemThinMaterialDark" style={[StyleSheet.absoluteFillObject, { borderRadius: R, borderCurve: 'continuous', overflow: 'hidden' }]}>
+          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(16,18,22,0.28)' }]} />
+        </BlurView>
+        <LiquidFrame w={size.w} h={size.h} radius={R} thickness={6} />
+        <View style={s.repPanelInner}>
+          <Text style={s.repNum}>{reps}</Text>
+          <View style={s.repSubRow}>
+            <View style={s.repDot} />
+            <Text style={s.repSub}>{goodReps} good</Text>
+          </View>
+        </View>
+      </View>
     </View>
   );
 }
@@ -712,21 +773,8 @@ export default function FormCheckScreen() {
         </PositioningGuide>
       )}
 
-      {/* Rep counter — fixed near the top on its own glass slab (matches the
-          panel / orb vibe), below the top bar so it doesn't collide with it. */}
-      {showRepCounter && (
-        <View style={s.repBlock} pointerEvents="none">
-          <GlassPanel radius={30} style={s.repPanel}>
-            <View style={s.repPanelInner}>
-              <Text style={s.repNum}>{reps}</Text>
-              <View style={s.repSubRow}>
-                <View style={s.repDot} />
-                <Text style={s.repSub}>{goodReps} good</Text>
-              </View>
-            </View>
-          </GlassPanel>
-        </View>
-      )}
+      {/* Rep counter — fixed near the top, same Liquid Glass frame as the box. */}
+      {showRepCounter && <RepCounter reps={reps} goodReps={goodReps} />}
 
       {/* Ready → tracking */}
       {phase === 'setup-done' && (
@@ -986,10 +1034,13 @@ const s = StyleSheet.create({
   outOfPlaneInner: { paddingHorizontal: 22, paddingVertical: 11 },
   outOfPlaneText:  { fontFamily: F.bold, fontSize: 16, color: C.warn, letterSpacing: 0.3 },
 
-  // Rep count — fixed near the top on a glass slab, clear of the top bar.
+  // Rep count — fixed near the top, clear of the top bar.
   repBlock:      { position: 'absolute', top: '12%', left: 0, right: 0, alignItems: 'center' },
-  repPanel:      { alignSelf: 'center' },
-  repPanelInner: { paddingHorizontal: 40, paddingTop: 12, paddingBottom: 16, alignItems: 'center' },
+  repCard: {
+    alignSelf: 'center', borderRadius: 30, borderCurve: 'continuous',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 14 }, shadowOpacity: 0.4, shadowRadius: 26,
+  },
+  repPanelInner: { paddingHorizontal: 44, paddingTop: 14, paddingBottom: 18, alignItems: 'center' },
   repNum:        {
     fontFamily: F.extra, fontSize: 104, lineHeight: 110, color: '#fff', letterSpacing: -2,
     textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 14,
