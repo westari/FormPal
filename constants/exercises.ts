@@ -1130,6 +1130,25 @@ export const EXERCISE_CATALOG = [
   // axis is invisible to a monocular side-on camera; device log confirmed a
   // dead-flat signal). See the REMOVED note in constants/exerciseDefinitions.ts.
 
+  // Dips — bodyweight upright push (triceps / lower chest / front delts).
+  // Side-camera; elbow-angle rep metric (see constants/exerciseDefinitions.ts).
+  {
+    id:              'dips',
+    displayName:     'Dips',
+    muscleGroups:    [MuscleGroup.Chest, MuscleGroup.Shoulders, MuscleGroup.Arms],
+    muscles:         [Muscle.Triceps, Muscle.Chest, Muscle.Shoulders],
+    splitCategories: [SplitCategory.Upper, SplitCategory.Push],
+    difficulty:      Difficulty.Intermediate,
+    equipment:       [],
+    defaultReps:     8,
+    defaultSets:     3,
+    progression: {
+      repRange: [5, 15],
+      setRange: [2, 5],
+    },
+    isFormCheckable: true,
+  },
+
   // ─────────────────────────────────────────────────────────────────────────
   // ADD NEW FORM-CHECKABLE EXERCISES HERE.
   // ─────────────────────────────────────────────────────────────────────────

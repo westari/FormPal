@@ -175,7 +175,13 @@ export type ExerciseType =
   // Crunch (shoulder-to-knee distanceRatio, front/side camera) — lying
   // down; see its registration for the confirmed-on-device
   // lying-pose-detection risk this shares with the removed gluteBridge
-  | 'crunch';
+  | 'crunch'
+  // Dips (bestSide elbow jointAngle, side camera) — upright/vertical push;
+  // elbow bends to lower the body, extends to raise it. Not in
+  // ExerciseRegistry.swift — the engine is built from the JSON definition
+  // (setExerciseDefinition), so the "unknown exercise 'dips'" NSLog from
+  // setExercise is expected and harmless. Reload-only.
+  | 'dips';
   // Russian twist was here — removed as untrackable (a twist is rotation
   // about a vertical axis; a monocular side-on camera can't see it, and the
   // front view needs an impractical raised camera). Device-log confirmed a

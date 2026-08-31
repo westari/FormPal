@@ -4089,6 +4089,94 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     planarityChecks: [],
   },
 
+  // ─── Dips ───────────────────────────────────────────────────────────────────
+  //
+  // REFERENCE EXERCISE: the push-up family (PUSHUP_REP_METRIC + pushupVariant
+  // thresholds). A dip and a push-up are the SAME elbow movement — arms
+  // straight (~165°) → elbow bends to lower the body (~90°) → push straight
+  // again — just performed upright instead of horizontal. jointAngle is a
+  // pure 3-point geometric angle and doesn't care about body orientation, so
+  // the metric type, joints, combinator and threshold SCALE all transfer
+  // directly from push-up. That makes these "about as close to verified as a
+  // placeholder starts" (same basis as legCurl borrowing squat's angle) —
+  // but the exact numbers still want a calibration pass: a dip doesn't lock
+  // out as hard as a push-up and "full depth" is elbow ≈ 90° (upper arm
+  // parallel), so goodROM is set deeper (100°, vs push-up's 75°). Turn on
+  // the log, do 5-10 clean dips + a few shallow ones, read [CALIB-SUGGEST].
+  //
+  // UPRIGHT / VERTICAL — tracks well: the body lowers and rises, the elbow
+  // angle opens and closes cleanly in a side view. The user's note about
+  // elbows going "behind the body" at the bottom is handled by the
+  // reliability-gate trim (leftJoints/rightJoints = shoulder+elbow only, no
+  // wrist) — the angle is still computed from all three points, but a hand
+  // gripping the bar/bench dropping below Vision's confidence floor no
+  // longer discards the whole rep. bestSide picks the better-tracked arm.
+  //
+  // FORM CUES:
+  //  ✓ "Go deeper" — the built-in ROM grade (goodROMThreshold 100 +
+  //    insufficientROMCue 'GO DEEPER'); a half-depth dip bottoming at ~120°
+  //    fails it. Not a separate FormCheckDef.
+  //  ✓ "Lock out at top" — dips_lockout below: max elbow angle over the rep
+  //    < 150° means the top was never reached. Same shape as curl's
+  //    full_extension check. PLACEHOLDER threshold — calibrate from the log.
+  //  ✗ Torso lean (forward = more chest, upright = more triceps) — SKIPPED.
+  //    It shifts emphasis, it isn't a fault (same call as the raise family's
+  //    "went too high: REMOVED").
+  //  ✗ Shoulder shrug at the bottom — SKIPPED. No neck/ear landmark; a
+  //    nose-height proxy is contaminated by head tilt (this file's
+  //    feasibility rule).
+  dips: {
+    id:          'dips',
+    displayName: 'Dips',
+    guideBox:    'standing',
+
+    repMetric: {
+      type: 'bestSide',
+      left:  { type: 'jointAngle', a: 'leftShoulder',  pivot: 'leftElbow',  c: 'leftWrist'  },
+      right: { type: 'jointAngle', a: 'rightShoulder', pivot: 'rightElbow', c: 'rightWrist' },
+      // Shoulder + elbow only for the reliability gate (NOT wrist) — same
+      // trim shoulder-press / tricep use, for the same reason: the wrist is
+      // occlusion-prone (hand on the bar) and shouldn't be able to delete a
+      // real rep. The angle math still uses all three points.
+      leftJoints:  ['leftShoulder',  'leftElbow'],
+      rightJoints: ['rightShoulder', 'rightElbow'],
+    },
+
+    // PLACEHOLDERS — scale borrowed from pushupVariant (same elbow-flexion
+    // movement); calibrate the exact numbers from a [CALIB] log.
+    topAngle:            165,    // PLACEHOLDER — arms locked at the top
+    repEnterThreshold:   135,    // PLACEHOLDER — elbow bending, descending
+    repExitThreshold:    148,    // PLACEHOLDER — pushing back up (enter/exit gap = hysteresis)
+    goodROMThreshold:    100,    // PLACEHOLDER — full depth ≈ elbow 90°; a shallow ~120° dip fails
+    insufficientROMCue: 'GO DEEPER',
+
+    formChecks: [
+      {
+        id:   'dips_lockout',
+        cue:  'LOCK OUT AT TOP',
+        metric: {
+          type:  'maximum',
+          left:  { type: 'jointAngle', a: 'leftShoulder',  pivot: 'leftElbow',  c: 'leftWrist'  },
+          right: { type: 'jointAngle', a: 'rightShoulder', pivot: 'rightElbow', c: 'rightWrist' },
+        },
+        evaluateAt: 'throughoutMax',
+        condition:  { type: 'lessThan', value: 150 },  // PLACEHOLDER — max elbow angle over the rep; calibrate from [CALIB] log
+        priority:   3,
+        enabled:    true,
+      },
+    ],
+    readyGate: PASSTHROUGH_GATE,
+
+    cameraSetup: {
+      setupInstruction: 'Stand side-on to the camera on the bars/bench — one shoulder and elbow in frame, whole body visible',
+      requiredJoints:    ['leftShoulder',  'leftElbow'],
+      requiredJointsAlt: ['rightShoulder', 'rightElbow'],
+    },
+
+    minRepInterval:  0.7,
+    planarityChecks: [],
+  },
+
   // ─── Russian twist — REMOVED ────────────────────────────────────────────────
   // Parked as untrackable. A twist is rotation about a vertical axis; from a
   // side-on phone that's almost pure depth-axis motion, which a monocular 2D

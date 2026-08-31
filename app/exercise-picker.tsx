@@ -102,6 +102,9 @@ export const EXERCISE_UI: Record<ExerciseId, { symbol: string; grad: [string, st
   // Leg curl (machine) — teal, distinct from squat's amber-orange lower-body family
   legCurl: { symbol: 'figure.strengthtraining.traditional', grad: ['#5EEAD4', '#0D9488'] },
   crunch: { symbol: 'figure.core.training', grad: ['#FCD34D', '#B45309'] },
+  // Dips — bodyweight push, triceps-forward; warm coral, distinct from the
+  // push-up family's blues and the tricep family's amber.
+  dips: { symbol: 'figure.strengthtraining.functional', grad: ['#FDBA74', '#C2410C'] },
 };
 
 export default function ExercisePickerScreen() {
