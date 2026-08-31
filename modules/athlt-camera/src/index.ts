@@ -264,12 +264,12 @@ export async function stopTracking(): Promise<SessionStats> {
 // shoulderPress). Must not be called while a live camera session is active
 // (native side guards this — resolves success:false with an explanation
 // instead of racing the shared engine).
-// orientationOverride — dev-only, lets a caller (see analyze-video.tsx's
-// dev orientation picker) force which CGImagePropertyOrientation
-// doAnalyzeVideoFile uses on the native side, instead of its own default.
-// One of 'up' | 'down' | 'left' | 'right'; omit/undefined for the default.
-// Exists so testing the 4 possible orientations for a given camera setup
-// doesn't require a native rebuild per guess — only the plumbing itself did.
+// orientationOverride — omit/undefined (the normal path) and the native side
+// runs its [ORIENT-TEST] probe: Vision pose detection under all four
+// CGImagePropertyOrientation rotations on a sample of frames, picking the one
+// that yields an upright, high-confidence body (logged, and used for the run).
+// Pass 'up' | 'down' | 'left' | 'right' to force one rotation and skip the
+// probe — A/B testing only.
 export async function analyzeVideoFile(
   uri: string,
   exerciseId: string,

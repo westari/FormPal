@@ -1051,16 +1051,28 @@ public class ATHLTCameraModule: Module {
         // (from analyzeVideoFile's JS caller) lets the other 3 cases be tried
         // from a JS-only control (see analyze-video.tsx), no rebuild needed
         // once THIS plumbing has shipped once.
-        let forced: CGImagePropertyOrientation
+        // An explicit orientationOverride from JS forces that rotation and
+        // SKIPS the probe (for A/B testing a specific case). With no override —
+        // the normal path — probeOrientation() runs Vision under all four
+        // rotations on a sample of frames and picks the one that actually
+        // yields an upright, high-confidence body. That replaces the old
+        // hardcoded ".right guess + rebuild per attempt" loop entirely.
+        let orientation: CGImagePropertyOrientation
+        let overrideNote: String
         switch orientationOverride {
-        case "up":    forced = .up
-        case "down":  forced = .down
-        case "left":  forced = .left
-        case "right": forced = .right
-        default:      forced = .right   // default/normal case — matches live's forced .portrait
+        case "up":    orientation = .up;    overrideNote = "explicit override='up' — probe skipped"
+        case "down":  orientation = .down;  overrideNote = "explicit override='down' — probe skipped"
+        case "left":  orientation = .left;  overrideNote = "explicit override='left' — probe skipped"
+        case "right": orientation = .right; overrideNote = "explicit override='right' — probe skipped"
+        default:
+            if let probed = probeOrientation(asset: asset, track: track) {
+                orientation  = probed
+                overrideNote = "auto-selected by [ORIENT-TEST] probe"
+            } else {
+                orientation  = .right
+                overrideNote = "probe inconclusive — using static default .right"
+            }
         }
-        let orientation = forced
-        let overrideNote = orientationOverride != nil ? "override='\(orientationOverride!)'" : "no override, using default"
         sendEvent("onDebugLog", ["message":
             "[VIDEO-ANALYZE] preferredTransform a=\(transform.a) b=\(transform.b) " +
             "c=\(transform.c) d=\(transform.d) tx=\(transform.tx) ty=\(transform.ty) " +
@@ -1162,6 +1174,132 @@ public class ATHLTCameraModule: Module {
             "goodReps": engine.goodReps,
             "error":    success ? NSNull() : (reader.error?.localizedDescription ?? "reader ended with status \(finalStatus.rawValue)") as Any,
         ])
+    }
+
+    // ─── Orientation probe — stops the guessing ───────────────────────────────
+    //
+    // The video path is byte-for-byte the same as live downstream of
+    // runPoseDetection (same VNDetectHumanBodyPoseRequest, same ExerciseEngine,
+    // same JS definition + calibration). Its ONE real difference is which
+    // CGImagePropertyOrientation Vision reads each frame at: live's capture
+    // connection pre-rotates every buffer to .portrait, a file read via
+    // AVAssetReader is handed raw sensor-storage pixels and the rotation lives
+    // only in preferredTransform, which stock-Camera clips don't decompose
+    // cleanly. Pick that wrong and Vision sees a sideways body — every rep
+    // then misses the thresholds.
+    //
+    // Rather than hardcode a guess and rebuild per attempt, this samples up to
+    // maxSamples frames spread across the clip and runs pose detection on each
+    // under ALL FOUR rotations, scoring:
+    //   • poses   — frames where Vision returned any body observation
+    //   • conf    — mean confidence of the best observation per frame
+    //   • upright — frames whose nose/shoulder/hip/ankle fall in a strictly
+    //               monotonic vertical order (either sign — we don't assume
+    //               Vision's y direction). A rotated body scrambles this even
+    //               when a weak observation still comes back, so it's the
+    //               decisive score; conf then poses break ties.
+    // Emits one [ORIENT-TEST] line and returns the winner, or nil if none
+    // clears a floor (caller then falls back to the static default, and says
+    // so in the log).
+    private func probeOrientation(asset: AVURLAsset, track: AVAssetTrack,
+                                  maxSamples: Int = 30, sampleEveryNth: Int = 6)
+        -> CGImagePropertyOrientation? {
+
+        let candidates: [CGImagePropertyOrientation] = [.up, .right, .down, .left]
+        var poseCount    = [Int](repeating: 0, count: candidates.count)
+        var confSum      = [Double](repeating: 0, count: candidates.count)
+        var uprightCount = [Int](repeating: 0, count: candidates.count)
+
+        guard let reader = try? AVAssetReader(asset: asset) else { return nil }
+        let outputSettings: [String: Any] = [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+        ]
+        let out = AVAssetReaderTrackOutput(track: track, outputSettings: outputSettings)
+        out.alwaysCopiesSampleData = false
+        guard reader.canAdd(out) else { return nil }
+        reader.add(out)
+        guard reader.startReading() else { return nil }
+
+        var frameIdx = 0
+        var sampled  = 0
+        while reader.status == .reading, sampled < maxSamples {
+            guard let sb = out.copyNextSampleBuffer() else { break }
+            let thisIdx = frameIdx
+            frameIdx += 1
+            guard thisIdx % sampleEveryNth == 0 else { continue }
+            guard let pb = CMSampleBufferGetImageBuffer(sb) else { continue }
+            sampled += 1
+            CVPixelBufferLockBaseAddress(pb, .readOnly)
+            for (i, o) in candidates.enumerated() {
+                let request = VNDetectHumanBodyPoseRequest()
+                let handler = VNImageRequestHandler(cvPixelBuffer: pb, orientation: o, options: [:])
+                guard (try? handler.perform([request])) != nil,
+                      let results = request.results as? [VNHumanBodyPoseObservation],
+                      let obs = results.max(by: { $0.confidence < $1.confidence })
+                else { continue }
+                poseCount[i] += 1
+                confSum[i]   += Double(obs.confidence)
+                if isUprightPose(extractPose(obs)) { uprightCount[i] += 1 }
+            }
+            CVPixelBufferUnlockBaseAddress(pb, .readOnly)
+        }
+        reader.cancelReading()
+
+        func avgConf(_ i: Int) -> Double { poseCount[i] > 0 ? confSum[i] / Double(poseCount[i]) : 0 }
+
+        let table = candidates.enumerated().map { i, o in
+            ".\(Self.orientationName(o)): \(poseCount[i])/\(sampled) poses, avg conf " +
+            "\(String(format: "%.2f", avgConf(i))), upright \(uprightCount[i])/\(max(poseCount[i], 1))"
+        }.joined(separator: " | ")
+        sendEvent("onDebugLog", ["message": "[ORIENT-TEST] probed \(sampled) frames | \(table)"])
+
+        guard sampled > 0 else { return nil }
+
+        // Winner: most upright frames, then highest mean confidence, then most poses.
+        var best = 0
+        for i in 1..<candidates.count {
+            if uprightCount[i] != uprightCount[best] {
+                if uprightCount[i] > uprightCount[best] { best = i }
+            } else if avgConf(i) != avgConf(best) {
+                if avgConf(i) > avgConf(best) { best = i }
+            } else if poseCount[i] > poseCount[best] {
+                best = i
+            }
+        }
+
+        // Require the winner to actually look like a real upright body on at
+        // least a third of sampled frames — otherwise the clip itself is the
+        // problem (nobody in frame, extreme angle), not the orientation.
+        guard uprightCount[best] * 3 >= sampled else {
+            sendEvent("onDebugLog", ["message":
+                "[ORIENT-TEST] inconclusive — best .\(Self.orientationName(candidates[best])) had only " +
+                "\(uprightCount[best])/\(sampled) upright frames; falling back to the static default"])
+            return nil
+        }
+        sendEvent("onDebugLog", ["message":
+            "[ORIENT-TEST] winner = .\(Self.orientationName(candidates[best]))"])
+        return candidates[best]
+    }
+
+    // Strictly monotonic vertical order of nose → shoulder → hip → ankle, in
+    // EITHER direction (we don't assume Vision's y sign). Uses whichever side's
+    // joint is present. True for an upright body, false for a sideways/rotated
+    // one — see probeOrientation.
+    private func isUprightPose(_ pose: Pose) -> Bool {
+        func firstY(_ a: Joint, _ b: Joint) -> Double? {
+            if let p = pose[a] { return Double(p.y) }
+            if let p = pose[b] { return Double(p.y) }
+            return nil
+        }
+        guard let nose = pose[.nose].map({ Double($0.y) }),
+              let sh   = firstY(.leftShoulder, .rightShoulder),
+              let hip  = firstY(.leftHip, .rightHip),
+              let ank  = firstY(.leftAnkle, .rightAnkle)
+        else { return false }
+        let seq  = [nose, sh, hip, ank]
+        let inc  = zip(seq, seq.dropFirst()).allSatisfy { $0 < $1 }
+        let dec  = zip(seq, seq.dropFirst()).allSatisfy { $0 > $1 }
+        return inc || dec
     }
 
     // Standard AVAssetTrack.preferredTransform → CGImagePropertyOrientation

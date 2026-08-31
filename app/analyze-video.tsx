@@ -39,14 +39,14 @@ export default function AnalyzeVideoScreen() {
   const [liveReps,     setLiveReps]     = useState(0);
   const [liveGoodReps, setLiveGoodReps] = useState(0);
 
-  // DEV-ONLY orientation override — see analyzeVideoFile's own doc comment
-  // in modules/athlt-camera/src/index.ts. 'right' matches the native
-  // default (what live capture's forced .portrait connection is believed
-  // to correspond to) — the other 3 exist purely to test the remaining
-  // possibilities without a native rebuild per guess, now that this one
-  // rebuild has shipped the plumbing. Remove once the right orientation is
-  // confirmed and hardcoded back on the native side.
-  const [devOrientation, setDevOrientation] = useState<'up' | 'down' | 'left' | 'right'>('right');
+  // Orientation. 'auto' (default) lets the native [ORIENT-TEST] probe run
+  // Vision under all four rotations on a sample of frames and pick the one
+  // that yields an upright, high-confidence body — see analyzeVideoFile's
+  // doc comment and probeOrientation() in ATHLTCameraModule.swift. The four
+  // explicit values force a single rotation and skip the probe, for A/B
+  // testing only.
+  const [devOrientation, setDevOrientation] =
+    useState<'auto' | 'up' | 'down' | 'left' | 'right'>('auto');
 
   // Full debug log buffer for this screen's lifetime — same accumulation
   // formcheck.tsx's SessionLogReview does with sessionLogRef, so a failed
@@ -139,7 +139,10 @@ export default function AnalyzeVideoScreen() {
       // structurally satisfy Record<string, unknown> — same pre-existing
       // mismatch formcheck.tsx's setExerciseDefinition(defEntry) call has;
       // both are plain serializable objects at runtime, just cast here.
-      const result = await analyzeVideoFile(videoUri, exerciseId, defEntry as Record<string, unknown> | null, devOrientation);
+      const result = await analyzeVideoFile(
+        videoUri, exerciseId, defEntry as Record<string, unknown> | null,
+        devOrientation === 'auto' ? undefined : devOrientation,
+      );
       repSub.remove();
 
       if (!result.success) {
@@ -235,14 +238,13 @@ export default function AnalyzeVideoScreen() {
             </Pressable>
           </Card>
 
-          {/* DEV-ONLY — orientation test picker. Lets the pushup video-vs-live
-              rotation mismatch be tested across all 4 CGImagePropertyOrientation
-              cases with just a re-run, no native rebuild per guess — see
-              devOrientation's own comment above. Remove once confirmed. */}
+          {/* Orientation. 'auto' runs the native [ORIENT-TEST] probe (all four
+              rotations, picks the upright one). The explicit values force one
+              rotation and skip the probe — A/B testing only. */}
           <Card style={styles.stepCard}>
             <Text style={styles.stepLabel}>DEV · VIDEO ORIENTATION</Text>
             <View style={styles.orientRow}>
-              {(['up', 'down', 'left', 'right'] as const).map(o => (
+              {(['auto', 'up', 'down', 'left', 'right'] as const).map(o => (
                 <Pressable
                   key={o}
                   onPress={() => setDevOrientation(o)}
