@@ -25,6 +25,7 @@ import { useWorkoutSessionStore } from '../store/workoutSessionStore';
 import type { WorkoutSummary } from '../store/workoutSessionStore';
 import { usePlanStore } from '../store/planStore';
 import { getDebugLog } from '../modules/athlt-camera/src/index';
+import { createCalibSynth } from '../lib/calibLog';
 
 // ─── Error boundary ───────────────────────────────────────────────────────────
 // The recap screen must degrade gracefully instead of taking the whole app
@@ -630,7 +631,17 @@ export default function RecapScreen() {
   // even though this is where most analyses actually land (only a hard
   // failure or a 0-rep result stays on analyze-video.tsx's own error card).
   const shareLogs = useCallback(() => {
-    const log = getDebugLog();
+    const raw = getDebugLog();
+    // Run the raw stream through the calibration synthesizer so the export
+    // carries the clean [CALIB] per-rep lines + the [CALIB-SUMMARY] /
+    // [CALIB-SUGGEST] threshold recommendation (see lib/calibLog.ts).
+    const synth = createCalibSynth();
+    const withCalib: string[] = [];
+    for (const line of raw) {
+      withCalib.push(line);
+      for (const c of synth.feed(line)) withCalib.push(c);
+    }
+    withCalib.push(...synth.flushSummary());
     const header = [
       '=== ATHLT Debug Log ===',
       `Exercise: ${data?.entries?.[0]?.exerciseId ?? exercise ?? 'unknown'}`,
@@ -639,7 +650,7 @@ export default function RecapScreen() {
       '========================',
       '',
     ].join('\n');
-    Share.share({ message: header + (log.length ? log.join('\n') : '(no debug log captured this run)') });
+    Share.share({ message: header + (withCalib.length ? withCalib.join('\n') : '(no debug log captured this run)') });
   }, [data, exercise]);
 
   const handleDone = useCallback(async () => {

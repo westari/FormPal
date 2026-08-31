@@ -37,6 +37,7 @@ import { EXERCISE_DEFINITIONS } from '../constants/exerciseDefinitions';
 import type { ExerciseId } from '../constants/exercises';
 import { getCalibration, applyOverride } from '../lib/calibration/store';
 import { handleRepAudio, playReadyCue } from '../lib/audioFeedback';
+import { createCalibSynth } from '../lib/calibLog';
 import { useAudioSettingsStore } from '../store/audioSettingsStore';
 import type { DebugStatsEvent, RepEvent, ExerciseType } from '../modules/athlt-camera/src/index';
 
@@ -175,6 +176,7 @@ const SETUP_INFO: Record<ExerciseId, { icon: string; title: string; sub: string 
   // that exercise's comment for the confirmed on-device
   // lying-pose-detection risk this shares with the removed gluteBridge.
   crunch: { icon: 'arrow.left.and.right', title: 'Lie on your back, phone to your side', sub: '~3-4 ft away · body fills ~2/3 of frame · good light' },
+  dips:   { icon: 'figure.strengthtraining.functional', title: 'Stand side-on to the camera', sub: 'Shoulder and elbow in frame — whole body visible' },
 };
 
 // ─── Positioning-guide box orientation ───────────────────────────────────────
@@ -444,6 +446,9 @@ export default function FormCheckScreen() {
   // Full session log buffer — accumulates EVERY line for post-session review.
   // Not a state value; we never need it to trigger re-renders during the session.
   const sessionLogRef = useRef<string[]>([]);
+  // Turns the raw [METRIC]/[REP]/[UNIV] stream into clean [CALIB] lines +
+  // an end-of-set summary with suggested thresholds. See docs/CALIBRATION.md.
+  const calibRef = useRef(createCalibSynth());
 
   // Pending nav params stored right before switching to 'review' phase, so the
   // review's Done button can navigate with the correct final rep counts/videoUri.
@@ -464,6 +469,11 @@ export default function FormCheckScreen() {
       console.log('[DEBUG]', e.message);
       // Full session buffer: every line, no limit — feeds the post-session review only.
       sessionLogRef.current.push(e.message);
+      // Synthesize clean [CALIB] lines alongside the raw stream.
+      for (const c of calibRef.current.feed(e.message)) {
+        sessionLogRef.current.push(c);
+        console.log('[DEBUG]', c);
+      }
       // Parse [METRIC] lines for live push-up readout
       if (e.message.startsWith('[METRIC]')) {
         const vMatch  = e.message.match(/value=([-\d.]+)/);
@@ -535,6 +545,7 @@ export default function FormCheckScreen() {
             setGoodReps(0);
             setLiveMetric(null);
             sessionLogRef.current = []; // clear buffer at start of each tracking session
+            calibRef.current.reset();
             startTimestamp.current = Date.now();
             repEvents.current      = [];
             setPhase('tracking');
@@ -679,6 +690,21 @@ export default function FormCheckScreen() {
     }
   }, [router, returnTo, workoutExerciseId, exerciseType, repCounterOnly]);
 
+  // Export the log at any point — the calibration workflow needs it, and
+  // getting logs out has been a recurring blocker. Also present on the
+  // review screen and on recap.
+  const shareLiveLog = useCallback(() => {
+    const header = [
+      '=== ATHLT Calibration / Debug Log ===',
+      `Exercise: ${exerciseType}`,
+      `Date: ${new Date().toLocaleString()}`,
+      `Reps so far: ${reps} total / ${goodReps} good`,
+      '=====================================', '',
+    ].join('\n');
+    const body = [...sessionLogRef.current, ...calibRef.current.flushSummary()].join('\n');
+    void Share.share({ message: header + body });
+  }, [exerciseType, reps, goodReps]);
+
   const handleStop = useCallback(async () => {
     setPhase('stopping');
     isTrackingRef.current = false;
@@ -688,6 +714,9 @@ export default function FormCheckScreen() {
     if (final.videoUri) void logSessionVideo(final.videoUri);
 
     const navParams = { reps: final.reps, goodReps: final.goodReps, videoUri: final.videoUri ?? '' };
+
+    // End-of-set calibration summary + suggested thresholds from the real range.
+    for (const l of calibRef.current.flushSummary()) sessionLogRef.current.push(l);
 
     if (DEBUG_LOG_ENABLED && sessionLogRef.current.length > 0) {
       // Store nav params and show review; Done button will call doNavigate.
@@ -882,6 +911,11 @@ export default function FormCheckScreen() {
             </View>
           </GlassButton>
         )}
+        {(isTracking || isStopping) && (
+          <Pressable onPress={shareLiveLog} hitSlop={12}>
+            <Text style={s.shareLiveTxt}>Share logs</Text>
+          </Pressable>
+        )}
       </View>
 
       {/* ── Post-session debug log review (phase === 'review') ──────────────── */}
@@ -1056,6 +1090,7 @@ const s = StyleSheet.create({
   debugPanel: { position: 'absolute', bottom: 140, left: 16, backgroundColor: C.glass, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, minWidth: 210, borderWidth: 1, borderColor: C.border },
   bottomBar:  { position: 'absolute', bottom: 0, left: 0, right: 0, alignItems: 'center', paddingTop: 12, paddingHorizontal: 24, gap: 12 },
   hint:       { color: C.muted, fontSize: 13 },
+  shareLiveTxt: { color: 'rgba(255,255,255,0.66)', fontSize: 12.5, fontFamily: F.bold, letterSpacing: 0.3, textDecorationLine: 'underline' },
   trackLabel:     { fontSize: 16, fontWeight: '600', color: C.text },
   trackLabelStop: { color: C.warn },
 
