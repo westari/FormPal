@@ -3916,7 +3916,7 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
   // route.
   crunch: {
     id:          'crunch',
-    displayName: 'Crunch',
+    displayName: 'Sit-up',   // renamed — the shoulder→knee distanceRatio tracks a full sit-up better than a shoulder-blades-only crunch (and it's what the user does)
     guideBox:    'floor',
 
     repMetric: {
@@ -3953,15 +3953,25 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     // genuine crunch bottoming at ~0.68 still grades as full ROM instead of
     // nagging CURL HIGHER — this does NOT gate counting (a rep counts on the
     // enter→exit crossing regardless of ROM).
-    // topAngle LEFT at 1.5 on purpose (not raised to the real ~2.0 rest
-    // value): it feeds the ACTIVITY "start zone" resume check as 0.75×topAngle
-    // = 1.125, and the noisy rest floor (~1.37, with dips) needs that bar
-    // LOW to recover if inactivity-suppression ever engages. A slightly
-    // over-credited ROM% is harmless; a too-high resume bar is not.
-    topAngle:            1.50,
-    repEnterThreshold:   0.95,
-    repExitThreshold:    1.30,
-    goodROMThreshold:    0.85,
+    // CALIBRATED from a device [CALIB] log (8/31/2026, 3 clean reps):
+    //   rest/max  avg 2.17  [2.1–2.2]
+    //   bottom/min avg 0.6   [0.5–0.8]   (deep reps ~0.5; a shallow one ~0.8)
+    //   swing avg 1.53
+    // The old enter=0.95 sat only ~0.15 above the deepest point, so a rep
+    // wasn't detected until you were ~80% of the way up — that's the "reps
+    // are really late" complaint. enter raised to 1.25 (~40% into the sit-up)
+    // so it registers early, with a 0.25 hysteresis gap to exit=1.50. Rest
+    // noise dips only reach ~1.35, safely above 1.25, so they can't false-fire.
+    // topAngle kept low-ish (1.60) so the 0.75x resume bar (1.20) stays below
+    // the rest noise floor.
+    // goodROMThreshold TIGHTENED HARD 0.85 -> 0.55 per explicit request:
+    // a full sit-up bottoms at ~0.5, a half-rep at ~0.8, so 0.55 passes deep
+    // reps and flags anything shallower with GO HIGHER (does NOT gate the
+    // count — a shallow rep still counts, just as a bad rep).
+    topAngle:            1.60,
+    repEnterThreshold:   1.25,
+    repExitThreshold:    1.50,
+    goodROMThreshold:    0.55,
     insufficientROMCue: 'GO HIGHER',
 
     // FORM CUES. Kept per explicit request, but both thresholds are LOOSE
@@ -4001,7 +4011,11 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
           right: { type: 'jointAngle', a: 'rightHip', pivot: 'rightKnee', c: 'rightAnkle' },
         },
         evaluateAt:       'throughoutMax',
-        condition:        { type: 'greaterThan', value: 70 },  // PLACEHOLDER — a clean rep read 53.8 at lim 55 (too close); calibrate once rep counting works
+        // Device log: clean sit-ups read 50-53, one rep read 70.5 and FALSE-fired
+        // at lim 70. Raised to 92 — clean reps have huge margin, a genuine
+        // leg-drive (knees straightening) still blows past it, and it stops
+        // nagging on normal reps.
+        condition:        { type: 'greaterThan', value: 92 },
         priority:         3,
         enabled:          true,
         formCheckMinConf: 0.35,
