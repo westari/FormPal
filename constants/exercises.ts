@@ -1111,7 +1111,7 @@ export const EXERCISE_CATALOG = [
   // before, on-device.
   {
     id:              'crunch',
-    displayName:     'Crunch',
+    displayName:     'Sit-up',
     muscleGroups:    [MuscleGroup.Core],
     muscles:         [Muscle.Abs],
     splitCategories: [SplitCategory.Upper],
