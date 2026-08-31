@@ -19,6 +19,10 @@ import { FONT, Sp, W } from '../../constants/theme';
 import ScreenBackground from '../../components/ScreenBackground';
 import { clearAllCalibrations } from '../../lib/calibration/store';
 import { useAudioSettingsStore } from '../../store/audioSettingsStore';
+import { useCustomizationStore } from '../../store/customizationStore';
+import { useRankStanding } from '../../lib/rank';
+import { TIER_META, TierEmblem } from '../../components/MuscleTierMap';
+import { unlockProgress } from '../../constants/customization';
 
 // ─── Design tokens (exact match to index.tsx) ─────────────────────────────────
 
@@ -169,6 +173,9 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const audioEnabled = useAudioSettingsStore(s => s.audioEnabled);
+  const displayName  = useCustomizationStore(s => s.displayName);
+  const { peakTier } = useRankStanding();
+  const unlocks = unlockProgress(peakTier);
 
   const [plan,      setPlan]      = useState<PlanProfile>({});
   const [readiness, setReadiness] = useState<string | null>(null);
@@ -220,13 +227,6 @@ export default function ProfileScreen() {
     );
   };
 
-  // Build a one-line profile summary for the avatar card
-  const planSummary = [
-    plan.goal        ? GOAL_LABELS[plan.goal]      : null,
-    plan.experience  ? EXP_LABELS[plan.experience] : null,
-    plan.daysPerWeek ? `${plan.daysPerWeek}×/wk`   : null,
-  ].filter(Boolean).join(' · ');
-
   return (
     <>
       <StatusBar style="dark" />
@@ -245,27 +245,53 @@ export default function ProfileScreen() {
             <Text style={s.sub}>Your plan, preferences, and settings.</Text>
           </View>
 
-          {/* ── 2. AVATAR CARD ──────────────────────────────────────────── */}
-          <View style={[s.avatarCard, SHADOW_HIGH]}>
+          {/* ── 2. AVATAR CARD — taps into the rank / customization screen ── */}
+          <Pressable
+            onPress={() => router.push('/customize')}
+            style={({ pressed }) => [s.avatarCard, SHADOW_HIGH, pressed && { opacity: 0.85 }]}
+          >
             {/* Gradient circle avatar */}
             <LinearGradient
-              colors={C.formGrad}
+              colors={peakTier ? [TIER_META[peakTier].hi, TIER_META[peakTier].lo] : C.formGrad}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={s.avatar}
             >
-              <Text style={s.avatarLetter}>A</Text>
+              <Text style={[s.avatarLetter, peakTier && { color: TIER_META[peakTier].ink }]}>
+                {(displayName[0] || 'A').toUpperCase()}
+              </Text>
             </LinearGradient>
 
             <View style={s.avatarInfo}>
-              <Text style={s.avatarName}>Athlete</Text>
-              {planSummary ? (
-                <Text style={s.avatarSub}>{planSummary}</Text>
-              ) : (
-                <Text style={s.avatarSub}>No plan set up yet</Text>
-              )}
+              <Text style={s.avatarName}>{displayName}</Text>
+              <View style={s.rankRow}>
+                {peakTier ? (
+                  <>
+                    <TierEmblem tier={peakTier} size={16} />
+                    <Text style={s.avatarSub}>
+                      {TIER_META[peakTier].label} · {unlocks.unlocked}/{unlocks.total} unlocked
+                    </Text>
+                  </>
+                ) : (
+                  <Text style={s.avatarSub}>Unranked — train to earn your first colour</Text>
+                )}
+              </View>
             </View>
-          </View>
+            <Text style={s.avatarChevron}>›</Text>
+          </Pressable>
+
+          {/* ── RANK & CUSTOMIZATION ───────────────────────────────────── */}
+          <SectionHeader title="Rank" />
+          <SettingsCard>
+            <SettingRow
+              icon="paintpalette.fill"
+              colors={peakTier ? [TIER_META[peakTier].lo, TIER_META[peakTier].ink] : ['#BF5AF2', '#9544C9']}
+              label="Rank & customization"
+              value={peakTier ? TIER_META[peakTier].label : 'Unranked'}
+              onPress={() => router.push('/customize')}
+              last
+            />
+          </SettingsCard>
 
           {/* ── 3. YOUR PLAN ────────────────────────────────────────────── */}
           <SectionHeader title="Your plan" />
@@ -435,6 +461,8 @@ const s = StyleSheet.create({
   avatarInfo:  { flex: 1, gap: 4 },
   avatarName:  { fontSize: 20, fontWeight: W.bold, letterSpacing: -0.4, color: C.text },
   avatarSub:   { fontSize: 13, fontWeight: W.medium, color: C.textSub, lineHeight: 18 },
+  rankRow:     { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  avatarChevron: { fontSize: 22, color: C.textDim, lineHeight: 24, marginLeft: 4 },
 
   // Footer version note
   versionNote: {

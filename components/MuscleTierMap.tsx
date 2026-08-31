@@ -42,24 +42,12 @@ import {
 import { Col, FONT, W, Sp } from '../constants/theme';
 
 // ─── Tier palette ───────────────────────────────────────────────────────────
-// Each tier is a real 3-stop material gradient (highlight -> mid -> ink),
-// not a flat color — used by both the emblem and the SVG-fallback icon fill.
-export const TIER_META: Record<Tier, { hi: string; lo: string; ink: string; label: string }> = {
-  bronze:   { hi: '#F0C9A0', lo: '#B97A42', ink: '#7A4A22', label: 'Bronze' },
-  // Old values (hi #F2F5F8, lo #AEB8C4, ink #69727E) were clustered in a
-  // narrow light-gray band — even ink, the darkest stop, was luminance
-  // ~113, nearly double every other tier's ink. First fix widened the
-  // range AND added a cool blue lean ("polished steel") — the range fix
-  // was right, the blue lean wasn't wanted; reverted that part to a plain
-  // grayscale silver (lo is literally CSS's own #C0C0C0 "silver"), same
-  // real hi-to-ink spread as every other tier, no added hue.
-  silver:   { hi: '#FFFFFF', lo: '#C0C0C0', ink: '#585858', label: 'Silver' },
-  gold:     { hi: '#FFEBB0', lo: '#E3B94D', ink: '#96701A', label: 'Gold' },
-  platinum: { hi: '#E2FBF3', lo: '#7FE0C9', ink: '#1C9C82', label: 'Platinum' },
-  diamond:  { hi: '#E3F7FF', lo: '#6FD3FF', ink: '#1789B8', label: 'Diamond' },
-  master:   { hi: '#F1E4FF', lo: '#B98CFF', ink: '#6F3FC2', label: 'Master' },
-  champion: { hi: '#FFF7DE', lo: '#FFD36E', ink: '#B9820A', label: 'Champion' },
-};
+// Moved to constants/tierPalette.ts so the form-check theme resolver can read
+// it without pulling this whole module (and its ~90 PNG requires) into the
+// camera screen's bundle graph. Re-exported here so every existing
+// `import { TIER_META } from '../components/MuscleTierMap'` still works.
+import { TIER_META } from '../constants/tierPalette';
+export { TIER_META };
 
 export const MUSCLE_LABELS: Record<Muscle, string> = {
   [Muscle.Chest]:      'Chest',

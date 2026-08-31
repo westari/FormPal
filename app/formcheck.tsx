@@ -39,6 +39,7 @@ import { getCalibration, applyOverride } from '../lib/calibration/store';
 import { handleRepAudio, playReadyCue } from '../lib/audioFeedback';
 import { createCalibSynth } from '../lib/calibLog';
 import { useAudioSettingsStore } from '../store/audioSettingsStore';
+import { useFormTheme, type FormTheme } from '../lib/activeTheme';
 import type { DebugStatsEvent, RepEvent, ExerciseType } from '../modules/athlt-camera/src/index';
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
@@ -306,8 +307,8 @@ function LiquidFrame({
 // the set. Sized generously (legs / full standing body fit inside). Purely
 // visual — doesn't hit-test joints (that's native).
 function PositioningGuide({
-  box, ready, children,
-}: { box: 'standing' | 'floor'; ready: boolean; children?: React.ReactNode }) {
+  box, ready, children, readyAccent = C.good, readyFrame,
+}: { box: 'standing' | 'floor'; ready: boolean; children?: React.ReactNode; readyAccent?: string; readyFrame?: string }) {
   const rect = box === 'floor'
     ? { top: '33%', bottom: '5%',  side: '4%'  }
     : { top: '16%', bottom: '7%',  side: '9%'  };
@@ -336,17 +337,17 @@ function PositioningGuide({
           top: rect.top as any, bottom: rect.bottom as any,
           left: rect.side as any, right: rect.side as any,
           borderRadius: R, borderCurve: 'continuous',
-          backgroundColor: ready ? 'rgba(50,215,75,0.07)' : 'rgba(255,255,255,0.025)',
+          backgroundColor: ready ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.025)',
           opacity: pulse,
           alignItems: 'center', justifyContent: 'center',
-          shadowColor: ready ? C.good : '#000',
+          shadowColor: ready ? readyAccent : '#000',
           shadowOffset: { width: 0, height: 0 },
           shadowOpacity: ready ? 0.95 : 0.5,
           shadowRadius: ready ? 26 : 18,
           elevation: 8,
         }}
       >
-        <LiquidFrame w={size.w} h={size.h} radius={R} thickness={8} accent={ready ? '#8affb0' : undefined} />
+        <LiquidFrame w={size.w} h={size.h} radius={R} thickness={8} accent={ready ? (readyFrame ?? '#8affb0') : undefined} />
         {children}
       </Animated.View>
     </View>
@@ -356,15 +357,17 @@ function PositioningGuide({
 // ─── Rep counter — bare number + label, no frame ─────────────────────────────
 // repCounterOnly: this exercise's form isn't judged (see exerciseDefinitions
 // `mode`), so show a neutral "REP COUNTER" tag instead of a good-rep count.
-function RepCounter({ reps, goodReps, repCounterOnly }: { reps: number; goodReps: number; repCounterOnly: boolean }) {
+function RepCounter({
+  reps, goodReps, repCounterOnly, theme,
+}: { reps: number; goodReps: number; repCounterOnly: boolean; theme: FormTheme }) {
   return (
     <View style={s.repBlock} pointerEvents="none">
-      <Text style={s.repNum}>{reps}</Text>
+      <Text style={[s.repNum, !theme.isDefault && { color: theme.repText }]}>{reps}</Text>
       {repCounterOnly ? (
         <Text style={s.repCounterTag}>REP COUNTER · FORM NOT SCORED</Text>
       ) : (
         <View style={s.repSubRow}>
-          <View style={s.repDot} />
+          <View style={[s.repDot, { backgroundColor: theme.accent }]} />
           <Text style={s.repSub}>{goodReps} good</Text>
         </View>
       )}
@@ -401,6 +404,9 @@ function parseRepSummaries(lines: string[]): RepSummary[] {
 export default function FormCheckScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  // User's unlocked rank colour for the ✓ orb / rep counter / accent glow —
+  // resolves to the shipped green/red when "Classic" (or nothing) is selected.
+  const theme = useFormTheme();
   const {
     exercise = 'squat',
     returnTo,
@@ -766,15 +772,19 @@ export default function FormCheckScreen() {
     <View style={s.root}>
       <ATHLTCameraView style={StyleSheet.absoluteFill} />
 
-      {/* Green flash on rep */}
+      {/* Accent flash on rep */}
       <Animated.View
         pointerEvents="none"
-        style={[StyleSheet.absoluteFill, { backgroundColor: C.good, opacity: Animated.multiply(flashAnim, 0.15) }]}
+        style={[StyleSheet.absoluteFill, { backgroundColor: theme.accent, opacity: Animated.multiply(flashAnim, 0.15) }]}
       />
 
       {/* Rep feedback badge */}
       {feedback && (
-        <RepFeedback good={feedback.good} reason={feedback.reason} seq={feedback.seq} onComplete={() => setFeedback(null)} />
+        <RepFeedback
+          good={feedback.good} reason={feedback.reason} seq={feedback.seq}
+          onComplete={() => setFeedback(null)}
+          goodColor={theme.orbGood} badColor={theme.orbBad}
+        />
       )}
 
       {/* Positioning-guide box. Border goes green the instant SETUP's joint
@@ -785,6 +795,8 @@ export default function FormCheckScreen() {
         <PositioningGuide
           box={guideBoxFor(exerciseType)}
           ready={setupAllVisible || phase === 'setup-done' || phase === 'tracking'}
+          readyAccent={theme.isDefault ? C.good : theme.accent}
+          readyFrame={theme.isDefault ? undefined : theme.accent}
         >
           {phase === 'setup' && (
             <GlassPanel radius={30} style={s.setupPanel}>
@@ -805,7 +817,7 @@ export default function FormCheckScreen() {
       )}
 
       {/* Rep counter — fixed near the top, same Liquid Glass frame as the box. */}
-      {showRepCounter && <RepCounter reps={reps} goodReps={goodReps} repCounterOnly={repCounterOnly} />}
+      {showRepCounter && <RepCounter reps={reps} goodReps={goodReps} repCounterOnly={repCounterOnly} theme={theme} />}
 
       {/* Ready → tracking */}
       {phase === 'setup-done' && (

@@ -15,9 +15,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 import { StatusBar } from 'expo-status-bar';
 
-import { Col, Sp, Sz, FONT, Elev } from '../constants/theme';
+import { Col, Sp, Sz, FONT, Elev, W } from '../constants/theme';
 import ScreenBackground from '../components/ScreenBackground';
-import { MuscleTierMap, MuscleRankBackdrop, computeOverallStanding, MUSCLE_ICON_ATTRIBUTION } from '../components/MuscleTierMap';
+import { MuscleTierMap, MuscleRankBackdrop, computeOverallStanding, computeOverallPeak, MUSCLE_ICON_ATTRIBUTION } from '../components/MuscleTierMap';
+import RankUpBanner from '../components/RankUpBanner';
 import { getAllSessions, computeMuscleTiers, type MuscleTiers } from '../lib/sessionLog';
 
 const SHADOW_LOW  = Platform.OS === 'ios' ? { boxShadow: Elev.low.shadow } as any : { elevation: Elev.low.android };
@@ -34,6 +35,7 @@ export default function MuscleRanksScreen() {
   );
 
   const overall = computeOverallStanding(tiers);
+  const peakTier = computeOverallPeak(tiers);
 
   return (
     <>
@@ -42,14 +44,20 @@ export default function MuscleRanksScreen() {
         <MuscleRankBackdrop tier={overall?.tier ?? 'bronze'} />
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingTop: insets.top + 12, paddingBottom: insets.bottom + 60, paddingHorizontal: Sp.md }}
+          contentContainerStyle={{ paddingTop: insets.top + 12, paddingBottom: insets.bottom + 60, paddingHorizontal: Sp.md, gap: Sp.md }}
         >
           <View style={s.header}>
             <Pressable onPress={() => router.back()} style={[s.backBtn, SHADOW_LOW]} hitSlop={10}>
               <SymbolView name="chevron.left" size={18} tintColor={Col.text} type="monochrome" style={{ width: 18, height: 18 }} />
             </Pressable>
             <Text style={s.title}>Standing</Text>
+            <Pressable onPress={() => router.push('/customize' as any)} style={[s.customizeBtn, SHADOW_LOW]} hitSlop={8}>
+              <SymbolView name="paintpalette.fill" size={14} tintColor={Col.text} type="monochrome" style={{ width: 14, height: 14 }} />
+              <Text style={s.customizeTxt}>Customize</Text>
+            </Pressable>
           </View>
+
+          <RankUpBanner peakTier={peakTier} />
 
           <MuscleTierMap tiers={tiers} scale={1.0} />
 
@@ -64,20 +72,26 @@ export default function MuscleRanksScreen() {
 
 const s = StyleSheet.create({
   header: {
-    flexDirection: 'row', alignItems: 'center', gap: 16,
-    marginBottom: Sp.xl,
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    marginBottom: Sp.md,
   },
   backBtn: {
     width: 34, height: 34, borderRadius: 17,
     alignItems: 'center', justifyContent: 'center',
     backgroundColor: Col.card,
   },
+  customizeBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999,
+    backgroundColor: Col.card,
+  },
+  customizeTxt: { fontSize: 13, fontWeight: W.semi, color: Col.text },
   // FONT.displayLight, not displayBold — matches the app's own "greeting
   // header" convention (see DESIGN.md's FONT table: displayLight is for
   // screen titles like "Welcome back.", not section headings). Dropped the
   // subtitle entirely, per explicit ask — it read as clutter under a title
   // this size; the card below already makes the "volume AND form" point.
-  title: { fontFamily: FONT.displayLight, fontSize: Sz.h1, color: Col.text, letterSpacing: -0.5 },
+  title: { flex: 1, fontFamily: FONT.displayLight, fontSize: Sz.h1, color: Col.text, letterSpacing: -0.5 },
 
   attribution:    { alignItems: 'center', marginTop: Sp.lg, paddingVertical: 6 },
   attributionTxt: { fontSize: Sz.caption, color: Col.textSub, textDecorationLine: 'underline' },

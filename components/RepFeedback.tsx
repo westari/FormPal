@@ -16,8 +16,11 @@ const ORB   = 152;
 
 // ─── 3D Liquid Glass orb ─────────────────────────────────────────────────────
 
-function GlassOrb({ good }: { good: boolean }) {
-  const tint = good ? GREEN : RED;
+// goodColor / badColor default to the shipped green / red. formcheck.tsx
+// passes the user's unlocked rank colour for the ✓ orb (see lib/activeTheme);
+// the ✗ orb stays red on every theme by design.
+function GlassOrb({ good, goodColor = GREEN, badColor = RED }: { good: boolean; goodColor?: string; badColor?: string }) {
+  const tint = good ? goodColor : badColor;
 
   return (
     <View style={[orb.lift]}>
@@ -116,11 +119,15 @@ export default function RepFeedback({
   reason,
   seq: repSeq,
   onComplete,
+  goodColor,
+  badColor,
 }: {
   good: boolean;
   reason: string;
   seq: number;
   onComplete: () => void;
+  goodColor?: string;
+  badColor?: string;
 }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const scale   = useRef(new Animated.Value(0.8)).current;
@@ -152,7 +159,7 @@ export default function RepFeedback({
       pointerEvents="none"
     >
       <Animated.View style={{ transform: [{ scale }], alignItems: 'center' }}>
-        <GlassOrb good={good} />
+        <GlassOrb good={good} goodColor={goodColor} badColor={badColor} />
         {!good && !!reason && (
           <Text style={rf.cue} numberOfLines={2}>{reason}</Text>
         )}
