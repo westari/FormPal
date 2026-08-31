@@ -262,9 +262,11 @@ extension ExerciseDefinition {
         let parsedJoints = joints.compactMap(Joint.init(string:))
         let altJoints: [Joint]? = (dict["requiredJointsAlt"] as? [String])
             .map { $0.compactMap(Joint.init(string:)) }
+        let facing = SetupFacing(rawValue: (dict["facing"] as? String) ?? "") ?? .any
         return CameraSetupConfig(setupInstruction: instr,
                                  requiredJoints: parsedJoints,
-                                 requiredJointsAlt: altJoints)
+                                 requiredJointsAlt: altJoints,
+                                 facing: facing)
     }
 
     private static func parseCalibration(_ dict: [String: Any]) -> CalibrationConfig? {

@@ -643,7 +643,7 @@ final class ExerciseEngine {
                 setupPhaseState = .pending
             }
             onSetupUpdate?(SetupStatus(allJointsVisible: false, holdProgress: 0.0,
-                                       passed: false, hint: "Step into frame to start"))
+                                       passed: false, hint: "Step into the box"))
         }
         handleNoPose(timestamp: timestamp)
     }
@@ -732,7 +732,7 @@ final class ExerciseEngine {
         }
 
         onSetupUpdate?(SetupStatus(allJointsVisible: allVisible, holdProgress: holdProgress,
-                                   passed: false, hint: hintForMissingJoints(missingJoints)))
+                                   passed: false, hint: positionGuidance(pose: pose, missing: missingJoints)))
     }
 
     // Called when setup passes — goes straight to ACTIVE. If def.calibration is
@@ -808,17 +808,69 @@ final class ExerciseEngine {
         return false
     }
 
-    private func hintForMissingJoints(_ joints: [Joint]) -> String {
-        if joints.isEmpty { return "" }
-        let hasLeg = joints.contains(.leftAnkle)  || joints.contains(.rightAnkle) ||
-                     joints.contains(.leftKnee)   || joints.contains(.rightKnee)
-        let hasHip = joints.contains(.leftHip)    || joints.contains(.rightHip)
-        let hasArm = joints.contains(.leftWrist)  || joints.contains(.rightWrist) ||
-                     joints.contains(.leftElbow)  || joints.contains(.rightElbow)
-        if hasLeg  { return "Move back — feet not in frame" }
-        if hasHip  { return "Move back — hips not visible" }
-        if hasArm  { return "Step sideways — arms not visible" }
-        return "Adjust so your body fills the frame"
+    // Real-time positioning coaching for SETUP. Works off the pose Vision
+    // already produced this frame: the bounding box of every joint it can see
+    // (not just the required ones), plus a coarse facing estimate from
+    // shoulder-width vs torso-height. Returns "" when there's nothing useful
+    // to say (all required joints visible, or the frame's fine) — the JS side
+    // then shows the static one-line instruction.
+    //
+    // `missing` is the required-joint list that failed the visibility/edge
+    // check (see missingSetupJoints). Empty `missing` short-circuits to "" so
+    // "all visible → just hold still" behaviour is unchanged.
+    private func positionGuidance(pose: Pose, missing: [Joint]) -> String {
+        if missing.isEmpty { return "" }
+
+        let facing = def.cameraSetup?.facing ?? .any
+        // Size/edge/facing heuristics only make sense for an upright, full-body
+        // exercise. Floor exercises (.any) legitimately have a short vertical
+        // span and a body running edge-to-edge — skip those checks for them.
+        let standing = facing != .any
+
+        var xs: [Double] = []
+        var ys: [Double] = []
+        for j in Joint.allCases {
+            guard let p = pose[j], p.confidence >= Self.SETUP_JOINT_MIN_CONF else { continue }
+            xs.append(Double(p.x)); ys.append(Double(p.y))
+        }
+        guard xs.count >= 3 else { return "Step into the box" }
+
+        let minX = xs.min()!, maxX = xs.max()!
+        let minY = ys.min()!, maxY = ys.max()!
+        let spanX = maxX - minX, spanY = maxY - minY
+        let cx = (minX + maxX) / 2
+
+        if standing {
+            // Whole visible body is small → too far away.
+            if spanY < 0.42 && spanX < 0.55 { return "Come closer" }
+            // Body runs off an edge → too close / partly cut off. Vision's y
+            // increases upward, so y≈1 is the top of the frame.
+            if minY < 0.04 || maxY > 0.97 || minX < 0.03 || maxX > 0.97 {
+                return "Back up — you're cut off"
+            }
+        }
+
+        // Off to one side (mirror-safe: centre-relative, no left/right).
+        if cx < 0.28 || cx > 0.72 { return "Move to the centre of the frame" }
+
+        // Facing the wrong way — coarse: broad shoulders vs a short torso reads
+        // as "facing the camera", very narrow reads as "side-on".
+        if standing,
+           let ls = pose[.leftShoulder], ls.confidence >= Self.SETUP_JOINT_MIN_CONF,
+           let rs = pose[.rightShoulder], rs.confidence >= Self.SETUP_JOINT_MIN_CONF {
+            let shoulderW = abs(Double(ls.x) - Double(rs.x))
+            let shoulderY = (Double(ls.y) + Double(rs.y)) / 2
+            var torsoH = 0.30
+            if let lh = pose[.leftHip], lh.confidence >= Self.SETUP_JOINT_MIN_CONF,
+               let rh = pose[.rightHip], rh.confidence >= Self.SETUP_JOINT_MIN_CONF {
+                torsoH = max(0.05, abs(shoulderY - (Double(lh.y) + Double(rh.y)) / 2))
+            }
+            let ratio = shoulderW / torsoH
+            if facing == .camera && ratio < 0.28 { return "Turn to face the camera" }
+            if facing == .side   && ratio > 0.58 { return "Turn side-on to the camera" }
+        }
+
+        return "Get your whole body in the box"
     }
 
     // ─── Passive calibration ──────────────────────────────────────────────────

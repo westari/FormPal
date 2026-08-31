@@ -81,6 +81,12 @@ export interface CameraSetupDef {
   setupInstruction:  string;
   requiredJoints:    string[];
   requiredJointsAlt?: string[];
+  // Which way the athlete faces. Drives the SETUP "Turn to face the camera" /
+  // "Turn side-on" coaching cue AND the standing-body size/edge heuristics
+  // (see ExerciseEngine.positionGuidance). Omit for floor exercises
+  // (push-up / sit-up) — they have no facing preference and a small vertical
+  // span, so the standing heuristics must not run. NATIVE — needs an EAS build.
+  facing?: 'camera' | 'side';
 }
 
 export interface CalibrationDef {
@@ -4249,3 +4255,43 @@ export function isRepCounterExercise(id: string): boolean {
     const def = (EXERCISE_DEFINITIONS as Record<string, ExerciseDefinitionDef | undefined>)[id];
     if (def) def.mode = 'repCounter';
   });
+
+// ─── SETUP facing — drives the "Turn to face the camera" / "Turn side-on"
+// coaching cue and the standing-body size/edge heuristics (see
+// ExerciseEngine.positionGuidance). Set post-declaration as a one-liner list,
+// same as `mode` above. Anything NOT listed (push-up + sit-up families) stays
+// facing-agnostic — floor exercises where those heuristics must not run.
+// NATIVE — the cue itself needs an EAS build; harmless extra JSON until then.
+{
+  const setFacing = (ids: readonly string[], facing: 'camera' | 'side') =>
+    ids.forEach((id) => {
+      const cs = (EXERCISE_DEFINITIONS as Record<string, ExerciseDefinitionDef | undefined>)[id]?.cameraSetup;
+      if (cs) cs.facing = facing;
+    });
+
+  setFacing([
+    // Curl family
+    'curl', 'hammerCurl', 'concentrationCurl', 'preacherCurl', 'reverseCurl', 'cableCurl',
+    // Overhead-press family
+    'shoulderPress', 'overheadPress', 'arnoldPress', 'dumbbellShoulderPress', 'machineShoulderPress',
+    // Front-on pulls / raises / misc
+    'latPulldown', 'facePull', 'lateralRaise', 'jumpingJack', 'pullup',
+  ], 'camera');
+
+  setFacing([
+    // Squat / lunge families
+    'squat', 'gobletSquat', 'airSquat', 'frontSquat', 'backSquat', 'sumoSquat',
+    'lunge', 'splitSquat', 'reverseLunge', 'stepUp', 'bulgarianSplitSquat',
+    // Chest press (side/lying view)
+    'chestPress', 'barbellBenchPress',
+    // Tricep family
+    'tricepPushdown', 'overheadTricepExtension', 'skullcrusher',
+    // Row families
+    'bentOverRow', 'barbellRow', 'singleArmRow', 'invertedRow', 'tBarRow',
+    'seatedCableRow', 'machineRow',
+    // Hip-hinge family
+    'romanianDeadlift', 'deadlift', 'goodMorning', 'kettlebellSwing', 'singleLegRDL', 'cablePullThrough',
+    // Side-on isolation
+    'frontRaise', 'standingGluteKickback', 'calfRaise', 'legCurl', 'dips',
+  ], 'side');
+}

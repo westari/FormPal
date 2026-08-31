@@ -6,17 +6,30 @@ import Foundation
 // The engine checks requiredJoints are visible + stable for ~2 seconds.
 // Adding a new exercise = set its cameraSetup in ExerciseRegistry. Zero engine changes.
 
+// Which way the athlete should face for this exercise. Drives the SETUP
+// "Turn to face the camera" / "Turn side-on" coaching cue (see
+// ExerciseEngine.positionGuidance). `.any` = no preference (floor exercises)
+// and disables the facing cue plus the standing-body size/edge heuristics.
+enum SetupFacing: String {
+    case camera
+    case side
+    case any
+}
+
 struct CameraSetupConfig {
     let setupInstruction:  String
     let requiredJoints:    [Joint]
     let requiredJointsAlt: [Joint]?
+    let facing:            SetupFacing
 
     init(setupInstruction: String,
          requiredJoints: [Joint],
-         requiredJointsAlt: [Joint]? = nil) {
+         requiredJointsAlt: [Joint]? = nil,
+         facing: SetupFacing = .any) {
         self.setupInstruction  = setupInstruction
         self.requiredJoints    = requiredJoints
         self.requiredJointsAlt = requiredJointsAlt
+        self.facing            = facing
     }
 }
 

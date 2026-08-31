@@ -524,14 +524,21 @@ export default function FormCheckScreen() {
       setSetupAllVisible(event.allJointsVisible);
       setSetupHoldProgress(event.holdProgress);
 
+      // Live positioning cue. Show a new cue immediately so guidance tracks
+      // the user in real time (React de-dupes an identical string); only
+      // DEBOUNCE the clear, so a one-frame "all good" blip doesn't wipe a
+      // still-relevant cue mid-adjustment. (The old code debounced every
+      // update by 400ms, which — because onSetupStatus fires every frame —
+      // meant a continuous stream of cues kept resetting the timer and the
+      // hint never actually appeared.)
       if (event.hint) {
-        if (hintTimer.current) clearTimeout(hintTimer.current);
-        hintTimer.current = setTimeout(() => {
-          if (mounted) setSetupHint(event.hint);
-        }, 400);
-      } else {
         if (hintTimer.current) { clearTimeout(hintTimer.current); hintTimer.current = null; }
-        if (mounted) setSetupHint('');
+        setSetupHint(event.hint);
+      } else if (!hintTimer.current) {
+        hintTimer.current = setTimeout(() => {
+          hintTimer.current = null;
+          if (mounted) setSetupHint('');
+        }, 300);
       }
 
       if (event.passed) {
@@ -801,14 +808,16 @@ export default function FormCheckScreen() {
           {phase === 'setup' && (
             <GlassPanel radius={30} style={s.setupPanel}>
               <View style={s.setupPanelInner}>
+                {/* ONE line: the live positioning cue from native
+                    ("Come closer", "Back up — you're cut off", "Move to the
+                    centre", "Turn to face the camera", …), falling back to the
+                    exercise's one-sentence instruction until the camera has
+                    something to say, and "Perfect — hold still" once every
+                    required joint is in frame. No paragraph. */}
                 <Text style={s.setupBig}>
-                  {setupAllVisible ? 'Hold still…' : 'Line yourself up'}
-                </Text>
-                <Text style={s.setupHint}>
-                  {setupHint
-                    || (setupAllVisible
-                          ? 'Locking on — keep steady'
-                          : `${SETUP_INFO[exerciseType].title} · ${SETUP_INFO[exerciseType].sub}`)}
+                  {setupAllVisible
+                    ? 'Perfect — hold still'
+                    : (setupHint || SETUP_INFO[exerciseType].title)}
                 </Text>
               </View>
             </GlassPanel>
@@ -1120,12 +1129,11 @@ const s = StyleSheet.create({
   metricStateDown: { color: C.good },
   metricThresh:    { fontFamily: 'Menlo', fontSize: 8, color: C.dim, marginTop: 2 },
 
-  // ── Setup instruction — centred inside the guide box (see PositioningGuide
-  // children), so it never crosses the box border. ───────────────────────
-  setupPanel:      { alignSelf: 'center', maxWidth: 320, marginHorizontal: 16 },
-  setupPanelInner: { paddingHorizontal: 28, paddingTop: 20, paddingBottom: 22, alignItems: 'center', gap: 8 },
-  setupBig:        { fontFamily: F.extra, fontSize: 25, color: '#fff', textAlign: 'center' },
-  setupHint:       { fontFamily: F.regular, fontSize: 14, color: 'rgba(255,255,255,0.86)', textAlign: 'center', lineHeight: 20 },
+  // ── Setup instruction — ONE line, centred inside the guide box (see
+  // PositioningGuide children) so it never crosses the box border. ────────
+  setupPanel:      { alignSelf: 'center', maxWidth: 340, marginHorizontal: 16 },
+  setupPanelInner: { paddingHorizontal: 26, paddingTop: 18, paddingBottom: 20, alignItems: 'center' },
+  setupBig:        { fontFamily: F.extra, fontSize: 24, lineHeight: 30, color: '#fff', textAlign: 'center' },
 
   setupDoneOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
 
