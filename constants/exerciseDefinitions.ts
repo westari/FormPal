@@ -175,6 +175,14 @@ export interface ExerciseDefinitionDef {
   // runs ~67% of frames below the floor (Apple Vision shoulder confidence
   // tops out ~0.67 lying down) and was having every such rep deleted.
   repReliabilityMaxUnreliableFraction?: number;
+  // Seconds since the last COUNTED rep (person present, not mid-rep) before
+  // rep counting is suppressed until the user returns to the start position
+  // (see ExerciseEngine.swift's updateActivityState). Default 8.0 (omit for
+  // every normal exercise). crunch overrides it long: lying flat, reps
+  // resolve slowly and some are dropped by the reliability gate, so the real
+  // gap between counted reps exceeds 8s and suppression was locking out the
+  // rest of a set.
+  inactivityRepGapSec?: number;
   // Orientation of the on-screen positioning-guide box shown during SETUP in
   // app/formcheck.tsx (a dimmed surround with a clear target rectangle the
   // user lines up inside). 'standing' = tall upright box for a standing
@@ -3784,20 +3792,23 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
       rightJoints: ['rightKnee', 'rightAnkle'],
     },
 
-    // PLACEHOLDER — and unusually TIGHT on purpose, not wide like every
-    // other exercise added this round: the real problem here isn't
-    // hysteresis margin, it's that the whole physical range of motion is
-    // small. A wide gap would very likely never be crossed at all. These
-    // numbers assume the knee-ankle gap shrinks by only a few percent of
-    // torso-normalized scale during a real heel raise — an assumption, not
-    // a measurement. Send a real log FIRST for this one specifically — if
-    // the observed swing is even smaller than this already-tight band, no
-    // threshold fix will save it and this exercise may not be trackable
-    // with this app's joint set at all.
-    topAngle:            0.10,    // PLACEHOLDER — heels-down baseline
-    repEnterThreshold:   0.07,    // PLACEHOLDER — tight gap, not wide, on purpose
-    repExitThreshold:    0.085,   // PLACEHOLDER
-    goodROMThreshold:    0.03,    // PLACEHOLDER — full heel raise
+    // RECALIBRATED from a device log (8/31/2026): the previous band
+    // (top 0.10 / enter 0.07 / exit 0.085) was ~10x BELOW the real metric
+    // value — normalizedVerticalGap(knee,ankle) actually reads ~0.76–0.94,
+    // hovering ~0.85 at rest, so the value could never approach the old
+    // thresholds and zero reps registered. New band is anchored to that
+    // observed range: a heel raise shrinks the knee→ankle vertical gap, so
+    // a rep DROPS the value and returns.
+    // STILL A PLACEHOLDER: that same log showed the value bouncing ~±0.09
+    // with no visible rep structure — the calf-raise motion may sit inside
+    // Vision's noise floor for this joint pair. Do ~10 SLOW, deliberate,
+    // full-height raises and send the log; if the deliberate dips don't
+    // separate cleanly from that noise, this exercise isn't trackable with
+    // knee/ankle alone and should be dropped.
+    topAngle:            0.88,    // PLACEHOLDER — heels-down baseline (top of observed range)
+    repEnterThreshold:   0.80,    // PLACEHOLDER — needs a clear ~0.08 drop from rest to enter
+    repExitThreshold:    0.84,    // PLACEHOLDER — back toward rest
+    goodROMThreshold:    0.75,    // PLACEHOLDER — full heel raise
     insufficientROMCue: 'HIGHER RAISE',
 
     // No form check — with only knee/ankle available and the primary
@@ -4068,6 +4079,11 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     // logged while the user walked away — that runs ~100% unreliable) while
     // letting a normal lying-down crunch count.
     repReliabilityMaxUnreliableFraction: 0.9,
+    // Reps resolve slowly lying flat and the reliability gate discards some,
+    // so the real inter-rep gap runs well past 8s — a device log showed
+    // inactivity suppression engaging at 9.9s and never releasing, killing
+    // the rest of the set. 30s leash. (Native — needs an EAS build.)
+    inactivityRepGapSec: 30,
 
     minRepInterval:  0.5,
     planarityChecks: [],

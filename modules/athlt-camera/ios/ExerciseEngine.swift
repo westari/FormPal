@@ -1693,7 +1693,7 @@ final class ExerciseEngine {
             // Inactivity: at least one rep done, not mid-rep, long gap since last rep.
             if totalReps > 0,
                repPhase != .inRep,
-               timestamp.timeIntervalSince(lastRepTime) >= Self.INACTIVITY_REP_GAP_SEC {
+               timestamp.timeIntervalSince(lastRepTime) >= def.inactivityRepGapSec {
                 suppressAndLog(reason: "inactivity gap=\(String(format: "%.1f", timestamp.timeIntervalSince(lastRepTime)))s")
             }
 

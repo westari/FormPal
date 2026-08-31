@@ -244,6 +244,16 @@ struct ExerciseDefinition {
     // still runs ~100% unreliable and is still caught.
     let repReliabilityMaxUnreliableFraction: Double
 
+    // ── Inactivity-suppression gap (per-exercise override) ───────────────────
+    // Seconds since the last COUNTED rep, with the person present and not
+    // mid-rep, before rep counting is suppressed until they return to the
+    // start position (see ExerciseEngine.swift's updateActivityState). Default
+    // 8.0. Crunch overrides it long: lying flat, reps resolve slowly and some
+    // get thrown out by the reliability gate, so the real inter-rep gap
+    // legitimately exceeds 8s and suppression was locking out the rest of a
+    // set. The walk-away case is still caught — just after a longer wait.
+    let inactivityRepGapSec: Double
+
     init(id: String, displayName: String,
          repMetric: Metric,
          topAngle: Double, repEnterThreshold: Double, repExitThreshold: Double,
@@ -259,7 +269,8 @@ struct ExerciseDefinition {
          exitConfirmFrames: Int = 3,
          missingPersonGraceFrames: Int = 3,
          settleAnchorMinFraction: Double? = nil,
-         repReliabilityMaxUnreliableFraction: Double = 0.5) {
+         repReliabilityMaxUnreliableFraction: Double = 0.5,
+         inactivityRepGapSec: Double = 8.0) {
         self.id                        = id
         self.displayName               = displayName
         self.repMetric                 = repMetric
@@ -280,5 +291,6 @@ struct ExerciseDefinition {
         self.missingPersonGraceFrames  = missingPersonGraceFrames
         self.settleAnchorMinFraction   = settleAnchorMinFraction
         self.repReliabilityMaxUnreliableFraction = repReliabilityMaxUnreliableFraction
+        self.inactivityRepGapSec       = inactivityRepGapSec
     }
 }
