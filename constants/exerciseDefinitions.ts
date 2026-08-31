@@ -183,6 +183,18 @@ export interface ExerciseDefinitionDef {
   // gap between counted reps exceeds 8s and suppression was locking out the
   // rest of a set.
   inactivityRepGapSec?: number;
+  // When false (default true), skips the native frame-edge guard that resets
+  // framesSincePoseGap whenever a repMetric joint sits within 5% of a frame
+  // edge during tracking (see ExerciseEngine.swift's ingest() edge call site
+  // and edgeGuardEnabled in ExerciseDefinition.swift). That guard is built for
+  // STANDING exercises (edge-adjacent joint = walking out of frame). A FLOOR
+  // exercise lies across the whole frame with a knee/shoulder near an edge on
+  // every rep — a device log showed the guard resetting the clean-frame
+  // counter every few frames, so the deep frames of every rep after the first
+  // were never recorded and the reps failed the phantom guard, then inactivity
+  // suppression locked out the set. Set false for floor exercises only.
+  // NATIVE — needs an EAS build.
+  edgeGuardEnabled?: boolean;
   // Orientation of the on-screen positioning-guide box shown during SETUP in
   // app/formcheck.tsx (a dimmed surround with a clear target rectangle the
   // user lines up inside). 'standing' = tall upright box for a standing
@@ -4098,6 +4110,16 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     // inactivity suppression engaging at 9.9s and never releasing, killing
     // the rest of the set. 30s leash. (Native — needs an EAS build.)
     inactivityRepGapSec: 30,
+    // LOG-DERIVED (8/31/2026 device take): rep #1 counted GOOD, then rep #2 —
+    // a clearly deeper rep in the raw [METRIC] trace (value 2.05 → 0.63) — was
+    // rejected as phantom because framesSincePoseGap kept resetting 1→2→3→4→0
+    // every few frames (a knee/shoulder near the frame edge, lying across the
+    // whole frame), so repMinAngle never recorded the 0.63 bottom — it stuck
+    // at 1.21 and movementPastEntry read 0.04 vs 0.21 required. Then inactivity
+    // suppression locked out the remaining ~6 reps. Disabling the edge guard
+    // for this floor exercise stops the deep frames being discarded. (Native —
+    // needs an EAS build.)
+    edgeGuardEnabled: false,
 
     minRepInterval:  0.5,
     planarityChecks: [],

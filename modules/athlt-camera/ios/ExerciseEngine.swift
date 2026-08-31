@@ -569,7 +569,14 @@ final class ExerciseEngine {
         // same class of bug as the lateral-raise asymmetry check (confidence
         // above the floor isn't the same as a reliable reading). Treat an edge-
         // adjacent repMetric joint exactly like a pose gap.
-        if isNearFrameEdge(pose: pose, joints: def.repMetric.referencedJoints()) {
+        // def.edgeGuardEnabled == false (floor exercises: crunch/sit-up) skips
+        // ONLY this edge reset — the person lies across the whole frame with a
+        // knee/shoulder legitimately near an edge every rep, and this was
+        // deleting the deep frames of every rep after the first (see the field's
+        // doc comment in ExerciseDefinition.swift). A real missing pose still
+        // resets framesSincePoseGap via handleNoPose/notePersonMissing.
+        if def.edgeGuardEnabled,
+           isNearFrameEdge(pose: pose, joints: def.repMetric.referencedJoints()) {
             framesSincePoseGap = 0
         } else {
             framesSincePoseGap = min(framesSincePoseGap + 1, Self.MIN_FRAMES_AFTER_POSE_GAP + 100)

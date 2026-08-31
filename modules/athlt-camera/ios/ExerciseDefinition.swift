@@ -254,6 +254,28 @@ struct ExerciseDefinition {
     // set. The walk-away case is still caught — just after a longer wait.
     let inactivityRepGapSec: Double
 
+    // ── Frame-edge guard (per-exercise override) ─────────────────────────────
+    // When true (default), a repMetric joint sitting within SETUP_EDGE_MARGIN
+    // (5%) of any frame edge during ACTIVE tracking is treated like a pose gap:
+    // framesSincePoseGap resets to 0, and no rep can enter/complete and no
+    // repMinAngle can be recorded until MIN_FRAMES_AFTER_POSE_GAP clean frames
+    // pass (see ExerciseEngine.swift's ingest() edge call site). Built for
+    // STANDING exercises, where an edge-adjacent joint really does mean the
+    // user is walking out of frame with a garbled reading.
+    //
+    // A FLOOR exercise (crunch/sit-up) breaks that assumption: the person lies
+    // across the whole frame with the phone on the floor beside them, so a
+    // knee or the far shoulder is legitimately near an edge on EVERY rep,
+    // especially at the top of the curl. A device log showed this resetting
+    // framesSincePoseGap 1→2→3→4→reset every few frames, so the deep frames of
+    // every rep after the first were never recorded into repMinAngle — the rep
+    // then failed the phantom guard (recorded movement far short of real) and
+    // was dropped, after which inactivity suppression locked out the set.
+    // Setting this false for floor exercises skips ONLY the edge reset; a
+    // genuine missing pose still resets via handleNoPose/notePersonMissing, so
+    // the "stale data completes a bogus rep" protection is unaffected.
+    let edgeGuardEnabled: Bool
+
     init(id: String, displayName: String,
          repMetric: Metric,
          topAngle: Double, repEnterThreshold: Double, repExitThreshold: Double,
@@ -270,7 +292,8 @@ struct ExerciseDefinition {
          missingPersonGraceFrames: Int = 3,
          settleAnchorMinFraction: Double? = nil,
          repReliabilityMaxUnreliableFraction: Double = 0.5,
-         inactivityRepGapSec: Double = 8.0) {
+         inactivityRepGapSec: Double = 8.0,
+         edgeGuardEnabled: Bool = true) {
         self.id                        = id
         self.displayName               = displayName
         self.repMetric                 = repMetric
@@ -292,5 +315,6 @@ struct ExerciseDefinition {
         self.settleAnchorMinFraction   = settleAnchorMinFraction
         self.repReliabilityMaxUnreliableFraction = repReliabilityMaxUnreliableFraction
         self.inactivityRepGapSec       = inactivityRepGapSec
+        self.edgeGuardEnabled          = edgeGuardEnabled
     }
 }
