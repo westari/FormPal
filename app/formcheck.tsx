@@ -176,7 +176,7 @@ const SETUP_INFO: Record<ExerciseId, { icon: string; title: string; sub: string 
   // Crunch — lying down, side-on. Matches its own setupInstruction; see
   // that exercise's comment for the confirmed on-device
   // lying-pose-detection risk this shares with the removed gluteBridge.
-  crunch: { icon: 'arrow.left.and.right', title: 'Lie on your back, phone to your side', sub: '~3-4 ft away · body fills ~2/3 of frame · good light' },
+  crunch: { icon: 'arrow.left.and.right', title: 'Phone on a chair beside you, angled down', sub: 'Whole body — head to feet — inside the box' },
   dips:   { icon: 'figure.strengthtraining.functional', title: 'Stand side-on to the camera', sub: 'Shoulder and elbow in frame — whole body visible' },
 };
 
@@ -310,11 +310,10 @@ function PositioningGuide({
   box, ready, children, readyAccent = C.good, readyFrame,
 }: { box: 'standing' | 'floor'; ready: boolean; children?: React.ReactNode; readyAccent?: string; readyFrame?: string }) {
   const rect = box === 'floor'
-    // Near-full-frame for floor exercises. The old 33%-from-the-top box made
-    // people line up with their head ABOVE it / out of the real camera frame
-    // — and the sit-up metric needs the head (nose) visible. A big box = "fit
-    // your whole body, head included, inside this" = head stays in frame.
-    ? { top: '4%',  bottom: '3%',  side: '3%'  }
+    // Floor exercises: head near the top of frame, feet near the bottom. The
+    // old 33%-from-the-top box put your head OUTSIDE it; full-frame made it
+    // meaningless. 12% top leaves head room while still framing a real target.
+    ? { top: '12%', bottom: '5%',  side: '5%'  }
     : { top: '16%', bottom: '7%',  side: '9%'  };
   const R = 36;
 

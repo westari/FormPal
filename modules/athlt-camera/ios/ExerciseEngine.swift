@@ -136,7 +136,11 @@ final class ExerciseEngine {
     // "Come back into frame" cue (activeTrackingCue) fills the gap in the
     // meantime instead of silently bouncing to the setup screen.
     private static let LEAVE_TIMEOUT:         TimeInterval = 6.0
-    private static let SETUP_JOINT_MIN_CONF:  Float        = 0.30
+    // 0.30 → 0.25 (= kMinConf). FIX 1's setup gate now means "the rep metric
+    // is computable" — and the metric math itself gates joints at kMinConf, so
+    // a stricter setup floor just made side-on setups (marginal shoulder/wrist
+    // ~0.25-0.35) fail to lock on when the very next frame could count a rep.
+    private static let SETUP_JOINT_MIN_CONF:  Float        = 0.25
     private static let SETUP_EDGE_MARGIN:     Double       = 0.05
 
     // FIX 2b — a single edge-adjacent / weak frame no longer nukes

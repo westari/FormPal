@@ -2445,12 +2445,22 @@ function standingGluteKickbackVariant(
 // reads close to straight either way, but not verified). Do 5 reps of
 // facePull once this reloads and send the [REP] log — real numbers replace
 // all four, not just tune them.
+// METRIC CHANGED — was jointAngle(shoulder, ELBOW, wrist). Side-on video logs
+// proved the ELBOW is the failure point: it sits pointing at/away from the
+// camera during a face pull and its confidence oscillates 0.1–0.6, so the
+// 2s setup hold broke every 1-2 frames and never passed → 0 reps, every
+// time. New metric: jointAngle(hip, SHOULDER, wrist) — the angle at the
+// shoulder between the torso (hip) and the arm (wrist). No elbow. The WRIST
+// is well tracked (0.6–0.8 in the logs), the hip and shoulder are marginal
+// but present (0.3–0.5). Arm reaching toward the cable ≈ wide angle (~130–
+// 160°); pulled back with the hand by the head ≈ closed (~60–90°). DECREASES
+// into the rep, matching the engine convention.
 const FACE_PULL_REP_METRIC: MetricDef = {
   type:  'bestSide',
-  left:  { type: 'jointAngle', a: 'leftShoulder',  pivot: 'leftElbow',  c: 'leftWrist'  },
-  right: { type: 'jointAngle', a: 'rightShoulder', pivot: 'rightElbow', c: 'rightWrist' },
-  leftJoints:  ['leftShoulder',  'leftElbow',  'leftWrist'],
-  rightJoints: ['rightShoulder', 'rightElbow', 'rightWrist'],
+  left:  { type: 'jointAngle', a: 'leftHip',  pivot: 'leftShoulder',  c: 'leftWrist'  },
+  right: { type: 'jointAngle', a: 'rightHip', pivot: 'rightShoulder', c: 'rightWrist' },
+  leftJoints:  ['leftShoulder',  'leftWrist'],
+  rightJoints: ['rightShoulder', 'rightWrist'],
 };
 
 // FORM CHECK — elbows dropping too low. A face pull's defining technique
@@ -2519,21 +2529,23 @@ function facePullVariant(
     id,
     displayName,
     repMetric:          FACE_PULL_REP_METRIC,
-    // SEEDED from bentOverRowVariant's own verified numbers — see the block
-    // comment above for exactly why, and why these still count as
-    // placeholders for THIS exercise despite coming from real device data
-    // on a different one.
-    topAngle:           168,
-    repEnterThreshold:  100,
-    repExitThreshold:   110,
-    goodROMThreshold:   80,
+    // WIDE PLACEHOLDERS for the new hip-shoulder-wrist angle (arm reaching
+    // ~130-160°, pulled ~60-90°). Point is that reps COUNT; ROM graded loose.
+    // Do 5 and send the [REP] log for real numbers.
+    topAngle:           145,
+    repEnterThreshold:  115,
+    repExitThreshold:   125,
+    goodROMThreshold:   95,
     insufficientROMCue: 'PULL FARTHER',
-    formChecks:      [FACE_PULL_ELBOW_HEIGHT_CHECK],
+    // Elbow-height form check disabled — the elbow is the joint that proved
+    // unreliable side-on; re-enable once counting is solid.
+    formChecks:      [],
     readyGate:       PASSTHROUGH_GATE,
     cameraSetup: {
       setupInstruction,
-      requiredJoints:    FACE_PULL_CAMERA_JOINTS_A,
-      requiredJointsAlt: FACE_PULL_CAMERA_JOINTS_B,
+      // Advisory after the FIX 1 build; near side's shoulder+wrist (no elbow).
+      requiredJoints:    ['leftShoulder',  'leftWrist'],
+      requiredJointsAlt: ['rightShoulder', 'rightWrist'],
     },
     minRepInterval:  0.7,
     planarityChecks: [],
@@ -3973,24 +3985,26 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     // the head so the knee→nose line is near-horizontal → ~85–90°. Sitting up
     // the nose rises over the knees → the line steepens toward vertical →
     // ~20–40°. DECREASES into the rep, matching the engine convention.
-    // Per side: average(knee→nose angle, knee→shoulder angle). Metric.combine()
-    // falls back to whichever ONE is visible, so this reads a value as long as
-    // the knee plus EITHER the nose OR the shoulder is tracked — covers the
-    // head briefly leaving frame AND the shoulder vanishing at the fold, which
-    // don't usually happen on the same frame. Both angles run the same way
-    // (~horizontal lying → ~vertical sitting up), so blending / swapping
-    // between them stays well clear of the enter/exit thresholds.
+    // Per side: average(distanceRatio(shoulder,knee), distanceRatio(nose,knee)).
+    // Metric.combine() falls back to whichever ONE is available, so the rep
+    // signal survives as long as the knee plus EITHER the shoulder OR the nose
+    // is tracked — the near shoulder vanishing at the fold and the head
+    // briefly leaving frame rarely hit the same frame. distanceRatio (2D
+    // distance / torso length) is naturally LARGE lying flat and SHRINKS as
+    // the chest comes toward the knees. The original shoulder-only version
+    // entered reps fine; it only failed because the deepest frames read nil
+    // and froze repMinAngle shallow — the nose fallback fills those in.
     repMetric: {
       type: 'bestSide',
       left: {
         type:  'average',
-        left:  { type: 'lineVsVertical', from: 'leftKnee', to: 'nose' },
-        right: { type: 'lineVsVertical', from: 'leftKnee', to: 'leftShoulder' },
+        left:  { type: 'distanceRatio', a: 'leftShoulder', b: 'leftKnee' },
+        right: { type: 'distanceRatio', a: 'nose',         b: 'leftKnee' },
       },
       right: {
         type:  'average',
-        left:  { type: 'lineVsVertical', from: 'rightKnee', to: 'nose' },
-        right: { type: 'lineVsVertical', from: 'rightKnee', to: 'rightShoulder' },
+        left:  { type: 'distanceRatio', a: 'rightShoulder', b: 'rightKnee' },
+        right: { type: 'distanceRatio', a: 'nose',          b: 'rightKnee' },
       },
       leftJoints:  ['leftKnee'],
       rightJoints: ['rightKnee'],
@@ -4033,17 +4047,14 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     // a full sit-up bottoms at ~0.5, a half-rep at ~0.8, so 0.55 passes deep
     // reps and flags anything shallower with GO HIGHER (does NOT gate the
     // count — a shallow rep still counts, just as a bad rep).
-    // ALL PLACEHOLDERS for the new knee→nose metric — the old distanceRatio
-    // numbers are meaningless now. Deliberately WIDE so reps register on the
-    // first try regardless of where the real values land: enter well below the
-    // ~85–90° rest, exit with a big hysteresis gap, goodROM permissive.
-    // Do ~10 sit-ups and send the [REP]/[METRIC] log — real numbers get set
-    // from that, and goodROMThreshold ("GO HIGHER") calibrated then, NOT
-    // guessed strict again.
-    topAngle:            85,
-    repEnterThreshold:   65,
-    repExitThreshold:    74,
-    goodROMThreshold:    50,
+    // distanceRatio scale (calib log: rest ~2.1, bottom ~0.6). WIDE and
+    // permissive — the point right now is that a real sit-up COUNTS, not that
+    // ROM is graded strictly. enter 1.25 with a fat hysteresis gap; goodROM
+    // 0.9 so a shallow rep still counts (flagged GO HIGHER, not rejected).
+    topAngle:            1.75,
+    repEnterThreshold:   1.25,
+    repExitThreshold:    1.55,
+    goodROMThreshold:    0.90,
     insufficientROMCue: 'GO HIGHER',
 
     // FORM CUES. Kept per explicit request, but both thresholds are LOOSE
@@ -4137,11 +4148,14 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     // Target: body filling roughly two-thirds of the frame, centred, with a
     // hand's width of margin at head and feet, and good even light on you.
     cameraSetup: {
-      setupInstruction: 'Lie on your back, phone on the floor to your side, ~3-4 ft away. Fill about two-thirds of the frame — a little gap at your head and feet, good light on you',
-      // Advisory only after the FIX 1 build (the gate reads the rep metric),
-      // but keep it aligned with the new knee→nose metric.
-      requiredJoints:    ['nose', 'leftKnee'],
-      requiredJointsAlt: ['nose', 'rightKnee'],
+      // Phone RAISED (on a chair/box/bench), not flat on the floor, angled
+      // down at you — a floor-level lens can't fit your head-to-knees in frame
+      // unless you're unrealistically far, and this metric needs your upper
+      // body visible. Line your whole body up inside the box.
+      setupInstruction: 'Put the phone on a chair or box beside you, angled down — whole body from head to feet in the frame',
+      // Advisory only after the FIX 1 build (the gate reads the rep metric).
+      requiredJoints:    ['leftKnee'],
+      requiredJointsAlt: ['rightKnee'],
     },
 
     // Vision loses the WHOLE person for a stretch at the top of every sit-up
