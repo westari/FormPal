@@ -1267,15 +1267,42 @@ public class ATHLTCameraModule: Module {
             }
         }
 
-        // Require the winner to actually look like a real upright body on at
-        // least a third of sampled frames — otherwise the clip itself is the
-        // problem (nobody in frame, extreme angle), not the orientation.
-        guard uprightCount[best] * 3 >= sampled else {
+        // "upright" (nose→shoulder→hip→ankle monotonic) is a strong signal for a
+        // STANDING subject, but a SIDE-ON video (squat, row, face pull — the
+        // main calibration angle) has a body that isn't vertically monotonic at
+        // ANY orientation, so uprightCount stays low even when the rotation is
+        // right. Confirmed by a side-on face-pull log: .up got 30/30 poses at
+        // conf 1.00 but only 9/30 "upright", failed this bar, and the fallback
+        // forced .right → 6/30 poses → "no person detected" on most frames.
+        //
+        // So: if nothing clears the upright bar, DON'T bail to a static guess —
+        // fall back to the orientation Vision simply detected a body on most
+        // reliably (pose count, then confidence). A wrong rotation detects far
+        // fewer bodies; the right one still detects nearly all of them.
+        if uprightCount[best] * 3 < sampled {
+            var byPose = 0
+            for i in 1..<candidates.count {
+                if poseCount[i] != poseCount[byPose] {
+                    if poseCount[i] > poseCount[byPose] { byPose = i }
+                } else if avgConf(i) > avgConf(byPose) {
+                    byPose = i
+                }
+            }
+            // Only trust it if a body was actually found on most frames.
+            guard poseCount[byPose] * 2 >= sampled else {
+                sendEvent("onDebugLog", ["message":
+                    "[ORIENT-TEST] inconclusive — best-by-upright .\(Self.orientationName(candidates[best])) " +
+                    "\(uprightCount[best])/\(sampled) upright, best-by-pose-count .\(Self.orientationName(candidates[byPose])) " +
+                    "only \(poseCount[byPose])/\(sampled) poses; falling back to the static default"])
+                return nil
+            }
             sendEvent("onDebugLog", ["message":
-                "[ORIENT-TEST] inconclusive — best .\(Self.orientationName(candidates[best])) had only " +
-                "\(uprightCount[best])/\(sampled) upright frames; falling back to the static default"])
-            return nil
+                "[ORIENT-TEST] no clear 'upright' orientation (side-on clip?) — using " +
+                ".\(Self.orientationName(candidates[byPose])) by pose count \(poseCount[byPose])/\(sampled) @ conf " +
+                "\(String(format: "%.2f", avgConf(byPose)))"])
+            return candidates[byPose]
         }
+
         sendEvent("onDebugLog", ["message":
             "[ORIENT-TEST] winner = .\(Self.orientationName(candidates[best]))"])
         return candidates[best]
