@@ -4129,13 +4129,15 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
       requiredJointsAlt: ['nose', 'rightKnee'],
     },
 
-    // Lying flat, Vision self-occludes the far side and briefly loses the
-    // whole person mid-rep (log: framesSincePoseGap resets right at the top
-    // of rep #1). Default 3 frames (~0.3s) abandons an in-progress rep on
-    // that flicker. Raised to 6 (~0.6-0.8s at the ~8fps this pose runs at) so
-    // a normal occlusion blink no longer kills the rep — same log-confirmed
-    // exception tricep already carries.
-    missingPersonGraceFrames: 6,
+    // Vision loses the WHOLE person for a stretch at the top of every sit-up
+    // (folded up, filmed from the floor) — reported "reps never count, 'come
+    // back in frame' pops up every rep". That vanish is PART of the rep, not a
+    // walk-away. Raised to 20 (~2.5s at ~8fps) so the in-progress rep is never
+    // abandoned during the fold — it completes on the way back down when the
+    // metric rises past exit. (edgeGuardEnabled:false below also tells the
+    // engine not to bounce a floor exercise back to the setup screen or nag
+    // "come back in frame" for these normal per-rep vanishes.)
+    missingPersonGraceFrames: 20,
 
     // At the ~8fps Vision manages for a floor pose, requiring 3 consecutive
     // frames above repExitThreshold to trust a rep as complete makes each
@@ -4171,6 +4173,14 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     // for this floor exercise stops the deep frames being discarded. (Native —
     // needs an EAS build.)
     edgeGuardEnabled: false,
+
+    // Phantom-rep guard cut to 0.10 (default 0.30). With the noisy floor pose
+    // and per-rep vanishes, the recorded swing under-represents the real
+    // movement — a genuine sit-up that dips past enter should COUNT, not get
+    // rejected for not travelling "far enough" past a threshold the tracking
+    // can't measure cleanly. ROM quality is a separate grade (goodROMThreshold
+    // + GO HIGHER), not the count.
+    phantomGuardFraction: 0.10,
 
     minRepInterval:  0.5,
     planarityChecks: [],

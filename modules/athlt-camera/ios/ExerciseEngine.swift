@@ -646,7 +646,9 @@ final class ExerciseEngine {
         if isMetricReliable(def.repMetric, pose: pose, minConf: Self.FORM_CHECK_MIN_CONF) {
             trackWeakFrames = max(0, trackWeakFrames - 2)
             if trackWeakFrames == 0 { activeTrackingCue = nil }
-        } else {
+        } else if def.edgeGuardEnabled {
+            // Floor exercises (edgeGuardEnabled == false) track weakly by
+            // nature every rep — don't nag them (see notePersonMissing).
             trackWeakFrames = min(trackWeakFrames + 1, Self.LOSING_TRACK_ENTER_FRAMES + 10)
             if trackWeakFrames >= Self.LOSING_TRACK_ENTER_FRAMES {
                 activeTrackingCue = "Adjust — I'm losing you"
@@ -690,11 +692,19 @@ final class ExerciseEngine {
             // as unambiguous; this only filters a brief, exercise-normal miss.
             consecutiveMissingFrames = min(consecutiveMissingFrames + 1, def.missingPersonGraceFrames + 5)
 
-            // Keep coaching during reps (looser than SETUP): a sustained full
-            // loss gets a gentle "come back" cue well before the LEAVE_TIMEOUT
-            // bounce to the setup screen, so it's never silent.
-            trackGoneFrames = min(trackGoneFrames + 1, 200)
-            if trackGoneFrames >= 6 { activeTrackingCue = "Come back into frame" }
+            // FLOOR EXERCISES (edgeGuardEnabled == false: sit-up) lose the WHOLE
+            // person for a stretch at the top of EVERY rep — folded up, filmed
+            // from the floor. That vanish is part of the rep, not a walk-away,
+            // so for these: no "come back in frame" nag, and NEVER bounce back
+            // to the setup screen (the user can't be accidentally walking off
+            // mid sit-up; a genuinely abandoned set is still caught by
+            // inactivity suppression). Everything else keeps the old behaviour.
+            let forgiveFloorLoss = !def.edgeGuardEnabled
+
+            if !forgiveFloorLoss {
+                trackGoneFrames = min(trackGoneFrames + 1, 200)
+                if trackGoneFrames >= 6 { activeTrackingCue = "Come back into frame" }
+            }
 
             if repPhase == .inRep, consecutiveMissingFrames >= def.missingPersonGraceFrames {
                 repPhase = .atTop
@@ -706,7 +716,7 @@ final class ExerciseEngine {
 
             if setupLossStart == nil { setupLossStart = timestamp }
             let gone = timestamp.timeIntervalSince(setupLossStart!)
-            if gone >= Self.LEAVE_TIMEOUT {
+            if gone >= Self.LEAVE_TIMEOUT, !forgiveFloorLoss {
                 NSLog("[Engine] [%@] Person gone %.1fs — returning to SETUP", def.id, gone)
                 enginePhase           = .setup
                 setupPhaseState       = .pending
