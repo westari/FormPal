@@ -68,20 +68,19 @@ export function createRepDiagnostic(): RepDiagnostic {
     if (elapsed < GRACE_SEC) { msg = null; return; }
     if (repCount > 0 && sinceRep < STALE_REP_SEC) { msg = null; return; }
 
-    // Ordered most-specific → most-generic.
+    // Ordered most-specific → most-generic. Keep these SHORT — a few words.
     if (noPersonHits >= 3) {
-      msg = 'Get your whole body in the box — head to knees';
+      msg = 'Get fully in frame';
     } else if (unreliable >= 1) {
-      msg = 'Hard to track — turn a light on or move a little closer';
+      msg = 'Move closer';
     } else if (phantom >= 1) {
-      msg = 'Come further up — bring your chest toward your knees';
+      msg = 'Sit up higher';
     } else if (downTransitions >= 2 && repCount === 0) {
-      msg = 'Lower all the way back down flat between reps';
+      msg = 'Lie all the way back';
     } else if (metricFrames > 0 && metricFrames < elapsed * 2.5) {
-      // very sparse readings → the camera mostly can't see the joints it needs
-      msg = "Can't see you clearly — line up inside the box";
+      msg = 'Line up in the box';
     } else if (repCount === 0 && elapsed > NUDGE_AFTER_SEC) {
-      msg = 'Come up higher — full sit-ups, chest to knees';
+      msg = 'Sit up higher';
     } else {
       msg = null;
     }

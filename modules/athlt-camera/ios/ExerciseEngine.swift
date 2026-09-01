@@ -729,7 +729,7 @@ final class ExerciseEngine {
                 repPhase              = .waitingForReady
                 resetCalibrationState(keepDerived: false)
                 onSetupUpdate?(SetupStatus(allJointsVisible: false, holdProgress: 0.0,
-                                           passed: false, hint: "Step back into view to continue"))
+                                           passed: false, hint: "Get back in frame"))
             }
         } else {
             if case .holding = setupPhaseState {
@@ -849,7 +849,7 @@ final class ExerciseEngine {
         // frame edge, say so directly; otherwise hand positionGuidance the
         // joints that are actually too weak so it can coach on framing.
         let hint: String = allVisible ? ""
-            : (metricReliable ? "Back up — you're right on the frame edge"
+            : (metricReliable ? "Back up a bit"
                               : positionGuidance(pose: pose, missing: missingJoints))
         onSetupUpdate?(SetupStatus(allJointsVisible: allVisible, holdProgress: holdProgress,
                                    passed: false, hint: hint))
@@ -952,12 +952,12 @@ final class ExerciseEngine {
             // Body runs off an edge → too close / partly cut off. Vision's y
             // increases upward, so y≈1 is the top of the frame.
             if minY < 0.04 || maxY > 0.97 || minX < 0.03 || maxX > 0.97 {
-                return "Back up — you're cut off"
+                return "Back up"
             }
         }
 
         // Off to one side (mirror-safe: centre-relative, no left/right).
-        if cx < 0.28 || cx > 0.72 { return "Move to the centre of the frame" }
+        if cx < 0.28 || cx > 0.72 { return "Move to the middle" }
 
         // Facing the wrong way — coarse: broad shoulders vs a short torso reads
         // as "facing the camera", very narrow reads as "side-on".
@@ -972,11 +972,11 @@ final class ExerciseEngine {
                 torsoH = max(0.05, abs(shoulderY - (Double(lh.y) + Double(rh.y)) / 2))
             }
             let ratio = shoulderW / torsoH
-            if facing == .camera && ratio < 0.28 { return "Turn to face the camera" }
-            if facing == .side   && ratio > 0.58 { return "Turn side-on to the camera" }
+            if facing == .camera && ratio < 0.28 { return "Face the camera" }
+            if facing == .side   && ratio > 0.58 { return "Turn sideways" }
         }
 
-        return "Get your whole body in the box"
+        return "Get in the box"
     }
 
     // ─── Passive calibration ──────────────────────────────────────────────────
