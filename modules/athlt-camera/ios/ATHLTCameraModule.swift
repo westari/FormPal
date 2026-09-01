@@ -1359,6 +1359,9 @@ public class ATHLTCameraModule: Module {
             "kneeAngle":           lastDebugAngle,
             "backAngle":           lastDebugFormVals["back_lean"] ?? 0.0,
             "outOfPlaneCue":       lastOutOfPlaneCue ?? "",
+            // Gentle "losing track of you" coaching that keeps running (looser)
+            // DURING reps — see ExerciseEngine.activeTrackingCue.
+            "trackingCue":         engine.activeTrackingCue ?? "",
             "ready":               lastDebugReady,
             "phase":               lastDebugReady ? "active" : "waiting",
             "reps":                engine.totalReps,

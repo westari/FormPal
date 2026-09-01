@@ -41,6 +41,7 @@ export interface DebugStatsEvent {
   totalFramesReceived: number;
   totalFramesAnalyzed: number;
   outOfPlaneCue: string;       // "" = in-plane; non-empty = live foreshortening hint
+  trackingCue: string;         // "" = tracking fine; non-empty = gentle "losing you / come back" cue during reps
 }
 
 /** Emitted every frame during the SETUP phase (calibration). */

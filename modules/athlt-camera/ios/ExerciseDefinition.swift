@@ -218,8 +218,10 @@ struct ExerciseDefinition {
     // ── Missing-person abandonment grace period (per-exercise override) ──────
     // Consecutive frames Vision must report NO person at all, while mid-rep,
     // before the in-progress rep is abandoned (see ExerciseEngine.swift's
-    // MISSING_PERSON_GRACE_FRAMES doc comment). Default 3 (~0.3s) is fine for
-    // exercises tracked at a normal distance. Tricep pushdown/overhead
+    // MISSING_PERSON_GRACE_FRAMES doc comment). FIX 2c — raised 3 → 5 (~0.5s):
+    // a 1-4 frame Vision blip mid-rep shouldn't abandon the rep. A real
+    // departure still trips it, and completion has independent protection
+    // (framesSincePoseGap). Tricep pushdown/overhead
     // extension is done close to the camera with the forearm crossing in
     // front of the torso every single rep — a log confirmed Vision's
     // whole-body detector can lose the person for MORE than 3 consecutive
@@ -302,7 +304,7 @@ struct ExerciseDefinition {
          suppressApproachDetection: Bool = false,
          phantomGuardFraction: Double = 0.30,
          exitConfirmFrames: Int = 3,
-         missingPersonGraceFrames: Int = 3,
+         missingPersonGraceFrames: Int = 5,
          settleAnchorMinFraction: Double? = nil,
          repReliabilityMaxUnreliableFraction: Double = 0.5,
          inactivityRepGapSec: Double = 8.0,

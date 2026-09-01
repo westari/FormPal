@@ -154,8 +154,9 @@ export interface ExerciseDefinitionDef {
   exitConfirmFrames?: number;
   // Consecutive frames Vision must report NO person at all, while mid-rep,
   // before the in-progress rep is abandoned (see ExerciseEngine.swift's
-  // consecutiveMissingFrames doc comment). Default 3 (~0.3s, omit for every
-  // normal exercise) — a log-confirmed exception exists for tricep: done
+  // consecutiveMissingFrames doc comment). Default 5 (~0.5s, was 3 — FIX 2c,
+  // brief blips no longer abandon a rep; omit for every normal exercise) — a
+  // log-confirmed exception exists for tricep: done
   // close to the camera with the forearm crossing the torso every rep,
   // Vision's whole-body detector can lose the person for longer than that
   // from self-occlusion alone, killing every rep before it could complete.
@@ -305,9 +306,12 @@ const CURL_FORM_CHECKS: FormCheckDef[] = [
   },
 ];
 
-const CURL_CAMERA_REQUIRED_JOINTS = [
-  'leftShoulder', 'rightShoulder', 'leftElbow', 'rightElbow', 'leftWrist', 'rightWrist',
-];
+// NEAR / FAR split — repMetric is minimum(jointAngle L/R) which tracks off one
+// arm, so setup shouldn't demand both. Lets a curl calibrate from a side-on
+// video (far arm occluded) the same way row/hinge already do. (Advisory only
+// after the FIX 1 native build — the gate then reads the rep metric directly.)
+const CURL_CAMERA_JOINTS_A = ['leftShoulder',  'leftElbow',  'leftWrist'];
+const CURL_CAMERA_JOINTS_B = ['rightShoulder', 'rightElbow', 'rightWrist'];
 
 const CURL_CALIBRATION: CalibrationDef = {
   repsNeeded:    2,
@@ -343,7 +347,8 @@ function curlVariant(
 
     cameraSetup: {
       setupInstruction,
-      requiredJoints: CURL_CAMERA_REQUIRED_JOINTS,
+      requiredJoints:    CURL_CAMERA_JOINTS_A,
+      requiredJointsAlt: CURL_CAMERA_JOINTS_B,
     },
 
     calibration:    CURL_CALIBRATION,
@@ -405,12 +410,12 @@ const SQUAT_FORM_CHECKS: FormCheckDef[] = [
   },
 ];
 
-const SQUAT_CAMERA_JOINTS = [
-  'leftShoulder', 'rightShoulder',
-  'leftHip',      'rightHip',
-  'leftKnee',     'rightKnee',
-  'leftAnkle',    'rightAnkle',
-];
+// NEAR / FAR split — repMetric is average(jointAngle(hip,knee,ankle) L/R),
+// which tracks off one leg. A squat is filmed SIDE-ON, so the far leg is
+// partly occluded; demanding both sides made side-on squat videos never pass
+// setup. (Advisory only after the FIX 1 native build.)
+const SQUAT_CAMERA_JOINTS_A = ['leftShoulder',  'leftHip',  'leftKnee',  'leftAnkle'];
+const SQUAT_CAMERA_JOINTS_B = ['rightShoulder', 'rightHip', 'rightKnee', 'rightAnkle'];
 
 const SQUAT_PLANARITY: PlanarityCheckDef[] = [
   { id: 'thigh_l', jointA: 'leftHip',  jointB: 'leftKnee',
@@ -435,7 +440,7 @@ function squatVariant(
     insufficientROMCue: 'GO DEEPER',
     formChecks:      SQUAT_FORM_CHECKS,
     readyGate:       PASSTHROUGH_GATE,
-    cameraSetup:     { setupInstruction, requiredJoints: SQUAT_CAMERA_JOINTS },
+    cameraSetup:     { setupInstruction, requiredJoints: SQUAT_CAMERA_JOINTS_A, requiredJointsAlt: SQUAT_CAMERA_JOINTS_B },
     calibration:     { repsNeeded: 2, enterFraction: 0.50, exitFraction: 0.25 },
     minRepInterval:  0.5,
     planarityChecks: SQUAT_PLANARITY,
@@ -692,7 +697,9 @@ function shoulderPressVariant(
     readyGate:       PASSTHROUGH_GATE,
     cameraSetup: {
       setupInstruction,
-      requiredJoints: ['leftShoulder', 'leftElbow', 'rightShoulder', 'rightElbow'],
+      // NEAR / FAR — repMetric is bestSide(lineVsVertical(shoulder→elbow)).
+      requiredJoints:    ['leftShoulder',  'leftElbow'],
+      requiredJointsAlt: ['rightShoulder', 'rightElbow'],
     },
     calibration:     { repsNeeded: 2, enterFraction: 0.50, exitFraction: 0.25 },
     minRepInterval:  0.5,
@@ -868,12 +875,10 @@ const LUNGE_FORM_CHECKS: FormCheckDef[] = [
   },
 ];
 
-const LUNGE_CAMERA_JOINTS = [
-  'leftShoulder', 'rightShoulder',
-  'leftHip',      'rightHip',
-  'leftKnee',     'rightKnee',
-  'leftAnkle',    'rightAnkle',
-];
+// NEAR / FAR split — see SQUAT_CAMERA_JOINTS_A/B (same minimum(jointAngle L/R)
+// family, same side-on framing).
+const LUNGE_CAMERA_JOINTS_A = ['leftShoulder',  'leftHip',  'leftKnee',  'leftAnkle'];
+const LUNGE_CAMERA_JOINTS_B = ['rightShoulder', 'rightHip', 'rightKnee', 'rightAnkle'];
 
 const LUNGE_PLANARITY: PlanarityCheckDef[] = [
   { id: 'thigh_l', jointA: 'leftHip',  jointB: 'leftKnee',
@@ -898,7 +903,7 @@ function lungeVariant(
     insufficientROMCue: 'LUNGE DEEPER',
     formChecks:      LUNGE_FORM_CHECKS,
     readyGate:       PASSTHROUGH_GATE,
-    cameraSetup:     { setupInstruction, requiredJoints: LUNGE_CAMERA_JOINTS },
+    cameraSetup:     { setupInstruction, requiredJoints: LUNGE_CAMERA_JOINTS_A, requiredJointsAlt: LUNGE_CAMERA_JOINTS_B },
     calibration:     { repsNeeded: 2, enterFraction: 0.50, exitFraction: 0.25 },
     minRepInterval:  0.5,
     planarityChecks: LUNGE_PLANARITY,
@@ -1828,10 +1833,10 @@ const RAISE_DIRECTION_CHECK: FormCheckDef = {
 // every side-view family so far). Includes hips explicitly (unlike shoulder
 // press's requiredJoints, which omits them despite its own lean_back check
 // needing them) since the swing check is one of only two active checks here.
-const RAISE_CAMERA_JOINTS_FRONT = [
-  'leftShoulder', 'rightShoulder', 'leftElbow', 'rightElbow',
-  'leftWrist', 'rightWrist', 'leftHip', 'rightHip',
-];
+// NEAR / FAR split — repMetric is bestSide(lineVsHorizontal(shoulder→elbow)),
+// tracks off one arm. (Advisory only after the FIX 1 native build.)
+const RAISE_CAMERA_JOINTS_FRONT_A = ['leftShoulder',  'leftElbow',  'leftWrist',  'leftHip'];
+const RAISE_CAMERA_JOINTS_FRONT_B = ['rightShoulder', 'rightElbow', 'rightWrist', 'rightHip'];
 
 // CAMERA — front raise: SIDE-facing, not front. A front raise's arc is in the
 // sagittal plane, which points straight at a front camera — the arm would
@@ -1898,7 +1903,8 @@ function lateralRaiseVariant(
     readyGate:          PASSTHROUGH_GATE,
     cameraSetup: {
       setupInstruction,
-      requiredJoints: RAISE_CAMERA_JOINTS_FRONT,
+      requiredJoints:    RAISE_CAMERA_JOINTS_FRONT_A,
+      requiredJointsAlt: RAISE_CAMERA_JOINTS_FRONT_B,
     },
     minRepInterval:  1.0,
     planarityChecks: [],
@@ -2118,9 +2124,10 @@ const LAT_PULLDOWN_PLANARITY: PlanarityCheckDef[] = [
 // (LAT_PULLDOWN_TORSO_CHECK is hip/shoulder only). Requiring it during
 // SETUP would only add a chance of blocking a real back-facing user for no
 // functional benefit.
-const LAT_PULLDOWN_CAMERA_JOINTS = [
-  'leftShoulder', 'rightShoulder', 'leftElbow', 'rightElbow',
-];
+// NEAR / FAR split — repMetric is average(lineVsHorizontal(shoulder→elbow) L/R),
+// tracks off one side. (Advisory only after the FIX 1 native build.)
+const LAT_PULLDOWN_CAMERA_JOINTS_A = ['leftShoulder',  'leftElbow'];
+const LAT_PULLDOWN_CAMERA_JOINTS_B = ['rightShoulder', 'rightElbow'];
 
 // Helper — mirrors curlVariant()'s shape exactly, per the investigate-first
 // process above. Only one exercise uses this template (latPulldown) — grip-
@@ -2193,7 +2200,8 @@ function latPulldownVariant(
     readyGate:       PASSTHROUGH_GATE,
     cameraSetup: {
       setupInstruction,
-      requiredJoints: LAT_PULLDOWN_CAMERA_JOINTS,
+      requiredJoints:    LAT_PULLDOWN_CAMERA_JOINTS_A,
+      requiredJointsAlt: LAT_PULLDOWN_CAMERA_JOINTS_B,
     },
     // minRepInterval + calibration copied verbatim from shoulderPressVariant()
     // — same state machine, same tempo floor, same auto-calibration behavior.
@@ -2491,9 +2499,16 @@ const FACE_PULL_ELBOW_HEIGHT_CHECK: FormCheckDef = {
 // face pull leaning back to cheat the pull is a plausible future check,
 // not attempted here since it wasn't asked for and has zero on-device
 // reasoning behind it yet).
-const FACE_PULL_CAMERA_JOINTS = [
-  'leftShoulder', 'rightShoulder', 'leftElbow', 'rightElbow', 'leftWrist', 'rightWrist',
-];
+// NEAR / FAR split (was one both-arms list). Face pull is often filmed
+// side-on, where the far arm is fully occluded behind the torso — a
+// both-arms setup gate then waits forever (device log: near arm 0.6-0.75,
+// far arm stuck ~0.12, 0 reps). repMetric is bestSide, so one arm is all
+// that's needed. Same near/far pattern the row / hinge / push-up families
+// already use. (Post the FIX 1 native build the SETUP gate reads the rep
+// metric directly and this list is advisory only — but it should still
+// reflect reality.)
+const FACE_PULL_CAMERA_JOINTS_A = ['leftShoulder',  'leftElbow',  'leftWrist'];
+const FACE_PULL_CAMERA_JOINTS_B = ['rightShoulder', 'rightElbow', 'rightWrist'];
 
 function facePullVariant(
   id:               string,
@@ -2517,7 +2532,8 @@ function facePullVariant(
     readyGate:       PASSTHROUGH_GATE,
     cameraSetup: {
       setupInstruction,
-      requiredJoints: FACE_PULL_CAMERA_JOINTS,
+      requiredJoints:    FACE_PULL_CAMERA_JOINTS_A,
+      requiredJointsAlt: FACE_PULL_CAMERA_JOINTS_B,
     },
     minRepInterval:  0.7,
     planarityChecks: [],
@@ -2599,12 +2615,10 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
 
     cameraSetup: {
       setupInstruction: 'Stand sideways to the camera — full body in frame',
-      requiredJoints: [
-        'leftShoulder', 'rightShoulder',
-        'leftHip',      'rightHip',
-        'leftKnee',     'rightKnee',
-        'leftAnkle',    'rightAnkle',
-      ],
+      // NEAR / FAR — the rep metric tracks one leg (avg/min jointAngle L/R);
+      // the far leg is partly occluded from a side-on angle.
+      requiredJoints:    ['leftShoulder',  'leftHip',  'leftKnee',  'leftAnkle'],
+      requiredJointsAlt: ['rightShoulder', 'rightHip', 'rightKnee', 'rightAnkle'],
     },
 
     calibration: {
@@ -2925,12 +2939,10 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
 
     cameraSetup: {
       setupInstruction: 'Stand sideways to the camera — full body in frame',
-      requiredJoints: [
-        'leftShoulder', 'rightShoulder',
-        'leftHip',      'rightHip',
-        'leftKnee',     'rightKnee',
-        'leftAnkle',    'rightAnkle',
-      ],
+      // NEAR / FAR — the rep metric tracks one leg (avg/min jointAngle L/R);
+      // the far leg is partly occluded from a side-on angle.
+      requiredJoints:    ['leftShoulder',  'leftHip',  'leftKnee',  'leftAnkle'],
+      requiredJointsAlt: ['rightShoulder', 'rightHip', 'rightKnee', 'rightAnkle'],
     },
 
     calibration: {
@@ -3058,10 +3070,9 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
       // Wrists removed from requiredJoints: repMetric doesn't use wrists; requiring
       // them makes setup fail if wrists are cropped at top of frame.
       setupInstruction: 'Stand FACING the camera directly — do NOT turn sideways — both arms and shoulders clearly visible',
-      requiredJoints: [
-        'leftShoulder', 'leftElbow',
-        'rightShoulder', 'rightElbow',
-      ],
+      // NEAR / FAR — repMetric is bestSide(lineVsVertical(shoulder→elbow)).
+      requiredJoints:    ['leftShoulder',  'leftElbow'],
+      requiredJointsAlt: ['rightShoulder', 'rightElbow'],
     },
 
     calibration: {
@@ -3133,10 +3144,11 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     readyGate: PASSTHROUGH_GATE,
     cameraSetup: {
       setupInstruction: 'Face the camera — stand back so head to feet are fully in frame',
-      requiredJoints: [
-        'leftShoulder', 'rightShoulder', 'leftWrist', 'rightWrist',
-        'leftHip', 'rightHip', 'leftAnkle', 'rightAnkle',
-      ],
+      // NEAR / FAR — repMetric is average(normalizedVerticalGap(shoulder,wrist) L/R).
+      // (Jumping jack is a front-on movement; the split just keeps setup from
+      // stalling on a partly-occluded side.)
+      requiredJoints:    ['leftShoulder',  'leftWrist',  'leftHip',  'leftAnkle'],
+      requiredJointsAlt: ['rightShoulder', 'rightWrist', 'rightHip', 'rightAnkle'],
     },
     calibration:    { repsNeeded: 2, enterFraction: 0.50, exitFraction: 0.25 },
     minRepInterval: 0.45,
@@ -3773,7 +3785,9 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
 
     cameraSetup: {
       setupInstruction: "Face the camera — shoulders, elbows, and hips in frame (hands on the bar don't need to be)",
-      requiredJoints: ['leftShoulder', 'rightShoulder', 'leftElbow', 'rightElbow', 'leftHip', 'rightHip'],
+      // NEAR / FAR — repMetric is bestSide(bodyRelativeDeviation(elbow; hip→shoulder)).
+      requiredJoints:    ['leftShoulder',  'leftElbow',  'leftHip'],
+      requiredJointsAlt: ['rightShoulder', 'rightElbow', 'rightHip'],
     },
 
     minRepInterval:  0.6,
@@ -3839,7 +3853,9 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
 
     cameraSetup: {
       setupInstruction: 'Stand side-on to the camera — knees and ankles in frame',
-      requiredJoints: ['leftKnee', 'rightKnee', 'leftAnkle', 'rightAnkle'],
+      // NEAR / FAR — repMetric is bestSide(normalizedVerticalGap(knee,ankle)).
+      requiredJoints:    ['leftKnee',  'leftAnkle'],
+      requiredJointsAlt: ['rightKnee', 'rightAnkle'],
     },
 
     minRepInterval:  0.4,
@@ -3890,7 +3906,9 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
 
     cameraSetup: {
       setupInstruction: "Side-on to the camera — hip, knee, and ankle in frame (the machine partially blocking the leg is expected)",
-      requiredJoints: ['leftHip', 'rightHip', 'leftKnee', 'rightKnee', 'leftAnkle', 'rightAnkle'],
+      // NEAR / FAR — repMetric is average(jointAngle(hip,knee,ankle) L/R).
+      requiredJoints:    ['leftHip',  'leftKnee',  'leftAnkle'],
+      requiredJointsAlt: ['rightHip', 'rightKnee', 'rightAnkle'],
     },
 
     minRepInterval:  0.5,

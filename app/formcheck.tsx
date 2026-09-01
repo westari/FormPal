@@ -901,6 +901,19 @@ export default function FormCheckScreen() {
         </View>
       )}
 
+      {/* Gentle "losing track" cue — keeps running (looser) during reps so it's
+          never silent if tracking degrades. Suppressed while a planarity hint
+          is already showing. */}
+      {isTracking && !!stats?.trackingCue && !stats?.outOfPlaneCue && (
+        <View style={s.trackingCueHint} pointerEvents="none">
+          <GlassPanel radius={999} style={s.outOfPlaneGlass}>
+            <View style={s.outOfPlaneInner}>
+              <Text style={s.trackingCueText}>{stats.trackingCue}</Text>
+            </View>
+          </GlassPanel>
+        </View>
+      )}
+
       {/* Debug stats */}
       {stats && isTracking && (
         <View style={s.debugPanel}>
@@ -1090,6 +1103,10 @@ const s = StyleSheet.create({
   outOfPlaneGlass: { alignSelf: 'center' },
   outOfPlaneInner: { paddingHorizontal: 22, paddingVertical: 11 },
   outOfPlaneText:  { fontFamily: F.bold, fontSize: 16, color: C.warn, letterSpacing: 0.3 },
+  // Calmer than the planarity hint — softer colour, lower on screen, out of
+  // the way of the rep counter. Guidance, not an alarm.
+  trackingCueHint: { position: 'absolute', top: '52%', left: 0, right: 0, alignItems: 'center' },
+  trackingCueText: { fontFamily: F.bold, fontSize: 14, color: 'rgba(255,255,255,0.9)', letterSpacing: 0.3 },
 
   // Rep count — bare, no frame; own shadow for legibility over the camera.
   repBlock:  { position: 'absolute', top: '12%', left: 0, right: 0, alignItems: 'center' },

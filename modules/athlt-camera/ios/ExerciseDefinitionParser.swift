@@ -64,7 +64,7 @@ extension ExerciseDefinition {
         let missingPersonGraceFrames: Int
         if let v = dict["missingPersonGraceFrames"] as? Int { missingPersonGraceFrames = v }
         else if let v = dict["missingPersonGraceFrames"] as? Double { missingPersonGraceFrames = Int(v) }
-        else { missingPersonGraceFrames = 3 }
+        else { missingPersonGraceFrames = 5 }   // FIX 2c — was 3
         let settleAnchorMinFraction = dict["settleAnchorMinFraction"] as? Double
         let repReliabilityMaxUnreliableFraction = dict["repReliabilityMaxUnreliableFraction"] as? Double ?? 0.5
         let inactivityRepGapSec = dict["inactivityRepGapSec"] as? Double ?? 8.0

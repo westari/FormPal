@@ -129,9 +129,32 @@ final class ExerciseEngine {
     private var setupLossStart:  Date? = nil
 
     private static let SETUP_HOLD_DURATION:   TimeInterval = 2.0
-    private static let LEAVE_TIMEOUT:         TimeInterval = 3.0
+    // FIX 2a — was 3.0. Once SETUP has genuinely confirmed the rep metric is
+    // trackable (see runSetupCheck's FIX 1 gate), a few seconds of Vision
+    // dropping the person is a flicker, not a walk-away. A real departure is
+    // still caught, just after a longer, less trigger-happy wait; the gentle
+    // "Come back into frame" cue (activeTrackingCue) fills the gap in the
+    // meantime instead of silently bouncing to the setup screen.
+    private static let LEAVE_TIMEOUT:         TimeInterval = 6.0
     private static let SETUP_JOINT_MIN_CONF:  Float        = 0.30
     private static let SETUP_EDGE_MARGIN:     Double       = 0.05
+
+    // FIX 2b — a single edge-adjacent / weak frame no longer nukes
+    // framesSincePoseGap (which would open a ~0.5s window where no rep can
+    // register). Only POSE_GAP_CONFIRM_FRAMES consecutive bad frames count as
+    // a genuine gap; shorter blips just don't advance the settle count that
+    // frame. See the ingest() ACTIVE path.
+    private var poseGapStreak: Int = 0
+    private static let POSE_GAP_CONFIRM_FRAMES: Int = 3
+
+    // Gentle "I'm losing track of you" coaching shown DURING reps (looser than
+    // SETUP's positionGuidance): speaks up only after a sustained weak stretch,
+    // clears fast on recovery, never gates counting. Read directly by
+    // ATHLTCameraModule.maybeEmitDebugStats and surfaced as onDebugStats.trackingCue.
+    private(set) var activeTrackingCue: String? = nil
+    private var trackWeakFrames: Int = 0
+    private var trackGoneFrames: Int = 0
+    private static let LOSING_TRACK_ENTER_FRAMES: Int = 10  // ~1s of weak tracking
 
     // ── Calibration (passive — fed from real completed reps, see completeRep) ──
     //
@@ -490,6 +513,7 @@ final class ExerciseEngine {
         resetRepState()
         resetActivityState()
         resetSettleState()
+        resetTrackingHealth()
     }
 
     // Partial reset — resets rep counters but keeps enginePhase and calibration-derived thresholds.
@@ -504,6 +528,15 @@ final class ExerciseEngine {
         resetRepState()
         resetActivityState()
         resetSettleState()
+        resetTrackingHealth()
+    }
+
+    // FIX 2 — the flicker-tolerance + live-cue counters.
+    private func resetTrackingHealth() {
+        poseGapStreak    = 0
+        trackWeakFrames  = 0
+        trackGoneFrames  = 0
+        activeTrackingCue = nil
     }
 
     // ─── Per-frame entry point ────────────────────────────────────────────────
@@ -575,12 +608,39 @@ final class ExerciseEngine {
         // deleting the deep frames of every rep after the first (see the field's
         // doc comment in ExerciseDefinition.swift). A real missing pose still
         // resets framesSincePoseGap via handleNoPose/notePersonMissing.
-        if def.edgeGuardEnabled,
-           isNearFrameEdge(pose: pose, joints: def.repMetric.referencedJoints()) {
-            framesSincePoseGap = 0
+        // FIX 2b — a SINGLE edge-adjacent frame no longer nukes framesSincePoseGap
+        // (which opens a ~0.5s window where no rep can register). It takes
+        // POSE_GAP_CONFIRM_FRAMES consecutive edge-adjacent frames to count as a
+        // real gap; a 1-2 frame flicker just doesn't advance the settle count
+        // that frame. Once SETUP has genuinely confirmed the rep metric is
+        // trackable (FIX 1), brief flickers are noise, not a walk-away.
+        let edgeBad = def.edgeGuardEnabled &&
+            isNearFrameEdge(pose: pose, joints: def.repMetric.referencedJoints())
+        if edgeBad {
+            poseGapStreak += 1
+            if poseGapStreak >= Self.POSE_GAP_CONFIRM_FRAMES { framesSincePoseGap = 0 }
         } else {
+            poseGapStreak = 0
             framesSincePoseGap = min(framesSincePoseGap + 1, Self.MIN_FRAMES_AFTER_POSE_GAP + 100)
         }
+
+        // Gentle live "losing track" cue during reps (looser than SETUP): only
+        // after a sustained weak stretch, clears fast on recovery, never gates
+        // counting. Surfaced as onDebugStats.trackingCue.
+        // A valid pose reached ingest at all → the person is back: clear any
+        // "come back into frame" cue immediately.
+        trackGoneFrames = 0
+        if activeTrackingCue == "Come back into frame" { activeTrackingCue = nil }
+        if isMetricReliable(def.repMetric, pose: pose, minConf: Self.FORM_CHECK_MIN_CONF) {
+            trackWeakFrames = max(0, trackWeakFrames - 2)
+            if trackWeakFrames == 0 { activeTrackingCue = nil }
+        } else {
+            trackWeakFrames = min(trackWeakFrames + 1, Self.LOSING_TRACK_ENTER_FRAMES + 10)
+            if trackWeakFrames >= Self.LOSING_TRACK_ENTER_FRAMES {
+                activeTrackingCue = "Adjust — I'm losing you"
+            }
+        }
+
         accumulate(pose: pose)
         trackSegmentReferences(pose: pose)
         updateActivityState(pose: pose, angle: angle, timestamp: timestamp)
@@ -617,6 +677,13 @@ final class ExerciseEngine {
             // was killing every tricep rep). A sustained gap is still treated
             // as unambiguous; this only filters a brief, exercise-normal miss.
             consecutiveMissingFrames = min(consecutiveMissingFrames + 1, def.missingPersonGraceFrames + 5)
+
+            // Keep coaching during reps (looser than SETUP): a sustained full
+            // loss gets a gentle "come back" cue well before the LEAVE_TIMEOUT
+            // bounce to the setup screen, so it's never silent.
+            trackGoneFrames = min(trackGoneFrames + 1, 200)
+            if trackGoneFrames >= 6 { activeTrackingCue = "Come back into frame" }
+
             if repPhase == .inRep, consecutiveMissingFrames >= def.missingPersonGraceFrames {
                 repPhase = .atTop
                 resetRepState()
@@ -651,26 +718,39 @@ final class ExerciseEngine {
     // ─── Setup phase ──────────────────────────────────────────────────────────
 
     private func runSetupCheck(pose: Pose, timestamp: Date) {
-        guard let setup = def.cameraSetup else {
+        guard def.cameraSetup != nil else {
             transitionFromSetup()
             onSetupUpdate?(SetupStatus(allJointsVisible: true, holdProgress: 1.0,
                                        passed: true, hint: ""))
             return
         }
 
-        let missingMain = missingSetupJoints(setup.requiredJoints, pose: pose)
-        var missingJoints = missingMain
-        var allVisible = missingMain.isEmpty
+        // FIX 1 — "ready" now means "I can COUNT this exercise's reps", not "a
+        // body is in frame". The gate is the REP METRIC's own joints, checked
+        // exactly the bestSide/average/minimum/maximum way counting checks them
+        // (isMetricReliable) — so ONE visible side is enough, mirroring how the
+        // rep FSM actually works. The old gate used a hand-authored
+        // cameraSetup.requiredJoints list that frequently demanded BOTH sides
+        // (face pull, curl, squat, lat pulldown…) — impossible from a side-on
+        // angle where the far limb is occluded, so setup never passed and 0
+        // reps counted (confirmed by a side-on face-pull video log: near arm
+        // 0.6-0.75 conf, far arm stuck ~0.12, setup waiting on the far arm
+        // forever). measure() already succeeded (ingest guards on it before
+        // calling this), so this is purely the confidence + edge check.
+        let metricReliable = isMetricReliable(def.repMetric, pose: pose,
+                                              minConf: Self.SETUP_JOINT_MIN_CONF)
+        // Same edge-margin guard the ACTIVE path uses, on the same joints —
+        // and only PRESENT joints trip it (isNearFrameEdge skips anything below
+        // kMinConf), so an occluded far limb can't block. Floor exercises
+        // (edgeGuardEnabled == false) opt out, consistent with ACTIVE.
+        let edgeClear = !def.edgeGuardEnabled ||
+            !isNearFrameEdge(pose: pose, joints: def.repMetric.referencedJoints())
 
-        if !allVisible, let altJoints = setup.requiredJointsAlt {
-            let missingAlt = missingSetupJoints(altJoints, pose: pose)
-            if missingAlt.isEmpty {
-                allVisible    = true
-                missingJoints = []
-            } else if missingAlt.count < missingMain.count {
-                missingJoints = missingAlt
+        let allVisible = metricReliable && edgeClear
+        let missingJoints: [Joint] = allVisible ? [] :
+            def.repMetric.referencedJoints().filter {
+                (pose[$0]?.confidence ?? 0) < Self.SETUP_JOINT_MIN_CONF
             }
-        }
 
         var holdProgress: Double = 0.0
 
@@ -683,11 +763,9 @@ final class ExerciseEngine {
                 // Xcode/Console) — the same failure mode that made a whole video
                 // analysis pass show zero trace of anything. Mirrored to onDebugLog
                 // so recap.tsx's debug panel actually shows SETUP transitions.
-                onDebugLog?("[SETUP] \(def.id) all joints visible — starting \(Int(Self.SETUP_HOLD_DURATION))s hold " +
+                onDebugLog?("[SETUP] \(def.id) rep metric trackable — starting \(Int(Self.SETUP_HOLD_DURATION))s hold " +
                             "at timestamp=\(timestamp.timeIntervalSince1970)")
-                let logJoints: [Joint] = (!missingMain.isEmpty && setup.requiredJointsAlt != nil)
-                    ? (setup.requiredJointsAlt ?? []) : setup.requiredJoints
-                for joint in logJoints {
+                for joint in def.repMetric.referencedJoints() {
                     let conf = pose[joint]?.confidence ?? 0
                     NSLog("[Engine] [%@]   %@: conf=%.2f x=%.2f y=%.2f",
                           def.id, "\(joint)", conf,
@@ -731,8 +809,14 @@ final class ExerciseEngine {
             holdProgress    = 0.0
         }
 
+        // Hint: if the rep signal is trackable but a tracked joint sits on the
+        // frame edge, say so directly; otherwise hand positionGuidance the
+        // joints that are actually too weak so it can coach on framing.
+        let hint: String = allVisible ? ""
+            : (metricReliable ? "Back up — you're right on the frame edge"
+                              : positionGuidance(pose: pose, missing: missingJoints))
         onSetupUpdate?(SetupStatus(allJointsVisible: allVisible, holdProgress: holdProgress,
-                                   passed: false, hint: positionGuidance(pose: pose, missing: missingJoints)))
+                                   passed: false, hint: hint))
     }
 
     // Called when setup passes — goes straight to ACTIVE. If def.calibration is
@@ -779,20 +863,6 @@ final class ExerciseEngine {
         enginePhase = .active
     }
 
-    private func missingSetupJoints(_ joints: [Joint], pose: Pose) -> [Joint] {
-        var missing: [Joint] = []
-        for joint in joints {
-            guard let p = pose[joint], p.confidence >= Self.SETUP_JOINT_MIN_CONF else {
-                missing.append(joint); continue
-            }
-            let x = Double(p.x), y = Double(p.y)
-            if x < Self.SETUP_EDGE_MARGIN || x > 1 - Self.SETUP_EDGE_MARGIN ||
-               y < Self.SETUP_EDGE_MARGIN || y > 1 - Self.SETUP_EDGE_MARGIN {
-                missing.append(joint)
-            }
-        }
-        return missing
-    }
 
     // Same edge-margin concept as missingSetupJoints, applied during ACTIVE
     // tracking — see the framesSincePoseGap call site in ingest() for why.
