@@ -904,10 +904,12 @@ export default function FormCheckScreen() {
         </View>
       )}
 
-      {/* Gentle "losing track" cue — keeps running (looser) during reps so it's
-          never silent if tracking degrades. Suppressed while a planarity hint
-          is already showing. */}
-      {isTracking && !!stats?.trackingCue && !stats?.outOfPlaneCue && (
+      {/* Live "step back into frame" cue. Suppressed while a planarity hint
+          shows, AND for floor exercises (sit-up): the body legitimately leaves
+          frame at the top of every rep there, so the cue just nags — the
+          native build stops sending it for those anyway. */}
+      {isTracking && !!stats?.trackingCue && !stats?.outOfPlaneCue
+        && guideBoxFor(exerciseType) !== 'floor' && (
         <View style={s.trackingCueHint} pointerEvents="none">
           <GlassPanel radius={999} style={s.outOfPlaneGlass}>
             <View style={s.outOfPlaneInner}>
@@ -1112,9 +1114,11 @@ const s = StyleSheet.create({
   // Calmer than the planarity hint — softer colour, lower on screen, out of
   // the way of the rep counter. Guidance, not an alarm.
   trackingCueHint: { position: 'absolute', top: '52%', left: 0, right: 0, alignItems: 'center' },
+  // The "step back into frame" command — large and loud, this is the one the
+  // user needs to see mid-set from a distance.
   trackingCueText: {
-    fontFamily: F.extra, fontSize: 20, color: '#fff', letterSpacing: 0.3,
-    textShadowColor: 'rgba(0,0,0,0.7)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 12,
+    fontFamily: undefined, fontWeight: '800', fontSize: 30, color: '#fff', letterSpacing: 0.3,
+    textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 16,
   },
 
   // Rep count — bare, no frame; own shadow for legibility over the camera.
@@ -1159,12 +1163,12 @@ const s = StyleSheet.create({
   // PositioningGuide children) so it never crosses the box border. ────────
   setupPanel:      { alignSelf: 'center', maxWidth: 380, marginHorizontal: 12 },
   setupPanelInner: { paddingHorizontal: 24, paddingTop: 18, paddingBottom: 20, alignItems: 'center' },
-  // Big and high-contrast — this is the primary guidance ("Step into the box",
-  // "Back up", "Come closer", "Perfect — hold still"). Must be readable at a
-  // glance from across the room, over a bright camera image.
+  // System (SF) font, bold — the setup instruction line. Kept at 24 (bigger
+  // was too much); light shadow so it holds up over the camera.
   setupBig:        {
-    fontFamily: F.extra, fontSize: 34, lineHeight: 40, color: '#fff', textAlign: 'center',
-    textShadowColor: 'rgba(0,0,0,0.75)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 16,
+    fontFamily: undefined, fontWeight: '700', fontSize: 24, lineHeight: 30,
+    color: '#fff', textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 10,
   },
 
   setupDoneOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },

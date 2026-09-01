@@ -4098,19 +4098,18 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
           right: { type: 'jointAngle', a: 'rightHip', pivot: 'rightKnee', c: 'rightAnkle' },
         },
         evaluateAt:       'throughoutMax',
-        // Device log: clean sit-ups read 50-53, one rep read 70.5 and FALSE-fired
-        // at lim 70. Raised to 92 — clean reps have huge margin, a genuine
-        // leg-drive (knees straightening) still blows past it, and it stops
-        // nagging on normal reps.
-        condition:        { type: 'greaterThan', value: 92 },
-        priority:         3,
-        // RE-ENABLED (counting is solid now). Threshold 92 is well above the
-        // 50-53 clean readings + the 70.5 outlier from the 8/30 device log, so
-        // it stays silent on normal reps and only a real knee-straightening
-        // leg drive trips it. formCheckMinConf 0.35 + isReliable means a
-        // low-confidence ankle frame is just skipped, not misread — biased
-        // toward under-firing. Still a PLACEHOLDER: 5 clean + 5 deliberate
-        // leg-kick reps in one log dials it in.
+        // CALIBRATED from a 10-rep device log (9/1): clean sit-ups read
+        // 48-68; deliberate leg-assist reps read 80-112. 78 sits in the gap —
+        // fires on any real leg drive, ~10 units of margin above the clean
+        // ceiling. (Was 92, which the user reported "never fires".)
+        condition:        { type: 'greaterThan', value: 78 },
+        // Priority 4 = overrides the ROM cue. Same log showed leg-assist reps
+        // also reading shallow (they'd otherwise show "GO HIGHER" instead of
+        // "KEEP LEGS DOWN" — "it's confused"). Justified: the knee is IN the
+        // rep metric (distanceRatio to shoulder/nose), so a leg drive
+        // genuinely contaminates the depth reading — the leg fault is the
+        // real problem to surface.
+        priority:         4,
         enabled:          true,
         formCheckMinConf: 0.35,
       },
@@ -4200,7 +4199,11 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     // deletes real reps. 0.9 keeps the gate's real purpose (catch a rep
     // logged while the user walked away — that runs ~100% unreliable) while
     // letting a normal lying-down crunch count.
-    repReliabilityMaxUnreliableFraction: 0.9,
+    // 0.9 -> 0.97: a real 10-rep set had one rep dropped at "94% unreliable"
+    // (near knee dipping under 0.6, far side garbage) even though the near
+    // shoulder + nose were solid the whole time. A genuine walk-away still
+    // runs ~100% and is still caught.
+    repReliabilityMaxUnreliableFraction: 0.97,
     // Reps resolve slowly lying flat and the reliability gate discards some,
     // so the real inter-rep gap runs well past 8s — a device log showed
     // inactivity suppression engaging at 9.9s and never releasing, killing

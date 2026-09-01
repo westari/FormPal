@@ -133,7 +133,7 @@ final class ExerciseEngine {
     // trackable (see runSetupCheck's FIX 1 gate), a few seconds of Vision
     // dropping the person is a flicker, not a walk-away. A real departure is
     // still caught, just after a longer, less trigger-happy wait; the gentle
-    // "Come back into frame" cue (activeTrackingCue) fills the gap in the
+    // "Step back into frame" cue (activeTrackingCue) fills the gap in the
     // meantime instead of silently bouncing to the setup screen.
     private static let LEAVE_TIMEOUT:         TimeInterval = 6.0
     // 0.30 → 0.25 (= kMinConf). FIX 1's setup gate now means "the rep metric
@@ -642,11 +642,12 @@ final class ExerciseEngine {
         // Gentle live "losing track" cue during reps (looser than SETUP): only
         // after a sustained weak stretch, clears fast on recovery, never gates
         // counting. Surfaced as onDebugStats.trackingCue.
-        // A valid pose reached ingest at all → the person is back: clear the
-        // no-pose streak and any "come back into frame" cue immediately.
+        // A valid pose reached ingest → clear the no-pose streak and drop the
+        // cue immediately; it only comes back if the metric stays unreliable
+        // for LOSING_TRACK_ENTER_FRAMES straight (below).
         trackGoneFrames = 0
         noPoseStreak = 0
-        if activeTrackingCue == "Come back into frame" { activeTrackingCue = nil }
+        activeTrackingCue = nil
         if isMetricReliable(def.repMetric, pose: pose, minConf: Self.FORM_CHECK_MIN_CONF) {
             trackWeakFrames = max(0, trackWeakFrames - 2)
             if trackWeakFrames == 0 { activeTrackingCue = nil }
@@ -655,7 +656,7 @@ final class ExerciseEngine {
             // nature every rep — don't nag them (see notePersonMissing).
             trackWeakFrames = min(trackWeakFrames + 1, Self.LOSING_TRACK_ENTER_FRAMES + 10)
             if trackWeakFrames >= Self.LOSING_TRACK_ENTER_FRAMES {
-                activeTrackingCue = "Adjust — I'm losing you"
+                activeTrackingCue = "Step back into frame"
             }
         }
 
@@ -707,7 +708,7 @@ final class ExerciseEngine {
 
             if !forgiveFloorLoss {
                 trackGoneFrames = min(trackGoneFrames + 1, 200)
-                if trackGoneFrames >= 6 { activeTrackingCue = "Come back into frame" }
+                if trackGoneFrames >= 6 { activeTrackingCue = "Step back into frame" }
             }
 
             if repPhase == .inRep, consecutiveMissingFrames >= def.missingPersonGraceFrames {
