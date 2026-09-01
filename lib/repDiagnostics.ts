@@ -68,17 +68,17 @@ export function createRepDiagnostic(): RepDiagnostic {
     if (elapsed < GRACE_SEC) { msg = null; return; }
     if (repCount > 0 && sinceRep < STALE_REP_SEC) { msg = null; return; }
 
-    // Ordered most-specific → most-generic. Keep these SHORT — a few words.
+    // Ordered most-specific → most-generic. Short and plain — a few words,
+    // no jargon, no "the box".
     if (noPersonHits >= 3) {
       msg = 'Get fully in frame';
-    } else if (unreliable >= 1) {
-      msg = 'Move closer';
+    } else if (unreliable >= 1 || (metricFrames > 0 && metricFrames < elapsed * 2.5)) {
+      // rejected for low confidence, OR the camera is barely getting readings
+      msg = 'Move closer to the camera';
     } else if (phantom >= 1) {
       msg = 'Sit up higher';
     } else if (downTransitions >= 2 && repCount === 0) {
-      msg = 'Lie all the way back';
-    } else if (metricFrames > 0 && metricFrames < elapsed * 2.5) {
-      msg = 'Line up in the box';
+      msg = 'Lie back down flat each rep';
     } else if (repCount === 0 && elapsed > NUDGE_AFTER_SEC) {
       msg = 'Sit up higher';
     } else {

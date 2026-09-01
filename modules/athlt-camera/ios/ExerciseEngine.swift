@@ -737,7 +737,7 @@ final class ExerciseEngine {
                 setupPhaseState = .pending
             }
             onSetupUpdate?(SetupStatus(allJointsVisible: false, holdProgress: 0.0,
-                                       passed: false, hint: "Step into the box"))
+                                       passed: false, hint: "Get in frame"))
         }
         handleNoPose(timestamp: timestamp)
     }
@@ -939,7 +939,7 @@ final class ExerciseEngine {
             guard let p = pose[j], p.confidence >= Self.SETUP_JOINT_MIN_CONF else { continue }
             xs.append(Double(p.x)); ys.append(Double(p.y))
         }
-        guard xs.count >= 3 else { return "Step into the box" }
+        guard xs.count >= 3 else { return "Get in frame" }
 
         let minX = xs.min()!, maxX = xs.max()!
         let minY = ys.min()!, maxY = ys.max()!
@@ -976,7 +976,7 @@ final class ExerciseEngine {
             if facing == .side   && ratio > 0.58 { return "Turn sideways" }
         }
 
-        return "Get in the box"
+        return "Get fully in frame"
     }
 
     // ─── Passive calibration ──────────────────────────────────────────────────
