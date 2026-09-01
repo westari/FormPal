@@ -38,6 +38,7 @@ import type { ExerciseId } from '../constants/exercises';
 import { getCalibration, applyOverride } from '../lib/calibration/store';
 import { handleRepAudio, playReadyCue } from '../lib/audioFeedback';
 import { createCalibSynth } from '../lib/calibLog';
+import { createRepDiagnostic } from '../lib/repDiagnostics';
 import { useAudioSettingsStore } from '../store/audioSettingsStore';
 import { useFormTheme, type FormTheme } from '../lib/activeTheme';
 import type { DebugStatsEvent, RepEvent, ExerciseType } from '../modules/athlt-camera/src/index';
@@ -460,6 +461,12 @@ export default function FormCheckScreen() {
   // an end-of-set summary with suggested thresholds. See docs/CALIBRATION.md.
   const calibRef = useRef(createCalibSynth());
 
+  // "Why aren't reps counting?" — reads the same [METRIC]/[REP]/rejection
+  // stream the counter does and turns a silent 0-rep session into one short
+  // on-screen instruction. See lib/repDiagnostics.ts.
+  const repDiagRef = useRef(createRepDiagnostic());
+  const [repDiag, setRepDiag] = useState<string | null>(null);
+
   // Pending nav params stored right before switching to 'review' phase, so the
   // review's Done button can navigate with the correct final rep counts/videoUri.
   const pendingNavRef = useRef<{
@@ -484,6 +491,10 @@ export default function FormCheckScreen() {
         sessionLogRef.current.push(c);
         console.log('[DEBUG]', c);
       }
+      // Live "why aren't reps counting" diagnosis.
+      repDiagRef.current.feed(e.message);
+      const d = repDiagRef.current.message();
+      setRepDiag(prev => (prev === d ? prev : d));
       // Parse [METRIC] lines for live push-up readout
       if (e.message.startsWith('[METRIC]')) {
         const vMatch  = e.message.match(/value=([-\d.]+)/);
@@ -563,6 +574,8 @@ export default function FormCheckScreen() {
             setLiveMetric(null);
             sessionLogRef.current = []; // clear buffer at start of each tracking session
             calibRef.current.reset();
+            repDiagRef.current.reset();
+            setRepDiag(null);
             startTimestamp.current = Date.now();
             repEvents.current      = [];
             setPhase('tracking');
@@ -649,6 +662,7 @@ export default function FormCheckScreen() {
     const repSub = addRepListener((rep: RepEvent) => {
       setReps(rep.reps);
       setGoodReps(rep.goodReps);
+      setRepDiag(null);   // a rep landed — drop any "why isn't it counting" cue
       flashAnim.setValue(1);
       Animated.timing(flashAnim, { toValue: 0, duration: 700, useNativeDriver: true }).start();
       if (repCounterOnly) {
@@ -905,20 +919,27 @@ export default function FormCheckScreen() {
         </View>
       )}
 
-      {/* Live "step back into frame" cue. Suppressed while a planarity hint
-          shows, AND for floor exercises (sit-up): the body legitimately leaves
-          frame at the top of every rep there, so the cue just nags — the
-          native build stops sending it for those anyway. */}
-      {isTracking && !!stats?.trackingCue && !stats?.outOfPlaneCue
-        && guideBoxFor(exerciseType) !== 'floor' && (
-        <View style={s.trackingCueHint} pointerEvents="none">
-          <GlassPanel radius={999} style={s.outOfPlaneGlass}>
-            <View style={s.outOfPlaneInner}>
-              <Text style={s.trackingCueText}>{stats.trackingCue}</Text>
-            </View>
-          </GlassPanel>
-        </View>
-      )}
+      {/* Live guidance while tracking. Priority:
+          1. repDiag — "why aren't reps counting" worked out from the log
+             stream (all exercises, incl. sit-up). This is the link between
+             the counter and the on-screen command the user asked for.
+          2. stats.trackingCue — native "step back into frame" (non-floor
+             only; a floor body legitimately leaves frame each rep).
+          Suppressed while a planarity hint is already showing. */}
+      {isTracking && !stats?.outOfPlaneCue && (() => {
+        const cue = repDiag
+          ?? (guideBoxFor(exerciseType) !== 'floor' ? (stats?.trackingCue || null) : null);
+        if (!cue) return null;
+        return (
+          <View style={s.trackingCueHint} pointerEvents="none">
+            <GlassPanel radius={28} style={s.outOfPlaneGlass}>
+              <View style={s.trackingCueInner}>
+                <Text style={s.trackingCueText}>{cue}</Text>
+              </View>
+            </GlassPanel>
+          </View>
+        );
+      })()}
 
       {/* Debug stats */}
       {stats && isTracking && (
@@ -1114,11 +1135,13 @@ const s = StyleSheet.create({
   },
   // Calmer than the planarity hint — softer colour, lower on screen, out of
   // the way of the rep counter. Guidance, not an alarm.
-  trackingCueHint: { position: 'absolute', top: '52%', left: 0, right: 0, alignItems: 'center' },
-  // The "step back into frame" command — large and loud, this is the one the
-  // user needs to see mid-set from a distance.
+  trackingCueHint: { position: 'absolute', top: '46%', left: 0, right: 0, alignItems: 'center', paddingHorizontal: 20 },
+  trackingCueInner: { paddingHorizontal: 24, paddingVertical: 16, maxWidth: 340 },
+  // The live guidance command — large and loud, readable mid-set from a
+  // distance.
   trackingCueText: {
-    fontFamily: undefined, fontWeight: '800', fontSize: 30, color: '#fff', letterSpacing: 0.3,
+    fontFamily: undefined, fontWeight: '800', fontSize: 26, lineHeight: 32,
+    color: '#fff', textAlign: 'center', letterSpacing: 0.2,
     textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 16,
   },
 
