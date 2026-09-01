@@ -3955,16 +3955,30 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     displayName: 'Sit-up',   // renamed — the shoulder→knee distanceRatio tracks a full sit-up better than a shoulder-blades-only crunch (and it's what the user does)
     guideBox:    'floor',
 
+    // METRIC CHANGED — was bestSide(distanceRatio(shoulder, knee)). Device
+    // logs proved that dead: at the bottom of a real sit-up the SHOULDER
+    // confidence collapses (Vision, torso folded, filmed from the floor), so
+    // distanceRatio returns nil for the deepest frames — AND distanceRatio's
+    // own normaliser (torsoReference = shoulder→hip) also needs the shoulder,
+    // so it goes nil too. repMinAngle then freezes at the last shallow
+    // pre-collapse reading (~1.17 in one log) and every rep fails the
+    // phantom-rep guard as "barely past enter". No threshold fix survives a
+    // metric that can't see the bottom of the movement.
+    //
+    // NEW METRIC: lineVsVertical(from: knee, to: nose) — the angle of the
+    // knee→nose line from vertical. The NOSE is Vision's most reliable
+    // landmark (logs: 0.75–0.85 confidence even side-on / lying), the KNEE is
+    // planted and well tracked; neither collapses at the fold, and there's no
+    // torso-reference normaliser to go blind. Lying flat the nose is far past
+    // the head so the knee→nose line is near-horizontal → ~85–90°. Sitting up
+    // the nose rises over the knees → the line steepens toward vertical →
+    // ~20–40°. DECREASES into the rep, matching the engine convention.
     repMetric: {
       type: 'bestSide',
-      left:  { type: 'distanceRatio', a: 'leftShoulder',  b: 'leftKnee'  },
-      right: { type: 'distanceRatio', a: 'rightShoulder', b: 'rightKnee' },
-      // Shoulder only — same reliability-gate trim pushup's fix and
-      // pull-up above both use, for the same reason: don't let the whole
-      // rep get thrown out by a hip/knee confidence dip this metric's own
-      // internal 0.25 floor (Joints.swift's kMinConf) already tolerates.
-      leftJoints:  ['leftShoulder'],
-      rightJoints: ['rightShoulder'],
+      left:  { type: 'lineVsVertical', from: 'leftKnee',  to: 'nose' },
+      right: { type: 'lineVsVertical', from: 'rightKnee', to: 'nose' },
+      leftJoints:  ['leftKnee',  'nose'],
+      rightJoints: ['rightKnee', 'nose'],
     },
 
     // PLACEHOLDER — genuinely novel: no existing exercise uses distanceRatio
@@ -4004,10 +4018,17 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     // a full sit-up bottoms at ~0.5, a half-rep at ~0.8, so 0.55 passes deep
     // reps and flags anything shallower with GO HIGHER (does NOT gate the
     // count — a shallow rep still counts, just as a bad rep).
-    topAngle:            1.60,
-    repEnterThreshold:   1.25,
-    repExitThreshold:    1.50,
-    goodROMThreshold:    0.55,
+    // ALL PLACEHOLDERS for the new knee→nose metric — the old distanceRatio
+    // numbers are meaningless now. Deliberately WIDE so reps register on the
+    // first try regardless of where the real values land: enter well below the
+    // ~85–90° rest, exit with a big hysteresis gap, goodROM permissive.
+    // Do ~10 sit-ups and send the [REP]/[METRIC] log — real numbers get set
+    // from that, and goodROMThreshold ("GO HIGHER") calibrated then, NOT
+    // guessed strict again.
+    topAngle:            85,
+    repEnterThreshold:   65,
+    repExitThreshold:    74,
+    goodROMThreshold:    50,
     insufficientROMCue: 'GO HIGHER',
 
     // FORM CUES. Kept per explicit request, but both thresholds are LOOSE
@@ -4053,7 +4074,11 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
         // nagging on normal reps.
         condition:        { type: 'greaterThan', value: 92 },
         priority:         3,
-        enabled:          true,
+        // DISABLED with the metric change — get rep COUNTING solid on the new
+        // knee→nose signal first, then re-enable / recalibrate form checks
+        // from a clean log. (crunch_arms below also relies on the shoulder,
+        // which is the joint that proved unreliable here.)
+        enabled:          false,
         formCheckMinConf: 0.35,
       },
       {
@@ -4065,9 +4090,9 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
           right: { type: 'distanceRatio', a: 'rightWrist', b: 'rightShoulder' },
         },
         evaluateAt:       'throughoutMax',
-        condition:        { type: 'greaterThan', value: 1.65 },  // PLACEHOLDER — a rep read 1.43 and was flagged; not enough data (only 1 rep counted). Calibrate once rep counting works
+        condition:        { type: 'greaterThan', value: 1.65 },
         priority:         2,
-        enabled:          true,
+        enabled:          false,   // DISABLED — see crunch_legs note above
         formCheckMinConf: 0.35,
       },
     ],
@@ -4098,8 +4123,10 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     // hand's width of margin at head and feet, and good even light on you.
     cameraSetup: {
       setupInstruction: 'Lie on your back, phone on the floor to your side, ~3-4 ft away. Fill about two-thirds of the frame — a little gap at your head and feet, good light on you',
-      requiredJoints:    ['leftShoulder',  'leftKnee'],
-      requiredJointsAlt: ['rightShoulder', 'rightKnee'],
+      // Advisory only after the FIX 1 build (the gate reads the rep metric),
+      // but keep it aligned with the new knee→nose metric.
+      requiredJoints:    ['nose', 'leftKnee'],
+      requiredJointsAlt: ['nose', 'rightKnee'],
     },
 
     // Lying flat, Vision self-occludes the far side and briefly loses the

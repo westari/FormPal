@@ -145,7 +145,16 @@ final class ExerciseEngine {
     // a genuine gap; shorter blips just don't advance the settle count that
     // frame. See the ingest() ACTIVE path.
     private var poseGapStreak: Int = 0
+    private var noPoseStreak:  Int = 0   // consecutive measure()==nil frames (handleNoPose)
     private static let POSE_GAP_CONFIRM_FRAMES: Int = 3
+
+    // FIX — the SETUP 2s hold tolerates this many consecutive "not trackable"
+    // frames before it resets. Marginal tracking (face pull side-on: the elbow
+    // confidence oscillating around the 0.30 floor) was breaking the all-or-
+    // nothing hold every 1-2 frames, so it never reached 2s and setup never
+    // passed. A real repositioning still exceeds this and restarts the hold.
+    private var setupHoldBadFrames: Int = 0
+    private static let SETUP_HOLD_TOLERANCE: Int = 6
 
     // Gentle "I'm losing track of you" coaching shown DURING reps (looser than
     // SETUP's positionGuidance): speaks up only after a sustained weak stretch,
@@ -533,9 +542,11 @@ final class ExerciseEngine {
 
     // FIX 2 — the flicker-tolerance + live-cue counters.
     private func resetTrackingHealth() {
-        poseGapStreak    = 0
-        trackWeakFrames  = 0
-        trackGoneFrames  = 0
+        poseGapStreak     = 0
+        noPoseStreak      = 0
+        setupHoldBadFrames = 0
+        trackWeakFrames   = 0
+        trackGoneFrames   = 0
         activeTrackingCue = nil
     }
 
@@ -627,9 +638,10 @@ final class ExerciseEngine {
         // Gentle live "losing track" cue during reps (looser than SETUP): only
         // after a sustained weak stretch, clears fast on recovery, never gates
         // counting. Surfaced as onDebugStats.trackingCue.
-        // A valid pose reached ingest at all → the person is back: clear any
-        // "come back into frame" cue immediately.
+        // A valid pose reached ingest at all → the person is back: clear the
+        // no-pose streak and any "come back into frame" cue immediately.
         trackGoneFrames = 0
+        noPoseStreak = 0
         if activeTrackingCue == "Come back into frame" { activeTrackingCue = nil }
         if isMetricReliable(def.repMetric, pose: pose, minConf: Self.FORM_CHECK_MIN_CONF) {
             trackWeakFrames = max(0, trackWeakFrames - 2)
@@ -755,6 +767,7 @@ final class ExerciseEngine {
         var holdProgress: Double = 0.0
 
         if allVisible {
+            setupHoldBadFrames = 0
             switch setupPhaseState {
             case .pending:
                 NSLog("[Engine] [%@] Setup: all joints visible — starting %.0fs hold",
@@ -795,18 +808,26 @@ final class ExerciseEngine {
                 }
             }
         } else {
-            if case .holding = setupPhaseState {
-                NSLog("[Engine] [%@] Setup: hold broken — missing [%@]",
-                      def.id, missingJoints.map { "\($0)" }.joined(separator: ","))
-                onDebugLog?("[SETUP] \(def.id) hold broken — missing [\(missingJoints.map { "\($0)" }.joined(separator: ","))]")
+            setupHoldBadFrames += 1
+            if case .holding(let start) = setupPhaseState,
+               setupHoldBadFrames < Self.SETUP_HOLD_TOLERANCE {
+                // Brief flicker during the hold (marginal joint confidence) —
+                // keep the 2s timer running rather than restarting it. The next
+                // good frame's .holding case picks up where it left off.
+                holdProgress = min(1.0, timestamp.timeIntervalSince(start) / Self.SETUP_HOLD_DURATION)
+                onDebugLog?("[SETUP-TRACE] \(def.id) hold flicker \(setupHoldBadFrames)/\(Self.SETUP_HOLD_TOLERANCE) " +
+                            "— missing [\(missingJoints.map { "\($0)" }.joined(separator: ","))], timer held")
             } else {
-                // Steady-state "never had all required joints even once" case —
-                // previously had NO log at all, not even NSLog, so a video stuck
-                // here from frame 1 looked identical to one stuck mid-hold.
-                onDebugLog?("[SETUP-TRACE] \(def.id) pending — missing [\(missingJoints.map { "\($0)" }.joined(separator: ","))]")
+                if case .holding = setupPhaseState {
+                    NSLog("[Engine] [%@] Setup: hold broken — missing [%@]",
+                          def.id, missingJoints.map { "\($0)" }.joined(separator: ","))
+                    onDebugLog?("[SETUP] \(def.id) hold broken — missing [\(missingJoints.map { "\($0)" }.joined(separator: ","))]")
+                } else {
+                    onDebugLog?("[SETUP-TRACE] \(def.id) pending — missing [\(missingJoints.map { "\($0)" }.joined(separator: ","))]")
+                }
+                setupPhaseState = .pending
+                holdProgress    = 0.0
             }
-            setupPhaseState = .pending
-            holdProgress    = 0.0
         }
 
         // Hint: if the rep signal is trackable but a tracked joint sits on the
@@ -1722,10 +1743,17 @@ final class ExerciseEngine {
     // ─── Inactivity reset ─────────────────────────────────────────────────────
 
     private func handleNoPose(timestamp: Date) {
-        // Reset immediately, before the inactivityTimeout guard below — a single
-        // invalid/missing-pose frame should restart the settle count even if it's
-        // too brief to trigger the full rep-state reset that follows.
-        framesSincePoseGap = 0
+        // FIX — a 1-2 frame measure()==nil blip (a joint's confidence dipping
+        // for a frame: routine when a sit-up folds and briefly hides the near
+        // shoulder, or an arm crosses the torso) no longer nukes
+        // framesSincePoseGap. Nuking it opened a ~0.5s window where no rep
+        // could enter OR complete, and repMinAngle stopped updating — so the
+        // deep frames of every rep after the first went unrecorded and the rep
+        // failed the phantom guard as "barely past enter". Now it takes
+        // POSE_GAP_CONFIRM_FRAMES consecutive missing frames to count as a real
+        // gap. noPoseStreak is cleared on any valid frame (ingest ACTIVE path).
+        noPoseStreak += 1
+        if noPoseStreak >= Self.POSE_GAP_CONFIRM_FRAMES { framesSincePoseGap = 0 }
 
         let elapsed = timestamp.timeIntervalSince(lastValidPoseTime)
         guard lastValidPoseTime != .distantPast,
