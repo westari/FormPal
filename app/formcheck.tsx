@@ -1105,11 +1105,17 @@ const s = StyleSheet.create({
   outOfPlaneHint:  { position: 'absolute', top: '43%', left: 0, right: 0, alignItems: 'center' },
   outOfPlaneGlass: { alignSelf: 'center' },
   outOfPlaneInner: { paddingHorizontal: 22, paddingVertical: 11 },
-  outOfPlaneText:  { fontFamily: F.bold, fontSize: 16, color: C.warn, letterSpacing: 0.3 },
+  outOfPlaneText:  {
+    fontFamily: F.extra, fontSize: 22, color: C.warn, letterSpacing: 0.3,
+    textShadowColor: 'rgba(0,0,0,0.7)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 12,
+  },
   // Calmer than the planarity hint — softer colour, lower on screen, out of
   // the way of the rep counter. Guidance, not an alarm.
   trackingCueHint: { position: 'absolute', top: '52%', left: 0, right: 0, alignItems: 'center' },
-  trackingCueText: { fontFamily: F.bold, fontSize: 14, color: 'rgba(255,255,255,0.9)', letterSpacing: 0.3 },
+  trackingCueText: {
+    fontFamily: F.extra, fontSize: 20, color: '#fff', letterSpacing: 0.3,
+    textShadowColor: 'rgba(0,0,0,0.7)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 12,
+  },
 
   // Rep count — bare, no frame; own shadow for legibility over the camera.
   repBlock:  { position: 'absolute', top: '12%', left: 0, right: 0, alignItems: 'center' },
@@ -1151,9 +1157,15 @@ const s = StyleSheet.create({
 
   // ── Setup instruction — ONE line, centred inside the guide box (see
   // PositioningGuide children) so it never crosses the box border. ────────
-  setupPanel:      { alignSelf: 'center', maxWidth: 340, marginHorizontal: 16 },
-  setupPanelInner: { paddingHorizontal: 26, paddingTop: 18, paddingBottom: 20, alignItems: 'center' },
-  setupBig:        { fontFamily: F.extra, fontSize: 24, lineHeight: 30, color: '#fff', textAlign: 'center' },
+  setupPanel:      { alignSelf: 'center', maxWidth: 380, marginHorizontal: 12 },
+  setupPanelInner: { paddingHorizontal: 24, paddingTop: 18, paddingBottom: 20, alignItems: 'center' },
+  // Big and high-contrast — this is the primary guidance ("Step into the box",
+  // "Back up", "Come closer", "Perfect — hold still"). Must be readable at a
+  // glance from across the room, over a bright camera image.
+  setupBig:        {
+    fontFamily: F.extra, fontSize: 34, lineHeight: 40, color: '#fff', textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.75)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 16,
+  },
 
   setupDoneOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
 

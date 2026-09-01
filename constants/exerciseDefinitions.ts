@@ -4054,7 +4054,11 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     topAngle:            1.75,
     repEnterThreshold:   1.25,
     repExitThreshold:    1.55,
-    goodROMThreshold:    0.90,
+    // Tightened 0.90 -> 0.70 ("GO HIGHER was too nice"). Old shoulder-knee
+    // calib showed a full sit-up bottoms ~0.5-0.8, so 0.70 passes a proper
+    // rep and flags one that doesn't come up far enough. phantomGuardFraction
+    // 0.10 keeps this from affecting whether a rep COUNTS — still just a grade.
+    goodROMThreshold:    0.70,
     insufficientROMCue: 'GO HIGHER',
 
     // FORM CUES. Kept per explicit request, but both thresholds are LOOSE
