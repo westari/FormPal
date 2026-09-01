@@ -3973,12 +3973,27 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     // the head so the knee→nose line is near-horizontal → ~85–90°. Sitting up
     // the nose rises over the knees → the line steepens toward vertical →
     // ~20–40°. DECREASES into the rep, matching the engine convention.
+    // Per side: average(knee→nose angle, knee→shoulder angle). Metric.combine()
+    // falls back to whichever ONE is visible, so this reads a value as long as
+    // the knee plus EITHER the nose OR the shoulder is tracked — covers the
+    // head briefly leaving frame AND the shoulder vanishing at the fold, which
+    // don't usually happen on the same frame. Both angles run the same way
+    // (~horizontal lying → ~vertical sitting up), so blending / swapping
+    // between them stays well clear of the enter/exit thresholds.
     repMetric: {
       type: 'bestSide',
-      left:  { type: 'lineVsVertical', from: 'leftKnee',  to: 'nose' },
-      right: { type: 'lineVsVertical', from: 'rightKnee', to: 'nose' },
-      leftJoints:  ['leftKnee',  'nose'],
-      rightJoints: ['rightKnee', 'nose'],
+      left: {
+        type:  'average',
+        left:  { type: 'lineVsVertical', from: 'leftKnee', to: 'nose' },
+        right: { type: 'lineVsVertical', from: 'leftKnee', to: 'leftShoulder' },
+      },
+      right: {
+        type:  'average',
+        left:  { type: 'lineVsVertical', from: 'rightKnee', to: 'nose' },
+        right: { type: 'lineVsVertical', from: 'rightKnee', to: 'rightShoulder' },
+      },
+      leftJoints:  ['leftKnee'],
+      rightJoints: ['rightKnee'],
     },
 
     // PLACEHOLDER — genuinely novel: no existing exercise uses distanceRatio

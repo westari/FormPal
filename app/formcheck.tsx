@@ -310,7 +310,11 @@ function PositioningGuide({
   box, ready, children, readyAccent = C.good, readyFrame,
 }: { box: 'standing' | 'floor'; ready: boolean; children?: React.ReactNode; readyAccent?: string; readyFrame?: string }) {
   const rect = box === 'floor'
-    ? { top: '33%', bottom: '5%',  side: '4%'  }
+    // Near-full-frame for floor exercises. The old 33%-from-the-top box made
+    // people line up with their head ABOVE it / out of the real camera frame
+    // — and the sit-up metric needs the head (nose) visible. A big box = "fit
+    // your whole body, head included, inside this" = head stays in frame.
+    ? { top: '4%',  bottom: '3%',  side: '3%'  }
     : { top: '16%', bottom: '7%',  side: '9%'  };
   const R = 36;
 
