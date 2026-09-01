@@ -3985,29 +3985,34 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     // the head so the knee→nose line is near-horizontal → ~85–90°. Sitting up
     // the nose rises over the knees → the line steepens toward vertical →
     // ~20–40°. DECREASES into the rep, matching the engine convention.
-    // Per side: average(distanceRatio(shoulder,knee), distanceRatio(nose,knee)).
-    // Metric.combine() falls back to whichever ONE is available, so the rep
-    // signal survives as long as the knee plus EITHER the shoulder OR the nose
-    // is tracked — the near shoulder vanishing at the fold and the head
-    // briefly leaving frame rarely hit the same frame. distanceRatio (2D
-    // distance / torso length) is naturally LARGE lying flat and SHRINKS as
-    // the chest comes toward the knees. The original shoulder-only version
-    // entered reps fine; it only failed because the deepest frames read nil
-    // and froze repMinAngle shallow — the nose fallback fills those in.
+    // METRIC = TORSO ANGLE about the hip, not a distance to the knee.
+    // The knee-anchored distanceRatio version counted fine with the legs
+    // still, but ANY leg movement (the user's deliberate leg-drive cheat)
+    // moves the knee → corrupts the shoulder/nose→knee distance → the rep
+    // either never enters or gets phantom-rejected → "not a single one
+    // counts". A sit-up IS the torso rotating about the hip, so measure that
+    // directly: lineVsVertical(hip → nose) — nose is Vision's most reliable
+    // landmark, hip is the pivot (barely moves, and a leg kick doesn't move
+    // it). Lying flat the hip→nose line is near-horizontal → ~80–90°; sitting
+    // up the nose swings above the hips → ~20–45°. DECREASES into the rep.
+    // Per side: average(hip→nose, hip→shoulder) so a brief nose drop-out
+    // falls back to the shoulder (Metric.combine picks whichever is present).
+    // NOTHING here depends on the knee or ankle → leg movement can't stop a
+    // rep counting; KEEP LEGS DOWN (below) is what flags it instead.
     repMetric: {
       type: 'bestSide',
       left: {
         type:  'average',
-        left:  { type: 'distanceRatio', a: 'leftShoulder', b: 'leftKnee' },
-        right: { type: 'distanceRatio', a: 'nose',         b: 'leftKnee' },
+        left:  { type: 'lineVsVertical', from: 'leftHip', to: 'nose' },
+        right: { type: 'lineVsVertical', from: 'leftHip', to: 'leftShoulder' },
       },
       right: {
         type:  'average',
-        left:  { type: 'distanceRatio', a: 'rightShoulder', b: 'rightKnee' },
-        right: { type: 'distanceRatio', a: 'nose',          b: 'rightKnee' },
+        left:  { type: 'lineVsVertical', from: 'rightHip', to: 'nose' },
+        right: { type: 'lineVsVertical', from: 'rightHip', to: 'rightShoulder' },
       },
-      leftJoints:  ['leftKnee'],
-      rightJoints: ['rightKnee'],
+      leftJoints:  ['leftHip'],
+      rightJoints: ['rightHip'],
     },
 
     // PLACEHOLDER — genuinely novel: no existing exercise uses distanceRatio
@@ -4047,18 +4052,16 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     // a full sit-up bottoms at ~0.5, a half-rep at ~0.8, so 0.55 passes deep
     // reps and flags anything shallower with GO HIGHER (does NOT gate the
     // count — a shallow rep still counts, just as a bad rep).
-    // distanceRatio scale (calib log: rest ~2.1, bottom ~0.6). WIDE and
-    // permissive — the point right now is that a real sit-up COUNTS, not that
-    // ROM is graded strictly. enter 1.25 with a fat hysteresis gap; goodROM
-    // 0.9 so a shallow rep still counts (flagged GO HIGHER, not rejected).
-    topAngle:            1.75,
-    repEnterThreshold:   1.25,
-    repExitThreshold:    1.55,
-    // Tightened 0.90 -> 0.70 ("GO HIGHER was too nice"). Old shoulder-knee
-    // calib showed a full sit-up bottoms ~0.5-0.8, so 0.70 passes a proper
-    // rep and flags one that doesn't come up far enough. phantomGuardFraction
-    // 0.10 keeps this from affecting whether a rep COUNTS — still just a grade.
-    goodROMThreshold:    0.70,
+    // TORSO-ANGLE scale (lineVsVertical, 0-90). Lying flat reads ~80-90,
+    // a full sit-up swings down to ~20-40. enter 62 catches a real rep early,
+    // exit 74 gives a 12deg hysteresis gap, goodROM 48 = "GO HIGHER" unless
+    // you actually come up (kept strict per request; phantomGuardFraction
+    // 0.10 means it never blocks the count). Do ~10 and send the log if these
+    // need nudging.
+    topAngle:            85,
+    repEnterThreshold:   62,
+    repExitThreshold:    74,
+    goodROMThreshold:    48,
     insufficientROMCue: 'GO HIGHER',
 
     // FORM CUES. Kept per explicit request, but both thresholds are LOOSE
@@ -4103,12 +4106,10 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
         // fires on any real leg drive, ~10 units of margin above the clean
         // ceiling. (Was 92, which the user reported "never fires".)
         condition:        { type: 'greaterThan', value: 78 },
-        // Priority 4 = overrides the ROM cue. Same log showed leg-assist reps
-        // also reading shallow (they'd otherwise show "GO HIGHER" instead of
-        // "KEEP LEGS DOWN" — "it's confused"). Justified: the knee is IN the
-        // rep metric (distanceRatio to shoulder/nose), so a leg drive
-        // genuinely contaminates the depth reading — the leg fault is the
-        // real problem to surface.
+        // Priority 4 = wins over the ROM cue, so a leg-assisted rep reads
+        // "KEEP LEGS DOWN", not "GO HIGHER" ("it's confused"). The rep metric
+        // is now torso-angle (leg-immune), so a leg-drive rep counts with
+        // real ROM and this is the only thing that flags it.
         priority:         4,
         enabled:          true,
         formCheckMinConf: 0.35,
@@ -4167,8 +4168,8 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
       // body visible. Line your whole body up inside the box.
       setupInstruction: 'Put the phone on a chair or box beside you, angled down — whole body from head to feet in the frame',
       // Advisory only after the FIX 1 build (the gate reads the rep metric).
-      requiredJoints:    ['leftKnee'],
-      requiredJointsAlt: ['rightKnee'],
+      requiredJoints:    ['leftHip'],
+      requiredJointsAlt: ['rightHip'],
     },
 
     // Vision loses the WHOLE person for a stretch at the top of every sit-up

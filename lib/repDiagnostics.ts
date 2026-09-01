@@ -21,9 +21,9 @@ export interface RepDiagnostic {
   reset(): void;
 }
 
-const GRACE_SEC        = 6;   // don't nag before tracking has had a fair shot
-const STALE_REP_SEC    = 10;  // reps were counting, then stopped for this long
-const NUDGE_AFTER_SEC  = 11;  // counting has never started
+const GRACE_SEC        = 7;   // don't nag before tracking has had a fair shot
+const STALE_REP_SEC    = 14;  // reps were counting, then stopped for this long
+const NUDGE_AFTER_SEC  = 12;  // counting has never started
 
 export function createRepDiagnostic(): RepDiagnostic {
   let startedAt      = 0;
@@ -65,20 +65,20 @@ export function createRepDiagnostic(): RepDiagnostic {
     const elapsed  = (now() - startedAt) / 1000;
     const sinceRep = lastRepAt ? (now() - lastRepAt) / 1000 : elapsed;
 
+    // Only speak up when reps genuinely aren't happening — never nag over a
+    // set that's working. So: either NOTHING has counted yet, or reps have
+    // been fully dead for STALE_REP_SEC.
     if (elapsed < GRACE_SEC) { msg = null; return; }
     if (repCount > 0 && sinceRep < STALE_REP_SEC) { msg = null; return; }
 
-    // Ordered most-specific → most-generic. Short and plain — a few words,
-    // no jargon, no "the box".
-    if (noPersonHits >= 3) {
+    if (noPersonHits >= 4) {
       msg = 'Get fully in frame';
-    } else if (unreliable >= 1 || (metricFrames > 0 && metricFrames < elapsed * 2.5)) {
-      // rejected for low confidence, OR the camera is barely getting readings
-      msg = 'Move closer to the camera';
-    } else if (phantom >= 1) {
+    } else if (phantom >= 2) {
       msg = 'Sit up higher';
-    } else if (downTransitions >= 2 && repCount === 0) {
+    } else if (downTransitions >= 3 && repCount === 0) {
       msg = 'Lie back down flat each rep';
+    } else if (unreliable >= 2) {
+      msg = 'Move closer';
     } else if (repCount === 0 && elapsed > NUDGE_AFTER_SEC) {
       msg = 'Sit up higher';
     } else {

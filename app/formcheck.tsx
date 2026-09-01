@@ -422,6 +422,11 @@ export default function FormCheckScreen() {
     workoutExerciseId?: string;
   }>();
   const exerciseType = (exercise in SETUP_INFO ? exercise : 'squat') as ExerciseType;
+  // Floor exercises (sit-up): the phone is propped in landscape beside a
+  // person on the ground, so the portrait UI text reads sideways to them.
+  // Rotate the on-screen commands 90° so they run the way the phone is held.
+  const isFloor = guideBoxFor(exerciseType) === 'floor';
+  const cmdRotate = isFloor ? ({ transform: [{ rotate: '90deg' }] } as const) : undefined;
   // 'repCounter' exercises: still count reps live, but no ✓/✗ coaching and no
   // form score reaches ranks/stats. See exerciseDefinitions.ts `mode`.
   const repCounterOnly = (EXERCISE_DEFINITIONS[exerciseType]?.mode ?? 'formCheck') === 'repCounter';
@@ -824,14 +829,10 @@ export default function FormCheckScreen() {
           readyFrame={theme.isDefault ? undefined : theme.accent}
         >
           {phase === 'setup' && (
-            <GlassPanel radius={30} style={s.setupPanel}>
+            <GlassPanel radius={30} style={[s.setupPanel, cmdRotate]}>
               <View style={s.setupPanelInner}>
-                {/* ONE line: the live positioning cue from native
-                    ("Come closer", "Back up — you're cut off", "Move to the
-                    centre", "Turn to face the camera", …), falling back to the
-                    exercise's one-sentence instruction until the camera has
-                    something to say, and "Perfect — hold still" once every
-                    required joint is in frame. No paragraph. */}
+                {/* ONE short line: the live positioning cue, else the
+                    exercise's instruction, else "Perfect — hold still". */}
                 <Text style={s.setupBig}>
                   {setupAllVisible
                     ? 'Perfect — hold still'
@@ -928,10 +929,10 @@ export default function FormCheckScreen() {
           Suppressed while a planarity hint is already showing. */}
       {isTracking && !stats?.outOfPlaneCue && (() => {
         const cue = repDiag
-          ?? (guideBoxFor(exerciseType) !== 'floor' ? (stats?.trackingCue || null) : null);
+          ?? (isFloor ? null : (stats?.trackingCue || null));
         if (!cue) return null;
         return (
-          <View style={s.trackingCueHint} pointerEvents="none">
+          <View style={[s.trackingCueHint, cmdRotate]} pointerEvents="none">
             <GlassPanel radius={28} style={s.outOfPlaneGlass}>
               <View style={s.trackingCueInner}>
                 <Text style={s.trackingCueText}>{cue}</Text>
