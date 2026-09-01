@@ -58,6 +58,7 @@ const C = {
 // camera overlays were rendering in the bare system font, which read as
 // off-brand next to the rest of the app.
 const F = {
+  light:   'BricolageGrotesque_300Light',
   regular: 'BricolageGrotesque_400Regular',
   bold:    'BricolageGrotesque_700Bold',
   extra:   'BricolageGrotesque_800ExtraBold',
@@ -1163,12 +1164,12 @@ const s = StyleSheet.create({
   // PositioningGuide children) so it never crosses the box border. ────────
   setupPanel:      { alignSelf: 'center', maxWidth: 380, marginHorizontal: 12 },
   setupPanelInner: { paddingHorizontal: 24, paddingTop: 18, paddingBottom: 20, alignItems: 'center' },
-  // System (SF) font, bold — the setup instruction line. Kept at 24 (bigger
-  // was too much); light shadow so it holds up over the camera.
+  // Thin display style — matches the home page's "Welcome back." greeting
+  // (FONT.displayLight). Subtle shadow so it survives over the camera.
   setupBig:        {
-    fontFamily: undefined, fontWeight: '700', fontSize: 24, lineHeight: 30,
+    fontFamily: F.light, fontSize: 28, lineHeight: 34, letterSpacing: -0.8,
     color: '#fff', textAlign: 'center',
-    textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 10,
+    textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 10,
   },
 
   setupDoneOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
