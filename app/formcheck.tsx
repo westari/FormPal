@@ -310,10 +310,10 @@ function PositioningGuide({
   box, ready, children, readyAccent = C.good, readyFrame,
 }: { box: 'standing' | 'floor'; ready: boolean; children?: React.ReactNode; readyAccent?: string; readyFrame?: string }) {
   const rect = box === 'floor'
-    // Floor exercises: head near the top of frame, feet near the bottom. The
-    // old 33%-from-the-top box put your head OUTSIDE it; full-frame made it
-    // meaningless. 12% top leaves head room while still framing a real target.
-    ? { top: '12%', bottom: '5%',  side: '5%'  }
+    // Floor exercises (phone raised on a chair, angled down): the body sits as
+    // a wide band across the middle. A real framed target with clear dark
+    // margins top and bottom — NOT the whole screen (that guides nothing).
+    ? { top: '22%', bottom: '16%', side: '6%'  }
     : { top: '16%', bottom: '7%',  side: '9%'  };
   const R = 36;
 
