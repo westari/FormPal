@@ -4104,11 +4104,14 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
         // nagging on normal reps.
         condition:        { type: 'greaterThan', value: 92 },
         priority:         3,
-        // DISABLED with the metric change — get rep COUNTING solid on the new
-        // knee→nose signal first, then re-enable / recalibrate form checks
-        // from a clean log. (crunch_arms below also relies on the shoulder,
-        // which is the joint that proved unreliable here.)
-        enabled:          false,
+        // RE-ENABLED (counting is solid now). Threshold 92 is well above the
+        // 50-53 clean readings + the 70.5 outlier from the 8/30 device log, so
+        // it stays silent on normal reps and only a real knee-straightening
+        // leg drive trips it. formCheckMinConf 0.35 + isReliable means a
+        // low-confidence ankle frame is just skipped, not misread — biased
+        // toward under-firing. Still a PLACEHOLDER: 5 clean + 5 deliberate
+        // leg-kick reps in one log dials it in.
+        enabled:          true,
         formCheckMinConf: 0.35,
       },
       {
@@ -4120,9 +4123,16 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
           right: { type: 'distanceRatio', a: 'rightWrist', b: 'rightShoulder' },
         },
         evaluateAt:       'throughoutMax',
+        // RE-ENABLED per request. WEAKEST of the checks: distanceRatio(wrist,
+        // shoulder) needs the shoulder — the joint that's unreliable folded up
+        // — plus the torso reference, and there's NO labelled device data for
+        // it (one rep read 1.43). 1.65 is a guess at "hands flung well past
+        // the head". Expect it to be quiet (isReliable skips it when the
+        // shoulder is weak). If it misfires, send a log with 5 clean + 5
+        // obvious arm-swing reps and it gets a real number or comes back out.
         condition:        { type: 'greaterThan', value: 1.65 },
         priority:         2,
-        enabled:          false,   // DISABLED — see crunch_legs note above
+        enabled:          true,
         formCheckMinConf: 0.35,
       },
     ],
