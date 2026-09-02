@@ -160,6 +160,16 @@ final class ExerciseEngine {
     private var setupHoldBadFrames: Int = 0
     private static let SETUP_HOLD_TOLERANCE: Int = 6
 
+    // Set true by ATHLTCameraModule.doAnalyzeVideoFile while analysing an
+    // uploaded clip. An uploaded video's joint confidence runs a good bit
+    // lower than a live feed (compression, a filmed-once angle, no autofocus
+    // lock), so the tracking-reliability gate — tuned for live at 0.5 — was
+    // rejecting otherwise-complete reps (face pull side-on: a full rep at
+    // 68% "unreliable"). In video mode the gate floors at 0.9: a genuine
+    // walk-away still runs ~100%, everything else counts.
+    var videoMode: Bool = false
+    private static let VIDEO_RELIABILITY_FLOOR: Double = 0.9
+
     // Gentle "I'm losing track of you" coaching shown DURING reps (looser than
     // SETUP's positionGuidance): speaks up only after a sustained weak stretch,
     // clears fast on recovery, never gates counting. Read directly by
@@ -1337,7 +1347,10 @@ final class ExerciseEngine {
                 // out ~0.67 lying down) — see that field's doc comment.
                 if primaryTotalFrames > 0 {
                     let unreliableFraction = Double(primaryUnreliableFrames) / Double(primaryTotalFrames)
-                    guard unreliableFraction <= def.repReliabilityMaxUnreliableFraction else {
+                    let reliabilityCap = videoMode
+                        ? max(def.repReliabilityMaxUnreliableFraction, Self.VIDEO_RELIABILITY_FLOOR)
+                        : def.repReliabilityMaxUnreliableFraction
+                    guard unreliableFraction <= reliabilityCap else {
                         // Per-joint min/max confidence across the whole rejected
                         // rep — see primaryJointConfMin/Max's doc comment. Tells
                         // apart "Vision never found this joint at all" (max ~0)

@@ -363,10 +363,10 @@ function PositioningGuide({
 // repCounterOnly: this exercise's form isn't judged (see exerciseDefinitions
 // `mode`), so show a neutral "REP COUNTER" tag instead of a good-rep count.
 function RepCounter({
-  reps, goodReps, repCounterOnly, theme,
-}: { reps: number; goodReps: number; repCounterOnly: boolean; theme: FormTheme }) {
+  reps, goodReps, repCounterOnly, theme, spin,
+}: { reps: number; goodReps: number; repCounterOnly: boolean; theme: FormTheme; spin?: Animated.AnimatedInterpolation<string> }) {
   return (
-    <View style={s.repBlock} pointerEvents="none">
+    <Animated.View style={[s.repBlock, spin ? { transform: [{ rotate: spin }] } : null]} pointerEvents="none">
       <Text style={[s.repNum, !theme.isDefault && { color: theme.repText }]}>{reps}</Text>
       {repCounterOnly ? (
         <Text style={s.repCounterTag}>REP COUNTER · FORM NOT SCORED</Text>
@@ -376,7 +376,7 @@ function RepCounter({
           <Text style={s.repSub}>{goodReps} good</Text>
         </View>
       )}
-    </View>
+    </Animated.View>
   );
 }
 
@@ -426,7 +426,6 @@ export default function FormCheckScreen() {
   // person on the ground, so the portrait UI text reads sideways to them.
   // Rotate the on-screen commands 90° so they run the way the phone is held.
   const isFloor = guideBoxFor(exerciseType) === 'floor';
-  const cmdRotate = isFloor ? ({ transform: [{ rotate: '90deg' }] } as const) : undefined;
   // 'repCounter' exercises: still count reps live, but no ✓/✗ coaching and no
   // form score reaches ranks/stats. See exerciseDefinitions.ts `mode`.
   const repCounterOnly = (EXERCISE_DEFINITIONS[exerciseType]?.mode ?? 'formCheck') === 'repCounter';
@@ -444,6 +443,9 @@ export default function FormCheckScreen() {
   const [feedback, setFeedback] = useState<{ good: boolean; reason: string; seq: number } | null>(null);
   const feedbackSeq    = useRef(0);
   const flashAnim      = useRef(new Animated.Value(0)).current;
+  // Floor exercises: smoothly rotate the tracking-phase text 90° once setup
+  // is done, so it reads the way the phone is propped beside you.
+  const floorRot       = useRef(new Animated.Value(0)).current;
   const notLinked      = !isNativeModuleLinked();
 
   const startTimestamp = useRef<number | null>(null);
@@ -786,6 +788,17 @@ export default function FormCheckScreen() {
   const isTracking     = phase === 'tracking';
   const isStopping     = phase === 'stopping';
   const showRepCounter = isStopping || isTracking;
+
+  // Animate the 90° turn in/out as tracking starts/stops (floor only).
+  useEffect(() => {
+    Animated.timing(floorRot, {
+      toValue: (isFloor && (isTracking || isStopping)) ? 1 : 0,
+      duration: 420,
+      easing: Easing.inOut(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [isFloor, isTracking, isStopping, floorRot]);
+  const floorSpin = floorRot.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '90deg'] });
   const isPushupFamily = ['pushup','kneePushup','inclinePushup','widePushup','diamondPushup','declinePushup'].includes(exerciseType);
   // Raise family also gets the live numeric readout — needed to read arms-down
   // vs arms-up directly on-screen while calibrating real thresholds, same as
@@ -829,7 +842,7 @@ export default function FormCheckScreen() {
           readyFrame={theme.isDefault ? undefined : theme.accent}
         >
           {phase === 'setup' && (
-            <GlassPanel radius={30} style={[s.setupPanel, cmdRotate]}>
+            <GlassPanel radius={30} style={s.setupPanel}>
               <View style={s.setupPanelInner}>
                 {/* ONE short line: the live positioning cue, else the
                     exercise's instruction, else "Perfect — hold still". */}
@@ -845,7 +858,7 @@ export default function FormCheckScreen() {
       )}
 
       {/* Rep counter — fixed near the top, same Liquid Glass frame as the box. */}
-      {showRepCounter && <RepCounter reps={reps} goodReps={goodReps} repCounterOnly={repCounterOnly} theme={theme} />}
+      {showRepCounter && <RepCounter reps={reps} goodReps={goodReps} repCounterOnly={repCounterOnly} theme={theme} spin={isFloor ? floorSpin : undefined} />}
 
       {/* Ready → tracking */}
       {phase === 'setup-done' && (
@@ -932,13 +945,13 @@ export default function FormCheckScreen() {
           ?? (isFloor ? null : (stats?.trackingCue || null));
         if (!cue) return null;
         return (
-          <View style={[s.trackingCueHint, cmdRotate]} pointerEvents="none">
+          <Animated.View style={[s.trackingCueHint, { transform: [{ rotate: floorSpin }] }]} pointerEvents="none">
             <GlassPanel radius={28} style={s.outOfPlaneGlass}>
               <View style={s.trackingCueInner}>
                 <Text style={s.trackingCueText}>{cue}</Text>
               </View>
             </GlassPanel>
-          </View>
+          </Animated.View>
         );
       })()}
 

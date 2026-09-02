@@ -1102,6 +1102,11 @@ public class ATHLTCameraModule: Module {
         sendEvent("onDebugLog", ["message":
             "[VIDEO-ANALYZE] starting '\(url.lastPathComponent)' as '\(currentExercise)'"])
 
+        // Uploaded clips track a good bit less confidently than a live feed —
+        // relax the rep-reliability gate for the duration of the analysis.
+        engine.videoMode = true
+        defer { engine.videoMode = false }
+
         var frameCount        = 0
         var firstVideoTime: Double?
         let wallClockStart = CACurrentMediaTime()

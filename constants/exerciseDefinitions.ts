@@ -4011,8 +4011,13 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
         left:  { type: 'lineVsVertical', from: 'rightHip', to: 'nose' },
         right: { type: 'lineVsVertical', from: 'rightHip', to: 'rightShoulder' },
       },
-      leftJoints:  ['leftHip'],
-      rightJoints: ['rightHip'],
+      // Reliability-gate joint = the NOSE (Vision's most reliable landmark
+      // lying down, 0.75-0.9). The hip is only 0.15-0.5 folded up — gating on
+      // it made SETUP never pass ("ready gate never turns on, can't start").
+      // The angle math still uses the hip; this is just what "is it trackable"
+      // checks.
+      leftJoints:  ['nose'],
+      rightJoints: ['nose'],
     },
 
     // PLACEHOLDER — genuinely novel: no existing exercise uses distanceRatio
@@ -4168,8 +4173,8 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
       // body visible. Line your whole body up inside the box.
       setupInstruction: 'Put the phone on a chair or box beside you, angled down — whole body from head to feet in the frame',
       // Advisory only after the FIX 1 build (the gate reads the rep metric).
-      requiredJoints:    ['leftHip'],
-      requiredJointsAlt: ['rightHip'],
+      requiredJoints:    ['nose'],
+      requiredJointsAlt: ['nose'],
     },
 
     // Vision loses the WHOLE person for a stretch at the top of every sit-up
@@ -4396,4 +4401,28 @@ export function isRepCounterExercise(id: string): boolean {
     // Side-on isolation
     'frontRaise', 'standingGluteKickback', 'calfRaise', 'legCurl', 'dips',
   ], 'side');
+}
+
+// ─── Reliability tolerance for hard-to-track side-on / occluded exercises ────
+// These track at genuinely low joint confidence from the one workable angle
+// (far limb occluded, machine in the way). The rep-reliability gate's live
+// default (0.5) rejects otherwise-complete reps on them — a side-on face-pull
+// video logged a full rep at 68% "unreliable". Raise the ceiling so a real
+// rep counts; a true walk-away still runs ~100%. (The native video-analysis
+// path also floors this at 0.9 regardless — this covers the LIVE path and
+// pre-build reloads.)
+(['facePull', 'legCurl', 'seatedCableRow', 'machineRow', 'calfRaise',
+  'standingGluteKickback', 'cablePullThrough'] as const)
+  .forEach((id) => {
+    const def = (EXERCISE_DEFINITIONS as Record<string, ExerciseDefinitionDef | undefined>)[id];
+    if (def) def.repReliabilityMaxUnreliableFraction = 0.9;
+  });
+
+// legCurl's knee angle is noisy (ankle occluded by the machine) and its
+// settle can lock onto a garbage low reading below the enter threshold, so
+// every "rep" then reads movement=0. Require the settle anchor to sit high
+// (a real extended-leg rest ~160°) before it's trusted.
+{
+  const lc = (EXERCISE_DEFINITIONS as Record<string, ExerciseDefinitionDef | undefined>).legCurl;
+  if (lc) lc.settleAnchorMinFraction = 0.75;
 }
