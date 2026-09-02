@@ -798,7 +798,7 @@ export default function FormCheckScreen() {
       useNativeDriver: true,
     }).start();
   }, [isFloor, isTracking, isStopping, floorRot]);
-  const floorSpin = floorRot.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '90deg'] });
+  const floorSpin = floorRot.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-90deg'] });
   const isPushupFamily = ['pushup','kneePushup','inclinePushup','widePushup','diamondPushup','declinePushup'].includes(exerciseType);
   // Raise family also gets the live numeric readout — needed to read arms-down
   // vs arms-up directly on-screen while calibrating real thresholds, same as
@@ -827,6 +827,7 @@ export default function FormCheckScreen() {
           good={feedback.good} reason={feedback.reason} seq={feedback.seq}
           onComplete={() => setFeedback(null)}
           goodColor={theme.orbGood} badColor={theme.orbBad}
+          spin={isFloor ? floorSpin : undefined}
         />
       )}
 

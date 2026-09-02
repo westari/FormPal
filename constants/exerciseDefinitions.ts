@@ -4057,17 +4057,27 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     // a full sit-up bottoms at ~0.5, a half-rep at ~0.8, so 0.55 passes deep
     // reps and flags anything shallower with GO HIGHER (does NOT gate the
     // count — a shallow rep still counts, just as a bad rep).
-    // TORSO-ANGLE scale (lineVsVertical, 0-90). Lying flat reads ~80-90,
-    // a full sit-up swings down to ~20-40. enter 62 catches a real rep early,
-    // exit 74 gives a 12deg hysteresis gap, goodROM 48 = "GO HIGHER" unless
-    // you actually come up (kept strict per request; phantomGuardFraction
-    // 0.10 means it never blocks the count). Do ~10 and send the log if these
-    // need nudging.
-    topAngle:            85,
-    repEnterThreshold:   62,
-    repExitThreshold:    74,
-    goodROMThreshold:    48,
+    // CALIBRATED from a real 6-rep [CALIB] log (9/2): rest 84-87, sit-up
+    // bottom 3-5, swing ~83. The [CALIB-SUGGEST] was enter 37 / exit 52 /
+    // rom 21. Adjusted from there so:
+    //  • enter 45 — a real sit-up is ~half way up before it "starts a rep"
+    //    (rest at 85 has 40deg of margin, so noise can't false-fire).
+    //  • exit 78 — the rep only COMPLETES once you're basically back flat
+    //    (91% of the way down). "It should count after coming back down."
+    //  • rom 25 — a full sit-up hits ~4; anything that stops short flags
+    //    GO HIGHER. Strict, per request. phantomGuardFraction 0.10 keeps it
+    //    from ever blocking the count.
+    topAngle:            84,
+    repEnterThreshold:   45,
+    repExitThreshold:    78,
+    goodROMThreshold:    25,
     insufficientROMCue: 'GO HIGHER',
+    // Stops the FIRST rep locking its "rest" onto the folded-up position
+    // (~4°) when tracking starts mid-movement — the settle anchor must sit at
+    // least 70% of the way from rom up to top (~66°, i.e. near lying flat)
+    // before it's trusted. Without this the opening rep read movement≈0 and
+    // was phantom-rejected, which looked "random".
+    settleAnchorMinFraction: 0.7,
 
     // FORM CUES. Kept per explicit request, but both thresholds are LOOSE
     // PLACEHOLDERS set ABOVE the user's own observed clean-rep readings so

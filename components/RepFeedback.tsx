@@ -121,6 +121,7 @@ export default function RepFeedback({
   onComplete,
   goodColor,
   badColor,
+  spin,
 }: {
   good: boolean;
   reason: string;
@@ -128,6 +129,8 @@ export default function RepFeedback({
   onComplete: () => void;
   goodColor?: string;
   badColor?: string;
+  // floor exercises: rotate the orb + cue to match the propped phone
+  spin?: Animated.AnimatedInterpolation<string>;
 }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const scale   = useRef(new Animated.Value(0.8)).current;
@@ -158,7 +161,7 @@ export default function RepFeedback({
       style={[StyleSheet.absoluteFill, rf.overlay, { opacity }]}
       pointerEvents="none"
     >
-      <Animated.View style={{ transform: [{ scale }], alignItems: 'center' }}>
+      <Animated.View style={{ transform: spin ? [{ scale }, { rotate: spin }] : [{ scale }], alignItems: 'center' }}>
         <GlassOrb good={good} goodColor={goodColor} badColor={badColor} />
         {!good && !!reason && (
           <Text style={rf.cue} numberOfLines={2}>{reason}</Text>
