@@ -1121,53 +1121,75 @@ public class ATHLTCameraModule: Module {
         // finds nobody.
         var poseLogCounter = 0
 
-        while reader.status == .reading {
-            guard let sampleBuffer = trackOutput.copyNextSampleBuffer() else { break }
-            guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { continue }
+        // MEMORY — each decoded frame is a multi-MB BGRA buffer handed out from
+        // a SMALL fixed decoder pool. The CMSampleBuffer from
+        // copyNextSampleBuffer(), plus everything Vision autoreleases while
+        // reading it, has to be freed before the next iteration or the pool
+        // starves — the decoder then can't produce frame N+1,
+        // copyNextSampleBuffer() returns nil, and the reader flips to
+        // .completed exactly as if it had reached the end of the file. That is
+        // the "only the first ~7 seconds analysed, reps=1, status=completed on
+        // a longer clip" bug. A per-frame autoreleasepool bounds the footprint
+        // to one frame at a time so the WHOLE file gets read. (break/continue
+        // don't cross the closure boundary — a keepReading flag stands in for
+        // the old `break`, a bare `return` for the old `continue`.)
+        var keepReading = true
+        while keepReading && reader.status == .reading {
+            autoreleasepool {
+                guard let sampleBuffer = trackOutput.copyNextSampleBuffer() else { keepReading = false; return }
+                guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
 
-            let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-            let videoTime: Double = pts.timescale > 0 ? Double(pts.value) / Double(pts.timescale) : 0
-            if firstVideoTime == nil { firstVideoTime = videoTime }
-            let videoElapsed = videoTime - (firstVideoTime ?? 0)
-            // Relative to the first frame (i.e. starts at 0), matching how
-            // the JS side's player.currentTime reads during playback.
-            currentVideoTimeSec = videoElapsed
+                let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+                let videoTime: Double = pts.timescale > 0 ? Double(pts.value) / Double(pts.timescale) : 0
+                if firstVideoTime == nil { firstVideoTime = videoTime }
+                let videoElapsed = videoTime - (firstVideoTime ?? 0)
+                // Relative to the first frame (i.e. starts at 0), matching how
+                // the JS side's player.currentTime reads during playback.
+                currentVideoTimeSec = videoElapsed
 
-            // Real-time pacing — see the block comment above. Sleeps only when
-            // reading has gotten AHEAD of real elapsed time; never sleeps
-            // negative, so a slow device that's already behind just proceeds
-            // at its own best pace instead of trying to catch up abruptly.
-            let wallElapsed = CACurrentMediaTime() - wallClockStart
-            let toSleep = videoElapsed - wallElapsed
-            if toSleep > 0 { Thread.sleep(forTimeInterval: toSleep) }
+                // Real-time pacing — see the block comment above. Sleeps only
+                // when reading has gotten AHEAD of real elapsed time; never
+                // sleeps negative, so a slow device that's already behind just
+                // proceeds at its own best pace instead of catching up abruptly.
+                let wallElapsed = CACurrentMediaTime() - wallClockStart
+                let toSleep = videoElapsed - wallElapsed
+                if toSleep > 0 { Thread.sleep(forTimeInterval: toSleep) }
 
-            frameCount += 1
-            poseLogCounter += 1
-            let shouldLogPose = poseLogCounter % 15 == 0
-            CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
-            runPoseDetection(pixelBuffer: pixelBuffer, timestamp: videoTime, orientation: orientation,
-                onPoseDetected: { [weak self] pose in
-                    guard shouldLogPose, let self else { return }
-                    guard let pose else {
+                frameCount += 1
+                poseLogCounter += 1
+                let shouldLogPose = poseLogCounter % 15 == 0
+                CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+                runPoseDetection(pixelBuffer: pixelBuffer, timestamp: videoTime, orientation: orientation,
+                    onPoseDetected: { [weak self] pose in
+                        guard shouldLogPose, let self else { return }
+                        guard let pose else {
+                            self.sendEvent("onDebugLog", ["message":
+                                "[VIDEO-POSE] frame \(frameCount) t=\(String(format: "%.2f", videoTime))s — no person detected"])
+                            return
+                        }
+                        let jointStr = Joint.allCases.compactMap { j -> String? in
+                            guard let p = pose[j] else { return nil }
+                            return "\(j)=(\(String(format: "%.2f", p.x)),\(String(format: "%.2f", p.y)),c=\(String(format: "%.2f", p.confidence)))"
+                        }.joined(separator: " ")
                         self.sendEvent("onDebugLog", ["message":
-                            "[VIDEO-POSE] frame \(frameCount) t=\(String(format: "%.2f", videoTime))s — no person detected"])
-                        return
-                    }
-                    let jointStr = Joint.allCases.compactMap { j -> String? in
-                        guard let p = pose[j] else { return nil }
-                        return "\(j)=(\(String(format: "%.2f", p.x)),\(String(format: "%.2f", p.y)),c=\(String(format: "%.2f", p.confidence)))"
-                    }.joined(separator: " ")
-                    self.sendEvent("onDebugLog", ["message":
-                        "[VIDEO-POSE] frame \(frameCount) t=\(String(format: "%.2f", videoTime))s — \(jointStr)"])
-                })
-            CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly)
+                            "[VIDEO-POSE] frame \(frameCount) t=\(String(format: "%.2f", videoTime))s — \(jointStr)"])
+                    })
+                CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly)
+            }
         }
 
         let finalStatus = reader.status
         let success     = finalStatus == .completed
+        // Expected-frame estimate so the log says truncation vs. genuinely
+        // short clip at a glance: frameCount well under the estimate + status
+        // .completed == the pool-starvation truncation above.
+        let clipDurSec = CMTimeGetSeconds(asset.duration)
+        let nominalFps = track.nominalFrameRate
+        let expFrames  = nominalFps > 0 && clipDurSec.isFinite ? Int(clipDurSec * Double(nominalFps)) : -1
         sendEvent("onDebugLog", ["message":
             "[VIDEO-ANALYZE] done — \(frameCount) frames processed, reader.status=\(finalStatus.rawValue) " +
-            "(1=reading 2=completed 3=failed 4=cancelled), reps=\(engine.totalReps) good=\(engine.goodReps)"])
+            "(1=reading 2=completed 3=failed 4=cancelled), reps=\(engine.totalReps) good=\(engine.goodReps) " +
+            "| clip \(String(format: "%.1f", clipDurSec))s @ ~\(String(format: "%.0f", nominalFps))fps ≈ \(expFrames) frames expected"])
         // Back to nil so a live session started afterward doesn't inherit a
         // stale video timestamp.
         currentVideoTimeSec = nil
