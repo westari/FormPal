@@ -45,25 +45,33 @@ export default function PlanGrowthMoment({ header, insets, onContinue }: {
   const captionOpacity  = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.parallel([
+    // Every animation is captured and stopped on unmount — tapping Continue
+    // before blueProgress finishes (~2.1s) otherwise fires the endDot spring
+    // + endGlow loop on a torn-down view: "Unable to find node on an
+    // unmounted component".
+    const anims: Animated.CompositeAnimation[] = [];
+    const track = (a: Animated.CompositeAnimation) => { anims.push(a); return a; };
+
+    track(Animated.parallel([
       Animated.timing(headlineOpacity, { toValue: 1, duration: 380, useNativeDriver: true }),
       Animated.timing(headlineY,       { toValue: 0, duration: 380, useNativeDriver: true }),
-    ]).start();
-    Animated.timing(cardOpacity, { toValue: 1, duration: 400, delay: 200, useNativeDriver: true }).start();
-
-    Animated.timing(startDot, { toValue: 1, duration: 220, delay: 350, useNativeDriver: true }).start();
-    Animated.timing(greyProgress, { toValue: 1, duration: 1100, delay: 450, useNativeDriver: false }).start();
-    Animated.timing(blueProgress, { toValue: 1, duration: 1500, delay: 600, useNativeDriver: false }).start(() => {
-      Animated.spring(endDot, { toValue: 1, friction: 6, tension: 120, useNativeDriver: true }).start();
-      Animated.loop(
+    ])).start();
+    track(Animated.timing(cardOpacity, { toValue: 1, duration: 400, delay: 200, useNativeDriver: true })).start();
+    track(Animated.timing(startDot, { toValue: 1, duration: 220, delay: 350, useNativeDriver: true })).start();
+    track(Animated.timing(greyProgress, { toValue: 1, duration: 1100, delay: 450, useNativeDriver: false })).start();
+    track(Animated.timing(blueProgress, { toValue: 1, duration: 1500, delay: 600, useNativeDriver: false })).start(({ finished }) => {
+      if (!finished) return;
+      track(Animated.spring(endDot, { toValue: 1, friction: 6, tension: 120, useNativeDriver: true })).start();
+      track(Animated.loop(
         Animated.sequence([
           Animated.timing(endGlow, { toValue: 0.4, duration: 900, useNativeDriver: true }),
           Animated.timing(endGlow, { toValue: 0,   duration: 900, useNativeDriver: true }),
         ])
-      ).start();
+      )).start();
     });
+    track(Animated.timing(captionOpacity, { toValue: 1, duration: 400, delay: 2400, useNativeDriver: true })).start();
 
-    Animated.timing(captionOpacity, { toValue: 1, duration: 400, delay: 2400, useNativeDriver: true }).start();
+    return () => { anims.forEach(a => a.stop()); };
   }, []);
 
   const greyDashoffset = greyProgress.interpolate({ inputRange: [0, 1], outputRange: [LINE_LEN, 0] });
