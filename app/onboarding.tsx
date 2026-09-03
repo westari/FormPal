@@ -464,7 +464,7 @@ type StepOptions = OptionDef[] | ((a: Record<string, any>) => OptionDef[]);
 interface Step {
   id:             string;
   section:        string;
-  type:           'select' | 'multiselect' | 'wheel' | 'slider' | 'ruler' | 'interstitial' | 'text' | 'locationBubbles' | 'videoClip' | 'webview';
+  type:           'select' | 'multiselect' | 'wheel' | 'slider' | 'ruler' | 'interstitial' | 'text' | 'locationBubbles' | 'videoClip' | 'webview' | 'guessSlider';
   question:       string;
   subtitle?:      string;
   placeholder?:   string;
@@ -676,6 +676,9 @@ const STEPS: Step[] = [
   { id: 'demoClip', section: 'Wrap up', type: 'videoClip',
     question: 'This is FormPal watching a rep.',
     subtitle: "It counts the clean ones — and tells you exactly why the rest didn't." },
+
+  { id: 'formGuess', section: 'Wrap up', type: 'guessSlider',
+    question: 'Out of every rep you do, how many do you think are actually good form?' },
 ];
 
 // Was a literal engineering task list ("Reading your answers," "Setting
@@ -1255,9 +1258,177 @@ const mp = StyleSheet.create({
   sub:      { fontSize: 16, color: L.textSub, textAlign: 'center', lineHeight: 24, letterSpacing: -0.2 },
 });
 
+// ── The math ─────────────────────────────────────────────────────────────
+// Ported from onboarding-test's computeWastedReps / getRealFormPct /
+// CinematicMathScreen. Same numbers, same 13 lines in the same order —
+// only the presentation changes (all lines stagger-fade onto one screen,
+// one Continue, instead of one tap-gated line at a time).
+
+const DURATION_WEEKS: Record<string, number> = {
+  'Just starting': 2, '1-6 months': 13, '6-12 months': 39, '1-2 years': 78,
+  '2-5 years': 182, '5-10 years': 390, '10+ years': 624,
+};
+const DURATION_PLAIN: Record<string, string> = {
+  'Just starting': 'just starting out', '1-6 months': 'about 3 months', '6-12 months': 'about 9 months',
+  '1-2 years': 'about 1.5 years', '2-5 years': 'about 3.5 years', '5-10 years': 'about 7.5 years', '10+ years': '12+ years',
+};
+const REPS_PER_SESSION_BY_DURATION: Record<string, number> = {
+  '15-20 min': 60, '30 min': 90, '45 min': 120, '60 min': 150, '75+ min': 180,
+};
+const DEFAULT_REPS_PER_SESSION = 90;
+
+function dayWord(n: number): string { return `${n} day${n === 1 ? '' : 's'}`; }
+
+function computeWastedReps(answers: Record<string, any>) {
+  const trainDurationLabel = (answers.trainDuration as string) ?? 'Just starting';
+  const justStarting = trainDurationLabel === 'Just starting';
+  const freq = parseInt(String(answers.days ?? '3 days'), 10) || 3;
+  const durationLabel = answers.duration as string | undefined;
+  const repsPerSession = REPS_PER_SESSION_BY_DURATION[durationLabel ?? ''] ?? DEFAULT_REPS_PER_SESSION;
+  const pct = typeof answers.formGuess === 'number' ? answers.formGuess : 50;
+  const weeks = justStarting ? 104 : (DURATION_WEEKS[trainDurationLabel] ?? 78);
+  const weeksPlain = justStarting ? 'about 2 years ahead' : (DURATION_PLAIN[trainDurationLabel] ?? 'about 1.5 years');
+  const totalSessions = Math.round(freq * weeks);
+  const totalReps = totalSessions * repsPerSession;
+  const wasted = Math.max(0, Math.round(totalReps * (1 - pct / 100)));
+  return { trainDurationLabel, justStarting, freq, repsPerSession, pct, weeks, weeksPlain, totalSessions, totalReps, wasted };
+}
+
+function getRealFormPct(answers: Record<string, any>): number {
+  if (typeof answers.formGuess === 'number') return answers.formGuess;
+  if (typeof answers.demoGoodReps === 'number' && typeof answers.demoReps === 'number' && answers.demoReps > 0) {
+    return Math.round((answers.demoGoodReps / answers.demoReps) * 100);
+  }
+  return 70;
+}
+
+function cinematicLines(answers: Record<string, any>): string[] {
+  const m = computeWastedReps({ ...answers, formGuess: getRealFormPct(answers) });
+  const sessionsPerYear = Math.round(m.freq * 52);
+  const repsPerYear = m.repsPerSession * sessionsPerYear;
+  const opener = m.justStarting
+    ? `Let's imagine you do ${m.repsPerSession} reps a session.`
+    : `Okay, so you said you do ${m.repsPerSession} reps a session.`;
+  const trainLine = m.justStarting
+    ? `And let's say you train ${dayWord(m.freq)} a week.`
+    : `You train ${dayWord(m.freq)} a week.`;
+  return [
+    opener,
+    trainLine,
+    'There are 52 weeks in a year.',
+    `${m.freq} × 52 = ${sessionsPerYear} sessions a year.`,
+    `${m.repsPerSession} reps × ${sessionsPerYear} sessions = ${repsPerYear.toLocaleString()} reps a year.`,
+    `Do that for ${m.weeksPlain}, and that's about ${m.totalReps.toLocaleString()} reps total.`,
+    `You said ${m.pct}% of them are good form.`,
+    `That means ${m.wasted.toLocaleString()} of them barely built anything.`,
+    "That's months of muscle — gone.",
+    "But that's not it.",
+    'Every gym injury is a 4-6 week sideline.',
+    'After just 4 weeks off, you start losing the strength you built.',
+    'So one injury = months of progress, undone.',
+  ];
+}
+
+const REVERSAL_LINES = [
+  "But it's not too late.",
+  'FormPal checks every rep.',
+  'So from today, every one counts — and you build nearly 2x the muscle.',
+];
+
+function planRevealSteps(answers: Record<string, any>): string[] {
+  const name = (answers.name as string) || 'you';
+  const goals = (answers.goal as string[]) ?? [];
+  const goal = goals[0] ?? 'your goals';
+  const daysNum = parseInt(String(answers.days ?? '3 days'), 10) || 3;
+  const wasted = computeWastedReps({ ...answers, formGuess: getRealFormPct(answers) }).wasted;
+  return [
+    `Analyzing ${name}'s answers`,
+    'Factoring in your starting rank',
+    `Building around ${goal.toLowerCase()}`,
+    `Setting your ${daysNum}-a-week schedule`,
+    `Remembering: ${wasted.toLocaleString()} reps you don't have to waste again`,
+    'Calibrating form-check thresholds',
+  ];
+}
+
+// One clean screen: every line fades up in sequence, then Continue.
+function StaggerLines({ lines, onAllShown }: { lines: string[]; onAllShown: () => void }) {
+  const vals = useRef(lines.map(() => new Animated.Value(0))).current;
+  useEffect(() => {
+    const seq = Animated.stagger(
+      420,
+      vals.map(v => Animated.timing(v, { toValue: 1, duration: 460, useNativeDriver: true })),
+    );
+    seq.start(({ finished }) => { if (finished) onAllShown(); });
+    return () => seq.stop();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <View style={{ gap: 18 }}>
+      {lines.map((ln, i) => (
+        <Animated.Text
+          key={i}
+          style={{
+            fontFamily: FONT.display, fontSize: 22, lineHeight: 30, color: L.text, letterSpacing: -0.3,
+            opacity: vals[i],
+            transform: [{ translateY: vals[i].interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }],
+          }}
+        >
+          {ln}
+        </Animated.Text>
+      ))}
+    </View>
+  );
+}
+
+// ── GuessSlider — 0-100%, single track. The one demo leftover: "how many
+// of your reps do you think are actually good form?"
+function GuessSlider({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const [trackWidth, setTrackWidth] = useState(280);
+  const [display, setDisplay] = useState(Math.round(value));
+  const anim = useRef(new Animated.Value(value)).current;
+  const startRef = useRef(value);
+  useEffect(() => { anim.setValue(value); setDisplay(Math.round(value)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const pan = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderGrant: () => { startRef.current = (anim as any)._value ?? 50; },
+    onPanResponderMove: (_, gs) => {
+      const next = Math.max(0, Math.min(100, startRef.current + (gs.dx / trackWidth) * 100));
+      anim.setValue(next);
+      const r = Math.round(next);
+      setDisplay(r); onChange(r);
+    },
+    onPanResponderRelease: (_, gs) => {
+      const next = Math.round(Math.max(0, Math.min(100, startRef.current + (gs.dx / trackWidth) * 100)));
+      anim.setValue(next); setDisplay(next); onChange(next);
+    },
+  })).current;
+  const fillW = anim.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] });
+  const thumbL = anim.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] });
+  return (
+    <View style={{ gap: 20, marginTop: 24 }}>
+      <Text style={{ fontFamily: FONT.displayBold, fontSize: 52, color: L.text, letterSpacing: -1.5, textAlign: 'center' }}>{display}%</Text>
+      <View
+        style={{ height: 52, justifyContent: 'center' }}
+        onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}
+        {...pan.panHandlers}
+      >
+        <View style={{ position: 'absolute', left: 0, right: 0, height: 10, borderRadius: 5, backgroundColor: '#EBEBF0', overflow: 'hidden' }}>
+          <Animated.View style={{ height: '100%', width: fillW, backgroundColor: L.accent }} />
+        </View>
+        <Animated.View style={{ position: 'absolute', left: thumbL, marginLeft: -15, width: 30, height: 30, borderRadius: 15, backgroundColor: '#fff', borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', ...({ boxShadow: Elev.medium.shadow } as any) }} />
+      </View>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+        <Text style={{ fontSize: 12, color: L.textDim }}>None of them</Text>
+        <Text style={{ fontSize: 12, color: L.textDim }}>Every one</Text>
+      </View>
+    </View>
+  );
+}
+
 // ── Screen ────────────────────────────────────────────────────────────────────
 
-type AppState = 'welcome' | 'onboarding' | 'mypal' | 'building' | 'projection' | 'payoff';
+type AppState = 'welcome' | 'onboarding' | 'calcMath' | 'cinematic' | 'reversal' | 'building' | 'paywall';
 
 export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
@@ -1272,6 +1443,9 @@ export default function OnboardingScreen() {
   // Tap-feedback only, for single-select questions — see handleSelect below
   // for why this exists separately from `answers`.
   const [justSelected, setJustSelected] = useState<string | null>(null);
+  // Gates the Continue button on the cinematic-math + reversal screens until
+  // every line has faded in.
+  const [mathLinesDone, setMathLinesDone] = useState(false);
 
   const fadeAnim  = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
@@ -1296,23 +1470,25 @@ export default function OnboardingScreen() {
     Asset.loadAsync(Object.values(ICON)).catch(() => {});
   }, []);
 
+  const buildSteps = useMemo(() => planRevealSteps(answers), [answers]);
+
   useEffect(() => {
     if (appState !== 'building') return;
     setLoadStep(0); setLoadPct(0);
     let i = 0;
     const id = setInterval(() => {
       i++;
-      if (i < LOADING_STEPS.length) {
+      if (i < buildSteps.length) {
         setLoadStep(i);
-        setLoadPct(Math.round((i / LOADING_STEPS.length) * 100));
+        setLoadPct(Math.round((i / buildSteps.length) * 100));
       } else {
         clearInterval(id);
         setLoadPct(100);
-        setTimeout(() => setAppState('projection'), 500);
+        setTimeout(() => setAppState('paywall'), 500);
       }
-    }, 700);
+    }, 620);
     return () => clearInterval(id);
-  }, [appState]);
+  }, [appState, buildSteps.length]);
 
   const animTrans = (dir: 'forward' | 'back', cb: () => void) => {
     const out = dir === 'forward' ? -36 : 36;
@@ -1335,7 +1511,7 @@ export default function OnboardingScreen() {
     if (stepIndex < vis.length - 1) {
       animTrans('forward', () => setStepIndex(i => i + 1));
     } else {
-      setAppState('mypal');
+      setAppState('calcMath');
     }
   };
 
@@ -1571,6 +1747,27 @@ export default function OnboardingScreen() {
       );
     }
 
+    // Guess slider — 0-100%, feeds the math. Always shown.
+    if (st.type === 'guessSlider') {
+      const val = typeof answers[st.id] === 'number' ? (answers[st.id] as number) : 50;
+      return (
+        <OnboardingBackground>
+          <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
+            {header}
+            <View style={{ paddingHorizontal: 24, paddingTop: 20, flex: 1 }}>
+              <Text style={s.qq}>{st.question}</Text>
+              <GuessSlider value={val} onChange={(v) => setAnswers({ ...answers, [st.id]: v })} />
+            </View>
+            <View style={s.bn}>
+              <TouchableOpacity style={s.cb} onPress={() => advance({ ...answers, [st.id]: val })} activeOpacity={0.85}>
+                <Text style={s.ct}>Continue</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </OnboardingBackground>
+      );
+    }
+
     // Rank WebView screen — full-screen HTML artifact, its own back button.
     if (st.type === 'webview' && st.htmlKey) {
       return (
@@ -1684,17 +1881,55 @@ export default function OnboardingScreen() {
     );
   }
 
-  // ── MYPAL INTRO — animated, icon-forward, minimal text ───────────────────────
+  // ── CALCULATING (the math) — short processing beat ───────────────────────────
 
-  if (appState === 'mypal') {
+  if (appState === 'calcMath') {
+    return <CalcMathBeat onDone={() => setAppState('cinematic')} />;
+  }
+
+  // ── CINEMATIC MATH — the 13 lines, staggered onto one screen ─────────────────
+
+  if (appState === 'cinematic') {
     return (
       <OnboardingBackground>
-        <MyPalIntroContent onContinue={() => { haptic(Haptics.ImpactFeedbackStyle.Medium); setPlan(buildPlan(answers)); setAppState('building'); }} />
+        <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
+          <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: 140 }} showsVerticalScrollIndicator={false}>
+            <StaggerLines lines={cinematicLines(answers)} onAllShown={() => setMathLinesDone(true)} />
+          </ScrollView>
+          {mathLinesDone && (
+            <View style={s.bn}>
+              <TouchableOpacity style={s.cb} onPress={() => { haptic(Haptics.ImpactFeedbackStyle.Medium); setMathLinesDone(false); setAppState('reversal'); }} activeOpacity={0.85}>
+                <Text style={s.ct}>Continue</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
       </OnboardingBackground>
     );
   }
 
-  // ── BUILDING ─────────────────────────────────────────────────────────────────
+  // ── REVERSAL — 3 lines, same treatment ──────────────────────────────────────
+
+  if (appState === 'reversal') {
+    return (
+      <OnboardingBackground>
+        <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
+          <View style={{ flex: 1, paddingHorizontal: 24, justifyContent: 'center' }}>
+            <StaggerLines lines={REVERSAL_LINES} onAllShown={() => setMathLinesDone(true)} />
+          </View>
+          {mathLinesDone && (
+            <View style={s.bn}>
+              <TouchableOpacity style={s.cb} onPress={() => { haptic(Haptics.ImpactFeedbackStyle.Medium); setMathLinesDone(false); setAppState('building'); }} activeOpacity={0.85}>
+                <Text style={s.ct}>Continue</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      </OnboardingBackground>
+    );
+  }
+
+  // ── BUILDING (the plan reveal checklist) ────────────────────────────────────
 
   if (appState === 'building') {
     return (
@@ -1710,9 +1945,9 @@ export default function OnboardingScreen() {
             </View>
           </View>
           <Text style={{ fontFamily: FONT.displayBold, fontSize: 28, color: L.text, marginBottom: 8, letterSpacing: -0.8 }}>Building your plan</Text>
-          <Text style={{ fontSize: 15, color: L.textSub, marginBottom: 36, lineHeight: 22 }}>Putting it together around your goals and setup.</Text>
+          <Text style={{ fontSize: 15, color: L.textSub, marginBottom: 36, lineHeight: 22 }}>Putting it together around everything you told me.</Text>
           <View>
-            {LOADING_STEPS.map((step, i) => {
+            {buildSteps.map((step, i) => {
               const done    = i < loadStep;
               const current = i === loadStep;
               return (
@@ -1731,76 +1966,45 @@ export default function OnboardingScreen() {
     );
   }
 
-  // ── PROJECTION ───────────────────────────────────────────────────────────────
+  // ── PAYWALL — placeholder. The real paywall drops in here; the first
+  // workout stays locked until the user pays. ─────────────────────────────────
 
-  if (appState === 'projection') {
-    const daysNum = parseInt((answers.days as string) ?? '3') || 3;
+  if (appState === 'paywall') {
     return (
       <OnboardingBackground>
-        <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
-          <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
-            <Text style={s.qq}>Here's what training {daysNum} day{daysNum !== 1 ? 's' : ''} a week looks like.</Text>
-            <ProjectionChart />
-            {BULLET_ITEMS.map((item, i) => <BulletItem key={item} text={item} index={i} />)}
-          </ScrollView>
-          <View style={s.bn}>
-            <TouchableOpacity style={s.cb} onPress={() => { haptic(Haptics.ImpactFeedbackStyle.Medium); setAppState('payoff'); }} activeOpacity={0.85}>
-              <Text style={s.ct}>Continue</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </OnboardingBackground>
-    );
-  }
-
-  // ── PAYOFF ───────────────────────────────────────────────────────────────────
-
-  if (appState === 'payoff') {
-    return (
-      <OnboardingBackground>
-        <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
-          <ScrollView contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
-            <View style={s.projRow}>
-              <View style={s.sectionIconWrap}>
-                <Sym name="checkmark" size={12} color={L.accent} />
-              </View>
-              <Text style={s.qs}>YOUR PLAN IS READY</Text>
-            </View>
-            <Text style={s.qq}>Here's your starting point.</Text>
-            <Text style={s.qsub}>{projectionLine(answers)}</Text>
-            <View style={s.heroCard}>
-              <Text style={s.heroLabel}>FIRST WORKOUT</Text>
-              <Text style={s.heroFocus}>{plan?.focus}</Text>
-              {plan?.exercises.map((ex, i) => (
-                <View key={i} style={s.exRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.exName}>{ex.name}</Text>
-                    <Text style={s.exScheme}>{ex.scheme}</Text>
-                  </View>
-                  {ex.formCheck && (
-                    <View style={s.fcTag}>
-                      <Sym name="camera.fill" size={11} color={L.accent} />
-                      <Text style={s.fcTxt}>form-check</Text>
-                    </View>
-                  )}
-                </View>
-              ))}
-            </View>
-            <Text style={{ fontSize: 14, color: L.textSub, textAlign: 'center', marginVertical: 16, lineHeight: 21 }}>
-              {motivationLine(answers)}
-            </Text>
-          </ScrollView>
-          <View style={s.bn}>
-            <TouchableOpacity style={s.cb} onPress={finishOnboarding} activeOpacity={0.85}>
-              <Text style={s.ct}>Start training</Text>
-            </TouchableOpacity>
-          </View>
+        <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom, paddingHorizontal: 28, alignItems: 'center', justifyContent: 'center' }}>
+          <Sym name="lock.fill" size={30} color={L.textDim} />
+          <Text style={{ fontFamily: FONT.displayBold, fontSize: 26, color: L.text, marginTop: 16, letterSpacing: -0.6 }}>Your plan is ready.</Text>
+          <Text style={{ fontSize: 15, color: L.textSub, textAlign: 'center', marginTop: 8, lineHeight: 22 }}>Paywall goes here — built separately.</Text>
+          <TouchableOpacity style={[s.cb, { alignSelf: 'stretch', marginTop: 32 }]} onPress={finishOnboarding} activeOpacity={0.85}>
+            <Text style={s.ct}>Continue (dev)</Text>
+          </TouchableOpacity>
         </View>
       </OnboardingBackground>
     );
   }
 
   return null;
+}
+
+// Short "analyzing your reps" beat before the math.
+function CalcMathBeat({ onDone }: { onDone: () => void }) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const a = Animated.timing(opacity, { toValue: 1, duration: 420, useNativeDriver: true });
+    a.start();
+    const t = setTimeout(onDone, 1700);
+    return () => { a.stop(); clearTimeout(t); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <OnboardingBackground>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
+        <Animated.Text style={{ opacity, fontFamily: FONT.display, fontSize: 22, color: L.text, letterSpacing: -0.3 }}>
+          Analyzing your reps...
+        </Animated.Text>
+      </View>
+    </OnboardingBackground>
+  );
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
