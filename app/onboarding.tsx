@@ -1127,23 +1127,35 @@ function NotificationBanner({ topOffset }: { topOffset: number }) {
   const opacity    = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Wait 500ms, then slide in + fade in together
-    Animated.sequence([
+    // Every animation + timer is captured so unmount (leaving the
+    // notifications step before this finishes) can stop them — otherwise a
+    // native-driver spring keeps running on a torn-down view: "Unable to
+    // find node on an unmounted component".
+    let holdTimer: ReturnType<typeof setTimeout> | null = null;
+    let outAnim: Animated.CompositeAnimation | null = null;
+    const inAnim = Animated.sequence([
       Animated.delay(500),
       Animated.parallel([
         Animated.timing(opacity,    { toValue: 1, duration: 250, useNativeDriver: true }),
         Animated.spring(translateY, { toValue: 0, friction: 9, tension: 60, useNativeDriver: true }),
       ]),
-    ]).start(() => {
-      // Hold ~2s then fade out
-      setTimeout(() => {
-        Animated.parallel([
+    ]);
+    inAnim.start(({ finished }) => {
+      if (!finished) return;
+      holdTimer = setTimeout(() => {
+        outAnim = Animated.parallel([
           Animated.timing(opacity,    { toValue: 0, duration: 350, useNativeDriver: true }),
           Animated.timing(translateY, { toValue: -8, duration: 350, useNativeDriver: true }),
-        ]).start();
+        ]);
+        outAnim.start();
       }, 2000);
     });
-  }, []);
+    return () => {
+      inAnim.stop();
+      outAnim?.stop();
+      if (holdTimer) clearTimeout(holdTimer);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <Animated.View
@@ -1351,32 +1363,47 @@ function planRevealSteps(answers: Record<string, any>): string[] {
   ];
 }
 
-// One clean screen: every line fades up in sequence, then Continue.
-function StaggerLines({ lines, onAllShown }: { lines: string[]; onAllShown: () => void }) {
-  const vals = useRef(lines.map(() => new Animated.Value(0))).current;
+// One line at a time: fade in (450ms), hold 2s, fade out (450ms), next.
+// Last line fades in and stays; onDone fires so the caller can show
+// Continue. Ported verbatim from onboarding-test's FadeSequence — the
+// "sentence by sentence" reveal the user asked to keep.
+function FadeSequence({ lines, onDone }: { lines: string[]; onDone: () => void }) {
+  const [index, setIndex] = useState(0);
+  const opacity = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
-    const seq = Animated.stagger(
-      420,
-      vals.map(v => Animated.timing(v, { toValue: 1, duration: 460, useNativeDriver: true })),
-    );
-    seq.start(({ finished }) => { if (finished) onAllShown(); });
-    return () => seq.stop();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    const isLast = index === lines.length - 1;
+    let holdTimer: ReturnType<typeof setTimeout> | null = null;
+    let fadeOut: Animated.CompositeAnimation | null = null;
+    const fadeIn = Animated.timing(opacity, { toValue: 1, duration: 450, useNativeDriver: false });
+    fadeIn.start(({ finished }) => {
+      if (!finished) return;
+      void Haptics.selectionAsync();
+      if (isLast) { onDone(); return; }
+      holdTimer = setTimeout(() => {
+        fadeOut = Animated.timing(opacity, { toValue: 0, duration: 450, useNativeDriver: false });
+        fadeOut.start(({ finished: f2 }) => { if (f2) setIndex(i => i + 1); });
+      }, 2000);
+    });
+    return () => {
+      fadeIn.stop();
+      if (holdTimer) clearTimeout(holdTimer);
+      fadeOut?.stop();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index]);
+
   return (
-    <View style={{ gap: 18 }}>
-      {lines.map((ln, i) => (
-        <Animated.Text
-          key={i}
-          style={{
-            fontFamily: FONT.display, fontSize: 22, lineHeight: 30, color: L.text, letterSpacing: -0.3,
-            opacity: vals[i],
-            transform: [{ translateY: vals[i].interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }],
-          }}
-        >
-          {ln}
-        </Animated.Text>
-      ))}
-    </View>
+    <Animated.Text
+      style={{
+        opacity,
+        fontFamily: FONT.display, fontSize: 29, lineHeight: 38, fontWeight: '600',
+        color: L.text, textAlign: 'center',
+        textShadowColor: 'rgba(255,255,255,0.9)', textShadowRadius: 10, textShadowOffset: { width: 0, height: 0 },
+      }}
+    >
+      {lines[index]}
+    </Animated.Text>
   );
 }
 
@@ -1887,15 +1914,15 @@ export default function OnboardingScreen() {
     return <CalcMathBeat onDone={() => setAppState('cinematic')} />;
   }
 
-  // ── CINEMATIC MATH — the 13 lines, staggered onto one screen ─────────────────
+  // ── CINEMATIC MATH — the 13 lines, one at a time (fade in, hold, fade out)
 
   if (appState === 'cinematic') {
     return (
       <OnboardingBackground>
         <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
-          <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: 140 }} showsVerticalScrollIndicator={false}>
-            <StaggerLines lines={cinematicLines(answers)} onAllShown={() => setMathLinesDone(true)} />
-          </ScrollView>
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
+            <FadeSequence lines={cinematicLines(answers)} onDone={() => setMathLinesDone(true)} />
+          </View>
           {mathLinesDone && (
             <View style={s.bn}>
               <TouchableOpacity style={s.cb} onPress={() => { haptic(Haptics.ImpactFeedbackStyle.Medium); setMathLinesDone(false); setAppState('reversal'); }} activeOpacity={0.85}>
@@ -1914,8 +1941,8 @@ export default function OnboardingScreen() {
     return (
       <OnboardingBackground>
         <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
-          <View style={{ flex: 1, paddingHorizontal: 24, justifyContent: 'center' }}>
-            <StaggerLines lines={REVERSAL_LINES} onAllShown={() => setMathLinesDone(true)} />
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
+            <FadeSequence lines={REVERSAL_LINES} onDone={() => setMathLinesDone(true)} />
           </View>
           {mathLinesDone && (
             <View style={s.bn}>

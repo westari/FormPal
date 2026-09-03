@@ -1151,13 +1151,13 @@ const s = StyleSheet.create({
   // Calmer than the planarity hint — softer colour, lower on screen, out of
   // the way of the rep counter. Guidance, not an alarm.
   trackingCueHint: { position: 'absolute', top: '46%', left: 0, right: 0, alignItems: 'center', paddingHorizontal: 20 },
-  trackingCueInner: { paddingHorizontal: 24, paddingVertical: 16, maxWidth: 340 },
-  // The live guidance command — large and loud, readable mid-set from a
-  // distance.
+  trackingCueInner: { paddingHorizontal: 20, paddingVertical: 18, maxWidth: 380 },
+  // The live guidance command — big and loud, readable mid-set from across
+  // the room. Bumped 26 -> 42 per repeated "make it visible" feedback.
   trackingCueText: {
-    fontFamily: undefined, fontWeight: '800', fontSize: 26, lineHeight: 32,
+    fontFamily: undefined, fontWeight: '800', fontSize: 42, lineHeight: 48,
     color: '#fff', textAlign: 'center', letterSpacing: 0.2,
-    textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 16,
+    textShadowColor: 'rgba(0,0,0,0.85)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 18,
   },
 
   // Rep count — bare, no frame; own shadow for legibility over the camera.

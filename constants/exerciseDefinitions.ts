@@ -4062,23 +4062,22 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     // rom 21. Adjusted from there so:
     //  • enter 45 — a real sit-up is ~half way up before it "starts a rep"
     //    (rest at 85 has 40deg of margin, so noise can't false-fire).
-    //  • exit 82 — the rep only COMPLETES once you're basically back flat.
-    //    RAISED 78 -> 82 (9/2): lineVsVertical is UNSIGNED, so it can't tell
-    //    "10deg short of vertical, still coming up" from "10deg PAST vertical,
-    //    folded forward over the knees at peak crunch" — both read small, and
-    //    a deep fold at the TOP makes hip->nose read ~75-80deg from vertical
-    //    (nose down by the shins). At exit 78 that folded-forward peak
-    //    satisfied the exit test and the rep counted AT THE TOP, on the way
-    //    up ("it counts when I get to the top which is horrible — it should
-    //    be after coming back down"). Rest is a logged 84-87 and the return
-    //    stroke is a full ~83deg swing, so 82 still completes every genuine
-    //    lie-back-down while sitting above what a forward fold can reach.
+    //  • exit 78 — the rep only COMPLETES once you're basically back flat
+    //    (91% of the way down). "It should count after coming back down."
+    //    REVERTED from a brief 82 (9/2): a device log showed the settle
+    //    anchor resyncing "rest" onto ~81deg, so exit 82 sat ABOVE the real
+    //    resting value — the rep could never complete and counting died
+    //    entirely ("0 reps"). 78 is the proven value; the "it counts a hair
+    //    early on a hard forward fold" nitpick is not worth breaking the
+    //    count over, and can't be fixed by a threshold anyway (lineVsVertical
+    //    is unsigned, so a deep fold past vertical is indistinguishable from
+    //    coming back toward flat).
     //  • rom 25 — a full sit-up hits ~4; anything that stops short flags
     //    GO HIGHER. Strict, per request. phantomGuardFraction 0.10 keeps it
     //    from ever blocking the count.
     topAngle:            84,
     repEnterThreshold:   45,
-    repExitThreshold:    82,
+    repExitThreshold:    78,
     goodROMThreshold:    25,
     insufficientROMCue: 'GO HIGHER',
     // Stops the FIRST rep locking its "rest" onto the folded-up position
