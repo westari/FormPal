@@ -11,11 +11,13 @@ import * as Haptics from 'expo-haptics';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useVideoPlayer, VideoView } from 'expo-video';
+import { WebView } from 'react-native-webview';
 import Svg, { Path as SvgPath, Text as SvgText, Circle as SvgCircle } from 'react-native-svg';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AppBackground from '../components/AppBackground';
 import PlanGrowthMoment from '../components/PlanGrowthMoment';
+import { PUSHUP_ICON, PULLUP_ICON, SQUAT_ICON } from '../assets/onboarding/onbIcons';
 import { FONT, W, Col, Elev } from '../constants/theme';
 
 // Onboarding video clips — drop the real files in at these paths and flip
@@ -158,6 +160,200 @@ function OnboardingBackground({ children }: { children: React.ReactNode }) {
   );
 }
 
+// ── Rank WebView screens ─────────────────────────────────────────────────
+// The rank wheel intro, strength assessment and rank reveal are the exact
+// Claude-designed HTML artifacts (assets/onboarding/*.html), rendered
+// verbatim in a transparent WebView over AppBackground. Inject script +
+// per-screen icon wiring copied over from onboarding-test unchanged.
+const ONBOARDING_WEB_INJECT = `
+(function () {
+  function post(m) { try { window.ReactNativeWebView.postMessage(m); } catch (e) {} }
+  function btnFor(el) {
+    for (var i = 0; el && i < 6; i++, el = el.parentElement) {
+      var role = el.getAttribute && el.getAttribute('role');
+      if (role === 'button' || el.tagName === 'BUTTON') return el;
+    }
+    return null;
+  }
+  document.addEventListener('pointerdown', function (e) { if (btnFor(e.target)) post('__tap'); }, true);
+  document.addEventListener('touchstart', function (e) { if (btnFor(e.target)) post('__tap'); }, true);
+  document.addEventListener('click', function (e) {
+    var b = btnFor(e.target);
+    if (!b) return;
+    var oc = b.getAttribute('sc-camel-on-click') || '';
+    if (b.getAttribute('data-glass') === 'panel' || /pick/i.test(oc)) return;
+    var t = (b.textContent || '').replace(/\\s+/g, ' ').trim();
+    if (/^Skip for now/i.test(t)) return post('skip');
+    if (b.getAttribute('data-cta') !== null || /^Start 5 /i.test(t)) {
+      var sel = document.querySelector('[data-glass="panel"][data-selected="1"]');
+      var st = (sel && sel.textContent || '') + ' ' + t;
+      return post(/squat/i.test(st) ? 'squat' : 'pushup');
+    }
+    if (/^(Start at Bronze|Continue|Start climbing|Find my rank|Next|Done)\\b/i.test(t)) return post('advance');
+  }, true);
+
+  var CARD = 'div[style*="width: 472px"][style*="height: 1024px"]';
+  var WRAP = 'div[style*="min-height: 100vh"][style*="padding: 40px 24px"]';
+  var BAR  = 'div[style*="justify-content: space-between"][style*="padding: 22px 34px 0"]';
+  var CSS = ''
+    + 'html{margin:0!important;padding:0!important;background:transparent!important;overflow:hidden!important;height:100%!important;width:100%!important;}'
+    + 'body{margin:0!important;padding:0!important;background:transparent!important;overflow:hidden!important;}'
+    + WRAP + '{min-height:1024px!important;height:1024px!important;padding:0!important;display:block!important;background:transparent!important;overflow:hidden!important;}'
+    + CARD + '{width:472px!important;height:1024px!important;border-radius:0!important;box-shadow:none!important;margin:0!important;background:transparent!important;}'
+    + BAR + '{display:none!important;}'
+    + 'div[style*="gap: 18px"][style*="padding: 26px 34px 0"]{display:none!important;}'
+    + 'div[style*="width: 140px"][style*="height: 5px"]{display:none!important;}'
+    + 'div[style*="filter: blur(52px)"]{display:none!important;}'
+    + 'div[role="button"][style*="height: 62px"][style*="border-radius: 31px"]:not([data-glass="pill"]){background:#007AFF!important;opacity:1!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;box-shadow:0 14px 34px rgba(0,122,255,0.42)!important;}'
+    + 'div[style*="font-size: 34px"][style*="letter-spacing: -0.6px"]{font-size:39px!important;line-height:44px!important;}'
+    + 'svg{will-change:transform;}';
+
+  function ensure() {
+    if (document.getElementById('__rn_css')) return;
+    var s = document.createElement('style');
+    s.id = '__rn_css';
+    s.textContent = CSS;
+    (document.head || document.documentElement).appendChild(s);
+  }
+  function wireScrollHaptics() {
+    var scrollers = document.querySelectorAll('[data-rank-track],[style*="scroll-snap-type"]');
+    for (var s = 0; s < scrollers.length; s++) {
+      (function (sc) {
+        if (sc.__rnHap) return;
+        sc.__rnHap = 1;
+        var last = -1;
+        sc.addEventListener('scroll', function () {
+          var kids = sc.children;
+          if (!kids.length) return;
+          var horiz = sc.scrollWidth - sc.clientWidth > sc.scrollHeight - sc.clientHeight;
+          var mid = horiz ? sc.scrollLeft + sc.clientWidth / 2 : sc.scrollTop + sc.clientHeight / 2;
+          var best = 0, bd = 1e9;
+          for (var i = 0; i < kids.length; i++) {
+            var k = kids[i];
+            var c = horiz ? k.offsetLeft + k.offsetWidth / 2 : k.offsetTop + k.offsetHeight / 2;
+            var d = Math.abs(c - mid);
+            if (d < bd) { bd = d; best = i; }
+          }
+          if (best !== last) { last = best; post('__tick'); }
+        }, { passive: true });
+      })(scrollers[s]);
+    }
+  }
+  function fit() {
+    ensure();
+    wireScrollHaptics();
+    var vw = window.innerWidth, vh = window.innerHeight;
+    if (!vw || !vh) return;
+    var S = Math.min(vw / 472, vh / 1024);
+    var b = document.body;
+    if (!b || b.__rnFit === S) return;
+    b.__rnFit = S;
+    b.style.setProperty('width', '472px', 'important');
+    b.style.setProperty('height', '1024px', 'important');
+    b.style.setProperty('position', 'absolute', 'important');
+    b.style.setProperty('top', '0', 'important');
+    b.style.setProperty('left', Math.round((vw - 472 * S) / 2) + 'px', 'important');
+    b.style.setProperty('transform', 'scale(' + S + ')', 'important');
+    b.style.setProperty('transform-origin', 'top left', 'important');
+  }
+  fit();
+  var deb;
+  var obs = new MutationObserver(function () { clearTimeout(deb); deb = setTimeout(fit, 120); });
+  obs.observe(document, { childList: true, subtree: true });
+  window.addEventListener('resize', fit);
+  [30, 120, 320, 700].forEach(function (d) { setTimeout(fit, d); });
+  setTimeout(function () { obs.disconnect(); }, 1500);
+  true;
+})();
+`;
+
+const STRENGTH_ICONS_JS = `
+(function () {
+  var MAP = { 'Push-ups': ${JSON.stringify(PUSHUP_ICON)}, 'Pull-ups': ${JSON.stringify(PULLUP_ICON)}, 'Squats': ${JSON.stringify(SQUAT_ICON)} };
+  function apply() {
+    var labels = document.querySelectorAll('div[style*="text-align: center"][style*="font-size: 15px"]');
+    var hit = 0;
+    for (var i = 0; i < labels.length; i++) {
+      var el = labels[i];
+      var k = (el.textContent || '').trim();
+      if (!MAP[k]) continue;
+      if (el.__rnIcon) { hit++; continue; }
+      el.__rnIcon = 1;
+      el.style.display = 'flex'; el.style.flexDirection = 'column'; el.style.alignItems = 'center';
+      var img = document.createElement('img');
+      img.src = MAP[k];
+      img.style.cssText = 'width:36px;height:36px;object-fit:contain;display:block;margin:0 0 6px';
+      el.insertBefore(img, el.firstChild);
+      hit++;
+    }
+    return hit >= 3;
+  }
+  if (!apply()) [150, 400, 800, 1600, 3000].forEach(function (d) { setTimeout(apply, d); });
+})();
+`;
+
+const ONB_HTML = {
+  rankWheel:          require('../assets/onboarding/rankwheel.html'),
+  strengthAssessment: require('../assets/onboarding/strengthassessment.html'),
+  rankReveal:         require('../assets/onboarding/rankreveal.html'),
+} as const;
+
+function OnboardingWebScreen({ htmlKey, onAdvance, onBack, topInset }: {
+  htmlKey: keyof typeof ONB_HTML;
+  onAdvance: () => void;
+  onBack: () => void;
+  topInset: number;
+}) {
+  const fade = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const a = Animated.timing(fade, { toValue: 1, duration: 240, easing: Easing.out(Easing.quad), useNativeDriver: true });
+    a.start();
+    return () => a.stop();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const extraJs = htmlKey === 'strengthAssessment' ? STRENGTH_ICONS_JS : undefined;
+  return (
+    <View style={{ flex: 1, backgroundColor: '#f4f4f2' }}>
+      <AppBackground />
+      <Animated.View style={{ flex: 1, marginTop: topInset, opacity: fade }}>
+        <WebView
+          source={ONB_HTML[htmlKey] as any}
+          originWhitelist={['*']}
+          injectedJavaScript={extraJs ? ONBOARDING_WEB_INJECT + '\n' + extraJs : ONBOARDING_WEB_INJECT}
+          onMessage={(e) => {
+            const m = e.nativeEvent.data;
+            if (m === '__tap' || m === '__tick') { Haptics.selectionAsync(); return; }
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            if (m === 'advance' || m === 'skip') onAdvance();
+          }}
+          style={{ flex: 1, backgroundColor: 'transparent' }}
+          opaque={false}
+          scrollEnabled
+          bounces={false}
+          overScrollMode="never"
+          androidLayerType="hardware"
+          setSupportMultipleWindows={false}
+          allowFileAccess
+          allowFileAccessFromFileURLs
+          allowUniversalAccessFromFileURLs
+          javaScriptEnabled
+          domStorageEnabled
+          cacheEnabled
+        />
+      </Animated.View>
+      <Pressable onPress={() => { Haptics.selectionAsync(); onBack(); }} hitSlop={12} style={[web.backBtn, { top: topInset + 8 }]}>
+        <View style={web.backCircle}>
+          <SymbolView name="chevron.left" size={15} tintColor="#fff" type="monochrome" style={{ width: 15, height: 15 }} />
+        </View>
+      </Pressable>
+    </View>
+  );
+}
+
+const web = StyleSheet.create({
+  backBtn:    { position: 'absolute', left: 20, zIndex: 60 },
+  backCircle: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(0,0,0,0.35)', alignItems: 'center', justifyContent: 'center' },
+});
+
 // ── LocationBubbles — 3 overlapping gradient spheres (Home / Gym / Mix)
 // that ARE the answer options: tap one to pick, then Continue. Copied over
 // from onboarding-test verbatim (drift/entrance animations, frosted glass,
@@ -268,12 +464,13 @@ type StepOptions = OptionDef[] | ((a: Record<string, any>) => OptionDef[]);
 interface Step {
   id:             string;
   section:        string;
-  type:           'select' | 'multiselect' | 'wheel' | 'slider' | 'ruler' | 'interstitial' | 'text' | 'locationBubbles' | 'videoClip';
+  type:           'select' | 'multiselect' | 'wheel' | 'slider' | 'ruler' | 'interstitial' | 'text' | 'locationBubbles' | 'videoClip' | 'webview';
   question:       string;
   subtitle?:      string;
   placeholder?:   string;
   options?:       StepOptions;
   wheelKind?:     'age' | 'height';
+  htmlKey?:       'rankWheel' | 'strengthAssessment' | 'rankReveal';
   showIf?:        (a: Record<string, any>) => boolean;
   clearAllOption?: string;
 }
@@ -469,9 +666,13 @@ const STEPS: Step[] = [
     { label: 'No thanks', sfSymbol: 'bell.slash.fill', customIcon: ICON.notifOff },
   ]},
 
-  // The demo, as a clip instead of "do 5 reps". The 3 rank screens land
-  // just ahead of this in the next commit; the math + reversal + plan come
-  // right after it in the one after that.
+  // ── The rank run — every question is done; nothing below is a question.
+  { id: 'rankWheelIntro', section: 'Rank', type: 'webview', question: '', htmlKey: 'rankWheel' },
+  { id: 'rankAssess',     section: 'Rank', type: 'webview', question: '', htmlKey: 'strengthAssessment' },
+  { id: 'rankReveal',     section: 'Rank', type: 'webview', question: '', htmlKey: 'rankReveal' },
+
+  // The demo, as a clip instead of "do 5 reps". The math + reversal + plan
+  // come right after it in the next commit.
   { id: 'demoClip', section: 'Wrap up', type: 'videoClip',
     question: 'This is FormPal watching a rep.',
     subtitle: "It counts the clean ones — and tells you exactly why the rest didn't." },
@@ -1367,6 +1568,18 @@ export default function OnboardingScreen() {
             </View>
           </View>
         </OnboardingBackground>
+      );
+    }
+
+    // Rank WebView screen — full-screen HTML artifact, its own back button.
+    if (st.type === 'webview' && st.htmlKey) {
+      return (
+        <OnboardingWebScreen
+          htmlKey={st.htmlKey}
+          topInset={insets.top}
+          onAdvance={() => advance(answers)}
+          onBack={goBack}
+        />
       );
     }
 
