@@ -1639,7 +1639,9 @@ export default function OnboardingScreen() {
         <View style={s.pc}>
           <View style={s.pt}><View style={[s.pf, { width: `${progress * 100}%` }]} /></View>
         </View>
-        <View style={{ width: 44 }} />
+        <TouchableOpacity onPress={finishOnboarding} style={s.skipBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Text style={s.skipTxt}>Skip</Text>
+        </TouchableOpacity>
       </View>
     );
 
@@ -1921,7 +1923,7 @@ export default function OnboardingScreen() {
       <OnboardingBackground>
         <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
-            <FadeSequence lines={cinematicLines(answers)} onDone={() => setMathLinesDone(true)} />
+            <FadeSequence key="math" lines={cinematicLines(answers)} onDone={() => setMathLinesDone(true)} />
           </View>
           {mathLinesDone && (
             <View style={s.bn}>
@@ -1942,7 +1944,7 @@ export default function OnboardingScreen() {
       <OnboardingBackground>
         <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
-            <FadeSequence lines={REVERSAL_LINES} onDone={() => setMathLinesDone(true)} />
+            <FadeSequence key="reversal" lines={REVERSAL_LINES} onDone={() => setMathLinesDone(true)} />
           </View>
           {mathLinesDone && (
             <View style={s.bn}>
@@ -2043,6 +2045,8 @@ const s = StyleSheet.create({
   pc: { flex: 1, paddingHorizontal: 12 },
   pt: { height: 4, backgroundColor: 'rgba(17,24,39,0.08)', borderRadius: 2, overflow: 'hidden' },
   pf: { height: 4, backgroundColor: L.accent, borderRadius: 2 },
+  skipBtn: { width: 44, height: 44, alignItems: 'flex-end', justifyContent: 'center' },
+  skipTxt: { fontSize: 14, fontWeight: W.semi, color: L.textSub },
 
   // Question
   qq:     { fontFamily: FONT.display, fontSize: 30, color: L.text, lineHeight: 38, marginBottom: 20, letterSpacing: -0.6 },
