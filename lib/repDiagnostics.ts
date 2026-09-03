@@ -21,9 +21,9 @@ export interface RepDiagnostic {
   reset(): void;
 }
 
-const GRACE_SEC       = 5;   // don't nag before tracking has had a fair shot
-const STALE_REP_SEC   = 12;  // reps were counting, then stopped for this long
-const NUDGE_AFTER_SEC = 7;   // counting has never started — speak up by now
+const GRACE_SEC       = 4;   // don't nag before tracking has had a fair shot
+const STALE_REP_SEC   = 10;  // reps were counting, then stopped for this long
+const NUDGE_AFTER_SEC = 5;   // counting has never started — speak up by now
 
 export function createRepDiagnostic(): RepDiagnostic {
   let startedAt       = 0;
@@ -75,24 +75,21 @@ export function createRepDiagnostic(): RepDiagnostic {
     if (repCount > 0 && sinceRep < STALE_REP_SEC) { msg = null; return; }
     if (elapsed < GRACE_SEC) { msg = null; return; }
 
-    // Most specific cause first.
+    // Short. Plain. Most specific cause first. Never more than 4 words.
     if (noPersonHits >= 3) {
-      msg = 'Get your whole body in frame — head to feet';
+      msg = 'Get in frame';
     } else if (unreliable >= 2) {
-      msg = 'Move the phone back so your whole body shows';
+      msg = 'Move farther back';
     } else if (!settleActive && settleWaiting >= 3) {
-      msg = 'Lie flat and hold still for 2 seconds to start';
-    } else if (phantom >= 2) {
-      msg = 'Full range — sit all the way up, lower all the way down';
+      msg = 'Lie flat, hold still';
     } else if (downTransitions >= 2 && repCount === 0) {
-      // Going up but never completing — almost always not returning to flat.
-      msg = 'Lower all the way back down flat each rep';
+      msg = 'Come all the way down';
+    } else if (phantom >= 2) {
+      msg = 'Full range each rep';
     } else if (repCount === 0 && elapsed > NUDGE_AFTER_SEC) {
-      msg = metricFrames > 10
-        ? 'Sit up until your shoulders clear the floor'
-        : 'Lie flat, whole body in frame';
+      msg = metricFrames > 10 ? 'Sit up higher' : 'Get in frame';
     } else if (repCount > 0 && sinceRep >= STALE_REP_SEC) {
-      msg = 'Reset flat and keep a steady up-and-down';
+      msg = 'Keep going, steady reps';
     } else {
       msg = null;
     }

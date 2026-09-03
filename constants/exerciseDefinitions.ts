@@ -3999,32 +3999,27 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     // falls back to the shoulder (Metric.combine picks whichever is present).
     // NOTHING here depends on the knee or ankle → leg movement can't stop a
     // rep counting; KEEP LEGS DOWN (below) is what flags it instead.
-    // METRIC CHANGED AGAIN (9/3) — was bestSide(average(lineVsVertical(hip→nose),
-    // lineVsVertical(hip→shoulder))). That is UNSIGNED: as the torso passes
-    // vertical and folds forward over the knees at the top of a real sit-up,
-    // the hip→nose angle from vertical goes back UP (0° at vertical → 40-70°
-    // folded forward), so it re-crosses repExitThreshold at PEAK CRUNCH and
-    // the rep counts "on the way up" instead of after lowering back down —
-    // reported 4+ times, unfixable with any threshold because a deep fold and
-    // a return-to-flat read the same number.
     //
-    // NEW: jointAngle(nose, pivot: hip, c: ankle) — the actual hip-flexion
-    // angle of a sit-up. Lying flat (knees bent, feet planted): hip→nose and
-    // hip→ankle point opposite ways along the floor → ~170-180°. Sitting
-    // upright: hip→nose swings vertical → ~90°. Folding chest-to-knees: closes
-    // further → ~45°. STRICTLY MONOTONIC — folding harder only closes it more,
-    // it can never wrap back up, so repExitThreshold is only reached by
-    // genuinely lowering back toward flat. nose = Vision's most reliable
-    // landmark; ankle = planted in a sit-up, so a feet-planted leg-drive
-    // cheat barely moves it (KEEP LEGS DOWN below still flags that separately
-    // off the knee angle). bestSide picks the clearer hip/ankle side.
+    // 9/3 — a jointAngle(nose,hip,ankle) swap was tried to kill the "counts a
+    // hair early on a hard fold" nitpick. It counted ZERO reps (ankle too
+    // poorly tracked lying down for a clean angle). REVERTED to this
+    // torso-angle metric, which the user has repeatedly confirmed "works
+    // great" for actually counting. The early-count nitpick stays — a working
+    // count matters far more, and it can't be fixed by a threshold anyway.
     repMetric: {
       type: 'bestSide',
-      left:  { type: 'jointAngle', a: 'nose', pivot: 'leftHip',  c: 'leftAnkle'  },
-      right: { type: 'jointAngle', a: 'nose', pivot: 'rightHip', c: 'rightAnkle' },
+      left: {
+        type:  'average',
+        left:  { type: 'lineVsVertical', from: 'leftHip', to: 'nose' },
+        right: { type: 'lineVsVertical', from: 'leftHip', to: 'leftShoulder' },
+      },
+      right: {
+        type:  'average',
+        left:  { type: 'lineVsVertical', from: 'rightHip', to: 'nose' },
+        right: { type: 'lineVsVertical', from: 'rightHip', to: 'rightShoulder' },
+      },
       // Reliability gate = the NOSE only (0.75-0.9 lying down). Gating on the
-      // hip or ankle made SETUP never pass. The angle math still uses all
-      // three points; this is only the "is it trackable" check.
+      // hip made SETUP never pass. The angle math still uses the hip.
       leftJoints:  ['nose'],
       rightJoints: ['nose'],
     },
@@ -4081,30 +4076,18 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     //    count over, and can't be fixed by a threshold anyway (lineVsVertical
     //    is unsigned, so a deep fold past vertical is indistinguishable from
     //    coming back toward flat).
-    // ─── PLACEHOLDERS for the NEW jointAngle(nose,hip,ankle) metric ─────────
-    // No verified exercise uses a nose-hip-ankle hip-flexion angle, so these
-    // are GEOMETRIC ESTIMATES, not measurements — do one clean set and send
-    // the [CALIB-SUGGEST] line so I can set the real numbers:
-    //  • topAngle 172 — lying flat, body nearly straight nose↔hip↔ankle.
-    //  • repEnterThreshold 135 — torso ~40° up off the floor = rep started.
-    //  • repExitThreshold 160 — back within ~12° of flat = rep COMPLETES.
-    //    A deep forward fold bottoms near ~45, so it can NEVER falsely reach
-    //    160 — the "counts on the way up" bug is structurally gone with this
-    //    metric.
-    //  • goodROMThreshold 90 — a full sit-up closes past 90; a half-rep that
-    //    stops short stays above it and gets GO HIGHER (does NOT gate the
-    //    count).
-    topAngle:            172,
-    repEnterThreshold:   135,
-    repExitThreshold:    160,
-    goodROMThreshold:    90,
+    //  • rom 25 — a full sit-up hits ~4; anything that stops short flags
+    //    GO HIGHER. phantomGuardFraction 0.10 keeps it from blocking a count.
+    // These are the values the user confirmed count reliably ("works great").
+    topAngle:            84,
+    repEnterThreshold:   45,
+    repExitThreshold:    78,
+    goodROMThreshold:    25,
     insufficientROMCue: 'GO HIGHER',
-    // Lowered 0.7 → 0.45: the settle anchor only needs to sit ~45% of the way
-    // from rom up to top (~127° on the new scale) before it locks "rest".
-    // 0.7 (~147°) waited so long that the opening rep was consumed to
-    // establish the anchor — the reported "first rep never counts". 0.45 lets
-    // it lock from a near-flat start immediately so rep 1 lands.
-    settleAnchorMinFraction: 0.45,
+    // The settle anchor must reach ~70% of the way from rom up to top (~66°,
+    // near lying flat) before it locks "rest" — stops the first rep locking
+    // "rest" onto a folded-up position when tracking starts mid-movement.
+    settleAnchorMinFraction: 0.7,
 
     // FORM CUES. Kept per explicit request, but both thresholds are LOOSE
     // PLACEHOLDERS set ABOVE the user's own observed clean-rep readings so
