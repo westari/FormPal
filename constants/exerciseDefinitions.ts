@@ -3999,23 +3999,32 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     // falls back to the shoulder (Metric.combine picks whichever is present).
     // NOTHING here depends on the knee or ankle → leg movement can't stop a
     // rep counting; KEEP LEGS DOWN (below) is what flags it instead.
+    // METRIC CHANGED AGAIN (9/3) — was bestSide(average(lineVsVertical(hip→nose),
+    // lineVsVertical(hip→shoulder))). That is UNSIGNED: as the torso passes
+    // vertical and folds forward over the knees at the top of a real sit-up,
+    // the hip→nose angle from vertical goes back UP (0° at vertical → 40-70°
+    // folded forward), so it re-crosses repExitThreshold at PEAK CRUNCH and
+    // the rep counts "on the way up" instead of after lowering back down —
+    // reported 4+ times, unfixable with any threshold because a deep fold and
+    // a return-to-flat read the same number.
+    //
+    // NEW: jointAngle(nose, pivot: hip, c: ankle) — the actual hip-flexion
+    // angle of a sit-up. Lying flat (knees bent, feet planted): hip→nose and
+    // hip→ankle point opposite ways along the floor → ~170-180°. Sitting
+    // upright: hip→nose swings vertical → ~90°. Folding chest-to-knees: closes
+    // further → ~45°. STRICTLY MONOTONIC — folding harder only closes it more,
+    // it can never wrap back up, so repExitThreshold is only reached by
+    // genuinely lowering back toward flat. nose = Vision's most reliable
+    // landmark; ankle = planted in a sit-up, so a feet-planted leg-drive
+    // cheat barely moves it (KEEP LEGS DOWN below still flags that separately
+    // off the knee angle). bestSide picks the clearer hip/ankle side.
     repMetric: {
       type: 'bestSide',
-      left: {
-        type:  'average',
-        left:  { type: 'lineVsVertical', from: 'leftHip', to: 'nose' },
-        right: { type: 'lineVsVertical', from: 'leftHip', to: 'leftShoulder' },
-      },
-      right: {
-        type:  'average',
-        left:  { type: 'lineVsVertical', from: 'rightHip', to: 'nose' },
-        right: { type: 'lineVsVertical', from: 'rightHip', to: 'rightShoulder' },
-      },
-      // Reliability-gate joint = the NOSE (Vision's most reliable landmark
-      // lying down, 0.75-0.9). The hip is only 0.15-0.5 folded up — gating on
-      // it made SETUP never pass ("ready gate never turns on, can't start").
-      // The angle math still uses the hip; this is just what "is it trackable"
-      // checks.
+      left:  { type: 'jointAngle', a: 'nose', pivot: 'leftHip',  c: 'leftAnkle'  },
+      right: { type: 'jointAngle', a: 'nose', pivot: 'rightHip', c: 'rightAnkle' },
+      // Reliability gate = the NOSE only (0.75-0.9 lying down). Gating on the
+      // hip or ankle made SETUP never pass. The angle math still uses all
+      // three points; this is only the "is it trackable" check.
       leftJoints:  ['nose'],
       rightJoints: ['nose'],
     },
@@ -4072,20 +4081,30 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     //    count over, and can't be fixed by a threshold anyway (lineVsVertical
     //    is unsigned, so a deep fold past vertical is indistinguishable from
     //    coming back toward flat).
-    //  • rom 25 — a full sit-up hits ~4; anything that stops short flags
-    //    GO HIGHER. Strict, per request. phantomGuardFraction 0.10 keeps it
-    //    from ever blocking the count.
-    topAngle:            84,
-    repEnterThreshold:   45,
-    repExitThreshold:    78,
-    goodROMThreshold:    25,
+    // ─── PLACEHOLDERS for the NEW jointAngle(nose,hip,ankle) metric ─────────
+    // No verified exercise uses a nose-hip-ankle hip-flexion angle, so these
+    // are GEOMETRIC ESTIMATES, not measurements — do one clean set and send
+    // the [CALIB-SUGGEST] line so I can set the real numbers:
+    //  • topAngle 172 — lying flat, body nearly straight nose↔hip↔ankle.
+    //  • repEnterThreshold 135 — torso ~40° up off the floor = rep started.
+    //  • repExitThreshold 160 — back within ~12° of flat = rep COMPLETES.
+    //    A deep forward fold bottoms near ~45, so it can NEVER falsely reach
+    //    160 — the "counts on the way up" bug is structurally gone with this
+    //    metric.
+    //  • goodROMThreshold 90 — a full sit-up closes past 90; a half-rep that
+    //    stops short stays above it and gets GO HIGHER (does NOT gate the
+    //    count).
+    topAngle:            172,
+    repEnterThreshold:   135,
+    repExitThreshold:    160,
+    goodROMThreshold:    90,
     insufficientROMCue: 'GO HIGHER',
-    // Stops the FIRST rep locking its "rest" onto the folded-up position
-    // (~4°) when tracking starts mid-movement — the settle anchor must sit at
-    // least 70% of the way from rom up to top (~66°, i.e. near lying flat)
-    // before it's trusted. Without this the opening rep read movement≈0 and
-    // was phantom-rejected, which looked "random".
-    settleAnchorMinFraction: 0.7,
+    // Lowered 0.7 → 0.45: the settle anchor only needs to sit ~45% of the way
+    // from rom up to top (~127° on the new scale) before it locks "rest".
+    // 0.7 (~147°) waited so long that the opening rep was consumed to
+    // establish the anchor — the reported "first rep never counts". 0.45 lets
+    // it lock from a near-flat start immediately so rep 1 lands.
+    settleAnchorMinFraction: 0.45,
 
     // FORM CUES. Kept per explicit request, but both thresholds are LOOSE
     // PLACEHOLDERS set ABOVE the user's own observed clean-rep readings so
@@ -4124,11 +4143,12 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
           right: { type: 'jointAngle', a: 'rightHip', pivot: 'rightKnee', c: 'rightAnkle' },
         },
         evaluateAt:       'throughoutMax',
-        // CALIBRATED from a 10-rep device log (9/1): clean sit-ups read
-        // 48-68; deliberate leg-assist reps read 80-112. 78 sits in the gap —
-        // fires on any real leg drive, ~10 units of margin above the clean
-        // ceiling. (Was 92, which the user reported "never fires".)
-        condition:        { type: 'greaterThan', value: 78 },
+        // 10-rep device log (9/1): clean sit-ups read 48-68; deliberate
+        // leg-assist reps read 80-112. Was 78 — user reports it fires on
+        // normal reps ("a little too strict"). Raised to 95: only a clear,
+        // deliberate leg drive (>95, i.e. knee actively straightening) trips
+        // it now; a clean rep with knees planted stays well under.
+        condition:        { type: 'greaterThan', value: 95 },
         // Priority 4 = wins over the ROM cue, so a leg-assisted rep reads
         // "KEEP LEGS DOWN", not "GO HIGHER" ("it's confused"). The rep metric
         // is now torso-angle (leg-immune), so a leg-drive rep counts with
