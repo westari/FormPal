@@ -4085,10 +4085,15 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     goodROMThreshold:    25,
     // Was 'GO HIGHER' — user: "idk why that's even a command." Plainer.
     insufficientROMCue: 'FULL RANGE',
-    // The settle anchor must reach ~70% of the way from rom up to top (~66°,
-    // near lying flat) before it locks "rest" — stops the first rep locking
-    // "rest" onto a folded-up position when tracking starts mid-movement.
-    settleAnchorMinFraction: 0.7,
+    // 0.7 → 0.55: the settle anchor locks "rest" once it sees ~55% of the way
+    // from rom up to top (~57°). Lower = it locks sooner, so it's less likely
+    // to fall through to "resync on the first real rep attempt" (which
+    // consumes that rep — the "first rep never counts" report). Still well
+    // above a folded-up position so a mid-crunch start can't anchor there.
+    // NOTE: the first-rep miss is ultimately a native ExerciseEngine
+    // behaviour (settle calibrating off rep 1) — this only reduces it;
+    // fully fixing it is an EAS build.
+    settleAnchorMinFraction: 0.55,
 
     // FORM CUES. Kept per explicit request, but both thresholds are LOOSE
     // PLACEHOLDERS set ABOVE the user's own observed clean-rep readings so
@@ -4120,23 +4125,25 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     formChecks: [
       {
         id:         'crunch_legs',
-        cue:        'KEEP LEGS DOWN',
+        cue:        'KEEP KNEES BENT',
         metric: {
           type:  'maximum',
           left:  { type: 'jointAngle', a: 'leftHip',  pivot: 'leftKnee',  c: 'leftAnkle'  },
           right: { type: 'jointAngle', a: 'rightHip', pivot: 'rightKnee', c: 'rightAnkle' },
         },
         evaluateAt:       'throughoutMax',
-        // DISABLED (9/3). This jointAngle(hip,knee,ankle) reading depends on
-        // the ankle, which Vision tracks badly on a planted, foreshortened
-        // foot — so it spikes past the threshold on CLEAN reps with legs
-        // still, and the user gets "KEEP LEGS DOWN" spammed for no reason.
-        // Never had a clean separation between clean and leg-drive reps
-        // (CLAUDE.md: drop a check whose signal is just noise). Off until a
-        // labelled log proves the two actually separate.
-        condition:        { type: 'greaterThan', value: 95 },
+        // RE-SCOPED (9/3): the fault the user actually wants caught is the
+        // legs going from BENT to STRAIGHT mid-rep (laying them out flat).
+        // That is a geometric near-certainty, not a noisy signal: a bent knee
+        // in a sit-up setup is ~80-110°, a straightened leg is ~165-180°.
+        // 140 sits well above any bent-knee reading and well below straight,
+        // so ankle noise (±20-30°) can't false-fire it the way 95 did, and
+        // 'throughoutMax' means it trips the moment the legs straighten at
+        // ANY point in the rep. Placeholder — 140 is from geometry (straight
+        // = 180); tighten from a labelled log if it still misfires.
+        condition:        { type: 'greaterThan', value: 140 },
         priority:         4,
-        enabled:          false,
+        enabled:          true,
         formCheckMinConf: 0.35,
       },
       {
