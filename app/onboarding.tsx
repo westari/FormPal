@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Platform, ScrollView,
-  Animated, ActivityIndicator, PanResponder, Image,
+  Animated, ActivityIndicator, PanResponder, Image, TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Asset } from 'expo-asset';
@@ -13,9 +13,6 @@ import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AppBackground from '../components/AppBackground';
 import PlanGrowthMoment from '../components/PlanGrowthMoment';
-import EffortResultsMoment from '../components/EffortResultsMoment';
-import FormMuscleMoment from '../components/FormMuscleMoment';
-import InjuryRiskMoment from '../components/InjuryRiskMoment';
 import { FONT, W, Col, Elev } from '../constants/theme';
 
 export const ONBOARDING_KEY = 'formpal_onboarding_complete';
@@ -28,49 +25,68 @@ export const ONBOARDING_KEY = 'formpal_onboarding_complete';
 // "30 streak" baked into the image itself (literal text pixels) — not
 // reusable as a generic icon, left out entirely.
 const ICON = {
-  heart:  require('../assets/icons/heart.webp'),
-  person: require('../assets/icons/person.webp'),
-  muscle: require('../assets/icons/muscle.webp'),
-  calm:   require('../assets/icons/calm.webp'),
-  days:   require('../assets/icons/days.webp'),
-  run:    require('../assets/icons/run.webp'),
-  gym:    require('../assets/icons/gym.webp'),
-  scale:  require('../assets/icons/scale.webp'),
-  camera: require('../assets/icons/camera.webp'),
-  arm:    require('../assets/icons/arm.webp'),
-  allGood:   require('../assets/icons/allgood.webp'),
-  hip:       require('../assets/icons/hip.webp'),
-  wrist:     require('../assets/icons/wrist.webp'),
-  neck:      require('../assets/icons/neck.webp'),
-  shoulder:  require('../assets/icons/shoulder.webp'),
-  knee:      require('../assets/icons/knee.webp'),
-  notSure:   require('../assets/icons/notsure.webp'),
-  fire:      require('../assets/icons/fire.webp'),
-  scared:    require('../assets/icons/scared.webp'),
-  noResults: require('../assets/icons/progressquestion.webp'),
-  date:      require('../assets/icons/date.webp'),
-  good:      require('../assets/icons/good.webp'),
-  bodyweight: require('../assets/icons/bodyweight.webp'),
-  bench:      require('../assets/icons/bench.webp'),
-  pullupBar:  require('../assets/icons/pullupbar.webp'),
-  kettlebell: require('../assets/icons/kettlebell.webp'),
-  bands:      require('../assets/icons/bands.webp'),
-  dumbbell:   require('../assets/icons/dumbell.webp'),
-  barbell:      require('../assets/icons/barbellandplates.webp'),
-  expertGym:    require('../assets/icons/gymexpert.webp'),
-  intermediateGym: require('../assets/icons/gymintermediate.webp'),
-  someExpGym:   require('../assets/icons/gymsomeexperience.webp'),
-  beginnerGym:  require('../assets/icons/gymbeginner.webp'),
-  home:         require('../assets/icons/home.webp'),
-  female:       require('../assets/icons/female.webp'),
-  male:         require('../assets/icons/male.webp'),
-  mixOfBoth:    require('../assets/icons/mixofboth.webp'),
-  back:         require('../assets/icons/back.webp'),
-  squatMachine:  require('../assets/icons/squatmachine.webp'),
-  backMachine:   require('../assets/icons/backmachine.webp'),
-  chestMachine:  require('../assets/icons/chestmachine.webp'),
-  legMachine:    require('../assets/icons/legmachine.webp'),
-  cableMachine:  require('../assets/icons/cablemachine.webp'),
+  heart: require('../assets/icons/heart.webp'), person: require('../assets/icons/person.webp'),
+  muscle: require('../assets/icons/muscle.webp'), calm: require('../assets/icons/calm.webp'),
+  days: require('../assets/icons/days.webp'), run: require('../assets/icons/run.webp'),
+  gym: require('../assets/icons/gym.webp'), scale: require('../assets/icons/scale.webp'),
+  camera: require('../assets/icons/camera.webp'), arm: require('../assets/icons/arm.webp'),
+  allGood: require('../assets/icons/allgood.webp'), hip: require('../assets/icons/hip.webp'),
+  wrist: require('../assets/icons/wrist.webp'), neck: require('../assets/icons/neck.webp'),
+  shoulder: require('../assets/icons/shoulder.webp'), knee: require('../assets/icons/knee.webp'),
+  notSure: require('../assets/icons/notsure.webp'), fire: require('../assets/icons/fire.webp'),
+  scared: require('../assets/icons/scared.webp'), noResults: require('../assets/icons/progressquestion.webp'),
+  date: require('../assets/icons/date.webp'), good: require('../assets/icons/good.webp'),
+  bodyweight: require('../assets/icons/bodyweight.webp'), bench: require('../assets/icons/bench.webp'),
+  pullupBar: require('../assets/icons/pullupbar.webp'), kettlebell: require('../assets/icons/kettlebell.webp'),
+  bands: require('../assets/icons/bands.webp'), dumbbell: require('../assets/icons/dumbell.webp'),
+  barbell: require('../assets/icons/barbellandplates.webp'), expertGym: require('../assets/icons/gymexpert.webp'),
+  intermediateGym: require('../assets/icons/gymintermediate.webp'), someExpGym: require('../assets/icons/gymsomeexperience.webp'),
+  beginnerGym: require('../assets/icons/gymbeginner.webp'), home: require('../assets/icons/home.webp'),
+  female: require('../assets/icons/female.webp'), male: require('../assets/icons/male.webp'),
+  mixOfBoth: require('../assets/icons/mixofboth.webp'), back: require('../assets/icons/back.webp'),
+  squatMachine: require('../assets/icons/squatmachine.webp'), backMachine: require('../assets/icons/backmachine.webp'),
+  chestMachine: require('../assets/icons/chestmachine.webp'), legMachine: require('../assets/icons/legmachine.webp'),
+  cableMachine: require('../assets/icons/cablemachine.webp'),
+  // trainDuration — one per option, ascending
+  justStarting: require('../assets/icons/juststarting.webp'), lessThan6mo: require('../assets/icons/6months.webp'),
+  sixTo12mo: require('../assets/icons/12months.webp'), oneToTwoYr: require('../assets/icons/1year.webp'),
+  twoToFiveYr: require('../assets/icons/2years.webp'), fiveToTenYr: require('../assets/icons/5years.webp'),
+  tenPlusYr: require('../assets/icons/10years.webp'),
+  // cardioTypes
+  running: require('../assets/icons/running.webp'), cycling: require('../assets/icons/cycling.webp'),
+  swimming: require('../assets/icons/swimming.webp'), rowing: require('../assets/icons/rowing.webp'),
+  hiit: require('../assets/icons/hiit.webp'), walking: require('../assets/icons/walking.webp'),
+  sports: require('../assets/icons/sports.webp'),
+  // startReason + successVision
+  moreMuscle: require('../assets/icons/moremuscle.webp'), trainProperly: require('../assets/icons/trainproperly.webp'),
+  getStronger: require('../assets/icons/getstronger.webp'), lookBetter: require('../assets/icons/lookbetter.webp'),
+  seeingResults: require('../assets/icons/seeingreusults.webp'), betterForm: require('../assets/icons/betterform.webp'),
+  backOnTrack: require('../assets/icons/backontrack.webp'), stayConsistentIcon: require('../assets/icons/stayconsistent.webp'),
+  shirtOff: require('../assets/icons/shirtoff.webp'), leanerIcon: require('../assets/icons/leaner.webp'),
+  // days 1-7
+  oneDay: require('../assets/icons/1day.webp'), twoDays: require('../assets/icons/2days.webp'),
+  threeDays: require('../assets/icons/3days.webp'), fourDays: require('../assets/icons/4days.webp'),
+  fiveDays: require('../assets/icons/5days.webp'), sixDays: require('../assets/icons/6days.webp'),
+  sevenDays: require('../assets/icons/7days.webp'),
+  // duration
+  fifteenMin: require('../assets/icons/15mins.webp'), thirtyMin: require('../assets/icons/30mins.webp'),
+  fortyFiveMin: require('../assets/icons/45mins.webp'), sixtyMin: require('../assets/icons/60mins.webp'),
+  seventyFiveMin: require('../assets/icons/75mins.webp'),
+  // trainTime
+  morning: require('../assets/icons/morning.webp'), afternoon: require('../assets/icons/afternoon.webp'),
+  night: require('../assets/icons/night.webp'),
+  // howHeard
+  socialMedia: require('../assets/icons/socialmedia.webp'), shareLink: require('../assets/icons/sharelink.webp'),
+  appStore: require('../assets/icons/appstore.webp'), search: require('../assets/icons/search.webp'),
+  other: require('../assets/icons/other.webp'),
+  // followPlan / formConfidence
+  yes: require('../assets/icons/yes.webp'), no: require('../assets/icons/no.webp'),
+  onAndOff: require('../assets/icons/onandoff.webp'),
+  // trainingLocation bubbles — transparent-bg variants for the gradient art
+  homeNoBg: require('../assets/icons/homenobg.webp'), gymNoBg: require('../assets/icons/gymnobg.webp'),
+  mixNoBg: require('../assets/icons/homeandgymnobg.webp'),
+  // notifications
+  notifOn: require('../assets/icons/notison.webp'), notifOff: require('../assets/icons/notisoff.webp'),
 } as const;
 
 // ── Light theme palette ────────────────────────────────────────────────────────
@@ -134,161 +150,215 @@ function OnboardingBackground({ children }: { children: React.ReactNode }) {
 // ── Step definitions ───────────────────────────────────────────────────────────
 
 interface OptionDef { label: string; sfSymbol?: string; sublabel?: string; customIcon?: any; }
+type StepOptions = OptionDef[] | ((a: Record<string, any>) => OptionDef[]);
 interface Step {
   id:             string;
   section:        string;
-  type:           'select' | 'multiselect' | 'wheel' | 'slider' | 'ruler' | 'interstitial';
+  type:           'select' | 'multiselect' | 'wheel' | 'slider' | 'ruler' | 'interstitial' | 'text';
   question:       string;
   subtitle?:      string;
-  options?:       OptionDef[];
+  placeholder?:   string;
+  options?:       StepOptions;
   wheelKind?:     'age' | 'height';
   showIf?:        (a: Record<string, any>) => boolean;
   clearAllOption?: string;
 }
 
+function resolveOptions(opts: StepOptions | undefined, a: Record<string, any>): OptionDef[] {
+  if (!opts) return [];
+  return typeof opts === 'function' ? opts(a) : opts;
+}
+
+// ── STEPS — every question from the onboarding-test FLOW, in the same
+// order, rendered in this screen's clean tappable style (no typewriter, no
+// conversational reply lines). fact1 is the `afterAboutYou` interstitial
+// (PlanGrowthMoment) sitting right after followPlan. fact2 was cut per
+// request; the old afterGoal/afterExperience/afterTraining interstitials
+// and the motivation / homeSplit questions are gone (not in FLOW).
 const STEPS: Step[] = [
-  // ── About You
+  { id: 'name', section: 'About You', type: 'text', question: 'What should I call you?', placeholder: 'Your name' },
+
   { id: 'age',    section: 'About You', type: 'wheel',  wheelKind: 'age',    question: 'How old are you?' },
   { id: 'height', section: 'About You', type: 'wheel',  wheelKind: 'height', question: 'How tall are you?' },
-  // Was a plain number TextInput — now the tick-mark ruler (see
-  // WeightRulerSlider) directly on this same question, not a separate page.
   { id: 'weight', section: 'About You', type: 'ruler',  question: 'What do you weigh?' },
   { id: 'sex', section: 'About You', type: 'select', question: "What's your sex?", options: [
     { label: 'Male',   sfSymbol: 'person.fill', customIcon: ICON.male   },
     { label: 'Female', sfSymbol: 'person.fill', customIcon: ICON.female },
   ]},
 
-  // Section-transition interstitial — no input, just a fixed sell-moment
-  // screen. See the 'interstitial' render branch below for which
-  // components/ file backs each id.
-  { id: 'afterAboutYou', section: 'About You', type: 'interstitial', question: '' },
-
-  // ── Your Goal (short, distinct options)
-  // customIcon (from assets/icons, see ICON above) takes priority over
-  // sfSymbol in the option renderer below — sfSymbol stays as the fallback.
-  { id: 'goal', section: 'Your Goal', type: 'multiselect', question: 'What are your goals?', options: [
-    { label: 'Build muscle',    sfSymbol: 'dumbbell.fill', customIcon: ICON.muscle },
-    { label: 'Lose weight',     sfSymbol: 'flame.fill',    customIcon: ICON.scale  },
-    { label: 'Get stronger',    sfSymbol: 'bolt.fill',     customIcon: ICON.arm    },
-    { label: 'Improve form',    sfSymbol: 'camera.fill',   customIcon: ICON.camera },
-    { label: 'Stay consistent', sfSymbol: 'repeat',        customIcon: ICON.days   },
-  ]},
-  { id: 'motivation', section: 'Your Goal', type: 'multiselect', question: 'What draws you to fitness?', options: [
-    { label: 'Feel healthier',       sfSymbol: 'heart.fill', customIcon: ICON.heart  },
-    { label: 'Look & feel confident', sfSymbol: 'star.fill', customIcon: ICON.person },
-    { label: 'Get strong',           sfSymbol: 'bolt.fill',  customIcon: ICON.gym    },
-    { label: 'Reduce stress',        sfSymbol: 'leaf.fill',  customIcon: ICON.calm   },
-    { label: 'Build a habit',        sfSymbol: 'repeat',     customIcon: ICON.days   },
-    { label: 'Sports & performance', sfSymbol: 'figure.run', customIcon: ICON.run    },
+  { id: 'trainDuration', section: 'Your Training', type: 'select', question: 'How long have you actually been training, in months or years?', options: [
+    { label: 'Just starting', sfSymbol: 'sparkles', customIcon: ICON.justStarting },
+    { label: '1-6 months', sfSymbol: 'clock.fill', customIcon: ICON.lessThan6mo },
+    { label: '6-12 months', sfSymbol: 'clock.fill', customIcon: ICON.sixTo12mo },
+    { label: '1-2 years', sfSymbol: 'calendar', customIcon: ICON.oneToTwoYr },
+    { label: '2-5 years', sfSymbol: 'calendar', customIcon: ICON.twoToFiveYr },
+    { label: '5-10 years', sfSymbol: 'calendar', customIcon: ICON.fiveToTenYr },
+    { label: '10+ years', sfSymbol: 'calendar', customIcon: ICON.tenPlusYr },
   ]},
 
-  { id: 'afterGoal', section: 'Your Goal', type: 'interstitial', question: '' },
-
-  // ── Your Experience (short main label + tiny sublabel)
-  { id: 'experience', section: 'Your Experience', type: 'select', question: 'Your experience level?', options: [
-    { label: 'Beginner',        sublabel: 'Never really worked out',   sfSymbol: '1.circle.fill', customIcon: ICON.beginnerGym     },
-    { label: 'Some experience', sublabel: 'Tried it, not consistent',  sfSymbol: '2.circle.fill', customIcon: ICON.someExpGym      },
-    { label: 'Intermediate',    sublabel: 'Train semi-regularly',      sfSymbol: '3.circle.fill', customIcon: ICON.intermediateGym },
-    { label: 'Advanced',        sublabel: 'Train consistently',        sfSymbol: '4.circle.fill', customIcon: ICON.expertGym       },
+  { id: 'startReason', section: 'Your Training', type: 'select', question: 'What made you decide to start FormPal?', options: [
+    { label: 'Build muscle', sfSymbol: 'dumbbell.fill', customIcon: ICON.moreMuscle },
+    { label: 'Look better, feel confident', sfSymbol: 'star.fill', customIcon: ICON.lookBetter },
+    { label: 'Learn to train properly', sfSymbol: 'camera.fill', customIcon: ICON.trainProperly },
+    { label: 'Get back on track', sfSymbol: 'arrow.triangle.2.circlepath', customIcon: ICON.backOnTrack },
+    { label: 'Stay consistent', sfSymbol: 'repeat', customIcon: ICON.stayConsistentIcon },
   ]},
-  {
-    id: 'injuries', section: 'Your Experience', type: 'multiselect',
-    question: 'Anything to train around?',
-    subtitle: "We'll keep your plan safe and avoid aggravating these.",
-    clearAllOption: "None — I'm good",
-    options: [
-      { label: 'Knees',            sfSymbol: 'figure.walk',        customIcon: ICON.knee     },
-      { label: 'Shoulders',        sfSymbol: 'figure.arms.open',   customIcon: ICON.shoulder },
-      { label: 'Lower back',       sfSymbol: 'figure.cooldown', customIcon: ICON.back        },
-      { label: 'Wrists',           sfSymbol: 'hand.raised.fill',   customIcon: ICON.wrist    },
-      { label: 'Neck',             sfSymbol: 'figure.stand',       customIcon: ICON.neck     },
-      { label: 'Hips',             sfSymbol: 'figure.run',         customIcon: ICON.hip      },
-      { label: "None — I'm good",  sfSymbol: 'checkmark.circle.fill', customIcon: ICON.good  },
-    ],
-  },
-  // TODO: plan generator should avoid/modify exercises based on injuries[]
-  { id: 'struggle', section: 'Your Experience', type: 'multiselect',
-    question: 'Anything getting in your way?',
+
+  { id: 'experience', section: 'Your Training', type: 'select', question: 'How much do you actually know about proper training and form?', options: [
+    { label: 'Beginner', sfSymbol: '1.circle.fill', customIcon: ICON.beginnerGym },
+    { label: 'Some experience', sfSymbol: '2.circle.fill', customIcon: ICON.someExpGym },
+    { label: 'Intermediate', sfSymbol: '3.circle.fill', customIcon: ICON.intermediateGym },
+    { label: 'Advanced', sfSymbol: '4.circle.fill', customIcon: ICON.expertGym },
+  ]},
+
+  { id: 'followPlan', section: 'Your Training', type: 'select', question: 'Do you currently follow a structured training plan?', options: [
+    { label: 'Yes', sfSymbol: 'checkmark.circle.fill', customIcon: ICON.yes },
+    { label: 'No — I wing it', sfSymbol: 'xmark.circle.fill', customIcon: ICON.no },
+    { label: 'On and off', sfSymbol: 'arrow.triangle.2.circlepath', customIcon: ICON.onAndOff },
+  ]},
+
+  // fact1 — the structured-plan stat (PlanGrowthMoment). See the
+  // 'interstitial' render branch.
+  { id: 'afterAboutYou', section: 'Your Training', type: 'interstitial', question: '' },
+
+  { id: 'struggle', section: 'Your Goal', type: 'multiselect', question: "What's been holding your training back?",
     clearAllOption: 'Nothing — just ready to start',
+    showIf: a => a.experience !== 'Beginner',
     options: [
-      { label: 'Not sure what to do',          sfSymbol: 'questionmark.circle.fill', customIcon: ICON.notSure   },
-      { label: 'Staying consistent',           sfSymbol: 'repeat',                   customIcon: ICON.days      },
-      { label: 'Gym anxiety',                  sfSymbol: 'shield.fill',              customIcon: ICON.scared    },
-      { label: 'Not seeing results',           sfSymbol: 'minus.circle.fill',        customIcon: ICON.noResults },
-      { label: 'Finding time',                 sfSymbol: 'clock.fill',               customIcon: ICON.date      },
-      { label: 'Nothing — just ready to start', sfSymbol: 'checkmark.circle.fill',   customIcon: ICON.fire      },
+      { label: 'Not seeing results', sfSymbol: 'minus.circle.fill', customIcon: ICON.noResults },
+      { label: "Not sure if I'm training right", sfSymbol: 'questionmark.circle.fill', customIcon: ICON.notSure },
+      { label: 'Staying consistent', sfSymbol: 'repeat', customIcon: ICON.days },
+      { label: 'Losing motivation', sfSymbol: 'flame.fill', customIcon: ICON.scared },
+      { label: 'Injuries or pain', sfSymbol: 'bandage.fill', customIcon: ICON.wrist },
+      { label: 'Nothing — just ready to start', sfSymbol: 'checkmark.circle.fill', customIcon: ICON.good },
+    ],
+  },
+  { id: 'frustration', section: 'Your Goal', type: 'select', question: 'What frustrates you most about your training?',
+    showIf: a => a.experience !== 'Beginner',
+    options: [
+      { label: 'Not seeing results', sfSymbol: 'minus.circle.fill', customIcon: ICON.noResults },
+      { label: "Don't know if I'm doing it right", sfSymbol: 'questionmark.circle.fill', customIcon: ICON.notSure },
+      { label: 'Staying consistent', sfSymbol: 'repeat', customIcon: ICON.days },
+      { label: 'Nothing really', sfSymbol: 'checkmark.circle.fill', customIcon: ICON.good },
+    ],
+  },
+  { id: 'formConfidence', section: 'Your Goal', type: 'select', question: 'Do you actually know if your form is right?', options: [
+    { label: 'Yes', sfSymbol: 'checkmark.seal.fill', customIcon: ICON.yes },
+    { label: 'Not sure', sfSymbol: 'questionmark.circle.fill', customIcon: ICON.notSure },
+    { label: 'No idea', sfSymbol: 'xmark.circle.fill', customIcon: ICON.no },
+  ]},
+
+  { id: 'goal', section: 'Your Goal', type: 'multiselect', question: 'What are your goals?', options: [
+    { label: 'Build muscle & strength', sfSymbol: 'dumbbell.fill', customIcon: ICON.muscle },
+    { label: 'Lose weight', sfSymbol: 'flame.fill', customIcon: ICON.scale },
+    { label: 'Improve form', sfSymbol: 'camera.fill', customIcon: ICON.camera },
+    { label: 'Stay consistent', sfSymbol: 'repeat', customIcon: ICON.days },
+    { label: 'General fitness', sfSymbol: 'heart.fill', customIcon: ICON.heart },
+  ]},
+
+  { id: 'injuries', section: 'Your Body', type: 'multiselect', question: 'Any injuries or areas that hurt?',
+    clearAllOption: 'No injuries — all clear',
+    options: [
+      { label: 'Knees', sfSymbol: 'figure.walk', customIcon: ICON.knee },
+      { label: 'Shoulders', sfSymbol: 'figure.arms.open', customIcon: ICON.shoulder },
+      { label: 'Lower back', sfSymbol: 'figure.cooldown', customIcon: ICON.back },
+      { label: 'Wrists', sfSymbol: 'hand.raised.fill', customIcon: ICON.wrist },
+      { label: 'Neck', sfSymbol: 'figure.stand', customIcon: ICON.neck },
+      { label: 'Hips', sfSymbol: 'figure.run', customIcon: ICON.hip },
+      { label: 'No injuries — all clear', sfSymbol: 'checkmark.circle.fill', customIcon: ICON.good },
     ],
   },
 
-  { id: 'afterExperience', section: 'Your Experience', type: 'interstitial', question: '' },
-
-  // ── Your Training
+  // Renders as a plain 3-way select for now — the gradient bubbles land in
+  // the next commit.
   { id: 'trainingLocation', section: 'Your Training', type: 'select', question: 'Where do you train?', options: [
-    { label: 'Home',       sfSymbol: 'house.fill', customIcon: ICON.home                    },
-    { label: 'Gym',        sfSymbol: 'figure.strengthtraining.traditional', customIcon: ICON.gym },
-    { label: 'Mix of both', sfSymbol: 'shuffle', customIcon: ICON.mixOfBoth                 },
+    { label: 'Home', sfSymbol: 'house.fill', customIcon: ICON.home },
+    { label: 'Gym', sfSymbol: 'figure.strengthtraining.traditional', customIcon: ICON.gym },
+    { label: 'Mix of both', sfSymbol: 'shuffle', customIcon: ICON.mixOfBoth },
   ]},
-  {
-    id: 'homeSplit', section: 'Your Training', type: 'slider',
-    question: 'How do you split your training?',
-    showIf: (a) => a.trainingLocation === 'Mix of both',
-  },
-  {
-    id: 'homeEquipment', section: 'Your Training', type: 'multiselect',
-    question: 'Equipment you have at home?',
-    showIf: (a) => a.trainingLocation === 'Home' || a.trainingLocation === 'Mix of both',
+  { id: 'homeEquipment', section: 'Your Training', type: 'multiselect', question: 'Equipment you have at home?',
+    showIf: a => a.trainingLocation === 'Home' || a.trainingLocation === 'Mix of both',
     clearAllOption: 'Nothing — bodyweight only',
     options: [
-      { label: 'Dumbbells',              sfSymbol: 'dumbbell.fill',                      customIcon: ICON.dumbbell   },
-      { label: 'Resistance bands',       sfSymbol: 'figure.flexibility',                 customIcon: ICON.bands      },
-      { label: 'Kettlebells',            sfSymbol: 'figure.strengthtraining.functional', customIcon: ICON.kettlebell },
-      { label: 'Pull-up bar',            sfSymbol: 'figure.gymnastics',                  customIcon: ICON.pullupBar  },
-      { label: 'Bench',                  sfSymbol: 'rectangle.fill',                     customIcon: ICON.bench      },
-      { label: 'Barbell & plates',       sfSymbol: 'figure.strengthtraining.traditional', customIcon: ICON.barbell },
+      { label: 'Dumbbells', sfSymbol: 'dumbbell.fill', customIcon: ICON.dumbbell },
+      { label: 'Resistance bands', sfSymbol: 'figure.flexibility', customIcon: ICON.bands },
+      { label: 'Kettlebells', sfSymbol: 'figure.strengthtraining.functional', customIcon: ICON.kettlebell },
+      { label: 'Pull-up bar', sfSymbol: 'figure.gymnastics', customIcon: ICON.pullupBar },
+      { label: 'Bench', sfSymbol: 'rectangle.fill', customIcon: ICON.bench },
+      { label: 'Barbell & plates', sfSymbol: 'figure.strengthtraining.traditional', customIcon: ICON.barbell },
       { label: 'Nothing — bodyweight only', sfSymbol: 'figure.walk', customIcon: ICON.bodyweight },
     ],
   },
-  {
-    id: 'gymMissingEquipment', section: 'Your Training', type: 'multiselect',
-    question: "Anything your gym is missing?",
-    showIf: (a) => a.trainingLocation === 'Gym' || a.trainingLocation === 'Mix of both',
+  { id: 'gymMissingEquipment', section: 'Your Training', type: 'multiselect', question: 'Anything your gym is missing?',
+    showIf: a => a.trainingLocation === 'Gym' || a.trainingLocation === 'Mix of both',
     clearAllOption: 'It has everything',
     options: [
-      { label: 'Free weights',       sfSymbol: 'dumbbell.fill', customIcon: ICON.dumbbell },
-      { label: 'Cable machines',     sfSymbol: 'figure.strengthtraining.functional', customIcon: ICON.cableMachine },
-      { label: 'Leg machines',       sfSymbol: 'figure.walk', customIcon: ICON.legMachine            },
+      { label: 'Free weights', sfSymbol: 'dumbbell.fill', customIcon: ICON.dumbbell },
+      { label: 'Cable machines', sfSymbol: 'figure.strengthtraining.functional', customIcon: ICON.cableMachine },
+      { label: 'Leg machines', sfSymbol: 'figure.walk', customIcon: ICON.legMachine },
       { label: 'Chest / press machines', sfSymbol: 'figure.strengthtraining.traditional', customIcon: ICON.chestMachine },
-      // Was figure.gymnastics (bars/rings, not a rowing machine) — figure.rower
-      // is the literal rowing-machine glyph.
-      { label: 'Back / row machines', sfSymbol: 'figure.rower', customIcon: ICON.backMachine          },
-      { label: 'Squat rack',         sfSymbol: 'figure.cross.training', customIcon: ICON.squatMachine },
-      { label: 'It has everything',  sfSymbol: 'checkmark.circle.fill', customIcon: ICON.allGood },
+      { label: 'Back / row machines', sfSymbol: 'figure.rower', customIcon: ICON.backMachine },
+      { label: 'Squat rack', sfSymbol: 'figure.cross.training', customIcon: ICON.squatMachine },
+      { label: 'It has everything', sfSymbol: 'checkmark.circle.fill', customIcon: ICON.allGood },
     ],
   },
-  // TODO: pass trainingLocation, homeSplit, homeEquipment[], gymMissingEquipment[] to planGenerator
-  { id: 'days', section: 'Your Training', type: 'select', question: 'How many days a week?', options: [
-    { label: '1 day',  sfSymbol: '1.circle.fill' },
-    { label: '2 days', sfSymbol: '2.circle.fill' },
-    { label: '3 days', sfSymbol: '3.circle.fill' },
-    { label: '4 days', sfSymbol: '4.circle.fill' },
-    { label: '5 days', sfSymbol: '5.circle.fill' },
-    { label: '6 days', sfSymbol: '6.circle.fill' },
-    { label: '7 days', sfSymbol: '7.circle.fill' },
-  ]},
+  { id: 'days', section: 'Your Training', type: 'select', question: 'How many days a week do you train?', options: (a) => {
+      const advanced = a.experience === 'Intermediate' || a.experience === 'Advanced';
+      const max = advanced ? 7 : 6;
+      const DAY_ICONS = [ICON.oneDay, ICON.twoDays, ICON.threeDays, ICON.fourDays, ICON.fiveDays, ICON.sixDays, ICON.sevenDays];
+      return Array.from({ length: max }, (_, i) => ({ label: `${i + 1} day${i === 0 ? '' : 's'}`, sfSymbol: `${i + 1}.circle.fill`, customIcon: DAY_ICONS[i] }));
+    },
+  },
   { id: 'duration', section: 'Your Training', type: 'select', question: 'How long per session?', options: [
-    { label: '15-20 min', sfSymbol: 'clock.fill' },
-    { label: '30 min',    sfSymbol: 'clock.fill' },
-    { label: '45 min',    sfSymbol: 'clock.fill' },
-    { label: '60 min',    sfSymbol: 'clock.fill' },
-    { label: '75+ min',   sfSymbol: 'clock.fill' },
+    { label: '15-20 min', sfSymbol: 'clock.fill', customIcon: ICON.fifteenMin },
+    { label: '30 min', sfSymbol: 'clock.fill', customIcon: ICON.thirtyMin },
+    { label: '45 min', sfSymbol: 'clock.fill', customIcon: ICON.fortyFiveMin },
+    { label: '60 min', sfSymbol: 'clock.fill', customIcon: ICON.sixtyMin },
+    { label: '75+ min', sfSymbol: 'clock.fill', customIcon: ICON.seventyFiveMin },
   ]},
 
-  { id: 'afterTraining', section: 'Your Training', type: 'interstitial', question: '' },
-
-  // ── Reminders
-  { id: 'notifications', section: 'Reminders', type: 'select', question: 'Reminders on training days?', options: [
-    { label: 'Yes please', sfSymbol: 'bell.fill'       },
-    { label: 'No thanks',  sfSymbol: 'bell.slash.fill' },
+  { id: 'cardio', section: 'Your Training', type: 'select', question: 'Do you do any cardio or other training?', options: [
+    { label: 'Yes, regularly', sfSymbol: 'figure.run', customIcon: ICON.running },
+    { label: 'Sometimes', sfSymbol: 'figure.walk', customIcon: ICON.walking },
+    { label: 'No, just lifting', sfSymbol: 'dumbbell.fill', customIcon: ICON.dumbbell },
+    { label: 'I want to add some', sfSymbol: 'plus.circle.fill', customIcon: ICON.fire },
+  ]},
+  { id: 'cardioTypes', section: 'Your Training', type: 'multiselect', question: 'What kind?',
+    showIf: a => a.cardio === 'Yes, regularly' || a.cardio === 'Sometimes',
+    options: [
+      { label: 'Running', sfSymbol: 'figure.run', customIcon: ICON.running },
+      { label: 'Cycling', sfSymbol: 'bicycle', customIcon: ICON.cycling },
+      { label: 'Swimming', sfSymbol: 'figure.pool.swim', customIcon: ICON.swimming },
+      { label: 'Rowing', sfSymbol: 'figure.rower', customIcon: ICON.rowing },
+      { label: 'HIIT', sfSymbol: 'bolt.fill', customIcon: ICON.hiit },
+      { label: 'Walking', sfSymbol: 'figure.walk', customIcon: ICON.walking },
+      { label: 'Sports', sfSymbol: 'sportscourt.fill', customIcon: ICON.sports },
+    ],
+  },
+  { id: 'trainTime', section: 'Your Training', type: 'select', question: 'What time of day do you usually train?', options: [
+    { label: 'Morning', sfSymbol: 'sunrise.fill', customIcon: ICON.morning },
+    { label: 'Afternoon', sfSymbol: 'sun.max.fill', customIcon: ICON.afternoon },
+    { label: 'Evening', sfSymbol: 'moon.stars.fill', customIcon: ICON.night },
+    { label: 'Varies', sfSymbol: 'shuffle', customIcon: ICON.onAndOff },
+  ]},
+  { id: 'successVision', section: 'Wrap up', type: 'select', question: 'What does success look like in 6 months?', options: [
+    { label: 'Visibly more muscle', sfSymbol: 'dumbbell.fill', customIcon: ICON.moreMuscle },
+    { label: 'Noticeably stronger lifts', sfSymbol: 'bolt.fill', customIcon: ICON.getStronger },
+    { label: 'Leaner and more defined', sfSymbol: 'flame.fill', customIcon: ICON.leanerIcon },
+    { label: 'Confident with my shirt off', sfSymbol: 'star.fill', customIcon: ICON.shirtOff },
+    { label: 'Finally seeing results', sfSymbol: 'checkmark.circle.fill', customIcon: ICON.seeingResults },
+    { label: 'Knowing my form is right', sfSymbol: 'camera.fill', customIcon: ICON.betterForm },
+  ]},
+  { id: 'howHeard', section: 'Wrap up', type: 'select', question: 'How did you hear about us?', options: [
+    { label: 'Instagram / TikTok', sfSymbol: 'play.rectangle.fill', customIcon: ICON.socialMedia },
+    { label: 'Friend or referral', sfSymbol: 'person.2.fill', customIcon: ICON.shareLink },
+    { label: 'App Store search', sfSymbol: 'magnifyingglass', customIcon: ICON.appStore },
+    { label: 'Google / web search', sfSymbol: 'globe', customIcon: ICON.search },
+    { label: 'Other', sfSymbol: 'ellipsis.circle.fill', customIcon: ICON.other },
+  ]},
+  { id: 'notifications', section: 'Wrap up', type: 'select', question: 'Reminders on training days?', options: [
+    { label: 'Yes please', sfSymbol: 'bell.fill', customIcon: ICON.notifOn },
+    { label: 'No thanks', sfSymbol: 'bell.slash.fill', customIcon: ICON.notifOff },
   ]},
 ];
 
@@ -1117,28 +1187,44 @@ export default function OnboardingScreen() {
       );
     }
 
-    // Interstitial — no input, just a beat between sections that reflects
-    // the answers just given back at the user (see the recap functions
-    // above STEPS, and this file's own note on why no fabricated stats).
+    // Text — free-text input (the name step). Continue enabled once there's
+    // a non-blank value; the trimmed string is stored as the answer.
+    if (st.type === 'text') {
+      const raw = typeof answers[st.id] === 'string' ? (answers[st.id] as string) : '';
+      const ready = raw.trim().length > 0;
+      return (
+        <OnboardingBackground>
+          <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
+            {header}
+            <View style={{ paddingHorizontal: 24, paddingTop: 20, flex: 1 }}>
+              <Text style={s.qq}>{st.question}</Text>
+              <TextInput
+                value={raw}
+                onChangeText={(t) => setAnswers({ ...answers, [st.id]: t })}
+                placeholder={st.placeholder}
+                placeholderTextColor={L.textDim}
+                autoFocus
+                autoCapitalize="words"
+                returnKeyType="done"
+                onSubmitEditing={() => { if (ready) advance({ ...answers, [st.id]: raw.trim() }); }}
+                style={s.textInput}
+              />
+            </View>
+            <View style={s.bn}>
+              <TouchableOpacity style={[s.cb, !ready && s.cbDisabled]} disabled={!ready} onPress={() => advance({ ...answers, [st.id]: raw.trim() })} activeOpacity={0.85}>
+                <Text style={[s.ct, !ready && s.ctDisabled]}>Continue</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </OnboardingBackground>
+      );
+    }
+
+    // Interstitial — the one persuasion beat still in the flow: fact1, the
+    // structured-plan stat (PlanGrowthMoment), sitting right after
+    // followPlan. Takes the same shared header + CTA as every other step.
     if (st.type === 'interstitial') {
-      // Each of the 4 rebuilt interstitials owns its own full-screen layout
-      // (see their individual files in components/) but takes the SAME
-      // shared header (back button + progress bar) and CTA behavior every
-      // other onboarding step uses, so navigation and progress stay
-      // consistent even though the content is bespoke per screen.
-      const Content =
-        st.id === 'afterAboutYou'   ? PlanGrowthMoment   :
-        st.id === 'afterGoal'       ? EffortResultsMoment :
-        st.id === 'afterExperience' ? FormMuscleMoment    :
-        InjuryRiskMoment; // afterTraining
-      const content = <Content header={header} insets={insets} onContinue={() => advance(answers)} />;
-      // The photo-driven screens (FormMuscleMoment, InjuryRiskMoment) sit on
-      // a plain white page, not AppBackground's colorful blob gradient —
-      // the blobs read as clutter behind a real photo. The other two keep
-      // the blob background the rest of onboarding uses.
-      if (st.id === 'afterExperience' || st.id === 'afterTraining') {
-        return <View style={{ flex: 1, backgroundColor: L.bg }}>{content}</View>;
-      }
+      const content = <PlanGrowthMoment header={header} insets={insets} onContinue={() => advance(answers)} />;
       return <OnboardingBackground>{content}</OnboardingBackground>;
     }
 
@@ -1162,7 +1248,7 @@ export default function OnboardingScreen() {
             <Animated.View style={{ opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
               <Text style={s.qq}>{st.question}</Text>
               {st.subtitle && <Text style={s.qqSub}>{st.subtitle}</Text>}
-              {(st.options || []).map((o, i) => {
+              {resolveOptions(st.options, answers).map((o, i) => {
                 const sel = isSel(o.label);
                 const sym = o.sfSymbol || 'person.fill';
                 return (
@@ -1336,6 +1422,7 @@ const s = StyleSheet.create({
   // Question
   qq:     { fontFamily: FONT.display, fontSize: 30, color: L.text, lineHeight: 38, marginBottom: 20, letterSpacing: -0.6 },
   qqSub:  { fontSize: 14, color: L.textSub, lineHeight: 21, marginTop: -12, marginBottom: 20 },
+  textInput: { backgroundColor: L.card, borderRadius: 16, borderWidth: 1, borderColor: L.border, paddingHorizontal: 18, paddingVertical: 16, fontSize: 18, color: L.text, ...({ boxShadow: Elev.low.shadow } as any) },
 
   // Options
   opt:        { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: L.card, borderRadius: 16, borderWidth: 1, borderColor: L.border, paddingHorizontal: 16, paddingVertical: 14, marginBottom: 10, ...({ boxShadow: Elev.low.shadow } as any) },
