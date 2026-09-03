@@ -688,6 +688,11 @@ export default function FormCheckScreen() {
       setStats(e);
       setReps(e.reps);
       setGoodReps(e.goodReps);
+      // Re-poll the diagnostic on this ~1/sec tick too — it keeps firing
+      // even when the pose is lost and the debug-log stream goes silent, so
+      // a dead stream ("can't see you") still surfaces a command.
+      const d = repDiagRef.current.message();
+      setRepDiag(prev => (prev === d ? prev : d));
     });
     return () => { repSub.remove(); dbgSub.remove(); };
   }, [phase]);

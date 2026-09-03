@@ -6,12 +6,12 @@
  * AREN'T landing, works out the likely reason and returns one short
  * on-screen instruction naming what the camera needs to see.
  *
- * This is the link the user asked for: the guidance command reads the same
- * signal the rep counter does, so a silent "0 reps" turns into "here's what
- * to fix" instead of nothing — and once counting starts it goes quiet.
+ * `message()` re-evaluates against the wall clock on every call, so callers
+ * should poll it on a timer too (not only on new log lines) — otherwise a
+ * lost pose that stops the log stream leaves a stale message on screen.
  *
  * Reload-only — it consumes lines native already emits ([METRIC], [REP],
- * [SETTLE*], [SETUP-TRACE], rejection lines).
+ * [SETTLE*], rejection lines).
  */
 
 export interface RepDiagnostic {
@@ -24,10 +24,12 @@ export interface RepDiagnostic {
 const GRACE_SEC       = 4;   // don't nag before tracking has had a fair shot
 const STALE_REP_SEC   = 10;  // reps were counting, then stopped for this long
 const NUDGE_AFTER_SEC = 5;   // counting has never started — speak up by now
+const STREAM_DEAD_SEC = 2.5; // [METRIC] lines were flowing, then stopped = no pose
 
 export function createRepDiagnostic(): RepDiagnostic {
   let startedAt       = 0;
   let lastRepAt       = 0;
+  let lastMetricAt    = 0;
   let repCount        = 0;
   let metricFrames    = 0;
   let downTransitions = 0;   // metric crossed into a rep (state -> down/inRep)
@@ -44,6 +46,7 @@ export function createRepDiagnostic(): RepDiagnostic {
   function feed(line: string): void {
     if (line.startsWith('[METRIC]')) {
       if (!startedAt) startedAt = now();
+      lastMetricAt = now();
       metricFrames++;
       const st = line.match(/state=(\w+)/)?.[1] ?? '';
       if ((st === 'down' || st === 'inRep') && lastState !== st) downTransitions++;
@@ -68,39 +71,42 @@ export function createRepDiagnostic(): RepDiagnostic {
 
   function recompute(): void {
     if (!startedAt) { msg = null; return; }
-    const elapsed  = (now() - startedAt) / 1000;
-    const sinceRep = lastRepAt ? (now() - lastRepAt) / 1000 : elapsed;
+    const elapsed    = (now() - startedAt) / 1000;
+    const sinceRep   = lastRepAt ? (now() - lastRepAt) / 1000 : elapsed;
+    const streamDead = lastMetricAt > 0 && (now() - lastMetricAt) / 1000 > STREAM_DEAD_SEC;
 
-    // Never nag a set that's working: something has counted recently.
-    if (repCount > 0 && sinceRep < STALE_REP_SEC) { msg = null; return; }
     if (elapsed < GRACE_SEC) { msg = null; return; }
 
+    // The pose is GONE — the engine stopped producing readings. This wins
+    // over everything: no point coaching form when the camera can't see you.
+    if (streamDead) { msg = 'Point the camera at your body'; return; }
+
+    // A set that's actively working — don't nag.
+    if (repCount > 0 && sinceRep < STALE_REP_SEC) { msg = null; return; }
+
     // Short, plain, and about the CAMERA — the usual reason reps don't count
-    // is framing, not the user's form. Most specific cause first, ≤4 words.
-    if (noPersonHits >= 2) {
-      // Tracking keeps dropping mid-rep — the top half is leaving the frame.
-      msg = 'Angle the phone up';
+    // is framing, not the user's form.
+    if (noPersonHits >= 2 || (downTransitions >= 2 && repCount === 0)) {
+      msg = 'Fit your whole body in frame';
     } else if (unreliable >= 2) {
       msg = 'Move farther back';
     } else if (!settleActive && settleWaiting >= 3) {
       msg = 'Lie flat, hold still';
-    } else if (downTransitions >= 2 && repCount === 0) {
-      msg = 'Keep your head in frame';
     } else if (phantom >= 2) {
       msg = 'Full range each rep';
     } else if (repCount === 0 && elapsed > NUDGE_AFTER_SEC) {
-      msg = 'Adjust the camera angle';
-    } else if (repCount > 0 && sinceRep >= STALE_REP_SEC) {
-      msg = 'Keep going, steady reps';
+      msg = metricFrames > 10 ? 'Adjust the camera angle' : 'Fit your whole body in frame';
     } else {
+      // Reps stalled but the pose is fine — could just be a rest between
+      // sets. Say nothing rather than nag.
       msg = null;
     }
   }
 
-  function message(): string | null { return msg; }
+  function message(): string | null { recompute(); return msg; }
 
   function reset(): void {
-    startedAt = lastRepAt = repCount = metricFrames = downTransitions = 0;
+    startedAt = lastRepAt = lastMetricAt = repCount = metricFrames = downTransitions = 0;
     noPersonHits = unreliable = phantom = settleWaiting = 0;
     settleActive = false;
     lastState = '';
