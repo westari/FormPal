@@ -1,19 +1,30 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Platform, ScrollView,
-  Animated, ActivityIndicator, PanResponder, Image, TextInput,
+  Animated, ActivityIndicator, PanResponder, Image, TextInput, Pressable, Easing,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Asset } from 'expo-asset';
 import { SymbolView } from 'expo-symbols';
 import { Picker } from '@react-native-picker/picker';
 import * as Haptics from 'expo-haptics';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import Svg, { Path as SvgPath, Text as SvgText, Circle as SvgCircle } from 'react-native-svg';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AppBackground from '../components/AppBackground';
 import PlanGrowthMoment from '../components/PlanGrowthMoment';
 import { FONT, W, Col, Elev } from '../constants/theme';
+
+// Onboarding video clips — drop the real files in at these paths and flip
+// the consts to require(...). null renders a plain black frame instead, so
+// the flow is fully testable before the footage exists.
+//   hero — the app catching a rep (green check / red x firing), first screen
+//   demo — a single rep that doesn't count, shown before the math
+const HERO_VIDEO: any = null; // require('../assets/onboarding/hero.mp4')
+const DEMO_VIDEO: any = null; // require('../assets/onboarding/demo.mp4')
 
 export const ONBOARDING_KEY = 'formpal_onboarding_complete';
 
@@ -147,6 +158,109 @@ function OnboardingBackground({ children }: { children: React.ReactNode }) {
   );
 }
 
+// ── LocationBubbles — 3 overlapping gradient spheres (Home / Gym / Mix)
+// that ARE the answer options: tap one to pick, then Continue. Copied over
+// from onboarding-test verbatim (drift/entrance animations, frosted glass,
+// transparent-bg icons), restyled only for this screen's palette.
+const AnimatedBubblePressable = Animated.createAnimatedComponent(Pressable);
+
+const BUBBLES: { label: string; sub: string; icon: string; customIcon: any; colors: [string, string]; style: any }[] = [
+  { label: 'Home', sub: 'Minimal kit', icon: 'house.fill', customIcon: ICON.homeNoBg, colors: ['#FFD9A8', '#FF9F5A'], style: { top: 0, right: 6, width: 168, height: 168 } },
+  { label: 'Gym', sub: 'Full rack', icon: 'figure.strengthtraining.traditional', customIcon: ICON.gymNoBg, colors: ['#BFE0FF', '#5AA9FF'], style: { top: 118, left: 0, width: 190, height: 190 } },
+  { label: 'Mix of both', sub: 'Flexible', icon: 'shuffle', customIcon: ICON.mixNoBg, colors: ['#E3D6FF', '#B79CFF'], style: { top: 190, right: 0, width: 176, height: 176 } },
+];
+
+function LocationBubbles({ selected, onPick }: { selected: string | null; onPick: (label: string) => void }) {
+  const entrance = useRef(BUBBLES.map(() => new Animated.Value(0.5))).current;
+  const driftX = useRef(BUBBLES.map(() => new Animated.Value(0))).current;
+  const driftY = useRef(BUBBLES.map(() => new Animated.Value(0))).current;
+
+  useEffect(() => {
+    const entranceAnims = entrance.map((v, i) =>
+      Animated.timing(v, { toValue: 1, duration: 480, delay: i * 90, easing: Easing.out(Easing.cubic), useNativeDriver: false })
+    );
+    entranceAnims.forEach(a => a.start());
+
+    const driftLoops = BUBBLES.map((_, i) => {
+      const xDur = 3600 + i * 620;
+      const yDur = 4200 + i * 540;
+      const xLoop = Animated.loop(Animated.sequence([
+        Animated.timing(driftX[i], { toValue: 1, duration: xDur, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(driftX[i], { toValue: -1, duration: xDur, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(driftX[i], { toValue: 0, duration: xDur, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ]));
+      const yLoop = Animated.loop(Animated.sequence([
+        Animated.timing(driftY[i], { toValue: 1, duration: yDur, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(driftY[i], { toValue: -1, duration: yDur, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(driftY[i], { toValue: 0, duration: yDur, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ]));
+      setTimeout(() => { xLoop.start(); yLoop.start(); }, i * 240);
+      return [xLoop, yLoop];
+    }).flat();
+
+    return () => {
+      entranceAnims.forEach(a => a.stop());
+      driftLoops.forEach(l => l.stop());
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <View style={bub.wrap}>
+      {BUBBLES.map((b, i) => {
+        const tx = driftX[i].interpolate({ inputRange: [-1, 1], outputRange: [-9, 9] });
+        const ty = driftY[i].interpolate({ inputRange: [-1, 1], outputRange: [-7, 7] });
+        const scale = entrance[i].interpolate({ inputRange: [0.5, 1], outputRange: [0.92, 1] });
+        const isSel = selected === b.label;
+        return (
+          <AnimatedBubblePressable
+            key={b.label}
+            onPress={() => onPick(b.label)}
+            style={[bub.bubble, b.style, isSel && bub.bubbleSel, { opacity: entrance[i], transform: [{ scale }, { translateX: tx }, { translateY: ty }] }]}
+          >
+            <LinearGradient colors={b.colors} start={{ x: 0.15, y: 0.1 }} end={{ x: 0.9, y: 1 }} style={[StyleSheet.absoluteFill, { opacity: 0.94 }]} />
+            <BlurView intensity={8} tint="light" style={StyleSheet.absoluteFill} pointerEvents="none" />
+            <View pointerEvents="none" style={bub.highlight} />
+            <View style={bub.inner} pointerEvents="none">
+              {b.customIcon
+                ? <Image source={b.customIcon} style={{ width: 28, height: 28, marginBottom: 4 }} resizeMode="contain" />
+                : <SymbolView name={b.icon as any} size={26} tintColor="#241708" type="monochrome" style={{ width: 26, height: 26, marginBottom: 4 }} />}
+              <Text style={bub.label}>{b.label}</Text>
+              <Text style={bub.sub}>{b.sub}</Text>
+            </View>
+            {isSel && (
+              <View style={bub.check} pointerEvents="none">
+                <SymbolView name="checkmark" size={14} tintColor="#fff" type="monochrome" style={{ width: 14, height: 14 }} />
+              </View>
+            )}
+          </AnimatedBubblePressable>
+        );
+      })}
+    </View>
+  );
+}
+
+const bub = StyleSheet.create({
+  wrap: { height: 380, marginTop: 26 },
+  bubble: {
+    position: 'absolute', borderRadius: 999, overflow: 'hidden',
+    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.55)',
+    ...({ boxShadow: '0px 10px 24px rgba(20,20,40,0.16), 0px 2px 6px rgba(20,20,40,0.10), inset 0px 1px 1px rgba(255,255,255,0.4)' } as any),
+  },
+  bubbleSel: { borderWidth: 3, borderColor: L.btnDark },
+  highlight: {
+    position: 'absolute', top: '10%', left: '16%', width: '46%', height: '30%',
+    borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.45)',
+    ...({ transform: [{ rotate: '-18deg' }] } as any),
+  },
+  inner: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3 },
+  label: { fontSize: 16, fontWeight: '700', color: '#241708' },
+  sub: { fontSize: 12, fontWeight: '500', color: 'rgba(36,23,8,0.6)' },
+  check: {
+    position: 'absolute', top: 10, right: 10, width: 22, height: 22, borderRadius: 11,
+    backgroundColor: L.btnDark, alignItems: 'center', justifyContent: 'center',
+  },
+});
+
 // ── Step definitions ───────────────────────────────────────────────────────────
 
 interface OptionDef { label: string; sfSymbol?: string; sublabel?: string; customIcon?: any; }
@@ -154,7 +268,7 @@ type StepOptions = OptionDef[] | ((a: Record<string, any>) => OptionDef[]);
 interface Step {
   id:             string;
   section:        string;
-  type:           'select' | 'multiselect' | 'wheel' | 'slider' | 'ruler' | 'interstitial' | 'text';
+  type:           'select' | 'multiselect' | 'wheel' | 'slider' | 'ruler' | 'interstitial' | 'text' | 'locationBubbles' | 'videoClip';
   question:       string;
   subtitle?:      string;
   placeholder?:   string;
@@ -269,13 +383,7 @@ const STEPS: Step[] = [
     ],
   },
 
-  // Renders as a plain 3-way select for now — the gradient bubbles land in
-  // the next commit.
-  { id: 'trainingLocation', section: 'Your Training', type: 'select', question: 'Where do you train?', options: [
-    { label: 'Home', sfSymbol: 'house.fill', customIcon: ICON.home },
-    { label: 'Gym', sfSymbol: 'figure.strengthtraining.traditional', customIcon: ICON.gym },
-    { label: 'Mix of both', sfSymbol: 'shuffle', customIcon: ICON.mixOfBoth },
-  ]},
+  { id: 'trainingLocation', section: 'Your Training', type: 'locationBubbles', question: 'Where do you train?' },
   { id: 'homeEquipment', section: 'Your Training', type: 'multiselect', question: 'Equipment you have at home?',
     showIf: a => a.trainingLocation === 'Home' || a.trainingLocation === 'Mix of both',
     clearAllOption: 'Nothing — bodyweight only',
@@ -360,6 +468,13 @@ const STEPS: Step[] = [
     { label: 'Yes please', sfSymbol: 'bell.fill', customIcon: ICON.notifOn },
     { label: 'No thanks', sfSymbol: 'bell.slash.fill', customIcon: ICON.notifOff },
   ]},
+
+  // The demo, as a clip instead of "do 5 reps". The 3 rank screens land
+  // just ahead of this in the next commit; the math + reversal + plan come
+  // right after it in the one after that.
+  { id: 'demoClip', section: 'Wrap up', type: 'videoClip',
+    question: 'This is FormPal watching a rep.',
+    subtitle: "It counts the clean ones — and tells you exactly why the rest didn't." },
 ];
 
 // Was a literal engineering task list ("Reading your answers," "Setting
@@ -960,6 +1075,12 @@ export default function OnboardingScreen() {
   const fadeAnim  = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
 
+  // Hero (welcome screen) + demo (demoClip step) clips. Created
+  // unconditionally so the hooks are stable; a null source just renders
+  // black until the real files are dropped in (see HERO_VIDEO / DEMO_VIDEO).
+  const heroPlayer = useVideoPlayer(HERO_VIDEO, p => { p.loop = true; p.muted = true; p.play(); });
+  const demoPlayer = useVideoPlayer(DEMO_VIDEO, p => { p.loop = true; p.muted = true; p.play(); });
+
   const visibleSteps = getVisibleSteps(answers);
   const currentStep  = visibleSteps[stepIndex];
   const progress     = visibleSteps.length > 0 ? (stepIndex + 1) / visibleSteps.length : 0;
@@ -1070,29 +1191,34 @@ export default function OnboardingScreen() {
     router.replace('/(tabs)');
   };
 
-  // ── WELCOME ──────────────────────────────────────────────────────────────────
+  // ── WELCOME — hero video (Cal-AI style): full-bleed clip of the app
+  // catching a rep, headline + CTA over the bottom. Black frame until the
+  // real file is dropped in (HERO_VIDEO).
 
   if (appState === 'welcome') {
     return (
-      <OnboardingBackground>
-        <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
-          <ScrollView contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 28, justifyContent: 'center' }} showsVerticalScrollIndicator={false}>
-            <View style={{ alignItems: 'center', marginBottom: 20 }}>
-              <View style={s.logoDot} />
-            </View>
-            <Text style={s.wordmarkBig}>FORMPAL</Text>
-            <Text style={s.welcomeTitle}>Your AI form coach, plus a plan built for you.</Text>
-            {/* Was "Answer a few quick questions and I'll build your first
-                workout — then I'll check every rep" — led with the
-                mechanism (questions, workout-building, rep-checking)
-                instead of what it gets you. Outcome-first now. */}
-            <Text style={s.welcomeSub}>Train with confidence, knowing every rep is done right — no more guessing if your form's holding you back.</Text>
-            <TouchableOpacity style={s.primaryBtn} onPress={() => { haptic(Haptics.ImpactFeedbackStyle.Medium); setStepIndex(0); setAppState('onboarding'); }} activeOpacity={0.85}>
-              <Text style={s.primaryBtnTxt}>Build my plan</Text>
-            </TouchableOpacity>
-          </ScrollView>
+      <View style={{ flex: 1, backgroundColor: '#000' }}>
+        {HERO_VIDEO
+          ? <VideoView player={heroPlayer} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} />
+          : <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
+              <Text style={{ color: 'rgba(255,255,255,0.25)', fontSize: 13, letterSpacing: 0.5 }}>hero clip goes here</Text>
+            </View>}
+        {/* Legibility scrim behind the text */}
+        <LinearGradient
+          colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.85)']}
+          locations={[0, 0.55, 1]}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+        <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom + 24, paddingHorizontal: 28, justifyContent: 'flex-end' }}>
+          <Text style={h.wordmark}>FORMPAL</Text>
+          <Text style={h.title}>Every rep, checked.</Text>
+          <Text style={h.sub}>Your AI form coach — it watches every rep, counts the clean ones, and tells you what to fix.</Text>
+          <TouchableOpacity style={h.btn} onPress={() => { haptic(Haptics.ImpactFeedbackStyle.Medium); setStepIndex(0); setAppState('onboarding'); }} activeOpacity={0.85}>
+            <Text style={h.btnTxt}>Build my plan</Text>
+          </TouchableOpacity>
         </View>
-      </OnboardingBackground>
+      </View>
     );
   }
 
@@ -1217,6 +1343,61 @@ export default function OnboardingScreen() {
             </View>
           </View>
         </OnboardingBackground>
+      );
+    }
+
+    // Location bubbles — tap a sphere to pick, then Continue.
+    if (st.type === 'locationBubbles') {
+      const picked = (answers[st.id] as string) || null;
+      return (
+        <OnboardingBackground>
+          <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
+            {header}
+            <View style={{ paddingHorizontal: 24, paddingTop: 20, flex: 1 }}>
+              <Text style={s.qq}>{st.question}</Text>
+              <LocationBubbles
+                selected={picked}
+                onPick={(label) => { haptic(); setAnswers({ ...answers, [st.id]: label }); }}
+              />
+            </View>
+            <View style={s.bn}>
+              <TouchableOpacity style={[s.cb, !picked && s.cbDisabled]} disabled={!picked} onPress={() => advance(answers)} activeOpacity={0.85}>
+                <Text style={[s.ct, !picked && s.ctDisabled]}>Continue</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </OnboardingBackground>
+      );
+    }
+
+    // Video clip — full-bleed player (black until the file exists), headline
+    // + caption over the bottom, Continue. Used for the demo.
+    if (st.type === 'videoClip') {
+      return (
+        <View style={{ flex: 1, backgroundColor: '#000' }}>
+          {DEMO_VIDEO
+            ? <VideoView player={demoPlayer} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} />
+            : <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
+                <Text style={{ color: 'rgba(255,255,255,0.25)', fontSize: 13, letterSpacing: 0.5 }}>demo clip goes here</Text>
+              </View>}
+          <LinearGradient
+            colors={['rgba(0,0,0,0.5)', 'rgba(0,0,0,0)', 'rgba(0,0,0,0.85)']}
+            locations={[0, 0.4, 1]}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+          />
+          <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom + 24, paddingHorizontal: 28 }}>
+            <TouchableOpacity onPress={goBack} style={[s.bb, { backgroundColor: 'rgba(255,255,255,0.14)', borderColor: 'transparent' }]}>
+              <Sym name="chevron.left" size={16} color="#fff" />
+            </TouchableOpacity>
+            <View style={{ flex: 1 }} />
+            <Text style={h.title}>{st.question}</Text>
+            {!!st.subtitle && <Text style={h.sub}>{st.subtitle}</Text>}
+            <TouchableOpacity style={h.btn} onPress={() => advance(answers)} activeOpacity={0.85}>
+              <Text style={h.btnTxt}>Continue</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       );
     }
 
@@ -1476,4 +1657,13 @@ const s = StyleSheet.create({
   exScheme:       { fontSize: 13, color: L.textSub, marginTop: 2 },
   fcTag:          { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(10,132,255,0.08)', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 100 },
   fcTxt:          { fontSize: 11, fontWeight: W.bold, color: L.accent, letterSpacing: 0.2 },
+});
+
+// Hero / video-clip overlays — white text on a dark clip.
+const h = StyleSheet.create({
+  wordmark: { fontSize: 12, fontWeight: W.bold, color: 'rgba(255,255,255,0.6)', letterSpacing: 2.5, marginBottom: 12 },
+  title:    { fontFamily: FONT.displayBold, fontSize: 34, color: '#fff', letterSpacing: -1, lineHeight: 40, marginBottom: 12 },
+  sub:      { fontSize: 15, color: 'rgba(255,255,255,0.82)', lineHeight: 22, marginBottom: 24 },
+  btn:      { backgroundColor: '#fff', borderRadius: 100, paddingVertical: 18, alignItems: 'center' },
+  btnTxt:   { fontFamily: FONT.displayBold, fontSize: 16, color: '#0B1020', letterSpacing: 0.1 },
 });
