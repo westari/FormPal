@@ -178,7 +178,7 @@ const SETUP_INFO: Record<ExerciseId, { icon: string; title: string; sub: string 
   // Crunch — lying down, side-on. Matches its own setupInstruction; see
   // that exercise's comment for the confirmed on-device
   // lying-pose-detection risk this shares with the removed gluteBridge.
-  crunch: { icon: 'arrow.left.and.right', title: 'Phone on a chair beside you, angled down', sub: 'Whole body — head to feet — inside the box' },
+  crunch: { icon: 'arrow.left.and.right', title: 'Phone on a chair beside you, angled down', sub: 'Fit your whole body with room above your head' },
   dips:   { icon: 'figure.strengthtraining.functional', title: 'Stand side-on to the camera', sub: 'Shoulder and elbow in frame — whole body visible' },
 };
 

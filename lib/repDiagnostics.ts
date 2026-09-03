@@ -75,19 +75,21 @@ export function createRepDiagnostic(): RepDiagnostic {
     if (repCount > 0 && sinceRep < STALE_REP_SEC) { msg = null; return; }
     if (elapsed < GRACE_SEC) { msg = null; return; }
 
-    // Short. Plain. Most specific cause first. Never more than 4 words.
-    if (noPersonHits >= 3) {
-      msg = 'Get in frame';
+    // Short, plain, and about the CAMERA — the usual reason reps don't count
+    // is framing, not the user's form. Most specific cause first, ≤4 words.
+    if (noPersonHits >= 2) {
+      // Tracking keeps dropping mid-rep — the top half is leaving the frame.
+      msg = 'Angle the phone up';
     } else if (unreliable >= 2) {
       msg = 'Move farther back';
     } else if (!settleActive && settleWaiting >= 3) {
       msg = 'Lie flat, hold still';
     } else if (downTransitions >= 2 && repCount === 0) {
-      msg = 'Come all the way down';
+      msg = 'Keep your head in frame';
     } else if (phantom >= 2) {
       msg = 'Full range each rep';
     } else if (repCount === 0 && elapsed > NUDGE_AFTER_SEC) {
-      msg = metricFrames > 10 ? 'Sit up higher' : 'Get in frame';
+      msg = 'Adjust the camera angle';
     } else if (repCount > 0 && sinceRep >= STALE_REP_SEC) {
       msg = 'Keep going, steady reps';
     } else {

@@ -4076,14 +4076,15 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     //    count over, and can't be fixed by a threshold anyway (lineVsVertical
     //    is unsigned, so a deep fold past vertical is indistinguishable from
     //    coming back toward flat).
-    //  • rom 25 — a full sit-up hits ~4; anything that stops short flags
-    //    GO HIGHER. phantomGuardFraction 0.10 keeps it from blocking a count.
+    //  • rom 25 — a full sit-up hits ~4; anything that stops short flags the
+    //    ROM cue. phantomGuardFraction 0.10 keeps it from blocking a count.
     // These are the values the user confirmed count reliably ("works great").
     topAngle:            84,
     repEnterThreshold:   45,
     repExitThreshold:    78,
     goodROMThreshold:    25,
-    insufficientROMCue: 'GO HIGHER',
+    // Was 'GO HIGHER' — user: "idk why that's even a command." Plainer.
+    insufficientROMCue: 'FULL RANGE',
     // The settle anchor must reach ~70% of the way from rom up to top (~66°,
     // near lying flat) before it locks "rest" — stops the first rep locking
     // "rest" onto a folded-up position when tracking starts mid-movement.
@@ -4126,18 +4127,16 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
           right: { type: 'jointAngle', a: 'rightHip', pivot: 'rightKnee', c: 'rightAnkle' },
         },
         evaluateAt:       'throughoutMax',
-        // 10-rep device log (9/1): clean sit-ups read 48-68; deliberate
-        // leg-assist reps read 80-112. Was 78 — user reports it fires on
-        // normal reps ("a little too strict"). Raised to 95: only a clear,
-        // deliberate leg drive (>95, i.e. knee actively straightening) trips
-        // it now; a clean rep with knees planted stays well under.
+        // DISABLED (9/3). This jointAngle(hip,knee,ankle) reading depends on
+        // the ankle, which Vision tracks badly on a planted, foreshortened
+        // foot — so it spikes past the threshold on CLEAN reps with legs
+        // still, and the user gets "KEEP LEGS DOWN" spammed for no reason.
+        // Never had a clean separation between clean and leg-drive reps
+        // (CLAUDE.md: drop a check whose signal is just noise). Off until a
+        // labelled log proves the two actually separate.
         condition:        { type: 'greaterThan', value: 95 },
-        // Priority 4 = wins over the ROM cue, so a leg-assisted rep reads
-        // "KEEP LEGS DOWN", not "GO HIGHER" ("it's confused"). The rep metric
-        // is now torso-angle (leg-immune), so a leg-drive rep counts with
-        // real ROM and this is the only thing that flags it.
         priority:         4,
-        enabled:          true,
+        enabled:          false,
         formCheckMinConf: 0.35,
       },
       {
@@ -4192,21 +4191,20 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
       // down at you — a floor-level lens can't fit your head-to-knees in frame
       // unless you're unrealistically far, and this metric needs your upper
       // body visible. Line your whole body up inside the box.
-      setupInstruction: 'Put the phone on a chair or box beside you, angled down — whole body from head to feet in the frame',
+      setupInstruction: 'Phone on a chair beside you, angled down. Fit your whole body with space above your head — that space is where you go when you sit up.',
       // Advisory only after the FIX 1 build (the gate reads the rep metric).
       requiredJoints:    ['nose'],
       requiredJointsAlt: ['nose'],
     },
 
-    // Vision loses the WHOLE person for a stretch at the top of every sit-up
-    // (folded up, filmed from the floor) — reported "reps never count, 'come
-    // back in frame' pops up every rep". That vanish is PART of the rep, not a
-    // walk-away. Raised to 20 (~2.5s at ~8fps) so the in-progress rep is never
-    // abandoned during the fold — it completes on the way back down when the
-    // metric rises past exit. (edgeGuardEnabled:false below also tells the
-    // engine not to bounce a floor exercise back to the setup screen or nag
-    // "come back in frame" for these normal per-rep vanishes.)
-    missingPersonGraceFrames: 20,
+    // Vision loses the top half for a stretch at the top of every sit-up
+    // (head/shoulders climb out of a low frame). That vanish is PART of the
+    // rep, not a walk-away. 35 (~4s at ~8fps) so the in-progress rep survives
+    // even a badly-angled frame and completes on the way back down — which is
+    // the "first rep or two don't count" the user reports when their camera
+    // angle clips the top. (edgeGuardEnabled:false also stops a floor
+    // exercise bouncing back to setup for these normal per-rep vanishes.)
+    missingPersonGraceFrames: 35,
 
     // At the ~8fps Vision manages for a floor pose, requiring 3 consecutive
     // frames above repExitThreshold to trust a rep as complete makes each
