@@ -4078,27 +4078,27 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     //    count over, and can't be fixed by a threshold anyway (lineVsVertical
     //    is unsigned, so a deep fold past vertical is indistinguishable from
     //    coming back toward flat).
-    // ─── PLACEHOLDERS for the jointAngle(nose,hip,knee) metric ─────────────
-    // Geometric estimates for a knees-bent sit-up — do one clean set and send
-    // the [CALIB-SUGGEST] line so I can lock the real numbers:
-    //  • topAngle 125 — lying flat, nose↔hip↔knee opened out.
-    //  • repEnterThreshold 100 — torso ~30-40° up = rep started.
-    //  • repExitThreshold 115 — back within ~10° of flat = rep COMPLETES
-    //    (10° hysteresis over enter).
-    //  • goodROMThreshold 70 — a full sit-up closes past 70; a half-rep stays
-    //    above and gets the FULL RANGE cue (does NOT gate the count).
-    topAngle:            125,
-    repEnterThreshold:   100,
-    repExitThreshold:    115,
-    goodROMThreshold:    70,
+    // CALIBRATED from a device log (9/3, jointAngle nose-hip-knee): lying flat
+    // read ~108-112 (NOT the 125 placeholder), and the exit was set to 115 —
+    // ABOVE the actual resting value, so a rep could never complete. Fixed:
+    //  • topAngle 110 — measured rest.
+    //  • repEnterThreshold 90 — ~18° below rest = rep started.
+    //  • repExitThreshold 103 — back to within ~7° of rest = rep COMPLETES,
+    //    and it now sits BELOW rest so returning to flat actually crosses it.
+    //  • goodROMThreshold 65 — a full sit-up closes well past this.
+    // NOTE: the knee/hip tracked poorly in that log (conf 0.24-0.55) so the
+    // signal is noisy — if reps still don't land it's the camera angle: the
+    // phone needs to be at your SIDE with your body across the frame, close
+    // enough for Vision to see your hips and knees.
+    topAngle:            110,
+    repEnterThreshold:   90,
+    repExitThreshold:    103,
+    goodROMThreshold:    65,
     // Was 'GO HIGHER' — user: "idk why that's even a command." Plainer.
     insufficientROMCue: 'FULL RANGE',
-    // 0.4 on the new scale = the settle needs a candidate ≥ ~92° (rom 70 +
-    // 0.4·55) to lock "rest". True rest reads ~125, so it locks on the very
-    // first still frame at the start — the first rep is no longer consumed to
-    // "resync" the anchor. (That resync, and the whole first-rep miss, was a
-    // side effect of the inverted lineVsVertical metric never letting the
-    // settle see a valid rest value — the metric swap should fix it.)
+    // 0.4 = the settle needs a candidate ≥ ~83° (rom 65 + 0.4·45) to lock
+    // "rest". Measured rest is ~108, so it locks on the first still frame —
+    // the first rep isn't consumed to "resync" the anchor.
     settleAnchorMinFraction: 0.4,
 
     // FORM CUES. Kept per explicit request, but both thresholds are LOOSE
