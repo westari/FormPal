@@ -2529,13 +2529,14 @@ function facePullVariant(
     id,
     displayName,
     repMetric:          FACE_PULL_REP_METRIC,
-    // WIDE PLACEHOLDERS for the new hip-shoulder-wrist angle (arm reaching
-    // ~130-160°, pulled ~60-90°). Point is that reps COUNT; ROM graded loose.
-    // Do 5 and send the [REP] log for real numbers.
-    topAngle:           145,
-    repEnterThreshold:  115,
-    repExitThreshold:   125,
-    goodROMThreshold:   95,
+    // CALIBRATED from a device video log (9/3): arm fully extended read ~177-180°
+    // (not the ~145 assumed), contracted ~59°, swing ~121°. [CALIB-SUGGEST]
+    // gave top 177 / enter 107 / exit 129 / rom 83. Nudged top down to 170 so
+    // a slightly-less-than-straight live arm still clears the settle anchor.
+    topAngle:           170,
+    repEnterThreshold:  108,
+    repExitThreshold:   130,
+    goodROMThreshold:   88,
     insufficientROMCue: 'PULL FARTHER',
     // Elbow-height form check disabled — the elbow is the joint that proved
     // unreliable side-on; re-enable once counting is solid.

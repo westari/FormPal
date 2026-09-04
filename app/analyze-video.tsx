@@ -158,7 +158,15 @@ export default function AnalyzeVideoScreen() {
         return;
       }
 
-      const durationSec = Math.round((Date.now() - analyzeStartedAt.current) / 1000);
+      // The video's ACTUAL length, not how long the (real-time-paced)
+      // analysis took — that includes probe + setup overhead and was
+      // showing ~9s for a 7s clip.
+      const clipDur = player.duration;
+      const durationSec = Math.round(
+        clipDur && isFinite(clipDur) && clipDur > 0
+          ? clipDur
+          : (Date.now() - analyzeStartedAt.current) / 1000,
+      );
       router.replace({
         pathname: '/recap',
         params: {

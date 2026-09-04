@@ -4,7 +4,7 @@
  * "Why aren't my reps counting?" — a live analyzer that reads the native
  * engine's own debug-log stream during a tracking session and, when reps
  * AREN'T landing, works out the likely reason and returns one short
- * on-screen instruction naming what the camera needs to see.
+ * on-screen instruction.
  *
  * `message()` re-evaluates against the wall clock on every call, so callers
  * should poll it on a timer too (not only on new log lines) — otherwise a
@@ -21,23 +21,25 @@ export interface RepDiagnostic {
   reset(): void;
 }
 
-const GRACE_SEC       = 4;   // don't nag before tracking has had a fair shot
+const GRACE_SEC       = 3;   // don't nag before tracking has had a fair shot
 const STALE_REP_SEC   = 10;  // reps were counting, then stopped for this long
 const STREAM_DEAD_SEC = 2.5; // [METRIC] lines were flowing, then stopped = no pose
 
 export function createRepDiagnostic(): RepDiagnostic {
-  let startedAt       = 0;
-  let lastRepAt       = 0;
-  let lastMetricAt    = 0;
-  let repCount        = 0;
-  let metricFrames    = 0;
-  let downTransitions = 0;   // metric crossed into a rep (state -> down/inRep)
-  let lastState       = '';
-  let noPersonHits    = 0;
-  let unreliable      = 0;
-  let phantom         = 0;
-  let settleActive    = false; // saw "rep counting active"
-  let settleWaiting   = 0;     // [SETTLE] rejected / still-waiting lines
+  let startedAt      = 0;
+  let lastRepAt      = 0;
+  let lastMetricAt   = 0;
+  let repCount       = 0;
+  let metricFrames   = 0;
+  let noPersonHits   = 0;
+  let unreliable     = 0;
+  let phantom        = 0;
+  let settleActive   = false; // saw "rep counting active"
+  let settleWaiting  = 0;     // [SETTLE] rejected / still-waiting lines
+  // Metric-vs-threshold tracking — the exercises here DECREASE into a rep
+  // (rest = high value, working = low). enter < exit (exit has hysteresis).
+  let crossedEnter    = false; // value dropped below enter at least once
+  let returnedToExit  = false; // after that, rose back above exit
   let msg: string | null = null;
 
   const now = () => Date.now();
@@ -47,9 +49,11 @@ export function createRepDiagnostic(): RepDiagnostic {
       if (!startedAt) startedAt = now();
       lastMetricAt = now();
       metricFrames++;
-      const st = line.match(/state=(\w+)/)?.[1] ?? '';
-      if ((st === 'down' || st === 'inRep') && lastState !== st) downTransitions++;
-      lastState = st;
+      const v  = parseFloat(line.match(/value=([-\d.]+)/)?.[1]  ?? 'NaN');
+      const en = parseFloat(line.match(/enter=([-\d.]+)/)?.[1]  ?? 'NaN');
+      const ex = parseFloat(line.match(/exit=([-\d.]+)/)?.[1]   ?? 'NaN');
+      if (!Number.isNaN(v) && !Number.isNaN(en) && v < en) crossedEnter = true;
+      if (crossedEnter && !Number.isNaN(v) && !Number.isNaN(ex) && v > ex) returnedToExit = true;
     } else if (/rep counting active|entering ACTIVE/i.test(line)) {
       settleActive = true;
     } else if (/\[SETTLE\][^]*?(rejected|still waiting|not a genuine)/i.test(line)) {
@@ -63,7 +67,8 @@ export function createRepDiagnostic(): RepDiagnostic {
     } else if (/^\[REP\] #\d+/.test(line)) {
       repCount++;
       lastRepAt = now();
-      noPersonHits = 0; unreliable = 0; phantom = 0; // a rep landed — clear the slate
+      noPersonHits = 0; unreliable = 0; phantom = 0;
+      crossedEnter = false; returnedToExit = false;
     }
     recompute();
   }
@@ -76,23 +81,27 @@ export function createRepDiagnostic(): RepDiagnostic {
 
     if (elapsed < GRACE_SEC) { msg = null; return; }
 
-    // The pose is GONE — the engine stopped producing readings. Genuinely
-    // useful; wins over everything.
+    // Pose is GONE — wins over everything.
     if (streamDead) { msg = 'Point the camera at your body'; return; }
 
-    // A set that's actively working — don't nag.
+    // A working set — don't nag.
     if (repCount > 0 && sinceRep < STALE_REP_SEC) { msg = null; return; }
 
-    // Only speak when a pattern is CLEARLY wrong — a few stray rejections
-    // aren't worth a command. Everything else: stay silent.
-    if (noPersonHits >= 3 || (downTransitions >= 3 && repCount === 0)) {
+    // Framing / tracking problems first.
+    if (noPersonHits >= 2) {
       msg = 'Fit your whole body in frame';
-    } else if (unreliable >= 3) {
+    } else if (unreliable >= 2) {
       msg = 'Move farther back';
-    } else if (!settleActive && settleWaiting >= 5) {
-      msg = 'Hold still to start';
-    } else if (phantom >= 3) {
-      msg = 'Full range each rep';
+    } else if (!settleActive && settleWaiting >= 4) {
+      msg = 'Hold still at the start';
+    } else if (phantom >= 1) {
+      msg = 'Slower, fuller reps';
+    } else if (repCount === 0 && !crossedEnter && metricFrames > 8) {
+      // Never got deep enough for a rep to even begin.
+      msg = 'Go deeper into each rep';
+    } else if (repCount === 0 && crossedEnter && !returnedToExit && metricFrames > 8) {
+      // Went into a rep but never came back to the start.
+      msg = 'Return to the start each rep';
     } else {
       msg = null;
     }
@@ -101,10 +110,9 @@ export function createRepDiagnostic(): RepDiagnostic {
   function message(): string | null { recompute(); return msg; }
 
   function reset(): void {
-    startedAt = lastRepAt = lastMetricAt = repCount = metricFrames = downTransitions = 0;
+    startedAt = lastRepAt = lastMetricAt = repCount = metricFrames = 0;
     noPersonHits = unreliable = phantom = settleWaiting = 0;
-    settleActive = false;
-    lastState = '';
+    settleActive = crossedEnter = returnedToExit = false;
     msg = null;
   }
 
