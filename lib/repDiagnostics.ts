@@ -23,7 +23,6 @@ export interface RepDiagnostic {
 
 const GRACE_SEC       = 4;   // don't nag before tracking has had a fair shot
 const STALE_REP_SEC   = 10;  // reps were counting, then stopped for this long
-const NUDGE_AFTER_SEC = 5;   // counting has never started — speak up by now
 const STREAM_DEAD_SEC = 2.5; // [METRIC] lines were flowing, then stopped = no pose
 
 export function createRepDiagnostic(): RepDiagnostic {
@@ -77,28 +76,24 @@ export function createRepDiagnostic(): RepDiagnostic {
 
     if (elapsed < GRACE_SEC) { msg = null; return; }
 
-    // The pose is GONE — the engine stopped producing readings. This wins
-    // over everything: no point coaching form when the camera can't see you.
+    // The pose is GONE — the engine stopped producing readings. Genuinely
+    // useful; wins over everything.
     if (streamDead) { msg = 'Point the camera at your body'; return; }
 
     // A set that's actively working — don't nag.
     if (repCount > 0 && sinceRep < STALE_REP_SEC) { msg = null; return; }
 
-    // Short, plain, and about the CAMERA — the usual reason reps don't count
-    // is framing, not the user's form.
-    if (noPersonHits >= 2 || (downTransitions >= 2 && repCount === 0)) {
+    // Only speak when a pattern is CLEARLY wrong — a few stray rejections
+    // aren't worth a command. Everything else: stay silent.
+    if (noPersonHits >= 3 || (downTransitions >= 3 && repCount === 0)) {
       msg = 'Fit your whole body in frame';
-    } else if (unreliable >= 2) {
+    } else if (unreliable >= 3) {
       msg = 'Move farther back';
-    } else if (!settleActive && settleWaiting >= 3) {
-      msg = 'Lie flat, hold still';
-    } else if (phantom >= 2) {
+    } else if (!settleActive && settleWaiting >= 5) {
+      msg = 'Hold still to start';
+    } else if (phantom >= 3) {
       msg = 'Full range each rep';
-    } else if (repCount === 0 && elapsed > NUDGE_AFTER_SEC) {
-      msg = metricFrames > 10 ? 'Adjust the camera angle' : 'Fit your whole body in frame';
     } else {
-      // Reps stalled but the pose is fine — could just be a rest between
-      // sets. Say nothing rather than nag.
       msg = null;
     }
   }

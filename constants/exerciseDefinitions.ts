@@ -4000,26 +4000,27 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     // NOTHING here depends on the knee or ankle → leg movement can't stop a
     // rep counting; KEEP LEGS DOWN (below) is what flags it instead.
     //
-    // 9/3 — a jointAngle(nose,hip,ankle) swap was tried to kill the "counts a
-    // hair early on a hard fold" nitpick. It counted ZERO reps (ankle too
-    // poorly tracked lying down for a clean angle). REVERTED to this
-    // torso-angle metric, which the user has repeatedly confirmed "works
-    // great" for actually counting. The early-count nitpick stays — a working
-    // count matters far more, and it can't be fixed by a threshold anyway.
+    // 9/3 — a device log proved lineVsVertical is CAMERA-ORIENTATION
+    // DEPENDENT and was reading INVERTED for the user: lying flat it read ~7°
+    // (not the assumed ~84°), and it rose toward 80° during the sit-up. So
+    // the settle never found a valid "rest", every rep consumed a first-rep
+    // resync, and nothing counted. lineVsVertical only works if the body
+    // lies exactly horizontal in the frame — too fragile.
+    //
+    // NEW: jointAngle(nose, pivot: hip, c: knee) — a pure 3-point angle,
+    // completely orientation-agnostic (the body can lie horizontal, diagonal,
+    // head-to-camera, whatever). Lying flat, knees bent: nose↔hip↔knee opens
+    // to ~115-135°. Sitting up, chest toward knees: closes to ~45-70°.
+    // DECREASES into the rep. nose = most reliable landmark; knee = far better
+    // tracked than the ankle (which killed the last attempt). A clean sit-up
+    // keeps the knee planted; KEEP KNEES BENT (below) flags it if the leg
+    // straightens.
     repMetric: {
       type: 'bestSide',
-      left: {
-        type:  'average',
-        left:  { type: 'lineVsVertical', from: 'leftHip', to: 'nose' },
-        right: { type: 'lineVsVertical', from: 'leftHip', to: 'leftShoulder' },
-      },
-      right: {
-        type:  'average',
-        left:  { type: 'lineVsVertical', from: 'rightHip', to: 'nose' },
-        right: { type: 'lineVsVertical', from: 'rightHip', to: 'rightShoulder' },
-      },
-      // Reliability gate = the NOSE only (0.75-0.9 lying down). Gating on the
-      // hip made SETUP never pass. The angle math still uses the hip.
+      left:  { type: 'jointAngle', a: 'nose', pivot: 'leftHip',  c: 'leftKnee'  },
+      right: { type: 'jointAngle', a: 'nose', pivot: 'rightHip', c: 'rightKnee' },
+      // Reliability gate = the NOSE only. Gating on the hip/knee made SETUP
+      // never pass. The angle math still uses all three points.
       leftJoints:  ['nose'],
       rightJoints: ['nose'],
     },
@@ -4076,24 +4077,28 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     //    count over, and can't be fixed by a threshold anyway (lineVsVertical
     //    is unsigned, so a deep fold past vertical is indistinguishable from
     //    coming back toward flat).
-    //  • rom 25 — a full sit-up hits ~4; anything that stops short flags the
-    //    ROM cue. phantomGuardFraction 0.10 keeps it from blocking a count.
-    // These are the values the user confirmed count reliably ("works great").
-    topAngle:            84,
-    repEnterThreshold:   45,
-    repExitThreshold:    78,
-    goodROMThreshold:    25,
+    // ─── PLACEHOLDERS for the jointAngle(nose,hip,knee) metric ─────────────
+    // Geometric estimates for a knees-bent sit-up — do one clean set and send
+    // the [CALIB-SUGGEST] line so I can lock the real numbers:
+    //  • topAngle 125 — lying flat, nose↔hip↔knee opened out.
+    //  • repEnterThreshold 100 — torso ~30-40° up = rep started.
+    //  • repExitThreshold 115 — back within ~10° of flat = rep COMPLETES
+    //    (10° hysteresis over enter).
+    //  • goodROMThreshold 70 — a full sit-up closes past 70; a half-rep stays
+    //    above and gets the FULL RANGE cue (does NOT gate the count).
+    topAngle:            125,
+    repEnterThreshold:   100,
+    repExitThreshold:    115,
+    goodROMThreshold:    70,
     // Was 'GO HIGHER' — user: "idk why that's even a command." Plainer.
     insufficientROMCue: 'FULL RANGE',
-    // 0.7 → 0.55: the settle anchor locks "rest" once it sees ~55% of the way
-    // from rom up to top (~57°). Lower = it locks sooner, so it's less likely
-    // to fall through to "resync on the first real rep attempt" (which
-    // consumes that rep — the "first rep never counts" report). Still well
-    // above a folded-up position so a mid-crunch start can't anchor there.
-    // NOTE: the first-rep miss is ultimately a native ExerciseEngine
-    // behaviour (settle calibrating off rep 1) — this only reduces it;
-    // fully fixing it is an EAS build.
-    settleAnchorMinFraction: 0.55,
+    // 0.4 on the new scale = the settle needs a candidate ≥ ~92° (rom 70 +
+    // 0.4·55) to lock "rest". True rest reads ~125, so it locks on the very
+    // first still frame at the start — the first rep is no longer consumed to
+    // "resync" the anchor. (That resync, and the whole first-rep miss, was a
+    // side effect of the inverted lineVsVertical metric never letting the
+    // settle see a valid rest value — the metric swap should fix it.)
+    settleAnchorMinFraction: 0.4,
 
     // FORM CUES. Kept per explicit request, but both thresholds are LOOSE
     // PLACEHOLDERS set ABOVE the user's own observed clean-rep readings so
