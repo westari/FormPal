@@ -337,30 +337,15 @@ function planReadyInject(a: Record<string, any>): string {
     return hit>=3;
   }
   if(!apply()) [200,500,1000,2000,3500,5000].forEach(function(d){ setTimeout(apply,d); });
-  // Breathing room above the "We think you can reach…" heading — it renders
-  // jammed against the top otherwise.
-  var st=document.createElement('style');
-  st.textContent='#dc-root{padding-top:40px!important;}';
-  (document.head||document.documentElement).appendChild(st);
-  // The little pencil SVGs next to each info value are cursor:pointer design
-  // elements with no handler — make them open the native quick-edit page.
-  document.addEventListener('click', function(e){
-    var el=e.target;
-    for(var i=0; el && i<4; i++, el=el.parentElement){
-      var s=(el.getAttribute && el.getAttribute('style'))||'';
-      if((el.tagName==='svg'||el.tagName==='SVG') && /cursor:\\s*pointer/.test(s)){ post('__tap'); post('editinfo'); return; }
-    }
-  }, true);
 })();
 `;
 }
 
-// The 4 pre-paywall pages are Claude-Design artboards (a fixed ~390px-wide
-// #dc-root on a white ground), NOT the 472px rank artifacts
-// ONBOARDING_WEB_INJECT was written for. Keep this DEAD simple: solid white
-// (no scaling — a scale transform was mangling the layout), centre the
-// artboard, and post 'advance' when the primary CTA is tapped. Matches any
-// clickable element, not just <button>/[role=button].
+// The 4 pre-paywall pages are Claude-Design artboards — FIXED 390×844
+// canvases with overflow:hidden (not meant to scroll). Don't unlock their
+// scroll (that made the paywall land part-scrolled and fight the user):
+// instead scale #dc-root to fit the WebView, centred, white letterbox.
+// Everything visible, nothing clipped, no scrolling.
 const DC_PAGE_KEYS: (keyof typeof ONB_HTML)[] = ['generatePlan', 'planReady', 'trialTimeline', 'paywall'];
 const DC_CTA_RE = "^(Continue|See my plan|See plan|Unlock my full plan|Unlock my plan|Unlock|Start my 3-day|Start my 3\\u2011day|Start my free trial|Start free trial|Start free|Next|Done|Get started)\\b";
 const DC_PAGE_INJECT = `
@@ -375,20 +360,32 @@ const DC_PAGE_INJECT = `
     return null;
   }
   document.addEventListener('click', function(e){
+    // Edit pencils on plan-ready — small svg with cursor:pointer, no handler.
+    var el=e.target;
+    for(var k=0; el && k<4; k++, el=el.parentElement){
+      var st=(el.getAttribute && el.getAttribute('style'))||'';
+      if((el.tagName+'').toLowerCase()==='svg' && /cursor:\\s*pointer/.test(st)){ post('__tap'); post('editinfo'); return; }
+    }
     var c = clickable(e.target);
     var t = ((c || e.target).textContent || '').replace(/\\s+/g,' ').trim();
     if (RE.test(t)) { post('__tap'); post('advance'); }
   }, true);
-  // The artboards ship with body{height:100%} and #dc-root{height:100%},
-  // which locks their content to one viewport and CLIPS the bottom (the
-  // grey subtext + the CTA). Unlock it so the page flows and scrolls all
-  // the way to the button, with a little breathing room underneath.
-  var CSS = 'html{background:#ffffff!important;}'
-    + 'body{margin:0!important;padding:0!important;background:#ffffff!important;height:auto!important;min-height:100%!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch!important;}'
-    + '#dc-root,#dc-root>.sc-host{height:auto!important;min-height:100%!important;}'
-    + '#dc-root{margin:0 auto!important;padding-bottom:44px!important;}';
-  var s=document.createElement('style'); s.textContent=CSS;
+
+  var W=390, H=844;
+  var s=document.createElement('style');
+  s.textContent='html,body{margin:0!important;padding:0!important;background:#ffffff!important;overflow:hidden!important;}'
+    + '#dc-root{position:relative!important;margin:0 auto!important;width:'+W+'px!important;height:'+H+'px!important;transform-origin:top center!important;}';
   (document.head||document.documentElement).appendChild(s);
+  function fit(){
+    var root=document.getElementById('dc-root'); if(!root) return;
+    var vw=window.innerWidth||W, vh=window.innerHeight||H;
+    var S=Math.min(vw/W, vh/H);
+    root.style.setProperty('transform','scale('+S+')','important');
+    document.body.style.setProperty('height', Math.ceil(H*S)+'px','important');
+  }
+  fit();
+  window.addEventListener('resize', fit);
+  [60,200,500,1200].forEach(function(d){ setTimeout(fit,d); });
   true;
 })();
 `;
@@ -399,16 +396,6 @@ const DC_PAGE_INJECT = `
 const GENERATE_PLAN_INJECT = `
 (function(){
   setTimeout(function(){ try{ window.ReactNativeWebView.postMessage('advance'); }catch(e){} }, 13000);
-  true;
-})();
-`;
-
-// The paywall artboard lands part-scrolled, hiding its own top row. Pin it
-// to the top a few times as it settles.
-const PAYWALL_INJECT = `
-(function(){
-  function top(){ try{ window.scrollTo(0,0); document.scrollingElement && (document.scrollingElement.scrollTop=0); }catch(e){} }
-  [0,80,250,600,1200,2200].forEach(function(d){ setTimeout(top,d); });
   true;
 })();
 `;
@@ -441,7 +428,7 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, topInset,
 
   const isDcPage = DC_PAGE_KEYS.includes(htmlKey);
   const baseInject = isDcPage ? DC_PAGE_INJECT : ONBOARDING_WEB_INJECT;
-  const dcExtra = htmlKey === 'generatePlan' ? GENERATE_PLAN_INJECT : htmlKey === 'paywall' ? PAYWALL_INJECT : undefined;
+  const dcExtra = htmlKey === 'generatePlan' ? GENERATE_PLAN_INJECT : undefined;
   const extraJs = extraJsProp
     ? (dcExtra ? extraJsProp + '\n' + dcExtra : extraJsProp)
     : (dcExtra ?? (htmlKey === 'strengthAssessment' ? STRENGTH_ICONS_JS : undefined));
@@ -463,8 +450,8 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, topInset,
           }}
           style={{ flex: 1, backgroundColor: isDcPage ? '#ffffff' : 'transparent' }}
           opaque={isDcPage}
-          scrollEnabled
-          bounces={isDcPage}
+          scrollEnabled={!isDcPage}
+          bounces={false}
           decelerationRate="normal"
           nestedScrollEnabled
           overScrollMode="never"
@@ -2203,9 +2190,9 @@ function CalcMathBeat({ onDone }: { onDone: () => void }) {
   );
 }
 
-// ── EditInfoScreen — the native quick-edit sheet reached from the pencil
-// icons on the plan-ready page. Edits age / height / weight / experience
-// and hands a patch back to `answers`. ────────────────────────────────────────
+// ── EditInfoScreen — reached from the pencil icons on the plan-ready page.
+// A plain iOS-style info list: tap a value, the keyboard comes up, change
+// the number. Not the onboarding pickers. ────────────────────────────────────
 
 const EXPERIENCE_OPTS = ['Beginner', 'Some experience', 'Intermediate', 'Advanced'];
 
@@ -2215,57 +2202,61 @@ function EditInfoScreen({ answers, topInset, onSave, onCancel }: {
   onSave: (patch: Record<string, any>) => void;
   onCancel: () => void;
 }) {
-  const [age, setAge]       = useState<string>(answers.age != null ? String(answers.age) : '25');
-  const [height, setHeight] = useState<string>(typeof answers.height === 'string' ? answers.height : `5'8"`);
-  const [weight, setWeight] = useState<number>(typeof answers.weight === 'number' ? answers.weight : 160);
+  const [age, setAge]       = useState<string>(answers.age != null ? String(answers.age) : '');
+  const [height, setHeight] = useState<string>(typeof answers.height === 'string' ? answers.height : '');
+  const [weight, setWeight] = useState<string>(typeof answers.weight === 'number' ? String(Math.round(answers.weight)) : '');
   const [exp, setExp]       = useState<string>(typeof answers.experience === 'string' ? answers.experience : 'Intermediate');
+
+  const save = () => {
+    haptic(Haptics.ImpactFeedbackStyle.Medium);
+    const patch: Record<string, any> = { experience: exp };
+    if (age.trim())    patch.age = age.trim();
+    if (height.trim()) patch.height = height.trim();
+    const wn = parseFloat(weight);
+    if (!Number.isNaN(wn)) patch.weight = wn;
+    onSave(patch);
+  };
 
   return (
     <OnboardingBackground>
       <View style={{ flex: 1, paddingTop: topInset }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12 }}>
-          <Text style={{ fontFamily: FONT.displayBold, fontSize: 20, color: L.text, letterSpacing: -0.4 }}>Edit your info</Text>
+          <Text style={{ fontFamily: FONT.displayBold, fontSize: 20, color: L.text, letterSpacing: -0.4 }}>Your info</Text>
           <TouchableOpacity onPress={onCancel} hitSlop={12} style={s.bb}>
             <Sym name="xmark" size={15} color={L.textSub} />
           </TouchableOpacity>
         </View>
-        <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 8, paddingBottom: 140 }} showsVerticalScrollIndicator={false}>
-          <Text style={ei.label}>Age</Text>
-          <View style={ei.pickerWrap}>
-            <Picker selectedValue={age} onValueChange={(v) => setAge(String(v))} itemStyle={{ color: L.text, fontSize: 20 }}>
-              {AGE_OPTIONS.map(o => <Picker.Item key={o} label={o} value={o} />)}
-            </Picker>
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 8, paddingBottom: 160 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <View style={ei.card}>
+            <View style={[ei.row, ei.rowDivide]}>
+              <Text style={ei.rowLabel}>Age</Text>
+              <TextInput style={ei.rowInput} value={age} onChangeText={setAge} keyboardType="number-pad" placeholder="27" placeholderTextColor={L.textDim} returnKeyType="done" textAlign="right" />
+            </View>
+            <View style={[ei.row, ei.rowDivide]}>
+              <Text style={ei.rowLabel}>Height</Text>
+              <TextInput style={ei.rowInput} value={height} onChangeText={setHeight} placeholder={`5'10"`} placeholderTextColor={L.textDim} returnKeyType="done" textAlign="right" />
+            </View>
+            <View style={ei.row}>
+              <Text style={ei.rowLabel}>Weight (lb)</Text>
+              <TextInput style={ei.rowInput} value={weight} onChangeText={setWeight} keyboardType="number-pad" placeholder="168" placeholderTextColor={L.textDim} returnKeyType="done" textAlign="right" />
+            </View>
           </View>
 
-          <Text style={ei.label}>Height</Text>
-          <View style={ei.pickerWrap}>
-            <Picker selectedValue={height} onValueChange={(v) => setHeight(String(v))} itemStyle={{ color: L.text, fontSize: 20 }}>
-              {HEIGHT_OPTIONS.map(o => <Picker.Item key={o} label={o} value={o} />)}
-            </Picker>
-          </View>
-
-          <Text style={ei.label}>Weight</Text>
-          <WeightRulerSlider value={weight} onChange={setWeight} />
-
-          <Text style={[ei.label, { marginTop: 24 }]}>Experience</Text>
-          <View style={{ gap: 10 }}>
+          <Text style={ei.groupLabel}>Experience</Text>
+          <View style={{ gap: 8 }}>
             {EXPERIENCE_OPTS.map(o => {
               const sel = exp === o;
               return (
-                <TouchableOpacity key={o} onPress={() => setExp(o)} activeOpacity={0.7} style={[s.opt, sel && s.optSel]}>
-                  <Text style={[s.optTxt, sel && s.optTxtSel]}>{o}</Text>
-                  <View style={[s.radio, sel && s.radioSel]}>{sel && <Sym name="checkmark" size={11} color="#fff" />}</View>
+                <TouchableOpacity key={o} onPress={() => { haptic(); setExp(o); }} activeOpacity={0.7} style={[ei.expChip, sel && ei.expChipSel]}>
+                  <Text style={[ei.expTxt, sel && ei.expTxtSel]}>{o}</Text>
+                  {sel && <Sym name="checkmark" size={13} color={L.accent} />}
                 </TouchableOpacity>
               );
             })}
           </View>
         </ScrollView>
         <View style={s.bn}>
-          <TouchableOpacity
-            style={s.cb}
-            activeOpacity={0.85}
-            onPress={() => { haptic(Haptics.ImpactFeedbackStyle.Medium); onSave({ age, height, weight, experience: exp }); }}
-          >
+          <TouchableOpacity style={s.cb} activeOpacity={0.85} onPress={save}>
             <Text style={s.ct}>Save</Text>
           </TouchableOpacity>
         </View>
@@ -2275,8 +2266,16 @@ function EditInfoScreen({ answers, topInset, onSave, onCancel }: {
 }
 
 const ei = StyleSheet.create({
-  label: { fontSize: 13, fontWeight: W.bold, color: L.textDim, letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 6, marginTop: 18 },
-  pickerWrap: { backgroundColor: L.card, borderRadius: 16, borderWidth: 1, borderColor: L.border, overflow: 'hidden' },
+  card:       { backgroundColor: L.card, borderRadius: 16, borderWidth: 1, borderColor: L.border, paddingHorizontal: 16, ...({ boxShadow: Elev.low.shadow } as any) },
+  row:        { flexDirection: 'row', alignItems: 'center', minHeight: 54 },
+  rowDivide:  { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: L.border },
+  rowLabel:   { fontSize: 16, color: L.text, fontWeight: W.medium },
+  rowInput:   { flex: 1, fontSize: 16, color: L.text, paddingVertical: 14, marginLeft: 12 },
+  groupLabel: { fontSize: 13, fontWeight: W.bold, color: L.textDim, letterSpacing: 0.6, textTransform: 'uppercase', marginTop: 26, marginBottom: 8 },
+  expChip:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: L.card, borderRadius: 14, borderWidth: 1, borderColor: L.border, paddingHorizontal: 16, paddingVertical: 14 },
+  expChipSel: { borderColor: L.accent, backgroundColor: L.accentSoft },
+  expTxt:     { fontSize: 15, color: L.text, fontWeight: W.medium },
+  expTxtSel:  { fontWeight: W.semi },
 });
 
 // ── Styles ────────────────────────────────────────────────────────────────────
