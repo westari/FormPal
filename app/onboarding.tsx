@@ -415,13 +415,15 @@ const DC_PAGE_INJECT = `
     + 'body{margin:0!important;padding:0!important;background:#ffffff!important;display:block!important;overflow-x:hidden!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch!important;}'
     + '#dc-root{position:relative!important;margin:0 auto!important;width:'+W+'px!important;transform-origin:top center!important;}';
   (document.head||document.documentElement).appendChild(s);
-  var lastS=-1;
+  var lastS=-1, H=844;
   function fit(){
     var root=document.getElementById('dc-root'); if(!root) return;
-    var S=Math.min(1, (window.innerWidth||W)/W);
+    var vw=window.innerWidth||W, vh=window.innerHeight||H;
+    var rh=Math.max(root.scrollHeight||0, H);   // scrollHeight is wrong pre-paint
+    // Fit BOTH width and height so the whole artboard — including the grey
+    // line under the CTA — is on screen. No clipping.
+    var S=Math.min(1, vw/W, vh/rh);
     if(Math.abs(S-lastS)>=0.002){ lastS=S; root.style.setProperty('transform','scale('+S+')','important'); }
-    // Always refresh the scroll height — scrollHeight is wrong until painted.
-    var rh=root.scrollHeight || 844;
     document.body.style.setProperty('height', Math.ceil(rh*S)+'px','important');
   }
   function painted(){
@@ -476,13 +478,17 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, topInset,
       Animated.timing(backFade, { toValue: 1, duration: 280, useNativeDriver: true }).start();
     }, BACK_DELAY_MS[htmlKey] ?? 350);
   };
-  // Fallback: reveal a bit after the doc loads even if 'rendered' never
-  // arrives (non-DC pages don't post it).
+  // Fallback reveals — the 'rendered' message is the fast path, but never
+  // leave the page (or its back button) hidden if it doesn't arrive.
   useEffect(() => {
     if (!webReady) return;
     const t = setTimeout(reveal, DC_PAGE_KEYS.includes(htmlKey) ? 1400 : 350);
     return () => clearTimeout(t);
   }, [webReady]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const hard = setTimeout(reveal, 3500); // absolute backstop from mount
+    return () => clearTimeout(hard);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isDcPage = DC_PAGE_KEYS.includes(htmlKey);
   const baseInject = isDcPage ? DC_PAGE_INJECT : ONBOARDING_WEB_INJECT;
@@ -2307,9 +2313,16 @@ function EditFieldOverlay({ field, answers, topInset, onSave, onClose }: {
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
           <Text style={{ fontFamily: FONT.displayBold, fontSize: 19, color: L.text, letterSpacing: -0.3 }}>Edit your {meta.title}</Text>
-          <TouchableOpacity onPress={onClose} hitSlop={12} style={s.bb}>
-            <Sym name="xmark" size={14} color={L.textSub} />
-          </TouchableOpacity>
+          <LiquidGlassButton
+            onPress={onClose}
+            hitSlop={12}
+            radius={17}
+            variant="regular"
+            fallbackColor="rgba(255,255,255,0.92)"
+            style={{ width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.10)' }}
+          >
+            <Sym name="xmark" size={14} color={L.text} />
+          </LiquidGlassButton>
         </View>
         <Text style={{ fontSize: 13, color: L.textSub, marginBottom: 16 }}>
           {field === 'experience' ? 'Pick the one that fits.' : `Type it in${meta.unit ? ` — in ${meta.unit}` : ''}.`}
