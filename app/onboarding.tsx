@@ -418,13 +418,14 @@ const DC_PAGE_INJECT = `
   var lastS=-1, H=844;
   function fit(){
     var root=document.getElementById('dc-root'); if(!root) return;
-    var vw=window.innerWidth||W, vh=window.innerHeight||H;
-    var rh=Math.max(root.scrollHeight||0, H);   // scrollHeight is wrong pre-paint
-    // Fit BOTH width and height so the whole artboard — including the grey
-    // line under the CTA — is on screen. No clipping.
-    var S=Math.min(1, vw/W, vh/rh);
+    // Fit to WIDTH only — keep the design at full readable size. Its real
+    // content height (scrollHeight is unaffected by the scale transform)
+    // drives the body height, so whatever runs past the screen (the grey
+    // line under the CTA, etc.) can be scrolled to.
+    var S=Math.min(1, (window.innerWidth||W)/W);
     if(Math.abs(S-lastS)>=0.002){ lastS=S; root.style.setProperty('transform','scale('+S+')','important'); }
-    document.body.style.setProperty('height', Math.ceil(rh*S)+'px','important');
+    var rh=Math.max(root.scrollHeight||0, H);
+    document.body.style.setProperty('height', Math.ceil(rh*S + 24)+'px','important');
   }
   function painted(){
     var r=document.getElementById('dc-root');
