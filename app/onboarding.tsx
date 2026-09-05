@@ -458,49 +458,6 @@ const GENERATE_PLAN_INJECT = `
 })();
 `;
 
-// rankReveal.html is designed around "Silver II". Retarget it to Bronze:
-// rename the rank, colour it bronze, nudge it up, kill the spinning
-// dotted-ray "loading" halo, and drop a warm glow in its place.
-// (The emblem image + the mini projection chart still read Silver — those
-// are baked assets and need a design re-export to fully fix.)
-const RANK_REVEAL_INJECT = `
-(function(){
-  var st=document.createElement('style');
-  st.textContent='@keyframes fpGlow{0%,100%{transform:scale(0.95);opacity:.75}50%{transform:scale(1.08);opacity:1}}';
-  document.head && document.head.appendChild(st);
-  function go(){
-    var hit=0;
-    var rays=document.querySelectorAll('div[style*="raysSpin"],div[style*="haloBreathe"],div[style*="repeating-conic-gradient"]');
-    for(var i=0;i<rays.length;i++){ rays[i].style.setProperty('display','none','important'); hit++; }
-    var img=document.querySelector('img[alt*="emblem"]');
-    if(img && img.parentElement && !img.parentElement.__fp){
-      img.parentElement.__fp=1;
-      img.parentElement.style.position='relative';
-      var g=document.createElement('div');
-      g.style.cssText='position:absolute;inset:-6%;border-radius:50%;pointer-events:none;z-index:0;background:radial-gradient(circle, rgba(255,196,120,.55) 0%, rgba(255,168,84,.22) 44%, rgba(255,168,84,0) 72%);animation:fpGlow 3.6s ease-in-out infinite';
-      img.parentElement.insertBefore(g, img);
-      hit++;
-    }
-    var d=document.querySelectorAll('div');
-    for(var j=0;j<d.length;j++){
-      var el=d[j], t=(el.textContent||'').trim();
-      if(el.children.length===0 && t==='Silver II'){
-        el.textContent='Bronze 1';
-        el.style.setProperty('color','#A9743B','important');
-        el.style.setProperty('font-weight','500','important');
-        el.style.setProperty('padding-top','0','important');
-        el.style.setProperty('margin-top','-10px','important');
-        hit++;
-      } else if(el.children.length===0 && /Stronger than \\d+% of new lifters/.test(t)){
-        el.textContent='Everyone starts here. Now you climb.';
-      }
-    }
-    return hit>=2;
-  }
-  if(!go()) [150,400,900,1800,3200,5000].forEach(function(x){ setTimeout(go,x); });
-})();
-`;
-
 // The page's own CTA slides in a beat after it loads. Delay the back button
 // to land with it, not before it.
 const BACK_DELAY_MS: Partial<Record<string, number>> = { trialTimeline: 1500, paywall: 1100, planReady: 500, generatePlan: 500 };
@@ -543,7 +500,6 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, topInset,
   const dcExtra =
     htmlKey === 'generatePlan' ? GENERATE_PLAN_INJECT :
     (htmlKey === 'trialTimeline' || htmlKey === 'paywall') ? FIT_BOTH_INJECT :
-    htmlKey === 'rankReveal' ? RANK_REVEAL_INJECT :
     undefined;
   const extraJs = extraJsProp
     ? (dcExtra ? extraJsProp + '\n' + dcExtra : extraJsProp)
