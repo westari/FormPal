@@ -359,6 +359,7 @@ function cinematicGraphInject(a: Record<string, any>): string {
   return `
 (function(){
   var Y=${years}, RL=${JSON.stringify(wasted.toLocaleString() + ' reps lost')}, ML=${JSON.stringify(months + ' months of muscle gone')}, P=${pct};
+  function post(m){ try{ window.ReactNativeWebView.postMessage(m); }catch(e){} }
   function apply(){
     var s=document.querySelectorAll('span.sc-interp'), hit=0;
     for(var i=0;i<s.length;i++){
@@ -371,6 +372,31 @@ function cinematicGraphInject(a: Record<string, any>): string {
     return hit>=2;
   }
   if(!apply()) [200,500,1000,2000,3500,5000].forEach(function(d){ setTimeout(apply,d); });
+
+  // The CTA ("Let's do it") is a <div sc-camel-on-click="{{ blast }}"> whose
+  // own handler only fires a burst animation — it never navigates. Wire it
+  // straight to advance so the graph isn't a dead end, and let the whole
+  // lower CTA strip act as the tap target once it's visible.
+  var wired=false;
+  document.addEventListener('pointerdown', function(){ post('__tap'); }, true);
+  function hunt(){
+    if(wired) return true;
+    var all=document.querySelectorAll('div,button');
+    for(var i=0;i<all.length;i++){
+      var el=all[i];
+      var t=(el.textContent||'').replace(/\\s+/g,' ').trim();
+      if(t.length>1 && t.length<=18 && /^(let'?s do it|let'?s go|i'?m in|continue|start)/i.test(t)){
+        var cs=getComputedStyle(el);
+        if(cs.display==='none' || cs.visibility==='hidden') continue;
+        el.addEventListener('click', function(ev){ ev.stopPropagation(); post('__tap'); post('advance'); }, true);
+        el.style.setProperty('cursor','pointer','important');
+        wired=true;
+        return true;
+      }
+    }
+    return false;
+  }
+  var tries=0, iv=setInterval(function(){ if(hunt() || ++tries>80) clearInterval(iv); }, 250);
 })();
 `;
 }
@@ -455,7 +481,7 @@ const DC_PAGE_KEYS: (keyof typeof ONB_HTML)[] = [
   // The redesigned rank + graph pages are the same 390-wide #dc-root format.
   'rankWheel', 'strengthAssessment', 'rankReveal', 'cinematicGraph',
 ];
-const DC_CTA_RE = "^(Continue|See my plan|See plan|Unlock my full plan|Unlock my plan|Unlock|Start my 3-day|Start my 3\\u2011day|Start my free trial|Start free trial|Start free|Next|Done|Get started)\\b";
+const DC_CTA_RE = "^(Continue|See my plan|See plan|Unlock my full plan|Unlock my plan|Unlock|Start my 3-day|Start my 3\\u2011day|Start my free trial|Start free trial|Start free|Next|Done|Get started|Let.s do it|Let.s go|I.m in)\\b";
 const DC_PAGE_INJECT = `
 (function () {
   function post(m){ try{ window.ReactNativeWebView.postMessage(m); }catch(e){} }
@@ -605,11 +631,13 @@ const DC_PAGE_INJECT = `
     fit();
     if(Math.abs(lastS-prevS)<0.003) stable++; else stable=0;
     prevS=lastS;
-    if(painted() && (stable>=2 || n>16)){ reveal(); return; }
-    if(n++<70) setTimeout(wait, 90);
+    if(painted() && (stable>=2 || n>20)){ reveal(); return; }
+    if(n++<90) setTimeout(wait, 90);
   })();
-  // Absolute backstop — never leave it hidden.
-  setTimeout(reveal, 2600);
+  // Absolute backstop — never leave it hidden. Long enough that a slow
+  // artboard finishes hydrating first (otherwise the reveal catches the
+  // interp slots still as grey placeholder pills).
+  setTimeout(reveal, 5000);
   window.addEventListener('resize', fit);
   true;
 })();
@@ -670,10 +698,10 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, topInset,
 
   const isDcPage = DC_PAGE_KEYS.includes(htmlKey);
   const baseInject = isDcPage ? DC_PAGE_INJECT : ONBOARDING_WEB_INJECT;
-  // Everything except planReady is a one-screen page → fit to the height too.
-  // rankReveal stays width-fit (fills the screen edge-to-edge, no white
-  // border) — the user wants it fully zoomed, scrolling any overflow.
-  const fitBothKeys = ['trialTimeline', 'paywall', 'rankWheel', 'strengthAssessment', 'cinematicGraph'];
+  // rankReveal + cinematicGraph stay width-fit (fill the screen edge-to-edge,
+  // no white border) — the user wants them fully zoomed, scrolling any
+  // overflow. The others fit to height so their CTA is always on screen.
+  const fitBothKeys = ['trialTimeline', 'paywall', 'rankWheel', 'strengthAssessment'];
   const dcExtra =
     htmlKey === 'generatePlan' ? GENERATE_PLAN_INJECT :
     fitBothKeys.includes(htmlKey) ? FIT_BOTH_INJECT :
@@ -714,14 +742,20 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, topInset,
           cacheEnabled
         />
       </Animated.View>
-      <Animated.View style={{ opacity: backFade, zIndex: 80 }} pointerEvents={webReady ? 'auto' : 'none'}>
+      {/* Absolute + anchored to the top of THIS screen — an RN View defaults
+          to position:relative, so when the wrapper was a plain flow child
+          after the flex:1 WebView its absolute child was being measured from
+          the bottom of the screen and pushed off. */}
+      <Animated.View
+        pointerEvents="box-none"
+        style={{ position: 'absolute', top: topInset + 8, left: 20, zIndex: 80, opacity: backFade }}
+      >
         <LiquidGlassButton
           onPress={() => { Haptics.selectionAsync(); onBack(); }}
           hitSlop={12}
           radius={17}
           variant={isDcPage ? 'regular' : 'clear'}
           fallbackColor={isDcPage ? 'rgba(255,255,255,0.92)' : 'rgba(0,0,0,0.35)'}
-          containerStyle={[web.backBtn, { top: topInset + 8 }]}
           style={[web.backCircle, isDcPage && web.backCircleDc]}
         >
           <SymbolView name="chevron.left" size={15} tintColor={isDcPage ? '#1b1f27' : '#fff'} type="monochrome" style={{ width: 15, height: 15 }} />
@@ -732,7 +766,6 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, topInset,
 }
 
 const web = StyleSheet.create({
-  backBtn:    { position: 'absolute', left: 20, zIndex: 60 },
   backCircle: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
   // On the white DC pages: a clean light chip, not a heavy dark blob.
   backCircleDc: { borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.10)', ...({ boxShadow: '0px 2px 8px rgba(0,0,0,0.10)' } as any) },
