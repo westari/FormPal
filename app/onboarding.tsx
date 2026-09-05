@@ -418,14 +418,15 @@ const DC_PAGE_INJECT = `
   var lastS=-1, H=844;
   function fit(){
     var root=document.getElementById('dc-root'); if(!root) return;
-    // Fit to WIDTH only — keep the design at full readable size. Its real
-    // content height (scrollHeight is unaffected by the scale transform)
-    // drives the body height, so whatever runs past the screen (the grey
-    // line under the CTA, etc.) can be scrolled to.
-    var S=Math.min(1, (window.innerWidth||W)/W);
-    if(Math.abs(S-lastS)>=0.002){ lastS=S; root.style.setProperty('transform','scale('+S+')','important'); }
+    var vw=window.innerWidth||W, vh=window.innerHeight||H;
     var rh=Math.max(root.scrollHeight||0, H);
-    document.body.style.setProperty('height', Math.ceil(rh*S + 24)+'px','important');
+    // Default: fit to WIDTH, full readable size, scroll the overflow.
+    // window.__dcFitBoth (set by the per-page inject for the one-screen
+    // pages) instead shrinks to fit the height too, so everything — the
+    // grey line under the CTA included — is visible with no scrolling.
+    var S = window.__dcFitBoth ? Math.min(1, vw/W, vh/rh) : Math.min(1, vw/W);
+    if(Math.abs(S-lastS)>=0.002){ lastS=S; root.style.setProperty('transform','scale('+S+')','important'); }
+    document.body.style.setProperty('height', Math.ceil(rh*S + (window.__dcFitBoth?0:24))+'px','important');
   }
   function painted(){
     var r=document.getElementById('dc-root');
@@ -444,12 +445,15 @@ const DC_PAGE_INJECT = `
 })();
 `;
 
-// generatePlan is a timed "generating…" beat. Never let the user get stuck
-// on it — auto-advance after ~13s regardless of its own progress bar (its
-// own animation runs ~9s, then shows a CTA).
+// One-screen pages: fit to the screen height too so nothing needs scrolling.
+const FIT_BOTH_INJECT = `window.__dcFitBoth=1;`;
+
+// generatePlan is a timed "generating…" beat + a one-screen page. Auto-
+// advance as a backstop (its own progress runs ~9s then shows a CTA).
 const GENERATE_PLAN_INJECT = `
 (function(){
-  setTimeout(function(){ try{ window.ReactNativeWebView.postMessage('advance'); }catch(e){} }, 13000);
+  window.__dcFitBoth=1;
+  setTimeout(function(){ try{ window.ReactNativeWebView.postMessage('advance'); }catch(e){} }, 16000);
   true;
 })();
 `;
@@ -493,7 +497,10 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, topInset,
 
   const isDcPage = DC_PAGE_KEYS.includes(htmlKey);
   const baseInject = isDcPage ? DC_PAGE_INJECT : ONBOARDING_WEB_INJECT;
-  const dcExtra = htmlKey === 'generatePlan' ? GENERATE_PLAN_INJECT : undefined;
+  const dcExtra =
+    htmlKey === 'generatePlan' ? GENERATE_PLAN_INJECT :
+    (htmlKey === 'trialTimeline' || htmlKey === 'paywall') ? FIT_BOTH_INJECT :
+    undefined;
   const extraJs = extraJsProp
     ? (dcExtra ? extraJsProp + '\n' + dcExtra : extraJsProp)
     : (dcExtra ?? (htmlKey === 'strengthAssessment' ? STRENGTH_ICONS_JS : undefined));
@@ -2287,7 +2294,7 @@ function EditFieldOverlay({ field, answers, topInset, onSave, onClose }: {
   const [val, setVal] = useState<string>(initial);
   const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    Animated.spring(anim, { toValue: 1, useNativeDriver: true, friction: 9, tension: 90 }).start();
+    Animated.timing(anim, { toValue: 1, duration: 170, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const save = () => {
@@ -2304,16 +2311,18 @@ function EditFieldOverlay({ field, answers, topInset, onSave, onClose }: {
   return (
     <View style={[StyleSheet.absoluteFill, { justifyContent: 'flex-end' }]}>
       <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(17,24,39,0.35)' }]} onPress={onClose} />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ width: '100%' }}>
       <Animated.View
         style={{
-          backgroundColor: L.card, borderTopLeftRadius: 24, borderTopRightRadius: 24,
-          paddingHorizontal: 24, paddingTop: 20, paddingBottom: 28,
-          transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [340, 0] }) }],
+          width: '100%',
+          backgroundColor: L.card, borderTopLeftRadius: 26, borderTopRightRadius: 26,
+          paddingHorizontal: 22, paddingTop: 18, paddingBottom: 34,
+          opacity: anim,
+          transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [220, 0] }) }],
         }}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-          <Text style={{ fontFamily: FONT.displayBold, fontSize: 19, color: L.text, letterSpacing: -0.3 }}>Edit your {meta.title}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <Text style={{ fontFamily: FONT.display, fontSize: 20, fontWeight: '600', color: L.text, letterSpacing: -0.3 }}>Edit {meta.title}</Text>
           <LiquidGlassButton
             onPress={onClose}
             hitSlop={12}
@@ -2325,9 +2334,6 @@ function EditFieldOverlay({ field, answers, topInset, onSave, onClose }: {
             <Sym name="xmark" size={14} color={L.text} />
           </LiquidGlassButton>
         </View>
-        <Text style={{ fontSize: 13, color: L.textSub, marginBottom: 16 }}>
-          {field === 'experience' ? 'Pick the one that fits.' : `Type it in${meta.unit ? ` — in ${meta.unit}` : ''}.`}
-        </Text>
 
         {field === 'experience' ? (
           <View style={{ gap: 8 }}>
