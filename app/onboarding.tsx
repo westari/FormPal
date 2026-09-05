@@ -364,8 +364,14 @@ const DC_PAGE_INJECT = `
     var t = ((c || e.target).textContent || '').replace(/\\s+/g,' ').trim();
     if (RE.test(t)) { post('__tap'); post('advance'); }
   }, true);
-  var CSS = 'html,body{margin:0!important;padding:0!important;background:#ffffff!important;}'
-    + '#dc-root{margin:0 auto!important;}';
+  // The artboards ship with body{height:100%} and #dc-root{height:100%},
+  // which locks their content to one viewport and CLIPS the bottom (the
+  // grey subtext + the CTA). Unlock it so the page flows and scrolls all
+  // the way to the button, with a little breathing room underneath.
+  var CSS = 'html{background:#ffffff!important;}'
+    + 'body{margin:0!important;padding:0!important;background:#ffffff!important;height:auto!important;min-height:100%!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch!important;}'
+    + '#dc-root,#dc-root>.sc-host{height:auto!important;min-height:100%!important;}'
+    + '#dc-root{margin:0 auto!important;padding-bottom:44px!important;}';
   var s=document.createElement('style'); s.textContent=CSS;
   (document.head||document.documentElement).appendChild(s);
   true;
@@ -373,10 +379,11 @@ const DC_PAGE_INJECT = `
 `;
 
 // generatePlan is a timed "generating…" beat. Never let the user get stuck
-// on it — auto-advance after ~10s regardless of its own progress bar.
+// on it — auto-advance after ~13s regardless of its own progress bar (its
+// own animation runs ~9s, then shows a CTA).
 const GENERATE_PLAN_INJECT = `
 (function(){
-  setTimeout(function(){ try{ window.ReactNativeWebView.postMessage('advance'); }catch(e){} }, 10000);
+  setTimeout(function(){ try{ window.ReactNativeWebView.postMessage('advance'); }catch(e){} }, 13000);
   true;
 })();
 `;
@@ -389,11 +396,17 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, topInset, extraJs: ex
   extraJs?: string;
 }) {
   const fade = useRef(new Animated.Value(0)).current;
+  const [webReady, setWebReady] = useState(false);
+  // Fade the page (and its back button) in TOGETHER, once the WebView has
+  // loaded and had a beat to unpack — not on mount, when it's still blank.
   useEffect(() => {
-    const a = Animated.timing(fade, { toValue: 1, duration: 240, easing: Easing.out(Easing.quad), useNativeDriver: true });
-    a.start();
-    return () => a.stop();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!webReady) return;
+    const t = setTimeout(() => {
+      Animated.timing(fade, { toValue: 1, duration: 320, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
+    }, 350);
+    return () => clearTimeout(t);
+  }, [webReady]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const isDcPage = DC_PAGE_KEYS.includes(htmlKey);
   const baseInject = isDcPage ? DC_PAGE_INJECT : ONBOARDING_WEB_INJECT;
   const dcExtra = htmlKey === 'generatePlan' ? GENERATE_PLAN_INJECT : undefined;
@@ -401,11 +414,12 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, topInset, extraJs: ex
   return (
     <View style={{ flex: 1, backgroundColor: isDcPage ? '#ffffff' : '#f4f4f2' }}>
       {!isDcPage && <AppBackground />}
-      <Animated.View style={{ flex: 1, marginTop: topInset, opacity: fade }}>
+      <Animated.View style={{ flex: 1, marginTop: isDcPage ? 0 : topInset, opacity: fade }}>
         <WebView
           source={ONB_HTML[htmlKey] as any}
           originWhitelist={['*']}
           injectedJavaScript={extraJs ? baseInject + '\n' + extraJs : baseInject}
+          onLoadEnd={() => setWebReady(true)}
           onMessage={(e) => {
             const m = e.nativeEvent.data;
             if (m === '__tap' || m === '__tick') { Haptics.selectionAsync(); return; }
@@ -415,9 +429,10 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, topInset, extraJs: ex
           style={{ flex: 1, backgroundColor: isDcPage ? '#ffffff' : 'transparent' }}
           opaque={isDcPage}
           scrollEnabled
-          bounces={false}
+          bounces={isDcPage}
+          decelerationRate="normal"
+          nestedScrollEnabled
           overScrollMode="never"
-          androidLayerType="hardware"
           setSupportMultipleWindows={false}
           allowFileAccess
           allowFileAccessFromFileURLs
@@ -427,22 +442,19 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, topInset, extraJs: ex
           cacheEnabled
         />
       </Animated.View>
-      {/* Real Liquid Glass example — floating circular control over media,
-          exactly the case Apple designed it for. 'clear' variant reads
-          better over busy video/WebView content than 'regular'. Falls back
-          to the old flat rgba(0,0,0,0.35) circle until the native module is
-          built in (see components/LiquidGlass.tsx). */}
-      <LiquidGlassButton
-        onPress={() => { Haptics.selectionAsync(); onBack(); }}
-        hitSlop={12}
-        radius={17}
-        variant="clear"
-        fallbackColor="rgba(0,0,0,0.35)"
-        containerStyle={[web.backBtn, { top: topInset + 8 }]}
-        style={web.backCircle}
-      >
-        <SymbolView name="chevron.left" size={15} tintColor="#fff" type="monochrome" style={{ width: 15, height: 15 }} />
-      </LiquidGlassButton>
+      <Animated.View style={{ opacity: fade }} pointerEvents={webReady ? 'auto' : 'none'}>
+        <LiquidGlassButton
+          onPress={() => { Haptics.selectionAsync(); onBack(); }}
+          hitSlop={12}
+          radius={17}
+          variant="clear"
+          fallbackColor="rgba(0,0,0,0.35)"
+          containerStyle={[web.backBtn, { top: topInset + 8 }]}
+          style={web.backCircle}
+        >
+          <SymbolView name="chevron.left" size={15} tintColor="#fff" type="monochrome" style={{ width: 15, height: 15 }} />
+        </LiquidGlassButton>
+      </Animated.View>
     </View>
   );
 }
@@ -2083,13 +2095,21 @@ export default function OnboardingScreen() {
   }
 
   if (appState === 'planReady') {
+    // Back = "edit my info" — the page can't take inline edits (it's a
+    // static artboard), so it drops back into the question flow at the
+    // About-You block. Answering through again returns here.
+    const editInfo = () => {
+      const idx = getVisibleSteps(answers).findIndex(s => s.id === 'age');
+      setStepIndex(idx >= 0 ? idx : 0);
+      setAppState('onboarding');
+    };
     return (
       <OnboardingWebScreen
         htmlKey="planReady"
         topInset={insets.top}
         extraJs={planReadyInject(answers)}
         onAdvance={() => setAppState('trialTimeline')}
-        onBack={() => setAppState('generatePlan')}
+        onBack={editInfo}
       />
     );
   }
