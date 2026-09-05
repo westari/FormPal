@@ -323,6 +323,7 @@ function planReadyInject(a: Record<string, any>): string {
   return `
 (function(){
   var W=${JSON.stringify(w)}, H=${JSON.stringify(h)}, A=${JSON.stringify(ag)}, E=${JSON.stringify(ex)}, D=${JSON.stringify(gd)};
+  function post(m){ try{ window.ReactNativeWebView.postMessage(m); }catch(e){} }
   function apply(){
     var s=document.querySelectorAll('span.sc-interp'), hit=0;
     for(var i=0;i<s.length;i++){
@@ -336,6 +337,20 @@ function planReadyInject(a: Record<string, any>): string {
     return hit>=3;
   }
   if(!apply()) [200,500,1000,2000,3500,5000].forEach(function(d){ setTimeout(apply,d); });
+  // Breathing room above the "We think you can reach…" heading — it renders
+  // jammed against the top otherwise.
+  var st=document.createElement('style');
+  st.textContent='#dc-root{padding-top:40px!important;}';
+  (document.head||document.documentElement).appendChild(st);
+  // The little pencil SVGs next to each info value are cursor:pointer design
+  // elements with no handler — make them open the native quick-edit page.
+  document.addEventListener('click', function(e){
+    var el=e.target;
+    for(var i=0; el && i<4; i++, el=el.parentElement){
+      var s=(el.getAttribute && el.getAttribute('style'))||'';
+      if((el.tagName==='svg'||el.tagName==='SVG') && /cursor:\\s*pointer/.test(s)){ post('__tap'); post('editinfo'); return; }
+    }
+  }, true);
 })();
 `;
 }
@@ -388,29 +403,48 @@ const GENERATE_PLAN_INJECT = `
 })();
 `;
 
-function OnboardingWebScreen({ htmlKey, onAdvance, onBack, topInset, extraJs: extraJsProp }: {
+// The paywall artboard lands part-scrolled, hiding its own top row. Pin it
+// to the top a few times as it settles.
+const PAYWALL_INJECT = `
+(function(){
+  function top(){ try{ window.scrollTo(0,0); document.scrollingElement && (document.scrollingElement.scrollTop=0); }catch(e){} }
+  [0,80,250,600,1200,2200].forEach(function(d){ setTimeout(top,d); });
+  true;
+})();
+`;
+
+// The page's own CTA slides in a beat after it loads. Delay the back button
+// to land with it, not before it.
+const BACK_DELAY_MS: Partial<Record<string, number>> = { trialTimeline: 1500, paywall: 1100, planReady: 500, generatePlan: 500 };
+
+function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, topInset, extraJs: extraJsProp }: {
   htmlKey: keyof typeof ONB_HTML;
   onAdvance: () => void;
   onBack: () => void;
+  onEditInfo?: () => void;
   topInset: number;
   extraJs?: string;
 }) {
   const fade = useRef(new Animated.Value(0)).current;
+  const backFade = useRef(new Animated.Value(0)).current;
   const [webReady, setWebReady] = useState(false);
-  // Fade the page (and its back button) in TOGETHER, once the WebView has
-  // loaded and had a beat to unpack — not on mount, when it's still blank.
   useEffect(() => {
     if (!webReady) return;
-    const t = setTimeout(() => {
+    const t1 = setTimeout(() => {
       Animated.timing(fade, { toValue: 1, duration: 320, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
     }, 350);
-    return () => clearTimeout(t);
+    const t2 = setTimeout(() => {
+      Animated.timing(backFade, { toValue: 1, duration: 280, useNativeDriver: true }).start();
+    }, BACK_DELAY_MS[htmlKey] ?? 350);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [webReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isDcPage = DC_PAGE_KEYS.includes(htmlKey);
   const baseInject = isDcPage ? DC_PAGE_INJECT : ONBOARDING_WEB_INJECT;
-  const dcExtra = htmlKey === 'generatePlan' ? GENERATE_PLAN_INJECT : undefined;
-  const extraJs = extraJsProp ?? dcExtra ?? (htmlKey === 'strengthAssessment' ? STRENGTH_ICONS_JS : undefined);
+  const dcExtra = htmlKey === 'generatePlan' ? GENERATE_PLAN_INJECT : htmlKey === 'paywall' ? PAYWALL_INJECT : undefined;
+  const extraJs = extraJsProp
+    ? (dcExtra ? extraJsProp + '\n' + dcExtra : extraJsProp)
+    : (dcExtra ?? (htmlKey === 'strengthAssessment' ? STRENGTH_ICONS_JS : undefined));
   return (
     <View style={{ flex: 1, backgroundColor: isDcPage ? '#ffffff' : '#f4f4f2' }}>
       {!isDcPage && <AppBackground />}
@@ -424,6 +458,7 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, topInset, extraJs: ex
             const m = e.nativeEvent.data;
             if (m === '__tap' || m === '__tick') { Haptics.selectionAsync(); return; }
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            if (m === 'editinfo') { onEditInfo?.(); return; }
             if (m === 'advance' || m === 'skip') onAdvance();
           }}
           style={{ flex: 1, backgroundColor: isDcPage ? '#ffffff' : 'transparent' }}
@@ -442,17 +477,17 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, topInset, extraJs: ex
           cacheEnabled
         />
       </Animated.View>
-      <Animated.View style={{ opacity: fade }} pointerEvents={webReady ? 'auto' : 'none'}>
+      <Animated.View style={{ opacity: backFade, zIndex: 80 }} pointerEvents={webReady ? 'auto' : 'none'}>
         <LiquidGlassButton
           onPress={() => { Haptics.selectionAsync(); onBack(); }}
           hitSlop={12}
           radius={17}
-          variant="clear"
-          fallbackColor="rgba(0,0,0,0.35)"
+          variant={isDcPage ? 'regular' : 'clear'}
+          fallbackColor={isDcPage ? 'rgba(255,255,255,0.92)' : 'rgba(0,0,0,0.35)'}
           containerStyle={[web.backBtn, { top: topInset + 8 }]}
-          style={web.backCircle}
+          style={[web.backCircle, isDcPage && web.backCircleDc]}
         >
-          <SymbolView name="chevron.left" size={15} tintColor="#fff" type="monochrome" style={{ width: 15, height: 15 }} />
+          <SymbolView name="chevron.left" size={15} tintColor={isDcPage ? '#1b1f27' : '#fff'} type="monochrome" style={{ width: 15, height: 15 }} />
         </LiquidGlassButton>
       </Animated.View>
     </View>
@@ -462,6 +497,8 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, topInset, extraJs: ex
 const web = StyleSheet.create({
   backBtn:    { position: 'absolute', left: 20, zIndex: 60 },
   backCircle: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
+  // On the white DC pages: a clean light chip, not a heavy dark blob.
+  backCircleDc: { borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.10)', ...({ boxShadow: '0px 2px 8px rgba(0,0,0,0.10)' } as any) },
 });
 
 // ── LocationBubbles — 3 overlapping gradient spheres (Home / Gym / Mix)
@@ -1553,7 +1590,9 @@ type AppState =
   // Rank run — moved to AFTER the math (was a set of question-flow steps).
   | 'rankWheel' | 'rankAssess' | 'rankReveal'
   // The four pre-paywall WebView pages (assets/*.html), in order.
-  | 'generatePlan' | 'planReady' | 'trialTimeline' | 'webPaywall';
+  | 'generatePlan' | 'planReady' | 'trialTimeline' | 'webPaywall'
+  // Native quick-edit sheet reached from the plan-ready page's pencils.
+  | 'editInfo';
 
 export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
@@ -2095,21 +2134,26 @@ export default function OnboardingScreen() {
   }
 
   if (appState === 'planReady') {
-    // Back = "edit my info" — the page can't take inline edits (it's a
-    // static artboard), so it drops back into the question flow at the
-    // About-You block. Answering through again returns here.
-    const editInfo = () => {
-      const idx = getVisibleSteps(answers).findIndex(s => s.id === 'age');
-      setStepIndex(idx >= 0 ? idx : 0);
-      setAppState('onboarding');
-    };
     return (
       <OnboardingWebScreen
         htmlKey="planReady"
         topInset={insets.top}
         extraJs={planReadyInject(answers)}
         onAdvance={() => setAppState('trialTimeline')}
-        onBack={editInfo}
+        onBack={() => setAppState('generatePlan')}
+        // The pencil icons on the page open this native quick-edit sheet.
+        onEditInfo={() => setAppState('editInfo')}
+      />
+    );
+  }
+
+  if (appState === 'editInfo') {
+    return (
+      <EditInfoScreen
+        answers={answers}
+        topInset={insets.top}
+        onSave={(patch) => { setAnswers(a => ({ ...a, ...patch })); setAppState('planReady'); }}
+        onCancel={() => setAppState('planReady')}
       />
     );
   }
@@ -2158,6 +2202,82 @@ function CalcMathBeat({ onDone }: { onDone: () => void }) {
     </OnboardingBackground>
   );
 }
+
+// ── EditInfoScreen — the native quick-edit sheet reached from the pencil
+// icons on the plan-ready page. Edits age / height / weight / experience
+// and hands a patch back to `answers`. ────────────────────────────────────────
+
+const EXPERIENCE_OPTS = ['Beginner', 'Some experience', 'Intermediate', 'Advanced'];
+
+function EditInfoScreen({ answers, topInset, onSave, onCancel }: {
+  answers: Record<string, any>;
+  topInset: number;
+  onSave: (patch: Record<string, any>) => void;
+  onCancel: () => void;
+}) {
+  const [age, setAge]       = useState<string>(answers.age != null ? String(answers.age) : '25');
+  const [height, setHeight] = useState<string>(typeof answers.height === 'string' ? answers.height : `5'8"`);
+  const [weight, setWeight] = useState<number>(typeof answers.weight === 'number' ? answers.weight : 160);
+  const [exp, setExp]       = useState<string>(typeof answers.experience === 'string' ? answers.experience : 'Intermediate');
+
+  return (
+    <OnboardingBackground>
+      <View style={{ flex: 1, paddingTop: topInset }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12 }}>
+          <Text style={{ fontFamily: FONT.displayBold, fontSize: 20, color: L.text, letterSpacing: -0.4 }}>Edit your info</Text>
+          <TouchableOpacity onPress={onCancel} hitSlop={12} style={s.bb}>
+            <Sym name="xmark" size={15} color={L.textSub} />
+          </TouchableOpacity>
+        </View>
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 8, paddingBottom: 140 }} showsVerticalScrollIndicator={false}>
+          <Text style={ei.label}>Age</Text>
+          <View style={ei.pickerWrap}>
+            <Picker selectedValue={age} onValueChange={(v) => setAge(String(v))} itemStyle={{ color: L.text, fontSize: 20 }}>
+              {AGE_OPTIONS.map(o => <Picker.Item key={o} label={o} value={o} />)}
+            </Picker>
+          </View>
+
+          <Text style={ei.label}>Height</Text>
+          <View style={ei.pickerWrap}>
+            <Picker selectedValue={height} onValueChange={(v) => setHeight(String(v))} itemStyle={{ color: L.text, fontSize: 20 }}>
+              {HEIGHT_OPTIONS.map(o => <Picker.Item key={o} label={o} value={o} />)}
+            </Picker>
+          </View>
+
+          <Text style={ei.label}>Weight</Text>
+          <WeightRulerSlider value={weight} onChange={setWeight} />
+
+          <Text style={[ei.label, { marginTop: 24 }]}>Experience</Text>
+          <View style={{ gap: 10 }}>
+            {EXPERIENCE_OPTS.map(o => {
+              const sel = exp === o;
+              return (
+                <TouchableOpacity key={o} onPress={() => setExp(o)} activeOpacity={0.7} style={[s.opt, sel && s.optSel]}>
+                  <Text style={[s.optTxt, sel && s.optTxtSel]}>{o}</Text>
+                  <View style={[s.radio, sel && s.radioSel]}>{sel && <Sym name="checkmark" size={11} color="#fff" />}</View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </ScrollView>
+        <View style={s.bn}>
+          <TouchableOpacity
+            style={s.cb}
+            activeOpacity={0.85}
+            onPress={() => { haptic(Haptics.ImpactFeedbackStyle.Medium); onSave({ age, height, weight, experience: exp }); }}
+          >
+            <Text style={s.ct}>Save</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </OnboardingBackground>
+  );
+}
+
+const ei = StyleSheet.create({
+  label: { fontSize: 13, fontWeight: W.bold, color: L.textDim, letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 6, marginTop: 18 },
+  pickerWrap: { backgroundColor: L.card, borderRadius: 16, borderWidth: 1, borderColor: L.border, overflow: 'hidden' },
+});
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
