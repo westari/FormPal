@@ -1685,6 +1685,16 @@ export default function OnboardingScreen() {
           <TouchableOpacity style={h.btn} onPress={() => { haptic(Haptics.ImpactFeedbackStyle.Medium); setStepIndex(0); setAppState('onboarding'); }} activeOpacity={0.85}>
             <Text style={h.btnTxt}>Build my plan</Text>
           </TouchableOpacity>
+          {/* DEV — jump straight to the post-math sequence (rank → generate
+              plan → plan ready → trial → paywall) to test the new pages
+              without going through every question. */}
+          <TouchableOpacity
+            onPress={() => { haptic(); setMathLinesDone(false); setAppState('rankWheel'); }}
+            style={{ alignSelf: 'center', marginTop: 14, paddingVertical: 8, paddingHorizontal: 16 }}
+            activeOpacity={0.7}
+          >
+            <Text style={{ color: 'rgba(255,255,255,0.55)', fontSize: 13, fontWeight: '600' }}>Skip to rank (dev)</Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
