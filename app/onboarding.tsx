@@ -304,7 +304,7 @@ const ONB_HTML = {
   // the user's answers (see the *Inject helpers).
   generatePlan:       require('../assets/generateplan.html'),
   planReady:          require('../assets/planready.html'),
-  trialTimeline:      require('../assets/trialtimeline.html'),
+  trialTimeline:      require('../assets/trialtimeline2.html'),
   paywall:            require('../assets/paywall.html'),
 } as const;
 
