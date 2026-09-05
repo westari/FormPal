@@ -340,38 +340,43 @@ function planReadyInject(a: Record<string, any>): string {
 `;
 }
 
-// The 4 pre-paywall pages are Claude-Design artboards (390px-wide #dc-root),
-// NOT the 472px rank artifacts ONBOARDING_WEB_INJECT was written for — that
-// script's fit()/CSS would mis-scale them. This minimal inject just makes
-// the page transparent, fits #dc-root to the viewport width pinned to the
-// top, and posts 'advance' when the primary CTA is tapped.
+// The 4 pre-paywall pages are Claude-Design artboards (a fixed ~390px-wide
+// #dc-root on a white ground), NOT the 472px rank artifacts
+// ONBOARDING_WEB_INJECT was written for. Keep this DEAD simple: solid white
+// (no scaling — a scale transform was mangling the layout), centre the
+// artboard, and post 'advance' when the primary CTA is tapped. Matches any
+// clickable element, not just <button>/[role=button].
 const DC_PAGE_KEYS: (keyof typeof ONB_HTML)[] = ['generatePlan', 'planReady', 'trialTimeline', 'paywall'];
+const DC_CTA_RE = "^(Continue|See my plan|See plan|Unlock my full plan|Unlock my plan|Unlock|Start my 3-day|Start my 3\\u2011day|Start my free trial|Start free trial|Start free|Next|Done|Get started)\\b";
 const DC_PAGE_INJECT = `
 (function () {
   function post(m){ try{ window.ReactNativeWebView.postMessage(m); }catch(e){} }
-  function btnFor(el){ for(var i=0; el && i<6; i++, el=el.parentElement){ var r=el.getAttribute&&el.getAttribute('role'); if(r==='button'||el.tagName==='BUTTON') return el; } return null; }
-  document.addEventListener('pointerdown', function(e){ if(btnFor(e.target)) post('__tap'); }, true);
-  document.addEventListener('click', function(e){
-    var b=btnFor(e.target); if(!b) return;
-    var t=(b.textContent||'').replace(/\\s+/g,' ').trim();
-    if(/^(Continue|See my plan|See plan|Unlock my full plan|Unlock my plan|Start my 3-day|Start my 3\\u2011day|Start my free trial|Start free trial|Next|Done)\\b/i.test(t)) return post('advance');
-  }, true);
-  var CSS = 'html,body{margin:0!important;padding:0!important;background:transparent!important;}'
-    + '#dc-root{transform-origin:top center!important;}';
-  function ensure(){ if(document.getElementById('__dc_css')) return; var s=document.createElement('style'); s.id='__dc_css'; s.textContent=CSS; (document.head||document.documentElement).appendChild(s); }
-  function fit(){
-    ensure();
-    var root=document.getElementById('dc-root'); if(!root) return;
-    var vw=window.innerWidth||390; var rw=root.scrollWidth||390;
-    var S=Math.min(1, vw/rw);
-    root.style.setProperty('transform','scale('+S+')','important');
+  var RE = new RegExp(${JSON.stringify(DC_CTA_RE)}, 'i');
+  function clickable(el){
+    for(var i=0; el && i<8; i++, el=el.parentElement){
+      var r = el.getAttribute && el.getAttribute('role');
+      if(el.tagName==='BUTTON' || el.tagName==='A' || r==='button' || (el.getAttribute && el.getAttribute('onclick')!=null) || (el.style && el.style.cursor==='pointer')) return el;
+    }
+    return null;
   }
-  fit();
-  var obs=new MutationObserver(function(){ setTimeout(fit,60); });
-  obs.observe(document.documentElement,{childList:true,subtree:true});
-  window.addEventListener('resize', fit);
-  [60,200,500,1200,2500].forEach(function(d){ setTimeout(fit,d); });
-  setTimeout(function(){ obs.disconnect(); }, 4000);
+  document.addEventListener('click', function(e){
+    var c = clickable(e.target);
+    var t = ((c || e.target).textContent || '').replace(/\\s+/g,' ').trim();
+    if (RE.test(t)) { post('__tap'); post('advance'); }
+  }, true);
+  var CSS = 'html,body{margin:0!important;padding:0!important;background:#ffffff!important;}'
+    + '#dc-root{margin:0 auto!important;}';
+  var s=document.createElement('style'); s.textContent=CSS;
+  (document.head||document.documentElement).appendChild(s);
+  true;
+})();
+`;
+
+// generatePlan is a timed "generating…" beat. Never let the user get stuck
+// on it — auto-advance after ~10s regardless of its own progress bar.
+const GENERATE_PLAN_INJECT = `
+(function(){
+  setTimeout(function(){ try{ window.ReactNativeWebView.postMessage('advance'); }catch(e){} }, 10000);
   true;
 })();
 `;
@@ -391,10 +396,11 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, topInset, extraJs: ex
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const isDcPage = DC_PAGE_KEYS.includes(htmlKey);
   const baseInject = isDcPage ? DC_PAGE_INJECT : ONBOARDING_WEB_INJECT;
-  const extraJs = extraJsProp ?? (htmlKey === 'strengthAssessment' ? STRENGTH_ICONS_JS : undefined);
+  const dcExtra = htmlKey === 'generatePlan' ? GENERATE_PLAN_INJECT : undefined;
+  const extraJs = extraJsProp ?? dcExtra ?? (htmlKey === 'strengthAssessment' ? STRENGTH_ICONS_JS : undefined);
   return (
-    <View style={{ flex: 1, backgroundColor: '#f4f4f2' }}>
-      <AppBackground />
+    <View style={{ flex: 1, backgroundColor: isDcPage ? '#ffffff' : '#f4f4f2' }}>
+      {!isDcPage && <AppBackground />}
       <Animated.View style={{ flex: 1, marginTop: topInset, opacity: fade }}>
         <WebView
           source={ONB_HTML[htmlKey] as any}
@@ -406,8 +412,8 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, topInset, extraJs: ex
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             if (m === 'advance' || m === 'skip') onAdvance();
           }}
-          style={{ flex: 1, backgroundColor: 'transparent' }}
-          opaque={false}
+          style={{ flex: 1, backgroundColor: isDcPage ? '#ffffff' : 'transparent' }}
+          opaque={isDcPage}
           scrollEnabled
           bounces={false}
           overScrollMode="never"
@@ -758,13 +764,11 @@ const STEPS: Step[] = [
     { label: 'No thanks', sfSymbol: 'bell.slash.fill', customIcon: ICON.notifOff },
   ]},
 
-  // ── The rank run — every question is done; nothing below is a question.
-  { id: 'rankWheelIntro', section: 'Rank', type: 'webview', question: '', htmlKey: 'rankWheel' },
-  { id: 'rankAssess',     section: 'Rank', type: 'webview', question: '', htmlKey: 'strengthAssessment' },
-  { id: 'rankReveal',     section: 'Rank', type: 'webview', question: '', htmlKey: 'rankReveal' },
+  // NOTE: the rank run (wheel → assessment → reveal) used to sit here. It
+  // now runs AFTER the math/reversal, as an appState sequence — see the
+  // 'rankWheel'/'rankAssess'/'rankReveal' render blocks below.
 
-  // The demo, as a clip instead of "do 5 reps". The math + reversal + plan
-  // come right after it in the next commit.
+  // The demo, as a clip instead of "do 5 reps".
   { id: 'demoClip', section: 'Wrap up', type: 'videoClip',
     question: 'This is FormPal watching a rep.',
     subtitle: "It counts the clean ones — and tells you exactly why the rest didn't." },
@@ -1534,6 +1538,8 @@ function GuessSlider({ value, onChange }: { value: number; onChange: (v: number)
 
 type AppState =
   | 'welcome' | 'onboarding' | 'calcMath' | 'cinematic' | 'reversal'
+  // Rank run — moved to AFTER the math (was a set of question-flow steps).
+  | 'rankWheel' | 'rankAssess' | 'rankReveal'
   // The four pre-paywall WebView pages (assets/*.html), in order.
   | 'generatePlan' | 'planReady' | 'trialTimeline' | 'webPaywall';
 
@@ -2006,7 +2012,7 @@ export default function OnboardingScreen() {
           </View>
           {mathLinesDone && (
             <View style={s.bn}>
-              <TouchableOpacity style={s.cb} onPress={() => { haptic(Haptics.ImpactFeedbackStyle.Medium); setMathLinesDone(false); setAppState('generatePlan'); }} activeOpacity={0.85}>
+              <TouchableOpacity style={s.cb} onPress={() => { haptic(Haptics.ImpactFeedbackStyle.Medium); setMathLinesDone(false); setAppState('rankWheel'); }} activeOpacity={0.85}>
                 <Text style={s.ct}>Continue</Text>
               </TouchableOpacity>
             </View>
@@ -2016,9 +2022,44 @@ export default function OnboardingScreen() {
     );
   }
 
+  // ── Rank run — now AFTER the math. Same WebView artifacts as before. ────────
+
+  if (appState === 'rankWheel') {
+    return (
+      <OnboardingWebScreen
+        htmlKey="rankWheel"
+        topInset={insets.top}
+        onAdvance={() => setAppState('rankAssess')}
+        onBack={() => { setMathLinesDone(false); setAppState('reversal'); }}
+      />
+    );
+  }
+
+  if (appState === 'rankAssess') {
+    return (
+      <OnboardingWebScreen
+        htmlKey="strengthAssessment"
+        topInset={insets.top}
+        onAdvance={() => setAppState('rankReveal')}
+        onBack={() => setAppState('rankWheel')}
+      />
+    );
+  }
+
+  if (appState === 'rankReveal') {
+    return (
+      <OnboardingWebScreen
+        htmlKey="rankReveal"
+        topInset={insets.top}
+        onAdvance={() => setAppState('generatePlan')}
+        onBack={() => setAppState('rankAssess')}
+      />
+    );
+  }
+
   // ── The four pre-paywall WebView pages (assets/*.html). Each advances on
-  // its own CTA (ONBOARDING_WEB_INJECT catches the button text); planReady
-  // gets the user's answers rewritten into its stat slots. ────────────────────
+  // its own CTA (the inject catches the button text); planReady gets the
+  // user's answers rewritten into its stat slots. ───────────────────────────
 
   if (appState === 'generatePlan') {
     return (
