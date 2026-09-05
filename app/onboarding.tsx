@@ -294,12 +294,14 @@ const STRENGTH_ICONS_JS = `
 `;
 
 const ONB_HTML = {
-  rankWheel:          require('../assets/onboarding/rankwheel.html'),
-  strengthAssessment: require('../assets/onboarding/strengthassessment.html'),
-  rankReveal:         require('../assets/onboarding/rankreveal.html'),
-  // The four pre-paywall pages (Claude Design artboards in assets/). They
-  // render with their built-in default copy; planReady additionally has its
-  // stat slots rewritten from the user's answers (see planReadyInject).
+  // Redesigned rank run + the wasted-muscle graph (Claude Design artboards).
+  rankWheel:          require('../assets/rankwheel2.html'),
+  strengthAssessment: require('../assets/strengthassessment2.html'),
+  rankReveal:         require('../assets/rankreveal2.html'),
+  cinematicGraph:     require('../assets/cinematicgraph.html'),
+  // The four pre-paywall pages. They render with their built-in default
+  // copy; planReady + cinematicGraph + rankReveal get slots rewritten from
+  // the user's answers (see the *Inject helpers).
   generatePlan:       require('../assets/generateplan.html'),
   planReady:          require('../assets/planready.html'),
   trialTimeline:      require('../assets/trialtimeline.html'),
@@ -341,6 +343,60 @@ function planReadyInject(a: Record<string, any>): string {
 `;
 }
 
+const DURATION_YEARS: Record<string, number> = {
+  'Just starting': 1, '1-6 months': 1, '6-12 months': 1,
+  '1-2 years': 2, '2-5 years': 3, '5-10 years': 7, '10+ years': 12,
+};
+
+// cinematicgraph.html — the "two versions of you" wasted-muscle graph.
+// Slots: "<n>" (years trained), "13,000 reps lost", "8 months of muscle gone".
+function cinematicGraphInject(a: Record<string, any>): string {
+  const m = computeWastedReps({ ...a, formGuess: getRealFormPct(a) });
+  const years = DURATION_YEARS[(a.trainDuration as string) ?? ''] ?? 3;
+  const wasted = m.wasted;
+  const months = Math.max(2, Math.round(wasted / 1500));
+  const pct = getRealFormPct(a);
+  return `
+(function(){
+  var Y=${years}, RL=${JSON.stringify(wasted.toLocaleString() + ' reps lost')}, ML=${JSON.stringify(months + ' months of muscle gone')}, P=${pct};
+  function apply(){
+    var s=document.querySelectorAll('span.sc-interp'), hit=0;
+    for(var i=0;i<s.length;i++){
+      var t=(s[i].textContent||'').trim();
+      if(/^[0-9]{1,2}$/.test(t)){ s[i].textContent=String(Y); hit++; }
+      else if(/reps lost$/i.test(t)){ s[i].textContent=RL; hit++; }
+      else if(/months of muscle gone$/i.test(t)){ s[i].textContent=ML; hit++; }
+      else if(/^[0-9]{1,3}%$/.test(t)){ s[i].textContent=P+'%'; hit++; }
+    }
+    return hit>=2;
+  }
+  if(!apply()) [200,500,1000,2000,3500,5000].forEach(function(d){ setTimeout(apply,d); });
+})();
+`;
+}
+
+// rankreveal2.html — everyone starts at Bronze; the tier reflects how much
+// they already know (experience). Default in the design is "Bronze II".
+function rankRevealInject(a: Record<string, any>): string {
+  const tier = ({ 'Beginner': 'I', 'Some experience': 'II', 'Intermediate': 'III', 'Advanced': 'IV' } as Record<string, string>)[a.experience as string] ?? 'II';
+  const rank = `Bronze ${tier}`;
+  return `
+(function(){
+  var R=${JSON.stringify(rank)};
+  function apply(){
+    var hit=0, all=document.querySelectorAll('span,div');
+    for(var i=0;i<all.length;i++){
+      var el=all[i]; if(el.children.length) continue;
+      var t=(el.textContent||'').trim();
+      if(/^(Bronze|Silver|Gold|Platinum|Diamond)\\s+(I|II|III|IV|V)$/.test(t)){ el.textContent=R; hit++; }
+    }
+    return hit>=1;
+  }
+  if(!apply()) [200,500,1000,2000,3500,5000,7000].forEach(function(d){ setTimeout(apply,d); });
+})();
+`;
+}
+
 // The 4 pre-paywall pages are Claude-Design artboards — FIXED 390-wide
 // canvases. Scale #dc-root to the WebView width (never up past 1×), pin it
 // to the top, and let the browser scroll whatever overflows the viewport —
@@ -348,7 +404,11 @@ function planReadyInject(a: Record<string, any>): string {
 // than being clipped or fighting the user. Also posts 'rendered' once the
 // artboard has actually painted, so the fade-in doesn't happen over a
 // still-unpacking page (the "jitter").
-const DC_PAGE_KEYS: (keyof typeof ONB_HTML)[] = ['generatePlan', 'planReady', 'trialTimeline', 'paywall'];
+const DC_PAGE_KEYS: (keyof typeof ONB_HTML)[] = [
+  'generatePlan', 'planReady', 'trialTimeline', 'paywall',
+  // The redesigned rank + graph pages are the same 390-wide #dc-root format.
+  'rankWheel', 'strengthAssessment', 'rankReveal', 'cinematicGraph',
+];
 const DC_CTA_RE = "^(Continue|See my plan|See plan|Unlock my full plan|Unlock my plan|Unlock|Start my 3-day|Start my 3\\u2011day|Start my free trial|Start free trial|Start free|Next|Done|Get started)\\b";
 const DC_PAGE_INJECT = `
 (function () {
@@ -497,13 +557,15 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, topInset,
 
   const isDcPage = DC_PAGE_KEYS.includes(htmlKey);
   const baseInject = isDcPage ? DC_PAGE_INJECT : ONBOARDING_WEB_INJECT;
+  // Everything except planReady is a one-screen page → fit to the height too.
+  const fitBothKeys = ['trialTimeline', 'paywall', 'rankWheel', 'strengthAssessment', 'rankReveal', 'cinematicGraph'];
   const dcExtra =
     htmlKey === 'generatePlan' ? GENERATE_PLAN_INJECT :
-    (htmlKey === 'trialTimeline' || htmlKey === 'paywall') ? FIT_BOTH_INJECT :
+    fitBothKeys.includes(htmlKey) ? FIT_BOTH_INJECT :
     undefined;
   const extraJs = extraJsProp
     ? (dcExtra ? extraJsProp + '\n' + dcExtra : extraJsProp)
-    : (dcExtra ?? (htmlKey === 'strengthAssessment' ? STRENGTH_ICONS_JS : undefined));
+    : (dcExtra ?? undefined);
   return (
     <View style={{ flex: 1, backgroundColor: isDcPage ? '#ffffff' : '#f4f4f2' }}>
       {!isDcPage && <AppBackground />}
@@ -2104,24 +2166,18 @@ export default function OnboardingScreen() {
     return <CalcMathBeat onDone={() => setAppState('cinematic')} />;
   }
 
-  // ── CINEMATIC MATH — the 13 lines, one at a time (fade in, hold, fade out)
+  // ── CINEMATIC MATH — the "two versions of you" wasted-muscle graph, with
+  // the years / reps-lost / months-lost numbers rewritten from the answers.
 
   if (appState === 'cinematic') {
     return (
-      <OnboardingBackground>
-        <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
-            <FadeSequence key="math" lines={cinematicLines(answers)} onDone={() => setMathLinesDone(true)} />
-          </View>
-          {mathLinesDone && (
-            <View style={s.bn}>
-              <TouchableOpacity style={s.cb} onPress={() => { haptic(Haptics.ImpactFeedbackStyle.Medium); setMathLinesDone(false); setAppState('reversal'); }} activeOpacity={0.85}>
-                <Text style={s.ct}>Continue</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-      </OnboardingBackground>
+      <OnboardingWebScreen
+        htmlKey="cinematicGraph"
+        topInset={insets.top}
+        extraJs={cinematicGraphInject(answers)}
+        onAdvance={() => setAppState('rankWheel')}
+        onBack={() => setAppState('calcMath')}
+      />
     );
   }
 
@@ -2154,7 +2210,7 @@ export default function OnboardingScreen() {
         htmlKey="rankWheel"
         topInset={insets.top}
         onAdvance={() => setAppState('rankAssess')}
-        onBack={() => { setMathLinesDone(false); setAppState('reversal'); }}
+        onBack={() => setAppState('cinematic')}
       />
     );
   }
@@ -2175,6 +2231,7 @@ export default function OnboardingScreen() {
       <OnboardingWebScreen
         htmlKey="rankReveal"
         topInset={insets.top}
+        extraJs={rankRevealInject(answers)}
         onAdvance={() => setAppState('generatePlan')}
         onBack={() => setAppState('rankAssess')}
       />
@@ -2191,7 +2248,7 @@ export default function OnboardingScreen() {
         htmlKey="generatePlan"
         topInset={insets.top}
         onAdvance={() => setAppState('planReady')}
-        onBack={() => { setMathLinesDone(false); setAppState('reversal'); }}
+        onBack={() => setAppState('rankReveal')}
       />
     );
   }
