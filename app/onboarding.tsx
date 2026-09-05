@@ -341,11 +341,13 @@ function planReadyInject(a: Record<string, any>): string {
 `;
 }
 
-// The 4 pre-paywall pages are Claude-Design artboards — FIXED 390×844
-// canvases with overflow:hidden (not meant to scroll). Don't unlock their
-// scroll (that made the paywall land part-scrolled and fight the user):
-// instead scale #dc-root to fit the WebView, centred, white letterbox.
-// Everything visible, nothing clipped, no scrolling.
+// The 4 pre-paywall pages are Claude-Design artboards — FIXED 390-wide
+// canvases. Scale #dc-root to the WebView width (never up past 1×), pin it
+// to the top, and let the browser scroll whatever overflows the viewport —
+// so a design a bit taller than the screen just scrolls a little rather
+// than being clipped or fighting the user. Also posts 'rendered' once the
+// artboard has actually painted, so the fade-in doesn't happen over a
+// still-unpacking page (the "jitter").
 const DC_PAGE_KEYS: (keyof typeof ONB_HTML)[] = ['generatePlan', 'planReady', 'trialTimeline', 'paywall'];
 const DC_CTA_RE = "^(Continue|See my plan|See plan|Unlock my full plan|Unlock my plan|Unlock|Start my 3-day|Start my 3\\u2011day|Start my free trial|Start free trial|Start free|Next|Done|Get started)\\b";
 const DC_PAGE_INJECT = `
@@ -364,28 +366,48 @@ const DC_PAGE_INJECT = `
     var el=e.target;
     for(var k=0; el && k<4; k++, el=el.parentElement){
       var st=(el.getAttribute && el.getAttribute('style'))||'';
-      if((el.tagName+'').toLowerCase()==='svg' && /cursor:\\s*pointer/.test(st)){ post('__tap'); post('editinfo'); return; }
+      if((el.tagName+'').toLowerCase()==='svg' && /cursor:\\s*pointer/.test(st)){
+        // Figure out which row it's in from the nearest value span.
+        var host=el.parentElement, v='';
+        for(var p=0;p<6 && host;p++,host=host.parentElement){
+          var sp=host.querySelector && host.querySelector('span.sc-interp');
+          if(sp){ v=(sp.textContent||'').trim(); break; }
+        }
+        var field = /lb|kg/i.test(v) ? 'weight' : (v.indexOf('"')>=0 ? 'height' : (/^[0-9]{1,3}$/.test(v) ? 'age' : 'experience'));
+        post('__tap'); post('editinfo:'+field); return;
+      }
     }
     var c = clickable(e.target);
     var t = ((c || e.target).textContent || '').replace(/\\s+/g,' ').trim();
     if (RE.test(t)) { post('__tap'); post('advance'); }
   }, true);
 
-  var W=390, H=844;
+  var W=390;
   var s=document.createElement('style');
-  s.textContent='html,body{margin:0!important;padding:0!important;background:#ffffff!important;overflow:hidden!important;}'
-    + '#dc-root{position:relative!important;margin:0 auto!important;width:'+W+'px!important;height:'+H+'px!important;transform-origin:top center!important;}';
+  s.textContent='html{background:#ffffff!important;}'
+    + 'body{margin:0!important;padding:0!important;background:#ffffff!important;display:block!important;overflow-x:hidden!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch!important;}'
+    + '#dc-root{position:relative!important;margin:0 auto!important;width:'+W+'px!important;transform-origin:top center!important;}';
   (document.head||document.documentElement).appendChild(s);
+  var lastS=-1;
   function fit(){
     var root=document.getElementById('dc-root'); if(!root) return;
-    var vw=window.innerWidth||W, vh=window.innerHeight||H;
-    var S=Math.min(vw/W, vh/H);
-    root.style.setProperty('transform','scale('+S+')','important');
-    document.body.style.setProperty('height', Math.ceil(H*S)+'px','important');
+    var S=Math.min(1, (window.innerWidth||W)/W);
+    if(Math.abs(S-lastS)>=0.002){ lastS=S; root.style.setProperty('transform','scale('+S+')','important'); }
+    // Always refresh the scroll height — scrollHeight is wrong until painted.
+    var rh=root.scrollHeight || 844;
+    document.body.style.setProperty('height', Math.ceil(rh*S)+'px','important');
   }
-  fit();
+  function painted(){
+    var r=document.getElementById('dc-root');
+    return !!(r && r.children && r.children.length) && !document.documentElement.classList.contains('sc-dc-streaming');
+  }
+  var n=0;
+  (function wait(){
+    fit();
+    if(painted() || n++>50){ fit(); post('rendered'); return; }
+    setTimeout(wait, 90);
+  })();
   window.addEventListener('resize', fit);
-  [60,200,500,1200].forEach(function(d){ setTimeout(fit,d); });
   true;
 })();
 `;
@@ -408,22 +430,29 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, topInset,
   htmlKey: keyof typeof ONB_HTML;
   onAdvance: () => void;
   onBack: () => void;
-  onEditInfo?: () => void;
+  onEditInfo?: (field: string) => void;
   topInset: number;
   extraJs?: string;
 }) {
   const fade = useRef(new Animated.Value(0)).current;
   const backFade = useRef(new Animated.Value(0)).current;
+  const shown = useRef(false);
   const [webReady, setWebReady] = useState(false);
-  useEffect(() => {
-    if (!webReady) return;
-    const t1 = setTimeout(() => {
-      Animated.timing(fade, { toValue: 1, duration: 320, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
-    }, 350);
-    const t2 = setTimeout(() => {
+
+  const reveal = () => {
+    if (shown.current) return;
+    shown.current = true;
+    Animated.timing(fade, { toValue: 1, duration: 320, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
+    setTimeout(() => {
       Animated.timing(backFade, { toValue: 1, duration: 280, useNativeDriver: true }).start();
     }, BACK_DELAY_MS[htmlKey] ?? 350);
-    return () => { clearTimeout(t1); clearTimeout(t2); };
+  };
+  // Fallback: reveal a bit after the doc loads even if 'rendered' never
+  // arrives (non-DC pages don't post it).
+  useEffect(() => {
+    if (!webReady) return;
+    const t = setTimeout(reveal, DC_PAGE_KEYS.includes(htmlKey) ? 1400 : 350);
+    return () => clearTimeout(t);
   }, [webReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isDcPage = DC_PAGE_KEYS.includes(htmlKey);
@@ -435,7 +464,7 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, topInset,
   return (
     <View style={{ flex: 1, backgroundColor: isDcPage ? '#ffffff' : '#f4f4f2' }}>
       {!isDcPage && <AppBackground />}
-      <Animated.View style={{ flex: 1, marginTop: isDcPage ? 0 : topInset, opacity: fade }}>
+      <Animated.View style={{ flex: 1, marginTop: topInset, opacity: fade }}>
         <WebView
           source={ONB_HTML[htmlKey] as any}
           originWhitelist={['*']}
@@ -444,13 +473,14 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, topInset,
           onMessage={(e) => {
             const m = e.nativeEvent.data;
             if (m === '__tap' || m === '__tick') { Haptics.selectionAsync(); return; }
+            if (m === 'rendered') { reveal(); return; }
+            if (m.indexOf('editinfo') === 0) { onEditInfo?.(m.split(':')[1] || 'weight'); return; }
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            if (m === 'editinfo') { onEditInfo?.(); return; }
             if (m === 'advance' || m === 'skip') onAdvance();
           }}
           style={{ flex: 1, backgroundColor: isDcPage ? '#ffffff' : 'transparent' }}
           opaque={isDcPage}
-          scrollEnabled={!isDcPage}
+          scrollEnabled
           bounces={false}
           decelerationRate="normal"
           nestedScrollEnabled
@@ -1577,9 +1607,9 @@ type AppState =
   // Rank run — moved to AFTER the math (was a set of question-flow steps).
   | 'rankWheel' | 'rankAssess' | 'rankReveal'
   // The four pre-paywall WebView pages (assets/*.html), in order.
-  | 'generatePlan' | 'planReady' | 'trialTimeline' | 'webPaywall'
-  // Native quick-edit sheet reached from the plan-ready page's pencils.
-  | 'editInfo';
+  | 'generatePlan' | 'planReady' | 'trialTimeline' | 'webPaywall';
+
+type EditField = 'age' | 'height' | 'weight' | 'experience';
 
 export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
@@ -1595,6 +1625,9 @@ export default function OnboardingScreen() {
   // Gates the Continue button on the cinematic-math + reversal screens until
   // every line has faded in.
   const [mathLinesDone, setMathLinesDone] = useState(false);
+  // Which single info field the plan-ready page's pencil opened for editing
+  // (null = not editing). Rendered as an overlay so the WebView stays put.
+  const [editField, setEditField] = useState<EditField | null>(null);
 
   const fadeAnim  = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
@@ -2122,26 +2155,27 @@ export default function OnboardingScreen() {
 
   if (appState === 'planReady') {
     return (
-      <OnboardingWebScreen
-        htmlKey="planReady"
-        topInset={insets.top}
-        extraJs={planReadyInject(answers)}
-        onAdvance={() => setAppState('trialTimeline')}
-        onBack={() => setAppState('generatePlan')}
-        // The pencil icons on the page open this native quick-edit sheet.
-        onEditInfo={() => setAppState('editInfo')}
-      />
-    );
-  }
-
-  if (appState === 'editInfo') {
-    return (
-      <EditInfoScreen
-        answers={answers}
-        topInset={insets.top}
-        onSave={(patch) => { setAnswers(a => ({ ...a, ...patch })); setAppState('planReady'); }}
-        onCancel={() => setAppState('planReady')}
-      />
+      <View style={{ flex: 1 }}>
+        <OnboardingWebScreen
+          htmlKey="planReady"
+          topInset={insets.top}
+          extraJs={planReadyInject(answers)}
+          onAdvance={() => setAppState('trialTimeline')}
+          onBack={() => setAppState('generatePlan')}
+          // A pencil opens a one-field editor OVER the page — the WebView
+          // stays mounted, so closing it doesn't reload / re-animate.
+          onEditInfo={(f) => setEditField(f as EditField)}
+        />
+        {editField && (
+          <EditFieldOverlay
+            field={editField}
+            answers={answers}
+            topInset={insets.top}
+            onSave={(patch) => { setAnswers(a => ({ ...a, ...patch })); setEditField(null); }}
+            onClose={() => setEditField(null)}
+          />
+        )}
+      </View>
     );
   }
 
@@ -2190,93 +2224,98 @@ function CalcMathBeat({ onDone }: { onDone: () => void }) {
   );
 }
 
-// ── EditInfoScreen — reached from the pencil icons on the plan-ready page.
-// A plain iOS-style info list: tap a value, the keyboard comes up, change
-// the number. Not the onboarding pickers. ────────────────────────────────────
+// ── EditFieldOverlay — a pencil on the plan-ready page opens ONE field
+// here, over the still-mounted page. Number fields get a keyboard; the
+// experience field gets its four options. Save/Cancel dismiss it. ────────────
 
 const EXPERIENCE_OPTS = ['Beginner', 'Some experience', 'Intermediate', 'Advanced'];
+const FIELD_META: Record<EditField, { label: string; kbd: 'number-pad' | 'default'; ph: string }> = {
+  age:        { label: 'Age',        kbd: 'number-pad', ph: '27' },
+  height:     { label: 'Height',     kbd: 'default',    ph: `5'10"` },
+  weight:     { label: 'Weight (lb)', kbd: 'number-pad', ph: '168' },
+  experience: { label: 'Experience', kbd: 'default',    ph: '' },
+};
 
-function EditInfoScreen({ answers, topInset, onSave, onCancel }: {
+function EditFieldOverlay({ field, answers, topInset, onSave, onClose }: {
+  field: EditField;
   answers: Record<string, any>;
   topInset: number;
   onSave: (patch: Record<string, any>) => void;
-  onCancel: () => void;
+  onClose: () => void;
 }) {
-  const [age, setAge]       = useState<string>(answers.age != null ? String(answers.age) : '');
-  const [height, setHeight] = useState<string>(typeof answers.height === 'string' ? answers.height : '');
-  const [weight, setWeight] = useState<string>(typeof answers.weight === 'number' ? String(Math.round(answers.weight)) : '');
-  const [exp, setExp]       = useState<string>(typeof answers.experience === 'string' ? answers.experience : 'Intermediate');
+  const meta = FIELD_META[field];
+  const initial =
+    field === 'weight' ? (typeof answers.weight === 'number' ? String(Math.round(answers.weight)) : '') :
+    field === 'experience' ? (typeof answers.experience === 'string' ? answers.experience : 'Intermediate') :
+    (answers[field] != null ? String(answers[field]) : '');
+  const [val, setVal] = useState<string>(initial);
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.spring(anim, { toValue: 1, useNativeDriver: true, friction: 9, tension: 90 }).start();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const save = () => {
     haptic(Haptics.ImpactFeedbackStyle.Medium);
-    const patch: Record<string, any> = { experience: exp };
-    if (age.trim())    patch.age = age.trim();
-    if (height.trim()) patch.height = height.trim();
-    const wn = parseFloat(weight);
-    if (!Number.isNaN(wn)) patch.weight = wn;
-    onSave(patch);
+    if (field === 'experience') { onSave({ experience: val }); return; }
+    if (field === 'weight') {
+      const n = parseFloat(val);
+      onSave(Number.isNaN(n) ? {} : { weight: n });
+      return;
+    }
+    onSave(val.trim() ? { [field]: val.trim() } : {});
   };
 
   return (
-    <OnboardingBackground>
-      <View style={{ flex: 1, paddingTop: topInset }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12 }}>
-          <Text style={{ fontFamily: FONT.displayBold, fontSize: 20, color: L.text, letterSpacing: -0.4 }}>Your info</Text>
-          <TouchableOpacity onPress={onCancel} hitSlop={12} style={s.bb}>
-            <Sym name="xmark" size={15} color={L.textSub} />
+    <View style={[StyleSheet.absoluteFill, { justifyContent: 'flex-end' }]}>
+      <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(17,24,39,0.35)' }]} onPress={onClose} />
+      <Animated.View
+        style={{
+          backgroundColor: L.card, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+          paddingHorizontal: 24, paddingTop: 20, paddingBottom: 28 + topInset * 0,
+          transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [340, 0] }) }],
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <Text style={{ fontFamily: FONT.displayBold, fontSize: 19, color: L.text, letterSpacing: -0.3 }}>Edit {meta.label.toLowerCase()}</Text>
+          <TouchableOpacity onPress={onClose} hitSlop={12} style={s.bb}>
+            <Sym name="xmark" size={14} color={L.textSub} />
           </TouchableOpacity>
         </View>
-        <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 8, paddingBottom: 160 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          <View style={ei.card}>
-            <View style={[ei.row, ei.rowDivide]}>
-              <Text style={ei.rowLabel}>Age</Text>
-              <TextInput style={ei.rowInput} value={age} onChangeText={setAge} keyboardType="number-pad" placeholder="27" placeholderTextColor={L.textDim} returnKeyType="done" textAlign="right" />
-            </View>
-            <View style={[ei.row, ei.rowDivide]}>
-              <Text style={ei.rowLabel}>Height</Text>
-              <TextInput style={ei.rowInput} value={height} onChangeText={setHeight} placeholder={`5'10"`} placeholderTextColor={L.textDim} returnKeyType="done" textAlign="right" />
-            </View>
-            <View style={ei.row}>
-              <Text style={ei.rowLabel}>Weight (lb)</Text>
-              <TextInput style={ei.rowInput} value={weight} onChangeText={setWeight} keyboardType="number-pad" placeholder="168" placeholderTextColor={L.textDim} returnKeyType="done" textAlign="right" />
-            </View>
-          </View>
 
-          <Text style={ei.groupLabel}>Experience</Text>
+        {field === 'experience' ? (
           <View style={{ gap: 8 }}>
             {EXPERIENCE_OPTS.map(o => {
-              const sel = exp === o;
+              const sel = val === o;
               return (
-                <TouchableOpacity key={o} onPress={() => { haptic(); setExp(o); }} activeOpacity={0.7} style={[ei.expChip, sel && ei.expChipSel]}>
-                  <Text style={[ei.expTxt, sel && ei.expTxtSel]}>{o}</Text>
+                <TouchableOpacity key={o} onPress={() => { haptic(); setVal(o); }} activeOpacity={0.7}
+                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 14, borderWidth: 1, borderColor: sel ? L.accent : L.border, backgroundColor: sel ? L.accentSoft : L.card, paddingHorizontal: 16, paddingVertical: 14 }}>
+                  <Text style={{ fontSize: 15, color: L.text, fontWeight: sel ? W.semi : W.medium }}>{o}</Text>
                   {sel && <Sym name="checkmark" size={13} color={L.accent} />}
                 </TouchableOpacity>
               );
             })}
           </View>
-        </ScrollView>
-        <View style={s.bn}>
-          <TouchableOpacity style={s.cb} activeOpacity={0.85} onPress={save}>
-            <Text style={s.ct}>Save</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </OnboardingBackground>
+        ) : (
+          <TextInput
+            autoFocus
+            value={val}
+            onChangeText={setVal}
+            keyboardType={meta.kbd}
+            placeholder={meta.ph}
+            placeholderTextColor={L.textDim}
+            returnKeyType="done"
+            onSubmitEditing={save}
+            style={{ backgroundColor: L.bg, borderRadius: 14, borderWidth: 1, borderColor: L.border, paddingHorizontal: 16, paddingVertical: 16, fontSize: 22, color: L.text }}
+          />
+        )}
+
+        <TouchableOpacity style={[s.cb, { marginTop: 18 }]} activeOpacity={0.85} onPress={save}>
+          <Text style={s.ct}>Save</Text>
+        </TouchableOpacity>
+      </Animated.View>
+    </View>
   );
 }
-
-const ei = StyleSheet.create({
-  card:       { backgroundColor: L.card, borderRadius: 16, borderWidth: 1, borderColor: L.border, paddingHorizontal: 16, ...({ boxShadow: Elev.low.shadow } as any) },
-  row:        { flexDirection: 'row', alignItems: 'center', minHeight: 54 },
-  rowDivide:  { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: L.border },
-  rowLabel:   { fontSize: 16, color: L.text, fontWeight: W.medium },
-  rowInput:   { flex: 1, fontSize: 16, color: L.text, paddingVertical: 14, marginLeft: 12 },
-  groupLabel: { fontSize: 13, fontWeight: W.bold, color: L.textDim, letterSpacing: 0.6, textTransform: 'uppercase', marginTop: 26, marginBottom: 8 },
-  expChip:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: L.card, borderRadius: 14, borderWidth: 1, borderColor: L.border, paddingHorizontal: 16, paddingVertical: 14 },
-  expChipSel: { borderColor: L.accent, backgroundColor: L.accentSoft },
-  expTxt:     { fontSize: 15, color: L.text, fontWeight: W.medium },
-  expTxtSel:  { fontWeight: W.semi },
-});
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
