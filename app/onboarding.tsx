@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Platform, ScrollView,
-  Animated, PanResponder, Image, TextInput, Pressable, Easing, KeyboardAvoidingView,
+  Animated, PanResponder, Image, TextInput, Pressable, Easing, KeyboardAvoidingView, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Asset } from 'expo-asset';
@@ -485,6 +485,12 @@ const DC_CTA_RE = "^(Continue|See my plan|See plan|Unlock my full plan|Unlock my
 const DC_PAGE_INJECT = `
 (function () {
   function post(m){ try{ window.ReactNativeWebView.postMessage(m); }catch(e){} }
+  // Belt-and-suspenders viewport (also set pre-load) — see VIEWPORT_JS.
+  try{
+    var _mv=document.querySelector('meta[name=viewport]');
+    if(!_mv){ _mv=document.createElement('meta'); _mv.name='viewport'; (document.head||document.documentElement).appendChild(_mv); }
+    _mv.setAttribute('content','width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
+  }catch(e){}
   var RE = new RegExp(${JSON.stringify(DC_CTA_RE)}, 'i');
   function hasDcClick(el){
     if(!el.attributes) return false;
@@ -612,36 +618,40 @@ const DC_PAGE_INJECT = `
     var r=document.getElementById('dc-root');
     return !!(r && r.children && r.children.length) && !document.documentElement.classList.contains('sc-dc-streaming');
   }
-  var n=0, done=false, stable=0, prevS=-99;
-  // Poll fit() only until the artboard has painted AND the scale has stopped
-  // moving — then reveal, post 'rendered', and STOP. The old loop kept
-  // calling fit()/wireEdits()/calmAnims() every 120ms for ~10s, forcing a
-  // reflow on every tick right while the entrance animations and the user's
-  // scroll were trying to run — that was the choppiness.
+  var n=0, done=false;
+  // Show the artboard as soon as it has painted. No waiting for the scale to
+  // "settle" and no long safety timeout — that was making 'Continue' feel
+  // like a 5s freeze whenever the fast path didn't fire.
   function reveal(){
     if(done) return;
     done=true;
     var r=document.getElementById('dc-root');
     if(r) r.classList.add('__dcshow');
     post('rendered');
-    // One deferred cleanup after the entrance animations have played out.
-    setTimeout(function(){ fit(); wireEdits(); calmAnims(); }, 1200);
+    setTimeout(function(){ fit(); wireEdits(); calmAnims(); }, 900);
   }
   (function wait(){
     fit();
-    if(Math.abs(lastS-prevS)<0.003) stable++; else stable=0;
-    prevS=lastS;
-    if(painted() && (stable>=2 || n>20)){ reveal(); return; }
-    if(n++<90) setTimeout(wait, 90);
+    if(painted() || n>10){ reveal(); return; }
+    if(n++<40) setTimeout(wait, 150);
   })();
-  // Absolute backstop — never leave it hidden. Long enough that a slow
-  // artboard finishes hydrating first (otherwise the reveal catches the
-  // interp slots still as grey placeholder pills).
-  setTimeout(reveal, 5000);
+  // Short backstop — worst case the page shows ~1.2s in, never a long hang.
+  setTimeout(reveal, 1200);
   window.addEventListener('resize', fit);
   true;
 })();
 `;
+
+// NONE of the Claude-Design artboards ship a <meta name="viewport">. Without
+// one, iOS WKWebView lays the page out in a 980px world and then shrink-to-
+// fits it — so a 390px artboard renders at ~40% size ("not zoomed in", huge
+// margins) AND every blur/shadow is composited at a fractional scale (the
+// low FPS). Forcing width=device-width makes it lay out 1:1 at native scale.
+const VIEWPORT_JS = `(function(){try{
+  var m=document.querySelector('meta[name=viewport]');
+  if(!m){ m=document.createElement('meta'); m.name='viewport'; (document.head||document.documentElement).appendChild(m); }
+  m.setAttribute('content','width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
+}catch(e){}})(); true;`;
 
 // One-screen pages: fit to the screen height too so nothing needs scrolling.
 const FIT_BOTH_INJECT = `window.__dcFitBoth=1;`;
@@ -716,6 +726,7 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, topInset,
         <WebView
           source={ONB_HTML[htmlKey] as any}
           originWhitelist={['*']}
+          injectedJavaScriptBeforeContentLoaded={isDcPage ? VIEWPORT_JS : undefined}
           injectedJavaScript={extraJs ? baseInject + '\n' + extraJs : baseInject}
           onLoadEnd={() => setWebReady(true)}
           onMessage={(e) => {
@@ -750,16 +761,31 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, topInset,
         pointerEvents="box-none"
         style={{ position: 'absolute', top: topInset + 8, left: 20, zIndex: 80, opacity: backFade }}
       >
-        <LiquidGlassButton
-          onPress={() => { Haptics.selectionAsync(); onBack(); }}
-          hitSlop={12}
-          radius={17}
-          variant={isDcPage ? 'regular' : 'clear'}
-          fallbackColor={isDcPage ? 'rgba(255,255,255,0.92)' : 'rgba(0,0,0,0.35)'}
-          style={[web.backCircle, isDcPage && web.backCircleDc]}
-        >
-          <SymbolView name="chevron.left" size={15} tintColor={isDcPage ? '#1b1f27' : '#fff'} type="monochrome" style={{ width: 15, height: 15 }} />
-        </LiquidGlassButton>
+        {htmlKey === 'paywall' ? (
+          // Paywall: no back control — a "Restore" action instead (App Store
+          // requirement, and you shouldn't be able to just back out of it).
+          <LiquidGlassButton
+            onPress={() => { Haptics.selectionAsync(); Alert.alert('Restore purchases', 'No previous subscription found on this Apple ID.'); }}
+            hitSlop={12}
+            radius={17}
+            variant="regular"
+            fallbackColor="rgba(255,255,255,0.92)"
+            style={[web.restoreBtn, web.backCircleDc]}
+          >
+            <Text style={web.restoreTxt}>Restore</Text>
+          </LiquidGlassButton>
+        ) : (
+          <LiquidGlassButton
+            onPress={() => { Haptics.selectionAsync(); onBack(); }}
+            hitSlop={12}
+            radius={17}
+            variant={isDcPage ? 'regular' : 'clear'}
+            fallbackColor={isDcPage ? 'rgba(255,255,255,0.92)' : 'rgba(0,0,0,0.35)'}
+            style={[web.backCircle, isDcPage && web.backCircleDc]}
+          >
+            <SymbolView name="chevron.left" size={15} tintColor={isDcPage ? '#1b1f27' : '#fff'} type="monochrome" style={{ width: 15, height: 15 }} />
+          </LiquidGlassButton>
+        )}
       </Animated.View>
     </View>
   );
@@ -767,6 +793,8 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, topInset,
 
 const web = StyleSheet.create({
   backCircle: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
+  restoreBtn: { height: 34, paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center' },
+  restoreTxt: { fontSize: 13, fontWeight: '700', color: '#1b1f27', letterSpacing: -0.1 },
   // On the white DC pages: a clean light chip, not a heavy dark blob.
   backCircleDc: { borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.10)', ...({ boxShadow: '0px 2px 8px rgba(0,0,0,0.10)' } as any) },
 });
