@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Platform, ScrollView,
-  Animated, ActivityIndicator, PanResponder, Image, TextInput, Pressable, Easing,
+  Animated, PanResponder, Image, TextInput, Pressable, Easing,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Asset } from 'expo-asset';
@@ -17,6 +17,7 @@ import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AppBackground from '../components/AppBackground';
 import PlanGrowthMoment from '../components/PlanGrowthMoment';
+import { LiquidGlassButton } from '../components/LiquidGlass';
 import { PUSHUP_ICON, PULLUP_ICON, SQUAT_ICON } from '../assets/onboarding/onbIcons';
 import { FONT, W, Col, Elev } from '../constants/theme';
 
@@ -189,7 +190,7 @@ const ONBOARDING_WEB_INJECT = `
       var st = (sel && sel.textContent || '') + ' ' + t;
       return post(/squat/i.test(st) ? 'squat' : 'pushup');
     }
-    if (/^(Start at Bronze|Continue|Start climbing|Find my rank|Next|Done)\\b/i.test(t)) return post('advance');
+    if (/^(Start at Bronze|Continue|Start climbing|Find my rank|Next|Done|See my plan|Unlock my full plan|Unlock my plan|See plan|Start my 3-day|Start my free trial|Start free trial|Start my 3\\u2011day)\\b/i.test(t)) return post('advance');
   }, true);
 
   var CARD = 'div[style*="width: 472px"][style*="height: 1024px"]';
@@ -296,13 +297,91 @@ const ONB_HTML = {
   rankWheel:          require('../assets/onboarding/rankwheel.html'),
   strengthAssessment: require('../assets/onboarding/strengthassessment.html'),
   rankReveal:         require('../assets/onboarding/rankreveal.html'),
+  // The four pre-paywall pages (Claude Design artboards in assets/). They
+  // render with their built-in default copy; planReady additionally has its
+  // stat slots rewritten from the user's answers (see planReadyInject).
+  generatePlan:       require('../assets/generateplan.html'),
+  planReady:          require('../assets/planready.html'),
+  trialTimeline:      require('../assets/trialtimeline.html'),
+  paywall:            require('../assets/paywall.html'),
 } as const;
 
-function OnboardingWebScreen({ htmlKey, onAdvance, onBack, topInset }: {
+// planready.html shows weight / height / age / experience / a goal date in
+// <span class="sc-interp"> slots. These pages have no prop-injection channel
+// when run standalone, so — same approach as STRENGTH_ICONS_JS — we rewrite
+// the rendered spans in place, matched by the shape of their default text.
+function planReadyInject(a: Record<string, any>): string {
+  const w  = typeof a.weight === 'number' ? `${Math.round(a.weight)} lb` : '';
+  const h  = typeof a.height === 'string' ? a.height : '';
+  const ag = a.age != null ? String(a.age) : '';
+  const ex = typeof a.experience === 'string' ? a.experience : '';
+  const gd = (() => {
+    const d = new Date(Date.now() + 70 * 86400000); // ~10 weeks out
+    const M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return `${M[d.getMonth()]} ${d.getDate()}`;
+  })();
+  return `
+(function(){
+  var W=${JSON.stringify(w)}, H=${JSON.stringify(h)}, A=${JSON.stringify(ag)}, E=${JSON.stringify(ex)}, D=${JSON.stringify(gd)};
+  function apply(){
+    var s=document.querySelectorAll('span.sc-interp'), hit=0;
+    for(var i=0;i<s.length;i++){
+      var t=(s[i].textContent||'').trim();
+      if(W && /(lb|kg)$/.test(t)){ s[i].textContent=W; hit++; }
+      else if(H && t.indexOf('"')>=0 && t.indexOf("'")>=0){ s[i].textContent=H; hit++; }
+      else if(A && /^[0-9]{1,3}$/.test(t)){ s[i].textContent=A; hit++; }
+      else if(E && /^(Beginner|Some experience|Intermediate|Advanced)$/.test(t)){ s[i].textContent=E; hit++; }
+      else if(D && /^[A-Z][a-z]{2} [0-9]{1,2}$/.test(t)){ s[i].textContent=D; hit++; }
+    }
+    return hit>=3;
+  }
+  if(!apply()) [200,500,1000,2000,3500,5000].forEach(function(d){ setTimeout(apply,d); });
+})();
+`;
+}
+
+// The 4 pre-paywall pages are Claude-Design artboards (390px-wide #dc-root),
+// NOT the 472px rank artifacts ONBOARDING_WEB_INJECT was written for — that
+// script's fit()/CSS would mis-scale them. This minimal inject just makes
+// the page transparent, fits #dc-root to the viewport width pinned to the
+// top, and posts 'advance' when the primary CTA is tapped.
+const DC_PAGE_KEYS: (keyof typeof ONB_HTML)[] = ['generatePlan', 'planReady', 'trialTimeline', 'paywall'];
+const DC_PAGE_INJECT = `
+(function () {
+  function post(m){ try{ window.ReactNativeWebView.postMessage(m); }catch(e){} }
+  function btnFor(el){ for(var i=0; el && i<6; i++, el=el.parentElement){ var r=el.getAttribute&&el.getAttribute('role'); if(r==='button'||el.tagName==='BUTTON') return el; } return null; }
+  document.addEventListener('pointerdown', function(e){ if(btnFor(e.target)) post('__tap'); }, true);
+  document.addEventListener('click', function(e){
+    var b=btnFor(e.target); if(!b) return;
+    var t=(b.textContent||'').replace(/\\s+/g,' ').trim();
+    if(/^(Continue|See my plan|See plan|Unlock my full plan|Unlock my plan|Start my 3-day|Start my 3\\u2011day|Start my free trial|Start free trial|Next|Done)\\b/i.test(t)) return post('advance');
+  }, true);
+  var CSS = 'html,body{margin:0!important;padding:0!important;background:transparent!important;}'
+    + '#dc-root{transform-origin:top center!important;}';
+  function ensure(){ if(document.getElementById('__dc_css')) return; var s=document.createElement('style'); s.id='__dc_css'; s.textContent=CSS; (document.head||document.documentElement).appendChild(s); }
+  function fit(){
+    ensure();
+    var root=document.getElementById('dc-root'); if(!root) return;
+    var vw=window.innerWidth||390; var rw=root.scrollWidth||390;
+    var S=Math.min(1, vw/rw);
+    root.style.setProperty('transform','scale('+S+')','important');
+  }
+  fit();
+  var obs=new MutationObserver(function(){ setTimeout(fit,60); });
+  obs.observe(document.documentElement,{childList:true,subtree:true});
+  window.addEventListener('resize', fit);
+  [60,200,500,1200,2500].forEach(function(d){ setTimeout(fit,d); });
+  setTimeout(function(){ obs.disconnect(); }, 4000);
+  true;
+})();
+`;
+
+function OnboardingWebScreen({ htmlKey, onAdvance, onBack, topInset, extraJs: extraJsProp }: {
   htmlKey: keyof typeof ONB_HTML;
   onAdvance: () => void;
   onBack: () => void;
   topInset: number;
+  extraJs?: string;
 }) {
   const fade = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -310,7 +389,9 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, topInset }: {
     a.start();
     return () => a.stop();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const extraJs = htmlKey === 'strengthAssessment' ? STRENGTH_ICONS_JS : undefined;
+  const isDcPage = DC_PAGE_KEYS.includes(htmlKey);
+  const baseInject = isDcPage ? DC_PAGE_INJECT : ONBOARDING_WEB_INJECT;
+  const extraJs = extraJsProp ?? (htmlKey === 'strengthAssessment' ? STRENGTH_ICONS_JS : undefined);
   return (
     <View style={{ flex: 1, backgroundColor: '#f4f4f2' }}>
       <AppBackground />
@@ -318,7 +399,7 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, topInset }: {
         <WebView
           source={ONB_HTML[htmlKey] as any}
           originWhitelist={['*']}
-          injectedJavaScript={extraJs ? ONBOARDING_WEB_INJECT + '\n' + extraJs : ONBOARDING_WEB_INJECT}
+          injectedJavaScript={extraJs ? baseInject + '\n' + extraJs : baseInject}
           onMessage={(e) => {
             const m = e.nativeEvent.data;
             if (m === '__tap' || m === '__tick') { Haptics.selectionAsync(); return; }
@@ -340,18 +421,29 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, topInset }: {
           cacheEnabled
         />
       </Animated.View>
-      <Pressable onPress={() => { Haptics.selectionAsync(); onBack(); }} hitSlop={12} style={[web.backBtn, { top: topInset + 8 }]}>
-        <View style={web.backCircle}>
-          <SymbolView name="chevron.left" size={15} tintColor="#fff" type="monochrome" style={{ width: 15, height: 15 }} />
-        </View>
-      </Pressable>
+      {/* Real Liquid Glass example — floating circular control over media,
+          exactly the case Apple designed it for. 'clear' variant reads
+          better over busy video/WebView content than 'regular'. Falls back
+          to the old flat rgba(0,0,0,0.35) circle until the native module is
+          built in (see components/LiquidGlass.tsx). */}
+      <LiquidGlassButton
+        onPress={() => { Haptics.selectionAsync(); onBack(); }}
+        hitSlop={12}
+        radius={17}
+        variant="clear"
+        fallbackColor="rgba(0,0,0,0.35)"
+        containerStyle={[web.backBtn, { top: topInset + 8 }]}
+        style={web.backCircle}
+      >
+        <SymbolView name="chevron.left" size={15} tintColor="#fff" type="monochrome" style={{ width: 15, height: 15 }} />
+      </LiquidGlassButton>
     </View>
   );
 }
 
 const web = StyleSheet.create({
   backBtn:    { position: 'absolute', left: 20, zIndex: 60 },
-  backCircle: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(0,0,0,0.35)', alignItems: 'center', justifyContent: 'center' },
+  backCircle: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
 });
 
 // ── LocationBubbles — 3 overlapping gradient spheres (Home / Gym / Mix)
@@ -1347,21 +1439,6 @@ const REVERSAL_LINES = [
   'So from today, every one counts — and you build nearly 2x the muscle.',
 ];
 
-function planRevealSteps(answers: Record<string, any>): string[] {
-  const name = (answers.name as string) || 'you';
-  const goals = (answers.goal as string[]) ?? [];
-  const goal = goals[0] ?? 'your goals';
-  const daysNum = parseInt(String(answers.days ?? '3 days'), 10) || 3;
-  const wasted = computeWastedReps({ ...answers, formGuess: getRealFormPct(answers) }).wasted;
-  return [
-    `Analyzing ${name}'s answers`,
-    'Factoring in your starting rank',
-    `Building around ${goal.toLowerCase()}`,
-    `Setting your ${daysNum}-a-week schedule`,
-    `Remembering: ${wasted.toLocaleString()} reps you don't have to waste again`,
-    'Calibrating form-check thresholds',
-  ];
-}
 
 // One line at a time: fade in (450ms), hold 2s, fade out (450ms), next.
 // Last line fades in and stays; onDone fires so the caller can show
@@ -1455,7 +1532,10 @@ function GuessSlider({ value, onChange }: { value: number; onChange: (v: number)
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
-type AppState = 'welcome' | 'onboarding' | 'calcMath' | 'cinematic' | 'reversal' | 'building' | 'paywall';
+type AppState =
+  | 'welcome' | 'onboarding' | 'calcMath' | 'cinematic' | 'reversal'
+  // The four pre-paywall WebView pages (assets/*.html), in order.
+  | 'generatePlan' | 'planReady' | 'trialTimeline' | 'webPaywall';
 
 export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
@@ -1465,8 +1545,6 @@ export default function OnboardingScreen() {
   const [stepIndex, setStepIndex] = useState(0);
   const [answers,   setAnswers]   = useState<Record<string, any>>({});
   const [plan,      setPlan]      = useState<{ focus: string; exercises: WorkoutExercise[] } | null>(null);
-  const [loadStep,  setLoadStep]  = useState(0);
-  const [loadPct,   setLoadPct]   = useState(0);
   // Tap-feedback only, for single-select questions — see handleSelect below
   // for why this exists separately from `answers`.
   const [justSelected, setJustSelected] = useState<string | null>(null);
@@ -1496,26 +1574,6 @@ export default function OnboardingScreen() {
   useEffect(() => {
     Asset.loadAsync(Object.values(ICON)).catch(() => {});
   }, []);
-
-  const buildSteps = useMemo(() => planRevealSteps(answers), [answers]);
-
-  useEffect(() => {
-    if (appState !== 'building') return;
-    setLoadStep(0); setLoadPct(0);
-    let i = 0;
-    const id = setInterval(() => {
-      i++;
-      if (i < buildSteps.length) {
-        setLoadStep(i);
-        setLoadPct(Math.round((i / buildSteps.length) * 100));
-      } else {
-        clearInterval(id);
-        setLoadPct(100);
-        setTimeout(() => setAppState('paywall'), 500);
-      }
-    }, 620);
-    return () => clearInterval(id);
-  }, [appState, buildSteps.length]);
 
   const animTrans = (dir: 'forward' | 'back', cb: () => void) => {
     const out = dir === 'forward' ? -36 : 36;
@@ -1948,7 +2006,7 @@ export default function OnboardingScreen() {
           </View>
           {mathLinesDone && (
             <View style={s.bn}>
-              <TouchableOpacity style={s.cb} onPress={() => { haptic(Haptics.ImpactFeedbackStyle.Medium); setMathLinesDone(false); setAppState('building'); }} activeOpacity={0.85}>
+              <TouchableOpacity style={s.cb} onPress={() => { haptic(Haptics.ImpactFeedbackStyle.Medium); setMathLinesDone(false); setAppState('generatePlan'); }} activeOpacity={0.85}>
                 <Text style={s.ct}>Continue</Text>
               </TouchableOpacity>
             </View>
@@ -1958,58 +2016,52 @@ export default function OnboardingScreen() {
     );
   }
 
-  // ── BUILDING (the plan reveal checklist) ────────────────────────────────────
+  // ── The four pre-paywall WebView pages (assets/*.html). Each advances on
+  // its own CTA (ONBOARDING_WEB_INJECT catches the button text); planReady
+  // gets the user's answers rewritten into its stat slots. ────────────────────
 
-  if (appState === 'building') {
+  if (appState === 'generatePlan') {
     return (
-      <OnboardingBackground>
-        <View style={{ flex: 1, paddingTop: insets.top + 40, paddingBottom: insets.bottom, paddingHorizontal: 28 }}>
-          <View style={{ marginBottom: 44 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
-              <Text style={{ fontSize: 12, fontWeight: W.bold, color: L.textDim, letterSpacing: 1.2 }}>BUILDING PLAN</Text>
-              <Text style={{ fontFamily: FONT.displayBold, fontSize: 22, color: L.text, letterSpacing: -0.5 }}>{loadPct}%</Text>
-            </View>
-            <View style={{ width: '100%', height: 6, backgroundColor: 'rgba(17,24,39,0.08)', borderRadius: 3, overflow: 'hidden' }}>
-              <View style={{ height: 6, backgroundColor: L.accent, borderRadius: 3, width: `${loadPct}%` as any }} />
-            </View>
-          </View>
-          <Text style={{ fontFamily: FONT.displayBold, fontSize: 28, color: L.text, marginBottom: 8, letterSpacing: -0.8 }}>Building your plan</Text>
-          <Text style={{ fontSize: 15, color: L.textSub, marginBottom: 36, lineHeight: 22 }}>Putting it together around everything you told me.</Text>
-          <View>
-            {buildSteps.map((step, i) => {
-              const done    = i < loadStep;
-              const current = i === loadStep;
-              return (
-                <View key={i} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14, opacity: i > loadStep ? 0.3 : 1 }}>
-                  <View style={{ width: 24, height: 24, borderRadius: 12, marginRight: 14, backgroundColor: done ? L.accent : 'transparent', borderWidth: done ? 0 : 1.5, borderColor: current ? L.accent : 'rgba(17,24,39,0.12)', alignItems: 'center', justifyContent: 'center' }}>
-                    {done    && <Sym name="checkmark" size={12} color="#fff" />}
-                    {current && <ActivityIndicator size="small" color={L.accent} />}
-                  </View>
-                  <Text style={{ fontSize: 16, fontWeight: current ? W.semi : W.medium, color: done || current ? L.text : L.textDim }}>{step}</Text>
-                </View>
-              );
-            })}
-          </View>
-        </View>
-      </OnboardingBackground>
+      <OnboardingWebScreen
+        htmlKey="generatePlan"
+        topInset={insets.top}
+        onAdvance={() => setAppState('planReady')}
+        onBack={() => { setMathLinesDone(false); setAppState('reversal'); }}
+      />
     );
   }
 
-  // ── PAYWALL — placeholder. The real paywall drops in here; the first
-  // workout stays locked until the user pays. ─────────────────────────────────
-
-  if (appState === 'paywall') {
+  if (appState === 'planReady') {
     return (
-      <OnboardingBackground>
-        <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom, paddingHorizontal: 28, alignItems: 'center', justifyContent: 'center' }}>
-          <Sym name="lock.fill" size={30} color={L.textDim} />
-          <Text style={{ fontFamily: FONT.displayBold, fontSize: 26, color: L.text, marginTop: 16, letterSpacing: -0.6 }}>Your plan is ready.</Text>
-          <Text style={{ fontSize: 15, color: L.textSub, textAlign: 'center', marginTop: 8, lineHeight: 22 }}>Paywall goes here — built separately.</Text>
-          <TouchableOpacity style={[s.cb, { alignSelf: 'stretch', marginTop: 32 }]} onPress={finishOnboarding} activeOpacity={0.85}>
-            <Text style={s.ct}>Continue (dev)</Text>
-          </TouchableOpacity>
-        </View>
-      </OnboardingBackground>
+      <OnboardingWebScreen
+        htmlKey="planReady"
+        topInset={insets.top}
+        extraJs={planReadyInject(answers)}
+        onAdvance={() => setAppState('trialTimeline')}
+        onBack={() => setAppState('generatePlan')}
+      />
+    );
+  }
+
+  if (appState === 'trialTimeline') {
+    return (
+      <OnboardingWebScreen
+        htmlKey="trialTimeline"
+        topInset={insets.top}
+        onAdvance={() => setAppState('webPaywall')}
+        onBack={() => setAppState('planReady')}
+      />
+    );
+  }
+
+  if (appState === 'webPaywall') {
+    return (
+      <OnboardingWebScreen
+        htmlKey="paywall"
+        topInset={insets.top}
+        onAdvance={finishOnboarding}
+        onBack={() => setAppState('trialTimeline')}
+      />
     );
   }
 
