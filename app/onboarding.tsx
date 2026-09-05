@@ -397,6 +397,25 @@ function rankRevealInject(a: Record<string, any>): string {
 `;
 }
 
+// rankwheel2.html — the per-rank "Top NN% of FormPal lifters" readout renders
+// grey (#6e6e77). User wants that line in the wheel's blue accent.
+const RANK_WHEEL_INJECT = `
+(function(){
+  function go(){
+    var all=document.querySelectorAll('div,span,p'), hit=0;
+    for(var i=0;i<all.length;i++){
+      var el=all[i]; if(el.children.length) continue;
+      var t=(el.textContent||'').trim();
+      if(/^Top\\s+[0-9.]+%/.test(t)){ el.style.setProperty('color','#2E7DFF','important'); hit++; }
+    }
+    return hit>=1;
+  }
+  if(!go()) [200,500,1000,2000,3500].forEach(function(d){ setTimeout(go,d); });
+  else [900,2200].forEach(function(d){ setTimeout(go,d); });
+  true;
+})();
+`;
+
 // The 4 pre-paywall pages are Claude-Design artboards — FIXED 390-wide
 // canvases. Scale #dc-root to the WebView width (never up past 1×), pin it
 // to the top, and let the browser scroll whatever overflows the viewport —
@@ -473,8 +492,31 @@ const DC_PAGE_INJECT = `
   var s=document.createElement('style');
   s.textContent='html{background:#ffffff!important;}'
     + 'body{margin:0!important;padding:0!important;background:#ffffff!important;display:block!important;overflow-x:hidden!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch!important;}'
-    + '#dc-root{position:relative!important;margin:0 auto!important;width:'+W+'px!important;transform-origin:top center!important;}';
+    + '#dc-root{position:relative!important;margin:0 auto!important;width:'+W+'px!important;transform-origin:top center!important;}'
+    // Perf: backdrop-filter + mask-image are the two big WebView repaint
+    // killers on these artboards (frosted pills, faded scroll edges). Drop
+    // them — the pills already carry a solid-ish rgba fill, so they stay
+    // readable, and the scroll wheel / tap animations stop stuttering.
+    + '*{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}'
+    + '[style*="mask-image"],[style*="mask:"]{-webkit-mask-image:none!important;mask-image:none!important;-webkit-mask:none!important;mask:none!important;}';
   (document.head||document.documentElement).appendChild(s);
+
+  // Freeze looping decorative animations (drifting blobs, spinning rays,
+  // breathing glows). They force continuous compositing the whole time the
+  // user is trying to scroll. Static, they still look fine. One-shot
+  // transitions (CTA slide-in, rank reveal) are left alone.
+  function calmAnims(){
+    var all=document.querySelectorAll('#dc-root *'), k=0;
+    for(var i=0;i<all.length;i++){
+      try{
+        var cs=getComputedStyle(all[i]);
+        if(cs.animationIterationCount && cs.animationIterationCount.indexOf('infinite')>=0){
+          all[i].style.setProperty('animation','none','important'); k++;
+        }
+      }catch(e){}
+    }
+    return k;
+  }
   var lastS=-1, H=844;
   function fit(){
     var root=document.getElementById('dc-root'); if(!root) return;
@@ -484,7 +526,8 @@ const DC_PAGE_INJECT = `
     // window.__dcFitBoth (set by the per-page inject for the one-screen
     // pages) instead shrinks to fit the height too, so everything — the
     // grey line under the CTA included — is visible with no scrolling.
-    var S = window.__dcFitBoth ? Math.min(1, vw/W, vh/rh) : Math.min(1, vw/W);
+    var cap = window.__dcMaxScale || 1;
+    var S = window.__dcFitBoth ? Math.min(cap, vw/W, vh/rh) : Math.min(cap, vw/W);
     if(Math.abs(S-lastS)>=0.002){ lastS=S; root.style.setProperty('transform','scale('+S+')','important'); }
     document.body.style.setProperty('height', Math.ceil(rh*S + (window.__dcFitBoth?0:24))+'px','important');
   }
@@ -493,12 +536,20 @@ const DC_PAGE_INJECT = `
     return !!(r && r.children && r.children.length) && !document.documentElement.classList.contains('sc-dc-streaming');
   }
   var n=0, done=false;
+  // Phase 1: poll until the artboard paints. Phase 2: a few spaced settle
+  // passes, then STOP — the old code re-ran fit()/wireEdits() every 120ms
+  // for ~10s, which is layout thrash during the exact window the user is
+  // trying to scroll.
+  function settlePass(){ fit(); wireEdits(); calmAnims(); }
   (function wait(){
     fit();
-    var p = painted();
-    if(p) wireEdits();
-    if((p && !done)){ done=true; fit(); post('rendered'); }
-    if(n++<80) setTimeout(wait, 120); // keep wiring pencils as the page settles
+    if(painted()){
+      done=true;
+      wireEdits(); calmAnims(); fit(); post('rendered');
+      [250,700,1600,3000].forEach(function(d){ setTimeout(settlePass, d); });
+      return;
+    }
+    if(n++<70) setTimeout(wait, 120);
   })();
   window.addEventListener('resize', fit);
   true;
@@ -507,6 +558,9 @@ const DC_PAGE_INJECT = `
 
 // One-screen pages: fit to the screen height too so nothing needs scrolling.
 const FIT_BOTH_INJECT = `window.__dcFitBoth=1;`;
+// Rank reveal renders edge-to-edge at 1:1 and felt "too zoomed in" — pull it
+// in a touch so the emblem has breathing room.
+const RANK_REVEAL_INJECT = `window.__dcFitBoth=1;window.__dcMaxScale=0.9;`;
 
 // generatePlan is a timed "generating…" beat + a one-screen page. Auto-
 // advance as a backstop (its own progress runs ~9s then shows a CTA).
@@ -517,10 +571,6 @@ const GENERATE_PLAN_INJECT = `
   true;
 })();
 `;
-
-// The page's own CTA slides in a beat after it loads. Delay the back button
-// to land with it, not before it.
-const BACK_DELAY_MS: Partial<Record<string, number>> = { trialTimeline: 1500, paywall: 1100, planReady: 500, generatePlan: 500 };
 
 function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, topInset, extraJs: extraJsProp }: {
   htmlKey: keyof typeof ONB_HTML;
@@ -539,12 +589,19 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, topInset,
     if (shown.current) return;
     shown.current = true;
     Animated.timing(fade, { toValue: 1, duration: 320, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
-    setTimeout(() => {
-      Animated.timing(backFade, { toValue: 1, duration: 280, useNativeDriver: true }).start();
-    }, BACK_DELAY_MS[htmlKey] ?? 350);
   };
-  // Fallback reveals — the 'rendered' message is the fast path, but never
-  // leave the page (or its back button) hidden if it doesn't arrive.
+  // The back button is its own thing now — it fades in on a fixed timer from
+  // mount, on EVERY web screen (rank run, the 4 pre-paywall pages, the
+  // paywall), whether or not the page ever posts 'rendered'. The user should
+  // never be stuck without a way back.
+  useEffect(() => {
+    const b = setTimeout(() => {
+      Animated.timing(backFade, { toValue: 1, duration: 260, useNativeDriver: true }).start();
+    }, 450);
+    return () => clearTimeout(b);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Fallback page reveals — 'rendered' is the fast path, but never leave the
+  // page hidden if it doesn't arrive.
   useEffect(() => {
     if (!webReady) return;
     const t = setTimeout(reveal, DC_PAGE_KEYS.includes(htmlKey) ? 1400 : 350);
@@ -561,6 +618,7 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, topInset,
   const fitBothKeys = ['trialTimeline', 'paywall', 'rankWheel', 'strengthAssessment', 'rankReveal', 'cinematicGraph'];
   const dcExtra =
     htmlKey === 'generatePlan' ? GENERATE_PLAN_INJECT :
+    htmlKey === 'rankReveal' ? RANK_REVEAL_INJECT :
     fitBothKeys.includes(htmlKey) ? FIT_BOTH_INJECT :
     undefined;
   const extraJs = extraJsProp
@@ -2163,11 +2221,13 @@ export default function OnboardingScreen() {
   // ── CALCULATING (the math) — short processing beat ───────────────────────────
 
   if (appState === 'calcMath') {
-    return <CalcMathBeat onDone={() => setAppState('cinematic')} />;
+    return <CalcMathBeat onDone={() => setAppState('rankWheel')} />;
   }
 
   // ── CINEMATIC MATH — the "two versions of you" wasted-muscle graph, with
   // the years / reps-lost / months-lost numbers rewritten from the answers.
+  // Comes AFTER the rank run (it was landing before the ranks, where the
+  // user never got to it).
 
   if (appState === 'cinematic') {
     return (
@@ -2175,8 +2235,8 @@ export default function OnboardingScreen() {
         htmlKey="cinematicGraph"
         topInset={insets.top}
         extraJs={cinematicGraphInject(answers)}
-        onAdvance={() => setAppState('rankWheel')}
-        onBack={() => setAppState('calcMath')}
+        onAdvance={() => setAppState('generatePlan')}
+        onBack={() => setAppState('rankReveal')}
       />
     );
   }
@@ -2209,8 +2269,9 @@ export default function OnboardingScreen() {
       <OnboardingWebScreen
         htmlKey="rankWheel"
         topInset={insets.top}
+        extraJs={RANK_WHEEL_INJECT}
         onAdvance={() => setAppState('rankAssess')}
-        onBack={() => setAppState('cinematic')}
+        onBack={() => setAppState('calcMath')}
       />
     );
   }
@@ -2232,7 +2293,7 @@ export default function OnboardingScreen() {
         htmlKey="rankReveal"
         topInset={insets.top}
         extraJs={rankRevealInject(answers)}
-        onAdvance={() => setAppState('generatePlan')}
+        onAdvance={() => setAppState('cinematic')}
         onBack={() => setAppState('rankAssess')}
       />
     );
@@ -2248,7 +2309,7 @@ export default function OnboardingScreen() {
         htmlKey="generatePlan"
         topInset={insets.top}
         onAdvance={() => setAppState('planReady')}
-        onBack={() => setAppState('rankReveal')}
+        onBack={() => setAppState('cinematic')}
       />
     );
   }
