@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Platform, ScrollView,
-  Animated, PanResponder, Image, TextInput, Pressable, Easing,
+  Animated, PanResponder, Image, TextInput, Pressable, Easing, KeyboardAvoidingView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Asset } from 'expo-asset';
@@ -361,26 +361,53 @@ const DC_PAGE_INJECT = `
     }
     return null;
   }
-  document.addEventListener('click', function(e){
-    // Edit pencils on plan-ready — small svg with cursor:pointer, no handler.
-    var el=e.target;
-    for(var k=0; el && k<4; k++, el=el.parentElement){
-      var st=(el.getAttribute && el.getAttribute('style'))||'';
-      if((el.tagName+'').toLowerCase()==='svg' && /cursor:\\s*pointer/.test(st)){
-        // Figure out which row it's in from the nearest value span.
-        var host=el.parentElement, v='';
-        for(var p=0;p<6 && host;p++,host=host.parentElement){
-          var sp=host.querySelector && host.querySelector('span.sc-interp');
-          if(sp){ v=(sp.textContent||'').trim(); break; }
-        }
-        var field = /lb|kg/i.test(v) ? 'weight' : (v.indexOf('"')>=0 ? 'height' : (/^[0-9]{1,3}$/.test(v) ? 'age' : 'experience'));
-        post('__tap'); post('editinfo:'+field); return;
-      }
+  // A CTA counts only if it's actually on screen and tappable RIGHT NOW —
+  // generatePlan keeps its "See my plan" button in the DOM the whole time,
+  // hidden/disabled until the progress finishes; tapping the empty space
+  // near it was firing 'advance' early.
+  function live(el){
+    for(var i=0; el && i<5; i++, el=el.parentElement){
+      var cs=getComputedStyle(el);
+      if(cs.display==='none' || cs.visibility==='hidden') return false;
+      if(cs.pointerEvents==='none') return false;
+      if(parseFloat(cs.opacity||'1') < 0.35) return false;
     }
+    return true;
+  }
+  document.addEventListener('click', function(e){
     var c = clickable(e.target);
-    var t = ((c || e.target).textContent || '').replace(/\\s+/g,' ').trim();
+    if(!c) return;
+    var r=c.getBoundingClientRect();
+    if(r.width<24 || r.height<16 || !live(c)) return;
+    var t=(c.textContent||'').replace(/\\s+/g,' ').trim();
     if (RE.test(t)) { post('__tap'); post('advance'); }
   }, true);
+
+  // Plan-ready: the little pencil icons are cursor:pointer svgs with no
+  // handler. Wire each one explicitly to the field in its row.
+  function wireEdits(){
+    var svgs=document.querySelectorAll('svg[style*="cursor: pointer"],svg[style*="cursor:pointer"]');
+    var n=0;
+    for(var i=0;i<svgs.length;i++){
+      var sv=svgs[i];
+      if(sv.__wired){ n++; continue; }
+      sv.__wired=1;
+      var host=sv.parentElement, v='';
+      for(var p=0;p<6 && host;p++,host=host.parentElement){
+        var sp=host.querySelector && host.querySelector('span.sc-interp');
+        if(sp){ v=(sp.textContent||'').trim(); break; }
+      }
+      var field = /lb|kg/i.test(v) ? 'weight' : (v.indexOf('"')>=0 ? 'height' : (/^[0-9]{1,3}$/.test(v) ? 'age' : 'experience'));
+      sv.style.setProperty('padding','12px','important');
+      sv.style.setProperty('margin','-12px','important');
+      sv.style.setProperty('box-sizing','content-box','important');
+      (function(f){
+        sv.addEventListener('click', function(ev){ ev.preventDefault(); ev.stopPropagation(); post('__tap'); post('editinfo:'+f); }, true);
+      })(field);
+      n++;
+    }
+    return n>=3;
+  }
 
   var W=390;
   var s=document.createElement('style');
@@ -401,11 +428,13 @@ const DC_PAGE_INJECT = `
     var r=document.getElementById('dc-root');
     return !!(r && r.children && r.children.length) && !document.documentElement.classList.contains('sc-dc-streaming');
   }
-  var n=0;
+  var n=0, done=false;
   (function wait(){
     fit();
-    if(painted() || n++>50){ fit(); post('rendered'); return; }
-    setTimeout(wait, 90);
+    var p = painted();
+    if(p) wireEdits();
+    if((p && !done)){ done=true; fit(); post('rendered'); }
+    if(n++<80) setTimeout(wait, 120); // keep wiring pencils as the page settles
   })();
   window.addEventListener('resize', fit);
   true;
@@ -481,7 +510,7 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, topInset,
           style={{ flex: 1, backgroundColor: isDcPage ? '#ffffff' : 'transparent' }}
           opaque={isDcPage}
           scrollEnabled
-          bounces={false}
+          bounces={isDcPage}
           decelerationRate="normal"
           nestedScrollEnabled
           overScrollMode="never"
@@ -2229,11 +2258,11 @@ function CalcMathBeat({ onDone }: { onDone: () => void }) {
 // experience field gets its four options. Save/Cancel dismiss it. ────────────
 
 const EXPERIENCE_OPTS = ['Beginner', 'Some experience', 'Intermediate', 'Advanced'];
-const FIELD_META: Record<EditField, { label: string; kbd: 'number-pad' | 'default'; ph: string }> = {
-  age:        { label: 'Age',        kbd: 'number-pad', ph: '27' },
-  height:     { label: 'Height',     kbd: 'default',    ph: `5'10"` },
-  weight:     { label: 'Weight (lb)', kbd: 'number-pad', ph: '168' },
-  experience: { label: 'Experience', kbd: 'default',    ph: '' },
+const FIELD_META: Record<EditField, { title: string; kbd: 'number-pad' | 'default'; ph: string; unit?: string }> = {
+  age:        { title: 'age',        kbd: 'number-pad', ph: '27' },
+  height:     { title: 'height',     kbd: 'default',    ph: `5'10"` },
+  weight:     { title: 'weight',     kbd: 'number-pad', ph: '168', unit: 'lb' },
+  experience: { title: 'experience', kbd: 'default',    ph: '' },
 };
 
 function EditFieldOverlay({ field, answers, topInset, onSave, onClose }: {
@@ -2268,19 +2297,23 @@ function EditFieldOverlay({ field, answers, topInset, onSave, onClose }: {
   return (
     <View style={[StyleSheet.absoluteFill, { justifyContent: 'flex-end' }]}>
       <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(17,24,39,0.35)' }]} onPress={onClose} />
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Animated.View
         style={{
           backgroundColor: L.card, borderTopLeftRadius: 24, borderTopRightRadius: 24,
-          paddingHorizontal: 24, paddingTop: 20, paddingBottom: 28 + topInset * 0,
+          paddingHorizontal: 24, paddingTop: 20, paddingBottom: 28,
           transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [340, 0] }) }],
         }}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <Text style={{ fontFamily: FONT.displayBold, fontSize: 19, color: L.text, letterSpacing: -0.3 }}>Edit {meta.label.toLowerCase()}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+          <Text style={{ fontFamily: FONT.displayBold, fontSize: 19, color: L.text, letterSpacing: -0.3 }}>Edit your {meta.title}</Text>
           <TouchableOpacity onPress={onClose} hitSlop={12} style={s.bb}>
             <Sym name="xmark" size={14} color={L.textSub} />
           </TouchableOpacity>
         </View>
+        <Text style={{ fontSize: 13, color: L.textSub, marginBottom: 16 }}>
+          {field === 'experience' ? 'Pick the one that fits.' : `Type it in${meta.unit ? ` — in ${meta.unit}` : ''}.`}
+        </Text>
 
         {field === 'experience' ? (
           <View style={{ gap: 8 }}>
@@ -2313,6 +2346,7 @@ function EditFieldOverlay({ field, answers, topInset, onSave, onClose }: {
           <Text style={s.ct}>Save</Text>
         </TouchableOpacity>
       </Animated.View>
+      </KeyboardAvoidingView>
     </View>
   );
 }
