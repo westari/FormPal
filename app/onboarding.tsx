@@ -383,6 +383,7 @@ function rankRevealInject(a: Record<string, any>): string {
   return `
 (function(){
   var R=${JSON.stringify(rank)};
+  function post(m){ try{ window.ReactNativeWebView.postMessage(m); }catch(e){} }
   function apply(){
     var hit=0, all=document.querySelectorAll('span,div');
     for(var i=0;i<all.length;i++){
@@ -393,6 +394,32 @@ function rankRevealInject(a: Record<string, any>): string {
     return hit>=1;
   }
   if(!apply()) [200,500,1000,2000,3500,5000,7000].forEach(function(d){ setTimeout(apply,d); });
+
+  // The reveal CTA is a <div sc-camel-on-click="{{ }}">Continue</div> that
+  // only mounts once the rank is revealed — wire it straight to advance so
+  // the user is never stuck on the revealed screen, and give every tap on
+  // the reveal area a haptic.
+  var wired=false;
+  document.addEventListener('pointerdown', function(){ post('__tap'); }, true);
+  function hunt(){
+    if(wired) return true;
+    var all=document.querySelectorAll('div,button');
+    for(var i=0;i<all.length;i++){
+      var el=all[i];
+      var t=(el.textContent||'').replace(/\\s+/g,' ').trim();
+      if(t.length && t.length<=14 && /^continue$/i.test(t)){
+        var cs=getComputedStyle(el);
+        if(cs.visibility==='hidden' || cs.display==='none') continue;
+        el.addEventListener('click', function(ev){ ev.stopPropagation(); post('__tap'); post('advance'); }, true);
+        el.style.setProperty('cursor','pointer','important');
+        wired=true;
+        return true;
+      }
+    }
+    return false;
+  }
+  var tries=0;
+  var iv=setInterval(function(){ if(hunt() || ++tries>60) clearInterval(iv); }, 250);
 })();
 `;
 }
@@ -433,10 +460,22 @@ const DC_PAGE_INJECT = `
 (function () {
   function post(m){ try{ window.ReactNativeWebView.postMessage(m); }catch(e){} }
   var RE = new RegExp(${JSON.stringify(DC_CTA_RE)}, 'i');
+  function hasDcClick(el){
+    if(!el.attributes) return false;
+    for(var k=0;k<el.attributes.length;k++){
+      var nm=el.attributes[k].name;
+      if(nm==='onclick' || nm.indexOf('on-click')>=0 || nm.indexOf('onClick')>=0) return true;
+    }
+    return false;
+  }
   function clickable(el){
     for(var i=0; el && i<8; i++, el=el.parentElement){
       var r = el.getAttribute && el.getAttribute('role');
-      if(el.tagName==='BUTTON' || el.tagName==='A' || r==='button' || (el.getAttribute && el.getAttribute('onclick')!=null) || (el.style && el.style.cursor==='pointer')) return el;
+      // DC artboards bind their CTA as a <div sc-camel-on-click="{{ ... }}">
+      // — no BUTTON/A, no cursor:pointer inline. Without matching that
+      // attribute, tapping "Continue" on the rank reveal did nothing and
+      // the user was stuck.
+      if(el.tagName==='BUTTON' || el.tagName==='A' || r==='button' || hasDcClick(el) || (el.style && el.style.cursor==='pointer')) return el;
     }
     return null;
   }
@@ -492,20 +531,33 @@ const DC_PAGE_INJECT = `
   var s=document.createElement('style');
   s.textContent='html{background:#ffffff!important;}'
     + 'body{margin:0!important;padding:0!important;background:#ffffff!important;display:block!important;overflow-x:hidden!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch!important;}'
-    + '#dc-root{position:relative!important;margin:0 auto!important;width:'+W+'px!important;transform-origin:top center!important;}'
+    // Start hidden — revealed only after fit() has settled a stable scale,
+    // so the user never sees the artboard paint at 1:1 and then visibly
+    // shrink ("quickly zooms out for a sec").
+    + '#dc-root{position:relative!important;margin:0 auto!important;width:'+W+'px!important;transform-origin:top center!important;opacity:0!important;}'
+    + '#dc-root.__dcshow{opacity:1!important;transition:opacity 200ms ease!important;}'
     // Perf: backdrop-filter + mask-image are the two big WebView repaint
     // killers on these artboards (frosted pills, faded scroll edges). Drop
     // them — the pills already carry a solid-ish rgba fill, so they stay
     // readable, and the scroll wheel / tap animations stop stuttering.
     + '*{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}'
-    + '[style*="mask-image"],[style*="mask:"]{-webkit-mask-image:none!important;mask-image:none!important;-webkit-mask:none!important;mask:none!important;}';
+    + '[style*="mask-image"],[style*="mask:"]{-webkit-mask-image:none!important;mask-image:none!important;-webkit-mask:none!important;mask:none!important;}'
+    // Momentum scrolling on any inner scroller (the rank rows / assessment
+    // wheel), and no big blurred shadows repainting on the moving pieces.
+    + '[style*="overflow-x"],[style*="overflow-y"],[style*="overflow:"],[style*="overflow-scrolling"]{-webkit-overflow-scrolling:touch!important;}'
+    + '#dc-root [style*="filter: blur"],#dc-root [style*="filter:blur"]{filter:none!important;}';
   (document.head||document.documentElement).appendChild(s);
 
   // Freeze looping decorative animations (drifting blobs, spinning rays,
   // breathing glows). They force continuous compositing the whole time the
   // user is trying to scroll. Static, they still look fine. One-shot
-  // transitions (CTA slide-in, rank reveal) are left alone.
+  // transitions (CTA slide-in, rank reveal, row rise-in) are left alone.
+  // Runs ONCE, ~1.2s in — after the artboard's entrance animations finish,
+  // so it isn't doing a getComputedStyle walk while they're playing.
+  var calmDone=false;
   function calmAnims(){
+    if(calmDone) return 0;
+    calmDone=true;
     var all=document.querySelectorAll('#dc-root *'), k=0;
     for(var i=0;i<all.length;i++){
       try{
@@ -526,8 +578,7 @@ const DC_PAGE_INJECT = `
     // window.__dcFitBoth (set by the per-page inject for the one-screen
     // pages) instead shrinks to fit the height too, so everything — the
     // grey line under the CTA included — is visible with no scrolling.
-    var cap = window.__dcMaxScale || 1;
-    var S = window.__dcFitBoth ? Math.min(cap, vw/W, vh/rh) : Math.min(cap, vw/W);
+    var S = window.__dcFitBoth ? Math.min(1, vw/W, vh/rh) : Math.min(1, vw/W);
     if(Math.abs(S-lastS)>=0.002){ lastS=S; root.style.setProperty('transform','scale('+S+')','important'); }
     document.body.style.setProperty('height', Math.ceil(rh*S + (window.__dcFitBoth?0:24))+'px','important');
   }
@@ -535,22 +586,30 @@ const DC_PAGE_INJECT = `
     var r=document.getElementById('dc-root');
     return !!(r && r.children && r.children.length) && !document.documentElement.classList.contains('sc-dc-streaming');
   }
-  var n=0, done=false;
-  // Phase 1: poll until the artboard paints. Phase 2: a few spaced settle
-  // passes, then STOP — the old code re-ran fit()/wireEdits() every 120ms
-  // for ~10s, which is layout thrash during the exact window the user is
-  // trying to scroll.
-  function settlePass(){ fit(); wireEdits(); calmAnims(); }
+  var n=0, done=false, stable=0, prevS=-99;
+  // Poll fit() only until the artboard has painted AND the scale has stopped
+  // moving — then reveal, post 'rendered', and STOP. The old loop kept
+  // calling fit()/wireEdits()/calmAnims() every 120ms for ~10s, forcing a
+  // reflow on every tick right while the entrance animations and the user's
+  // scroll were trying to run — that was the choppiness.
+  function reveal(){
+    if(done) return;
+    done=true;
+    var r=document.getElementById('dc-root');
+    if(r) r.classList.add('__dcshow');
+    post('rendered');
+    // One deferred cleanup after the entrance animations have played out.
+    setTimeout(function(){ fit(); wireEdits(); calmAnims(); }, 1200);
+  }
   (function wait(){
     fit();
-    if(painted()){
-      done=true;
-      wireEdits(); calmAnims(); fit(); post('rendered');
-      [250,700,1600,3000].forEach(function(d){ setTimeout(settlePass, d); });
-      return;
-    }
-    if(n++<70) setTimeout(wait, 120);
+    if(Math.abs(lastS-prevS)<0.003) stable++; else stable=0;
+    prevS=lastS;
+    if(painted() && (stable>=2 || n>16)){ reveal(); return; }
+    if(n++<70) setTimeout(wait, 90);
   })();
+  // Absolute backstop — never leave it hidden.
+  setTimeout(reveal, 2600);
   window.addEventListener('resize', fit);
   true;
 })();
@@ -558,9 +617,6 @@ const DC_PAGE_INJECT = `
 
 // One-screen pages: fit to the screen height too so nothing needs scrolling.
 const FIT_BOTH_INJECT = `window.__dcFitBoth=1;`;
-// Rank reveal renders edge-to-edge at 1:1 and felt "too zoomed in" — pull it
-// in a touch so the emblem has breathing room.
-const RANK_REVEAL_INJECT = `window.__dcFitBoth=1;window.__dcMaxScale=0.9;`;
 
 // generatePlan is a timed "generating…" beat + a one-screen page. Auto-
 // advance as a backstop (its own progress runs ~9s then shows a CTA).
@@ -604,7 +660,7 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, topInset,
   // page hidden if it doesn't arrive.
   useEffect(() => {
     if (!webReady) return;
-    const t = setTimeout(reveal, DC_PAGE_KEYS.includes(htmlKey) ? 1400 : 350);
+    const t = setTimeout(reveal, DC_PAGE_KEYS.includes(htmlKey) ? 800 : 350);
     return () => clearTimeout(t);
   }, [webReady]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -615,10 +671,11 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, topInset,
   const isDcPage = DC_PAGE_KEYS.includes(htmlKey);
   const baseInject = isDcPage ? DC_PAGE_INJECT : ONBOARDING_WEB_INJECT;
   // Everything except planReady is a one-screen page → fit to the height too.
-  const fitBothKeys = ['trialTimeline', 'paywall', 'rankWheel', 'strengthAssessment', 'rankReveal', 'cinematicGraph'];
+  // rankReveal stays width-fit (fills the screen edge-to-edge, no white
+  // border) — the user wants it fully zoomed, scrolling any overflow.
+  const fitBothKeys = ['trialTimeline', 'paywall', 'rankWheel', 'strengthAssessment', 'cinematicGraph'];
   const dcExtra =
     htmlKey === 'generatePlan' ? GENERATE_PLAN_INJECT :
-    htmlKey === 'rankReveal' ? RANK_REVEAL_INJECT :
     fitBothKeys.includes(htmlKey) ? FIT_BOTH_INJECT :
     undefined;
   const extraJs = extraJsProp
