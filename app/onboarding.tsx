@@ -20,6 +20,7 @@ import PlanGrowthMoment from '../components/PlanGrowthMoment';
 import { LiquidGlassButton } from '../components/LiquidGlass';
 import RankRevealScreen from '../components/onboarding/RankRevealScreen';
 import RankWheelScreen from '../components/onboarding/RankWheelScreen';
+import StrengthAssessmentScreen from '../components/onboarding/StrengthAssessmentScreen';
 import { PUSHUP_ICON, PULLUP_ICON, SQUAT_ICON } from '../assets/onboarding/onbIcons';
 import { FONT, W, Col, Elev } from '../constants/theme';
 
@@ -2412,9 +2413,10 @@ export default function OnboardingScreen() {
 
   if (appState === 'rankAssess') {
     return (
-      <OnboardingWebScreen
-        htmlKey="strengthAssessment"
+      <StrengthAssessmentScreen
+        answers={answers}
         topInset={insets.top}
+        onSave={(reps) => setAnswers(a => ({ ...a, ...reps }))}
         onAdvance={() => setAppState('rankReveal')}
         onBack={() => setAppState('rankWheel')}
       />
