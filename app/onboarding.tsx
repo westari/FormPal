@@ -19,6 +19,7 @@ import AppBackground from '../components/AppBackground';
 import PlanGrowthMoment from '../components/PlanGrowthMoment';
 import { LiquidGlassButton } from '../components/LiquidGlass';
 import RankRevealScreen from '../components/onboarding/RankRevealScreen';
+import RankWheelScreen from '../components/onboarding/RankWheelScreen';
 import { PUSHUP_ICON, PULLUP_ICON, SQUAT_ICON } from '../assets/onboarding/onbIcons';
 import { FONT, W, Col, Elev } from '../constants/theme';
 
@@ -402,26 +403,8 @@ function cinematicGraphInject(a: Record<string, any>): string {
 `;
 }
 
-// rankReveal is now a native screen (components/onboarding/RankRevealScreen).
-
-// rankwheel2.html — the per-rank "Top NN% of FormPal lifters" readout renders
-// grey (#6e6e77). User wants that line in the wheel's blue accent.
-const RANK_WHEEL_INJECT = `
-(function(){
-  function go(){
-    var all=document.querySelectorAll('div,span,p'), hit=0;
-    for(var i=0;i<all.length;i++){
-      var el=all[i]; if(el.children.length) continue;
-      var t=(el.textContent||'').trim();
-      if(/^Top\\s+[0-9.]+%/.test(t)){ el.style.setProperty('color','#2E7DFF','important'); hit++; }
-    }
-    return hit>=1;
-  }
-  if(!go()) [200,500,1000,2000,3500].forEach(function(d){ setTimeout(go,d); });
-  else [900,2200].forEach(function(d){ setTimeout(go,d); });
-  true;
-})();
-`;
+// rankReveal + rankWheel are now native screens
+// (components/onboarding/RankRevealScreen, RankWheelScreen).
 
 // The 4 pre-paywall pages are Claude-Design artboards — FIXED 390-wide
 // canvases. Scale #dc-root to the WebView width (never up past 1×), pin it
@@ -2414,14 +2397,13 @@ export default function OnboardingScreen() {
     );
   }
 
-  // ── Rank run — now AFTER the math. Same WebView artifacts as before. ────────
+  // ── Rank run — native screens (rank wheel / reveal), WebView for the
+  // strength assessment for now. All AFTER the math. ────────────────────────
 
   if (appState === 'rankWheel') {
     return (
-      <OnboardingWebScreen
-        htmlKey="rankWheel"
+      <RankWheelScreen
         topInset={insets.top}
-        extraJs={RANK_WHEEL_INJECT}
         onAdvance={() => setAppState('rankAssess')}
         onBack={() => setAppState('calcMath')}
       />
