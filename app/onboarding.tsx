@@ -630,25 +630,34 @@ const GENERATE_PLAN_INJECT = `
 })();
 `;
 
-function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, topInset, extraJs: extraJsProp }: {
+function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, topInset, extraJs: extraJsProp, poolActive }: {
   htmlKey: keyof typeof ONB_HTML;
   onAdvance: () => void;
   onBack: () => void;
   onEditInfo?: (field: string) => void;
   topInset: number;
   extraJs?: string;
+  // Pool mode: when defined, this screen is one of several kept mounted at
+  // once (DcPagePool). It absolute-fills, only the active one is visible /
+  // interactive, and only the active one shows its back button.
+  poolActive?: boolean;
 }) {
+  const inPool = poolActive !== undefined;
   const fade = useRef(new Animated.Value(0)).current;
   const backFade = useRef(new Animated.Value(0)).current;
   // Whole-screen ease-in on mount so advancing to this screen doesn't hard
   // "pop" — pairs with the inner WebView fade for a two-stage settle.
-  const containerFade = useRef(new Animated.Value(0)).current;
+  const containerFade = useRef(new Animated.Value(inPool ? (poolActive ? 1 : 0) : 0)).current;
   const shown = useRef(false);
   const [webReady, setWebReady] = useState(false);
 
   useEffect(() => {
-    Animated.timing(containerFade, { toValue: 1, duration: 240, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    if (inPool) {
+      Animated.timing(containerFade, { toValue: poolActive ? 1 : 0, duration: 200, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
+    } else {
+      Animated.timing(containerFade, { toValue: 1, duration: 240, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
+    }
+  }, [poolActive]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const reveal = () => {
     if (shown.current) return;
@@ -692,7 +701,14 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, topInset,
     ? (dcExtra ? extraJsProp + '\n' + dcExtra : extraJsProp)
     : (dcExtra ?? undefined);
   return (
-    <Animated.View style={{ flex: 1, backgroundColor: isDcPage ? '#ffffff' : '#f4f4f2', opacity: containerFade }}>
+    <Animated.View
+      pointerEvents={inPool && !poolActive ? 'none' : 'auto'}
+      style={
+        inPool
+          ? { ...StyleSheet.absoluteFillObject, backgroundColor: '#ffffff', opacity: containerFade }
+          : { flex: 1, backgroundColor: isDcPage ? '#ffffff' : '#f4f4f2', opacity: containerFade }
+      }
+    >
       {!isDcPage && <AppBackground />}
       <Animated.View style={{ flex: 1, marginTop: topInset, opacity: fade }}>
         <WebView
@@ -728,8 +744,9 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, topInset,
       {/* Absolute + anchored to the top of THIS screen — an RN View defaults
           to position:relative, so when the wrapper was a plain flow child
           after the flex:1 WebView its absolute child was being measured from
-          the bottom of the screen and pushed off. */}
-      {htmlKey === 'paywall' ? (
+          the bottom of the screen and pushed off. In pool mode only the
+          active page shows its back control. */}
+      {(inPool && !poolActive) ? null : htmlKey === 'paywall' ? (
         // Paywall: iOS-standard layout — close (X) top-left, plain grey
         // "Restore" top-right. No glass pill on Restore.
         <Animated.View
@@ -780,6 +797,41 @@ const web = StyleSheet.create({
   // On the white DC pages: a clean light chip, not a heavy dark blob.
   backCircleDc: { borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.10)', ...({ boxShadow: '0px 2px 8px rgba(0,0,0,0.10)' } as any) },
 });
+
+// ── DcPagePool — the last 3 pre-paywall WebView pages (plan ready, trial
+// timeline, paywall) kept mounted at once. They boot once (during the
+// generatePlan "generating…" beat) and after that switching between them is
+// just a visibility toggle, so "Continue" is instant instead of a cold
+// WebView reload. generatePlan itself is deliberately slow (it's a loading
+// screen) so it stays a normal one-shot screen, not pooled.
+type PoolKey = 'planReady' | 'trialTimeline' | 'paywall';
+const POOL_ORDER: PoolKey[] = ['planReady', 'trialTimeline', 'paywall'];
+
+function DcPagePool({ activeKey, answers, topInset, onAdvance, onBack, onEditInfo }: {
+  activeKey: PoolKey | null;
+  answers: Record<string, any>;
+  topInset: number;
+  onAdvance: (from: PoolKey) => void;
+  onBack: (from: PoolKey) => void;
+  onEditInfo: (field: string) => void;
+}) {
+  return (
+    <View style={StyleSheet.absoluteFill}>
+      {POOL_ORDER.map((key) => (
+        <OnboardingWebScreen
+          key={key}
+          htmlKey={key}
+          topInset={topInset}
+          poolActive={activeKey === key}
+          extraJs={key === 'planReady' ? planReadyInject(answers) : undefined}
+          onAdvance={() => onAdvance(key)}
+          onBack={() => onBack(key)}
+          onEditInfo={key === 'planReady' ? onEditInfo : undefined}
+        />
+      ))}
+    </View>
+  );
+}
 
 // ── LocationBubbles — 3 overlapping gradient spheres (Home / Gym / Mix)
 // that ARE the answer options: tap one to pick, then Continue. Copied over
@@ -2398,35 +2450,41 @@ export default function OnboardingScreen() {
     );
   }
 
-  // ── The four pre-paywall WebView pages (assets/*.html). Each advances on
-  // its own CTA (the inject catches the button text); planReady gets the
-  // user's answers rewritten into its stat slots. ───────────────────────────
-
-  if (appState === 'generatePlan') {
+  // ── The pre-paywall WebView pages. generatePlan is a one-shot loading
+  // screen; the last three (plan ready / trial / paywall) live in a pool
+  // that boots during generatePlan so switching between them is instant.
+  if (appState === 'generatePlan' || appState === 'planReady' || appState === 'trialTimeline' || appState === 'webPaywall') {
+    const poolActive: PoolKey | null =
+      appState === 'planReady' ? 'planReady' :
+      appState === 'trialTimeline' ? 'trialTimeline' :
+      appState === 'webPaywall' ? 'paywall' : null;
     return (
-      <OnboardingWebScreen
-        htmlKey="generatePlan"
-        topInset={insets.top}
-        onAdvance={() => setAppState('planReady')}
-        onBack={() => setAppState('cinematic')}
-      />
-    );
-  }
-
-  if (appState === 'planReady') {
-    return (
-      <View style={{ flex: 1 }}>
-        <OnboardingWebScreen
-          htmlKey="planReady"
+      <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
+        <DcPagePool
+          activeKey={poolActive}
+          answers={answers}
           topInset={insets.top}
-          extraJs={planReadyInject(answers)}
-          onAdvance={() => setAppState('trialTimeline')}
-          onBack={() => setAppState('generatePlan')}
-          // A pencil opens a one-field editor OVER the page — the WebView
-          // stays mounted, so closing it doesn't reload / re-animate.
+          onAdvance={(from) => {
+            if (from === 'planReady') setAppState('trialTimeline');
+            else if (from === 'trialTimeline') setAppState('webPaywall');
+            else finishOnboarding();
+          }}
+          onBack={(from) => {
+            if (from === 'planReady') setAppState('generatePlan');
+            else if (from === 'trialTimeline') setAppState('planReady');
+            else setAppState('trialTimeline');
+          }}
           onEditInfo={(f) => setEditField(f as EditField)}
         />
-        {editField && (
+        {appState === 'generatePlan' && (
+          <OnboardingWebScreen
+            htmlKey="generatePlan"
+            topInset={insets.top}
+            onAdvance={() => setAppState('planReady')}
+            onBack={() => setAppState('cinematic')}
+          />
+        )}
+        {editField && appState === 'planReady' && (
           <EditFieldOverlay
             field={editField}
             answers={answers}
@@ -2436,28 +2494,6 @@ export default function OnboardingScreen() {
           />
         )}
       </View>
-    );
-  }
-
-  if (appState === 'trialTimeline') {
-    return (
-      <OnboardingWebScreen
-        htmlKey="trialTimeline"
-        topInset={insets.top}
-        onAdvance={() => setAppState('webPaywall')}
-        onBack={() => setAppState('planReady')}
-      />
-    );
-  }
-
-  if (appState === 'webPaywall') {
-    return (
-      <OnboardingWebScreen
-        htmlKey="paywall"
-        topInset={insets.top}
-        onAdvance={finishOnboarding}
-        onBack={() => setAppState('trialTimeline')}
-      />
     );
   }
 
