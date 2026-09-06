@@ -333,7 +333,7 @@ function planReadyInject(a: Record<string, any>): string {
 }
 
 const DURATION_YEARS: Record<string, number> = {
-  'Just starting': 1, '1-6 months': 1, '6-12 months': 1,
+  '1-2 months': 1, '2-6 months': 1, '6-12 months': 1,
   '1-2 years': 2, '2-5 years': 3, '5-10 years': 7, '10+ years': 12,
 };
 
@@ -624,8 +624,10 @@ const DC_PAGE_INJECT = `
     done=true;
     var r=document.getElementById('dc-root');
     if(r) r.classList.add('__dcshow');
-    polish();
     post('rendered');
+    // Do the DOM tidy-ups AFTER the reveal is posted so they don't delay the
+    // fade start.
+    setTimeout(polish, 0);
     setTimeout(function(){ fit(); wireEdits(); calmAnims(); polish(); }, 900);
     setTimeout(polish, 2000);
   }
@@ -681,17 +683,17 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
   const inPool = poolActive !== undefined;
   const fade = useRef(new Animated.Value(0)).current;
   const backFade = useRef(new Animated.Value(0)).current;
-  // Whole-screen ease-in on mount so advancing to this screen doesn't hard
-  // "pop" — pairs with the inner WebView fade for a two-stage settle.
-  const containerFade = useRef(new Animated.Value(inPool ? (poolActive ? 1 : 0) : 0)).current;
+  // Container visibility. In the pool it cross-fades between pages. Standalone
+  // it starts visible (white) — the inner WebView `fade` + the artboard's own
+  // #dc-root opacity gate are the single, clean content reveal; a second
+  // container fade on top of them just read as a glitch.
+  const containerFade = useRef(new Animated.Value(inPool ? (poolActive ? 1 : 0) : 1)).current;
   const shown = useRef(false);
   const [webReady, setWebReady] = useState(false);
 
   useEffect(() => {
     if (inPool) {
       Animated.timing(containerFade, { toValue: poolActive ? 1 : 0, duration: 200, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
-    } else {
-      Animated.timing(containerFade, { toValue: 1, duration: 240, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
     }
   }, [poolActive]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1019,9 +1021,9 @@ const STEPS: Step[] = [
     { label: 'Female', sfSymbol: 'person.fill', customIcon: ICON.female },
   ]},
 
-  { id: 'trainDuration', section: 'Your Training', type: 'select', question: 'How long have you actually been training, in months or years?', options: [
-    { label: 'Just starting', sfSymbol: 'sparkles', customIcon: ICON.justStarting },
-    { label: '1-6 months', sfSymbol: 'clock.fill', customIcon: ICON.lessThan6mo },
+  { id: 'trainDuration', section: 'Your Training', type: 'select', question: 'How long have you been training for?', options: [
+    { label: '1-2 months', sfSymbol: 'sparkles', customIcon: ICON.justStarting },
+    { label: '2-6 months', sfSymbol: 'clock.fill', customIcon: ICON.lessThan6mo },
     { label: '6-12 months', sfSymbol: 'clock.fill', customIcon: ICON.sixTo12mo },
     { label: '1-2 years', sfSymbol: 'calendar', customIcon: ICON.oneToTwoYr },
     { label: '2-5 years', sfSymbol: 'calendar', customIcon: ICON.twoToFiveYr },
@@ -1029,7 +1031,7 @@ const STEPS: Step[] = [
     { label: '10+ years', sfSymbol: 'calendar', customIcon: ICON.tenPlusYr },
   ]},
 
-  { id: 'startReason', section: 'Your Training', type: 'select', question: 'What made you decide to start FormPal?', options: [
+  { id: 'startReason', section: 'Your Training', type: 'select', question: 'Why did you start FormPal?', options: [
     { label: 'Build muscle', sfSymbol: 'dumbbell.fill', customIcon: ICON.moreMuscle },
     { label: 'Look better, feel confident', sfSymbol: 'star.fill', customIcon: ICON.lookBetter },
     { label: 'Learn to train properly', sfSymbol: 'camera.fill', customIcon: ICON.trainProperly },
@@ -1037,7 +1039,7 @@ const STEPS: Step[] = [
     { label: 'Stay consistent', sfSymbol: 'repeat', customIcon: ICON.stayConsistentIcon },
   ]},
 
-  { id: 'experience', section: 'Your Training', type: 'select', question: 'How much do you actually know about proper training and form?', options: [
+  { id: 'experience', section: 'Your Training', type: 'select', question: 'How well do you know proper form?', options: [
     { label: 'Beginner', sfSymbol: '1.circle.fill', customIcon: ICON.beginnerGym },
     { label: 'Some experience', sfSymbol: '2.circle.fill', customIcon: ICON.someExpGym },
     { label: 'Intermediate', sfSymbol: '3.circle.fill', customIcon: ICON.intermediateGym },
@@ -1066,7 +1068,7 @@ const STEPS: Step[] = [
       { label: 'Nothing — just ready to start', sfSymbol: 'checkmark.circle.fill', customIcon: ICON.good },
     ],
   },
-  { id: 'frustration', section: 'Your Goal', type: 'select', question: 'What frustrates you most about your training?',
+  { id: 'frustration', section: 'Your Goal', type: 'select', question: 'What frustrates you most?',
     showIf: a => a.experience !== 'Beginner',
     options: [
       { label: 'Not seeing results', sfSymbol: 'minus.circle.fill', customIcon: ICON.noResults },
@@ -1075,7 +1077,7 @@ const STEPS: Step[] = [
       { label: 'Nothing really', sfSymbol: 'checkmark.circle.fill', customIcon: ICON.good },
     ],
   },
-  { id: 'formConfidence', section: 'Your Goal', type: 'select', question: 'Do you actually know if your form is right?', options: [
+  { id: 'formConfidence', section: 'Your Goal', type: 'select', question: 'Do you know if your form is right?', options: [
     { label: 'Yes', sfSymbol: 'checkmark.seal.fill', customIcon: ICON.yes },
     { label: 'Not sure', sfSymbol: 'questionmark.circle.fill', customIcon: ICON.notSure },
     { label: 'No idea', sfSymbol: 'xmark.circle.fill', customIcon: ICON.no },
@@ -1792,11 +1794,11 @@ const mp = StyleSheet.create({
 // one Continue, instead of one tap-gated line at a time).
 
 const DURATION_WEEKS: Record<string, number> = {
-  'Just starting': 2, '1-6 months': 13, '6-12 months': 39, '1-2 years': 78,
+  '1-2 months': 6, '2-6 months': 16, '6-12 months': 39, '1-2 years': 78,
   '2-5 years': 182, '5-10 years': 390, '10+ years': 624,
 };
 const DURATION_PLAIN: Record<string, string> = {
-  'Just starting': 'just starting out', '1-6 months': 'about 3 months', '6-12 months': 'about 9 months',
+  '1-2 months': 'just starting out', '2-6 months': 'about 4 months', '6-12 months': 'about 9 months',
   '1-2 years': 'about 1.5 years', '2-5 years': 'about 3.5 years', '5-10 years': 'about 7.5 years', '10+ years': '12+ years',
 };
 const REPS_PER_SESSION_BY_DURATION: Record<string, number> = {
@@ -1807,8 +1809,8 @@ const DEFAULT_REPS_PER_SESSION = 90;
 function dayWord(n: number): string { return `${n} day${n === 1 ? '' : 's'}`; }
 
 function computeWastedReps(answers: Record<string, any>) {
-  const trainDurationLabel = (answers.trainDuration as string) ?? 'Just starting';
-  const justStarting = trainDurationLabel === 'Just starting';
+  const trainDurationLabel = (answers.trainDuration as string) ?? '1-2 months';
+  const justStarting = trainDurationLabel === '1-2 months';
   const freq = parseInt(String(answers.days ?? '3 days'), 10) || 3;
   const durationLabel = answers.duration as string | undefined;
   const repsPerSession = REPS_PER_SESSION_BY_DURATION[durationLabel ?? ''] ?? DEFAULT_REPS_PER_SESSION;
@@ -2021,11 +2023,16 @@ export default function OnboardingScreen() {
     });
   };
 
-  const advance = (ans: Record<string, any>) => {
+  const advance = (ans: Record<string, any>, commit?: () => void) => {
     const vis = getVisibleSteps(ans);
     if (stepIndex < vis.length - 1) {
-      animTrans('forward', () => setStepIndex(i => i + 1));
+      // Commit the pending answer INSIDE the transition, together with the
+      // stepIndex bump — updating `answers` a tick earlier lets a showIf
+      // toggle a different step into the current index and flash it during
+      // the fade-out ("quickly shows another question then goes away").
+      animTrans('forward', () => { commit?.(); setStepIndex(i => i + 1); });
     } else {
+      commit?.();
       setAppState('rankWheel');
     }
   };
@@ -2070,8 +2077,7 @@ export default function OnboardingScreen() {
       setJustSelected(opt);
       setTimeout(() => {
         const next = { ...answers, [st.id]: opt };
-        setAnswers(next);
-        advance(next);
+        advance(next, () => setAnswers(next));
         setJustSelected(null);
       }, 300);
     }
@@ -2153,7 +2159,7 @@ export default function OnboardingScreen() {
         <OnboardingBackground>
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
             {header}
-            <View style={{ paddingHorizontal: 24, paddingTop: 20, flex: 1 }}>
+            <View style={{ paddingHorizontal: 24, paddingTop: 34, flex: 1 }}>
               <Text style={s.qq}>{st.question}</Text>
               <Picker selectedValue={wheelVal} onValueChange={(v) => { Haptics.selectionAsync(); setAnswers({ ...answers, [st.id]: v as string }); }} style={{ height: 230 }} itemStyle={{ color: L.text, fontSize: 28, fontWeight: '600' }}>
                 {opts.map(o => <Picker.Item key={o} label={o} value={o} />)}
@@ -2177,7 +2183,7 @@ export default function OnboardingScreen() {
         <OnboardingBackground>
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
             {header}
-            <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 20, paddingBottom: 140 }} showsVerticalScrollIndicator={false}>
+            <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 34, paddingBottom: 140 }} showsVerticalScrollIndicator={false}>
               <Animated.View style={{ opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
                 <Text style={s.qq}>{st.question}</Text>
                 <HomeSplitSlider value={sliderVal} onChange={(v) => setAnswers({ ...answers, [st.id]: v })} />
@@ -2200,7 +2206,7 @@ export default function OnboardingScreen() {
         <OnboardingBackground>
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
             {header}
-            <View style={{ paddingHorizontal: 24, paddingTop: 20, flex: 1 }}>
+            <View style={{ paddingHorizontal: 24, paddingTop: 34, flex: 1 }}>
               <Text style={s.qq}>{st.question}</Text>
               <WeightRulerSlider
                 value={rulerVal}
@@ -2226,7 +2232,7 @@ export default function OnboardingScreen() {
         <OnboardingBackground>
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
             {header}
-            <View style={{ paddingHorizontal: 24, paddingTop: 20, flex: 1 }}>
+            <View style={{ paddingHorizontal: 24, paddingTop: 34, flex: 1 }}>
               <Text style={s.qq}>{st.question}</Text>
               <TextInput
                 value={raw}
@@ -2257,7 +2263,7 @@ export default function OnboardingScreen() {
         <OnboardingBackground>
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
             {header}
-            <View style={{ paddingHorizontal: 24, paddingTop: 20, flex: 1 }}>
+            <View style={{ paddingHorizontal: 24, paddingTop: 34, flex: 1 }}>
               <Text style={s.qq}>{st.question}</Text>
               <LocationBubbles
                 selected={picked}
@@ -2281,7 +2287,7 @@ export default function OnboardingScreen() {
         <OnboardingBackground>
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
             {header}
-            <View style={{ paddingHorizontal: 24, paddingTop: 20, flex: 1 }}>
+            <View style={{ paddingHorizontal: 24, paddingTop: 34, flex: 1 }}>
               <Text style={s.qq}>{st.question}</Text>
               <GuessSlider value={val} onChange={(v) => setAnswers({ ...answers, [st.id]: v })} />
             </View>
@@ -2362,7 +2368,7 @@ export default function OnboardingScreen() {
 
         <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
           {header}
-          <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 20, paddingBottom: 140 }} showsVerticalScrollIndicator={false}>
+          <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 34, paddingBottom: 140 }} showsVerticalScrollIndicator={false}>
             <Animated.View style={{ opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
               <Text style={s.qq}>{st.question}</Text>
               {st.subtitle && <Text style={s.qqSub}>{st.subtitle}</Text>}
@@ -2660,8 +2666,8 @@ const s = StyleSheet.create({
   skipTxt: { fontSize: 14, fontWeight: W.semi, color: L.textSub },
 
   // Question
-  qq:     { fontFamily: FONT.displayBlack, fontSize: 28, color: '#111114', lineHeight: 34, marginBottom: 20, letterSpacing: -1 },
-  qqSub:  { fontSize: 14, color: L.textSub, lineHeight: 21, marginTop: -12, marginBottom: 20 },
+  qq:     { fontFamily: FONT.displayBold, fontSize: 26, color: '#111114', lineHeight: 33, marginBottom: 26, letterSpacing: -0.6 },
+  qqSub:  { fontSize: 14, color: L.textSub, lineHeight: 21, marginTop: -14, marginBottom: 24 },
   textInput: { backgroundColor: L.card, borderRadius: 16, borderWidth: 1, borderColor: L.border, paddingHorizontal: 18, paddingVertical: 16, fontSize: 18, color: L.text, ...({ boxShadow: Elev.low.shadow } as any) },
 
   // Options
