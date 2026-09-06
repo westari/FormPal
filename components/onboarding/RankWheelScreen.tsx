@@ -98,7 +98,7 @@ export default function RankWheelScreen({
         disableIntervalMomentum
         contentContainerStyle={{ paddingHorizontal: SIDE_PAD }}
         scrollEventThrottle={16}
-        onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: true, listener: onScrollFrame })}
+        onScroll={(e) => { scrollX.setValue(e.nativeEvent.contentOffset.x); onScrollFrame(e); }}
         style={s.flow}
       >
         {RANKS.map((r, i) => {

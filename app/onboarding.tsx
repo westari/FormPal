@@ -1050,10 +1050,6 @@ const STEPS: Step[] = [
     { label: 'On and off', sfSymbol: 'arrow.triangle.2.circlepath', customIcon: ICON.onAndOff },
   ]},
 
-  // fact1 — the structured-plan stat (PlanGrowthMoment). See the
-  // 'interstitial' render branch.
-  { id: 'afterAboutYou', section: 'Your Training', type: 'interstitial', question: '' },
-
   { id: 'struggle', section: 'Your Goal', type: 'multiselect', question: "What's been holding your training back?",
     clearAllOption: 'Nothing — just ready to start',
     showIf: a => a.experience !== 'Beginner',
@@ -1192,9 +1188,20 @@ const STEPS: Step[] = [
   // now runs AFTER the math/reversal, as an appState sequence — see the
   // 'rankWheel'/'rankAssess'/'rankReveal' render blocks below.
 
-  { id: 'formGuess', section: 'Wrap up', type: 'guessSlider',
-    question: 'Out of every rep you do, how many do you think are actually good form?' },
+  { id: 'formGuess', section: 'Wrap up', type: 'select',
+    question: 'What percent of your reps do you think are good?', options: [
+      { label: 'Under 25%', sfSymbol: 'gauge.low',    customIcon: ICON.noResults },
+      { label: '25-50%',    sfSymbol: 'gauge.medium', customIcon: ICON.notSure },
+      { label: '50-75%',    sfSymbol: 'gauge.medium', customIcon: ICON.onAndOff },
+      { label: '75-90%',    sfSymbol: 'gauge.high',   customIcon: ICON.good },
+      { label: 'Over 90%',  sfSymbol: 'checkmark.seal.fill', customIcon: ICON.yes },
+    ] },
 ];
+
+// formGuess is now a bucket pick — map it back to a % midpoint for the math.
+const FORM_GUESS_PCT: Record<string, number> = {
+  'Under 25%': 15, '25-50%': 38, '50-75%': 62, '75-90%': 82, 'Over 90%': 95,
+};
 
 // Was a literal engineering task list ("Reading your answers," "Setting
 // your difficulty") — describes what the outcome of each step MEANS for
@@ -1812,7 +1819,7 @@ function computeWastedReps(answers: Record<string, any>) {
   const freq = parseInt(String(answers.days ?? '3 days'), 10) || 3;
   const durationLabel = answers.duration as string | undefined;
   const repsPerSession = REPS_PER_SESSION_BY_DURATION[durationLabel ?? ''] ?? DEFAULT_REPS_PER_SESSION;
-  const pct = typeof answers.formGuess === 'number' ? answers.formGuess : 50;
+  const pct = getRealFormPct(answers);
   const weeks = justStarting ? 104 : (DURATION_WEEKS[trainDurationLabel] ?? 78);
   const weeksPlain = justStarting ? 'about 2 years ahead' : (DURATION_PLAIN[trainDurationLabel] ?? 'about 1.5 years');
   const totalSessions = Math.round(freq * weeks);
@@ -1823,6 +1830,9 @@ function computeWastedReps(answers: Record<string, any>) {
 
 function getRealFormPct(answers: Record<string, any>): number {
   if (typeof answers.formGuess === 'number') return answers.formGuess;
+  if (typeof answers.formGuess === 'string' && FORM_GUESS_PCT[answers.formGuess] != null) {
+    return FORM_GUESS_PCT[answers.formGuess];
+  }
   if (typeof answers.demoGoodReps === 'number' && typeof answers.demoReps === 'number' && answers.demoReps > 0) {
     return Math.round((answers.demoGoodReps / answers.demoReps) * 100);
   }
@@ -2158,12 +2168,10 @@ export default function OnboardingScreen() {
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
             {header}
             <View style={{ paddingHorizontal: 24, paddingTop: 26, flex: 1 }}>
-              <Text style={s.qqC}>{st.question}</Text>
-              <View style={{ flex: 1, justifyContent: 'center' }}>
-                <Picker selectedValue={wheelVal} onValueChange={(v) => { Haptics.selectionAsync(); setAnswers({ ...answers, [st.id]: v as string }); }} style={{ height: 230 }} itemStyle={{ color: L.text, fontSize: 28, fontWeight: '600' }}>
-                  {opts.map(o => <Picker.Item key={o} label={o} value={o} />)}
-                </Picker>
-              </View>
+              <Text style={s.qq}>{st.question}</Text>
+              <Picker selectedValue={wheelVal} onValueChange={(v) => { Haptics.selectionAsync(); setAnswers({ ...answers, [st.id]: v as string }); }} style={{ height: 230, marginTop: 8 }} itemStyle={{ color: L.text, fontSize: 28, fontWeight: '600' }}>
+                {opts.map(o => <Picker.Item key={o} label={o} value={o} />)}
+              </Picker>
             </View>
             <View style={s.bn}>
               <TouchableOpacity style={s.cb} onPress={() => advance({ ...answers, [st.id]: wheelVal })} activeOpacity={0.85}>
@@ -2207,8 +2215,8 @@ export default function OnboardingScreen() {
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
             {header}
             <View style={{ paddingHorizontal: 24, paddingTop: 26, flex: 1 }}>
-              <Text style={s.qqC}>{st.question}</Text>
-              <View style={{ flex: 1, justifyContent: 'center' }}>
+              <Text style={s.qq}>{st.question}</Text>
+              <View style={{ marginTop: 12 }}>
                 <WeightRulerSlider
                   value={rulerVal}
                   onChange={(v) => setAnswers({ ...answers, [st.id]: v })}
@@ -2683,7 +2691,6 @@ const s = StyleSheet.create({
 
   // Question
   qq:     { fontFamily: FONT.displayBold, fontSize: 33, color: '#111114', lineHeight: 40, marginBottom: 26, letterSpacing: -0.9 },
-  qqC:    { fontFamily: FONT.displayBold, fontSize: 33, color: '#111114', lineHeight: 40, marginBottom: 26, letterSpacing: -0.9, textAlign: 'center' as const },
   qqSub:  { fontSize: 14, color: L.textSub, lineHeight: 21, marginTop: -14, marginBottom: 24 },
   textInput: { backgroundColor: L.card, borderRadius: 16, borderWidth: 1, borderColor: L.border, paddingHorizontal: 18, paddingVertical: 16, fontSize: 18, color: L.text, ...({ boxShadow: Elev.low.shadow } as any) },
 
