@@ -577,7 +577,11 @@ const DC_PAGE_INJECT = `
     // Momentum scrolling on any inner scroller (the rank rows / assessment
     // wheel), and no big blurred shadows repainting on the moving pieces.
     + '[style*="overflow-x"],[style*="overflow-y"],[style*="overflow:"],[style*="overflow-scrolling"]{-webkit-overflow-scrolling:touch!important;}'
-    + '#dc-root [style*="filter: blur"],#dc-root [style*="filter:blur"]{filter:none!important;}';
+    + '#dc-root [style*="filter: blur"],#dc-root [style*="filter:blur"]{filter:none!important;}'
+    // CTA pills are a fixed 54-58px with a centred label; a slightly longer
+    // label or the scale transform was clipping it. Let the pill grow and
+    // keep the label on one line.
+    + '#dc-root [style*="border-radius: 999px"]{overflow:visible!important;white-space:nowrap!important;height:auto!important;min-height:54px!important;padding-top:15px!important;padding-bottom:15px!important;line-height:1.15!important;}';
   (document.head||document.documentElement).appendChild(s);
 
   // Freeze looping decorative animations (drifting blobs, spinning rays,
@@ -595,6 +599,10 @@ const DC_PAGE_INJECT = `
       try{
         var cs=getComputedStyle(all[i]);
         if(cs.animationIterationCount && cs.animationIterationCount.indexOf('infinite')>=0){
+          // Keep long marquees (the paywall image carousel is a 46s linear
+          // loop). Only freeze the short decorative pulses/drifts/spins.
+          var dur=parseFloat(cs.animationDuration||'0');
+          if(dur>=18) continue;
           all[i].style.setProperty('animation','none','important'); k++;
         }
       }catch(e){}
@@ -612,7 +620,9 @@ const DC_PAGE_INJECT = `
     // grey line under the CTA included — is visible with no scrolling.
     var S = window.__dcFitBoth ? Math.min(1, vw/W, vh/rh) : Math.min(1, vw/W);
     if(Math.abs(S-lastS)>=0.002){ lastS=S; root.style.setProperty('transform','scale('+S+')','important'); }
-    document.body.style.setProperty('height', Math.ceil(rh*S + (window.__dcFitBoth?0:24))+'px','important');
+    // +28 tail padding so the grey footnote under the CTA is never clipped
+    // by a too-tight body height.
+    document.body.style.setProperty('height', Math.ceil(rh*S + 28)+'px','important');
   }
   function painted(){
     var r=document.getElementById('dc-root');
@@ -676,8 +686,15 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, topInset,
 }) {
   const fade = useRef(new Animated.Value(0)).current;
   const backFade = useRef(new Animated.Value(0)).current;
+  // Whole-screen ease-in on mount so advancing to this screen doesn't hard
+  // "pop" — pairs with the inner WebView fade for a two-stage settle.
+  const containerFade = useRef(new Animated.Value(0)).current;
   const shown = useRef(false);
   const [webReady, setWebReady] = useState(false);
+
+  useEffect(() => {
+    Animated.timing(containerFade, { toValue: 1, duration: 240, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const reveal = () => {
     if (shown.current) return;
@@ -708,10 +725,11 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, topInset,
 
   const isDcPage = DC_PAGE_KEYS.includes(htmlKey);
   const baseInject = isDcPage ? DC_PAGE_INJECT : ONBOARDING_WEB_INJECT;
-  // rankReveal + cinematicGraph stay width-fit (fill the screen edge-to-edge,
-  // no white border) — the user wants them fully zoomed, scrolling any
-  // overflow. The others fit to height so their CTA is always on screen.
-  const fitBothKeys = ['trialTimeline', 'paywall', 'rankWheel', 'strengthAssessment'];
+  // cinematicGraph stays width-fit (fills the screen). Everything else fits
+  // to height too so the whole artboard is framed with no scrolling and the
+  // CTA/footnote are always visible — rankReveal included (it was rendering
+  // overly zoomed at 1:1).
+  const fitBothKeys = ['trialTimeline', 'paywall', 'rankWheel', 'strengthAssessment', 'rankReveal'];
   const dcExtra =
     htmlKey === 'generatePlan' ? GENERATE_PLAN_INJECT :
     fitBothKeys.includes(htmlKey) ? FIT_BOTH_INJECT :
@@ -720,7 +738,7 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, topInset,
     ? (dcExtra ? extraJsProp + '\n' + dcExtra : extraJsProp)
     : (dcExtra ?? undefined);
   return (
-    <View style={{ flex: 1, backgroundColor: isDcPage ? '#ffffff' : '#f4f4f2' }}>
+    <Animated.View style={{ flex: 1, backgroundColor: isDcPage ? '#ffffff' : '#f4f4f2', opacity: containerFade }}>
       {!isDcPage && <AppBackground />}
       <Animated.View style={{ flex: 1, marginTop: topInset, opacity: fade }}>
         <WebView
@@ -757,24 +775,35 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, topInset,
           to position:relative, so when the wrapper was a plain flow child
           after the flex:1 WebView its absolute child was being measured from
           the bottom of the screen and pushed off. */}
-      <Animated.View
-        pointerEvents="box-none"
-        style={{ position: 'absolute', top: topInset + 8, left: 20, zIndex: 80, opacity: backFade }}
-      >
-        {htmlKey === 'paywall' ? (
-          // Paywall: no back control — a "Restore" action instead (App Store
-          // requirement, and you shouldn't be able to just back out of it).
+      {htmlKey === 'paywall' ? (
+        // Paywall: iOS-standard layout — close (X) top-left, plain grey
+        // "Restore" top-right. No glass pill on Restore.
+        <Animated.View
+          pointerEvents="box-none"
+          style={{ position: 'absolute', top: topInset + 8, left: 0, right: 0, zIndex: 80, opacity: backFade, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20 }}
+        >
           <LiquidGlassButton
-            onPress={() => { Haptics.selectionAsync(); Alert.alert('Restore purchases', 'No previous subscription found on this Apple ID.'); }}
+            onPress={() => { Haptics.selectionAsync(); onBack(); }}
             hitSlop={12}
             radius={17}
             variant="regular"
             fallbackColor="rgba(255,255,255,0.92)"
-            style={[web.restoreBtn, web.backCircleDc]}
+            style={[web.backCircle, web.backCircleDc]}
+          >
+            <SymbolView name="xmark" size={14} tintColor="#1b1f27" type="monochrome" style={{ width: 14, height: 14 }} />
+          </LiquidGlassButton>
+          <TouchableOpacity
+            onPress={() => { Haptics.selectionAsync(); Alert.alert('Restore purchases', 'No previous subscription found on this Apple ID.'); }}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
             <Text style={web.restoreTxt}>Restore</Text>
-          </LiquidGlassButton>
-        ) : (
+          </TouchableOpacity>
+        </Animated.View>
+      ) : (
+        <Animated.View
+          pointerEvents="box-none"
+          style={{ position: 'absolute', top: topInset + 8, left: 20, zIndex: 80, opacity: backFade }}
+        >
           <LiquidGlassButton
             onPress={() => { Haptics.selectionAsync(); onBack(); }}
             hitSlop={12}
@@ -785,16 +814,15 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, topInset,
           >
             <SymbolView name="chevron.left" size={15} tintColor={isDcPage ? '#1b1f27' : '#fff'} type="monochrome" style={{ width: 15, height: 15 }} />
           </LiquidGlassButton>
-        )}
-      </Animated.View>
-    </View>
+        </Animated.View>
+      )}
+    </Animated.View>
   );
 }
 
 const web = StyleSheet.create({
   backCircle: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
-  restoreBtn: { height: 34, paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center' },
-  restoreTxt: { fontSize: 13, fontWeight: '700', color: '#1b1f27', letterSpacing: -0.1 },
+  restoreTxt: { fontSize: 13, fontWeight: '600', color: '#6e6e77', letterSpacing: -0.1 },
   // On the white DC pages: a clean light chip, not a heavy dark blob.
   backCircleDc: { borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.10)', ...({ boxShadow: '0px 2px 8px rgba(0,0,0,0.10)' } as any) },
 });
@@ -2083,7 +2111,7 @@ export default function OnboardingScreen() {
             {header}
             <View style={{ paddingHorizontal: 24, paddingTop: 20, flex: 1 }}>
               <Text style={s.qq}>{st.question}</Text>
-              <Picker selectedValue={wheelVal} onValueChange={(v) => setAnswers({ ...answers, [st.id]: v as string })} style={{ height: 230 }} itemStyle={{ color: L.text, fontSize: 28, fontWeight: '600' }}>
+              <Picker selectedValue={wheelVal} onValueChange={(v) => { Haptics.selectionAsync(); setAnswers({ ...answers, [st.id]: v as string }); }} style={{ height: 230 }} itemStyle={{ color: L.text, fontSize: 28, fontWeight: '600' }}>
                 {opts.map(o => <Picker.Item key={o} label={o} value={o} />)}
               </Picker>
             </View>
