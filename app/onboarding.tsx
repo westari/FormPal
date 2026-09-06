@@ -2159,11 +2159,13 @@ export default function OnboardingScreen() {
         <OnboardingBackground>
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
             {header}
-            <View style={{ paddingHorizontal: 24, paddingTop: 34, flex: 1 }}>
+            <View style={{ paddingHorizontal: 24, paddingTop: 26, flex: 1 }}>
               <Text style={s.qq}>{st.question}</Text>
-              <Picker selectedValue={wheelVal} onValueChange={(v) => { Haptics.selectionAsync(); setAnswers({ ...answers, [st.id]: v as string }); }} style={{ height: 230 }} itemStyle={{ color: L.text, fontSize: 28, fontWeight: '600' }}>
-                {opts.map(o => <Picker.Item key={o} label={o} value={o} />)}
-              </Picker>
+              <View style={{ flex: 1, justifyContent: 'center' }}>
+                <Picker selectedValue={wheelVal} onValueChange={(v) => { Haptics.selectionAsync(); setAnswers({ ...answers, [st.id]: v as string }); }} style={{ height: 230 }} itemStyle={{ color: L.text, fontSize: 28, fontWeight: '600' }}>
+                  {opts.map(o => <Picker.Item key={o} label={o} value={o} />)}
+                </Picker>
+              </View>
             </View>
             <View style={s.bn}>
               <TouchableOpacity style={s.cb} onPress={() => advance({ ...answers, [st.id]: wheelVal })} activeOpacity={0.85}>
@@ -2183,12 +2185,12 @@ export default function OnboardingScreen() {
         <OnboardingBackground>
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
             {header}
-            <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 34, paddingBottom: 140 }} showsVerticalScrollIndicator={false}>
-              <Animated.View style={{ opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
-                <Text style={s.qq}>{st.question}</Text>
+            <Animated.View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 26, opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
+              <Text style={s.qq}>{st.question}</Text>
+              <View style={{ flex: 1, justifyContent: 'center' }}>
                 <HomeSplitSlider value={sliderVal} onChange={(v) => setAnswers({ ...answers, [st.id]: v })} />
-              </Animated.View>
-            </ScrollView>
+              </View>
+            </Animated.View>
             <View style={s.bn}>
               <TouchableOpacity style={s.cb} onPress={() => { const ans = { ...answers, [st.id]: sliderVal }; setAnswers(ans); advance(ans); }} activeOpacity={0.85}>
                 <Text style={s.ct}>Continue</Text>
@@ -2206,12 +2208,14 @@ export default function OnboardingScreen() {
         <OnboardingBackground>
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
             {header}
-            <View style={{ paddingHorizontal: 24, paddingTop: 34, flex: 1 }}>
+            <View style={{ paddingHorizontal: 24, paddingTop: 26, flex: 1 }}>
               <Text style={s.qq}>{st.question}</Text>
-              <WeightRulerSlider
-                value={rulerVal}
-                onChange={(v) => setAnswers({ ...answers, [st.id]: v })}
-              />
+              <View style={{ flex: 1, justifyContent: 'center' }}>
+                <WeightRulerSlider
+                  value={rulerVal}
+                  onChange={(v) => setAnswers({ ...answers, [st.id]: v })}
+                />
+              </View>
             </View>
             <View style={s.bn}>
               <TouchableOpacity style={s.cb} onPress={() => advance({ ...answers, [st.id]: rulerVal })} activeOpacity={0.85}>
@@ -2232,19 +2236,21 @@ export default function OnboardingScreen() {
         <OnboardingBackground>
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
             {header}
-            <View style={{ paddingHorizontal: 24, paddingTop: 34, flex: 1 }}>
+            <View style={{ paddingHorizontal: 24, paddingTop: 26, flex: 1 }}>
               <Text style={s.qq}>{st.question}</Text>
-              <TextInput
-                value={raw}
-                onChangeText={(t) => setAnswers({ ...answers, [st.id]: t })}
-                placeholder={st.placeholder}
-                placeholderTextColor={L.textDim}
-                autoFocus
-                autoCapitalize="words"
-                returnKeyType="done"
-                onSubmitEditing={() => { if (ready) advance({ ...answers, [st.id]: raw.trim() }); }}
-                style={s.textInput}
-              />
+              <View style={{ flex: 1, justifyContent: 'center' }}>
+                <TextInput
+                  value={raw}
+                  onChangeText={(t) => setAnswers({ ...answers, [st.id]: t })}
+                  placeholder={st.placeholder}
+                  placeholderTextColor={L.textDim}
+                  autoFocus
+                  autoCapitalize="words"
+                  returnKeyType="done"
+                  onSubmitEditing={() => { if (ready) advance({ ...answers, [st.id]: raw.trim() }); }}
+                  style={s.textInput}
+                />
+              </View>
             </View>
             <View style={s.bn}>
               <TouchableOpacity style={[s.cb, !ready && s.cbDisabled]} disabled={!ready} onPress={() => advance({ ...answers, [st.id]: raw.trim() })} activeOpacity={0.85}>
@@ -2263,12 +2269,14 @@ export default function OnboardingScreen() {
         <OnboardingBackground>
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
             {header}
-            <View style={{ paddingHorizontal: 24, paddingTop: 34, flex: 1 }}>
+            <View style={{ paddingHorizontal: 24, paddingTop: 26, flex: 1 }}>
               <Text style={s.qq}>{st.question}</Text>
-              <LocationBubbles
-                selected={picked}
-                onPick={(label) => { haptic(); setAnswers({ ...answers, [st.id]: label }); }}
-              />
+              <View style={{ flex: 1, justifyContent: 'center' }}>
+                <LocationBubbles
+                  selected={picked}
+                  onPick={(label) => { haptic(); setAnswers({ ...answers, [st.id]: label }); }}
+                />
+              </View>
             </View>
             <View style={s.bn}>
               <TouchableOpacity style={[s.cb, !picked && s.cbDisabled]} disabled={!picked} onPress={() => advance(answers)} activeOpacity={0.85}>
@@ -2287,9 +2295,11 @@ export default function OnboardingScreen() {
         <OnboardingBackground>
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
             {header}
-            <View style={{ paddingHorizontal: 24, paddingTop: 34, flex: 1 }}>
+            <View style={{ paddingHorizontal: 24, paddingTop: 26, flex: 1 }}>
               <Text style={s.qq}>{st.question}</Text>
-              <GuessSlider value={val} onChange={(v) => setAnswers({ ...answers, [st.id]: v })} />
+              <View style={{ flex: 1, justifyContent: 'center' }}>
+                <GuessSlider value={val} onChange={(v) => setAnswers({ ...answers, [st.id]: v })} />
+              </View>
             </View>
             <View style={s.bn}>
               <TouchableOpacity style={s.cb} onPress={() => advance({ ...answers, [st.id]: val })} activeOpacity={0.85}>
@@ -2368,10 +2378,17 @@ export default function OnboardingScreen() {
 
         <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
           {header}
-          <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 34, paddingBottom: 140 }} showsVerticalScrollIndicator={false}>
-            <Animated.View style={{ opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
+          <Animated.View style={{ flex: 1, opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
+            <View style={{ paddingHorizontal: 24, paddingTop: 26 }}>
               <Text style={s.qq}>{st.question}</Text>
               {st.subtitle && <Text style={s.qqSub}>{st.subtitle}</Text>}
+            </View>
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: st.type === 'multiselect' ? 140 : 44, flexGrow: 1, justifyContent: 'center' }}
+              showsVerticalScrollIndicator={false}
+            >
+              <View>
               {resolveOptions(st.options, answers).map((o, i) => {
                 const sel = isSel(o.label);
                 const sym = o.sfSymbol || 'person.fill';
@@ -2400,8 +2417,9 @@ export default function OnboardingScreen() {
                   </AnimatedOption>
                 );
               })}
-            </Animated.View>
-          </ScrollView>
+              </View>
+            </ScrollView>
+          </Animated.View>
           {st.type === 'multiselect' && (
             <View style={s.bn}>
               <TouchableOpacity style={[s.cb, !multiReady && s.cbDisabled]} disabled={!multiReady} onPress={() => advance(answers)} activeOpacity={0.85}>
