@@ -18,6 +18,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import AppBackground from '../components/AppBackground';
 import PlanGrowthMoment from '../components/PlanGrowthMoment';
 import { LiquidGlassButton } from '../components/LiquidGlass';
+import RankRevealScreen from '../components/onboarding/RankRevealScreen';
 import { PUSHUP_ICON, PULLUP_ICON, SQUAT_ICON } from '../assets/onboarding/onbIcons';
 import { FONT, W, Col, Elev } from '../constants/theme';
 
@@ -401,54 +402,7 @@ function cinematicGraphInject(a: Record<string, any>): string {
 `;
 }
 
-// rankreveal2.html — everyone starts at Bronze; the tier reflects how much
-// they already know (experience). Default in the design is "Bronze II".
-function rankRevealInject(a: Record<string, any>): string {
-  const tier = ({ 'Beginner': 'I', 'Some experience': 'II', 'Intermediate': 'III', 'Advanced': 'IV' } as Record<string, string>)[a.experience as string] ?? 'II';
-  const rank = `Bronze ${tier}`;
-  return `
-(function(){
-  var R=${JSON.stringify(rank)};
-  function post(m){ try{ window.ReactNativeWebView.postMessage(m); }catch(e){} }
-  function apply(){
-    var hit=0, all=document.querySelectorAll('span,div');
-    for(var i=0;i<all.length;i++){
-      var el=all[i]; if(el.children.length) continue;
-      var t=(el.textContent||'').trim();
-      if(/^(Bronze|Silver|Gold|Platinum|Diamond)\\s+(I|II|III|IV|V)$/.test(t)){ el.textContent=R; hit++; }
-    }
-    return hit>=1;
-  }
-  if(!apply()) [200,500,1000,2000,3500,5000,7000].forEach(function(d){ setTimeout(apply,d); });
-
-  // The reveal CTA is a <div sc-camel-on-click="{{ }}">Continue</div> that
-  // only mounts once the rank is revealed — wire it straight to advance so
-  // the user is never stuck on the revealed screen, and give every tap on
-  // the reveal area a haptic.
-  var wired=false;
-  document.addEventListener('pointerdown', function(){ post('__tap'); }, true);
-  function hunt(){
-    if(wired) return true;
-    var all=document.querySelectorAll('div,button');
-    for(var i=0;i<all.length;i++){
-      var el=all[i];
-      var t=(el.textContent||'').replace(/\\s+/g,' ').trim();
-      if(t.length && t.length<=14 && /^continue$/i.test(t)){
-        var cs=getComputedStyle(el);
-        if(cs.visibility==='hidden' || cs.display==='none') continue;
-        el.addEventListener('click', function(ev){ ev.stopPropagation(); post('__tap'); post('advance'); }, true);
-        el.style.setProperty('cursor','pointer','important');
-        wired=true;
-        return true;
-      }
-    }
-    return false;
-  }
-  var tries=0;
-  var iv=setInterval(function(){ if(hunt() || ++tries>60) clearInterval(iv); }, 250);
-})();
-`;
-}
+// rankReveal is now a native screen (components/onboarding/RankRevealScreen).
 
 // rankwheel2.html — the per-rank "Top NN% of FormPal lifters" readout renders
 // grey (#6e6e77). User wants that line in the wheel's blue accent.
@@ -2435,10 +2389,9 @@ export default function OnboardingScreen() {
 
   if (appState === 'rankReveal') {
     return (
-      <OnboardingWebScreen
-        htmlKey="rankReveal"
+      <RankRevealScreen
+        answers={answers}
         topInset={insets.top}
-        extraJs={rankRevealInject(answers)}
         onAdvance={() => setAppState('cinematic')}
         onBack={() => setAppState('rankAssess')}
       />

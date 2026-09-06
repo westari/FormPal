@@ -14,15 +14,30 @@
 //
 // Rule: FONT.display* → Sz.h2 and larger.  FONT.body → Sz.h3 and below.
 
+// Plus Jakarta Sans is the FormPal design-system typeface (matches the
+// onboarding artboards — planReady / paywall / rank pages). Display tokens
+// point at it now; the *Bricolage* names below are kept as aliases so any
+// screen still referencing them keeps working during the migration.
 export const FONT = {
-  // Bricolage Grotesque variants — large display text only
-  displayLight: 'BricolageGrotesque_300Light',      // thin headers: "Welcome back."
-  display:      'BricolageGrotesque_400Regular',     // neutral display
-  displayBold:  'BricolageGrotesque_700Bold',        // bold display: section titles
-  displayBlack: 'BricolageGrotesque_800ExtraBold',   // heaviest: wordmark, hero CTA
+  displayLight: 'PlusJakartaSans_400Regular',
+  display:      'PlusJakartaSans_500Medium',
+  displaySemi:  'PlusJakartaSans_600SemiBold',
+  displayBold:  'PlusJakartaSans_700Bold',
+  displayBlack: 'PlusJakartaSans_800ExtraBold',
 
-  // System (SF Pro on iOS, Roboto on Android) — body, labels, numbers
+  // Body stays on the system font (SF Pro) so fontWeight still works
+  // app-wide; it pairs cleanly with Plus Jakarta Sans headings. Use the
+  // PJS ramp below when you want the typeface on smaller text too.
   body: undefined as string | undefined,
+} as const;
+
+// Explicit Plus Jakarta Sans ramp for new code.
+export const PJS = {
+  regular:  'PlusJakartaSans_400Regular',
+  medium:   'PlusJakartaSans_500Medium',
+  semibold: 'PlusJakartaSans_600SemiBold',
+  bold:     'PlusJakartaSans_700Bold',
+  extrabold:'PlusJakartaSans_800ExtraBold',
 } as const;
 
 // ── Font weights ──────────────────────────────────────────────────────────────
