@@ -15,12 +15,15 @@ import { SymbolView } from 'expo-symbols';
 import { LiquidGlassButton } from '../LiquidGlass';
 import { PJS } from '../../constants/theme';
 
+// The 4 "% to gold" shells are the tap-to-crack theatre only; the reveal
+// lands on the real, uncovered Bronze emblem.
 const SHIELDS = [
   require('../../assets/ranks/0percent.webp'),
   require('../../assets/ranks/25percent.webp'),
   require('../../assets/ranks/50percent.webp'),
   require('../../assets/ranks/75percent.webp'),
 ];
+const EMBLEM = require('../../assets/ranks/bronze.png');
 
 const TIER: Record<string, string> = {
   Beginner: 'I',
@@ -67,6 +70,7 @@ export default function RankRevealScreen({
   const nameIn = useRef(new Animated.Value(0)).current;     // rank name pop
   const ctaIn = useRef(new Animated.Value(0)).current;      // CTA rise
   const backIn = useRef(new Animated.Value(0)).current;     // back button
+  const emblemIn = useRef(new Animated.Value(0)).current;   // real emblem on reveal
   const frameOpacity = useRef(SHIELDS.map((_, i) => new Animated.Value(i === 0 ? 1 : 0))).current;
 
   const chips = useRef(
@@ -143,12 +147,16 @@ export default function RankRevealScreen({
     }
     doFlash(true);
     burstChips(true);
+    // Swap the cracked shell out, the real Bronze emblem in — fast, so the
+    // rank appears (near-)instantly, not a second later.
+    frameOpacity.forEach((v) => Animated.timing(v, { toValue: 0, duration: 160, useNativeDriver: true }).start());
     Animated.parallel([
-      Animated.timing(halo, { toValue: 1, duration: 900, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-      Animated.timing(ring, { toValue: 1, duration: 1000, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-      Animated.timing(warmBg, { toValue: 1, duration: 900, useNativeDriver: true }),
-      Animated.spring(nameIn, { toValue: 1, friction: 6, tension: 80, delay: 220, useNativeDriver: true }),
-      Animated.timing(ctaIn, { toValue: 1, duration: 520, delay: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(emblemIn, { toValue: 1, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(halo, { toValue: 1, duration: 800, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(ring, { toValue: 1, duration: 900, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(warmBg, { toValue: 1, duration: 700, useNativeDriver: true }),
+      Animated.spring(nameIn, { toValue: 1, friction: 7, tension: 120, useNativeDriver: true }),
+      Animated.timing(ctaIn, { toValue: 1, duration: 340, delay: 160, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
     ]).start();
   };
 
@@ -164,7 +172,7 @@ export default function RankRevealScreen({
     doShake(final);
     doFlash(final);
     burstChips(final);
-    if (final) setTimeout(reveal, 140);
+    if (final) reveal();
   };
 
   const floatY = float.interpolate({ inputRange: [0, 1], outputRange: [4, -7] });
@@ -196,10 +204,6 @@ export default function RankRevealScreen({
 
       {/* stage */}
       <Pressable style={s.stageArea} onPress={onTap} disabled={revealed}>
-        {/* amber glow */}
-        <View pointerEvents="none" style={s.glowOuter} />
-        <View pointerEvents="none" style={s.glowInner} />
-
         {/* reveal halo + shock ring */}
         <Animated.View
           pointerEvents="none"
@@ -222,7 +226,7 @@ export default function RankRevealScreen({
           ]}
         />
 
-        {/* shield frames */}
+        {/* shield frames (crack theatre) + the real emblem on reveal */}
         <Animated.View style={[s.shieldWrap, { transform: [{ translateX: shake }, { translateY: floatY }, { rotate: floatR }] }]}>
           {SHIELDS.map((src, i) => (
             <Animated.Image
@@ -232,6 +236,11 @@ export default function RankRevealScreen({
               style={[s.shieldImg, { opacity: frameOpacity[i] }]}
             />
           ))}
+          <Animated.Image
+            source={EMBLEM}
+            resizeMode="contain"
+            style={[s.shieldImg, { opacity: emblemIn, transform: [{ scale: emblemIn.interpolate({ inputRange: [0, 1], outputRange: [0.86, 1] }) }] }]}
+          />
         </Animated.View>
 
         {/* stone chips */}
@@ -319,15 +328,6 @@ const s = StyleSheet.create({
 
   stageArea: { flex: 1, minHeight: 400, alignItems: 'center', justifyContent: 'center' },
 
-  glowOuter: {
-    position: 'absolute', width: 300, height: 300, borderRadius: 150,
-    backgroundColor: 'rgba(214,140,74,0.16)',
-  },
-  glowInner: {
-    position: 'absolute', width: 190, height: 190, borderRadius: 95,
-    backgroundColor: 'rgba(214,140,74,0.22)',
-  },
-
   halo: {
     position: 'absolute', width: 250, height: 250, borderRadius: 125,
     backgroundColor: 'rgba(253,240,226,0.9)',
@@ -351,8 +351,8 @@ const s = StyleSheet.create({
   },
 
   barTrack: {
-    height: 12, borderRadius: 999, backgroundColor: '#eeeef1',
-    marginHorizontal: 60, overflow: 'hidden',
+    height: 5, borderRadius: 999, backgroundColor: '#eeeef1',
+    marginHorizontal: 70, overflow: 'hidden',
   },
   barFill: { height: '100%', borderRadius: 999, backgroundColor: '#2E7DFF' },
 

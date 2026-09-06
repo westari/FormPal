@@ -44,11 +44,15 @@ export default function RankWheelScreen({
   const scrollX = useRef(new Animated.Value(0)).current;
   const listRef = useRef<ScrollView>(null);
   const [index, setIndex] = useState(0);
+  const idxRef = useRef(0);
   const current = RANKS[index];
 
-  const onMomentumEnd = (e: { nativeEvent: { contentOffset: { x: number } } }) => {
+  // Update the name / blurb / "Top N%" line LIVE as the wheel moves (see the
+  // onScroll listener below) — not on momentum-end, which lags the wheel.
+  const onScrollFrame = (e: { nativeEvent: { contentOffset: { x: number } } }) => {
     const i = Math.max(0, Math.min(RANKS.length - 1, Math.round(e.nativeEvent.contentOffset.x / SNAP)));
-    if (i !== index) {
+    if (i !== idxRef.current) {
+      idxRef.current = i;
       setIndex(i);
       if (Platform.OS !== 'web') void Haptics.selectionAsync();
     }
@@ -88,8 +92,7 @@ export default function RankWheelScreen({
         disableIntervalMomentum
         contentContainerStyle={{ paddingHorizontal: SIDE_PAD }}
         scrollEventThrottle={16}
-        onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: true })}
-        onMomentumScrollEnd={onMomentumEnd}
+        onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: true, listener: onScrollFrame })}
         style={s.flow}
       >
         {RANKS.map((r, i) => {

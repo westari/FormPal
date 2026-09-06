@@ -472,7 +472,48 @@ const DC_PAGE_INJECT = `
   }, true);
 
   // Plan-ready: the little pencil icons are cursor:pointer svgs with no
-  // handler. Wire each one explicitly to the field in its row.
+  // handler. Tapping one makes that row's value editable IN PLACE (the same
+  // little box, cursor in it, type a new value) — no separate screen.
+  // 'experience' has fixed options so it still opens the option picker.
+  function commitEdit(sp, field){
+    if(!sp.__editing) return;
+    sp.__editing=false;
+    sp.contentEditable='false';
+    sp.style.removeProperty('outline');
+    sp.style.removeProperty('background');
+    sp.style.removeProperty('border-radius');
+    sp.style.removeProperty('padding');
+    var raw=(sp.textContent||'').trim();
+    if(field==='weight'){
+      var num=(raw.match(/[0-9.]+/)||[''])[0];
+      if(num) sp.textContent=Math.round(parseFloat(num))+' lb';
+      post('editvalue:weight:'+encodeURIComponent(num));
+    } else if(field==='age'){
+      var a=(raw.match(/[0-9]+/)||[''])[0];
+      if(a) sp.textContent=a;
+      post('editvalue:age:'+encodeURIComponent(a));
+    } else {
+      sp.textContent=raw;
+      post('editvalue:height:'+encodeURIComponent(raw));
+    }
+  }
+  function startEdit(sp, field){
+    if(sp.__editing) return;
+    sp.__editing=true;
+    sp.contentEditable='true';
+    sp.setAttribute('inputmode', field==='height' ? 'text' : 'numeric');
+    sp.style.setProperty('outline','2px solid #2E7DFF','important');
+    sp.style.setProperty('background','#eef4ff','important');
+    sp.style.setProperty('border-radius','6px','important');
+    sp.style.setProperty('padding','1px 5px','important');
+    sp.focus();
+    try{ var r=document.createRange(); r.selectNodeContents(sp); var se=window.getSelection(); se.removeAllRanges(); se.addRange(r); }catch(e){}
+    if(!sp.__editWired){
+      sp.__editWired=1;
+      sp.addEventListener('blur', function(){ commitEdit(sp, field); });
+      sp.addEventListener('keydown', function(ev){ if(ev.key==='Enter'){ ev.preventDefault(); sp.blur(); } });
+    }
+  }
   function wireEdits(){
     var svgs=document.querySelectorAll('svg[style*="cursor: pointer"],svg[style*="cursor:pointer"]');
     var n=0;
@@ -480,18 +521,24 @@ const DC_PAGE_INJECT = `
       var sv=svgs[i];
       if(sv.__wired){ n++; continue; }
       sv.__wired=1;
-      var host=sv.parentElement, v='';
+      var host=sv.parentElement, sp=null;
       for(var p=0;p<6 && host;p++,host=host.parentElement){
-        var sp=host.querySelector && host.querySelector('span.sc-interp');
-        if(sp){ v=(sp.textContent||'').trim(); break; }
+        var found=host.querySelector && host.querySelector('span.sc-interp');
+        if(found){ sp=found; break; }
       }
+      if(!sp){ continue; }
+      var v=(sp.textContent||'').trim();
       var field = /lb|kg/i.test(v) ? 'weight' : (v.indexOf('"')>=0 ? 'height' : (/^[0-9]{1,3}$/.test(v) ? 'age' : 'experience'));
       sv.style.setProperty('padding','12px','important');
       sv.style.setProperty('margin','-12px','important');
       sv.style.setProperty('box-sizing','content-box','important');
-      (function(f){
-        sv.addEventListener('click', function(ev){ ev.preventDefault(); ev.stopPropagation(); post('__tap'); post('editinfo:'+f); }, true);
-      })(field);
+      (function(f, span){
+        sv.addEventListener('click', function(ev){
+          ev.preventDefault(); ev.stopPropagation(); post('__tap');
+          if(f==='experience'){ post('editinfo:experience'); return; }
+          startEdit(span, f);
+        }, true);
+      })(field, sp);
       n++;
     }
     return n>=3;
@@ -516,10 +563,13 @@ const DC_PAGE_INJECT = `
     // wheel), and no big blurred shadows repainting on the moving pieces.
     + '[style*="overflow-x"],[style*="overflow-y"],[style*="overflow:"],[style*="overflow-scrolling"]{-webkit-overflow-scrolling:touch!important;}'
     + '#dc-root [style*="filter: blur"],#dc-root [style*="filter:blur"]{filter:none!important;}'
-    // CTA pills are a fixed 54-58px with a centred label; a slightly longer
-    // label or the scale transform was clipping it. Let the pill grow and
-    // keep the label on one line.
-    + '#dc-root [style*="border-radius: 999px"]{overflow:visible!important;white-space:nowrap!important;height:auto!important;min-height:54px!important;padding-top:15px!important;padding-bottom:15px!important;line-height:1.15!important;}';
+    // Keep the CTA label on one line — but DON'T touch its box. (An earlier
+    // blanket rule on every border-radius:999px element blew the CTA pills
+    // up and turned the "SAVE 55%" badge into a giant circle.)
+    + '#dc-root [style*="height: 58px"][style*="999px"],#dc-root [style*="height: 54px"][style*="999px"]{white-space:nowrap!important;}'
+    // The generating-plan progress bar renders 12px thick — slim it.
+    + '#dc-root [style*="height: 12px"][style*="999px"]{height:4px!important;}'
+    + '#dc-root [style*="height: 12px"][style*="999px"]>*{height:4px!important;}';
   (document.head||document.documentElement).appendChild(s);
 
   // Freeze looping decorative animations (drifting blobs, spinning rays,
@@ -528,6 +578,19 @@ const DC_PAGE_INJECT = `
   // transitions (CTA slide-in, rank reveal, row rise-in) are left alone.
   // Runs ONCE, ~1.2s in — after the artboard's entrance animations finish,
   // so it isn't doing a getComputedStyle walk while they're playing.
+  // Page-specific tidy-ups that are easier to do by matching rendered text
+  // than by prop: hide the paywall's own "✕" close chip (we use the native
+  // Restore control) and relabel the plan-ready CTA.
+  function polish(){
+    var all=document.querySelectorAll('#dc-root div,#dc-root span,#dc-root button');
+    for(var i=0;i<all.length;i++){
+      var el=all[i]; if(el.children.length) continue;
+      var t=(el.textContent||'').trim();
+      if(t==='\\u2715' || t==='\\u2716' || t==='\\u00d7'){ el.style.setProperty('display','none','important'); }
+      else if(t==='Unlock my full plan' || t==='Unlock my plan'){ el.textContent='Continue'; }
+    }
+  }
+
   var calmDone=false;
   function calmAnims(){
     if(calmDone) return 0;
@@ -575,8 +638,10 @@ const DC_PAGE_INJECT = `
     done=true;
     var r=document.getElementById('dc-root');
     if(r) r.classList.add('__dcshow');
+    polish();
     post('rendered');
-    setTimeout(function(){ fit(); wireEdits(); calmAnims(); }, 900);
+    setTimeout(function(){ fit(); wireEdits(); calmAnims(); polish(); }, 900);
+    setTimeout(polish, 2000);
   }
   (function wait(){
     fit();
@@ -614,11 +679,12 @@ const GENERATE_PLAN_INJECT = `
 })();
 `;
 
-function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, topInset, extraJs: extraJsProp, poolActive }: {
+function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditValue, topInset, extraJs: extraJsProp, poolActive }: {
   htmlKey: keyof typeof ONB_HTML;
   onAdvance: () => void;
   onBack: () => void;
   onEditInfo?: (field: string) => void;
+  onEditValue?: (field: string, value: string) => void;
   topInset: number;
   extraJs?: string;
   // Pool mode: when defined, this screen is one of several kept mounted at
@@ -706,6 +772,11 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, topInset,
             if (m === '__tap' || m === '__tick') { Haptics.selectionAsync(); return; }
             if (m === 'rendered') { reveal(); return; }
             if (m.indexOf('editinfo') === 0) { onEditInfo?.(m.split(':')[1] || 'weight'); return; }
+            if (m.indexOf('editvalue:') === 0) {
+              const parts = m.split(':');
+              onEditValue?.(parts[1] || 'weight', decodeURIComponent(parts[2] || ''));
+              return;
+            }
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             if (m === 'advance' || m === 'skip') onAdvance();
           }}
@@ -791,13 +862,14 @@ const web = StyleSheet.create({
 type PoolKey = 'planReady' | 'trialTimeline' | 'paywall';
 const POOL_ORDER: PoolKey[] = ['planReady', 'trialTimeline', 'paywall'];
 
-function DcPagePool({ activeKey, answers, topInset, onAdvance, onBack, onEditInfo }: {
+function DcPagePool({ activeKey, answers, topInset, onAdvance, onBack, onEditInfo, onEditValue }: {
   activeKey: PoolKey | null;
   answers: Record<string, any>;
   topInset: number;
   onAdvance: (from: PoolKey) => void;
   onBack: (from: PoolKey) => void;
   onEditInfo: (field: string) => void;
+  onEditValue: (field: string, value: string) => void;
 }) {
   return (
     <View style={StyleSheet.absoluteFill}>
@@ -811,6 +883,7 @@ function DcPagePool({ activeKey, answers, topInset, onAdvance, onBack, onEditInf
           onAdvance={() => onAdvance(key)}
           onBack={() => onBack(key)}
           onEditInfo={key === 'planReady' ? onEditInfo : undefined}
+          onEditValue={key === 'planReady' ? onEditValue : undefined}
         />
       ))}
     </View>
@@ -2459,6 +2532,17 @@ export default function OnboardingScreen() {
             else setAppState('trialTimeline');
           }}
           onEditInfo={(f) => setEditField(f as EditField)}
+          onEditValue={(field, value) => {
+            if (field === 'weight') {
+              const n = parseFloat(value);
+              if (!Number.isNaN(n)) setAnswers(a => ({ ...a, weight: n }));
+            } else if (field === 'age') {
+              const n = parseInt(value, 10);
+              if (!Number.isNaN(n)) setAnswers(a => ({ ...a, age: n }));
+            } else if (value.trim()) {
+              setAnswers(a => ({ ...a, [field]: value.trim() }));
+            }
+          }}
         />
         {appState === 'generatePlan' && (
           <OnboardingWebScreen
