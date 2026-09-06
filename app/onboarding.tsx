@@ -144,24 +144,10 @@ function Sym({ name, size, color }: { name: string; size: number; color: string 
   return <SymbolView name={name as any} size={size} tintColor={color} type="monochrome" style={{ width: size, height: size }} />;
 }
 
-// Every onboarding screen (welcome, each question, mypal intro, building,
-// projection, payoff) used ScreenBackground's plain subtle gradient — asked
-// to switch to the same bright colorful-blob background recap.tsx/the
-// after-workout screen/the plus tab already use (AppBackground), for visual
-// consistency across the app's light-theme screens. AppBackground itself is
-// an absolute-fill layer, not a flex:1 wrapping container the way
-// ScreenBackground was, so this local wrapper keeps every call site below
-// (still just `<OnboardingBackground>children</OnboardingBackground>`)
-// unchanged. Local to this file, not a change to ScreenBackground.tsx itself
-// — that component is still used as-is by ~9 other screens app-wide, which
-// weren't part of this ask.
+// Every question screen sits on plain white now (matches the new design
+// system / the artboards), not the colourful-blob AppBackground.
 function OnboardingBackground({ children }: { children: React.ReactNode }) {
-  return (
-    <View style={{ flex: 1 }}>
-      <AppBackground />
-      {children}
-    </View>
-  );
+  return <View style={{ flex: 1, backgroundColor: '#ffffff' }}>{children}</View>;
 }
 
 // ── Rank WebView screens ─────────────────────────────────────────────────
@@ -567,9 +553,9 @@ const DC_PAGE_INJECT = `
     // blanket rule on every border-radius:999px element blew the CTA pills
     // up and turned the "SAVE 55%" badge into a giant circle.)
     + '#dc-root [style*="height: 58px"][style*="999px"],#dc-root [style*="height: 54px"][style*="999px"]{white-space:nowrap!important;}'
-    // The generating-plan progress bar renders 12px thick — slim it.
-    + '#dc-root [style*="height: 12px"][style*="999px"]{height:4px!important;}'
-    + '#dc-root [style*="height: 12px"][style*="999px"]>*{height:4px!important;}';
+    // The generating-plan progress bar renders 12px thick — trim it a bit.
+    + '#dc-root [style*="height: 12px"][style*="999px"]{height:7px!important;}'
+    + '#dc-root [style*="height: 12px"][style*="999px"]>*{height:7px!important;}';
   (document.head||document.documentElement).appendChild(s);
 
   // Freeze looping decorative animations (drifting blobs, spinning rays,
@@ -806,7 +792,7 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
         // "Restore" top-right. No glass pill on Restore.
         <Animated.View
           pointerEvents="box-none"
-          style={{ position: 'absolute', top: topInset + 8, left: 0, right: 0, zIndex: 80, opacity: backFade, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20 }}
+          style={{ position: 'absolute', top: Math.max(6, topInset - 6), left: 0, right: 0, zIndex: 80, opacity: backFade, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20 }}
         >
           <LiquidGlassButton
             onPress={() => { Haptics.selectionAsync(); onBack(); }}
@@ -1205,11 +1191,6 @@ const STEPS: Step[] = [
   // NOTE: the rank run (wheel → assessment → reveal) used to sit here. It
   // now runs AFTER the math/reversal, as an appState sequence — see the
   // 'rankWheel'/'rankAssess'/'rankReveal' render blocks below.
-
-  // The demo, as a clip instead of "do 5 reps".
-  { id: 'demoClip', section: 'Wrap up', type: 'videoClip',
-    question: 'This is FormPal watching a rep.',
-    subtitle: "It counts the clean ones — and tells you exactly why the rest didn't." },
 
   { id: 'formGuess', section: 'Wrap up', type: 'guessSlider',
     question: 'Out of every rep you do, how many do you think are actually good form?' },
@@ -1975,10 +1956,10 @@ function GuessSlider({ value, onChange }: { value: number; onChange: (v: number)
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 type AppState =
-  | 'welcome' | 'onboarding' | 'calcMath' | 'cinematic' | 'reversal'
-  // Rank run — moved to AFTER the math (was a set of question-flow steps).
+  | 'welcome' | 'onboarding' | 'cinematic' | 'reversal'
+  // Rank run — straight after the last question.
   | 'rankWheel' | 'rankAssess' | 'rankReveal'
-  // The four pre-paywall WebView pages (assets/*.html), in order.
+  // The pre-paywall WebView pages, in order.
   | 'generatePlan' | 'planReady' | 'trialTimeline' | 'webPaywall';
 
 type EditField = 'age' | 'height' | 'weight' | 'experience';
@@ -2045,7 +2026,7 @@ export default function OnboardingScreen() {
     if (stepIndex < vis.length - 1) {
       animTrans('forward', () => setStepIndex(i => i + 1));
     } else {
-      setAppState('calcMath');
+      setAppState('rankWheel');
     }
   };
 
@@ -2427,12 +2408,6 @@ export default function OnboardingScreen() {
     );
   }
 
-  // ── CALCULATING (the math) — short processing beat ───────────────────────────
-
-  if (appState === 'calcMath') {
-    return <CalcMathBeat onDone={() => setAppState('rankWheel')} />;
-  }
-
   // ── CINEMATIC MATH — the "two versions of you" wasted-muscle graph, with
   // the years / reps-lost / months-lost numbers rewritten from the answers.
   // Comes AFTER the rank run (it was landing before the ranks, where the
@@ -2471,15 +2446,15 @@ export default function OnboardingScreen() {
     );
   }
 
-  // ── Rank run — native screens (rank wheel / reveal), WebView for the
-  // strength assessment for now. All AFTER the math. ────────────────────────
+  // ── Rank run — native screens (rank wheel / reveal + strength assessment).
+  // Runs straight after the last question now (no math beat). ───────────────
 
   if (appState === 'rankWheel') {
     return (
       <RankWheelScreen
         topInset={insets.top}
         onAdvance={() => setAppState('rankAssess')}
-        onBack={() => setAppState('calcMath')}
+        onBack={() => setAppState('onboarding')}
       />
     );
   }
@@ -2566,26 +2541,6 @@ export default function OnboardingScreen() {
   }
 
   return null;
-}
-
-// Short "analyzing your reps" beat before the math.
-function CalcMathBeat({ onDone }: { onDone: () => void }) {
-  const opacity = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    const a = Animated.timing(opacity, { toValue: 1, duration: 420, useNativeDriver: true });
-    a.start();
-    const t = setTimeout(onDone, 1700);
-    return () => { a.stop(); clearTimeout(t); };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  return (
-    <OnboardingBackground>
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
-        <Animated.Text style={{ opacity, fontFamily: FONT.display, fontSize: 22, color: L.text, letterSpacing: -0.3 }}>
-          Analyzing your reps...
-        </Animated.Text>
-      </View>
-    </OnboardingBackground>
-  );
 }
 
 // ── EditFieldOverlay — a pencil on the plan-ready page opens ONE field
@@ -2705,7 +2660,7 @@ const s = StyleSheet.create({
   skipTxt: { fontSize: 14, fontWeight: W.semi, color: L.textSub },
 
   // Question
-  qq:     { fontFamily: FONT.display, fontSize: 30, color: L.text, lineHeight: 38, marginBottom: 20, letterSpacing: -0.6 },
+  qq:     { fontFamily: FONT.displayBlack, fontSize: 28, color: '#111114', lineHeight: 34, marginBottom: 20, letterSpacing: -1 },
   qqSub:  { fontSize: 14, color: L.textSub, lineHeight: 21, marginTop: -12, marginBottom: 20 },
   textInput: { backgroundColor: L.card, borderRadius: 16, borderWidth: 1, borderColor: L.border, paddingHorizontal: 18, paddingVertical: 16, fontSize: 18, color: L.text, ...({ boxShadow: Elev.low.shadow } as any) },
 
@@ -2735,9 +2690,9 @@ const s = StyleSheet.create({
   // itself (cb, solid dark pill) still reads clearly without a backing
   // surface, so nothing here was actually load-bearing for legibility.
   bn:         { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 24, paddingBottom: 24, paddingTop: 16 },
-  cb:         { backgroundColor: L.btnDark, borderRadius: 100, paddingVertical: 18, alignItems: 'center', ...({ boxShadow: Elev.medium.shadow } as any) },
+  cb:         { backgroundColor: '#111114', borderRadius: 999, height: 58, justifyContent: 'center', alignItems: 'center', ...({ boxShadow: '0px 16px 30px -16px rgba(17,17,20,0.6)' } as any) },
   cbDisabled: { backgroundColor: '#EBEBF0' },
-  ct:         { fontFamily: FONT.displayBold, fontSize: 16, color: '#fff', letterSpacing: 0.1 },
+  ct:         { fontFamily: FONT.displayBold, fontSize: 16.5, color: '#fff', letterSpacing: -0.2 },
   ctDisabled: { color: L.textDim },
 
   // Welcome
