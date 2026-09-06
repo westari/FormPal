@@ -1011,8 +1011,6 @@ function resolveOptions(opts: StepOptions | undefined, a: Record<string, any>): 
 // request; the old afterGoal/afterExperience/afterTraining interstitials
 // and the motivation / homeSplit questions are gone (not in FLOW).
 const STEPS: Step[] = [
-  { id: 'name', section: 'About You', type: 'text', question: 'What should I call you?', placeholder: 'Your name' },
-
   { id: 'age',    section: 'About You', type: 'wheel',  wheelKind: 'age',    question: 'How old are you?' },
   { id: 'height', section: 'About You', type: 'wheel',  wheelKind: 'height', question: 'How tall are you?' },
   { id: 'weight', section: 'About You', type: 'ruler',  question: 'What do you weigh?' },
@@ -2160,7 +2158,7 @@ export default function OnboardingScreen() {
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
             {header}
             <View style={{ paddingHorizontal: 24, paddingTop: 26, flex: 1 }}>
-              <Text style={s.qq}>{st.question}</Text>
+              <Text style={s.qqC}>{st.question}</Text>
               <View style={{ flex: 1, justifyContent: 'center' }}>
                 <Picker selectedValue={wheelVal} onValueChange={(v) => { Haptics.selectionAsync(); setAnswers({ ...answers, [st.id]: v as string }); }} style={{ height: 230 }} itemStyle={{ color: L.text, fontSize: 28, fontWeight: '600' }}>
                   {opts.map(o => <Picker.Item key={o} label={o} value={o} />)}
@@ -2209,7 +2207,7 @@ export default function OnboardingScreen() {
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
             {header}
             <View style={{ paddingHorizontal: 24, paddingTop: 26, flex: 1 }}>
-              <Text style={s.qq}>{st.question}</Text>
+              <Text style={s.qqC}>{st.question}</Text>
               <View style={{ flex: 1, justifyContent: 'center' }}>
                 <WeightRulerSlider
                   value={rulerVal}
@@ -2389,11 +2387,11 @@ export default function OnboardingScreen() {
               showsVerticalScrollIndicator={false}
             >
               <View>
-              {resolveOptions(st.options, answers).map((o, i) => {
+              {(() => { const _opts = resolveOptions(st.options, answers); const big = _opts.length <= 4; return _opts.map((o, i) => {
                 const sel = isSel(o.label);
                 const sym = o.sfSymbol || 'person.fill';
                 return (
-                  <AnimatedOption key={`${st.id}-${o.label}`} index={i} style={[s.opt, sel && s.optSel]} onPress={() => handleSelect(o.label)}>
+                  <AnimatedOption key={`${st.id}-${o.label}`} index={i} style={[s.opt, big && s.optBig, sel && s.optSel]} onPress={() => handleSelect(o.label)}>
                     <View style={[s.optIcon, o.customIcon && s.optIconBadge]}>
                       {o.customIcon
                         // No tintColor here — these webp icons render as a
@@ -2405,10 +2403,10 @@ export default function OnboardingScreen() {
                         // square via overflow:hidden instead of showing as a
                         // stark white square against the row.
                         ? <Image source={o.customIcon} style={s.optIconImg} resizeMode="cover" />
-                        : <Sym name={sym} size={24} color={sel ? L.accent : L.textSub} />}
+                        : <Sym name={sym} size={big ? 28 : 24} color={sel ? L.accent : L.textSub} />}
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={[s.optTxt, sel && s.optTxtSel]}>{o.label}</Text>
+                      <Text style={[s.optTxt, big && s.optTxtBig, sel && s.optTxtSel]}>{o.label}</Text>
                       {o.sublabel && <Text style={s.optSublabel}>{o.sublabel}</Text>}
                     </View>
                     <View style={[s.radio, sel && s.radioSel]}>
@@ -2416,7 +2414,7 @@ export default function OnboardingScreen() {
                     </View>
                   </AnimatedOption>
                 );
-              })}
+              }); })()}
               </View>
             </ScrollView>
           </Animated.View>
@@ -2684,13 +2682,17 @@ const s = StyleSheet.create({
   skipTxt: { fontSize: 14, fontWeight: W.semi, color: L.textSub },
 
   // Question
-  qq:     { fontFamily: FONT.displayBold, fontSize: 26, color: '#111114', lineHeight: 33, marginBottom: 26, letterSpacing: -0.6 },
+  qq:     { fontFamily: FONT.displayBold, fontSize: 33, color: '#111114', lineHeight: 40, marginBottom: 26, letterSpacing: -0.9 },
+  qqC:    { fontFamily: FONT.displayBold, fontSize: 33, color: '#111114', lineHeight: 40, marginBottom: 26, letterSpacing: -0.9, textAlign: 'center' as const },
   qqSub:  { fontSize: 14, color: L.textSub, lineHeight: 21, marginTop: -14, marginBottom: 24 },
   textInput: { backgroundColor: L.card, borderRadius: 16, borderWidth: 1, borderColor: L.border, paddingHorizontal: 18, paddingVertical: 16, fontSize: 18, color: L.text, ...({ boxShadow: Elev.low.shadow } as any) },
 
   // Options
   opt:        { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: L.card, borderRadius: 16, borderWidth: 1, borderColor: L.border, paddingHorizontal: 16, paddingVertical: 14, marginBottom: 10, ...({ boxShadow: Elev.low.shadow } as any) },
   optSel:     { borderColor: L.accent, backgroundColor: L.accentSoft },
+  // Short lists (sex, experience…) — roomier rows so they fill the screen.
+  optBig:     { borderRadius: 20, paddingHorizontal: 18, paddingVertical: 20, marginBottom: 14, gap: 16 },
+  optTxtBig:  { fontSize: 17.5 },
   // No boxed background — selection is already conveyed by the icon's own
   // color (accent when selected, muted gray otherwise, see the render
   // above), so the gray square backdrop was pure redundant chrome, not
