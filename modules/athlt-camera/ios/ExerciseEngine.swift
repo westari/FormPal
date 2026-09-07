@@ -1180,9 +1180,17 @@ final class ExerciseEngine {
                 }
 
                 if !hasSettled, angle < effectiveEnterThreshold {
-                    if settleCandidateAcceptable(settleCandidateTop) {
+                    // Video mode: an uploaded clip often starts MID-REP (leg
+                    // already curled, arm already pulled), so settleCandidateTop
+                    // is just however far the user had extended when analysis
+                    // began — a partial reading, not the real rest. That anchored
+                    // the rep FSM ~20° low and phantom-rejected the reps around
+                    // it. Fall back to the definition's calibrated topAngle (the
+                    // real rest for this exercise) whenever it's higher.
+                    let resyncAnchor = videoMode ? max(settleCandidateTop, def.topAngle) : settleCandidateTop
+                    if settleCandidateAcceptable(resyncAnchor) {
                         hasSettled  = true
-                        repTopValue = settleCandidateTop
+                        repTopValue = resyncAnchor
                         // DIAGNOSTIC (lat pulldown "rep 1 top=27.6 vs later reps 171/175"
                         // investigation): framesSeen tells you how many .atTop frames were
                         // actually observed before this anchor was locked in. A very low
@@ -1193,11 +1201,13 @@ final class ExerciseEngine {
                         // to something else (bad tracking) instead — send this line if it
                         // recurs and that distinguishes the two.
                         let msg = "[SETTLE] resynced on first real rep attempt " +
-                                  "(top≈\(String(format: "%.3f", settleCandidateTop)) framesSeen=\(preSettleFrameCount)) — rep counting active"
+                                  "(top≈\(String(format: "%.3f", resyncAnchor)) framesSeen=\(preSettleFrameCount)" +
+                                  (videoMode && resyncAnchor > settleCandidateTop ? " via def.topAngle" : "") +
+                                  ") — rep counting active"
                         NSLog("[Engine] [%@] %@", def.id, msg)
                         onDebugLog?(msg)
                     } else {
-                        logSettleRejection(candidate: settleCandidateTop, timestamp: timestamp)
+                        logSettleRejection(candidate: resyncAnchor, timestamp: timestamp)
                     }
                 }
 
