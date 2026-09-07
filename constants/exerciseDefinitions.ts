@@ -4090,15 +4090,34 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     // signal is noisy — if reps still don't land it's the camera angle: the
     // phone needs to be at your SIDE with your body across the frame, close
     // enough for Vision to see your hips and knees.
-    topAngle:            110,
+    // RE-CALIBRATED from a device [CALIB] log (9/7, 5 clean reps counted):
+    //   rest/max  avg 109.5  [108.5–109.7]
+    //   bottom/min avg 19.4  [12–36]
+    //   swing avg 90         [CALIB-SUGGEST: top 106.7 / enter 55 / exit 71.6 / rom 37]
+    // The reported bug: reps MERGE. A between-rep recovery to ~90–102 (just
+    // short of the old exit=103) never completed the rep, so 2–3 crunches
+    // counted as one 7.6s "rep". Fix: drop exit far below rest so a rep
+    // COMPLETES as soon as you're clearly on the way back, not only once
+    // you're basically flat again.
+    //  • topAngle 108   — measured rest.
+    //  • repEnterThreshold 90 — kept: any dip ~18° below rest starts a rep
+    //    (sensitive on purpose — the complaint is missed reps, not phantoms).
+    //  • repExitThreshold 72  — device-suggested. Recovering ~40% of the way
+    //    back now ends the rep, so bobbed reps stop merging.
+    //  • goodROMThreshold 45 — between old 65 and the suggested 37: a real
+    //    sit-up (swing 60+) still grades full; a shallow bob flags FULL RANGE
+    //    (does NOT gate the count).
+    topAngle:            108,
     repEnterThreshold:   90,
-    repExitThreshold:    103,
-    goodROMThreshold:    65,
+    repExitThreshold:    72,
+    goodROMThreshold:    45,
     // Was 'GO HIGHER' — user: "idk why that's even a command." Plainer.
     insufficientROMCue: 'FULL RANGE',
-    // 0.4 = the settle needs a candidate ≥ ~83° (rom 65 + 0.4·45) to lock
-    // "rest". Measured rest is ~108, so it locks on the first still frame —
-    // the first rep isn't consumed to "resync" the anchor.
+    // 0.4 = the settle needs a candidate ≥ ~70° (rom 45 + 0.4·63) to lock
+    // "rest". Measured rest is ~109, so it locks on the first still frame —
+    // the first rep isn't consumed to "resync" the anchor. (Lower than the
+    // old ~83° bar → counting activates a few frames sooner = fewer missed
+    // early reps.)
     settleAnchorMinFraction: 0.4,
 
     // FORM CUES. Kept per explicit request, but both thresholds are LOOSE

@@ -40,6 +40,16 @@ export function createRepDiagnostic(): RepDiagnostic {
   // (rest = high value, working = low). enter < exit (exit has hysteresis).
   let crossedEnter    = false; // value dropped below enter at least once
   let returnedToExit  = false; // after that, rose back above exit
+  // Rep ATTEMPTS (value dipped below enter, with hysteresis) vs reps COUNTED.
+  // A big gap = the user is moving but reps aren't landing (partial / merged
+  // reps that never come back far enough to complete).
+  let attempts        = 0;
+  let belowEnter      = false;
+  // Crunch: relative "legs straightened" check — if a rep's crunch_legs
+  // reading jumps well above the median of earlier reps, the knees came up /
+  // legs kicked. Relative (vs this user's own reps), not a guessed absolute.
+  let legReadings: number[] = [];
+  let legWarnUntil   = 0;
   let msg: string | null = null;
 
   const now = () => Date.now();
@@ -54,6 +64,10 @@ export function createRepDiagnostic(): RepDiagnostic {
       const ex = parseFloat(line.match(/exit=([-\d.]+)/)?.[1]   ?? 'NaN');
       if (!Number.isNaN(v) && !Number.isNaN(en) && v < en) crossedEnter = true;
       if (crossedEnter && !Number.isNaN(v) && !Number.isNaN(ex) && v > ex) returnedToExit = true;
+      if (!Number.isNaN(v) && !Number.isNaN(en) && !Number.isNaN(ex)) {
+        if (!belowEnter && v < en) { belowEnter = true; attempts++; }
+        else if (belowEnter && v > ex) { belowEnter = false; }
+      }
     } else if (/rep counting active|entering ACTIVE/i.test(line)) {
       settleActive = true;
     } else if (/\[SETTLE\][^]*?(rejected|still waiting|not a genuine)/i.test(line)) {
@@ -69,6 +83,16 @@ export function createRepDiagnostic(): RepDiagnostic {
       lastRepAt = now();
       noPersonHits = 0; unreliable = 0; phantom = 0;
       crossedEnter = false; returnedToExit = false;
+      const legs = parseFloat(line.match(/crunch_legs=([\d.]+)/)?.[1] ?? 'NaN');
+      if (!Number.isNaN(legs)) {
+        if (legReadings.length >= 2) {
+          const sorted = [...legReadings].sort((a, b) => a - b);
+          const median = sorted[Math.floor(sorted.length / 2)];
+          if (legs > median * 1.6 && legs > median + 25) legWarnUntil = now() + 4000;
+        }
+        legReadings.push(legs);
+        if (legReadings.length > 8) legReadings.shift();
+      }
     }
     recompute();
   }
@@ -84,8 +108,14 @@ export function createRepDiagnostic(): RepDiagnostic {
     // Pose is GONE — wins over everything.
     if (streamDead) { msg = 'Point the camera at your body'; return; }
 
-    // A working set — don't nag.
-    if (repCount > 0 && sinceRep < STALE_REP_SEC) { msg = null; return; }
+    // Legs straightened / kicked on a recent rep (relative to your own reps).
+    if (now() < legWarnUntil) { msg = 'Keep your knees bent'; return; }
+
+    // How many rep attempts never turned into a counted rep.
+    const missed = attempts - repCount;
+
+    // A working set that's keeping pace — don't nag.
+    if (repCount > 0 && sinceRep < STALE_REP_SEC && missed <= 1) { msg = null; return; }
 
     // Framing / tracking problems first.
     if (noPersonHits >= 2) {
@@ -96,12 +126,16 @@ export function createRepDiagnostic(): RepDiagnostic {
       msg = 'Hold still at the start';
     } else if (phantom >= 1) {
       msg = 'Slower, fuller reps';
+    } else if (missed >= 2 && metricFrames > 10) {
+      // Moving, but reps aren't landing — partial reps that never come back
+      // far enough to complete, so several merge into one.
+      msg = 'Come all the way back down each rep';
     } else if (repCount === 0 && !crossedEnter && metricFrames > 8) {
       // Never got deep enough for a rep to even begin.
       msg = 'Go deeper into each rep';
     } else if (repCount === 0 && crossedEnter && !returnedToExit && metricFrames > 8) {
       // Went into a rep but never came back to the start.
-      msg = 'Return to the start each rep';
+      msg = 'Come all the way back down each rep';
     } else {
       msg = null;
     }
@@ -113,6 +147,8 @@ export function createRepDiagnostic(): RepDiagnostic {
     startedAt = lastRepAt = lastMetricAt = repCount = metricFrames = 0;
     noPersonHits = unreliable = phantom = settleWaiting = 0;
     settleActive = crossedEnter = returnedToExit = false;
+    attempts = 0; belowEnter = false;
+    legReadings = []; legWarnUntil = 0;
     msg = null;
   }
 

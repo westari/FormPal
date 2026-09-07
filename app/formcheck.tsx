@@ -669,7 +669,10 @@ export default function FormCheckScreen() {
     const repSub = addRepListener((rep: RepEvent) => {
       setReps(rep.reps);
       setGoodReps(rep.goodReps);
-      setRepDiag(null);   // a rep landed — drop any "why isn't it counting" cue
+      // A rep landed — re-ask the diagnostic rather than force-clearing. If
+      // several reps are merging (attempts >> counted) or the legs kicked,
+      // it keeps a "why" on screen instead of going quiet after each merge.
+      setRepDiag(repDiagRef.current.message());
       flashAnim.setValue(1);
       Animated.timing(flashAnim, { toValue: 0, duration: 700, useNativeDriver: true }).start();
       if (repCounterOnly) {
