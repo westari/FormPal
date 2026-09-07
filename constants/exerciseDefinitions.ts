@@ -4170,28 +4170,13 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
         enabled:          true,
         formCheckMinConf: 0.35,
       },
-      {
-        // GATE (rejects the rep, no cue) — not a form flag. A crunch is
-        // physically impossible with a dead-straight leg (knee ~170-180°):
-        // that reading only happens when the pose is garbage — the classic
-        // case being the user reaching to pick the phone up mid-set, which
-        // was logging a spurious BAD rep ("gave me an X"). 170 is a hard
-        // anatomical bound, not a tuned threshold — every real crunch in the
-        // device logs reads crunch_legs well under 125.
-        id:         'crunch_legs_gate',
-        cue:        '',
-        metric: {
-          type:  'maximum',
-          left:  { type: 'jointAngle', a: 'leftHip',  pivot: 'leftKnee',  c: 'leftAnkle'  },
-          right: { type: 'jointAngle', a: 'rightHip', pivot: 'rightKnee', c: 'rightAnkle' },
-        },
-        evaluateAt:       'throughoutMax',
-        condition:        { type: 'greaterThan', value: 170 },
-        gatesCounting:    true,
-        priority:         1,
-        enabled:          true,
-        formCheckMinConf: 0.35,
-      },
+      // NOTE: no crunch_legs GATE. A gate at knee>170° also dropped
+      // deliberate straight-leg reps ("just doesn't count a rep"), and a
+      // straight leg reads the same whether it's an intentional cheat or a
+      // garbage pose — there's no clean way to tell them apart from the leg
+      // angle alone. Straight-leg reps COUNT and are flagged KEEP KNEES BENT
+      // (the check above); the repTopValue cap in ExerciseEngine handles the
+      // phone-reach case by other means.
       {
         id:         'crunch_arms',
         cue:        'DON\'T SWING ARMS',
