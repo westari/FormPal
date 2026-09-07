@@ -9,7 +9,7 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Animated, Dimensions, Platform, ScrollView, Easing } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Animated, Dimensions, Platform, ScrollView } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { SymbolView } from 'expo-symbols';
 import { LiquidGlassButton } from '../LiquidGlass';
@@ -50,7 +50,8 @@ export default function RankWheelScreen({
   const current = RANKS[index];
 
   useEffect(() => {
-    Animated.timing(mountFade, { toValue: 1, duration: 380, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    // Plain quick fade, like a question screen — no slide, no long curve.
+    Animated.timing(mountFade, { toValue: 1, duration: 220, useNativeDriver: true }).start();
   }, [mountFade]);
 
   // Update the name / blurb / "Top N%" line LIVE as the wheel moves (see the

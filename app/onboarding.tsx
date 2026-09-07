@@ -390,10 +390,15 @@ function cinematicGraphInject(a: Record<string, any>): string {
   const wasted = m.wasted;
   const months = Math.max(2, Math.round(wasted / 1500));
   const pct = getRealFormPct(a);
-  const rank = computeRank(a).label;
+  const cur = computeRank(a);
+  const rank = cur.label;
+  const rankColor = cur.name === 'Silver' ? '#8a8f98' : '#a9743f';
+  const next = nextRankLabel(a);
   return `
 (function(){
-  var Y=${years}, RL=${JSON.stringify(wasted.toLocaleString() + ' reps lost')}, ML=${JSON.stringify(months + ' months of muscle gone')}, P=${pct}, RANK=${JSON.stringify(rank)};
+  var Y=${years}, RL=${JSON.stringify(wasted.toLocaleString() + ' reps lost')}, ML=${JSON.stringify(months + ' months of muscle gone')}, P=${pct};
+  var RANK=${JSON.stringify(rank)}, RCOL=${JSON.stringify(rankColor)}, NEXT=${JSON.stringify(next)};
+  var RANK_RE=/\\b(Bronze|Silver|Gold|Platinum|Diamond)\\s+(I|II|III|IV|V)\\b/;
   function post(m){ try{ window.ReactNativeWebView.postMessage(m); }catch(e){} }
   function apply(){
     var s=document.querySelectorAll('span.sc-interp'), hit=0;
@@ -404,15 +409,30 @@ function cinematicGraphInject(a: Record<string, any>): string {
       else if(/months of muscle gone$/i.test(t)){ s[i].textContent=ML; hit++; }
       else if(/^[0-9]{1,3}%$/.test(t)){ s[i].textContent=P+'%'; hit++; }
     }
-    // "From Bronze II, ..." headline -> the real rank. (Plain text node,
-    // not an sc-interp span.)
+    // Rank text nodes: "From <rank>, ..." = your CURRENT rank (coloured);
+    // "moves you towards <rank>" = the rank ABOVE it (so it's not "towards"
+    // the rank you're already in).
     var all=document.querySelectorAll('#dc-root div,#dc-root span,#dc-root p');
     for(var j=0;j<all.length;j++){
-      for(var k=0;k<all[j].childNodes.length;k++){
-        var n=all[j].childNodes[k];
-        if(n.nodeType===3 && /\\b(Bronze|Silver|Gold|Platinum|Diamond)\\s+(I|II|III|IV|V)\\b/.test(n.nodeValue) && n.nodeValue.indexOf(RANK)<0){
-          n.nodeValue=n.nodeValue.replace(/\\b(Bronze|Silver|Gold|Platinum|Diamond)\\s+(I|II|III|IV|V)\\b/, RANK); hit++;
+      var el=all[j];
+      for(var k=0;k<el.childNodes.length;k++){
+        var n=el.childNodes[k];
+        if(n.nodeType!==3 || !RANK_RE.test(n.nodeValue) || n.__rk) continue;
+        var whole=n.nodeValue, mm=whole.match(RANK_RE);
+        var towards=/toward|towards|reach|climb to|get to/i.test(whole.slice(0, mm.index));
+        if(towards){
+          if(whole.indexOf(NEXT)<0){ n.nodeValue=whole.replace(RANK_RE, NEXT); hit++; }
+        } else {
+          // colour the current rank: split the text node and insert a span
+          var before=whole.slice(0, mm.index), after=whole.slice(mm.index+mm[0].length);
+          var sp=document.createElement('span'); sp.textContent=RANK;
+          sp.style.color=RCOL; sp.style.fontWeight='800'; sp.__rk=1;
+          n.nodeValue=before;
+          el.insertBefore(sp, n.nextSibling);
+          el.insertBefore(document.createTextNode(after), sp.nextSibling);
+          hit++;
         }
+        n.__rk=1;
       }
     }
     return hit>=2;
@@ -628,8 +648,11 @@ const DC_PAGE_INJECT = `
     // up and turned the "SAVE 55%" badge into a giant circle.)
     + '#dc-root [style*="height: 58px"][style*="999px"],#dc-root [style*="height: 54px"][style*="999px"]{white-space:nowrap!important;}'
     // The generating-plan progress bar renders 12px thick — trim it a bit.
-    + '#dc-root [style*="height: 12px"][style*="999px"]{height:10px!important;}'
-    + '#dc-root [style*="height: 12px"][style*="999px"]>*{height:10px!important;}';
+    + '#dc-root [style*="height: 12px"][style*="999px"]{height:18px!important;}'
+    + '#dc-root [style*="height: 12px"][style*="999px"]>*{height:18px!important;}'
+    // generatePlan step rows: keep every label on ONE line so a longer one
+    // ("Building your workout plan") can't wrap and shove the layout.
+    + '#dc-root div[style*="font-size: 15.5px"][style*="flex: 1"]{white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;font-size:13.5px!important;}';
   (document.head||document.documentElement).appendChild(s);
 
   // Freeze looping decorative animations (drifting blobs, spinning rays,
@@ -731,17 +754,10 @@ const VIEWPORT_JS = `(function(){try{
 // One-screen pages: fit to the screen height too so nothing needs scrolling.
 const FIT_BOTH_INJECT = `window.__dcFitBoth=1;`;
 
-// generatePlan is a timed "generating…" beat. It shows its own CTA when the
-// progress finishes — the user taps that to continue (no auto-advance; that
-// read as the screen skipping itself). A long backstop only so it can't hang
-// forever if the CTA never fires.
-const GENERATE_PLAN_INJECT = `
-(function(){
-  window.__dcFitBoth=1;
-  setTimeout(function(){ try{ window.ReactNativeWebView.postMessage('advance'); }catch(e){} }, 30000);
-  true;
-})();
-`;
+// generatePlan is a timed "generating…" beat. It shows its own "See my
+// plan" CTA when the progress finishes — the user taps that. NO auto-
+// advance (the screen was skipping itself).
+const GENERATE_PLAN_INJECT = `window.__dcFitBoth=1;`;
 
 function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditValue, topInset, extraJs: extraJsProp, poolActive }: {
   htmlKey: keyof typeof ONB_HTML;
@@ -1161,10 +1177,10 @@ const STEPS: Step[] = [
   ]},
 
   { id: 'goalWeight', section: 'Your Goal', type: 'ruler', question: "What's your goal weight?" },
-  { id: 'goalPace', section: 'Your Goal', type: 'select', question: 'How quickly do you want to get there?', options: [
-    { label: 'Steady — I want it to stick', sfSymbol: 'tortoise.fill' },
-    { label: 'Balanced', sfSymbol: 'figure.walk' },
-    { label: 'Aggressive — as fast as safe', sfSymbol: 'hare.fill' },
+  { id: 'goalPace', section: 'Your Goal', type: 'select', question: 'How fast do you want to get there?', options: [
+    { label: 'Relaxed',    sublabel: 'Build a habit that lasts',  sfSymbol: 'tortoise.fill' },
+    { label: 'Balanced',   sublabel: 'A sensible middle ground',  sfSymbol: 'figure.walk' },
+    { label: 'Aggressive', sublabel: 'Push hard, stay safe',      sfSymbol: 'hare.fill' },
   ]},
 
   { id: 'injuries', section: 'Your Body', type: 'multiselect', question: 'Any injuries or areas that hurt?',
@@ -1261,11 +1277,6 @@ const STEPS: Step[] = [
     { label: 'Google / web search', sfSymbol: 'globe', customIcon: ICON.search },
     { label: 'Other', sfSymbol: 'ellipsis.circle.fill', customIcon: ICON.other },
   ]},
-  { id: 'notifications', section: 'Wrap up', type: 'select', question: 'Reminders on training days?', options: [
-    { label: 'Yes please', sfSymbol: 'bell.fill', customIcon: ICON.notifOn },
-    { label: 'No thanks', sfSymbol: 'bell.slash.fill', customIcon: ICON.notifOff },
-  ]},
-
   // NOTE: the rank run (wheel → assessment → reveal) used to sit here. It
   // now runs AFTER the math/reversal, as an appState sequence — see the
   // 'rankWheel'/'rankAssess'/'rankReveal' render blocks below.
@@ -1938,6 +1949,15 @@ function computeRank(a: Record<string, any>): { name: string; tier: string; labe
   return { name, tier, label: `${name} ${tier}` };
 }
 
+// One step above the computed starting rank — used for "your route toward X".
+function nextRankLabel(a: Record<string, any>): string {
+  const { name, tier } = computeRank(a);
+  const tiers = ['I', 'II', 'III', 'IV'];
+  const ti = tiers.indexOf(tier);
+  if (ti < 3) return `${name} ${tiers[ti + 1]}`;
+  return name === 'Bronze' ? 'Silver I' : 'Gold I';
+}
+
 function cinematicLines(answers: Record<string, any>): string[] {
   const m = computeWastedReps({ ...answers, formGuess: getRealFormPct(answers) });
   const sessionsPerYear = Math.round(m.freq * 52);
@@ -2267,12 +2287,12 @@ export default function OnboardingScreen() {
         <OnboardingBackground>
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
             {header}
-            <View style={{ paddingHorizontal: 24, paddingTop: 26, flex: 1 }}>
+            <Animated.View style={{ paddingHorizontal: 24, paddingTop: 26, flex: 1, opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
               <Text style={s.qq}>{st.question}</Text>
               <Picker selectedValue={wheelVal} onValueChange={(v) => { Haptics.selectionAsync(); setAnswers({ ...answers, [st.id]: v as string }); }} style={{ height: 230, marginTop: 8 }} itemStyle={{ color: L.text, fontSize: 28, fontWeight: '600' }}>
                 {opts.map(o => <Picker.Item key={o} label={o} value={o} />)}
               </Picker>
-            </View>
+            </Animated.View>
             <View style={s.bn}>
               <TouchableOpacity style={s.cb} onPress={() => advance({ ...answers, [st.id]: wheelVal })} activeOpacity={0.85}>
                 <Text style={s.ct}>Continue</Text>
@@ -2315,7 +2335,7 @@ export default function OnboardingScreen() {
         <OnboardingBackground>
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
             {header}
-            <View style={{ paddingHorizontal: 24, paddingTop: 26, flex: 1 }}>
+            <Animated.View style={{ paddingHorizontal: 24, paddingTop: 26, flex: 1, opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
               <Text style={s.qq}>{st.question}</Text>
               <View style={{ marginTop: 12 }}>
                 <WeightRulerSlider
@@ -2323,7 +2343,7 @@ export default function OnboardingScreen() {
                   onChange={(v) => setAnswers({ ...answers, [st.id]: v })}
                 />
               </View>
-            </View>
+            </Animated.View>
             <View style={s.bn}>
               <TouchableOpacity style={s.cb} onPress={() => advance({ ...answers, [st.id]: rulerVal })} activeOpacity={0.85}>
                 <Text style={s.ct}>Continue</Text>
@@ -2343,7 +2363,7 @@ export default function OnboardingScreen() {
         <OnboardingBackground>
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
             {header}
-            <View style={{ paddingHorizontal: 24, paddingTop: 26, flex: 1 }}>
+            <Animated.View style={{ paddingHorizontal: 24, paddingTop: 26, flex: 1, opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
               <Text style={s.qq}>{st.question}</Text>
               <View style={{ flex: 1, justifyContent: 'center' }}>
                 <TextInput
@@ -2358,7 +2378,7 @@ export default function OnboardingScreen() {
                   style={s.textInput}
                 />
               </View>
-            </View>
+            </Animated.View>
             <View style={s.bn}>
               <TouchableOpacity style={[s.cb, !ready && s.cbDisabled]} disabled={!ready} onPress={() => advance({ ...answers, [st.id]: raw.trim() })} activeOpacity={0.85}>
                 <Text style={[s.ct, !ready && s.ctDisabled]}>Continue</Text>
@@ -2376,7 +2396,7 @@ export default function OnboardingScreen() {
         <OnboardingBackground>
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
             {header}
-            <View style={{ paddingHorizontal: 24, paddingTop: 26, flex: 1 }}>
+            <Animated.View style={{ paddingHorizontal: 24, paddingTop: 26, flex: 1, opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
               <Text style={s.qq}>{st.question}</Text>
               <View style={{ flex: 1, justifyContent: 'center' }}>
                 <LocationBubbles
@@ -2384,7 +2404,7 @@ export default function OnboardingScreen() {
                   onPick={(label) => { haptic(); setAnswers({ ...answers, [st.id]: label }); }}
                 />
               </View>
-            </View>
+            </Animated.View>
             <View style={s.bn}>
               <TouchableOpacity style={[s.cb, !picked && s.cbDisabled]} disabled={!picked} onPress={() => advance(answers)} activeOpacity={0.85}>
                 <Text style={[s.ct, !picked && s.ctDisabled]}>Continue</Text>
