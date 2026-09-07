@@ -332,9 +332,18 @@ function planReadyInject(a: Record<string, any>): string {
   function apply(){
     var all=document.querySelectorAll('#dc-root div,#dc-root span,#dc-root p'), hit=0;
     for(var i=0;i<all.length;i++){
-      var el=all[i]; if(el.children.length) continue;
-      var t=(el.textContent||'').trim();
-      if(MAP[t] != null && MAP[t] !== '' && el.textContent.trim() !== MAP[t]){ el.textContent=MAP[t]; hit++; }
+      var el=all[i];
+      if(!el.children.length){
+        var t=(el.textContent||'').trim();
+        if(MAP[t] != null && MAP[t] !== '' && el.textContent.trim() !== MAP[t]){ el.textContent=MAP[t]; hit++; }
+      }
+      // Headline: "You're set to hit X by Y" -> "Your goal is to reach X by Y".
+      for(var k=0;k<el.childNodes.length;k++){
+        var n=el.childNodes[k];
+        if(n.nodeType===3 && /You'?re set to hit/i.test(n.nodeValue)){
+          n.nodeValue=n.nodeValue.replace(/You'?re set to hit/i, 'Your goal is to reach'); hit++;
+        }
+      }
     }
     return hit>=3;
   }
@@ -394,21 +403,21 @@ function cinematicGraphInject(a: Record<string, any>): string {
   }
   if(!apply()) [200,500,1000,2000,3500,5000].forEach(function(d){ setTimeout(apply,d); });
 
-  // The CTA ("Let's do it") is a <div sc-camel-on-click="{{ blast }}"> whose
-  // own handler only fires a burst animation — it never navigates. Wire it
-  // straight to advance so the graph isn't a dead end, and let the whole
-  // lower CTA strip act as the tap target once it's visible.
+  // The CTA is a <div sc-camel-on-click="{{ blast }}"> whose own handler only
+  // fires a burst animation — it never navigates. Force its label to
+  // "See my potential" and wire it straight to advance.
   var wired=false;
   document.addEventListener('pointerdown', function(){ post('__tap'); }, true);
   function hunt(){
     if(wired) return true;
     var all=document.querySelectorAll('div,button');
     for(var i=0;i<all.length;i++){
-      var el=all[i];
+      var el=all[i]; if(el.children.length) continue;
       var t=(el.textContent||'').replace(/\\s+/g,' ').trim();
-      if(t.length>1 && t.length<=18 && /^(let'?s do it|let'?s go|i'?m in|continue|start)/i.test(t)){
+      if(t.length>1 && t.length<=22 && /^(see my potential|let'?s do it|let'?s go|i'?m in|continue)$/i.test(t)){
         var cs=getComputedStyle(el);
         if(cs.display==='none' || cs.visibility==='hidden') continue;
+        el.textContent='See my potential';
         el.addEventListener('click', function(ev){ ev.stopPropagation(); post('__tap'); post('advance'); }, true);
         el.style.setProperty('cursor','pointer','important');
         wired=true;
@@ -600,8 +609,8 @@ const DC_PAGE_INJECT = `
     // up and turned the "SAVE 55%" badge into a giant circle.)
     + '#dc-root [style*="height: 58px"][style*="999px"],#dc-root [style*="height: 54px"][style*="999px"]{white-space:nowrap!important;}'
     // The generating-plan progress bar renders 12px thick — trim it a bit.
-    + '#dc-root [style*="height: 12px"][style*="999px"]{height:7px!important;}'
-    + '#dc-root [style*="height: 12px"][style*="999px"]>*{height:7px!important;}';
+    + '#dc-root [style*="height: 12px"][style*="999px"]{height:10px!important;}'
+    + '#dc-root [style*="height: 12px"][style*="999px"]>*{height:10px!important;}';
   (document.head||document.documentElement).appendChild(s);
 
   // Freeze looping decorative animations (drifting blobs, spinning rays,
@@ -703,12 +712,14 @@ const VIEWPORT_JS = `(function(){try{
 // One-screen pages: fit to the screen height too so nothing needs scrolling.
 const FIT_BOTH_INJECT = `window.__dcFitBoth=1;`;
 
-// generatePlan is a timed "generating…" beat + a one-screen page. Auto-
-// advance as a backstop (its own progress runs ~9s then shows a CTA).
+// generatePlan is a timed "generating…" beat. It shows its own CTA when the
+// progress finishes — the user taps that to continue (no auto-advance; that
+// read as the screen skipping itself). A long backstop only so it can't hang
+// forever if the CTA never fires.
 const GENERATE_PLAN_INJECT = `
 (function(){
   window.__dcFitBoth=1;
-  setTimeout(function(){ try{ window.ReactNativeWebView.postMessage('advance'); }catch(e){} }, 16000);
+  setTimeout(function(){ try{ window.ReactNativeWebView.postMessage('advance'); }catch(e){} }, 30000);
   true;
 })();
 `;
@@ -772,9 +783,10 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
 
   const isDcPage = DC_PAGE_KEYS.includes(htmlKey);
   const baseInject = isDcPage ? DC_PAGE_INJECT : ONBOARDING_WEB_INJECT;
-  // cinematicGraph + planReady stay width-fit (fill the screen / scroll).
-  // Everything else fits to height too so it's framed with no scrolling.
-  const fitBothKeys = ['trialTimeline', 'paywall', 'strengthAssessment', 'recoveryRoute'];
+  // planReady stays width-fit (its info rows scroll). Everything else fits
+  // to height too so the whole artboard — CTA + "Replay" / footnote under
+  // it — is on screen with no scrolling.
+  const fitBothKeys = ['trialTimeline', 'paywall', 'strengthAssessment', 'recoveryRoute', 'cinematicGraph'];
   const dcExtra =
     htmlKey === 'generatePlan' ? GENERATE_PLAN_INJECT :
     fitBothKeys.includes(htmlKey) ? FIT_BOTH_INJECT :

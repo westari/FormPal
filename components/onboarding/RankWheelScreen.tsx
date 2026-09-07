@@ -9,7 +9,7 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Animated, Dimensions, Platform, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Animated, Dimensions, Platform, ScrollView, Easing } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { SymbolView } from 'expo-symbols';
 import { LiquidGlassButton } from '../LiquidGlass';
@@ -50,7 +50,7 @@ export default function RankWheelScreen({
   const current = RANKS[index];
 
   useEffect(() => {
-    Animated.timing(mountFade, { toValue: 1, duration: 220, useNativeDriver: true }).start();
+    Animated.timing(mountFade, { toValue: 1, duration: 380, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
   }, [mountFade]);
 
   // Update the name / blurb / "Top N%" line LIVE as the wheel moves (see the
@@ -70,7 +70,7 @@ export default function RankWheelScreen({
   };
 
   return (
-    <Animated.View style={[s.root, { paddingTop: topInset, opacity: mountFade }]}>
+    <Animated.View style={[s.root, { paddingTop: topInset, opacity: mountFade, transform: [{ translateY: mountFade.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }]}>
       <Animated.View style={[s.backWrap, { top: topInset + 8 }]} pointerEvents="box-none">
         <LiquidGlassButton
           onPress={() => { void Haptics.selectionAsync(); onBack(); }}
@@ -89,6 +89,7 @@ export default function RankWheelScreen({
         <Text style={s.sub}>Train with good form and climb from Bronze to Champion.</Text>
       </View>
 
+      <View style={s.mid}>
       <Animated.ScrollView
         ref={listRef as any}
         horizontal
@@ -103,7 +104,7 @@ export default function RankWheelScreen({
       >
         {RANKS.map((r, i) => {
           const inputRange = [(i - 1) * SNAP, i * SNAP, (i + 1) * SNAP];
-          const scale = scrollX.interpolate({ inputRange, outputRange: [0.66, 1.04, 0.66], extrapolate: 'clamp' });
+          const scale = scrollX.interpolate({ inputRange, outputRange: [0.66, 1, 0.66], extrapolate: 'clamp' });
           const opacity = scrollX.interpolate({ inputRange, outputRange: [0.38, 1, 0.38], extrapolate: 'clamp' });
           const tx = scrollX.interpolate({ inputRange, outputRange: [30, 0, -30], extrapolate: 'clamp' });
           return (
@@ -126,6 +127,7 @@ export default function RankWheelScreen({
             <View style={[s.dot, i === index && s.dotActive]} />
           </Pressable>
         ))}
+      </View>
       </View>
 
       <View style={s.footer}>
@@ -152,7 +154,9 @@ const s = StyleSheet.create({
   h1: { fontFamily: PJS.extrabold, fontSize: 28, color: '#111114', letterSpacing: -1, textAlign: 'center', lineHeight: 32 },
   sub: { fontFamily: PJS.semibold, fontSize: 13.5, color: '#6e6e77', textAlign: 'center', paddingTop: 8, lineHeight: 19 },
 
-  flow: { marginTop: 18, height: TILE_H, flexGrow: 0 },
+  // Wheel + rank text + dots, vertically centred in the space below the header.
+  mid: { flex: 1, justifyContent: 'center' },
+  flow: { height: TILE_H, flexGrow: 0 },
   tile: { width: ITEM_W, height: TILE_H, alignItems: 'center', justifyContent: 'center' },
   shield: {
     width: ITEM_W * 0.98, height: TILE_H * 0.96,
