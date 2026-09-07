@@ -169,6 +169,13 @@ final class ExerciseEngine {
     // walk-away still runs ~100%, everything else counts.
     var videoMode: Bool = false
     private static let VIDEO_RELIABILITY_FLOOR: Double = 0.9
+    // An uploaded clip is deliberate exercise from frame 1 — there's no
+    // "get into position" moment to wait out. The full 2s SETUP hold + the
+    // settle just eats the first ~2.5s of the clip (often the first rep or
+    // two of a short video). Confirm the joints are visible briefly, then go.
+    private var setupHoldDuration: TimeInterval {
+        videoMode ? 0.4 : Self.SETUP_HOLD_DURATION
+    }
 
     // Gentle "I'm losing track of you" coaching shown DURING reps (looser than
     // SETUP's positionGuidance): speaks up only after a sustained weak stretch,
@@ -795,13 +802,13 @@ final class ExerciseEngine {
             setupHoldBadFrames = 0
             switch setupPhaseState {
             case .pending:
-                NSLog("[Engine] [%@] Setup: all joints visible — starting %.0fs hold",
-                      def.id, Self.SETUP_HOLD_DURATION)
+                NSLog("[Engine] [%@] Setup: all joints visible — starting %.1fs hold",
+                      def.id, setupHoldDuration)
                 // NSLog-only messages in this function are invisible on Windows (no
                 // Xcode/Console) — the same failure mode that made a whole video
                 // analysis pass show zero trace of anything. Mirrored to onDebugLog
                 // so recap.tsx's debug panel actually shows SETUP transitions.
-                onDebugLog?("[SETUP] \(def.id) rep metric trackable — starting \(Int(Self.SETUP_HOLD_DURATION))s hold " +
+                onDebugLog?("[SETUP] \(def.id) rep metric trackable — starting \(String(format: "%.1f", setupHoldDuration))s hold " +
                             "at timestamp=\(timestamp.timeIntervalSince1970)")
                 for joint in def.repMetric.referencedJoints() {
                     let conf = pose[joint]?.confidence ?? 0
@@ -814,7 +821,7 @@ final class ExerciseEngine {
 
             case .holding(let start):
                 let elapsed = timestamp.timeIntervalSince(start)
-                holdProgress = min(1.0, elapsed / Self.SETUP_HOLD_DURATION)
+                holdProgress = min(1.0, elapsed / setupHoldDuration)
                 // Per-frame trace of the hold timer itself — this is the direct
                 // test of the timestamp-mismatch hypothesis: elapsed should climb
                 // smoothly to 2.0 in lockstep with real frames arriving. A negative
@@ -823,7 +830,7 @@ final class ExerciseEngine {
                 onDebugLog?("[SETUP-TRACE] \(def.id) elapsed=\(String(format: "%.4f", elapsed)) " +
                             "holdProgress=\(String(format: "%.2f", holdProgress)) " +
                             "start=\(start.timeIntervalSince1970) now=\(timestamp.timeIntervalSince1970)")
-                if elapsed >= Self.SETUP_HOLD_DURATION {
+                if elapsed >= setupHoldDuration {
                     NSLog("[Engine] [%@] Setup PASSED", def.id)
                     onDebugLog?("[SETUP] \(def.id) PASSED — entering ACTIVE")
                     onSetupUpdate?(SetupStatus(allJointsVisible: true, holdProgress: 1.0,
@@ -837,9 +844,9 @@ final class ExerciseEngine {
             if case .holding(let start) = setupPhaseState,
                setupHoldBadFrames < Self.SETUP_HOLD_TOLERANCE {
                 // Brief flicker during the hold (marginal joint confidence) —
-                // keep the 2s timer running rather than restarting it. The next
+                // keep the timer running rather than restarting it. The next
                 // good frame's .holding case picks up where it left off.
-                holdProgress = min(1.0, timestamp.timeIntervalSince(start) / Self.SETUP_HOLD_DURATION)
+                holdProgress = min(1.0, timestamp.timeIntervalSince(start) / setupHoldDuration)
                 onDebugLog?("[SETUP-TRACE] \(def.id) hold flicker \(setupHoldBadFrames)/\(Self.SETUP_HOLD_TOLERANCE) " +
                             "— missing [\(missingJoints.map { "\($0)" }.joined(separator: ","))], timer held")
             } else {
