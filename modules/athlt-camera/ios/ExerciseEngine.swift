@@ -1217,7 +1217,16 @@ final class ExerciseEngine {
                 // immediately below will correctly recognize this frame as a real rep entry.
             }
 
-            repTopValue = max(repTopValue, angle)
+            // Cap the "rest" reference. A pose spike (legs straightening, a
+            // reach for the phone, a garbled frame) could otherwise ratchet
+            // repTopValue far above the real rest and never recover — since
+            // it only ever grows — which then inflated `swing` and made every
+            // later rep grade ROM=short against a bogus top. A real rest sits
+            // within ~20° of the calibrated topAngle; anything past that is
+            // an artefact, not a starting position. (crunch log 9/7: a spike
+            // ratcheted top from ~110 to 153, wrongly FULL-RANGE-flagging the
+            // reps after it.)
+            repTopValue = min(max(repTopValue, angle), def.topAngle + 20.0)
 
             // CORE FIX (suppression was silently inert): activityState ==
             // .suppressed must block a NEW rep from entering. It never did —

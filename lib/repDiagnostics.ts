@@ -45,11 +45,6 @@ export function createRepDiagnostic(): RepDiagnostic {
   // reps that never come back far enough to complete).
   let attempts        = 0;
   let belowEnter      = false;
-  // Crunch: relative "legs straightened" check — if a rep's crunch_legs
-  // reading jumps well above the median of earlier reps, the knees came up /
-  // legs kicked. Relative (vs this user's own reps), not a guessed absolute.
-  let legReadings: number[] = [];
-  let legWarnUntil   = 0;
   let msg: string | null = null;
 
   const now = () => Date.now();
@@ -83,16 +78,6 @@ export function createRepDiagnostic(): RepDiagnostic {
       lastRepAt = now();
       noPersonHits = 0; unreliable = 0; phantom = 0;
       crossedEnter = false; returnedToExit = false;
-      const legs = parseFloat(line.match(/crunch_legs=([\d.]+)/)?.[1] ?? 'NaN');
-      if (!Number.isNaN(legs)) {
-        if (legReadings.length >= 2) {
-          const sorted = [...legReadings].sort((a, b) => a - b);
-          const median = sorted[Math.floor(sorted.length / 2)];
-          if (legs > median * 1.6 && legs > median + 25) legWarnUntil = now() + 4000;
-        }
-        legReadings.push(legs);
-        if (legReadings.length > 8) legReadings.shift();
-      }
     }
     recompute();
   }
@@ -108,8 +93,9 @@ export function createRepDiagnostic(): RepDiagnostic {
     // Pose is GONE — wins over everything.
     if (streamDead) { msg = 'Point the camera at your body'; return; }
 
-    // Legs straightened / kicked on a recent rep (relative to your own reps).
-    if (now() < legWarnUntil) { msg = 'Keep your knees bent'; return; }
+    // NOTE: form cues (KEEP KNEES BENT, DON'T SWING ARMS, FULL RANGE) are the
+    // native engine's job and show through the normal rep feedback — this
+    // analyzer is ONLY "why isn't a rep counting", never a form coach.
 
     // How many rep attempts never turned into a counted rep.
     const missed = attempts - repCount;
@@ -148,7 +134,6 @@ export function createRepDiagnostic(): RepDiagnostic {
     noPersonHits = unreliable = phantom = settleWaiting = 0;
     settleActive = crossedEnter = returnedToExit = false;
     attempts = 0; belowEnter = false;
-    legReadings = []; legWarnUntil = 0;
     msg = null;
   }
 

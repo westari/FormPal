@@ -4090,34 +4090,33 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     // signal is noisy — if reps still don't land it's the camera angle: the
     // phone needs to be at your SIDE with your body across the frame, close
     // enough for Vision to see your hips and knees.
-    // RE-CALIBRATED from a device [CALIB] log (9/7, 5 clean reps counted):
-    //   rest/max  avg 109.5  [108.5–109.7]
-    //   bottom/min avg 19.4  [12–36]
-    //   swing avg 90         [CALIB-SUGGEST: top 106.7 / enter 55 / exit 71.6 / rom 37]
-    // The reported bug: reps MERGE. A between-rep recovery to ~90–102 (just
-    // short of the old exit=103) never completed the rep, so 2–3 crunches
-    // counted as one 7.6s "rep". Fix: drop exit far below rest so a rep
-    // COMPLETES as soon as you're clearly on the way back, not only once
-    // you're basically flat again.
-    //  • topAngle 108   — measured rest.
-    //  • repEnterThreshold 90 — kept: any dip ~18° below rest starts a rep
-    //    (sensitive on purpose — the complaint is missed reps, not phantoms).
-    //  • repExitThreshold 72  — device-suggested. Recovering ~40% of the way
-    //    back now ends the rep, so bobbed reps stop merging.
-    //  • goodROMThreshold 45 — between old 65 and the suggested 37: a real
-    //    sit-up (swing 60+) still grades full; a shallow bob flags FULL RANGE
-    //    (does NOT gate the count).
-    topAngle:            108,
-    repEnterThreshold:   90,
-    repExitThreshold:    72,
-    goodROMThreshold:    45,
+    // RE-CALIBRATED again from a device [CALIB] log (9/7, 9 reps).
+    // The 9/7 v1 values (enter 90 / exit 72) had exit BELOW enter — a
+    // "dead zone" between 72 and 90 where a tiny wiggle both entered a rep
+    // AND immediately satisfied exit, so a leg twitch or shallow bob counted
+    // as a rep (reps #3/#4/#7 in the log fired on 30–35° swings; a
+    // leg-straighten double-counted). [CALIB-SUGGEST from that session:
+    // top 103.7 / enter 75 / exit 88.9 / rom 59.7 — note enter < exit, i.e.
+    // proper hysteresis: you must crunch PAST enter AND recover PAST a
+    // HIGHER exit to complete, which a wiggle can't do.]
+    //  • topAngle 107          — clean-rep rests were 105–114 (the 121 avg in
+    //    the summary is inflated by a pose spike; see the repTopValue cap in
+    //    ExerciseEngine).
+    //  • repEnterThreshold 75  — crunch past this to start a rep.
+    //  • repExitThreshold 89   — recover past this (≈75% back toward rest) to
+    //    COMPLETE. Above enter, so the dead-zone phantom is gone.
+    //  • goodROMThreshold 52   — between the suggested 60 and the old 45: a
+    //    normal crunch closes past this; a half-rep flags FULL RANGE (still
+    //    counts).
+    topAngle:            107,
+    repEnterThreshold:   75,
+    repExitThreshold:    89,
+    goodROMThreshold:    52,
     // Was 'GO HIGHER' — user: "idk why that's even a command." Plainer.
     insufficientROMCue: 'FULL RANGE',
-    // 0.4 = the settle needs a candidate ≥ ~70° (rom 45 + 0.4·63) to lock
-    // "rest". Measured rest is ~109, so it locks on the first still frame —
-    // the first rep isn't consumed to "resync" the anchor. (Lower than the
-    // old ~83° bar → counting activates a few frames sooner = fewer missed
-    // early reps.)
+    // 0.4 = the settle needs a candidate ≥ ~74° (rom 52 + 0.4·55) to lock
+    // "rest". Measured rest is ~107-114, so it locks on the first still
+    // frame — the first rep isn't consumed to "resync" the anchor.
     settleAnchorMinFraction: 0.4,
 
     // FORM CUES. Kept per explicit request, but both thresholds are LOOSE
@@ -4168,6 +4167,28 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
         // = 180); tighten from a labelled log if it still misfires.
         condition:        { type: 'greaterThan', value: 140 },
         priority:         4,
+        enabled:          true,
+        formCheckMinConf: 0.35,
+      },
+      {
+        // GATE (rejects the rep, no cue) — not a form flag. A crunch is
+        // physically impossible with a dead-straight leg (knee ~170-180°):
+        // that reading only happens when the pose is garbage — the classic
+        // case being the user reaching to pick the phone up mid-set, which
+        // was logging a spurious BAD rep ("gave me an X"). 170 is a hard
+        // anatomical bound, not a tuned threshold — every real crunch in the
+        // device logs reads crunch_legs well under 125.
+        id:         'crunch_legs_gate',
+        cue:        '',
+        metric: {
+          type:  'maximum',
+          left:  { type: 'jointAngle', a: 'leftHip',  pivot: 'leftKnee',  c: 'leftAnkle'  },
+          right: { type: 'jointAngle', a: 'rightHip', pivot: 'rightKnee', c: 'rightAnkle' },
+        },
+        evaluateAt:       'throughoutMax',
+        condition:        { type: 'greaterThan', value: 170 },
+        gatesCounting:    true,
+        priority:         1,
         enabled:          true,
         formCheckMinConf: 0.35,
       },
