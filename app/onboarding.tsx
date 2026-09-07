@@ -20,7 +20,6 @@ import PlanGrowthMoment from '../components/PlanGrowthMoment';
 import { LiquidGlassButton } from '../components/LiquidGlass';
 import RankRevealScreen from '../components/onboarding/RankRevealScreen';
 import RankWheelScreen from '../components/onboarding/RankWheelScreen';
-import StrengthAssessmentScreen from '../components/onboarding/StrengthAssessmentScreen';
 import { PUSHUP_ICON, PULLUP_ICON, SQUAT_ICON } from '../assets/onboarding/onbIcons';
 import { FONT, W, Col, Elev } from '../constants/theme';
 
@@ -285,49 +284,82 @@ const STRENGTH_ICONS_JS = `
 const ONB_HTML = {
   // Redesigned rank run + the wasted-muscle graph (Claude Design artboards).
   rankWheel:          require('../assets/rankwheel2.html'),
-  strengthAssessment: require('../assets/strengthassessment2.html'),
+  strengthAssessment: require('../assets/strengthassesment.html'),
   rankReveal:         require('../assets/rankreveal2.html'),
   cinematicGraph:     require('../assets/cinematicgraph.html'),
-  // The four pre-paywall pages. They render with their built-in default
-  // copy; planReady + cinematicGraph + rankReveal get slots rewritten from
-  // the user's answers (see the *Inject helpers).
+  recoveryRoute:      require('../assets/recoveryroute.html'),
+  // The pre-paywall pages. They render with their built-in default copy;
+  // planReady + cinematicGraph + recoveryRoute get slots rewritten from the
+  // user's answers (see the *Inject helpers).
   generatePlan:       require('../assets/generateplan.html'),
-  planReady:          require('../assets/planready.html'),
+  planReady:          require('../assets/planisreadynow.html'),
   trialTimeline:      require('../assets/trialtimeline2.html'),
   paywall:            require('../assets/paywall.html'),
 } as const;
 
-// planready.html shows weight / height / age / experience / a goal date in
-// <span class="sc-interp"> slots. These pages have no prop-injection channel
-// when run standalone, so — same approach as STRENGTH_ICONS_JS — we rewrite
-// the rendered spans in place, matched by the shape of their default text.
+const GOAL_DATE = () => {
+  const d = new Date(Date.now() + 70 * 86400000); // ~10 weeks out
+  const M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${M[d.getMonth()]} ${d.getDate()}`;
+};
+
+// planisreadynow.html renders its values as plain {{ }} text (no sc-interp
+// spans), so we can't match by class — instead we match each rendered leaf
+// against the artboard's KNOWN default string and swap it. Defaults (keep in
+// sync with the file's data-props): goalWeight "195 lb" (×2), goalDate
+// "Dec 1" (×2), weight "184 lb", height 5'11", age "27", experience
+// "Beginner". ctaLabel "Unlock my full plan" -> "Continue".
 function planReadyInject(a: Record<string, any>): string {
-  const w  = typeof a.weight === 'number' ? `${Math.round(a.weight)} lb` : '';
+  const w  = typeof a.weight === 'number' ? Math.round(a.weight) : 0;
+  const wStr = w ? `${w} lb` : '';
   const h  = typeof a.height === 'string' ? a.height : '';
   const ag = a.age != null ? String(a.age) : '';
   const ex = typeof a.experience === 'string' ? a.experience : '';
-  const gd = (() => {
-    const d = new Date(Date.now() + 70 * 86400000); // ~10 weeks out
-    const M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    return `${M[d.getMonth()]} ${d.getDate()}`;
-  })();
+  const goals = (a.goal as string[]) ?? [];
+  const delta = goals.includes('Lose weight') ? -8 : (goals.some(g => /muscle|strength/i.test(g)) ? 6 : 4);
+  const goalW = w ? `${w + delta} lb` : '';
+  const gd = GOAL_DATE();
   return `
 (function(){
-  var W=${JSON.stringify(w)}, H=${JSON.stringify(h)}, A=${JSON.stringify(ag)}, E=${JSON.stringify(ex)}, D=${JSON.stringify(gd)};
-  function post(m){ try{ window.ReactNativeWebView.postMessage(m); }catch(e){} }
+  var MAP = {
+    '195 lb': ${JSON.stringify(goalW)},
+    'Dec 1':  ${JSON.stringify(gd)},
+    '184 lb': ${JSON.stringify(wStr)},
+    "5'11\\"": ${JSON.stringify(h)},
+    '27':     ${JSON.stringify(ag)},
+    'Beginner': ${JSON.stringify(ex)}
+  };
   function apply(){
-    var s=document.querySelectorAll('span.sc-interp'), hit=0;
-    for(var i=0;i<s.length;i++){
-      var t=(s[i].textContent||'').trim();
-      if(W && /(lb|kg)$/.test(t)){ s[i].textContent=W; hit++; }
-      else if(H && t.indexOf('"')>=0 && t.indexOf("'")>=0){ s[i].textContent=H; hit++; }
-      else if(A && /^[0-9]{1,3}$/.test(t)){ s[i].textContent=A; hit++; }
-      else if(E && /^(Beginner|Some experience|Intermediate|Advanced)$/.test(t)){ s[i].textContent=E; hit++; }
-      else if(D && /^[A-Z][a-z]{2} [0-9]{1,2}$/.test(t)){ s[i].textContent=D; hit++; }
+    var all=document.querySelectorAll('#dc-root div,#dc-root span,#dc-root p'), hit=0;
+    for(var i=0;i<all.length;i++){
+      var el=all[i]; if(el.children.length) continue;
+      var t=(el.textContent||'').trim();
+      if(MAP[t] != null && MAP[t] !== '' && el.textContent.trim() !== MAP[t]){ el.textContent=MAP[t]; hit++; }
     }
     return hit>=3;
   }
   if(!apply()) [200,500,1000,2000,3500,5000].forEach(function(d){ setTimeout(apply,d); });
+  else [1000,2500].forEach(function(d){ setTimeout(apply,d); });
+})();
+`;
+}
+
+// recoveryroute.html — "your route to <goal> starts today". Fill the goal
+// date; leave the goal name (Gold I) as the artboard's default.
+function recoveryRouteInject(): string {
+  return `
+(function(){
+  var D=${JSON.stringify(GOAL_DATE())};
+  function apply(){
+    var all=document.querySelectorAll('#dc-root div,#dc-root span,#dc-root p'), hit=0;
+    for(var i=0;i<all.length;i++){
+      var el=all[i]; if(el.children.length) continue;
+      var t=(el.textContent||'').trim();
+      if(/^[A-Z][a-z]{2} [0-9]{1,2}$/.test(t)){ el.textContent=D; hit++; }
+    }
+    return hit>=1;
+  }
+  if(!apply()) [200,500,1000,2000,3500].forEach(function(d){ setTimeout(apply,d); });
 })();
 `;
 }
@@ -403,9 +435,11 @@ function cinematicGraphInject(a: Record<string, any>): string {
 const DC_PAGE_KEYS: (keyof typeof ONB_HTML)[] = [
   'generatePlan', 'planReady', 'trialTimeline', 'paywall',
   // The redesigned rank + graph pages are the same 390-wide #dc-root format.
-  'rankWheel', 'strengthAssessment', 'rankReveal', 'cinematicGraph',
+  'rankWheel', 'strengthAssessment', 'rankReveal', 'cinematicGraph', 'recoveryRoute',
 ];
-const DC_CTA_RE = "^(Continue|See my plan|See plan|Unlock my full plan|Unlock my plan|Unlock|Start my 3-day|Start my 3\\u2011day|Start my free trial|Start free trial|Start free|Next|Done|Get started|Let.s do it|Let.s go|I.m in)\\b";
+// NOTE: no bare "Next" — strengthassesment's in-card "Next exercise" button
+// must NOT advance the whole flow.
+const DC_CTA_RE = "^(Continue|See my plan|See plan|See my potential|Build my route|Get my rank|Unlock my full plan|Unlock my plan|Unlock|Start my 3-day|Start my 3\\u2011day|Start my free trial|Start free trial|Start free|Done|Get started|Let.s do it|Let.s go|I.m in)\\b";
 const DC_PAGE_INJECT = `
 (function () {
   function post(m){ try{ window.ReactNativeWebView.postMessage(m); }catch(e){} }
@@ -507,10 +541,22 @@ const DC_PAGE_INJECT = `
       var sv=svgs[i];
       if(sv.__wired){ n++; continue; }
       sv.__wired=1;
+      // Find this row's value element. Old planReady used span.sc-interp;
+      // the new one (planisreadynow) renders values as plain text, so also
+      // accept the nearest leaf whose text has a value shape.
+      function valueShape(t){
+        return /^[0-9]{1,3}\\s?(lb|kg)$/i.test(t) || (t.indexOf('"')>=0 && t.indexOf("'")>=0)
+            || /^[0-9]{1,3}$/.test(t) || /^(Beginner|Some experience|Intermediate|Advanced)$/.test(t);
+      }
       var host=sv.parentElement, sp=null;
-      for(var p=0;p<6 && host;p++,host=host.parentElement){
-        var found=host.querySelector && host.querySelector('span.sc-interp');
-        if(found){ sp=found; break; }
+      for(var p=0;p<6 && host && !sp;p++,host=host.parentElement){
+        var c=host.querySelector && host.querySelector('span.sc-interp');
+        if(c){ sp=c; break; }
+        var leaves=host.querySelectorAll ? host.querySelectorAll('div,span,p') : [];
+        for(var q=0;q<leaves.length;q++){
+          if(leaves[q].children.length) continue;
+          if(valueShape((leaves[q].textContent||'').trim())){ sp=leaves[q]; break; }
+        }
       }
       if(!sp){ continue; }
       var v=(sp.textContent||'').trim();
@@ -726,11 +772,9 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
 
   const isDcPage = DC_PAGE_KEYS.includes(htmlKey);
   const baseInject = isDcPage ? DC_PAGE_INJECT : ONBOARDING_WEB_INJECT;
-  // cinematicGraph stays width-fit (fills the screen). Everything else fits
-  // to height too so the whole artboard is framed with no scrolling and the
-  // CTA/footnote are always visible — rankReveal included (it was rendering
-  // overly zoomed at 1:1).
-  const fitBothKeys = ['trialTimeline', 'paywall', 'rankWheel', 'strengthAssessment', 'rankReveal'];
+  // cinematicGraph + planReady stay width-fit (fill the screen / scroll).
+  // Everything else fits to height too so it's framed with no scrolling.
+  const fitBothKeys = ['trialTimeline', 'paywall', 'strengthAssessment', 'recoveryRoute'];
   const dcExtra =
     htmlKey === 'generatePlan' ? GENERATE_PLAN_INJECT :
     fitBothKeys.includes(htmlKey) ? FIT_BOTH_INJECT :
@@ -1966,7 +2010,7 @@ function GuessSlider({ value, onChange }: { value: number; onChange: (v: number)
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 type AppState =
-  | 'welcome' | 'onboarding' | 'cinematic' | 'reversal'
+  | 'welcome' | 'onboarding' | 'cinematic' | 'recoveryRoute' | 'reversal'
   // Rank run — straight after the last question.
   | 'rankWheel' | 'rankAssess' | 'rankReveal'
   // The pre-paywall WebView pages, in order.
@@ -2449,8 +2493,20 @@ export default function OnboardingScreen() {
         htmlKey="cinematicGraph"
         topInset={insets.top}
         extraJs={cinematicGraphInject(answers)}
-        onAdvance={() => setAppState('generatePlan')}
+        onAdvance={() => setAppState('recoveryRoute')}
         onBack={() => setAppState('rankReveal')}
+      />
+    );
+  }
+
+  if (appState === 'recoveryRoute') {
+    return (
+      <OnboardingWebScreen
+        htmlKey="recoveryRoute"
+        topInset={insets.top}
+        extraJs={recoveryRouteInject()}
+        onAdvance={() => setAppState('generatePlan')}
+        onBack={() => setAppState('cinematic')}
       />
     );
   }
@@ -2491,10 +2547,9 @@ export default function OnboardingScreen() {
 
   if (appState === 'rankAssess') {
     return (
-      <StrengthAssessmentScreen
-        answers={answers}
+      <OnboardingWebScreen
+        htmlKey="strengthAssessment"
         topInset={insets.top}
-        onSave={(reps) => setAnswers(a => ({ ...a, ...reps }))}
         onAdvance={() => setAppState('rankReveal')}
         onBack={() => setAppState('rankWheel')}
       />
@@ -2554,7 +2609,7 @@ export default function OnboardingScreen() {
             htmlKey="generatePlan"
             topInset={insets.top}
             onAdvance={() => setAppState('planReady')}
-            onBack={() => setAppState('cinematic')}
+            onBack={() => setAppState('recoveryRoute')}
           />
         )}
         {editField && appState === 'planReady' && (
