@@ -23,13 +23,9 @@ const SHIELDS = [
   require('../../assets/ranks/50percent.webp'),
   require('../../assets/ranks/75percent.webp'),
 ];
-const EMBLEM = require('../../assets/ranks/bronze.png');
-
-const TIER: Record<string, string> = {
-  Beginner: 'I',
-  'Some experience': 'II',
-  Intermediate: 'III',
-  Advanced: 'IV',
+const EMBLEMS: Record<string, any> = {
+  Bronze: require('../../assets/ranks/bronze.png'),
+  Silver: require('../../assets/ranks/silver.png'),
 };
 
 const TAPS_TO_REVEAL = 9; // 3 hits per crack stage, 3 stages to fully cracked
@@ -43,17 +39,17 @@ function narrationFor(taps: number): string {
 }
 
 export default function RankRevealScreen({
-  answers,
+  rankName,
   topInset,
   onAdvance,
   onBack,
 }: {
-  answers: Record<string, any>;
+  rankName: string;
   topInset: number;
   onAdvance: () => void;
   onBack: () => void;
 }) {
-  const rankName = `Bronze ${TIER[answers?.experience as string] ?? 'II'}`;
+  const EMBLEM = EMBLEMS[rankName.split(' ')[0]] ?? EMBLEMS.Bronze;
 
   const [taps, setTaps] = useState(0);
   const [revealed, setRevealed] = useState(false);

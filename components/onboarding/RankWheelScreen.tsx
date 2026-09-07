@@ -70,7 +70,7 @@ export default function RankWheelScreen({
   };
 
   return (
-    <Animated.View style={[s.root, { paddingTop: topInset, opacity: mountFade, transform: [{ translateY: mountFade.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }]}>
+    <Animated.View style={[s.root, { paddingTop: topInset, opacity: mountFade }]}>
       <Animated.View style={[s.backWrap, { top: topInset + 8 }]} pointerEvents="box-none">
         <LiquidGlassButton
           onPress={() => { void Haptics.selectionAsync(); onBack(); }}

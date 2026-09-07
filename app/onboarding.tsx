@@ -315,9 +315,12 @@ function planReadyInject(a: Record<string, any>): string {
   const h  = typeof a.height === 'string' ? a.height : '';
   const ag = a.age != null ? String(a.age) : '';
   const ex = typeof a.experience === 'string' ? a.experience : '';
+  // Goal weight: the answer from the dedicated question if we have it, else
+  // a small goal-direction estimate off current weight.
   const goals = (a.goal as string[]) ?? [];
   const delta = goals.includes('Lose weight') ? -8 : (goals.some(g => /muscle|strength/i.test(g)) ? 6 : 4);
-  const goalW = w ? `${w + delta} lb` : '';
+  const goalNum = typeof a.goalWeight === 'number' ? Math.round(a.goalWeight) : (w ? w + delta : 0);
+  const goalW = goalNum ? `${goalNum} lb` : '';
   const gd = GOAL_DATE();
   return `
 (function(){
@@ -378,17 +381,19 @@ const DURATION_YEARS: Record<string, number> = {
   '1-2 years': 2, '2-5 years': 3, '5-10 years': 7, '10+ years': 12,
 };
 
-// cinematicgraph.html — the "two versions of you" wasted-muscle graph.
-// Slots: "<n>" (years trained), "13,000 reps lost", "8 months of muscle gone".
+// cinematicgraph.html — the wasted-muscle graph. Rewrites the years / reps
+// / months slots, the hardcoded "Bronze II" to the user's real starting
+// rank, and forces the CTA label to "See my potential".
 function cinematicGraphInject(a: Record<string, any>): string {
   const m = computeWastedReps({ ...a, formGuess: getRealFormPct(a) });
   const years = DURATION_YEARS[(a.trainDuration as string) ?? ''] ?? 3;
   const wasted = m.wasted;
   const months = Math.max(2, Math.round(wasted / 1500));
   const pct = getRealFormPct(a);
+  const rank = computeRank(a).label;
   return `
 (function(){
-  var Y=${years}, RL=${JSON.stringify(wasted.toLocaleString() + ' reps lost')}, ML=${JSON.stringify(months + ' months of muscle gone')}, P=${pct};
+  var Y=${years}, RL=${JSON.stringify(wasted.toLocaleString() + ' reps lost')}, ML=${JSON.stringify(months + ' months of muscle gone')}, P=${pct}, RANK=${JSON.stringify(rank)};
   function post(m){ try{ window.ReactNativeWebView.postMessage(m); }catch(e){} }
   function apply(){
     var s=document.querySelectorAll('span.sc-interp'), hit=0;
@@ -399,34 +404,48 @@ function cinematicGraphInject(a: Record<string, any>): string {
       else if(/months of muscle gone$/i.test(t)){ s[i].textContent=ML; hit++; }
       else if(/^[0-9]{1,3}%$/.test(t)){ s[i].textContent=P+'%'; hit++; }
     }
+    // "From Bronze II, ..." headline -> the real rank. (Plain text node,
+    // not an sc-interp span.)
+    var all=document.querySelectorAll('#dc-root div,#dc-root span,#dc-root p');
+    for(var j=0;j<all.length;j++){
+      for(var k=0;k<all[j].childNodes.length;k++){
+        var n=all[j].childNodes[k];
+        if(n.nodeType===3 && /\\b(Bronze|Silver|Gold|Platinum|Diamond)\\s+(I|II|III|IV|V)\\b/.test(n.nodeValue) && n.nodeValue.indexOf(RANK)<0){
+          n.nodeValue=n.nodeValue.replace(/\\b(Bronze|Silver|Gold|Platinum|Diamond)\\s+(I|II|III|IV|V)\\b/, RANK); hit++;
+        }
+      }
+    }
     return hit>=2;
   }
   if(!apply()) [200,500,1000,2000,3500,5000].forEach(function(d){ setTimeout(apply,d); });
+  else [1000,2500].forEach(function(d){ setTimeout(apply,d); });
 
-  // The CTA is a <div sc-camel-on-click="{{ blast }}"> whose own handler only
-  // fires a burst animation — it never navigates. Force its label to
-  // "See my potential" and wire it straight to advance.
+  // The CTA (<div sc-camel-on-click="{{ blast }}">) only fires a burst
+  // animation — never navigates. Force its label and wire it to advance.
   var wired=false;
   document.addEventListener('pointerdown', function(){ post('__tap'); }, true);
+  function ctaish(el){
+    var t=(el.textContent||'').replace(/\\s+/g,' ').trim();
+    if(!/^(see my potential|let'?s do it|let'?s go|i'?m in)$/i.test(t)) return false;
+    var cs=getComputedStyle(el);
+    return cs.display!=='none' && cs.visibility!=='hidden';
+  }
   function hunt(){
     if(wired) return true;
     var all=document.querySelectorAll('div,button');
     for(var i=0;i<all.length;i++){
-      var el=all[i]; if(el.children.length) continue;
-      var t=(el.textContent||'').replace(/\\s+/g,' ').trim();
-      if(t.length>1 && t.length<=22 && /^(see my potential|let'?s do it|let'?s go|i'?m in|continue)$/i.test(t)){
-        var cs=getComputedStyle(el);
-        if(cs.display==='none' || cs.visibility==='hidden') continue;
-        el.textContent='See my potential';
-        el.addEventListener('click', function(ev){ ev.stopPropagation(); post('__tap'); post('advance'); }, true);
-        el.style.setProperty('cursor','pointer','important');
-        wired=true;
-        return true;
-      }
+      var el=all[i];
+      if(el.children.length>1) continue;     // allow a lone text/span child
+      if(!ctaish(el)) continue;
+      el.textContent='See my potential';
+      el.addEventListener('click', function(ev){ ev.stopPropagation(); post('__tap'); post('advance'); }, true);
+      el.style.setProperty('cursor','pointer','important');
+      wired=true;
+      return true;
     }
     return false;
   }
-  var tries=0, iv=setInterval(function(){ if(hunt() || ++tries>80) clearInterval(iv); }, 250);
+  var tries=0, iv=setInterval(function(){ if(hunt() || ++tries>100) clearInterval(iv); }, 200);
 })();
 `;
 }
@@ -1139,6 +1158,13 @@ const STEPS: Step[] = [
     { label: 'Improve form', sfSymbol: 'camera.fill', customIcon: ICON.camera },
     { label: 'Stay consistent', sfSymbol: 'repeat', customIcon: ICON.days },
     { label: 'General fitness', sfSymbol: 'heart.fill', customIcon: ICON.heart },
+  ]},
+
+  { id: 'goalWeight', section: 'Your Goal', type: 'ruler', question: "What's your goal weight?" },
+  { id: 'goalPace', section: 'Your Goal', type: 'select', question: 'How quickly do you want to get there?', options: [
+    { label: 'Steady — I want it to stick', sfSymbol: 'tortoise.fill' },
+    { label: 'Balanced', sfSymbol: 'figure.walk' },
+    { label: 'Aggressive — as fast as safe', sfSymbol: 'hare.fill' },
   ]},
 
   { id: 'injuries', section: 'Your Body', type: 'multiselect', question: 'Any injuries or areas that hurt?',
@@ -1895,6 +1921,23 @@ function getRealFormPct(answers: Record<string, any>): number {
   return 70;
 }
 
+// The starting rank shown on the reveal + the cinematic graph. Derived from
+// the strength-assessment inputs we have (experience, guessed form %, how
+// long they've trained). Capped at Silver IV — onboarding never starts
+// anyone above Silver.
+function computeRank(a: Record<string, any>): { name: string; tier: string; label: string } {
+  const exp = ({ 'Beginner': 0, 'Some experience': 1, 'Intermediate': 2, 'Advanced': 3 } as Record<string, number>)[a.experience as string] ?? 0;
+  const fp = getRealFormPct(a);
+  const formPts = fp >= 90 ? 3 : fp >= 70 ? 2 : fp >= 45 ? 1 : 0;
+  const dur = DURATION_YEARS[(a.trainDuration as string) ?? ''] ?? 1;
+  const durPts = dur >= 5 ? 2 : dur >= 2 ? 1 : 0;
+  const score = exp * 2 + formPts + durPts; // 0..11
+  const idx = Math.max(0, Math.min(7, Math.round((score * 7) / 11))); // 0..7
+  const name = idx < 4 ? 'Bronze' : 'Silver';
+  const tier = ['I', 'II', 'III', 'IV'][idx % 4];
+  return { name, tier, label: `${name} ${tier}` };
+}
+
 function cinematicLines(answers: Record<string, any>): string[] {
   const m = computeWastedReps({ ...answers, formGuess: getRealFormPct(answers) });
   const sessionsPerYear = Math.round(m.freq * 52);
@@ -2096,8 +2139,9 @@ export default function OnboardingScreen() {
       // the fade-out ("quickly shows another question then goes away").
       animTrans('forward', () => { commit?.(); setStepIndex(i => i + 1); });
     } else {
-      commit?.();
-      setAppState('rankWheel');
+      // Fade the last question out before the rank wheel mounts, so it isn't
+      // a hard white cut into it.
+      animTrans('forward', () => { commit?.(); setAppState('rankWheel'); });
     }
   };
 
@@ -2265,7 +2309,8 @@ export default function OnboardingScreen() {
 
     // Ruler (desired weight, relative to the already-entered current weight)
     if (st.type === 'ruler') {
-      const rulerVal = typeof answers[st.id] === 'number' ? (answers[st.id] as number) : 160;
+      const rulerDefault = st.id === 'goalWeight' && typeof answers.weight === 'number' ? (answers.weight as number) : 160;
+      const rulerVal = typeof answers[st.id] === 'number' ? (answers[st.id] as number) : rulerDefault;
       return (
         <OnboardingBackground>
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
@@ -2571,7 +2616,7 @@ export default function OnboardingScreen() {
   if (appState === 'rankReveal') {
     return (
       <RankRevealScreen
-        answers={answers}
+        rankName={computeRank(answers).label}
         topInset={insets.top}
         onAdvance={() => setAppState('cinematic')}
         onBack={() => setAppState('rankAssess')}
