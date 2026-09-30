@@ -1,11 +1,16 @@
 /**
  * components/onboarding/RankRevealScreen.tsx
  *
- * Native rebuild of the rankreveal2.html artboard — "Something's sealed in
- * here" → tap to crack the bronze shield open → your rank. Was a WebView;
- * now real RN so it runs at 60fps, has proper haptics, and transitions in
- * instantly. Design matches the artboard (Plus Jakarta Sans, the amber
- * glow, the progress bar, the 44px rank name, the black pill CTA).
+ * Native rank-reveal reel — a vertical strip of rank shields spins and
+ * decelerates to land on the user's real computed rank. Replaces an earlier
+ * tap-to-crack-a-shield version (not used anymore) and, before that, a
+ * WebView "reel" artboard built on a custom templating framework whose
+ * sc-for loops turned out to never render any DOM children — a confirmed,
+ * reproducible bug in that framework, not a timing fluke. Rebuilt here as
+ * plain RN Animated so the whole class of "the loop silently renders
+ * nothing" bug is structurally impossible: every row is a real React
+ * element on every render, not something a template engine assembles at
+ * runtime.
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -15,27 +20,30 @@ import { SymbolView } from 'expo-symbols';
 import { LiquidGlassButton } from '../LiquidGlass';
 import { PJS } from '../../constants/theme';
 
-// The 4 "% to gold" shells are the tap-to-crack theatre only; the reveal
-// lands on the real, uncovered Bronze emblem.
-const SHIELDS = [
-  require('../../assets/ranks/0percent.webp'),
-  require('../../assets/ranks/25percent.webp'),
-  require('../../assets/ranks/50percent.webp'),
-  require('../../assets/ranks/75percent.webp'),
+// Same 7-tier ladder + shields RankWheelScreen uses, kept in landed order
+// (low to high) so the reel scrolls "upward through the ranks" toward
+// whichever one the user actually landed on. computeRank() in
+// app/onboarding.tsx only ever returns Bronze or Silver today (it's capped
+// at Silver IV), but the full ladder is in the strip so the spin has
+// somewhere real to scroll through before landing, not just two rows.
+const LADDER = [
+  { key: 'Bronze',   img: require('../../assets/ranks/bronze.png') },
+  { key: 'Silver',   img: require('../../assets/ranks/silver.png') },
+  { key: 'Gold',     img: require('../../assets/ranks/gold.png') },
+  { key: 'Platinum', img: require('../../assets/ranks/platinum.png') },
+  { key: 'Diamond',  img: require('../../assets/ranks/diamond.png') },
+  { key: 'Master',   img: require('../../assets/ranks/master.png') },
+  { key: 'Champion', img: require('../../assets/ranks/champion.png') },
 ];
-const EMBLEMS: Record<string, any> = {
-  Bronze: require('../../assets/ranks/bronze.png'),
-  Silver: require('../../assets/ranks/silver.png'),
-};
 
-const TAPS_TO_REVEAL = 9; // 3 hits per crack stage, 3 stages to fully cracked
-const CHIP_COUNT = 16;
-const CHIP_COLORS = ['#6d6a67', '#4d4a48', '#8b8683', '#a9743f'];
+const LOOPS = 4; // rows in the strip = LADDER.length * LOOPS
+const ROW_H = 104;
+const VIEWPORT_H = 340;
+// The spin value at which row `i` sits exactly centered in the viewport.
+const centerFor = (i: number) => VIEWPORT_H / 2 - ROW_H / 2 - i * ROW_H;
 
-function narrationFor(taps: number): string {
-  if (taps === 0) return "Something's sealed in here.";
-  if (taps < 5) return 'Keep going.';
-  return 'Almost there.';
+function narrationFor(landed: boolean): string {
+  return landed ? 'Your starting rank is...' : 'Calculating your rank...';
 }
 
 export default function RankRevealScreen({
@@ -49,136 +57,51 @@ export default function RankRevealScreen({
   onAdvance: () => void;
   onBack: () => void;
 }) {
-  const EMBLEM = EMBLEMS[rankName.split(' ')[0]] ?? EMBLEMS.Bronze;
+  const tierName = rankName.split(' ')[0];
+  const tierIdx = Math.max(0, LADDER.findIndex((r) => r.key === tierName));
 
-  const [taps, setTaps] = useState(0);
-  const [revealed, setRevealed] = useState(false);
-  const stage = Math.min(3, Math.floor(taps / 3));
+  // Land on the tier's LAST occurrence in the looped strip, so the spin
+  // has the full strip to travel through first.
+  const reel = useMemo(() => {
+    const out: { key: string; img: any }[] = [];
+    for (let l = 0; l < LOOPS; l++) LADDER.forEach((r) => out.push(r));
+    return out;
+  }, []);
+  const targetIndex = (LOOPS - 1) * LADDER.length + tierIdx;
 
-  // ── animated values ──────────────────────────────────────────────────────
-  const float = useRef(new Animated.Value(0)).current;      // idle bob
-  const shake = useRef(new Animated.Value(0)).current;      // hit shake
-  const barW = useRef(new Animated.Value(0)).current;       // progress 0..1
-  const flash = useRef(new Animated.Value(0)).current;      // white pop
-  const halo = useRef(new Animated.Value(0)).current;       // reveal halo
-  const ring = useRef(new Animated.Value(0)).current;       // shock ring
-  const warmBg = useRef(new Animated.Value(0)).current;     // page warms
-  const nameIn = useRef(new Animated.Value(0)).current;     // rank name pop
-  const ctaIn = useRef(new Animated.Value(0)).current;      // CTA rise
-  const backIn = useRef(new Animated.Value(0)).current;     // back button
-  const emblemIn = useRef(new Animated.Value(0)).current;   // real emblem on reveal
-  const frameOpacity = useRef(SHIELDS.map((_, i) => new Animated.Value(i === 0 ? 1 : 0))).current;
+  const [landed, setLanded] = useState(false);
+  const spin = useRef(new Animated.Value(centerFor(0))).current;
+  const backIn = useRef(new Animated.Value(0)).current;
+  const nameIn = useRef(new Animated.Value(0)).current;
+  const ctaIn = useRef(new Animated.Value(0)).current;
+  const glow = useRef(new Animated.Value(0)).current;
 
-  const chips = useRef(
-    Array.from({ length: CHIP_COUNT }, () => ({
-      x: new Animated.Value(0),
-      y: new Animated.Value(0),
-      o: new Animated.Value(0),
-      r: new Animated.Value(0),
-      size: 4 + Math.random() * 9,
-      shade: CHIP_COLORS[Math.floor(Math.random() * CHIP_COLORS.length)],
-      angle: Math.random() * Math.PI * 2,
-    })),
-  ).current;
-
-  // idle bob loop
   useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(float, { toValue: 1, duration: 2200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(float, { toValue: 0, duration: 2200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-      ]),
-    );
-    loop.start();
-    Animated.timing(backIn, { toValue: 1, duration: 300, delay: 260, useNativeDriver: true }).start();
-    return () => loop.stop();
+    Animated.timing(backIn, { toValue: 1, duration: 300, delay: 200, useNativeDriver: true }).start();
+    const t = setTimeout(() => {
+      Animated.timing(spin, {
+        toValue: centerFor(targetIndex),
+        duration: 2600,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (!finished) return;
+        setLanded(true);
+        if (Platform.OS !== 'web') {
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+        Animated.parallel([
+          Animated.timing(glow, { toValue: 1, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+          Animated.spring(nameIn, { toValue: 1, friction: 7, tension: 120, useNativeDriver: true }),
+          Animated.timing(ctaIn, { toValue: 1, duration: 340, delay: 160, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        ]).start();
+      });
+    }, 450);
+    return () => clearTimeout(t);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // crossfade shield frame when stage changes
-  useEffect(() => {
-    frameOpacity.forEach((v, i) =>
-      Animated.timing(v, { toValue: i === stage ? 1 : 0, duration: 260, useNativeDriver: true }).start(),
-    );
-  }, [stage]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const burstChips = (final: boolean) => {
-    const n = final ? CHIP_COUNT : 8;
-    chips.slice(0, n).forEach((c) => {
-      const dist = (final ? 120 : 60) + Math.random() * (final ? 110 : 50);
-      const dx = Math.cos(c.angle) * dist;
-      const dy = Math.sin(c.angle) * dist * 0.8 + (final ? 60 : 34);
-      c.x.setValue(0);
-      c.y.setValue(0);
-      c.o.setValue(1);
-      c.r.setValue(0);
-      Animated.parallel([
-        Animated.timing(c.x, { toValue: dx, duration: final ? 900 : 620, easing: Easing.out(Easing.quad), useNativeDriver: true }),
-        Animated.timing(c.y, { toValue: dy, duration: final ? 900 : 620, easing: Easing.out(Easing.quad), useNativeDriver: true }),
-        Animated.timing(c.r, { toValue: (Math.random() - 0.5) * 3, duration: final ? 900 : 620, useNativeDriver: true }),
-        Animated.timing(c.o, { toValue: 0, duration: final ? 900 : 620, easing: Easing.in(Easing.quad), useNativeDriver: true }),
-      ]).start();
-    });
-  };
-
-  const doShake = (final: boolean) => {
-    const amp = final ? 9 : 5;
-    Animated.sequence([
-      Animated.timing(shake, { toValue: -amp, duration: 45, useNativeDriver: true }),
-      Animated.timing(shake, { toValue: amp, duration: 60, useNativeDriver: true }),
-      Animated.timing(shake, { toValue: -amp * 0.5, duration: 55, useNativeDriver: true }),
-      Animated.timing(shake, { toValue: 0, duration: 70, useNativeDriver: true }),
-    ]).start();
-  };
-
-  const doFlash = (final: boolean) => {
-    flash.setValue(final ? 0.95 : 0.45);
-    Animated.timing(flash, { toValue: 0, duration: final ? 620 : 300, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
-  };
-
-  const reveal = () => {
-    setRevealed(true);
-    if (Platform.OS !== 'web') {
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-      setTimeout(() => void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success), 90);
-    }
-    doFlash(true);
-    burstChips(true);
-    // Swap the cracked shell out, the real Bronze emblem in — fast, so the
-    // rank appears (near-)instantly, not a second later.
-    frameOpacity.forEach((v) => Animated.timing(v, { toValue: 0, duration: 160, useNativeDriver: true }).start());
-    Animated.parallel([
-      Animated.timing(emblemIn, { toValue: 1, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-      Animated.timing(halo, { toValue: 1, duration: 800, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-      Animated.timing(ring, { toValue: 1, duration: 900, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-      Animated.timing(warmBg, { toValue: 1, duration: 700, useNativeDriver: true }),
-      Animated.spring(nameIn, { toValue: 1, friction: 7, tension: 120, useNativeDriver: true }),
-      Animated.timing(ctaIn, { toValue: 1, duration: 340, delay: 160, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-    ]).start();
-  };
-
-  const onTap = () => {
-    if (revealed) return;
-    const next = taps + 1;
-    setTaps(next);
-    const final = next >= TAPS_TO_REVEAL;
-    if (Platform.OS !== 'web') {
-      void Haptics.impactAsync(final ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Light);
-    }
-    Animated.timing(barW, { toValue: next / TAPS_TO_REVEAL, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
-    doShake(final);
-    doFlash(final);
-    burstChips(final);
-    if (final) reveal();
-  };
-
-  const floatY = float.interpolate({ inputRange: [0, 1], outputRange: [4, -7] });
-  const floatR = float.interpolate({ inputRange: [0, 1], outputRange: ['-0.6deg', '0.6deg'] });
 
   return (
     <View style={[s.root, { paddingTop: topInset }]}>
-      {/* warm wash that fades in on reveal */}
-      <Animated.View pointerEvents="none" style={[s.warm, { opacity: warmBg.interpolate({ inputRange: [0, 1], outputRange: [0, 0.6] }) }]} />
-
       {/* back button */}
       <Animated.View style={[s.backWrap, { top: topInset + 8, opacity: backIn }]} pointerEvents="box-none">
         <LiquidGlassButton
@@ -193,86 +116,52 @@ export default function RankRevealScreen({
         </LiquidGlassButton>
       </Animated.View>
 
-      {/* narration */}
       <View style={s.narrationWrap}>
-        {!revealed && <Text style={s.narration}>{narrationFor(taps)}</Text>}
+        <Text style={s.narration}>{narrationFor(landed)}</Text>
       </View>
 
-      {/* stage */}
-      <Pressable style={s.stageArea} onPress={onTap} disabled={revealed}>
-        {/* reveal halo + shock ring */}
+      {/* reel viewport */}
+      <View style={s.viewport}>
+        {/* landing-slot frame */}
+        <View pointerEvents="none" style={s.slotFrame} />
         <Animated.View
           pointerEvents="none"
-          style={[
-            s.halo,
-            {
-              opacity: halo.interpolate({ inputRange: [0, 0.6, 1], outputRange: [0, 0.9, 0] }),
-              transform: [{ scale: halo.interpolate({ inputRange: [0, 1], outputRange: [0.45, 1.1] }) }],
-            },
-          ]}
-        />
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            s.ring,
-            {
-              opacity: ring.interpolate({ inputRange: [0, 1], outputRange: [0.7, 0] }),
-              transform: [{ scale: ring.interpolate({ inputRange: [0, 1], outputRange: [0.62, 1.9] }) }],
-            },
-          ]}
+          style={[s.slotGlow, { opacity: glow.interpolate({ inputRange: [0, 0.6, 1], outputRange: [0, 0.9, 0] }) }]}
         />
 
-        {/* shield frames (crack theatre) + the real emblem on reveal */}
-        <Animated.View style={[s.shieldWrap, { transform: [{ translateX: shake }, { translateY: floatY }, { rotate: floatR }] }]}>
-          {SHIELDS.map((src, i) => (
-            <Animated.Image
-              key={i}
-              source={src}
-              resizeMode="contain"
-              style={[s.shieldImg, { opacity: frameOpacity[i] }]}
-            />
-          ))}
-          <Animated.Image
-            source={EMBLEM}
-            resizeMode="contain"
-            style={[s.shieldImg, { opacity: emblemIn, transform: [{ scale: emblemIn.interpolate({ inputRange: [0, 1], outputRange: [0.86, 1] }) }] }]}
-          />
+        <Animated.View style={{ transform: [{ translateY: spin }] }}>
+          {reel.map((r, i) => {
+            const c = centerFor(i);
+            const opacity = spin.interpolate({
+              inputRange: [c - 2 * ROW_H, c - ROW_H, c, c + ROW_H, c + 2 * ROW_H],
+              outputRange: [0.15, 0.4, 1, 0.4, 0.15],
+              extrapolate: 'clamp',
+            });
+            const scale = spin.interpolate({
+              inputRange: [c - 2 * ROW_H, c - ROW_H, c, c + ROW_H, c + 2 * ROW_H],
+              outputRange: [0.72, 0.85, 1, 0.85, 0.72],
+              extrapolate: 'clamp',
+            });
+            return (
+              <Animated.View key={i} style={[s.row, { opacity, transform: [{ scale }] }]}>
+                <Animated.Image source={r.img} resizeMode="contain" style={s.rowImg} />
+              </Animated.View>
+            );
+          })}
         </Animated.View>
+      </View>
 
-        {/* stone chips */}
-        {chips.map((c, i) => (
-          <Animated.View
-            key={i}
-            pointerEvents="none"
-            style={{
-              position: 'absolute',
-              width: c.size,
-              height: c.size * 0.8,
-              borderRadius: 2,
-              backgroundColor: c.shade,
-              opacity: c.o,
-              transform: [
-                { translateX: c.x },
-                { translateY: c.y },
-                { rotate: c.r.interpolate({ inputRange: [-3, 3], outputRange: ['-540deg', '540deg'] }) },
-              ],
-            }}
-          />
-        ))}
-
-        {/* white flash */}
-        <Animated.View pointerEvents="none" style={[s.flash, { opacity: flash }]} />
-
-        {/* rank name */}
-        {revealed && (
+      {/* rank name, revealed once landed */}
+      <View style={s.nameWrap}>
+        {landed && (
           <Animated.Text
             style={[
               s.rankName,
               {
                 opacity: nameIn,
                 transform: [
-                  { translateY: nameIn.interpolate({ inputRange: [0, 1], outputRange: [24, 0] }) },
-                  { scale: nameIn.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }) },
+                  { translateY: nameIn.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) },
+                  { scale: nameIn.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1] }) },
                 ],
               },
             ]}
@@ -280,19 +169,12 @@ export default function RankRevealScreen({
             {rankName}
           </Animated.Text>
         )}
-      </Pressable>
-
-      {/* progress bar (locked only) */}
-      {!revealed && (
-        <View style={s.barTrack}>
-          <Animated.View style={[s.barFill, { width: barW.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) }]} />
-        </View>
-      )}
+      </View>
 
       {/* footer */}
       <View style={s.footer}>
-        {!revealed ? (
-          <Text style={s.hint}>TAP TO REVEAL YOUR RANK</Text>
+        {!landed ? (
+          <Text style={s.hint}>FINDING YOUR RANK</Text>
         ) : (
           <Animated.View style={{ opacity: ctaIn, transform: [{ translateY: ctaIn.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }] }}>
             <Pressable style={s.cta} onPress={() => { void Haptics.selectionAsync(); onAdvance(); }}>
@@ -307,7 +189,6 @@ export default function RankRevealScreen({
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#ffffff', overflow: 'hidden' },
-  warm: { ...StyleSheet.absoluteFillObject, backgroundColor: '#fdf0e2' },
 
   backWrap: { position: 'absolute', left: 20, zIndex: 30 },
   backBtn: {
@@ -322,35 +203,26 @@ const s = StyleSheet.create({
     letterSpacing: -0.7, textAlign: 'center', lineHeight: 28,
   },
 
-  stageArea: { flex: 1, minHeight: 400, alignItems: 'center', justifyContent: 'center' },
-
-  halo: {
-    position: 'absolute', width: 250, height: 250, borderRadius: 125,
+  viewport: { height: VIEWPORT_H, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  slotFrame: {
+    position: 'absolute', top: VIEWPORT_H / 2 - ROW_H / 2, height: ROW_H,
+    left: 40, right: 40, borderRadius: 24,
+    borderWidth: 1.5, borderColor: 'rgba(46,125,255,0.25)',
+    backgroundColor: 'rgba(46,125,255,0.04)',
+  },
+  slotGlow: {
+    position: 'absolute', top: VIEWPORT_H / 2 - ROW_H, height: ROW_H * 2,
+    left: 20, right: 20, borderRadius: 100,
     backgroundColor: 'rgba(253,240,226,0.9)',
   },
-  ring: {
-    position: 'absolute', width: 230, height: 230, borderRadius: 115,
-    borderWidth: 4, borderColor: 'rgba(214,140,74,0.4)',
-  },
 
-  shieldWrap: { width: 268, height: 268, alignItems: 'center', justifyContent: 'center' },
-  shieldImg: { ...StyleSheet.absoluteFillObject, width: 268, height: 268 },
+  row: { height: ROW_H, alignItems: 'center', justifyContent: 'center' },
+  rowImg: { width: 76, height: 76 },
 
-  flash: {
-    position: 'absolute', width: 268, height: 268, borderRadius: 134,
-    backgroundColor: '#ffffff',
-  },
-
+  nameWrap: { minHeight: 60, alignItems: 'center', justifyContent: 'center' },
   rankName: {
-    position: 'absolute', bottom: 6, alignSelf: 'center',
-    fontFamily: PJS.extrabold, fontSize: 44, color: '#111114', letterSpacing: -1.6,
+    fontFamily: PJS.extrabold, fontSize: 32, color: '#111114', letterSpacing: -1.1,
   },
-
-  barTrack: {
-    height: 5, borderRadius: 999, backgroundColor: '#eeeef1',
-    marginHorizontal: 70, overflow: 'hidden',
-  },
-  barFill: { height: '100%', borderRadius: 999, backgroundColor: '#2E7DFF' },
 
   footer: { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 30, minHeight: 92, justifyContent: 'center' },
   hint: {

@@ -83,9 +83,6 @@ export const EXERCISE_UI: Record<ExerciseId, { symbol: string; grad: [string, st
   frontRaise:   { symbol: 'figure.arms.open', grad: ['#FEF08A', '#A16207'] },
   // Lat pulldown — indigo/violet, distinct from row's steel-blue and lunge's purple
   latPulldown: { symbol: 'dumbbell.fill', grad: ['#818CF8', '#3730A3'] },
-  // Standing glute kickback — rose/pink, distinct from the hip-hinge family's
-  // crimson (different movement pattern: extension, not a hinge)
-  standingGluteKickback: { symbol: 'figure.core.training', grad: ['#FDA4AF', '#E11D48'] },
   // Face pull — teal/cyan, distinct from every other pull family's palette
   // (row's steel-blue, lat pulldown's indigo)
   facePull: { symbol: 'figure.arms.open', grad: ['#2DD4BF', '#0F766E'] },
@@ -96,9 +93,6 @@ export const EXERCISE_UI: Record<ExerciseId, { symbol: string; grad: [string, st
   // Pull-up — dedicated calisthenics SF Symbol, deep indigo (distinct from
   // lunge's purple and lat pulldown's own indigo)
   pullup: { symbol: 'figure.pull.up', grad: ['#818CF8', '#312E81'] },
-  // Calf raise — emerald/green, its own family (no other lower-body
-  // exercise uses green)
-  calfRaise: { symbol: 'figure.strengthtraining.functional', grad: ['#6EE7B7', '#047857'] },
   // Leg curl (machine) — teal, distinct from squat's amber-orange lower-body family
   legCurl: { symbol: 'figure.strengthtraining.traditional', grad: ['#5EEAD4', '#0D9488'] },
   crunch: { symbol: 'figure.core.training', grad: ['#FCD34D', '#B45309'] },

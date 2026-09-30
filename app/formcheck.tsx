@@ -66,6 +66,9 @@ const F = {
 };
 
 const VIDEO_LOG_KEY = 'formpal_video_log';
+// JSON array of exercise ids the repCounter-only intro card has already been
+// shown for — see repCounterIntroSeen above.
+const REP_COUNTER_INTRO_KEY = 'formpal_repcounter_intro_seen';
 
 async function logSessionVideo(uri: string) {
   try {
@@ -152,10 +155,6 @@ const SETUP_INFO: Record<ExerciseId, { icon: string; title: string; sub: string 
   // for the full orientation investigation). Grip variants removed — one
   // exercise only.
   latPulldown: { icon: 'camera.fill', title: 'Back to the camera', sub: 'Sit back — both arms in frame, overhead to shoulders' },
-  // Standing glute kickback — side-on camera, standing (replaces the old
-  // gluteBridge/hipThrust, which required lying down and never worked —
-  // Apple Vision's body-pose model can't track a person lying down).
-  standingGluteKickback: { icon: 'arrow.left.and.right', title: 'Stand sideways', sub: 'Hip, knee, and ankle in frame' },
   // Face pull — front-facing, both arms visible at once (no near/far-side
   // ambiguity, unlike every side-on pull family). Copy matched to
   // facePullVariant()'s own setupInstruction, same convention as chestPress/
@@ -168,11 +167,6 @@ const SETUP_INFO: Record<ExerciseId, { icon: string; title: string; sub: string 
   // in exerciseDefinitions.ts (shoulders/elbows/hips visible, hands don't
   // need to be — that's the whole point of the wrist-free metric).
   pullup: { icon: 'camera.fill', title: 'Face the camera', sub: "Shoulders, elbows, and hips in frame — hands don't need to be" },
-  // Calf raise — side-on, matches its own setupInstruction. See that
-  // exercise's own comment for the "may not be reliably trackable at all"
-  // feasibility flag — this copy doesn't hide that from the setup screen,
-  // it's just the standard side-on instruction the metric itself needs.
-  calfRaise: { icon: 'arrow.left.and.right', title: 'Stand sideways', sub: 'Knees and ankles in frame' },
   // Leg curl (machine) — side-on, matches its own setupInstruction.
   legCurl: { icon: 'arrow.left.and.right', title: 'Set camera to your side', sub: 'Hip, knee, and ankle in frame' },
   // Crunch — lying down, side-on. Matches its own setupInstruction; see
@@ -405,6 +399,49 @@ function parseRepSummaries(lines: string[]): RepSummary[] {
   return result;
 }
 
+// ─── RepCounterIntro — one-time "this exercise only counts reps" card ─────────
+// Shown once per exercise id (see repCounterIntroSeen/dismissRepCounterIntro
+// above) before the camera starts. Native, not the repcountscreen.html
+// artboard — this screen has no per-user dynamic data to inject, so a plain
+// RN screen matching this file's own visual language (Bricolage, white,
+// black pill CTA) is simpler and more consistent than wiring up a WebView
+// bridge just for a static card.
+function RepCounterIntro({ topInset, bottomInset, onContinue }: {
+  topInset: number; bottomInset: number; onContinue: () => void;
+}) {
+  return (
+    <View style={[ri.root, { paddingTop: topInset, paddingBottom: bottomInset + 24 }]}>
+      <View style={ri.body}>
+        <View style={ri.badge}>
+          <Text style={ri.badgeTxt}>8</Text>
+        </View>
+        <Text style={ri.h1}>Some exercises{'\n'}only count reps</Text>
+        <Text style={ri.sub}>No form check on this one — just the count. Nothing here affects your rank.</Text>
+      </View>
+      <Pressable style={ri.cta} onPress={onContinue}>
+        <Text style={ri.ctaTxt}>Continue</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+const ri = StyleSheet.create({
+  root: { flex: 1, backgroundColor: '#ffffff', paddingHorizontal: 28 },
+  body: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  badge: {
+    width: 88, height: 88, borderRadius: 26, backgroundColor: '#F2F2F6',
+    alignItems: 'center', justifyContent: 'center', marginBottom: 26,
+  },
+  badgeTxt: { fontFamily: F.extra, fontSize: 36, color: '#111114' },
+  h1: { fontFamily: F.extra, fontSize: 26, color: '#111114', textAlign: 'center', letterSpacing: -0.5, lineHeight: 31, marginBottom: 12 },
+  sub: { fontFamily: F.regular, fontSize: 15, color: '#6e6e77', textAlign: 'center', lineHeight: 21, maxWidth: 300 },
+  cta: {
+    width: '100%', height: 58, borderRadius: 999, backgroundColor: '#111114',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  ctaTxt: { fontFamily: F.bold, fontSize: 16.5, color: '#fff', letterSpacing: -0.2 },
+});
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function FormCheckScreen() {
   const router = useRouter();
@@ -429,6 +466,40 @@ export default function FormCheckScreen() {
   // 'repCounter' exercises: still count reps live, but no ✓/✗ coaching and no
   // form score reaches ranks/stats. See exerciseDefinitions.ts `mode`.
   const repCounterOnly = (EXERCISE_DEFINITIONS[exerciseType]?.mode ?? 'formCheck') === 'repCounter';
+
+  // First time a user opens THIS SPECIFIC repCounter exercise, show a one-time
+  // explainer ("some exercises only count reps") before the camera. Tracked
+  // per-exercise-id (not a single global flag) — opening a different
+  // repCounter exercise for the first time still shows it once of its own.
+  // null = still checking AsyncStorage (render nothing extra yet); true =
+  // already seen (or this exercise isn't repCounter-only, so it never
+  // applies) — proceed straight to the normal flow; false = show it now.
+  const [repCounterIntroSeen, setRepCounterIntroSeen] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!repCounterOnly) { setRepCounterIntroSeen(true); return; }
+    let cancelled = false;
+    AsyncStorage.getItem(REP_COUNTER_INTRO_KEY)
+      .then((raw) => {
+        if (cancelled) return;
+        const seen: string[] = raw ? JSON.parse(raw) : [];
+        setRepCounterIntroSeen(seen.includes(exerciseType));
+      })
+      // Fail open — a storage error shouldn't block the exercise itself.
+      .catch(() => { if (!cancelled) setRepCounterIntroSeen(true); });
+    return () => { cancelled = true; };
+  }, [repCounterOnly, exerciseType]);
+
+  const dismissRepCounterIntro = useCallback(() => {
+    setRepCounterIntroSeen(true);
+    AsyncStorage.getItem(REP_COUNTER_INTRO_KEY)
+      .then((raw) => {
+        const seen: string[] = raw ? JSON.parse(raw) : [];
+        if (!seen.includes(exerciseType)) {
+          return AsyncStorage.setItem(REP_COUNTER_INTRO_KEY, JSON.stringify([...seen, exerciseType]));
+        }
+      })
+      .catch(() => {});
+  }, [exerciseType]);
 
   const [phase,    setPhase]    = useState<Phase>('idle');
   const [error,    setError]    = useState<string | null>(null);
@@ -818,6 +889,21 @@ export default function FormCheckScreen() {
   const isTricepFamily = ['tricepPushdown', 'overheadTricepExtension', 'skullcrusher'].includes(exerciseType);
   const showPushupMetric = (isPushupFamily || isRaiseFamily || isTricepFamily) && isTracking && liveMetric != null;
   const liveMetricLabel = isPushupFamily ? 'ELBOW ANGLE' : isTricepFamily ? 'FOREARM ANGLE' : 'ARM ANGLE';
+
+  // First time on THIS exercise (repCounter-only ones only) — show the
+  // explainer before the camera. repCounterIntroSeen stays null for one
+  // frame while AsyncStorage is checked; render nothing rather than a flash
+  // of the camera UI underneath.
+  if (repCounterIntroSeen !== true) {
+    if (repCounterIntroSeen === null) return <View style={[s.root, { backgroundColor: '#ffffff' }]} />;
+    return (
+      <RepCounterIntro
+        topInset={insets.top}
+        bottomInset={insets.bottom}
+        onContinue={dismissRepCounterIntro}
+      />
+    );
+  }
 
   return (
     <View style={s.root}>

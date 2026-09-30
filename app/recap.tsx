@@ -9,7 +9,7 @@ import { SymbolView } from 'expo-symbols';
 import { StatusBar } from 'expo-status-bar';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, Path as SvgPath, RadialGradient, Stop } from 'react-native-svg';
 import ViewShot from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import { BodyMap } from '../components/MuscleTierMap';
@@ -19,6 +19,7 @@ import {
   getAllSessions, appendSessions, groupIntoWorkouts, computeMuscleTiers,
   type SessionEntry, type MuscleTiers, type RepEventData,
 } from '../lib/sessionLog';
+import { findSessionVideoUri } from '../lib/sessionVideo';
 import { EXERCISE_DEFINITIONS } from '../constants/exerciseDefinitions';
 import type { ExerciseId } from '../constants/exercises';
 import { useWorkoutSessionStore } from '../store/workoutSessionStore';
@@ -317,6 +318,31 @@ function RepTimeline({
   );
 }
 
+// ─── MyPal insight — the same "you're X% better than when you started"
+// blue-sparkle stat used on the home and progress tabs' FormChart, reused
+// here so the recap screen speaks the same brand language. `diff` is
+// current-session pct minus the very first scored session's pct (see the
+// formDiff computation in the load effect) — null hides this entirely
+// (fewer than 2 scored sessions on record, same guard FormChart itself
+// uses before it renders a diff).
+const MYPAL_BLUE = '#0A84FF';
+function MyPalInsight({ diff }: { diff: number | null }) {
+  if (diff == null) return null;
+  return (
+    <View style={s.insightRow}>
+      <Svg width={13} height={13} viewBox="0 0 24 24">
+        <SvgPath d="M12 2.5l1.7 5.3 5.3 1.7-5.3 1.7L12 16.5l-1.7-5.3L5 9.5l5.3-1.7z" fill={MYPAL_BLUE} />
+        <SvgPath d="M18.5 14l.8 2.4 2.4.8-2.4.8-.8 2.4-.8-2.4-2.4-.8 2.4-.8z" fill={MYPAL_BLUE} />
+      </Svg>
+      <Text style={s.insightTxt}>
+        {diff >= 0
+          ? <>You&apos;re <Text style={s.insightBold}>{diff}% better</Text> than when you started.</>
+          : <>Score is <Text style={s.insightBold}>{Math.abs(diff)}% lower</Text> than your start.</>}
+      </Text>
+    </View>
+  );
+}
+
 // ─── MyPal review — one rep at a time, not a scrollable list ──────────────────
 // REDESIGNED from a flat list of every rep (felt like raw cue text dumped on
 // screen) to a focused single-rep card: a natural sentence (see
@@ -333,12 +359,13 @@ function RepTimeline({
 // the timeline, inside ONE shared card boundary — closer together without
 // overlapping the video itself, which was the explicit thing to avoid.
 function MyPalReview({
-  events, currentIndex, onPrev, onNext,
+  events, currentIndex, onPrev, onNext, formDiff,
 }: {
   events:       RepEventData[];
   currentIndex: number;
   onPrev:       () => void;
   onNext:       () => void;
+  formDiff:     number | null;
 }) {
   const ev = events[currentIndex];
   if (!ev) return null;
@@ -353,6 +380,7 @@ function MyPalReview({
         <View style={{ flex: 1 }}>
           <Text style={s.detailCardLabel}>MYPAL REVIEW</Text>
           <Text style={s.reviewRepLabel}>Rep {currentIndex + 1} of {events.length}</Text>
+          <MyPalInsight diff={formDiff} />
         </View>
       </View>
 
@@ -405,6 +433,12 @@ export default function RecapScreen() {
   const [data, setData]                   = useState<RecapData | null>(null);
   const [loadFailed, setLoadFailed]       = useState(false);
   const [muscleTiers, setMuscleTiers]     = useState<MuscleTiers>({});
+  // "You're X% better than when you started" — same MyPal insight language
+  // as the home/progress tabs' FormChart, computed here from this
+  // session's form score vs. the very first scored session on record.
+  // null until there are at least 2 scored (formChecked) sessions to
+  // compare — same guard FormChart uses before it'll show a diff.
+  const [formDiff, setFormDiff]           = useState<number | null>(null);
   const [sharing, setSharing]             = useState(false);
   const [activePage, setActivePage]       = useState(0);
   const initialized = useRef(false);
@@ -424,6 +458,12 @@ export default function RecapScreen() {
     initialized.current = true;
 
     (async () => {
+      // Tracks whichever session's form score this page is actually
+      // showing (fresh workout, a past session being viewed, or a solo
+      // live run) — used below to compute formDiff against the first-ever
+      // scored session.
+      let currentPct: number | null = null;
+
       if (isWorkoutMode) {
         const existing = useWorkoutSessionStore.getState().getSummary();
         const summary = existing ?? finishWorkout();
@@ -455,17 +495,24 @@ export default function RecapScreen() {
           durationSec: summary.durationSeconds, repEventsByExercise,
           hasFormData: summary.results.some(r => r.completed && r.formChecked),
         });
+        if (summary.results.some(r => r.completed && r.formChecked)) currentPct = summary.overallFormScore;
       } else if (isHistoryMode) {
         const all    = await getAllSessions();
         const groups = groupIntoWorkouts(all);
         const group  = groups.find(g => g.ts === Number(tsParam));
         if (!group) { setLoadFailed(true); return; }
+        // Past sessions were never looking up their own recording, so the
+        // replay card just never showed for history views even when a
+        // video was actually logged for that session — see lib/sessionVideo.ts.
+        const historyVideoUri = await findSessionVideoUri(group.ts);
         setData({
           ts: group.ts, entries: group.entries,
           totalReps: group.totalReps, totalGoodReps: group.totalGoodReps,
           pct: group.pct, isHistory: true,
           hasFormData: group.entries.some(e => e.formChecked !== false),
+          videoUri: historyVideoUri ?? undefined,
         });
+        if (group.entries.some(e => e.formChecked !== false)) currentPct = group.pct;
       } else {
         const reps        = parseInt(repsStr ?? '0', 10);
         const goodReps    = parseInt(goodRepsStr ?? '0', 10);
@@ -491,10 +538,20 @@ export default function RecapScreen() {
           repEventsByExercise: formChecked && repEventsParam.length > 0 ? { [exId]: repEventsParam } : undefined,
           durationSec: parsedDuration != null && !isNaN(parsedDuration) ? parsedDuration : undefined,
         });
+        if (formChecked && reps > 0) currentPct = pct;
       }
 
       const allAfter = await getAllSessions();
       setMuscleTiers(computeMuscleTiers(allAfter));
+
+      if (currentPct != null) {
+        const scoredGroups = groupIntoWorkouts(allAfter)
+          .filter(g => g.entries.some(e => e.formChecked !== false))
+          .sort((a, b) => a.ts - b.ts);
+        if (scoredGroups.length >= 2) {
+          setFormDiff(currentPct - scoredGroups[0].pct);
+        }
+      }
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -850,6 +907,7 @@ export default function RecapScreen() {
               <GlassSurface radius={30} style={s.detailCard}>
                 <Text style={s.detailCardLabel}>OVERVIEW</Text>
                 <Text style={s.cardText}>{generateSummary(data.totalReps, data.totalGoodReps, data.hasFormData)}</Text>
+                <MyPalInsight diff={formDiff} />
               </GlassSurface>
             )}
 
@@ -946,25 +1004,12 @@ export default function RecapScreen() {
                       currentIndex={reviewIndex}
                       onPrev={() => goToRep(-1)}
                       onNext={() => goToRep(1)}
+                      formDiff={formDiff}
                     />
                   </>
                 )}
               </GlassSurface>
             )}
-
-            {/* Entry point into the real video-analysis flow (app/analyze-video.tsx)
-                — replaces the old inline "run analyzeVideoFile()" debug harness.
-                Always shown, not gated on hasVideo: this analyzes ANY video
-                picked from the photo library, not just this session's own clip. */}
-            <GlassSurface radius={30} style={[s.detailCard, { padding: 14 }]}>
-              <Text style={s.detailCardLabel}>GOT A SET ON VIDEO?</Text>
-              <Pressable
-                onPress={() => router.push('/analyze-video' as any)}
-                style={({ pressed }) => [s.analyzeVideoBtn, pressed && { opacity: 0.7 }]}
-              >
-                <Text style={s.analyzeVideoBtnTxt}>Analyze a Video</Text>
-              </Pressable>
-            </GlassSurface>
 
             {/* Actions — this page had neither before; Share here shares the
                 video file itself (contextually the point of this page),
@@ -1061,6 +1106,10 @@ const s = StyleSheet.create({
 
   cardText: { fontSize: 15, fontWeight: '500', color: C.text, lineHeight: 22, letterSpacing: -0.1 },
 
+  insightRow:  { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
+  insightTxt:  { fontSize: 12.5, color: C.text, letterSpacing: -0.2, flexShrink: 1 },
+  insightBold: { fontWeight: '700' },
+
   header2: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 6, paddingBottom: 18 },
   backChipWrap: {},
   backChip:     { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
@@ -1069,12 +1118,6 @@ const s = StyleSheet.create({
 
   detailCard: { padding: 18, marginBottom: 14 },
   detailCardLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1.4, textTransform: 'uppercase', color: C.mutedDim, marginBottom: 10 },
-
-  analyzeVideoBtn: {
-    backgroundColor: 'rgba(90,110,160,0.16)', borderRadius: 12,
-    paddingVertical: 12, alignItems: 'center',
-  },
-  analyzeVideoBtnTxt: { fontSize: 13.5, fontWeight: '600', color: C.text },
 
   exRow:   { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 12 },
   exName:  { fontSize: 14.5, fontWeight: '600', color: C.text },

@@ -45,14 +45,23 @@ export default function RankWheelScreen({
   const scrollX = useRef(new Animated.Value(0)).current;
   const listRef = useRef<ScrollView>(null);
   const mountFade = useRef(new Animated.Value(0)).current;
+  const mountSlide = useRef(new Animated.Value(28)).current;
   const [index, setIndex] = useState(0);
   const idxRef = useRef(0);
   const current = RANKS[index];
 
   useEffect(() => {
-    // Plain quick fade, like a question screen — no slide, no long curve.
-    Animated.timing(mountFade, { toValue: 1, duration: 220, useNativeDriver: true }).start();
-  }, [mountFade]);
+    // Fade + slide-in, matching the exact "in" phase of the question-to-
+    // question transition (animTrans in app/onboarding.tsx: 200ms timing +
+    // a friction 8 / tension 60 spring back to 0). Landing on this screen
+    // straight after the last question used to cut to a plain fade with no
+    // slide — a different motion signature that read as an abrupt jump
+    // rather than a continuation of the same transition.
+    Animated.parallel([
+      Animated.timing(mountFade, { toValue: 1, duration: 200, useNativeDriver: true }),
+      Animated.spring(mountSlide, { toValue: 0, friction: 8, tension: 60, useNativeDriver: true }),
+    ]).start();
+  }, [mountFade, mountSlide]);
 
   // Update the name / blurb / "Top N%" line LIVE as the wheel moves (see the
   // onScroll listener below) — not on momentum-end, which lags the wheel.
@@ -71,8 +80,20 @@ export default function RankWheelScreen({
   };
 
   return (
-    <Animated.View style={[s.root, { paddingTop: topInset, opacity: mountFade }]}>
-      <Animated.View style={[s.backWrap, { top: topInset + 8 }]} pointerEvents="box-none">
+    // root carries the opaque white background and is NEVER animated —
+    // putting opacity on the same view as the white bg (the original bug
+    // here) fades the background itself out too, exposing the Stack
+    // navigator's dark contentStyle behind it as a black flash. The
+    // fade+slide entrance lives on this inner wrapper only.
+    <View style={[s.root, { paddingTop: topInset }]}>
+    <Animated.View style={{ flex: 1, opacity: mountFade, transform: [{ translateX: mountSlide }] }}>
+      {/* Flow row, not absolute — matches the question header exactly (same
+          s.qh shape: paddingHorizontal 20 / paddingVertical 12). The old
+          absolute `top: topInset + 8` double-counted the safe area, because
+          this whole wrapper already sits below a parent paddingTop:topInset
+          — that's what was pushing the button "way down" and crowding the
+          title underneath it. */}
+      <View style={s.headerRow}>
         <LiquidGlassButton
           onPress={() => { void Haptics.selectionAsync(); onBack(); }}
           hitSlop={12}
@@ -83,11 +104,11 @@ export default function RankWheelScreen({
         >
           <SymbolView name="chevron.left" size={15} tintColor="#1b1f27" type="monochrome" style={{ width: 15, height: 15 }} />
         </LiquidGlassButton>
-      </Animated.View>
+      </View>
 
       <View style={s.header}>
         <Text style={s.h1}>FormPal has ranks</Text>
-        <Text style={s.sub}>Train with good form and climb from Bronze to Champion.</Text>
+        <Text style={s.sub}>Ranks are earned by training with good form.</Text>
       </View>
 
       <View style={s.mid}>
@@ -138,20 +159,21 @@ export default function RankWheelScreen({
         <Text style={s.foot}>Your rank updates after every workout</Text>
       </View>
     </Animated.View>
+    </View>
   );
 }
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#ffffff' },
 
-  backWrap: { position: 'absolute', left: 20, zIndex: 30 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12 },
   backBtn: {
     width: 34, height: 34, alignItems: 'center', justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.10)',
     ...({ boxShadow: '0px 2px 8px rgba(0,0,0,0.10)' } as any),
   },
 
-  header: { paddingTop: 50, paddingHorizontal: 26, alignItems: 'center' },
+  header: { paddingTop: 22, paddingHorizontal: 26, alignItems: 'center' },
   h1: { fontFamily: PJS.extrabold, fontSize: 28, color: '#111114', letterSpacing: -1, textAlign: 'center', lineHeight: 32 },
   sub: { fontFamily: PJS.semibold, fontSize: 13.5, color: '#6e6e77', textAlign: 'center', paddingTop: 8, lineHeight: 19 },
 

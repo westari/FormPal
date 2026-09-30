@@ -2,12 +2,15 @@
  * components/LiquidGlass.tsx
  *
  * The REAL Apple Liquid Glass material — iOS 26's UIGlassEffect /
- * UIVisualEffectView, via the `expo-glass-effect` native module. This is
- * the same underlying system material the bottom tab bar gets for free
- * (app/(tabs)/_layout.tsx uses expo-router's NativeTabs, which renders a
- * genuine native UITabBar — iOS itself draws real Liquid Glass on it, no
- * library involved there). `expo-glass-effect` exposes that SAME native
- * effect as a normal view you can wrap anything in.
+ * UIVisualEffectView — via Callstack's `@callstack/liquid-glass` native
+ * module (LiquidGlassView). This is the same underlying system material the
+ * bottom tab bar gets for free (app/(tabs)/_layout.tsx uses expo-router's
+ * NativeTabs, which renders a genuine native UITabBar — iOS itself draws
+ * real Liquid Glass on it, no library involved there).
+ *
+ * `@callstack/liquid-glass` is the ONE liquid-glass dependency for this
+ * project from now on. Do NOT reintroduce `expo-glass-effect` — this file
+ * used to wrap it; it's been replaced and is now unused.
  *
  * This is NOT components/GlassSurface.tsx (BlurView + hand-painted
  * gradients standing in for glass — the "fake" approximation). LiquidGlass
@@ -19,14 +22,14 @@
  * built into the app (see BUILD NOTE) all render a plain, honestly-flat
  * translucent surface instead. No blur standing in for the real thing.
  *
- * BUILD NOTE — expo-glass-effect was already in package.json but nothing in
- * the app imports it yet, so its native module has never been compiled into
- * a build. Writing and using this component is pure JS (reload). But the
- * actual glass rendering can't turn on until the next EAS build links the
- * native module in — until then GLASS_SUPPORTED is false and every
- * LiquidGlass uses the plain fallback automatically. No code changes needed
- * on either side of that build; it just starts rendering real glass once
- * the binary has it.
+ * BUILD NOTE — the native module is only linked once an EAS build that
+ * includes it is made (requires Xcode >= 26, RN 0.80+). `@callstack/liquid-glass`
+ * reads a TurboModule constant at import time, which THROWS when the module
+ * isn't in the current binary — so it's pulled in with require() inside a
+ * try/catch below. Until that build exists, GLASS_SUPPORTED is false and
+ * every LiquidGlass uses the plain fallback automatically. No code changes
+ * needed on either side of that build; real glass just starts rendering
+ * once the binary has it.
  */
 
 import React from 'react';
@@ -34,23 +37,35 @@ import {
   Platform, Pressable, View,
   type PressableProps, type StyleProp, type ViewProps, type ViewStyle,
 } from 'react-native';
-import { GlassView, isLiquidGlassAvailable, type GlassColorScheme, type GlassStyle } from 'expo-glass-effect';
 
-// Computed once at module load. try/catch matters: calling into a native
-// module that isn't linked into this build THROWS, it doesn't return false
-// — that's what makes every LiquidGlass safe to ship immediately, before
-// the build that actually links expo-glass-effect in.
-function computeGlassSupported(): boolean {
-  if (Platform.OS !== 'ios') return false;
-  try {
-    return isLiquidGlassAvailable();
-  } catch {
-    return false;
-  }
+// require() inside try/catch on purpose: @callstack/liquid-glass reads a
+// TurboModule constant at import time (TurboModuleRegistry.getEnforcing),
+// which throws when the native module isn't linked into the current build.
+// A top-level `import` would crash the app before that build exists; this
+// keeps every LiquidGlass safe to ship immediately.
+let NativeLiquidGlassView: React.ComponentType<any> | null = null;
+let nativeGlassSupported = false;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const lib = require('@callstack/liquid-glass');
+  NativeLiquidGlassView = lib.LiquidGlassView ?? null;
+  nativeGlassSupported = lib.isLiquidGlassSupported === true;
+} catch {
+  NativeLiquidGlassView = null;
+  nativeGlassSupported = false;
 }
-export const GLASS_SUPPORTED = computeGlassSupported();
 
-export type LiquidGlassVariant = GlassStyle; // 'regular' | 'clear' | 'none'
+export const GLASS_SUPPORTED =
+  Platform.OS === 'ios' && nativeGlassSupported && NativeLiquidGlassView != null;
+
+export type LiquidGlassVariant = 'regular' | 'clear' | 'none';
+export type LiquidGlassColorScheme = 'auto' | 'light' | 'dark' | 'system';
+
+// @callstack/liquid-glass uses 'system'; keep 'auto' as our public default
+// (existing call sites rely on it) and map it through.
+function mapScheme(s: LiquidGlassColorScheme): 'light' | 'dark' | 'system' {
+  return s === 'auto' ? 'system' : s;
+}
 
 export interface LiquidGlassProps extends ViewProps {
   /** Corner radius — shapes the glass material itself, not just a clip mask. */
@@ -62,7 +77,7 @@ export interface LiquidGlassProps extends ViewProps {
   /** Real native touch response (shimmer/morph on press). Turn on for anything tappable — LiquidGlassButton below already does this. */
   interactive?: boolean;
   /** Overrides system light/dark for the glass appearance. Default follows the system. */
-  colorScheme?: GlassColorScheme;
+  colorScheme?: LiquidGlassColorScheme;
   /** Fill used ONLY by the plain fallback (no real glass available). Default: a neutral translucent surface — deliberately not a blur fake. */
   fallbackColor?: string;
   style?: StyleProp<ViewStyle>;
@@ -80,14 +95,16 @@ export default function LiquidGlass({
   children,
   ...rest
 }: LiquidGlassProps) {
-  if (!GLASS_SUPPORTED) {
+  if (!GLASS_SUPPORTED || !NativeLiquidGlassView) {
     return (
       <View
         style={[
           {
             borderRadius: radius,
             overflow: 'hidden',
-            backgroundColor: fallbackColor ?? (colorScheme === 'dark' ? 'rgba(28,28,30,0.72)' : 'rgba(255,255,255,0.72)'),
+            backgroundColor:
+              fallbackColor ??
+              (mapScheme(colorScheme) === 'dark' ? 'rgba(28,28,30,0.72)' : 'rgba(255,255,255,0.72)'),
           },
           style,
         ]}
@@ -97,17 +114,18 @@ export default function LiquidGlass({
       </View>
     );
   }
+  const Glass = NativeLiquidGlassView;
   return (
-    <GlassView
-      glassEffectStyle={variant}
+    <Glass
+      effect={variant}
       tintColor={tintColor}
-      isInteractive={interactive}
-      colorScheme={colorScheme}
+      interactive={interactive}
+      colorScheme={mapScheme(colorScheme)}
       style={[{ borderRadius: radius, overflow: 'hidden' }, style]}
       {...rest}
     >
       {children}
-    </GlassView>
+    </Glass>
   );
 }
 
@@ -121,7 +139,7 @@ export interface LiquidGlassButtonProps extends Omit<PressableProps, 'style'> {
   radius?: number;
   variant?: LiquidGlassVariant;
   tintColor?: string;
-  colorScheme?: GlassColorScheme;
+  colorScheme?: LiquidGlassColorScheme;
   fallbackColor?: string;
   /** Style for the hit-target Pressable itself — use this for absolute positioning/placement. */
   containerStyle?: StyleProp<ViewStyle>;
@@ -161,4 +179,6 @@ export function LiquidGlassButton({
   );
 }
 
-export { isLiquidGlassAvailable };
+export function isLiquidGlassAvailable() {
+  return GLASS_SUPPORTED;
+}

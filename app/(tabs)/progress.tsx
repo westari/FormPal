@@ -13,13 +13,14 @@
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Pressable, Platform,
+  View, Text, StyleSheet, ScrollView, Pressable, Platform, Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SymbolView } from 'expo-symbols';
 import { StatusBar } from 'expo-status-bar';
+import { getSessionThumbnail } from '../../lib/sessionVideo';
 import Svg, {
   G,
   Path as SvgPath,
@@ -143,14 +144,27 @@ function SessionCard({ group }: { group: WorkoutGroup }) {
   const title = group.entries.length === 1
     ? group.entries[0].displayName
     : `Workout · ${group.entries.length} exercises`;
+
+  // Real frame from the session's own recording when one exists (see
+  // lib/sessionVideo.ts) — falls back to the plain dumbbell icon for
+  // sessions with no matching logged video.
+  const [thumb, setThumb] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    getSessionThumbnail(group.ts).then(uri => { if (live) setThumb(uri); });
+    return () => { live = false; };
+  }, [group.ts]);
+
   return (
     <Pressable
       style={({ pressed }) => [sc.card, SHADOW_ROW, pressed && { opacity: 0.7 }]}
       onPress={() => router.push({ pathname: '/recap', params: { ts: String(group.ts) } })}
     >
       <View style={sc.iconBox}>
-        <SymbolView name="dumbbell.fill" type="monochrome"
-          style={{ width: 18, height: 18 }} tintColor="#6b7180" />
+        {thumb
+          ? <Image source={{ uri: thumb }} style={sc.thumbImg} resizeMode="cover" />
+          : <SymbolView name="dumbbell.fill" type="monochrome"
+              style={{ width: 18, height: 18 }} tintColor="#6b7180" />}
       </View>
       <View style={sc.mid}>
         <Text style={sc.date}>{title}</Text>
@@ -172,7 +186,9 @@ const sc = StyleSheet.create({
   iconBox: {
     width: 38, height: 38, borderRadius: 11,
     backgroundColor: C.iconBox, alignItems: 'center', justifyContent: 'center',
+    overflow: 'hidden',
   },
+  thumbImg: { width: '100%', height: '100%' },
   mid:      { flex: 1, marginLeft: 13 },
   date:     { fontSize: 14, fontWeight: W.semi, color: '#1a1d26' },
   meta:     { marginTop: 2, fontSize: 12.5, fontWeight: W.medium, color: C.textSub },

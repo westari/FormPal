@@ -986,33 +986,6 @@ export const EXERCISE_CATALOG = [
     isFormCheckable: true,
   },
 
-  // ─── Standing glute kickback ────────────────────────────────────────────────
-  // Replaces gluteBridge/hipThrust — both removed, Apple Vision's body-pose
-  // model can't track a person lying down (100% frame rejection, confirmed
-  // on-device). This is the standing equivalent: same hip-extension muscle
-  // targets, but the person stays upright the whole time. Hamstrings
-  // weighted 0.5 (real secondary mover in hip extension, not co-primary with
-  // glutes) and lowerBack weighted 0.25 ("light") — same reasoned-not-measured
-  // weighting convention as the row family's biceps 0.45 (see MuscleCredit's
-  // comment above), carried over unchanged from the old gluteBridge entry
-  // since the muscles worked haven't changed, only the body position.
-  {
-    id:              'standingGluteKickback',
-    displayName:     'Standing Glute Kickback',
-    muscleGroups:    [MuscleGroup.Legs, MuscleGroup.Back],
-    muscles:         [Muscle.Glutes, { muscle: Muscle.Hamstrings, weight: 0.5 }, { muscle: Muscle.LowerBack, weight: 0.25 }],
-    splitCategories: [SplitCategory.Lower],
-    difficulty:      Difficulty.Beginner,
-    equipment:       [],
-    defaultReps:     12,
-    defaultSets:     3,
-    progression: {
-      repRange: [10, 20],
-      setRange: [2, 4],
-    },
-    isFormCheckable: true,
-  },
-
   // ─── Face pull ──────────────────────────────────────────────────────────────
   // Rear delts primary, traps weighted 0.5 as a real secondary mover (a face
   // pull's scapular-retraction component works the mid traps directly, not
@@ -1055,27 +1028,6 @@ export const EXERCISE_CATALOG = [
     defaultSets:     3,
     progression: {
       repRange: [5, 15],
-      setRange: [2, 4],
-    },
-    isFormCheckable: true,
-  },
-
-  // ─── Calf raise ─────────────────────────────────────────────────────────────
-  // See its registration in constants/exerciseDefinitions.ts for an
-  // explicit feasibility flag — this app has no heel/toe joint at all, and
-  // this may not be reliably trackable regardless of thresholds.
-  {
-    id:              'calfRaise',
-    displayName:     'Calf Raise',
-    muscleGroups:    [MuscleGroup.Legs],
-    muscles:         [Muscle.Calves],
-    splitCategories: [SplitCategory.Lower],
-    difficulty:      Difficulty.Beginner,
-    equipment:       [],
-    defaultReps:     15,
-    defaultSets:     3,
-    progression: {
-      repRange: [12, 25],
       setRange: [2, 4],
     },
     isFormCheckable: true,

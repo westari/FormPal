@@ -7,10 +7,20 @@
  * by definition) with a selection haptic on every tick. Matches the
  * artboard: Plus Jakarta Sans, "rank" in blue, the grey rounded card, the
  * black pill CTA.
+ *
+ * PERF — three native Picker wheels (61+31+81 = 173 rows) all mounting cold
+ * on first render was the laggy/janky entrance into this screen: iOS has to
+ * construct three UIPickerViews at once, right as the screen transitions
+ * in. Fixed two ways: (1) the per-wheel item lists are now computed ONCE at
+ * module load instead of on every render, (2) the Pickers themselves mount
+ * one beat after interactions/animations settle (InteractionManager), not
+ * on the very first frame — the screen's chrome (header, card, CTA) appears
+ * immediately and at full frame rate, and the three wheels pop in a moment
+ * later instead of blocking the transition itself.
  */
 
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Image, Platform } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, Pressable, Image, Platform, InteractionManager } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import * as Haptics from 'expo-haptics';
 import { SymbolView } from 'expo-symbols';
@@ -22,7 +32,7 @@ const MOVES = [
   { key: 'pushups' as const, label: 'Push-ups', icon: PUSHUP_ICON, max: 60, start: 15 },
   { key: 'pullups' as const, label: 'Pull-ups', icon: PULLUP_ICON, max: 30, start: 6 },
   { key: 'squats'  as const, label: 'Squats',   icon: SQUAT_ICON,  max: 80, start: 25 },
-];
+].map((m) => ({ ...m, items: Array.from({ length: m.max + 1 }, (_, n) => n) }));
 
 export default function StrengthAssessmentScreen({
   answers,
@@ -42,6 +52,12 @@ export default function StrengthAssessmentScreen({
     pullups: typeof answers.pullups === 'number' ? answers.pullups : 6,
     squats: typeof answers.squats === 'number' ? answers.squats : 25,
   }));
+  const [pickersReady, setPickersReady] = useState(false);
+
+  useEffect(() => {
+    const task = InteractionManager.runAfterInteractions(() => setPickersReady(true));
+    return () => task.cancel();
+  }, []);
 
   const set = (key: string, v: number) => {
     if (Platform.OS !== 'web') void Haptics.selectionAsync();
@@ -82,16 +98,22 @@ export default function StrengthAssessmentScreen({
                 <Image source={{ uri: m.icon }} style={s.icon} resizeMode="contain" />
                 <Text style={s.colLabel}>{m.label}</Text>
                 <View style={s.wheel}>
-                  <Picker
-                    selectedValue={reps[m.key]}
-                    onValueChange={(v) => set(m.key, Number(v))}
-                    style={s.picker}
-                    itemStyle={s.pickerItem}
-                  >
-                    {Array.from({ length: m.max + 1 }, (_, n) => (
-                      <Picker.Item key={n} label={String(n)} value={n} />
-                    ))}
-                  </Picker>
+                  {pickersReady ? (
+                    <Picker
+                      selectedValue={reps[m.key]}
+                      onValueChange={(v) => set(m.key, Number(v))}
+                      style={s.picker}
+                      itemStyle={s.pickerItem}
+                    >
+                      {m.items.map((n) => (
+                        <Picker.Item key={n} label={String(n)} value={n} />
+                      ))}
+                    </Picker>
+                  ) : (
+                    <View style={s.pickerPlaceholder}>
+                      <Text style={s.pickerPlaceholderTxt}>{reps[m.key]}</Text>
+                    </View>
+                  )}
                 </View>
               </View>
             ))}
@@ -134,6 +156,8 @@ const s = StyleSheet.create({
   wheel: { width: '100%', height: 226, borderRadius: 20, backgroundColor: '#ffffff', overflow: 'hidden', justifyContent: 'center' },
   picker: { width: '100%', height: 226 },
   pickerItem: { fontSize: 20, color: '#111114', height: 226 },
+  pickerPlaceholder: { width: '100%', height: 226, alignItems: 'center', justifyContent: 'center' },
+  pickerPlaceholderTxt: { fontFamily: PJS.semibold, fontSize: 20, color: '#111114' },
 
   footer: { marginTop: 'auto', paddingHorizontal: 20, paddingTop: 22, paddingBottom: 30, gap: 8 },
   cta: {

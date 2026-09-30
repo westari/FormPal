@@ -8,9 +8,9 @@
  *   Good Reps   — #67CEFF → #0A6CFF  (sky    → blue)
  */
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Pressable, Platform,
+  View, Text, StyleSheet, ScrollView, Pressable, Platform, Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -22,6 +22,7 @@ import Svg, {
   Path as SvgPath, Circle as SvgCircle,
   Defs, LinearGradient as SvgGrad, Stop, Line as SvgLine,
 } from 'react-native-svg';
+import { getSessionThumbnail } from '../../lib/sessionVideo';
 
 import { FONT, Sp, W } from '../../constants/theme';
 import Ring from '../../components/Ring';
@@ -238,13 +239,26 @@ function SessionCard({ entry, last: _ }: { entry: SessionEntry; last: boolean })
   const bgColor   = pct >= 80 ? C.goodBg  : pct >= 60 ? C.midBg  : C.lowBg;
   const textColor = pct >= 80 ? C.goodText : pct >= 60 ? C.midText : C.lowText;
 
+  // Real frame from the session's own recording when one exists (see
+  // lib/sessionVideo.ts) — falls back to the plain dumbbell icon for
+  // sessions with no matching logged video (repCounter-only sets, or ones
+  // logged before video capture existed).
+  const [thumb, setThumb] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    getSessionThumbnail(entry.ts).then(uri => { if (live) setThumb(uri); });
+    return () => { live = false; };
+  }, [entry.ts]);
+
   return (
     <View style={[sc.card, SHADOW_ROW]}>
       <View style={sc.iconBox}>
-        <SymbolView
-          name="dumbbell.fill" type="monochrome"
-          style={{ width: 18, height: 18 }} tintColor="#6b7180"
-        />
+        {thumb
+          ? <Image source={{ uri: thumb }} style={sc.thumbImg} resizeMode="cover" />
+          : <SymbolView
+              name="dumbbell.fill" type="monochrome"
+              style={{ width: 18, height: 18 }} tintColor="#6b7180"
+            />}
       </View>
       <View style={sc.mid}>
         <Text style={sc.date}>{formatShort(entry.ts)}</Text>
@@ -267,7 +281,9 @@ const sc = StyleSheet.create({
     width: 38, height: 38, borderRadius: 11,
     backgroundColor: C.iconBox,
     alignItems: 'center', justifyContent: 'center',
+    overflow: 'hidden',
   },
+  thumbImg: { width: '100%', height: '100%' },
   mid:     { flex: 1, marginLeft: 13 },
   date:    { fontSize: 14.5, fontWeight: W.semi, color: '#1a1d26' },
   meta:    { marginTop: 2, fontSize: 12.5, fontWeight: W.medium, color: C.textSub },

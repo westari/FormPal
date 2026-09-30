@@ -66,11 +66,11 @@ function GlassOrb({ good, goodColor = GREEN, badColor = RED }: { good: boolean; 
             <G transform="translate(50 51)">
               {good ? (
                 <>
-                  <SvgPath d="M -18 1 L -6 13 L 20 -14" transform="translate(0 2)"
-                    stroke="#000000" strokeOpacity="0.28" strokeWidth="7"
+                  <SvgPath d="M -18 1 L -6 13 L 20 -14" transform="translate(0 2.5)"
+                    stroke="#000000" strokeOpacity="0.28" strokeWidth="11"
                     strokeLinecap="round" strokeLinejoin="round" fill="none" />
                   <SvgPath d="M -18 1 L -6 13 L 20 -14"
-                    stroke="#ffffff" strokeWidth="6.4"
+                    stroke="#ffffff" strokeWidth="9.6"
                     strokeLinecap="round" strokeLinejoin="round" fill="none" />
                 </>
               ) : (

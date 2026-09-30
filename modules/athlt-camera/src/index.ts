@@ -154,8 +154,6 @@ export type ExerciseType =
   // scoped to a barbell-specific catalog entry (see its own registration in
   // constants/exerciseDefinitions.ts for the full trackability writeup)
   | 'barbellBenchPress'
-  // Standing glute kickback (hip extension, side camera, shoulder-hip-knee angle metric)
-  | 'standingGluteKickback'
   // Face pull (rear delt/upper back pull, front camera, elbow-angle metric)
   | 'facePull'
   // Cable pull-through (hinge family, side camera, torso-angle metric) —
@@ -165,11 +163,6 @@ export type ExerciseType =
   // Pull-up (vertical body-vs-torso-axis metric, front camera, wrist
   // deliberately excluded — occludes gripping the bar)
   | 'pullup'
-  // Calf raise (small ankle-vs-knee vertical gap, side camera) — no
-  // heel/toe joint exists in this app's tracked joint set (Joints.swift);
-  // see its registration for the explicit "may not be trackable at all"
-  // feasibility flag
-  | 'calfRaise'
   // Leg curl / machine (hip-knee-ankle angle, same metric as squat, side
   // camera — machine may partially occlude the leg)
   | 'legCurl'

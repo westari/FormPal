@@ -454,12 +454,20 @@ function squatVariant(
 //   PUSHUP_HIP_CHECKS      — shoulder→ankle plank line (feet on floor).
 //   PUSHUP_HIP_CHECKS_KNEE — shoulder→knee plank line (knee push-up: ankles raised).
 
+// FIXED metric — was jointAngle(shoulder,elbow,wrist), reliability-gated on
+// elbow+wrist. That's the SAME bug the base `pushup` entry below had before
+// its own fix (confirmed on-device: elbow/wrist self-occlude at any
+// non-strict-side angle, so SETUP's 2s hold never passed → "0 reps, 0
+// movement" — see the base `pushup` entry's own comment for the full
+// root-cause writeup). This shared const feeds pushupVariant() and
+// kneePushupVariant() too, so every push-up-family exercise now uses the
+// SAME fixed metric as the base one, not a stale pre-fix copy.
 const PUSHUP_REP_METRIC: MetricDef = {
   type: 'bestSide',
-  left:  { type: 'jointAngle', a: 'leftShoulder',  pivot: 'leftElbow',  c: 'leftWrist'  },
-  right: { type: 'jointAngle', a: 'rightShoulder', pivot: 'rightElbow', c: 'rightWrist' },
-  leftJoints:  ['leftShoulder',  'leftElbow',  'leftWrist'],
-  rightJoints: ['rightShoulder', 'rightElbow', 'rightWrist'],
+  left:  { type: 'bodyRelativeDeviation', point: 'leftShoulder',  axisFrom: 'leftHip',  axisTo: 'leftAnkle'  },
+  right: { type: 'bodyRelativeDeviation', point: 'rightShoulder', axisFrom: 'rightHip', axisTo: 'rightAnkle' },
+  leftJoints:  ['leftShoulder'],
+  rightJoints: ['rightShoulder'],
 };
 
 const PUSHUP_HIP_CHECKS: FormCheckDef[] = [
@@ -534,6 +542,18 @@ const PUSHUP_PLANARITY: PlanarityCheckDef[] = [
     minRatio: 0.75, cue: 'TURN SIDE-ON', fallbackReferenceRatio: 0.64, enabled: false },
 ];
 
+// NEAR / FAR split for the FIXED metric — shoulder+ankle only, same fix as
+// the base `pushup` entry's cameraSetup (was elbow+wrist, the two joints
+// that self-occlude and never passed SETUP). Shared by both variant builders
+// below so neither can drift from the base entry again.
+const PUSHUP_CAMERA_JOINTS_A = ['leftShoulder',  'leftAnkle'];
+const PUSHUP_CAMERA_JOINTS_B = ['rightShoulder', 'rightAnkle'];
+
+// PORTED from the base `pushup` entry's fix (was the old elbow-jointAngle
+// metric + elbow/wrist SETUP gate — the exact bug that caused "0 reps, 0
+// movement" there before it was fixed). Every push-up-family variant shares
+// PUSHUP_REP_METRIC and this threshold/camera-setup shape now, so they can't
+// silently fall back out of sync with the base exercise again.
 function pushupVariant(
   id:               string,
   displayName:      string,
@@ -543,17 +563,17 @@ function pushupVariant(
     id,
     displayName,
     repMetric:          PUSHUP_REP_METRIC,
-    topAngle:           160,
-    repEnterThreshold:  140,
-    repExitThreshold:   150,
-    goodROMThreshold:    75,   // tightened 90→75: proper push-up ≤75°; half push-up (~85-90°) fails
+    topAngle:            0.35,
+    repEnterThreshold:   0.22,
+    repExitThreshold:    0.27,
+    goodROMThreshold:    0.15,
     insufficientROMCue: 'GO DEEPER',
     formChecks:      PUSHUP_HIP_CHECKS,
     readyGate:       PASSTHROUGH_GATE,
     cameraSetup: {
       setupInstruction,
-      requiredJoints:    ['leftShoulder',  'leftElbow',  'leftWrist'],
-      requiredJointsAlt: ['rightShoulder', 'rightElbow', 'rightWrist'],
+      requiredJoints:    PUSHUP_CAMERA_JOINTS_A,
+      requiredJointsAlt: PUSHUP_CAMERA_JOINTS_B,
     },
     minRepInterval:  0.8,
     planarityChecks: PUSHUP_PLANARITY,
@@ -570,17 +590,17 @@ function kneePushupVariant(
     id,
     displayName,
     repMetric:          PUSHUP_REP_METRIC,
-    topAngle:           160,
-    repEnterThreshold:  140,
-    repExitThreshold:   150,
-    goodROMThreshold:    75,   // tightened 90→75: proper push-up ≤75°; half push-up (~85-90°) fails
+    topAngle:            0.35,
+    repEnterThreshold:   0.22,
+    repExitThreshold:    0.27,
+    goodROMThreshold:    0.15,
     insufficientROMCue: 'GO DEEPER',
     formChecks:      PUSHUP_HIP_CHECKS_KNEE,
     readyGate:       PASSTHROUGH_GATE,
     cameraSetup: {
       setupInstruction,
-      requiredJoints:    ['leftShoulder',  'leftElbow',  'leftWrist'],
-      requiredJointsAlt: ['rightShoulder', 'rightElbow', 'rightWrist'],
+      requiredJoints:    PUSHUP_CAMERA_JOINTS_A,
+      requiredJointsAlt: PUSHUP_CAMERA_JOINTS_B,
     },
     minRepInterval:  0.8,
     planarityChecks: PUSHUP_PLANARITY,
@@ -1171,6 +1191,20 @@ function tricepVariant(
 }
 
 // Skullcrusher: same thresholds as tricepVariant, lying-down form checks.
+//
+// FIXED — was topAngle 85 / enter 72 / exit 82 / ROM 25, the SAME assumed
+// "rest reads ~80-85°" numbers that were never device-verified and confirmed
+// wrong for tricepPushdown/overheadTricepExtension (two real settle logs
+// showed actual rest reads 8-35°, so repExitThreshold(82/84) was
+// unreachable, the state machine entered a rep once and could never
+// complete — zero reps, every time). tricepVariant() got the fix; this
+// builder was never updated the same way and was almost certainly carrying
+// the identical bug. Ported the SAME real-anchor-derived numbers verbatim —
+// same TRICEP_REP_METRIC (forearm lineVsVertical), same joint geometry,
+// lying vs standing doesn't change what the metric measures, just the body
+// position, so there's no reason to expect a different scale. NOT its own
+// device log — if skullcrusher's real rest/bottom differ from pushdown's,
+// re-derive from a [METRIC] log the same way pushdown's was.
 function skullcrusherVariant(
   id:               string,
   displayName:      string,
@@ -1180,10 +1214,10 @@ function skullcrusherVariant(
     id,
     displayName,
     repMetric:          TRICEP_REP_METRIC,
-    topAngle:           85,
-    repEnterThreshold:  72,
-    repExitThreshold:   82,
-    goodROMThreshold:   25,
+    topAngle:           45,
+    repEnterThreshold:  25,
+    repExitThreshold:   35,
+    goodROMThreshold:   15,
     insufficientROMCue: 'EXTEND FULLY',
     formChecks:      TRICEP_FORM_CHECKS_LYING,
     readyGate:       PASSTHROUGH_GATE,
@@ -2272,128 +2306,6 @@ function latPulldownVariant(
   };
 }
 
-// ─── Standing glute kickback family ────────────────────────────────────────────
-//
-// REPLACES the old glute bridge / hip thrust family (both removed — Apple
-// Vision's body-pose model failed 100% of frames for a person lying down,
-// confirmed on-device: 178/178 frames rejected as unreliable, it's trained
-// for upright poses; see the DIAGNOSTIC comment this investigation left in
-// ExerciseEngine.swift's primaryJointConfMin/Max fields). This exercise
-// keeps the person standing the whole time instead: stand on one leg, kick
-// the working leg straight back (hip extension), side camera — same
-// upright-body requirement as every exercise that actually works.
-//
-// Reference/closest family, per the ask: the hip-hinge group (romanianDeadlift
-// etc, HINGE_REP_METRIC above) — singleLegRDL specifically is the closest
-// literal exercise already in the catalog (standing on one leg, other leg
-// extends behind the body, side camera, same "no on-device data yet"
-// situation). NOT reused verbatim, though: HINGE_REP_METRIC measures TORSO
-// angle from horizontal, which is the right signal for a hinge (torso travels
-// from vertical toward horizontal) but is near-constant here — a standing
-// kickback keeps the torso upright throughout, so torso angle barely moves
-// and can't drive rep detection. The moving joint here is the working hip
-// itself, not the torso.
-//
-// REP METRIC — jointAngle(shoulder, hip, knee) on the working leg. At rest
-// (standing, leg planted under the body) the hip-to-shoulder vector points
-// up and the hip-to-knee vector points straight down — close to a straight
-// line, i.e. close to 180°. As the leg kicks back into hip extension, the
-// knee swings posteriorly, closing the angle between those two vectors —
-// the metric DECREASES, matching the engine's hardwired decreasing-metric
-// state machine with no inversion trick needed (unlike gluteBridge's old
-// lineVsHorizontal workaround, which existed only because ITS literal
-// shoulder-hip-knee angle increased across the motion — this exercise's
-// doesn't).
-//
-// GENUINELY NEW METRIC — jointAngle with pivot=hip has never been used
-// anywhere in this codebase (grepped: every existing jointAngle pivots on
-// elbow, knee, or ankle). Zero on-device data. Per the placeholder rule,
-// topAngle/repEnterThreshold/repExitThreshold/goodROMThreshold below are
-// NOT measured — they're a rough anatomical estimate (standing ≈ 175°,
-// noticeable hip extension somewhere in the 150s-160s) spaced wide on
-// purpose so reps register regardless of the real value, not a tuned
-// number. Do 5 reps of standingGluteKickback once this reloads and send the
-// [REP]/[METRIC] log — real numbers will replace all four thresholds below.
-const STANDING_GLUTE_KICKBACK_REP_METRIC: MetricDef = {
-  type:  'average',
-  left:  { type: 'jointAngle', a: 'leftShoulder',  pivot: 'leftHip',  c: 'leftKnee'  },
-  right: { type: 'jointAngle', a: 'rightShoulder', pivot: 'rightHip', c: 'rightKnee' },
-};
-
-// FORM CHECKS ASSESSED AND NOT BUILT:
-//
-// - Leaning the torso forward / arching the lower back to fake hip
-//   extension (swinging the leg via lumbar arch instead of glute-driven hip
-//   extension): plausibly detectable in principle (lineVsVertical(hip,
-//   shoulder) is a proven pair — see HINGE_TORSO_ANGLE_CHECK above) but its
-//   72° threshold was tuned for a hinge's much larger expected torso travel,
-//   not this exercise's near-upright torso — no comparable data exists for
-//   what a "cheating lean" looks like here specifically. NOT BUILT this
-//   round, same "don't hardcode a guessed number" rule as the rep metric
-//   itself — worth adding once a real log shows what good vs. cheating reps
-//   look like on this metric.
-// - Overarching/hyperextending the lower back at the top: NOT BUILT, same
-//   verdict as the hip-hinge family's identical check — spinal CURVATURE
-//   fault, and Apple Vision has no mid-spine/lumbar landmark (only shoulder
-//   and hip as the torso's two endpoints). Can't be measured from two
-//   endpoints no matter which pair is chosen.
-// - Standing leg wobbling / losing balance: not a joint-angle fault at all
-//   (it's a stability/position fault, not an angle this Metric framework
-//   measures) — out of scope for a Layer-1 threshold check.
-// - Not kicking the leg back far enough: this IS covered, via the base
-//   goodROMThreshold/insufficientROMCue fields below (same mechanism as
-//   every other exercise's depth check) — no separate FormCheckDef needed.
-//
-// formChecks stays empty — no additional Layer-1 check cleared feasibility.
-
-// Side camera — same requiredJoints/requiredJointsAlt shape as the hip-hinge
-// family (shoulder+hip+knee+ankle per side); ankle included for camera
-// framing/future use even though the rep metric only consumes shoulder+hip+knee.
-const STANDING_GLUTE_KICKBACK_CAMERA_JOINTS_A = ['leftShoulder',  'leftHip',  'leftKnee',  'leftAnkle'];
-const STANDING_GLUTE_KICKBACK_CAMERA_JOINTS_B = ['rightShoulder', 'rightHip', 'rightKnee', 'rightAnkle'];
-
-function standingGluteKickbackVariant(
-  id:               string,
-  displayName:      string,
-  setupInstruction: string,
-): ExerciseDefinitionDef {
-  return {
-    id,
-    displayName,
-    repMetric:          STANDING_GLUTE_KICKBACK_REP_METRIC,
-    // ALL FOUR PLACEHOLDER — see the block comment above. topAngle(175) is a
-    // rough "standing straight" estimate; repEnterThreshold(155)/
-    // repExitThreshold(168) are spaced a wide 13° apart on purpose (same
-    // anti-double-count reasoning already learned the hard way for tricep/
-    // hinge/raise — narrow hysteresis gaps caused real double-count bugs in
-    // this codebase before).
-    topAngle:           175,
-    repEnterThreshold:  155,
-    repExitThreshold:   168,
-    // goodROMThreshold(150) sits just below repEnterThreshold(155) — reaching
-    // a counted rep isn't automatically "good," it needs a bit more kickback
-    // than the bare entry line. Kept close rather than far below it, per the
-    // wide/permissive-placeholder rule for a genuinely new metric — this is
-    // a starting point to replace from a real [REP] log, not a tuned value.
-    goodROMThreshold:   150,
-    insufficientROMCue: 'KICK YOUR LEG BACK FARTHER',
-    formChecks:      [],
-    readyGate:       PASSTHROUGH_GATE,
-    cameraSetup: {
-      setupInstruction,
-      requiredJoints:    STANDING_GLUTE_KICKBACK_CAMERA_JOINTS_A,
-      requiredJointsAlt: STANDING_GLUTE_KICKBACK_CAMERA_JOINTS_B,
-    },
-    minRepInterval:  0.7,
-    planarityChecks: [],
-    // No suppressApproachDetection — unlike the hip-hinge family (whose own
-    // torso rotation inflates the shoulder-hip distance signal used for
-    // approach detection), this exercise keeps the torso upright throughout,
-    // so that false-approach failure mode doesn't apply here. Leaving unset
-    // (default false), same as squat/curl/every other standing-still family.
-  };
-}
-
 // ─── Face pull ──────────────────────────────────────────────────────────────
 //
 // REFERENCE EXERCISE: the row family (ROW_REP_METRIC above — bentOverRow/
@@ -2751,13 +2663,10 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     // (leftAnkle's logged 0.00 low end) — this only removes them from the
     // stricter 0.6 whole-rep reliability gate they were never a good fit for
     // at this camera angle.
-    repMetric: {
-      type: 'bestSide',
-      left:  { type: 'bodyRelativeDeviation', point: 'leftShoulder',  axisFrom: 'leftHip',  axisTo: 'leftAnkle'  },
-      right: { type: 'bodyRelativeDeviation', point: 'rightShoulder', axisFrom: 'rightHip', axisTo: 'rightAnkle' },
-      leftJoints:  ['leftShoulder'],
-      rightJoints: ['rightShoulder'],
-    },
+    // Now shared as PUSHUP_REP_METRIC (see that const's own comment) so
+    // pushupVariant()/kneePushupVariant() can no longer drift out of sync
+    // with this base definition the way they did before this fix.
+    repMetric: PUSHUP_REP_METRIC,
 
     // REAL-LOG-DERIVED — set from an actual on-device [METRIC] log (one
     // three-quarter-angle pushup take), replacing the earlier guessed
@@ -2882,8 +2791,9 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     // the hold on either side.
     cameraSetup: {
       setupInstruction: 'Lay your phone on its side on the floor, a few feet to your side — a side-on or clear three-quarter angle both work',
-      requiredJoints:    ['leftShoulder',  'leftAnkle'],
-      requiredJointsAlt: ['rightShoulder', 'rightAnkle'],
+      // Now shared as PUSHUP_CAMERA_JOINTS_A/B — see that const's own comment.
+      requiredJoints:    PUSHUP_CAMERA_JOINTS_A,
+      requiredJointsAlt: PUSHUP_CAMERA_JOINTS_B,
     },
 
     // No calibration — thresholds intended to be stable across users/distances
@@ -3706,17 +3616,6 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     'Back to the camera — sit back so both arms are fully in frame overhead to shoulders',
   ),
 
-  // ─── Standing glute kickback ─────────────────────────────────────────────────
-  // See standingGluteKickbackVariant() and its comments above for the full
-  // investigate-first reasoning (why gluteBridge/hipThrust were removed,
-  // metric direction, camera, form-check feasibility) and the explicit
-  // placeholder-threshold warning.
-  standingGluteKickback: standingGluteKickbackVariant(
-    'standingGluteKickback',
-    'Standing Glute Kickback',
-    'Stand sideways to the camera — hip, knee, and ankle in frame',
-  ),
-
   // ─── Face pull ────────────────────────────────────────────────────────────────
   // See facePullVariant() and its comments above for the full investigate-
   // first reasoning (reference exercise: the row family; combinator choice;
@@ -3807,74 +3706,6 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     planarityChecks: [],
   },
 
-  // ─── Calf raise ─────────────────────────────────────────────────────────────
-  //
-  // FEASIBILITY FLAG — read this before trusting anything below it: this
-  // app's tracked joint set (Joint enum, Joints.swift) has NO heel or toe
-  // joint at all — the lowest point tracked is the ANKLE. A calf raise's
-  // real motion (heel lifting a few inches while the ball of the foot stays
-  // planted) barely moves the ANKLE joint itself — the ankle sits close to
-  // the pivot of that motion, not its end, so its own vertical travel is
-  // small relative to full body height, plausibly on the same order as
-  // Vision's own per-frame joint-position jitter. Of everything added this
-  // round, this is the one most likely to simply not register — genuinely
-  // uncertain, not a guess either way. Send a real device log immediately
-  // rather than assuming this works.
-  //
-  // METRIC: normalizedVerticalGap(upper: knee, lower: ankle) — as the ankle
-  // rises (heel lift), the knee-to-ankle vertical gap shrinks slightly
-  // (knee stays put, ankle moves up toward it). bestSide across both legs
-  // so whichever leg the camera reads more clearly drives the value.
-  calfRaise: {
-    id:          'calfRaise',
-    displayName: 'Calf Raise',
-
-    repMetric: {
-      type: 'bestSide',
-      left:  { type: 'normalizedVerticalGap', upper: 'leftKnee',  lower: 'leftAnkle'  },
-      right: { type: 'normalizedVerticalGap', upper: 'rightKnee', lower: 'rightAnkle' },
-      leftJoints:  ['leftKnee',  'leftAnkle'],
-      rightJoints: ['rightKnee', 'rightAnkle'],
-    },
-
-    // RECALIBRATED from a device log (8/31/2026): the previous band
-    // (top 0.10 / enter 0.07 / exit 0.085) was ~10x BELOW the real metric
-    // value — normalizedVerticalGap(knee,ankle) actually reads ~0.76–0.94,
-    // hovering ~0.85 at rest, so the value could never approach the old
-    // thresholds and zero reps registered. New band is anchored to that
-    // observed range: a heel raise shrinks the knee→ankle vertical gap, so
-    // a rep DROPS the value and returns.
-    // STILL A PLACEHOLDER: that same log showed the value bouncing ~±0.09
-    // with no visible rep structure — the calf-raise motion may sit inside
-    // Vision's noise floor for this joint pair. Do ~10 SLOW, deliberate,
-    // full-height raises and send the log; if the deliberate dips don't
-    // separate cleanly from that noise, this exercise isn't trackable with
-    // knee/ankle alone and should be dropped.
-    topAngle:            0.88,    // PLACEHOLDER — heels-down baseline (top of observed range)
-    repEnterThreshold:   0.80,    // PLACEHOLDER — needs a clear ~0.08 drop from rest to enter
-    repExitThreshold:    0.84,    // PLACEHOLDER — back toward rest
-    goodROMThreshold:    0.75,    // PLACEHOLDER — full heel raise
-    insufficientROMCue: 'HIGHER RAISE',
-
-    // No form check — with only knee/ankle available and the primary
-    // signal already this thin, an unverified form check stacked on top
-    // would just be a second guess on top of the first. Nothing here meets
-    // this file's own feasibility bar (see rule 4 in this project's
-    // CLAUDE.md — check feasibility before building a form check).
-    formChecks: [],
-    readyGate: PASSTHROUGH_GATE,
-
-    cameraSetup: {
-      setupInstruction: 'Stand side-on to the camera — knees and ankles in frame',
-      // NEAR / FAR — repMetric is bestSide(normalizedVerticalGap(knee,ankle)).
-      requiredJoints:    ['leftKnee',  'leftAnkle'],
-      requiredJointsAlt: ['rightKnee', 'rightAnkle'],
-    },
-
-    minRepInterval:  0.4,
-    planarityChecks: [],
-  },
-
   // ─── Leg curl (machine) ─────────────────────────────────────────────────────
   //
   // REFERENCE EXERCISE: squat's own repMetric — the SAME hip-knee-ankle
@@ -3935,8 +3766,7 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
   // gluteBridge/hipThrust were built, tested, and REMOVED because Apple
   // Vision's body-pose detector rejected 100% of frames — not "low
   // confidence," genuinely couldn't find a person at all lying flat on the
-  // floor (see standingGluteKickback's own comment in constants/
-  // exercises.ts for that history). A crunch is also lying down. It MAY
+  // floor (178/178 frames rejected, on-device). A crunch is also lying down. It MAY
   // fare differently — knees bent and feet planted gives a more open,
   // side-on silhouette than a flat hip thrust, and camera angle matters a
   // lot here — but that's a hope, not something verifiable without a
@@ -4414,7 +4244,7 @@ export function isRepCounterExercise(id: string): boolean {
 // here is the whole switch. Applied post-declaration so it stays a one-liner
 // list instead of a `mode:` line buried in each block.
 (['facePull', 'latPulldown', 'seatedCableRow', 'machineRow', 'cablePullThrough',
-  'standingGluteKickback', 'calfRaise', 'legCurl'] as const)
+  'legCurl'] as const)
   .forEach((id) => {
     const def = (EXERCISE_DEFINITIONS as Record<string, ExerciseDefinitionDef | undefined>)[id];
     if (def) def.mode = 'repCounter';
@@ -4456,7 +4286,7 @@ export function isRepCounterExercise(id: string): boolean {
     // Hip-hinge family
     'romanianDeadlift', 'deadlift', 'goodMorning', 'kettlebellSwing', 'singleLegRDL', 'cablePullThrough',
     // Side-on isolation
-    'frontRaise', 'standingGluteKickback', 'calfRaise', 'legCurl', 'dips',
+    'frontRaise', 'legCurl', 'dips',
   ], 'side');
 }
 
@@ -4468,8 +4298,8 @@ export function isRepCounterExercise(id: string): boolean {
 // rep counts; a true walk-away still runs ~100%. (The native video-analysis
 // path also floors this at 0.9 regardless — this covers the LIVE path and
 // pre-build reloads.)
-(['facePull', 'legCurl', 'seatedCableRow', 'machineRow', 'calfRaise',
-  'standingGluteKickback', 'cablePullThrough'] as const)
+(['facePull', 'legCurl', 'seatedCableRow', 'machineRow',
+  'cablePullThrough'] as const)
   .forEach((id) => {
     const def = (EXERCISE_DEFINITIONS as Record<string, ExerciseDefinitionDef | undefined>)[id];
     if (def) def.repReliabilityMaxUnreliableFraction = 0.9;

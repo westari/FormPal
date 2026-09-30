@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Platform, ScrollView,
-  Animated, PanResponder, Image, TextInput, Pressable, Easing, KeyboardAvoidingView, Alert,
+  Animated, PanResponder, Image, TextInput, Pressable, Easing, KeyboardAvoidingView, Alert, Dimensions,
+  unstable_batchedUpdates,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Asset } from 'expo-asset';
@@ -18,8 +19,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import AppBackground from '../components/AppBackground';
 import PlanGrowthMoment from '../components/PlanGrowthMoment';
 import { LiquidGlassButton } from '../components/LiquidGlass';
-import RankRevealScreen from '../components/onboarding/RankRevealScreen';
 import RankWheelScreen from '../components/onboarding/RankWheelScreen';
+import SaveProgressScreen from '../components/onboarding/SaveProgressScreen';
+import TryForFreeScreen from '../components/onboarding/TryForFreeScreen';
 import { PUSHUP_ICON, PULLUP_ICON, SQUAT_ICON } from '../assets/onboarding/onbIcons';
 import { FONT, W, Col, Elev } from '../constants/theme';
 
@@ -28,7 +30,7 @@ import { FONT, W, Col, Elev } from '../constants/theme';
 // the flow is fully testable before the footage exists.
 //   hero — the app catching a rep (green check / red x firing), first screen
 //   demo — a single rep that doesn't count, shown before the math
-const HERO_VIDEO: any = null; // require('../assets/onboarding/hero.mp4')
+const HERO_VIDEO: any = require('../assets/videos/demovid.mov');
 const DEMO_VIDEO: any = null; // require('../assets/onboarding/demo.mp4')
 
 export const ONBOARDING_KEY = 'formpal_onboarding_complete';
@@ -103,6 +105,13 @@ const ICON = {
   mixNoBg: require('../assets/icons/homeandgymnobg.webp'),
   // notifications
   notifOn: require('../assets/icons/notison.webp'), notifOff: require('../assets/icons/notisoff.webp'),
+  // goalPace
+  // Extracted from the originals (which had no alpha channel — a flat
+  // opaque square, which is why tinting them rendered as a solid box) into
+  // real transparent-background PNGs, so tintColor recolors just the
+  // silhouette. See scratchpad/extract_pace_icons.py for the conversion.
+  paceEasy: require('../assets/icons/pace-easy.png'), paceModerate: require('../assets/icons/pace-moderate.png'),
+  paceAggressive: require('../assets/icons/pace-aggressive.png'),
 } as const;
 
 // ── Light theme palette ────────────────────────────────────────────────────────
@@ -281,11 +290,72 @@ const STRENGTH_ICONS_JS = `
 })();
 `;
 
+// strengthassesment.html keeps its entered numbers in its own component
+// instance (this.state.vals), which the outer bootstrap script never
+// exposes on `window` — so nothing the user enters (or leaves at 0) ever
+// reached RN at all. THAT was the real bug behind "I skipped everything but
+// still got Silver": the rank was never computed from these answers in the
+// first place. Since we can't reach the instance directly, read it back off
+// the rendered DOM instead — only the ACTIVE exercise's wheel is mounted at
+// a time (renderVals() only builds `wheels` for `defs[at]`), so poll for
+// whichever card label is the "on" one (color #111114, vs #9a9aa2 off) and
+// read its wheel's big tabular-nums value(s), accumulating into a running
+// map keyed by exercise. Posts 'savals:<json>' any time that map changes —
+// by the time Continue is tapped, RN already has the latest numbers for all
+// 4 moves, not just whichever was on-screen last.
+const STRENGTH_CAPTURE_JS = `
+(function(){
+  var LABELS = { 'Push-ups': 'pushup', 'Pull-ups': 'pullup', 'Squats': 'squat', 'Deadlift': 'deadlift' };
+  var vals = { pushup: { reps: 0 }, pullup: { reps: 0 }, squat: { reps: 0 }, deadlift: { weight: 0, reps: 0 } };
+  var last = '';
+  function post(m){ try{ window.ReactNativeWebView.postMessage(m); }catch(e){} }
+  function num(t){ var n = parseInt(String(t).replace(/[^0-9]/g,''), 10); return isNaN(n) ? 0 : n; }
+  function poll(){
+    try {
+      var divs = document.querySelectorAll('#dc-root div');
+      var activeKey = null;
+      for (var i=0;i<divs.length;i++){
+        var el = divs[i];
+        if (el.children.length) continue;
+        var t = (el.textContent||'').trim();
+        var key = LABELS[t];
+        if (!key) continue;
+        var cs = getComputedStyle(el);
+        if (cs.color === 'rgb(17, 17, 20)') { activeKey = key; break; }
+      }
+      if (!activeKey) return;
+      var valueEls = document.querySelectorAll('#dc-root div[style*="38px"][style*="tabular-nums"]');
+      if (!valueEls.length) return;
+      if (activeKey === 'deadlift' && valueEls.length >= 2) {
+        vals.deadlift.weight = num(valueEls[0].textContent);
+        vals.deadlift.reps = num(valueEls[1].textContent);
+      } else {
+        vals[activeKey].reps = num(valueEls[0].textContent);
+      }
+      var enc = JSON.stringify(vals);
+      if (enc !== last) { last = enc; post('savals:' + enc); }
+    } catch(e){}
+  }
+  setInterval(poll, 260);
+  document.addEventListener('pointerup', function(){ setTimeout(poll, 30); }, true);
+  document.addEventListener('click', function(){ setTimeout(poll, 30); }, true);
+  true;
+})();
+`;
+
 const ONB_HTML = {
   // Redesigned rank run + the wasted-muscle graph (Claude Design artboards).
   rankWheel:          require('../assets/rankwheel2.html'),
   strengthAssessment: require('../assets/strengthassesment.html'),
-  rankReveal:         require('../assets/rankreveal2.html'),
+  // The reel-style reveal artboard (renamed from "FormPal Rank Reveal.html"
+  // — the space in that filename made the WebView's require()'d asset URL
+  // 404 as "asset not found" on device; every other DC page here uses a
+  // no-space filename for the same reason). The bronze/silver LADDER rows
+  // and get target() were edited to read window.__FORMPAL_RANK_KEY /
+  // __FORMPAL_RANK_LABEL / __FORMPAL_PERCENTILE_NOTE (set by
+  // rankRevealPreloadJs below) so it lands on and displays the user's real
+  // computed rank instead of the file's own hardcoded "Bronze II" demo.
+  rankReveal:         require('../assets/rankrevealreel.html'),
   cinematicGraph:     require('../assets/cinematicgraph.html'),
   recoveryRoute:      require('../assets/recoveryroute.html'),
   // The pre-paywall pages. They render with their built-in default copy;
@@ -297,11 +367,100 @@ const ONB_HTML = {
   paywall:            require('../assets/paywall.html'),
 } as const;
 
+// Same 7 files RankWheelScreen's own RANKS array requires — kept as a
+// separate keyed map (not imported from that component) so this file can
+// warm them well before RankWheelScreen ever mounts (see the preload
+// effect below).
+const RANK_SHIELD_ASSETS: Record<string, any> = {
+  bronze:   require('../assets/ranks/bronze.png'),
+  silver:   require('../assets/ranks/silver.png'),
+  gold:     require('../assets/ranks/gold.png'),
+  platinum: require('../assets/ranks/platinum.png'),
+  diamond:  require('../assets/ranks/diamond.png'),
+  master:   require('../assets/ranks/master.png'),
+  champion: require('../assets/ranks/champion.png'),
+};
+
 const GOAL_DATE = () => {
   const d = new Date(Date.now() + 70 * 86400000); // ~10 weeks out
   const M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   return `${M[d.getMonth()]} ${d.getDate()}`;
 };
+
+// Draws the plan-ready graph line in fully via JS, triggered when the page
+// actually becomes visible (see the poolActive effect below) — NOT the
+// artboard's own CSS animation. Two rounds of tuning that CSS's
+// animation-delay values did nothing visible, because the real problem is
+// the pool prewarms this page long before the user ever sees it: the CSS
+// animation fires and FINISHES during that hidden prewarm, so by reveal
+// time it's not "wrongly timed", it's already 100% done — no delay tweak
+// can matter once the animation has already run to completion off-screen.
+// This bypasses that entirely: kill the CSS animation, hold the line/dot/
+// target at their HIDDEN starting state, then drive stroke-dashoffset by
+// hand with requestAnimationFrame.
+//
+// Rebuilt this round off the SAME technique recoveryroute.html's (working)
+// graph uses — a dot riding the path itself in lockstep with the draw, not
+// a separately-timed fade — except done with getPointAtLength instead of
+// CSS offset-path, so the dot's position is always read directly off the
+// ACTUAL current tip of the line (correct even when planReadyInject swaps
+// in the mirrored down-sloping path for a lose-weight goal, since this
+// never hardcodes the tip's coordinates). Two concrete complaints this
+// fixes: the draw was way too fast (2000ms, front-loaded ease-out — most of
+// the distance happened in the first few frames) and the TARGET badges were
+// gated on an extra fixed 140ms AFTER the line finished instead of the
+// instant it actually gets there.
+const RESTART_GRAPH_ANIM_JS = `
+(function(){
+  function run(){
+    var line = document.querySelector('#dc-root path[style*="pr-draw"]');
+    if(!line) return false;
+    var dot = document.querySelector('#dc-root circle[style*="pr-fade"]');
+    var badges = document.querySelectorAll('#dc-root [style*="pr-badge"]');
+
+    var total;
+    try { total = line.getTotalLength(); } catch(e) { total = 620; }
+
+    line.style.animation = 'none';
+    line.style.strokeDasharray = String(total);
+    line.style.strokeDashoffset = String(total);
+    if (dot) {
+      dot.style.animation = 'none';
+      dot.style.transition = 'none';
+      dot.style.opacity = '1';
+      try { var p0 = line.getPointAtLength(0); dot.setAttribute('cx', String(p0.x)); dot.setAttribute('cy', String(p0.y)); } catch(e){}
+    }
+    for (var i=0;i<badges.length;i++){ badges[i].style.animation = 'none'; badges[i].style.opacity = '0'; }
+
+    var start = null, DUR = 2800;
+    function ease(t){ return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2; } // symmetric ease-in-out
+    function frame(ts){
+      if (start === null) start = ts;
+      var t = Math.min(1, (ts - start) / DUR);
+      var e = ease(t);
+      line.style.strokeDashoffset = String(total - total * e);
+      if (dot) {
+        try {
+          var pt = line.getPointAtLength(total * e);
+          dot.setAttribute('cx', String(pt.x));
+          dot.setAttribute('cy', String(pt.y));
+        } catch(err){}
+      }
+      if (t < 1) { requestAnimationFrame(frame); return; }
+      // The line (and the dot riding its tip) just reached the target —
+      // the badges appear NOW, not after an extra fixed delay.
+      for (var j=0;j<badges.length;j++){
+        badges[j].style.transition = 'opacity 260ms ease, transform 260ms cubic-bezier(.34,1.4,.64,1)';
+        badges[j].style.opacity = '1';
+      }
+    }
+    requestAnimationFrame(frame);
+    return true;
+  }
+  if (!run()) [150, 400, 900, 1600].forEach(function(d){ setTimeout(run, d); });
+  true;
+})();
+`;
 
 // planisreadynow.html renders its values as plain {{ }} text (no sc-interp
 // spans), so we can't match by class — instead we match each rendered leaf
@@ -309,6 +468,22 @@ const GOAL_DATE = () => {
 // sync with the file's data-props): goalWeight "195 lb" (×2), goalDate
 // "Dec 1" (×2), weight "184 lb", height 5'11", age "27", experience
 // "Beginner". ctaLabel "Unlock my full plan" -> "Continue".
+//
+// GOAL-DIRECTION — the artboard's graph line/fill are two hardcoded SVG
+// paths that always slope UP (weight/progress rising left-to-right). Real
+// for "build muscle"/"get stronger", backwards for "lose weight" (the user
+// wants the line falling toward their goal, not rising). Since the shapes
+// are static path data — not computed from the user's numbers — the fix is
+// a plain vertical mirror of both known `d` strings (reflected about their
+// own horizontal midline, y' = 222 - y), swapped in only when losing weight
+// is the primary goal. The trailing checkmark badge isn't repositioned (it's
+// a small decorative flourish near the old top-right end) — flag if that
+// looks wrong once you see it lose-weight side.
+const PR_LINE_D   = 'M14 152 C48 150 70 146 98 136 C132 124 154 94 192 82 C220 73 246 71 292 70';
+const PR_FILL_D    = PR_LINE_D + ' L292 160 L14 160 Z';
+const PR_LINE_D_DOWN = 'M14 70 C48 72 70 76 98 86 C132 98 154 128 192 140 C220 149 246 151 292 152';
+const PR_FILL_D_DOWN  = PR_LINE_D_DOWN + ' L292 160 L14 160 Z';
+
 function planReadyInject(a: Record<string, any>): string {
   const w  = typeof a.weight === 'number' ? Math.round(a.weight) : 0;
   const wStr = w ? `${w} lb` : '';
@@ -318,7 +493,8 @@ function planReadyInject(a: Record<string, any>): string {
   // Goal weight: the answer from the dedicated question if we have it, else
   // a small goal-direction estimate off current weight.
   const goals = (a.goal as string[]) ?? [];
-  const delta = goals.includes('Lose weight') ? -8 : (goals.some(g => /muscle|strength/i.test(g)) ? 6 : 4);
+  const isLoseWeight = goals.includes('Lose weight');
+  const delta = isLoseWeight ? -8 : (goals.some(g => /muscle|strength/i.test(g)) ? 6 : 4);
   const goalNum = typeof a.goalWeight === 'number' ? Math.round(a.goalWeight) : (w ? w + delta : 0);
   const goalW = goalNum ? `${goalNum} lb` : '';
   const gd = GOAL_DATE();
@@ -332,6 +508,7 @@ function planReadyInject(a: Record<string, any>): string {
     '27':     ${JSON.stringify(ag)},
     'Beginner': ${JSON.stringify(ex)}
   };
+  var GOING_DOWN = ${isLoseWeight ? 'true' : 'false'};
   function apply(){
     var all=document.querySelectorAll('#dc-root div,#dc-root span,#dc-root p'), hit=0;
     for(var i=0;i<all.length;i++){
@@ -348,6 +525,14 @@ function planReadyInject(a: Record<string, any>): string {
         }
       }
     }
+    if(GOING_DOWN){
+      var paths=document.querySelectorAll('#dc-root path');
+      for(var p=0;p<paths.length;p++){
+        var d=paths[p].getAttribute('d');
+        if(d===${JSON.stringify(PR_LINE_D)}) paths[p].setAttribute('d', ${JSON.stringify(PR_LINE_D_DOWN)});
+        else if(d===${JSON.stringify(PR_FILL_D)}) paths[p].setAttribute('d', ${JSON.stringify(PR_FILL_D_DOWN)});
+      }
+    }
     return hit>=3;
   }
   if(!apply()) [200,500,1000,2000,3500,5000].forEach(function(d){ setTimeout(apply,d); });
@@ -357,8 +542,19 @@ function planReadyInject(a: Record<string, any>): string {
 }
 
 // recoveryroute.html — "your route to <goal> starts today". Fill the goal
-// date; leave the goal name (Gold I) as the artboard's default.
-function recoveryRouteInject(): string {
+// date AND the goal name (was left at the artboard's hardcoded default
+// "Gold I" always — the source of "the next page says Silver III" not
+// matching the reveal; now it's the same nextRankLabel(computeRank(a)) the
+// cinematic page already uses for its own "towards X" line).
+// Leaves the artboard's own "Gold I" goal (headline, closer sentence, CTA
+// label) untouched on purpose — it was previously downgraded to
+// nextRankLabel(a) (just one tier above whatever the user actually landed
+// on, e.g. "Bronze II"), which read as an unambitious near-term target AND
+// didn't match the graph's own gold-tier milestone icon. Gold I is always
+// meaningfully ahead of the Bronze/Silver range computeRank() can return,
+// so it stays consistent with the icon for every user. Only the date slot
+// is real user data, so only that gets swapped.
+function recoveryRouteInject(a: Record<string, any>): string {
   return `
 (function(){
   var D=${JSON.stringify(GOAL_DATE())};
@@ -371,10 +567,80 @@ function recoveryRouteInject(): string {
     }
     return hit>=1;
   }
-  if(!apply()) [200,500,1000,2000,3500].forEach(function(d){ setTimeout(apply,d); });
+  if (apply()) return;
+  // DC_PAGE_INJECT's own reveal (shared by every one of these pages) shows
+  // the artboard the INSTANT #dc-root gets any children at all — polling on
+  // a fixed schedule here (200/500/1000ms...) can lose that race, so the
+  // default date is visibly on screen for a beat before this catches up
+  // and swaps it, which read as "the text flashes, then changes". Catch
+  // the exact moment the bundler's async unpack finishes instead of
+  // guessing an interval.
+  var root = document.getElementById('dc-root') || document.body;
+  var mo = new MutationObserver(function(){ if (apply()) mo.disconnect(); });
+  mo.observe(root, { childList: true, subtree: true });
+  [50, 150, 300, 600, 1200, 2500].forEach(function(d){ setTimeout(function(){ if (apply()) mo.disconnect(); }, d); });
 })();
 `;
 }
+
+// recoveryroute.html's graph/rise/badge animations are plain CSS keyframes
+// that start ticking the instant the page parses — including the
+// stroke-dashoffset line draw, which (unlike opacity/transform) is
+// main-thread-painted every frame, not compositor-accelerated. The two
+// @font-face declarations use font-display:swap, so the browser swaps from
+// the fallback font to Plus Jakarta Sans mid-animation once it loads —
+// that swap's reflow/repaint blocks the main thread for a frame or two,
+// which is exactly "the graph moves for a second, then stops, then goes".
+// Fix: freeze every inline `animation` under #dc-root immediately (their
+// saved values captured first), then restart them all together only once
+// document.fonts.ready — so the whole sequence runs in one uninterrupted
+// pass with no font-swap collision partway through.
+const RESTART_RECOVERY_ANIM_JS = `
+(function(){
+  function go(){
+    var els = document.querySelectorAll('#dc-root [style*="animation:"]');
+    var saved = [];
+    for (var i=0;i<els.length;i++){
+      var el = els[i];
+      var a = el.style.animation;
+      if (!a) continue;
+      // The two rank-badge <image> elements start hidden purely via their
+      // OWN keyframes' 0% opacity — nothing else on the element declares
+      // opacity. Setting animation:none removes that keyframe entirely, so
+      // for the freeze-to-restart gap the element reverts to no-opacity-set
+      // (fully visible) instead of staying hidden — a real flash of the
+      // badge, then a snap back to invisible when restart() re-applies the
+      // animation from its own 0% state. Pin the CURRENT computed
+      // opacity/transform as plain inline styles before removing the
+      // animation, so the freeze gap holds exactly what was already on
+      // screen (nothing, this early) instead of the element's un-animated
+      // default.
+      var cs = getComputedStyle(el);
+      var pinnedOpacity = cs.opacity, pinnedTransform = cs.transform;
+      saved.push([el, a, pinnedOpacity, pinnedTransform]);
+      el.style.setProperty('opacity', pinnedOpacity, 'important');
+      if (pinnedTransform && pinnedTransform !== 'none') el.style.setProperty('transform', pinnedTransform, 'important');
+      el.style.setProperty('animation', 'none', 'important');
+    }
+    function restart(){
+      for (var j=0;j<saved.length;j++){
+        var el = saved[j][0];
+        el.style.removeProperty('opacity');
+        el.style.removeProperty('transform');
+        void el.offsetWidth; // force reflow so the animation restarts cleanly
+        el.style.setProperty('animation', saved[j][1]);
+      }
+    }
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(function(){ setTimeout(restart, 60); }).catch(function(){ setTimeout(restart, 60); });
+    } else {
+      setTimeout(restart, 200);
+    }
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go);
+  else go();
+})();
+`;
 
 const DURATION_YEARS: Record<string, number> = {
   '1-2 months': 1, '2-6 months': 1, '6-12 months': 1,
@@ -419,7 +685,17 @@ function cinematicGraphInject(a: Record<string, any>): string {
         var n=el.childNodes[k];
         if(n.nodeType!==3 || !RANK_RE.test(n.nodeValue) || n.__rk) continue;
         var whole=n.nodeValue, mm=whole.match(RANK_RE);
-        var towards=/toward|towards|reach|climb to|get to/i.test(whole.slice(0, mm.index));
+        var prefix=whole.slice(0, mm.index);
+        // The templated goalRank slot (\`... toward <span>{{ goalRank }}</span> faster.\`)
+        // renders as its OWN span with the rank as its only child text node —
+        // "toward" lives in the PARENT's earlier text, not this node's own, so
+        // the prefix here is empty. Fall back to the element's previous
+        // sibling text node in that case instead of misreading it as a
+        // standalone "current rank" mention.
+        if(!prefix.trim() && el.previousSibling && el.previousSibling.nodeType===3){
+          prefix=el.previousSibling.nodeValue||'';
+        }
+        var towards=/toward|towards|reach|climb to|get to/i.test(prefix);
         if(towards){
           if(whole.indexOf(NEXT)<0){ n.nodeValue=whole.replace(RANK_RE, NEXT); hit++; }
         } else {
@@ -466,12 +742,35 @@ function cinematicGraphInject(a: Record<string, any>): string {
     return false;
   }
   var tries=0, iv=setInterval(function(){ if(hunt() || ++tries>100) clearInterval(iv); }, 200);
+
+  // Both "Replay" AND the CTA itself (hunt()'s own click listener above,
+  // also capture-phase — but added straight on the element, so THIS
+  // document-level listener runs first for the same click) fire
+  // unconditionally the instant they're tapped, including mid-play. The
+  // CTA spans the full width near the bottom of the screen and is
+  // clickable from the very first frame, so any stray tap down there
+  // instantly skips the whole cinematic sequence — reported as "pressing
+  // the bottom of the screen skips it". Swallow taps on either control, in
+  // the capture phase (so this runs before the DC framework's own click
+  // handler AND before hunt()'s own listener on the CTA), until the
+  // sequence's own duration (this.props.durationMs, defaulting to
+  // 15000ms — never overridden here) has actually elapsed.
+  var readyAt = Date.now() + 15000;
+  function isGuardedControl(el){
+    var t = (el.textContent || '').replace(/\\s+/g, ' ').trim();
+    if (t === 'Replay') return true;
+    return /^(see my potential|let'?s do it|let'?s go|i'?m in)$/i.test(t);
+  }
+  document.addEventListener('click', function(ev){
+    if (Date.now() >= readyAt) return;
+    var el = ev.target;
+    for (var d = 0; el && d < 4; d++, el = el.parentElement) {
+      if (isGuardedControl(el)) { ev.stopPropagation(); ev.preventDefault(); return; }
+    }
+  }, true);
 })();
 `;
 }
-
-// rankReveal + rankWheel are now native screens
-// (components/onboarding/RankRevealScreen, RankWheelScreen).
 
 // The 4 pre-paywall pages are Claude-Design artboards — FIXED 390-wide
 // canvases. Scale #dc-root to the WebView width (never up past 1×), pin it
@@ -487,7 +786,8 @@ const DC_PAGE_KEYS: (keyof typeof ONB_HTML)[] = [
 ];
 // NOTE: no bare "Next" — strengthassesment's in-card "Next exercise" button
 // must NOT advance the whole flow.
-const DC_CTA_RE = "^(Continue|See my plan|See plan|See my potential|Build my route|Get my rank|Unlock my full plan|Unlock my plan|Unlock|Start my 3-day|Start my 3\\u2011day|Start my free trial|Start free trial|Start free|Done|Get started|Let.s do it|Let.s go|I.m in)\\b";
+// FOUND THE ACTUAL "Continue does nothing" bug on the rank-reveal-wheel:
+const DC_CTA_RE = "^(Continue|See my plan|See plan|See my potential|See my route|Build my route|Get my rank|Unlock my full plan|Unlock my plan|Unlock|Start my 3-day|Start my 3\\u2011day|Start my free trial|Start free trial|Start free|Done|Get started|Let.s do it|Let.s go|I.m in)\\b";
 const DC_PAGE_INJECT = `
 (function () {
   function post(m){ try{ window.ReactNativeWebView.postMessage(m); }catch(e){} }
@@ -759,14 +1059,23 @@ const FIT_BOTH_INJECT = `window.__dcFitBoth=1;`;
 // advance (the screen was skipping itself).
 const GENERATE_PLAN_INJECT = `window.__dcFitBoth=1;`;
 
-function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditValue, topInset, extraJs: extraJsProp, poolActive }: {
+function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditValue, onStrengthVals, topInset, extraJs: extraJsProp, extraJsBeforeLoad, poolActive }: {
   htmlKey: keyof typeof ONB_HTML;
   onAdvance: () => void;
   onBack: () => void;
   onEditInfo?: (field: string) => void;
   onEditValue?: (field: string, value: string) => void;
+  // strengthAssessment only — see STRENGTH_CAPTURE_JS. Fires with the
+  // running { pushup:{reps}, pullup:{reps}, squat:{reps}, deadlift:{weight,reps} }
+  // map every time it changes.
+  onStrengthVals?: (vals: Record<string, any>) => void;
   topInset: number;
   extraJs?: string;
+  // Runs via injectedJavaScriptBeforeContentLoaded (before the page's own
+  // scripts execute), unlike extraJs above (which runs after load). Only
+  // for stashing a window global the artboard's own script reads on mount —
+  // see rankRevealPreloadJs for the one user of this so far.
+  extraJsBeforeLoad?: string;
   // Pool mode: when defined, this screen is one of several kept mounted at
   // once (DcPagePool). It absolute-fills, only the active one is visible /
   // interactive, and only the active one shows its back button.
@@ -775,6 +1084,7 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
   const inPool = poolActive !== undefined;
   const fade = useRef(new Animated.Value(0)).current;
   const backFade = useRef(new Animated.Value(0)).current;
+  const webRef = useRef<WebView>(null);
   // Container visibility. In the pool it cross-fades between pages. Standalone
   // it starts visible (white) — the inner WebView `fade` + the artboard's own
   // #dc-root opacity gate are the single, clean content reveal; a second
@@ -786,6 +1096,15 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
   useEffect(() => {
     if (inPool) {
       Animated.timing(containerFade, { toValue: poolActive ? 1 : 0, duration: 200, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
+    }
+    // planReady's goal-graph line/badge draw in via a CSS animation that
+    // fires once on load — which happens during generatePlan's prewarm,
+    // while this page is invisible in the pool. By the time the user
+    // actually sees it (poolActive flips true), the animation already
+    // finished and the graph reads as static. Restart it right when the
+    // page becomes visible instead of relying on the one-shot load fire.
+    if (inPool && poolActive && htmlKey === 'planReady') {
+      webRef.current?.injectJavaScript(RESTART_GRAPH_ANIM_JS);
     }
   }, [poolActive]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -821,14 +1140,13 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
   // planReady stays width-fit (its info rows scroll). Everything else fits
   // to height too so the whole artboard — CTA + "Replay" / footnote under
   // it — is on screen with no scrolling.
-  const fitBothKeys = ['trialTimeline', 'paywall', 'strengthAssessment', 'recoveryRoute', 'cinematicGraph'];
+  const fitBothKeys = ['trialTimeline', 'paywall', 'strengthAssessment', 'recoveryRoute', 'cinematicGraph', 'rankReveal'];
   const dcExtra =
     htmlKey === 'generatePlan' ? GENERATE_PLAN_INJECT :
     fitBothKeys.includes(htmlKey) ? FIT_BOTH_INJECT :
     undefined;
-  const extraJs = extraJsProp
-    ? (dcExtra ? extraJsProp + '\n' + dcExtra : extraJsProp)
-    : (dcExtra ?? undefined);
+  const strengthExtra = htmlKey === 'strengthAssessment' ? STRENGTH_CAPTURE_JS : undefined;
+  const extraJs = [extraJsProp, dcExtra, strengthExtra].filter(Boolean).join('\n') || undefined;
   return (
     <Animated.View
       pointerEvents={inPool && !poolActive ? 'none' : 'auto'}
@@ -841,9 +1159,10 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
       {!isDcPage && <AppBackground />}
       <Animated.View style={{ flex: 1, marginTop: topInset, opacity: fade }}>
         <WebView
+          ref={webRef}
           source={ONB_HTML[htmlKey] as any}
           originWhitelist={['*']}
-          injectedJavaScriptBeforeContentLoaded={isDcPage ? VIEWPORT_JS : undefined}
+          injectedJavaScriptBeforeContentLoaded={isDcPage ? VIEWPORT_JS + '\n' + (extraJsBeforeLoad ?? '') : undefined}
           injectedJavaScript={extraJs ? baseInject + '\n' + extraJs : baseInject}
           onLoadEnd={() => setWebReady(true)}
           onMessage={(e) => {
@@ -854,6 +1173,10 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
             if (m.indexOf('editvalue:') === 0) {
               const parts = m.split(':');
               onEditValue?.(parts[1] || 'weight', decodeURIComponent(parts[2] || ''));
+              return;
+            }
+            if (m.indexOf('savals:') === 0) {
+              try { onStrengthVals?.(JSON.parse(m.slice('savals:'.length))); } catch (e) {}
               return;
             }
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -872,7 +1195,13 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
           allowUniversalAccessFromFileURLs
           javaScriptEnabled
           domStorageEnabled
-          cacheEnabled
+          // Re-disabled specifically for rankReveal, temporarily — the
+          // champion-icon proportion fix and the cache re-enable landed in
+          // the SAME round, so "still looks squished" right after turning
+          // caching back on is more likely the WebView serving an
+          // already-cached pre-fix response than the fix not having taken.
+          // Back to plain `cacheEnabled` once that's confirmed either way.
+          cacheEnabled={htmlKey !== 'rankReveal'}
         />
       </Animated.View>
       {/* Absolute + anchored to the top of THIS screen — an RN View defaults
@@ -1095,6 +1424,33 @@ function resolveOptions(opts: StepOptions | undefined, a: Record<string, any>): 
   return typeof opts === 'function' ? opts(a) : opts;
 }
 
+// goalPace — vertical Cal-AI-style redesign. Real custom icons (dropped
+// into assets/icons/), not SF Symbols — a rough lb/week pace drives the
+// estimate card underneath, not a real calorie/macro model.
+const PACE_ICON: Record<string, any> = { Relaxed: ICON.paceEasy, Balanced: ICON.paceModerate, Aggressive: ICON.paceAggressive };
+// Continuous rate range — the 3 icons are reference anchors along it, not
+// the only selectable values. Dragging snaps live in 0.1 lb steps; tapping
+// an icon jumps straight to its anchor rate.
+const PACE_RATE_MIN = 0.2;
+const PACE_RATE_MAX = 2.0;
+const PACE_RATE_STEP = 0.1;
+const PACE_REF_RATE: Record<string, number> = { Relaxed: 0.5, Balanced: 1, Aggressive: 1.75 };
+
+function paceSnapRate(raw: number): number {
+  const clamped = Math.max(PACE_RATE_MIN, Math.min(PACE_RATE_MAX, raw));
+  return Math.round((Math.round(clamped / PACE_RATE_STEP) * PACE_RATE_STEP) * 10) / 10;
+}
+
+function paceLabelForRate(rate: number, opts: OptionDef[]): string {
+  let best = opts[0]?.label ?? '';
+  let bestDist = Infinity;
+  for (const o of opts) {
+    const d = Math.abs(rate - (PACE_REF_RATE[o.label] ?? 1));
+    if (d < bestDist) { bestDist = d; best = o.label; }
+  }
+  return best;
+}
+
 // ── STEPS — every question from the onboarding-test FLOW, in the same
 // order, rendered in this screen's clean tappable style (no typewriter, no
 // conversational reply lines). fact1 is the `afterAboutYou` interstitial
@@ -1311,6 +1667,15 @@ function getVisibleSteps(a: Record<string, any>): Step[] {
   return STEPS.filter(s => !s.showIf || s.showIf(a));
 }
 
+// Swaps the LAST space in a string for a non-breaking space so a question
+// that wraps to a second line can never leave a single lonely word by
+// itself on it — the last two words stay glued together and wrap as a pair
+// (or not at all), same "no orphans" trick as web `&nbsp;`.
+function noOrphan(text: string): string {
+  const i = text.lastIndexOf(' ');
+  return i === -1 ? text : text.slice(0, i) + ' ' + text.slice(i + 1);
+}
+
 // ── Plan helpers ──────────────────────────────────────────────────────────────
 
 interface WorkoutExercise { name: string; scheme: string; formCheck: boolean; }
@@ -1391,6 +1756,170 @@ function AnimatedOption({ index, children, style, onPress }: {
     <Animated.View style={{ opacity, transform: [{ translateY }] }}>
       <TouchableOpacity style={style} onPress={onPress} activeOpacity={0.7}>{children}</TouchableOpacity>
     </Animated.View>
+  );
+}
+
+// ── RankCalcOverlay — the "Reading your answers" beat, OVERLAID on the
+// still-mounted strengthAssessment screen (not a navigation to a separate
+// page). Blurs the still-visible page behind it, no card/scrim otherwise —
+// just the text + a progress bar, sitting ABOVE where the page's own
+// Continue button is, not covering it. Static label (no typewriter — was
+// reported as unwanted), plain solid blue (the gradient read badly at this
+// thickness — a thin multi-stop gradient smeared rather than reading as
+// "colorful"), thicker bar, and RankCalcOverlay's own duration IS the wait —
+// the parent's timeout (see rankCalcOverlay effect) matches it exactly, so
+// the next screen appears right as the bar finishes, not after a dead pause.
+// A bit longer than the original 1200ms (was reported as "gets to the end
+// too fast") — the parent's advance timer (see rankCalcOverlay effect)
+// uses this exact same value, so there's no dead pause once it fills.
+const RANK_CALC_MS = 1900;
+
+function RankCalcOverlay({ bottomInset }: { bottomInset: number }) {
+  const fade = useRef(new Animated.Value(0)).current;
+  const progress = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(fade, { toValue: 1, duration: 160, useNativeDriver: true }).start();
+    Animated.timing(progress, { toValue: 1, duration: RANK_CALC_MS, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+  }, [fade, progress]);
+
+  const widthPct = progress.interpolate({ inputRange: [0, 1], outputRange: ['8%', '100%'] });
+
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Animated.View style={[StyleSheet.absoluteFill, { opacity: fade }]}>
+        <BlurView intensity={26} tint="light" style={StyleSheet.absoluteFill} />
+      </Animated.View>
+      <Animated.View style={[rc.wrap, { opacity: fade, bottom: bottomInset + 110 }]}>
+        <Text style={rc.label}>Reading your answers</Text>
+        <View style={rc.track}>
+          <Animated.View style={[rc.fill, { width: widthPct }]} />
+        </View>
+      </Animated.View>
+    </View>
+  );
+}
+
+const rc = StyleSheet.create({
+  wrap: { position: 'absolute', left: 24, right: 24 },
+  label: { fontFamily: FONT.displayBold, fontSize: 15, color: L.text, marginBottom: 12, letterSpacing: -0.2 },
+  track: { width: '100%', height: 9, borderRadius: 4.5, backgroundColor: '#E9ECF3', overflow: 'hidden' },
+  fill: { height: '100%', borderRadius: 4.5, backgroundColor: '#2E7DFF' },
+});
+
+// A gentle continuous bob+tilt to suggest motion on the pace icons — NOT
+// literal "legs walking, ball rolling." These are flat single-frame
+// silhouette images (confirmed via a raw pixel check when they were
+// extracted — no alpha-separated layers for the figure vs. the rock), so
+// independently animating a leg or the boulder isn't possible without
+// either a sprite sheet or a Lottie file replacing this art; that's a real
+// asset request, not something to fake here. What IS honest with a single
+// static image: the whole icon bobbing, with its speed tied to that pace's
+// actual rate — Aggressive bobs noticeably faster than Relaxed, so the
+// motion at least means something instead of being decoration.
+function PaceIconBob({ source, tint, rate }: { source: any; tint: string; rate: number }) {
+  const bob = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    // Faster pace = faster bob. Relaxed(0.5) -> ~950ms half-cycle,
+    // Aggressive(1.75) -> ~450ms — linear map over the same PACE_RATE range.
+    const half = Math.round(1050 - ((rate - PACE_RATE_MIN) / (PACE_RATE_MAX - PACE_RATE_MIN)) * 650);
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(bob, { toValue: 1, duration: half, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(bob, { toValue: 0, duration: half, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [rate]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const translateY = bob.interpolate({ inputRange: [0, 1], outputRange: [0, -4] });
+  const rotate = bob.interpolate({ inputRange: [0, 1], outputRange: ['-3deg', '3deg'] });
+
+  return (
+    <Animated.View style={{ width: '100%', height: '100%', transform: [{ translateY }, { rotate }] }}>
+      <Image source={source} style={{ width: '100%', height: '100%' }} resizeMode="contain" tintColor={tint} />
+    </Animated.View>
+  );
+}
+
+// goalPace's picker went through several rejected designs before landing
+// on this: a HORIZONTAL layout matching the Cal-AI reference, with the 3
+// icons as reference anchors — NOT the only 3 selectable values (a real
+// pace picker needs finer control than 3 presets). This track drives a
+// CONTINUOUS rate directly, snapping live in PACE_RATE_STEP (0.1 lb)
+// increments as you drag, with a haptic tick on every notch — the nearest
+// icon just highlights based on which anchor the current rate is closest
+// to. selfUpdateRef distinguishes "this track's own onChange just moved
+// the value prop" (skip re-syncing anim, it's already exactly there) from
+// "an icon was tapped externally" (DO spring the thumb there).
+function HorizontalPaceTrack({ value, min, max, step, onChange }: {
+  value: number; min: number; max: number; step: number; onChange: (v: number) => void;
+}) {
+  const [trackW, setTrackW] = useState(300);
+  const anim = useRef(new Animated.Value(value)).current;
+  const startRef = useRef(value);
+  const selfUpdateRef = useRef(false);
+  const lastSnappedRef = useRef(value);
+
+  useEffect(() => {
+    if (selfUpdateRef.current) { selfUpdateRef.current = false; return; }
+    Animated.spring(anim, { toValue: value, friction: 8, tension: 60, useNativeDriver: false }).start();
+    lastSnappedRef.current = value;
+  }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const snap = (raw: number) => {
+    const clamped = Math.max(min, Math.min(max, raw));
+    // Round to 3dp to kill float noise (e.g. 0.1 steps producing
+    // 0.30000000000000004) before it leaks into the !== comparison below.
+    return Math.round((Math.round(clamped / step) * step) * 1000) / 1000;
+  };
+
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => { startRef.current = (anim as any)._value ?? value; },
+      onPanResponderMove: (_, gs) => {
+        const raw = startRef.current + (gs.dx / trackW) * (max - min);
+        const snapped = snap(raw);
+        anim.setValue(snapped);
+        if (snapped !== lastSnappedRef.current) {
+          lastSnappedRef.current = snapped;
+          void Haptics.selectionAsync();
+          selfUpdateRef.current = true;
+          onChange(snapped);
+        }
+      },
+    })
+  ).current;
+
+  const thumbLeft = anim.interpolate({ inputRange: [min, max], outputRange: [0, trackW], extrapolate: 'clamp' });
+  const fillW = thumbLeft;
+
+  return (
+    <View
+      style={{ height: 34, justifyContent: 'center' }}
+      onLayout={(e) => setTrackW(Math.max(40, e.nativeEvent.layout.width - 26))}
+      {...pan.panHandlers}
+    >
+      <View style={{ position: 'absolute', left: 13, right: 13, height: 4, borderRadius: 2, backgroundColor: '#EFEFF3', overflow: 'hidden' }}>
+        <Animated.View style={{ height: '100%', width: fillW, backgroundColor: '#111114' }} />
+      </View>
+      {/* Plain solid circle, not LiquidGlass — the glass wrapper rendered as
+          a squared-off box on device (the native glass view apparently
+          doesn't reliably respect a plain style borderRadius the way an RN
+          View always does). A guaranteed circle beats a glass effect that
+          might not actually be circular. */}
+      <Animated.View
+        style={{
+          position: 'absolute', left: thumbLeft, top: '50%', marginTop: -15,
+          width: 30, height: 30, borderRadius: 15, backgroundColor: L.accent,
+          borderWidth: 3, borderColor: '#fff',
+          ...({ boxShadow: '0px 3px 10px rgba(0,0,0,0.28)' } as any),
+        }}
+      />
+    </View>
   );
 }
 
@@ -1594,6 +2123,17 @@ const WEIGHT_MAX   = 400;
 const TICK_GAP      = 18; // px per 1 lb
 const TICK_TRACK_H  = 84;
 
+// Plain weight display. Several rounds of a custom scroll/roll animation
+// never landed right on device — back to a normal, reliable instant text
+// swap per explicit ask, rather than keep spending rounds on it.
+function RollingWeightValue({ value }: { value: number }) {
+  return (
+    <Text style={{ fontFamily: FONT.displayBold, fontSize: 52, color: L.text, letterSpacing: -1, marginBottom: 36 }}>
+      {value.toFixed(1)}<Text style={{ fontSize: 17, fontWeight: W.semi, color: L.textDim }}> lbs</Text>
+    </Text>
+  );
+}
+
 function WeightRulerSlider({ value, onChange }: {
   value: number; onChange: (v: number) => void;
 }) {
@@ -1606,13 +2146,13 @@ function WeightRulerSlider({ value, onChange }: {
 
   const valuePx  = useRef(new Animated.Value(pxFromValue(value))).current;
   const startRef = useRef(pxFromValue(value));
-  // Dims the big number while actively dragging (it was re-rendering on
-  // every pixel of movement and visibly lagging behind the — natively
-  // driven — ruler strip during a fast scrub) and holds it dimmed for a
-  // beat after release before settling back to full opacity, instead of
-  // snapping back the instant your finger lifts.
-  const numberOpacity = useRef(new Animated.Value(1)).current;
-  const settleTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // NO mount fade/slide of its own — this component already renders inside
+  // the question's own Animated.View (fadeAnim/slideAnim in the parent),
+  // which already fades+slides the WHOLE question in. A SECOND, separately-
+  // timed fade nested inside that was the real bug behind "the weight stuff
+  // spawns in weird" / "flashes" — two animations on different clocks,
+  // fighting over when this content actually becomes visible. Trust the
+  // parent's entrance like every other question type does.
   // Tracks the last WHOLE lb the drag crossed, so the haptic tick fires once
   // per pound crossed — not once per pixel/frame. See onPanResponderMove.
   const lastTickRef = useRef(Math.round(value));
@@ -1624,7 +2164,6 @@ function WeightRulerSlider({ value, onChange }: {
     valuePx.setValue(pxFromValue(value));
     setDisplayVal(value);
     lastTickRef.current = Math.round(value);
-    return () => { if (settleTimeout.current) clearTimeout(settleTimeout.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1634,8 +2173,6 @@ function WeightRulerSlider({ value, onChange }: {
       onMoveShouldSetPanResponder:  () => true,
       onPanResponderGrant: () => {
         startRef.current = (valuePx as any)._value ?? pxFromValue(value);
-        if (settleTimeout.current) clearTimeout(settleTimeout.current);
-        Animated.timing(numberOpacity, { toValue: 0.32, duration: 120, useNativeDriver: true }).start();
       },
       onPanResponderMove: (_, gs) => {
         // Dragging LEFT reveals higher numbers at center (same feel as
@@ -1644,8 +2181,13 @@ function WeightRulerSlider({ value, onChange }: {
         const next = Math.max(0, Math.min(trackWidth, raw));
         valuePx.setValue(next);
         const v = Math.round(valueFromPx(next) * 10) / 10;
-        setDisplayVal(v);
         onChange(v);
+        // Every move, not throttled — RollingWeightValue tracks the raw
+        // continuous position directly now instead of firing a triggered
+        // animation per discrete change, so there's no interruption risk
+        // to throttle around, and the whole point is that it follows the
+        // drag in real time.
+        setDisplayVal(v);
         // Haptic "ruler tick" — felt, not heard: selectionAsync is the
         // exact light-tick feedback iOS pickers/rulers use, distinct from
         // impactAsync's heavier bump. Fires once per whole pound crossed.
@@ -1662,9 +2204,6 @@ function WeightRulerSlider({ value, onChange }: {
         valuePx.setValue(pxFromValue(v));
         setDisplayVal(v);
         onChange(v);
-        settleTimeout.current = setTimeout(() => {
-          Animated.timing(numberOpacity, { toValue: 1, duration: 380, useNativeDriver: true }).start();
-        }, 1000);
       },
     })
   ).current;
@@ -1685,9 +2224,7 @@ function WeightRulerSlider({ value, onChange }: {
 
   return (
     <View style={{ alignItems: 'center', marginTop: 20 }}>
-      <Animated.Text style={{ opacity: numberOpacity, fontFamily: FONT.displayBold, fontSize: 60, color: L.text, letterSpacing: -1.5, marginBottom: 36 }}>
-        {displayVal.toFixed(1)} <Text style={{ fontSize: 24, fontWeight: W.semi, color: L.textDim }}>lbs</Text>
-      </Animated.Text>
+      <RollingWeightValue value={displayVal} />
 
       <View
         style={{ width: '100%', height: TICK_TRACK_H, overflow: 'hidden' }}
@@ -1932,22 +2469,119 @@ function getRealFormPct(answers: Record<string, any>): number {
   return 70;
 }
 
+// strengthassesment.html's entered numbers, captured off the DOM by
+// STRENGTH_CAPTURE_JS and stored at a.strength (see onStrengthVals wiring).
+// Nothing entered (or the assessment never even ran) = 0 points, same as
+// every field defaulting to 0 reps — that's the intended behavior, not a
+// bug: skipping the assessment should never fake a real result.
+function strengthPoints(a: Record<string, any>): number {
+  const st = a.strength as
+    | { pushup?: { reps?: number }; pullup?: { reps?: number }; squat?: { reps?: number }; deadlift?: { weight?: number; reps?: number } }
+    | undefined;
+  if (!st) return 0;
+  const pushReps = st.pushup?.reps ?? 0;
+  const pullReps = st.pullup?.reps ?? 0;
+  const squatReps = st.squat?.reps ?? 0;
+  const dlWeight = st.deadlift?.weight ?? 0;
+  const dlReps = st.deadlift?.reps ?? 0;
+  const bw = typeof a.weight === 'number' ? a.weight : 0;
+
+  const pushPts = pushReps >= 40 ? 3 : pushReps >= 25 ? 2 : pushReps >= 10 ? 1 : 0;
+  const pullPts = pullReps >= 15 ? 3 : pullReps >= 8 ? 2 : pullReps >= 3 ? 1 : 0;
+  const squatPts = squatReps >= 50 ? 3 : squatReps >= 30 ? 2 : squatReps >= 15 ? 1 : 0;
+  const dlRatio = bw > 0 && dlReps > 0 ? dlWeight / bw : 0;
+  const dlPts = dlRatio >= 2 ? 3 : dlRatio >= 1.5 ? 2 : dlRatio >= 1 ? 1 : 0;
+  return pushPts + pullPts + squatPts + dlPts; // 0..12
+}
+
+// "Better than N% of new lifters" per sub-tier — replaces the artboard's
+// single hardcoded 55%/46% notes (same number regardless of actual rank).
+const RANK_PERCENTILE = [12, 22, 30, 38, 46, 54, 62, 70]; // idx 0..7 = Bronze I..Silver IV
+
 // The starting rank shown on the reveal + the cinematic graph. Derived from
-// the strength-assessment inputs we have (experience, guessed form %, how
-// long they've trained). Capped at Silver IV — onboarding never starts
-// anyone above Silver.
-function computeRank(a: Record<string, any>): { name: string; tier: string; label: string } {
+// experience / guessed form % / training duration from the earlier
+// questions, PLUS real strength-assessment numbers (strengthPoints above),
+// which now dominate the score — without them (assessment skipped or
+// nothing entered), the result is capped at Bronze IV; Silver requires the
+// assessment to have actually shown real strength (strPts >= 3, e.g. 25+
+// push-ups or a bodyweight deadlift). Capped at Silver IV overall —
+// onboarding never starts anyone above Silver.
+//
+// strPts === 0 (assessment skipped or every field left at 0) is forced
+// straight to Bronze I, full stop — not just capped at Bronze IV. Letting
+// the earlier questions (experience/form-guess/duration) still push a
+// zero-effort assessment up to Bronze II-IV was the actual bug behind
+// "I answered nothing and still got Bronze II."
+function computeRank(a: Record<string, any>): { name: string; tier: string; label: string; idx: number; percentile: number } {
   const exp = ({ 'Beginner': 0, 'Some experience': 1, 'Intermediate': 2, 'Advanced': 3 } as Record<string, number>)[a.experience as string] ?? 0;
   const fp = getRealFormPct(a);
   const formPts = fp >= 90 ? 3 : fp >= 70 ? 2 : fp >= 45 ? 1 : 0;
   const dur = DURATION_YEARS[(a.trainDuration as string) ?? ''] ?? 1;
   const durPts = dur >= 5 ? 2 : dur >= 2 ? 1 : 0;
-  const score = exp * 2 + formPts + durPts; // 0..11
-  const idx = Math.max(0, Math.min(7, Math.round((score * 7) / 11))); // 0..7
+  const strPts = strengthPoints(a);
+  const score = exp * 2 + formPts + durPts + strPts; // 0..23
+  const rawIdx = Math.round((score * 7) / 23);
+  const idx = strPts === 0 ? 0 : strPts >= 3 ? Math.max(0, Math.min(7, rawIdx)) : Math.max(0, Math.min(3, rawIdx));
   const name = idx < 4 ? 'Bronze' : 'Silver';
   const tier = ['I', 'II', 'III', 'IV'][idx % 4];
-  return { name, tier, label: `${name} ${tier}` };
+  return { name, tier, label: `${name} ${tier}`, idx, percentile: RANK_PERCENTILE[idx] };
 }
+
+// Tells rankrevealwheel's bronze/silver LADDER rows (and get target()) which
+// rank to actually land on and display — see the require() comment on
+// ONB_HTML.rankReveal. Runs via injectedJavaScriptBeforeContentLoaded, so
+// it's on `window` before the artboard's own script reads it.
+function rankRevealPreloadJs(a: Record<string, any>): string {
+  const rank = computeRank(a);
+  const key = rank.name.toLowerCase(); // 'bronze' | 'silver' — the only two computeRank() ever returns
+  const note = `Stronger than ${rank.percentile}% of new lifters`;
+  return `window.__FORMPAL_RANK_KEY = ${JSON.stringify(key)}; window.__FORMPAL_RANK_LABEL = ${JSON.stringify(rank.label)}; window.__FORMPAL_PERCENTILE_NOTE = ${JSON.stringify(note)};`;
+}
+
+// The reel's landed row reads its name/note off the LADDER edit (see
+// ONB_HTML.rankReveal's require() comment) — but the footer line right
+// below it ("Bronze II is your starting point…") is separate, plain static
+// markup, not templated at all, so it can only be fixed post-load. This is
+// the actual source of "the bottom text says Bronze II" no matter what the
+// reveal actually landed on.
+const RANK_REVEAL_FOOTER_JS = `
+(function(){
+  function apply(){
+    var label = window.__FORMPAL_RANK_LABEL;
+    if (!label) return false;
+    // querySelectorAll('#dc-root div') returns every div in the page,
+    // ancestors included — and an ANCESTOR's innerHTML also contains this
+    // same substring, since it's just further-down descendant text.
+    // Matching on innerHTML with no depth check hit that ancestor FIRST
+    // (parents precede their own descendants in document order) and
+    // rewrote its entire subtree from a string — destroying the live
+    // reel's DOM (refs, running animation, everything) it happened to be
+    // sitting inside. That's the actual cause of the reel getting stuck on
+    // "Your rank is..." and never landing, not a separate bug.
+    // The target div itself has a nested <span> (the "real-time feedback"
+    // highlight), so "only touch leaf divs" isn't right either — it'd
+    // never match anything. Only replace on the MOST SPECIFIC matching
+    // element: one whose own children don't ALSO contain this text (an
+    // ancestor's only reason for matching is that a descendant does).
+    var els = document.querySelectorAll('#dc-root div');
+    var hit = 0;
+    for (var i=0;i<els.length;i++){
+      var el = els[i];
+      var html = el.innerHTML || '';
+      if (html.indexOf('Bronze II is your starting point') < 0) continue;
+      var isMostSpecific = true;
+      for (var c=0;c<el.children.length;c++){
+        if ((el.children[c].innerHTML||'').indexOf('Bronze II is your starting point') >= 0) { isMostSpecific = false; break; }
+      }
+      if (!isMostSpecific) continue;
+      el.innerHTML = html.replace('Bronze II is your starting point', label + ' is your starting point');
+      hit++;
+    }
+    return hit >= 1;
+  }
+  if (!apply()) [150, 400, 900, 1600, 3000].forEach(function(d){ setTimeout(apply, d); });
+})();
+`;
 
 // One step above the computed starting rank — used for "your route toward X".
 function nextRankLabel(a: Record<string, any>): string {
@@ -2088,8 +2722,9 @@ type AppState =
   | 'welcome' | 'onboarding' | 'cinematic' | 'recoveryRoute' | 'reversal'
   // Rank run — straight after the last question.
   | 'rankWheel' | 'rankAssess' | 'rankReveal'
-  // The pre-paywall WebView pages, in order.
-  | 'generatePlan' | 'planReady' | 'trialTimeline' | 'webPaywall';
+  // The pre-paywall pages, in order. saveProgress + tryForFree are native
+  // screens spliced in right after plan-ready.
+  | 'generatePlan' | 'planReady' | 'saveProgress' | 'tryForFree' | 'trialTimeline' | 'webPaywall';
 
 type EditField = 'age' | 'height' | 'weight' | 'experience';
 
@@ -2098,6 +2733,19 @@ export default function OnboardingScreen() {
   const router = useRouter();
 
   const [appState,  setAppState]  = useState<AppState>('welcome');
+  // Brief "Finalizing your rank" beat shown as an OVERLAY on top of the
+  // still-mounted strengthAssessment screen (not a navigation to a separate
+  // page) — right where Continue was tapped, per explicit ask. See the
+  // useEffect below that turns it off and actually advances after a beat.
+  const [rankCalcOverlay, setRankCalcOverlay] = useState(false);
+  useEffect(() => {
+    if (!rankCalcOverlay) return;
+    // Matches RANK_CALC_MS (the bar's own fill duration) exactly — advance
+    // lands right as the bar finishes, not after an extra dead pause once
+    // it's already full.
+    const t = setTimeout(() => { setRankCalcOverlay(false); setAppState('rankReveal'); }, RANK_CALC_MS);
+    return () => clearTimeout(t);
+  }, [rankCalcOverlay]);
   const [stepIndex, setStepIndex] = useState(0);
   const [answers,   setAnswers]   = useState<Record<string, any>>({});
   const [plan,      setPlan]      = useState<{ focus: string; exercises: WorkoutExercise[] } | null>(null);
@@ -2117,8 +2765,20 @@ export default function OnboardingScreen() {
   // Hero (welcome screen) + demo (demoClip step) clips. Created
   // unconditionally so the hooks are stable; a null source just renders
   // black until the real files are dropped in (see HERO_VIDEO / DEMO_VIDEO).
-  const heroPlayer = useVideoPlayer(HERO_VIDEO, p => { p.loop = true; p.muted = true; p.play(); });
+  const heroPlayer = useVideoPlayer(HERO_VIDEO, p => { p.loop = true; p.muted = true; });
   const demoPlayer = useVideoPlayer(DEMO_VIDEO, p => { p.loop = true; p.muted = true; p.play(); });
+
+  // expo-video: play() inside the factory can silently no-op on iOS before
+  // the source is ready, so the hero clip sat frozen. Kick it on mount and
+  // again the moment it reports ready, and keep it looping.
+  useEffect(() => {
+    if (!HERO_VIDEO) return;
+    heroPlayer.play();
+    const sub = heroPlayer.addListener('statusChange', ({ status }) => {
+      if (status === 'readyToPlay') heroPlayer.play();
+    });
+    return () => sub.remove();
+  }, [heroPlayer]);
 
   const visibleSteps = getVisibleSteps(answers);
   const currentStep  = visibleSteps[stepIndex];
@@ -2130,38 +2790,99 @@ export default function OnboardingScreen() {
   // decode and showed a blank/glitchy icon for a frame. Asset.loadAsync
   // forces them into the native image cache once, here, before any of them
   // are ever shown.
+  //
+  // Rank shields included too — RankWheelScreen mounts all 7 cold the
+  // instant the last question advances into it, decoding seven PNGs at once
+  // on the same frame as the screen swap. That decode stall is what let the
+  // Stack navigator's own dark background (#0A0B0C, see app/_layout.tsx)
+  // show through for a frame before the wheel's white content painted — the
+  // "black screen" during that transition. Warming them here, well before
+  // the user can possibly reach that screen, removes the stall.
   useEffect(() => {
     Asset.loadAsync(Object.values(ICON)).catch(() => {});
+    Asset.loadAsync(Object.values(RANK_SHIELD_ASSETS)).catch(() => {});
   }, []);
+
+  // Direction of the transition currently in flight — read by the fade-in
+  // effect below, since it fires after animTrans has already returned.
+  // transTick is bumped once per completed animTrans transition; the effect
+  // keys on THIS (not stepIndex/appState directly) specifically so it never
+  // fires for OTHER stepIndex/appState changes that already animate
+  // themselves outside animTrans — e.g. RankWheelScreen's own back handler,
+  // which sets both plus runs its own fade/slide inline. Keying on raw
+  // stepIndex/appState would double-animate against that.
+  const transDirRef = useRef<'forward' | 'back'>('forward');
+  const didMountRef = useRef(false);
+  const [transTick, setTransTick] = useState(0);
 
   const animTrans = (dir: 'forward' | 'back', cb: () => void) => {
     const out = dir === 'forward' ? -36 : 36;
-    const inn = dir === 'forward' ? 36 : -36;
+    transDirRef.current = dir;
+    // Stop whatever's still running on these two shared values first — e.g.
+    // the rank-wheel back handler animates them directly outside this
+    // function; without stopping it first, a fast back-then-forward could
+    // leave two animations fighting over the same value, which is the kind
+    // of thing that leaves opacity parked somewhere unexpected (read as a
+    // black-screen flash on repeat visits, not the first one).
+    fadeAnim.stopAnimation();
+    slideAnim.stopAnimation();
     Animated.parallel([
       Animated.timing(fadeAnim,  { toValue: 0, duration: 120, useNativeDriver: true }),
       Animated.timing(slideAnim, { toValue: out, duration: 120, useNativeDriver: true }),
-    ]).start(() => {
-      cb();
-      slideAnim.setValue(inn);
-      Animated.parallel([
-        Animated.timing(fadeAnim,  { toValue: 1, duration: 200, useNativeDriver: true }),
-        Animated.spring(slideAnim, { toValue: 0, friction: 8, tension: 60, useNativeDriver: true }),
-      ]).start();
+    ]).start(({ finished }) => {
+      // A newer transition interrupted this one (stopAnimation() above) —
+      // finished is false, and THAT newer call owns the commit. Firing cb()
+      // here too would double-advance stepIndex.
+      if (!finished) return;
+      // The fade/slide BACK IN used to start right here, imperatively, in
+      // the same tick as cb(). cb() flips stepIndex via
+      // unstable_batchedUpdates, but that's a state update — React can
+      // commit it a tick later than this synchronous callback runs
+      // (especially likely under React 18's automatic batching). The
+      // native-driven fade-in animation doesn't wait for that: it starts
+      // acting on whatever content is STILL actually mounted at this exact
+      // instant, which — until React's commit lands — is the OLD question,
+      // not the new one. fadeAnim ramping 0→1 on the still-mounted old
+      // content is exactly "flashes the question you just answered again
+      // quickly, then shows the new one" (the new content, once it does
+      // mount, has no fade-in left to play). Moving the fade-in into a
+      // useEffect keyed on transTick guarantees it only ever starts AFTER
+      // React has committed the new step, since effects run post-commit by
+      // contract — there's nothing old left to flash. Batching the tick
+      // bump together with cb() keeps them landing in the same render.
+      unstable_batchedUpdates(() => { cb(); setTransTick(t => t + 1); });
     });
   };
 
+  // Fade/slide the NEW step in — runs after React has committed it (see the
+  // comment in animTrans above for why this can't be imperative there).
+  useEffect(() => {
+    if (!didMountRef.current) { didMountRef.current = true; return; }
+    const inn = transDirRef.current === 'forward' ? 36 : -36;
+    slideAnim.setValue(inn);
+    Animated.parallel([
+      Animated.timing(fadeAnim,  { toValue: 1, duration: 200, useNativeDriver: true }),
+      Animated.spring(slideAnim, { toValue: 0, friction: 8, tension: 60, useNativeDriver: true }),
+    ]).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transTick]);
+
   const advance = (ans: Record<string, any>, commit?: () => void) => {
     const vis = getVisibleSteps(ans);
+    // commit() (setAnswers) and the state flip below used to be two
+    // SEPARATE setState calls fired from inside an Animated .start()
+    // callback — outside a React event handler, so not guaranteed to be
+    // batched into one render. When they landed as two renders, the FIRST
+    // one had the new (committed) answers but the OLD stepIndex/appState —
+    // which is exactly the "quickly flashes a different/random question"
+    // bug. unstable_batchedUpdates forces both into a single render no
+    // matter what triggered this callback.
     if (stepIndex < vis.length - 1) {
-      // Commit the pending answer INSIDE the transition, together with the
-      // stepIndex bump — updating `answers` a tick earlier lets a showIf
-      // toggle a different step into the current index and flash it during
-      // the fade-out ("quickly shows another question then goes away").
-      animTrans('forward', () => { commit?.(); setStepIndex(i => i + 1); });
+      animTrans('forward', () => { unstable_batchedUpdates(() => { commit?.(); setStepIndex(i => i + 1); }); });
     } else {
       // Fade the last question out before the rank wheel mounts, so it isn't
       // a hard white cut into it.
-      animTrans('forward', () => { commit?.(); setAppState('rankWheel'); });
+      animTrans('forward', () => { unstable_batchedUpdates(() => { commit?.(); setAppState('rankWheel'); }); });
     }
   };
 
@@ -2217,43 +2938,56 @@ export default function OnboardingScreen() {
     router.replace('/(tabs)');
   };
 
-  // ── WELCOME — hero video (Cal-AI style): full-bleed clip of the app
-  // catching a rep, headline + CTA over the bottom. Black frame until the
-  // real file is dropped in (HERO_VIDEO).
+  // ── WELCOME — Cal-AI style: white screen, a small floating phone mock
+  // playing the demo clip, one bold line + "Get Started" + Sign In.
 
   if (appState === 'welcome') {
     return (
-      <View style={{ flex: 1, backgroundColor: '#000' }}>
-        {HERO_VIDEO
-          ? <VideoView player={heroPlayer} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} />
-          : <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
-              <Text style={{ color: 'rgba(255,255,255,0.25)', fontSize: 13, letterSpacing: 0.5 }}>hero clip goes here</Text>
-            </View>}
-        {/* Legibility scrim behind the text */}
-        <LinearGradient
-          colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.85)']}
-          locations={[0, 0.55, 1]}
-          style={StyleSheet.absoluteFill}
-          pointerEvents="none"
-        />
-        <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom + 24, paddingHorizontal: 28, justifyContent: 'flex-end' }}>
-          <Text style={h.wordmark}>FORMPAL</Text>
-          <Text style={h.title}>Every rep, checked.</Text>
-          <Text style={h.sub}>Your AI form coach — it watches every rep, counts the clean ones, and tells you what to fix.</Text>
-          <TouchableOpacity style={h.btn} onPress={() => { haptic(Haptics.ImpactFeedbackStyle.Medium); setStepIndex(0); setAppState('onboarding'); }} activeOpacity={0.85}>
-            <Text style={h.btnTxt}>Build my plan</Text>
-          </TouchableOpacity>
-          {/* DEV — jump straight to the post-math sequence (rank → generate
-              plan → plan ready → trial → paywall) to test the new pages
-              without going through every question. */}
+      <View style={[h.root, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 16 }]}>
+        <View style={h.stage}>
+          {/* demovid.mov is already a phone screen-recording — no device frame
+              around it (that read as a phone-in-a-phone-case). Just the clip. */}
+          <View style={h.videoCard}>
+            {HERO_VIDEO
+              ? <VideoView
+                  player={heroPlayer}
+                  style={StyleSheet.absoluteFill}
+                  contentFit="cover"
+                  nativeControls={false}
+                />
+              : <View style={[StyleSheet.absoluteFill, { backgroundColor: '#111114' }]} />}
+          </View>
+        </View>
+
+        <View style={h.bottom}>
+          <Text style={h.headline}>Your phone becomes{'\n'}your form coach</Text>
           <TouchableOpacity
-            onPress={() => { haptic(); setMathLinesDone(false); setAppState('rankWheel'); }}
-            style={{ alignSelf: 'center', marginTop: 14, paddingVertical: 8, paddingHorizontal: 16 }}
-            activeOpacity={0.7}
+            style={h.cta}
+            activeOpacity={0.9}
+            onPress={() => { haptic(Haptics.ImpactFeedbackStyle.Medium); setStepIndex(0); setAppState('onboarding'); }}
           >
-            <Text style={{ color: 'rgba(255,255,255,0.55)', fontSize: 13, fontWeight: '600' }}>Skip to rank (dev)</Text>
+            <Text style={h.ctaTxt}>Get Started</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={h.signinWrap}
+            hitSlop={8}
+            activeOpacity={0.7}
+            // TODO(auth): real sign-in — for now it just enters the flow.
+            onPress={() => { haptic(); setStepIndex(0); setAppState('onboarding'); }}
+          >
+            <Text style={h.signin}>Already have an account? <Text style={h.signinBold}>Sign In</Text></Text>
           </TouchableOpacity>
         </View>
+
+        {/* DEV — skip straight to the rank run. Absolute so it doesn't take
+            layout space away from the phone. */}
+        <TouchableOpacity
+          onPress={() => { haptic(); setMathLinesDone(false); setAppState('rankWheel'); }}
+          style={h.devWrap}
+          activeOpacity={0.6}
+        >
+          <Text style={h.dev}>skip to rank (dev)</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -2265,9 +2999,16 @@ export default function OnboardingScreen() {
 
     const header = (
       <View style={s.qh}>
-        <TouchableOpacity onPress={goBack} style={s.bb}>
-          <Sym name="chevron.left" size={16} color={L.textSub} />
-        </TouchableOpacity>
+        <LiquidGlassButton
+          onPress={goBack}
+          hitSlop={12}
+          radius={17}
+          variant="regular"
+          fallbackColor="rgba(255,255,255,0.92)"
+          style={s.bb}
+        >
+          <SymbolView name="chevron.left" size={15} tintColor="#1b1f27" type="monochrome" style={{ width: 15, height: 15 }} />
+        </LiquidGlassButton>
         <View style={s.pc}>
           <View style={s.pt}><View style={[s.pf, { width: `${progress * 100}%` }]} /></View>
         </View>
@@ -2287,8 +3028,8 @@ export default function OnboardingScreen() {
         <OnboardingBackground>
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
             {header}
-            <Animated.View style={{ paddingHorizontal: 24, paddingTop: 26, flex: 1, opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
-              <Text style={s.qq}>{st.question}</Text>
+            <Animated.View style={{ paddingHorizontal: 24, paddingTop: 10, flex: 1, opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
+              <Text style={s.qq}>{noOrphan(st.question)}</Text>
               <Picker selectedValue={wheelVal} onValueChange={(v) => { Haptics.selectionAsync(); setAnswers({ ...answers, [st.id]: v as string }); }} style={{ height: 230, marginTop: 8 }} itemStyle={{ color: L.text, fontSize: 28, fontWeight: '600' }}>
                 {opts.map(o => <Picker.Item key={o} label={o} value={o} />)}
               </Picker>
@@ -2311,8 +3052,8 @@ export default function OnboardingScreen() {
         <OnboardingBackground>
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
             {header}
-            <Animated.View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 26, opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
-              <Text style={s.qq}>{st.question}</Text>
+            <Animated.View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 10, opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
+              <Text style={s.qq}>{noOrphan(st.question)}</Text>
               <View style={{ flex: 1, justifyContent: 'center' }}>
                 <HomeSplitSlider value={sliderVal} onChange={(v) => setAnswers({ ...answers, [st.id]: v })} />
               </View>
@@ -2335,14 +3076,23 @@ export default function OnboardingScreen() {
         <OnboardingBackground>
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
             {header}
-            <Animated.View style={{ paddingHorizontal: 24, paddingTop: 26, flex: 1, opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
-              <Text style={s.qq}>{st.question}</Text>
+            <Animated.View style={{ paddingHorizontal: 24, paddingTop: 10, flex: 1, opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
+              <Text style={s.qq}>{noOrphan(st.question)}</Text>
               <View style={{ marginTop: 12 }}>
                 <WeightRulerSlider
                   value={rulerVal}
                   onChange={(v) => setAnswers({ ...answers, [st.id]: v })}
                 />
               </View>
+              {st.id === 'goalWeight' && typeof answers.weight === 'number' && (
+                <Text style={s.goalDelta}>
+                  {rulerVal < answers.weight
+                    ? `Lose: ${Math.round(answers.weight - rulerVal)} lbs`
+                    : rulerVal > answers.weight
+                    ? `Gain: ${Math.round(rulerVal - answers.weight)} lbs`
+                    : 'Same as your current weight'}
+                </Text>
+              )}
             </Animated.View>
             <View style={s.bn}>
               <TouchableOpacity style={s.cb} onPress={() => advance({ ...answers, [st.id]: rulerVal })} activeOpacity={0.85}>
@@ -2363,8 +3113,8 @@ export default function OnboardingScreen() {
         <OnboardingBackground>
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
             {header}
-            <Animated.View style={{ paddingHorizontal: 24, paddingTop: 26, flex: 1, opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
-              <Text style={s.qq}>{st.question}</Text>
+            <Animated.View style={{ paddingHorizontal: 24, paddingTop: 10, flex: 1, opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
+              <Text style={s.qq}>{noOrphan(st.question)}</Text>
               <View style={{ flex: 1, justifyContent: 'center' }}>
                 <TextInput
                   value={raw}
@@ -2396,8 +3146,8 @@ export default function OnboardingScreen() {
         <OnboardingBackground>
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
             {header}
-            <Animated.View style={{ paddingHorizontal: 24, paddingTop: 26, flex: 1, opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
-              <Text style={s.qq}>{st.question}</Text>
+            <Animated.View style={{ paddingHorizontal: 24, paddingTop: 10, flex: 1, opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
+              <Text style={s.qq}>{noOrphan(st.question)}</Text>
               <View style={{ flex: 1, justifyContent: 'center' }}>
                 <LocationBubbles
                   selected={picked}
@@ -2422,8 +3172,8 @@ export default function OnboardingScreen() {
         <OnboardingBackground>
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
             {header}
-            <View style={{ paddingHorizontal: 24, paddingTop: 26, flex: 1 }}>
-              <Text style={s.qq}>{st.question}</Text>
+            <View style={{ paddingHorizontal: 24, paddingTop: 10, flex: 1 }}>
+              <Text style={s.qq}>{noOrphan(st.question)}</Text>
               <View style={{ flex: 1, justifyContent: 'center' }}>
                 <GuessSlider value={val} onChange={(v) => setAnswers({ ...answers, [st.id]: v })} />
               </View>
@@ -2471,7 +3221,7 @@ export default function OnboardingScreen() {
               <Sym name="chevron.left" size={16} color="#fff" />
             </TouchableOpacity>
             <View style={{ flex: 1 }} />
-            <Text style={h.title}>{st.question}</Text>
+            <Text style={h.title}>{noOrphan(st.question)}</Text>
             {!!st.subtitle && <Text style={h.sub}>{st.subtitle}</Text>}
             <TouchableOpacity style={h.btn} onPress={() => advance(answers)} activeOpacity={0.85}>
               <Text style={h.btnTxt}>Continue</Text>
@@ -2487,6 +3237,125 @@ export default function OnboardingScreen() {
     if (st.type === 'interstitial') {
       const content = <PlanGrowthMoment header={header} insets={insets} onContinue={() => advance(answers)} />;
       return <OnboardingBackground>{content}</OnboardingBackground>;
+    }
+
+    // "How fast do you want to get there?" — a REAL native picker wheel
+    // (same Picker component the 'wheel' step type and StrengthAssessment
+    // use elsewhere), per explicit direction after row-list, dial, and
+    // slider were all tried and rejected. Shows the selected pace's icon +
+    // sublabel above the wheel, updating live as it spins.
+    if (st.id === 'goalPace') {
+      const opts = resolveOptions(st.options, answers);
+      const rate = typeof answers.goalPaceRate === 'number' ? (answers.goalPaceRate as number) : PACE_REF_RATE.Balanced;
+      const nearestLabel = paceLabelForRate(rate, opts);
+      const selectedOpt = opts.find((o) => o.label === nearestLabel) ?? opts[0];
+
+      const weight = typeof answers.weight === 'number' ? (answers.weight as number) : 0;
+      const goalWeight = typeof answers.goalWeight === 'number' ? (answers.goalWeight as number) : weight;
+      const delta = Math.abs(goalWeight - weight);
+      const isLosing = goalWeight < weight;
+      const weeks = delta > 0 ? Math.max(1, Math.round(delta / rate)) : 0;
+      // ~3,500 kcal per lb is the standard (if rough) rule of thumb for
+      // converting a weekly rate into a daily calorie deficit/surplus — a
+      // real, concrete number instead of generic encouragement text.
+      // PACE_REF_RATE.Aggressive (1.75) as the risk threshold: most
+      // general guidance treats sustained rates above ~1.5-2 lb/week as
+      // needing medical supervision, which is exactly where that anchor
+      // already sits.
+      const dailyCal = Math.round((rate * 3500) / 7);
+      const isRisky = rate >= PACE_REF_RATE.Aggressive;
+      // Same treatment, mirrored, for the gentle end of the range — a
+      // green "this is a healthy pace" cue instead of the amber warning.
+      const isHealthy = rate <= PACE_REF_RATE.Relaxed;
+
+      const setRate = (r: number) => {
+        const snapped = paceSnapRate(r);
+        setAnswers({ ...answers, goalPaceRate: snapped, goalPace: paceLabelForRate(snapped, opts) });
+      };
+      const pickIcon = (label: string) => {
+        Haptics.selectionAsync();
+        setRate(PACE_REF_RATE[label] ?? 1);
+      };
+
+      return (
+        <OnboardingBackground>
+          <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
+            {header}
+            <Animated.View style={{ paddingHorizontal: 24, paddingTop: 4, flex: 1, opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
+              <Text style={s.qq}>{noOrphan(st.question)}</Text>
+
+              <View style={{ alignItems: 'center', marginTop: 26 }}>
+                <Text style={s.paceRateLabel}>Weight {isLosing ? 'loss' : 'gain'} speed per week</Text>
+                <Text style={s.paceRateBig}>{rate} <Text style={s.paceRateUnit}>lbs</Text></Text>
+              </View>
+
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 30, paddingHorizontal: 4 }}>
+                {opts.map((o) => {
+                  const on = o.label === nearestLabel;
+                  return (
+                    <Pressable key={o.label} onPress={() => pickIcon(o.label)} style={{ alignItems: 'center', gap: 8 }}>
+                      {/* No background, no border, fixed size whether
+                          selected or not — these are the extracted (real
+                          alpha channel) versions of your icons, so
+                          tintColor now recolors just the silhouette
+                          instead of flattening the whole square. */}
+                      <View style={s.paceBubble}>
+                        {PACE_ICON[o.label]
+                          ? <PaceIconBob source={PACE_ICON[o.label]} tint={on ? L.accent : '#111114'} rate={PACE_REF_RATE[o.label] ?? 1} />
+                          : <Sym name="circle" size={22} color={on ? L.accent : L.textDim} />}
+                      </View>
+                      <Text style={[s.paceLabel, on && s.paceLabelOn]}>{o.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <View style={{ marginTop: 20 }}>
+                <HorizontalPaceTrack value={rate} min={PACE_RATE_MIN} max={PACE_RATE_MAX} step={PACE_RATE_STEP} onChange={setRate} />
+              </View>
+
+              <View style={s.paceCard}>
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
+                    <View style={[s.paceCardIcon, isRisky && s.paceCardIconWarn, isHealthy && s.paceCardIconGood]}>
+                      <Sym
+                        name={isRisky ? 'exclamationmark.triangle.fill' : isHealthy ? 'checkmark.seal.fill' : 'calendar'}
+                        size={16}
+                        color={isRisky ? '#B45300' : isHealthy ? '#1F9D4D' : L.accent}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      {weeks > 0 ? (
+                        <Text style={s.paceCardTitle} numberOfLines={1} adjustsFontSizeToFit>
+                          Reach your goal in{' '}
+                          <Text style={s.paceCardBadge}>{weeks}{' '}{weeks === 1 ? 'week' : 'weeks'}</Text>
+                        </Text>
+                      ) : (
+                        <Text style={s.paceCardTitle} numberOfLines={1} adjustsFontSizeToFit>
+                          You're already at your goal weight
+                        </Text>
+                      )}
+                      {/* Short, plain, human copy: a real number (the
+                          implied daily calorie change) plus at most 3
+                          simple sentences — no em dashes, no jargon. */}
+                      <Text style={[s.paceCardSub, isRisky && s.paceCardSubWarn, isHealthy && s.paceCardSubGood]}>
+                        {isRisky
+                          ? `That's about ${dailyCal} calories a day ${isLosing ? 'less' : 'more'} than usual. Going this fast can be risky. Talk to a doctor before you start.`
+                          : isHealthy
+                          ? `That's about ${dailyCal} calories a day ${isLosing ? 'less' : 'more'} than usual. This is a healthy, steady pace that's easy on your body.`
+                          : `That's about ${dailyCal} calories a day ${isLosing ? 'less' : 'more'} than usual. It's a solid pace most people can keep up.`}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+            </Animated.View>
+            <View style={s.bn}>
+              <TouchableOpacity style={s.cb} onPress={() => advance({ ...answers, goalPace: nearestLabel, goalPaceRate: rate })} activeOpacity={0.85}>
+                <Text style={s.ct}>Continue</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </OnboardingBackground>
+      );
     }
 
     // Select / multiselect — notification overlay is absolute (not in scroll)
@@ -2506,21 +3375,21 @@ export default function OnboardingScreen() {
         <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
           {header}
           <Animated.View style={{ flex: 1, opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
-            <View style={{ paddingHorizontal: 24, paddingTop: 26 }}>
-              <Text style={s.qq}>{st.question}</Text>
+            <View style={{ paddingHorizontal: 24, paddingTop: 10 }}>
+              <Text style={s.qq}>{noOrphan(st.question)}</Text>
               {st.subtitle && <Text style={s.qqSub}>{st.subtitle}</Text>}
             </View>
             <ScrollView
               style={{ flex: 1 }}
-              contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: st.type === 'multiselect' ? 140 : 44, flexGrow: 1, justifyContent: 'center' }}
+              contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: st.type === 'multiselect' ? 140 : 44, flexGrow: 1 }}
               showsVerticalScrollIndicator={false}
             >
               <View>
-              {(() => { const _opts = resolveOptions(st.options, answers); const big = _opts.length <= 4; return _opts.map((o, i) => {
+              {(() => { const _opts = resolveOptions(st.options, answers); return _opts.map((o, i) => {
                 const sel = isSel(o.label);
                 const sym = o.sfSymbol || 'person.fill';
                 return (
-                  <AnimatedOption key={`${st.id}-${o.label}`} index={i} style={[s.opt, big && s.optBig, sel && s.optSel]} onPress={() => handleSelect(o.label)}>
+                  <AnimatedOption key={`${st.id}-${o.label}`} index={i} style={[s.opt, sel && s.optSel]} onPress={() => handleSelect(o.label)}>
                     <View style={[s.optIcon, o.customIcon && s.optIconBadge]}>
                       {o.customIcon
                         // No tintColor here — these webp icons render as a
@@ -2532,10 +3401,10 @@ export default function OnboardingScreen() {
                         // square via overflow:hidden instead of showing as a
                         // stark white square against the row.
                         ? <Image source={o.customIcon} style={s.optIconImg} resizeMode="cover" />
-                        : <Sym name={sym} size={big ? 28 : 24} color={sel ? L.accent : L.textSub} />}
+                        : <Sym name={sym} size={24} color={sel ? L.accent : L.textSub} />}
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={[s.optTxt, big && s.optTxtBig, sel && s.optTxtSel]}>{o.label}</Text>
+                      <Text style={[s.optTxt, sel && s.optTxtSel]}>{o.label}</Text>
                       {o.sublabel && <Text style={s.optSublabel}>{o.sublabel}</Text>}
                     </View>
                     <View style={[s.radio, sel && s.radioSel]}>
@@ -2581,7 +3450,7 @@ export default function OnboardingScreen() {
       <OnboardingWebScreen
         htmlKey="recoveryRoute"
         topInset={insets.top}
-        extraJs={recoveryRouteInject()}
+        extraJs={recoveryRouteInject(answers) + '\n' + RESTART_RECOVERY_ANIM_JS}
         onAdvance={() => setAppState('generatePlan')}
         onBack={() => setAppState('cinematic')}
       />
@@ -2612,32 +3481,66 @@ export default function OnboardingScreen() {
   // ── Rank run — native screens (rank wheel / reveal + strength assessment).
   // Runs straight after the last question now (no math beat). ───────────────
 
-  if (appState === 'rankWheel') {
+  // rankWheel + rankAssess share one block now: strengthAssessment (a
+  // WebView artboard) used to cold-mount only once the user landed on it —
+  // load HTML, decode fonts, run its own paint-detection poll — which is
+  // real, unavoidable latency a native-to-native transition doesn't have,
+  // and read as "a wait screen for a second". Same prewarm trick DcPagePool
+  // already uses for planReady/trialTimeline/paywall: mount it now, hidden,
+  // while RankWheelScreen (fully native) is still showing, so by the time
+  // the user taps Continue it's already loaded and just fades in.
+  if (appState === 'rankWheel' || appState === 'rankAssess') {
     return (
-      <RankWheelScreen
-        topInset={insets.top}
-        onAdvance={() => setAppState('rankAssess')}
-        onBack={() => setAppState('onboarding')}
-      />
-    );
-  }
-
-  if (appState === 'rankAssess') {
-    return (
-      <OnboardingWebScreen
-        htmlKey="strengthAssessment"
-        topInset={insets.top}
-        onAdvance={() => setAppState('rankReveal')}
-        onBack={() => setAppState('rankWheel')}
-      />
+      <View style={{ flex: 1 }}>
+        {appState === 'rankWheel' && (
+          <RankWheelScreen
+            topInset={insets.top}
+            onAdvance={() => setAppState('rankAssess')}
+            onBack={() => {
+              // Was a raw setAppState('onboarding') with stepIndex untouched —
+              // stepIndex was still whatever it was pointing at BEFORE the last
+              // question's answer got committed (advance()'s forward transition
+              // commits it only after this screen is already showing). If that
+              // answer changed which steps are visible (a showIf toggling
+              // elsewhere), the stale stepIndex could land on the wrong step, or
+              // past the end of a now-shorter list — currentStep comes back
+              // undefined and the screen renders blank/broken. Recompute the
+              // "last question" index fresh from the CURRENT answers instead of
+              // trusting the old one, and give it the same fade+slide entrance
+              // every other back-navigation gets instead of a hard, un-animated cut.
+              setStepIndex(Math.max(0, getVisibleSteps(answers).length - 1));
+              fadeAnim.stopAnimation();
+              slideAnim.stopAnimation();
+              fadeAnim.setValue(0);
+              slideAnim.setValue(-36);
+              setAppState('onboarding');
+              Animated.parallel([
+                Animated.timing(fadeAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
+                Animated.spring(slideAnim, { toValue: 0, friction: 8, tension: 60, useNativeDriver: true }),
+              ]).start();
+            }}
+          />
+        )}
+        <OnboardingWebScreen
+          htmlKey="strengthAssessment"
+          topInset={insets.top}
+          poolActive={appState === 'rankAssess'}
+          onAdvance={() => setRankCalcOverlay(true)}
+          onBack={() => setAppState('rankWheel')}
+          onStrengthVals={(vals) => setAnswers((a) => ({ ...a, strength: vals }))}
+        />
+        {rankCalcOverlay && <RankCalcOverlay bottomInset={insets.bottom} />}
+      </View>
     );
   }
 
   if (appState === 'rankReveal') {
     return (
-      <RankRevealScreen
-        rankName={computeRank(answers).label}
+      <OnboardingWebScreen
+        htmlKey="rankReveal"
         topInset={insets.top}
+        extraJsBeforeLoad={rankRevealPreloadJs(answers)}
+        extraJs={RANK_REVEAL_FOOTER_JS}
         onAdvance={() => setAppState('cinematic')}
         onBack={() => setAppState('rankAssess')}
       />
@@ -2647,7 +3550,10 @@ export default function OnboardingScreen() {
   // ── The pre-paywall WebView pages. generatePlan is a one-shot loading
   // screen; the last three (plan ready / trial / paywall) live in a pool
   // that boots during generatePlan so switching between them is instant.
-  if (appState === 'generatePlan' || appState === 'planReady' || appState === 'trialTimeline' || appState === 'webPaywall') {
+  if (
+    appState === 'generatePlan' || appState === 'planReady' || appState === 'saveProgress' ||
+    appState === 'tryForFree' || appState === 'trialTimeline' || appState === 'webPaywall'
+  ) {
     const poolActive: PoolKey | null =
       appState === 'planReady' ? 'planReady' :
       appState === 'trialTimeline' ? 'trialTimeline' :
@@ -2659,13 +3565,13 @@ export default function OnboardingScreen() {
           answers={answers}
           topInset={insets.top}
           onAdvance={(from) => {
-            if (from === 'planReady') setAppState('trialTimeline');
+            if (from === 'planReady') setAppState('saveProgress');
             else if (from === 'trialTimeline') setAppState('webPaywall');
             else finishOnboarding();
           }}
           onBack={(from) => {
             if (from === 'planReady') setAppState('generatePlan');
-            else if (from === 'trialTimeline') setAppState('planReady');
+            else if (from === 'trialTimeline') setAppState('tryForFree');
             else setAppState('trialTimeline');
           }}
           onEditInfo={(f) => setEditField(f as EditField)}
@@ -2687,6 +3593,20 @@ export default function OnboardingScreen() {
             topInset={insets.top}
             onAdvance={() => setAppState('planReady')}
             onBack={() => setAppState('recoveryRoute')}
+          />
+        )}
+        {appState === 'saveProgress' && (
+          <SaveProgressScreen
+            topInset={insets.top}
+            onAdvance={() => setAppState('tryForFree')}
+            onBack={() => setAppState('planReady')}
+          />
+        )}
+        {appState === 'tryForFree' && (
+          <TryForFreeScreen
+            topInset={insets.top}
+            onAdvance={() => setAppState('trialTimeline')}
+            onBack={() => setAppState('saveProgress')}
           />
         )}
         {editField && appState === 'planReady' && (
@@ -2814,7 +3734,14 @@ function EditFieldOverlay({ field, answers, topInset, onSave, onClose }: {
 const s = StyleSheet.create({
   // Progress bar header
   qh: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12 },
-  bb: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: L.card, borderWidth: 1, borderColor: L.border, ...({ boxShadow: Elev.low.shadow } as any) },
+  // Matches the back button style used everywhere else (rank screens, save
+  // progress, try-for-free) — was a flat grey-bordered circle here, a glass
+  // one there; same LiquidGlassButton + size now, everywhere.
+  bb: {
+    width: 34, height: 34, alignItems: 'center', justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.10)',
+    ...({ boxShadow: '0px 2px 8px rgba(0,0,0,0.10)' } as any),
+  },
   pc: { flex: 1, paddingHorizontal: 12 },
   pt: { height: 4, backgroundColor: 'rgba(17,24,39,0.08)', borderRadius: 2, overflow: 'hidden' },
   pf: { height: 4, backgroundColor: L.accent, borderRadius: 2 },
@@ -2822,16 +3749,39 @@ const s = StyleSheet.create({
   skipTxt: { fontSize: 14, fontWeight: W.semi, color: L.textSub },
 
   // Question
-  qq:     { fontFamily: FONT.displayBold, fontSize: 33, color: '#111114', lineHeight: 40, marginBottom: 26, letterSpacing: -0.9 },
+  qq:     { fontFamily: FONT.displayBold, fontSize: 26, color: '#111114', lineHeight: 32, marginBottom: 18, letterSpacing: -0.7 },
   qqSub:  { fontSize: 14, color: L.textSub, lineHeight: 21, marginTop: -14, marginBottom: 24 },
+  goalDelta: { fontFamily: FONT.displayBold, fontSize: 20, color: L.text, textAlign: 'center', marginTop: 40, letterSpacing: -0.3 },
+  paceRateLabel: { fontSize: 14.5, fontWeight: W.semi, color: L.textSub },
+  paceRateBig: { fontFamily: FONT.displayBold, fontSize: 46, color: L.text, letterSpacing: -1.2, marginTop: 6 },
+  paceRateUnit: { fontSize: 20, fontWeight: W.semi, color: L.textDim },
+  // No background fill, no border ring — plain white behind the icons,
+  // matching the reference exactly. Selection reads through size only (the
+  // "on" icon renders larger), same as the reference's own icon treatment.
+  // Fixed size always — never changes on selection, per explicit ask.
+  paceBubble: { width: 62, height: 62, alignItems: 'center', justifyContent: 'center' },
+  paceLabel: { fontSize: 11.5, fontWeight: '600', color: L.textDim },
+  paceLabelOn: { fontWeight: '800', color: L.text },
+  paceCard: { backgroundColor: L.card, borderRadius: 18, borderWidth: 1, borderColor: L.border, paddingHorizontal: 18, paddingVertical: 16, marginTop: 10 },
+  paceCardIcon: { width: 30, height: 30, borderRadius: 15, backgroundColor: 'rgba(46,125,255,0.12)', alignItems: 'center', justifyContent: 'center' },
+  paceCardIconWarn: { backgroundColor: 'rgba(180,83,0,0.14)' },
+  paceCardIconGood: { backgroundColor: 'rgba(31,157,77,0.14)' },
+  paceCardTitle: { fontFamily: FONT.displayBold, fontSize: 15.5, color: L.text, letterSpacing: -0.2, lineHeight: 21 },
+  // borderRadius large enough to exceed half the badge's own line-height —
+  // that's what actually reads as a true rounded pill instead of a
+  // barely-rounded rectangle.
+  paceCardBadge: {
+    color: '#fff', backgroundColor: L.accent, fontWeight: '800',
+    borderRadius: 999, paddingHorizontal: 9, paddingVertical: 2, overflow: 'hidden',
+  },
+  paceCardSub: { fontSize: 12.5, color: L.textSub, marginTop: 6, lineHeight: 18 },
+  paceCardSubWarn: { color: '#8a5a00', fontWeight: '600' },
+  paceCardSubGood: { color: '#1a7a3d', fontWeight: '600' },
   textInput: { backgroundColor: L.card, borderRadius: 16, borderWidth: 1, borderColor: L.border, paddingHorizontal: 18, paddingVertical: 16, fontSize: 18, color: L.text, ...({ boxShadow: Elev.low.shadow } as any) },
 
   // Options
   opt:        { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: L.card, borderRadius: 16, borderWidth: 1, borderColor: L.border, paddingHorizontal: 16, paddingVertical: 14, marginBottom: 10, ...({ boxShadow: Elev.low.shadow } as any) },
   optSel:     { borderColor: L.accent, backgroundColor: L.accentSoft },
-  // Short lists (sex, experience…) — roomier rows so they fill the screen.
-  optBig:     { borderRadius: 20, paddingHorizontal: 18, paddingVertical: 20, marginBottom: 14, gap: 16 },
-  optTxtBig:  { fontSize: 17.5 },
   // No boxed background — selection is already conveyed by the icon's own
   // color (accent when selected, muted gray otherwise, see the render
   // above), so the gray square backdrop was pure redundant chrome, not
@@ -2884,10 +3834,34 @@ const s = StyleSheet.create({
 });
 
 // Hero / video-clip overlays — white text on a dark clip.
+const WELCOME_VIDEO_W = Math.min(Dimensions.get('window').width * 0.78, 348);
+
 const h = StyleSheet.create({
-  wordmark: { fontSize: 12, fontWeight: W.bold, color: 'rgba(255,255,255,0.6)', letterSpacing: 2.5, marginBottom: 12 },
-  title:    { fontFamily: FONT.displayBold, fontSize: 34, color: '#fff', letterSpacing: -1, lineHeight: 40, marginBottom: 12 },
-  sub:      { fontSize: 15, color: 'rgba(255,255,255,0.82)', lineHeight: 22, marginBottom: 24 },
-  btn:      { backgroundColor: '#fff', borderRadius: 100, paddingVertical: 18, alignItems: 'center' },
-  btnTxt:   { fontFamily: FONT.displayBold, fontSize: 16, color: '#0B1020', letterSpacing: 0.1 },
+  root: { flex: 1, backgroundColor: '#ffffff', paddingHorizontal: 24 },
+  stage: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 20 },
+  videoCard: {
+    width: WELCOME_VIDEO_W, aspectRatio: 9 / 19.5, maxHeight: '100%',
+    borderRadius: 34, overflow: 'hidden', backgroundColor: '#000',
+  },
+  bottom: { paddingTop: 4, paddingBottom: 10 },
+  headline: {
+    fontFamily: FONT.displayBlack, fontSize: 30, lineHeight: 36, color: '#111114',
+    letterSpacing: -1, textAlign: 'center', marginBottom: 18,
+  },
+  cta: {
+    backgroundColor: '#111114', borderRadius: 100, height: 62,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  ctaTxt: { fontFamily: FONT.displayBold, fontSize: 17, color: '#fff', letterSpacing: -0.2 },
+  signinWrap: { alignSelf: 'center', marginTop: 14, paddingVertical: 4 },
+  signin: { fontFamily: FONT.display, fontSize: 14.5, color: '#6e6e77', letterSpacing: -0.1 },
+  signinBold: { fontFamily: FONT.displayBold, color: '#111114' },
+  devWrap: { position: 'absolute', left: 0, right: 0, bottom: 2, alignItems: 'center', padding: 6 },
+  dev: { fontSize: 11, color: '#c8c8cf', fontWeight: '600' },
+
+  // Dark full-bleed video overlay text — still used by the `videoClip` step type.
+  title:  { fontFamily: FONT.displayBold, fontSize: 34, color: '#fff', letterSpacing: -1, lineHeight: 40, marginBottom: 12 },
+  sub:    { fontSize: 15, color: 'rgba(255,255,255,0.82)', lineHeight: 22, marginBottom: 24 },
+  btn:    { backgroundColor: '#fff', borderRadius: 100, paddingVertical: 18, alignItems: 'center' },
+  btnTxt: { fontFamily: FONT.displayBold, fontSize: 16, color: '#0B1020', letterSpacing: 0.1 },
 });
