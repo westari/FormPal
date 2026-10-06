@@ -1572,9 +1572,22 @@ function DcPagePool({ activeKey, answers, topInset, progressFor, onAdvance, onBa
   const planReadyHtml = useMemo(() => {
     if (!rawPlanReadyHtml) return null;
     const goal = computeGoalPlan(answers);
+    // BUG FOUND (device test): the {{HEADER}}/{{SUBLINE}} tokens sit INSIDE
+    // a JSON string literal in the raw file (the __bundler/template
+    // script's content is JSON-escaped text, not live HTML yet) — a plain
+    // .replace() with a raw HTML string spliced in a literal, unescaped `"`
+    // from the header's `style="color: #2E7DFF;"` span, which prematurely
+    // terminated that JSON string and corrupted it. The bundler's own
+    // runtime JSON.parse() on that blob then threw ("Error unpacking: JSON
+    // Parse error") and rendered nothing but that error message. Fix:
+    // JSON-escape the replacement text the same way JSON.stringify would
+    // (quotes -> \", backslashes -> \\, etc.) before splicing it in —
+    // JSON.stringify(x).slice(1,-1) gives exactly that escaped inner
+    // content without the wrapping quotes.
+    const esc = (s: string) => JSON.stringify(s).slice(1, -1);
     return rawPlanReadyHtml
-      .replace('{{HEADER}}', planReadyHeaderText(goal))
-      .replace('{{SUBLINE}}', 'Starting today');
+      .replace('{{HEADER}}', esc(planReadyHeaderText(goal)))
+      .replace('{{SUBLINE}}', esc('Starting today'));
   }, [rawPlanReadyHtml, answers]);
 
   return (
