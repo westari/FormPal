@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Asset } from 'expo-asset';
+import { File } from 'expo-file-system';
 import { SymbolView } from 'expo-symbols';
 import { Picker } from '@react-native-picker/picker';
 import * as Haptics from 'expo-haptics';
@@ -17,13 +18,13 @@ import Svg, { Path as SvgPath, Text as SvgText, Circle as SvgCircle } from 'reac
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AppBackground from '../components/AppBackground';
-import PlanGrowthMoment from '../components/PlanGrowthMoment';
 import { LiquidGlassButton } from '../components/LiquidGlass';
 import RankWheelScreen from '../components/onboarding/RankWheelScreen';
 import SaveProgressScreen from '../components/onboarding/SaveProgressScreen';
 import TryForFreeScreen from '../components/onboarding/TryForFreeScreen';
 import { PUSHUP_ICON, PULLUP_ICON, SQUAT_ICON } from '../assets/onboarding/onbIcons';
 import { FONT, W, Col, Elev } from '../constants/theme';
+import { computeGoalPlan } from '../lib/onboardingGoals';
 
 // Onboarding video clips — drop the real files in at these paths and flip
 // the consts to require(...). null renders a plain black frame instead, so
@@ -105,13 +106,6 @@ const ICON = {
   mixNoBg: require('../assets/icons/homeandgymnobg.webp'),
   // notifications
   notifOn: require('../assets/icons/notison.webp'), notifOff: require('../assets/icons/notisoff.webp'),
-  // goalPace
-  // Extracted from the originals (which had no alpha channel — a flat
-  // opaque square, which is why tinting them rendered as a solid box) into
-  // real transparent-background PNGs, so tintColor recolors just the
-  // silhouette. See scratchpad/extract_pace_icons.py for the conversion.
-  paceEasy: require('../assets/icons/pace-easy.png'), paceModerate: require('../assets/icons/pace-moderate.png'),
-  paceAggressive: require('../assets/icons/pace-aggressive.png'),
 } as const;
 
 // ── Light theme palette ────────────────────────────────────────────────────────
@@ -344,9 +338,13 @@ const STRENGTH_CAPTURE_JS = `
 `;
 
 const ONB_HTML = {
-  // Redesigned rank run + the wasted-muscle graph (Claude Design artboards).
-  rankWheel:          require('../assets/rankwheel2.html'),
-  strengthAssessment: require('../assets/strengthassesment.html'),
+  // Redesigned rank run + the goal-route graph (Claude Design artboards).
+  // All these DC pages live in assets/app screens/. rankwheel2.html is gone
+  // — RankWheelScreen (native) replaced it entirely, the HTML version was
+  // never actually rendered any more. cinematicgraph.html is gone too — the
+  // rank-framed two-routes graph was dropped from the flow in favor of
+  // reusing recoveryroute.html, goal-framed, right after the rank reveal.
+  strengthAssessment: require('../assets/app screens/strengthassesment.html'),
   // The reel-style reveal artboard (renamed from "FormPal Rank Reveal.html"
   // — the space in that filename made the WebView's require()'d asset URL
   // 404 as "asset not found" on device; every other DC page here uses a
@@ -355,16 +353,39 @@ const ONB_HTML = {
   // __FORMPAL_RANK_LABEL / __FORMPAL_PERCENTILE_NOTE (set by
   // rankRevealPreloadJs below) so it lands on and displays the user's real
   // computed rank instead of the file's own hardcoded "Bronze II" demo.
-  rankReveal:         require('../assets/rankrevealreel.html'),
-  cinematicGraph:     require('../assets/cinematicgraph.html'),
-  recoveryRoute:      require('../assets/recoveryroute.html'),
+  rankReveal:         require('../assets/app screens/rankrevealreel.html'),
   // The pre-paywall pages. They render with their built-in default copy;
-  // planReady + cinematicGraph + recoveryRoute get slots rewritten from the
-  // user's answers (see the *Inject helpers).
-  generatePlan:       require('../assets/generateplan.html'),
-  planReady:          require('../assets/planisreadynow.html'),
-  trialTimeline:      require('../assets/trialtimeline2.html'),
-  paywall:            require('../assets/paywall.html'),
+  // planReady gets its slots rewritten from the user's answers (see the
+  // *Inject helpers).
+  generatePlan:       require('../assets/app screens/generateplan.html'),
+  planReady:          require('../assets/app screens/planisreadynow.html'),
+  trialTimeline:      require('../assets/app screens/trialtimeline2.html'),
+  paywall:            require('../assets/app screens/paywall.html'),
+  // Real Claude-Design artboards for steps that were native placeholders
+  // (plain "PLACEHOLDER — DESIGN COMING" text / a hand-built slider /
+  // native centered-text component) — used directly via WebView, not
+  // rebuilt natively, per explicit direction. Same keys as their STEPS
+  // ids where applicable, for easy tracing.
+  giveVsWithout:       require('../assets/app screens/plancomp.html'),
+  giveRealisticTarget: require('../assets/app screens/realistictarget.html'),
+  formConfidence:      require('../assets/app screens/formconfidence.html'),
+  goalPace:            require('../assets/app screens/goalpace.html'),
+  // goodhands.html's real content turned out to be the privacy/trust
+  // message ("Thank you for trusting us" / "Your privacy matters to
+  // us...") — despite its filename, extraction showed this is the
+  // 'thankYou' appState screen's replacement, NOT the STEPS
+  // 'giveGoodHands' struggle/accomplish interstitial. That one now has
+  // its own real design file (goodhandsv2.html, added later) — see below.
+  thankYou:            require('../assets/app screens/goodhands.html'),
+  // Real design artboards for the two remaining native-placeholder
+  // interstitials. Static copy baked into each file (no struggle/
+  // accomplish echo on giveGoodHands any more — the new design's own
+  // fixed copy replaces the old personalized native text).
+  giveGoodHands:       require('../assets/app screens/goodhandsv2.html'),
+  notAlone:            require('../assets/app screens/notalone.html'),
+  // Not a STEPS screen — a standalone appState shown right before
+  // generatePlan (see the 'readyToBuild' appState block).
+  readyToBuild:        require('../assets/app screens/readytobuild.html'),
 } as const;
 
 // Same 7 files RankWheelScreen's own RANKS array requires — kept as a
@@ -379,12 +400,6 @@ const RANK_SHIELD_ASSETS: Record<string, any> = {
   diamond:  require('../assets/ranks/diamond.png'),
   master:   require('../assets/ranks/master.png'),
   champion: require('../assets/ranks/champion.png'),
-};
-
-const GOAL_DATE = () => {
-  const d = new Date(Date.now() + 70 * 86400000); // ~10 weeks out
-  const M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return `${M[d.getMonth()]} ${d.getDate()}`;
 };
 
 // Draws the plan-ready graph line in fully via JS, triggered when the page
@@ -484,55 +499,238 @@ const PR_FILL_D    = PR_LINE_D + ' L292 160 L14 160 Z';
 const PR_LINE_D_DOWN = 'M14 70 C48 72 70 76 98 86 C132 98 154 128 192 140 C220 149 246 151 292 152';
 const PR_FILL_D_DOWN  = PR_LINE_D_DOWN + ' L292 160 L14 160 Z';
 
+// Exact wording per explicit spec — sentence case, no date in the header
+// any more (that's the {{SUBLINE}} token -> "Starting today"), no
+// "You're set to hit". Used to string-replace planisreadynow.html's own
+// {{HEADER}} token BEFORE the WebView loads it (see DcPagePool) — not via
+// DOM injection, which is what kept silently breaking across rounds.
+// Replacement value for {{HEADER}} is spliced straight into raw HTML text
+// (a plain string .replace(), not textContent), so inline markup here
+// renders for real — used to restore the original design's blue-highlight
+// on the value, same #2E7DFF the rest of this page's chart/badges use.
+// Recomp gets "Starting today." appended to the sentence itself — explicit
+// ask — since its two-line crossing graph doesn't carry the same "Starting
+// today" sub-line read as clearly as the single-line kinds do.
+function planReadyHeaderText(goal: ReturnType<typeof computeGoalPlan>): string {
+  if (goal.kind === 'fat')    return `Your goal is to lose <span style="color: #2E7DFF;">${goal.deltaLbs} lbs</span>`;
+  if (goal.kind === 'recomp') return `Your goal is to <span style="color: #2E7DFF;">lose fat and gain muscle</span>. Starting today.`;
+  return `Your goal is to gain <span style="color: #2E7DFF;">${goal.deltaLbs} lbs</span>`;
+}
+
 function planReadyInject(a: Record<string, any>): string {
+  const goal = computeGoalPlan(a);
   const w  = typeof a.weight === 'number' ? Math.round(a.weight) : 0;
   const wStr = w ? `${w} lb` : '';
   const h  = typeof a.height === 'string' ? a.height : '';
   const ag = a.age != null ? String(a.age) : '';
   const ex = typeof a.experience === 'string' ? a.experience : '';
-  // Goal weight: the answer from the dedicated question if we have it, else
-  // a small goal-direction estimate off current weight.
-  const goals = (a.goal as string[]) ?? [];
-  const isLoseWeight = goals.includes('Lose weight');
-  const delta = isLoseWeight ? -8 : (goals.some(g => /muscle|strength/i.test(g)) ? 6 : 4);
-  const goalNum = typeof a.goalWeight === 'number' ? Math.round(a.goalWeight) : (w ? w + delta : 0);
-  const goalW = goalNum ? `${goalNum} lb` : '';
-  const gd = GOAL_DATE();
+  const days = parseInt(String(a.daysPerWeek ?? '3 days'), 10) || 3;
   return `
 (function(){
+  function post(m){ try{ window.ReactNativeWebView.postMessage(m); }catch(e){} }
   var MAP = {
-    '195 lb': ${JSON.stringify(goalW)},
-    'Dec 1':  ${JSON.stringify(gd)},
+    '195 lb': ${JSON.stringify(goal.shortGoal)},
     '184 lb': ${JSON.stringify(wStr)},
     "5'11\\"": ${JSON.stringify(h)},
     '27':     ${JSON.stringify(ag)},
     'Beginner': ${JSON.stringify(ex)}
   };
-  var GOING_DOWN = ${isLoseWeight ? 'true' : 'false'};
+  var GOAL_VALUE = ${JSON.stringify(goal.shortGoal)};
+  var MILESTONE_LINE = ${JSON.stringify('Hit 90% clean form by ' + goal.milestoneDateLabel)};
+  var DAYS = ${days};
+  var KIND = ${JSON.stringify(goal.kind)};
   function apply(){
-    var all=document.querySelectorAll('#dc-root div,#dc-root span,#dc-root p'), hit=0;
+    // Header/sub-line are no longer matched or replaced here — the
+    // artboard file itself (planisreadynow.html) now has literal
+    // {{HEADER}} / {{SUBLINE}} tokens baked into its template, string-
+    // replaced on the raw HTML text BEFORE this page ever loads (see
+    // DcPagePool's planReadyHtml). That's the one fix the DOM-searching
+    // approach kept breaking on across multiple rounds — a pre-load
+    // string replace can't mismatch a div the way runtime querying could.
+    // The "Dec 1" date div is hidden via inline style in the same file
+    // edit, so it's not touched here either.
+    var hit=0;
+
+    var all=document.querySelectorAll('#dc-root div,#dc-root span,#dc-root p');
     for(var i=0;i<all.length;i++){
       var el=all[i];
-      if(!el.children.length){
-        var t=(el.textContent||'').trim();
-        if(MAP[t] != null && MAP[t] !== '' && el.textContent.trim() !== MAP[t]){ el.textContent=MAP[t]; hit++; }
+      if(el.children.length) continue;
+      var t=(el.textContent||'').trim();
+      if(MAP[t] != null && MAP[t] !== '' && el.textContent.trim() !== MAP[t]){ el.textContent=MAP[t]; hit++; }
+    }
+
+    // Graph: direction + start/end markers depend on the real goal kind.
+    // Muscle gain keeps the artboard's own default shape (line rising,
+    // left-to-right) untouched. Fat loss swaps to the falling variant.
+    // Recomp replaces the single line with two: fat down, muscle up, from
+    // a shared start point — the artboard only ever had one line, so this
+    // one is built fresh rather than guessed from the existing paths
+    // (which don't share a start point with each other).
+    var svg = document.querySelector('#dc-root svg[sc-camel-view-box="0 0 300 190"]') || document.querySelector('#dc-root svg');
+    if (svg && !svg.__formpalGraphDone) {
+      var paths = svg.querySelectorAll('path');
+      var lineEl=null, fillEl=null, badgeTriEl=null;
+      for (var p=0;p<paths.length;p++){
+        var d=paths[p].getAttribute('d')||'';
+        if (d===${JSON.stringify(PR_LINE_D)}) lineEl=paths[p];
+        else if (d===${JSON.stringify(PR_FILL_D)}) fillEl=paths[p];
+        else if (d.indexOf('L250 56')>=0 || d.indexOf('M250 56')>=0) badgeTriEl=paths[p];
       }
-      // Headline: "You're set to hit X by Y" -> "Your goal is to reach X by Y".
-      for(var k=0;k<el.childNodes.length;k++){
-        var n=el.childNodes[k];
-        if(n.nodeType===3 && /You'?re set to hit/i.test(n.nodeValue)){
-          n.nodeValue=n.nodeValue.replace(/You'?re set to hit/i, 'Your goal is to reach'); hit++;
+      var circles = svg.querySelectorAll('circle');
+      var startDot = circles[0] || null;   // cx=14 cy=152 in the original
+      var endDot   = circles[1] || null;   // cx=256 cy=70.6 in the original
+      // The TARGET badge is a plain floating div (not inside the SVG) —
+      // find it by its own "TARGET" label text.
+      var badge = null;
+      {
+        var cand = svg.parentElement ? svg.parentElement.querySelectorAll('div') : [];
+        for (var c=0;c<cand.length;c++){
+          if ((cand[c].textContent||'').indexOf('TARGET')>=0 && cand[c].querySelector('div')){ badge = cand[c]; break; }
         }
       }
-    }
-    if(GOING_DOWN){
-      var paths=document.querySelectorAll('#dc-root path');
-      for(var p=0;p<paths.length;p++){
-        var d=paths[p].getAttribute('d');
-        if(d===${JSON.stringify(PR_LINE_D)}) paths[p].setAttribute('d', ${JSON.stringify(PR_LINE_D_DOWN)});
-        else if(d===${JSON.stringify(PR_FILL_D)}) paths[p].setAttribute('d', ${JSON.stringify(PR_FILL_D_DOWN)});
+
+      function placeAlong(path, circleEl, atStart){
+        if (!path || !circleEl) return null;
+        var len = path.getTotalLength();
+        var pt = path.getPointAtLength(atStart ? 0 : len);
+        circleEl.setAttribute('cx', pt.x.toFixed(1));
+        circleEl.setAttribute('cy', pt.y.toFixed(1));
+        return pt;
       }
+      // BUG FOUND: the badge was positioned with fixed magic-number
+      // offsets (-44, -70) reverse-engineered from the untouched muscle-
+      // gain default — correct ONLY for that one exact point. For any
+      // other point (fat loss's repositioned endpoint) it was never
+      // actually centered, just offset by the same fixed amount from a
+      // totally different spot — reported as "the target card is
+      // broken." Measures the badge's REAL rendered width/height and
+      // centers it horizontally on the point every time, with its bottom
+      // edge a fixed gap above the point so the triangle (drawn right
+      // under it, same gap) reads as connecting card to dot.
+      var BADGE_GAP = 10;
+      function placeBadge(pt){
+        if (!badge || !pt || !svg.parentElement) return null;
+        var svgRect = svg.getBoundingClientRect();
+        var hostRect = svg.parentElement.getBoundingClientRect();
+        var vb = { w: 300, h: 190 }; // the artboard's own fixed viewBox
+        var scaleX = svgRect.width / vb.w, scaleY = svgRect.height / vb.h;
+        var px = (svgRect.left - hostRect.left) + pt.x * scaleX;
+        var py = (svgRect.top  - hostRect.top)  + pt.y * scaleY;
+        var bw = badge.offsetWidth || 88, bh = badge.offsetHeight || 54;
+        badge.style.left = (px - bw / 2) + 'px';
+        badge.style.top  = Math.max(4, py - bh - BADGE_GAP) + 'px';
+        return pt;
+      }
+      // Small triangle pointing down from the badge at the graph — back
+      // per explicit ask ("add back the triangle, it used to be there").
+      // Drawn in the SAME SVG coordinate space as the point itself (not
+      // screen pixels like the badge), directly above the dot with the
+      // same BADGE_GAP — lines up with the badge's now-precisely-centered
+      // bottom edge above it. Muscle gain (default, untouched graph)
+      // already has its own correctly-placed default, no change needed.
+      // Recomp still hides it — no single target badge there, two lines
+      // instead.
+      function placeTri(pt){
+        if (!badgeTriEl || !pt) return;
+        var cx = pt.x, cy = pt.y - (BADGE_GAP / ((svg.getBoundingClientRect().height / 190) || 1));
+        badgeTriEl.setAttribute('d', 'M'+(cx-6).toFixed(1)+' '+(cy-11).toFixed(1)+' L'+(cx+6).toFixed(1)+' '+(cy-11).toFixed(1)+' L'+cx.toFixed(1)+' '+cy.toFixed(1)+' Z');
+        badgeTriEl.style.display = '';
+      }
+
+      if (KIND === 'recomp') {
+        // Rebuilt per reference screenshot: two genuinely separate curves
+        // crossing in the middle (muscle rising from the bottom, fat
+        // falling from the top — NOT sharing a start point, which is what
+        // made the old version read as flat/boring), open-circle
+        // endpoints, dotted top/bottom guide lines, and labels sitting
+        // next to each line's own end instead of pinned to the edge. Muscle
+        // is blue (#2E7DFF, this page's one accent color everywhere else);
+        // fat is dark — the previous version had these swapped.
+        if (lineEl) lineEl.style.display = 'none';
+        if (fillEl) fillEl.style.display = 'none';
+        if (startDot) startDot.style.display = 'none';
+        if (endDot) endDot.style.display = 'none';
+        if (badge) badge.style.display = 'none';
+        if (badgeTriEl) badgeTriEl.style.display = 'none';
+        var old = svg.querySelectorAll('.__formpalRecompLine');
+        for (var oi = 0; oi < old.length; oi++) old[oi].parentNode.removeChild(old[oi]);
+
+        var NS = 'http://www.w3.org/2000/svg';
+        var TOP_Y = 70, BOT_Y = 152, FAT_COLOR = '#15171c', MUSCLE_COLOR = '#2E7DFF';
+        function mk(tag, attrs){
+          var el = document.createElementNS(NS, tag);
+          el.setAttribute('class', '__formpalRecompLine');
+          for (var k in attrs) el.setAttribute(k, attrs[k]);
+          return el;
+        }
+        // Dotted guides at the shared top/bottom levels, behind everything.
+        svg.appendChild(mk('line', { x1: '14', y1: String(TOP_Y), x2: '292', y2: String(TOP_Y), stroke: '#c7c9d1', 'stroke-width': '1', 'stroke-dasharray': '2.5 4' }));
+        svg.appendChild(mk('line', { x1: '14', y1: String(BOT_Y), x2: '292', y2: String(BOT_Y), stroke: '#c7c9d1', 'stroke-width': '1', 'stroke-dasharray': '2.5 4' }));
+        // Fat: falling, starts high (reuses the proven PR_LINE_D_DOWN
+        // shape/smoothness) — soft fill underneath, drawn first so the
+        // muscle fill reads as the dominant accent where they overlap.
+        svg.appendChild(mk('path', { d: ${JSON.stringify(PR_FILL_D_DOWN)}, fill: FAT_COLOR, opacity: '0.05' }));
+        svg.appendChild(mk('path', { d: ${JSON.stringify(PR_LINE_D_DOWN)}, fill: 'none', stroke: FAT_COLOR, 'stroke-width': '2.6', 'stroke-linecap': 'round' }));
+        // Muscle: rising, starts low (reuses PR_LINE_D).
+        svg.appendChild(mk('path', { d: ${JSON.stringify(PR_FILL_D)}, fill: MUSCLE_COLOR, opacity: '0.08' }));
+        svg.appendChild(mk('path', { d: ${JSON.stringify(PR_LINE_D)}, fill: 'none', stroke: MUSCLE_COLOR, 'stroke-width': '2.6', 'stroke-linecap': 'round' }));
+        // Open-circle endpoints — white fill, colored ring, on top of fills.
+        [[14, BOT_Y, MUSCLE_COLOR], [292, TOP_Y, MUSCLE_COLOR], [14, TOP_Y, FAT_COLOR], [292, BOT_Y, FAT_COLOR]].forEach(function(c){
+          svg.appendChild(mk('circle', { cx: String(c[0]), cy: String(c[1]), r: '4.5', fill: '#ffffff', stroke: c[2], 'stroke-width': '2.5' }));
+        });
+        // Labels beside each line's own end, inside the viewBox (not
+        // pinned to the right edge, which crowded the old version).
+        [['Muscle', MUSCLE_COLOR, 236, TOP_Y - 10], ['Fat', FAT_COLOR, 252, BOT_Y + 18]].forEach(function(row){
+          var txt = mk('text', { x: String(row[2]), y: String(row[3]), 'text-anchor': 'start', 'font-size': '13', 'font-weight': '800', 'font-family': 'Plus Jakarta Sans, Helvetica, sans-serif', fill: row[1] });
+          txt.textContent = row[0];
+          svg.appendChild(txt);
+        });
+        hit++;
+      } else if (KIND === 'fat') {
+        // Only fat loss actually needs the markers recomputed — swapping
+        // the line's own 'd' to the falling variant is what makes the
+        // ORIGINAL hardcoded start/end dot + badge position (tuned for the
+        // rising default) wrong in the first place ("the dot at the start
+        // is broken"). Muscle gain never touches this path below, so its
+        // already-correct, designer-placed defaults stay exactly as-is.
+        if (lineEl && fillEl) {
+          lineEl.setAttribute('d', ${JSON.stringify(PR_LINE_D_DOWN)});
+          fillEl.setAttribute('d', ${JSON.stringify(PR_FILL_D_DOWN)});
+        }
+        if (lineEl) {
+          placeAlong(lineEl, startDot, true);
+          var endPt = placeAlong(lineEl, endDot, false);
+          placeBadge(endPt);
+          placeTri(endPt);
+        }
+      }
+      svg.__formpalGraphDone = true;
+      hit++;
     }
+
+    // The "GOAL" info tile (5th tile added to the grid) is removed again —
+    // explicit ask. If an earlier apply() pass already added it (a fast
+    // re-render before this code updated), tear it back out.
+    var oldGoalTile = document.getElementById('__formpalGoalTile');
+    if(oldGoalTile && oldGoalTile.parentElement){ oldGoalTile.parentElement.removeChild(oldGoalTile); }
+
+    // "How to reach your goal(s)" + "Why FormPal?" copy — literal-text
+    // swaps against the artboard's own defaults, same technique as above.
+    var swap = {
+      'How to reach your goals:': 'How to reach your goal:',
+      'Film your sets with the camera': 'Film every set so each rep counts',
+      'Follow your weekly workout plan': MILESTONE_LINE,
+      'Fix the weak points we flag': 'Follow your ' + DAYS + '-day plan',
+      'Stay consistent week after week': 'Weigh in once a week',
+      'Fix weak points and climb the ranks': 'See progress every week, even before the mirror does'
+    };
+    var leafAll=document.querySelectorAll('#dc-root div,#dc-root span,#dc-root p');
+    for(var s=0;s<leafAll.length;s++){
+      var le=leafAll[s]; if(le.children.length) continue;
+      var lt=(le.textContent||'').trim();
+      if(swap[lt] != null && lt !== swap[lt]){ le.textContent=swap[lt]; hit++; }
+    }
+
     return hit>=3;
   }
   if(!apply()) [200,500,1000,2000,3500,5000].forEach(function(d){ setTimeout(apply,d); });
@@ -541,233 +739,174 @@ function planReadyInject(a: Record<string, any>): string {
 `;
 }
 
-// recoveryroute.html — "your route to <goal> starts today". Fill the goal
-// date AND the goal name (was left at the artboard's hardcoded default
-// "Gold I" always — the source of "the next page says Silver III" not
-// matching the reveal; now it's the same nextRankLabel(computeRank(a)) the
-// cinematic page already uses for its own "towards X" line).
-// Leaves the artboard's own "Gold I" goal (headline, closer sentence, CTA
-// label) untouched on purpose — it was previously downgraded to
-// nextRankLabel(a) (just one tier above whatever the user actually landed
-// on, e.g. "Bronze II"), which read as an unambitious near-term target AND
-// didn't match the graph's own gold-tier milestone icon. Gold I is always
-// meaningfully ahead of the Bronze/Silver range computeRank() can return,
-// so it stays consistent with the icon for every user. Only the date slot
-// is real user data, so only that gets swapped.
-function recoveryRouteInject(a: Record<string, any>): string {
-  return `
-(function(){
-  var D=${JSON.stringify(GOAL_DATE())};
-  function apply(){
-    var all=document.querySelectorAll('#dc-root div,#dc-root span,#dc-root p'), hit=0;
-    for(var i=0;i<all.length;i++){
-      var el=all[i]; if(el.children.length) continue;
-      var t=(el.textContent||'').trim();
-      if(/^[A-Z][a-z]{2} [0-9]{1,2}$/.test(t)){ el.textContent=D; hit++; }
-    }
-    return hit>=1;
-  }
-  if (apply()) return;
-  // DC_PAGE_INJECT's own reveal (shared by every one of these pages) shows
-  // the artboard the INSTANT #dc-root gets any children at all — polling on
-  // a fixed schedule here (200/500/1000ms...) can lose that race, so the
-  // default date is visibly on screen for a beat before this catches up
-  // and swaps it, which read as "the text flashes, then changes". Catch
-  // the exact moment the bundler's async unpack finishes instead of
-  // guessing an interval.
-  var root = document.getElementById('dc-root') || document.body;
-  var mo = new MutationObserver(function(){ if (apply()) mo.disconnect(); });
-  mo.observe(root, { childList: true, subtree: true });
-  [50, 150, 300, 600, 1200, 2500].forEach(function(d){ setTimeout(function(){ if (apply()) mo.disconnect(); }, d); });
-})();
-`;
-}
-
-// recoveryroute.html's graph/rise/badge animations are plain CSS keyframes
-// that start ticking the instant the page parses — including the
-// stroke-dashoffset line draw, which (unlike opacity/transform) is
-// main-thread-painted every frame, not compositor-accelerated. The two
-// @font-face declarations use font-display:swap, so the browser swaps from
-// the fallback font to Plus Jakarta Sans mid-animation once it loads —
-// that swap's reflow/repaint blocks the main thread for a frame or two,
-// which is exactly "the graph moves for a second, then stops, then goes".
-// Fix: freeze every inline `animation` under #dc-root immediately (their
-// saved values captured first), then restart them all together only once
-// document.fonts.ready — so the whole sequence runs in one uninterrupted
-// pass with no font-swap collision partway through.
-const RESTART_RECOVERY_ANIM_JS = `
-(function(){
-  function go(){
-    var els = document.querySelectorAll('#dc-root [style*="animation:"]');
-    var saved = [];
-    for (var i=0;i<els.length;i++){
-      var el = els[i];
-      var a = el.style.animation;
-      if (!a) continue;
-      // The two rank-badge <image> elements start hidden purely via their
-      // OWN keyframes' 0% opacity — nothing else on the element declares
-      // opacity. Setting animation:none removes that keyframe entirely, so
-      // for the freeze-to-restart gap the element reverts to no-opacity-set
-      // (fully visible) instead of staying hidden — a real flash of the
-      // badge, then a snap back to invisible when restart() re-applies the
-      // animation from its own 0% state. Pin the CURRENT computed
-      // opacity/transform as plain inline styles before removing the
-      // animation, so the freeze gap holds exactly what was already on
-      // screen (nothing, this early) instead of the element's un-animated
-      // default.
-      var cs = getComputedStyle(el);
-      var pinnedOpacity = cs.opacity, pinnedTransform = cs.transform;
-      saved.push([el, a, pinnedOpacity, pinnedTransform]);
-      el.style.setProperty('opacity', pinnedOpacity, 'important');
-      if (pinnedTransform && pinnedTransform !== 'none') el.style.setProperty('transform', pinnedTransform, 'important');
-      el.style.setProperty('animation', 'none', 'important');
-    }
-    function restart(){
-      for (var j=0;j<saved.length;j++){
-        var el = saved[j][0];
-        el.style.removeProperty('opacity');
-        el.style.removeProperty('transform');
-        void el.offsetWidth; // force reflow so the animation restarts cleanly
-        el.style.setProperty('animation', saved[j][1]);
-      }
-    }
-    if (document.fonts && document.fonts.ready) {
-      document.fonts.ready.then(function(){ setTimeout(restart, 60); }).catch(function(){ setTimeout(restart, 60); });
-    } else {
-      setTimeout(restart, 200);
-    }
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go);
-  else go();
-})();
-`;
-
 const DURATION_YEARS: Record<string, number> = {
   '1-2 months': 1, '2-6 months': 1, '6-12 months': 1,
   '1-2 years': 2, '2-5 years': 3, '5-10 years': 7, '10+ years': 12,
 };
 
-// cinematicgraph.html — the wasted-muscle graph. Rewrites the years / reps
-// / months slots, the hardcoded "Bronze II" to the user's real starting
-// rank, and forces the CTA label to "See my potential".
-function cinematicGraphInject(a: Record<string, any>): string {
-  const m = computeWastedReps({ ...a, formGuess: getRealFormPct(a) });
-  const years = DURATION_YEARS[(a.trainDuration as string) ?? ''] ?? 3;
-  const wasted = m.wasted;
-  const months = Math.max(2, Math.round(wasted / 1500));
-  const pct = getRealFormPct(a);
-  const cur = computeRank(a);
-  const rank = cur.label;
-  const rankColor = cur.name === 'Silver' ? '#8a8f98' : '#a9743f';
-  const next = nextRankLabel(a);
+// These 5 real-design webview screens (plan comparison, realistic target,
+// form confidence, goal pace, thank-you/privacy) each ship their own CSS
+// @keyframes entrance animation (rt-rise, fc-rise, gp-rise, gh-rise...),
+// on top of the native fade every DC page already gets — explicit
+// complaint: they should look like every other question screen's
+// transition, not have a second bespoke intro animation playing over it.
+// Prepended to each of their inject functions below.
+const SUPPRESS_DC_ANIM_JS = `(function(){var s=document.createElement('style');s.textContent='#dc-root *{animation:none!important;}';(document.head||document.documentElement).appendChild(s);})();`;
+
+// realistictarget.html — real design for the former 'giveRealisticTarget'
+// placeholder. Its dc-script already computes a goal-aware sentence
+// (verb/amount/recomp framing) from this.props.goal/lbs — but props are
+// baked in at export time with no live override channel, so the rendered
+// default is always "Gaining 12 lbs is a realistic target!" regardless of
+// the real user. Rather than fighting that, this matches that ONE known
+// default sentence (the only one the static export ever actually renders)
+// and swaps in the real one — same literal-match technique as everywhere
+// else, just applied to a screen whose default happens to come from a
+// prop instead of being hand-authored directly in the markup.
+//
+// BUG FOUND: this used to pick the verb from goal.kind (which goal the
+// user SELECTED) — "always says Gaining 12 lbs" was reported because that
+// read goal.kind correctly but the verb should follow the ACTUAL numbers
+// instead: gaining if goal weight is above current weight, losing if
+// below, regardless of which goal category got picked. This step is also
+// now Recomp-skipped entirely (see its showIf), so there's no recomp
+// case to handle here any more.
+function realisticTargetInject(a: Record<string, any>): string {
+  const weight = typeof a.weight === 'number' ? a.weight : 160;
+  const goalWeight = typeof a.goalWeight === 'number' ? a.goalWeight : weight;
+  const delta = Math.round(Math.abs(goalWeight - weight));
+  // Equal weights -> X = 0, verb follows whichever goal was actually
+  // selected (there's no real direction to infer from the numbers when
+  // the delta is 0) — explicit spec. Otherwise the verb follows the real
+  // numbers, same as before.
+  const mainGoalStr = typeof a.mainGoal === 'string' ? a.mainGoal : '';
+  const verb = delta === 0
+    ? (mainGoalStr.startsWith('Lose fat') ? 'Losing' : 'Gaining')
+    : (goalWeight >= weight ? 'Gaining' : 'Losing');
+  const sentence = `${verb} ${delta} lbs is a realistic target!`;
+  // Animation suppression is now applied via extraJsBeforeLoad at the
+  // call site (see the 'webview' step render branch) — before the page's
+  // own script ever runs, instead of after.
   return `
 (function(){
-  var Y=${years}, RL=${JSON.stringify(wasted.toLocaleString() + ' reps lost')}, ML=${JSON.stringify(months + ' months of muscle gone')}, P=${pct};
-  var RANK=${JSON.stringify(rank)}, RCOL=${JSON.stringify(rankColor)}, NEXT=${JSON.stringify(next)};
-  var RANK_RE=/\\b(Bronze|Silver|Gold|Platinum|Diamond)\\s+(I|II|III|IV|V)\\b/;
-  function post(m){ try{ window.ReactNativeWebView.postMessage(m); }catch(e){} }
+  var MAP = { 'Gaining 12 lbs is a realistic target!': ${JSON.stringify(sentence)} };
   function apply(){
-    var s=document.querySelectorAll('span.sc-interp'), hit=0;
-    for(var i=0;i<s.length;i++){
-      var t=(s[i].textContent||'').trim();
-      if(/^[0-9]{1,2}$/.test(t)){ s[i].textContent=String(Y); hit++; }
-      else if(/reps lost$/i.test(t)){ s[i].textContent=RL; hit++; }
-      else if(/months of muscle gone$/i.test(t)){ s[i].textContent=ML; hit++; }
-      else if(/^[0-9]{1,3}%$/.test(t)){ s[i].textContent=P+'%'; hit++; }
+    var hit=0;
+    var all=document.querySelectorAll('#dc-root div,#dc-root span');
+    for(var i=0;i<all.length;i++){
+      var el=all[i]; if(el.children.length) continue;
+      var t=(el.textContent||'').trim();
+      if(MAP[t]!=null && t!==MAP[t]){ el.textContent=MAP[t]; hit++; }
     }
-    // Rank text nodes: "From <rank>, ..." = your CURRENT rank (coloured);
-    // "moves you towards <rank>" = the rank ABOVE it (so it's not "towards"
-    // the rank you're already in).
-    var all=document.querySelectorAll('#dc-root div,#dc-root span,#dc-root p');
-    for(var j=0;j<all.length;j++){
-      var el=all[j];
-      for(var k=0;k<el.childNodes.length;k++){
-        var n=el.childNodes[k];
-        if(n.nodeType!==3 || !RANK_RE.test(n.nodeValue) || n.__rk) continue;
-        var whole=n.nodeValue, mm=whole.match(RANK_RE);
-        var prefix=whole.slice(0, mm.index);
-        // The templated goalRank slot (\`... toward <span>{{ goalRank }}</span> faster.\`)
-        // renders as its OWN span with the rank as its only child text node —
-        // "toward" lives in the PARENT's earlier text, not this node's own, so
-        // the prefix here is empty. Fall back to the element's previous
-        // sibling text node in that case instead of misreading it as a
-        // standalone "current rank" mention.
-        if(!prefix.trim() && el.previousSibling && el.previousSibling.nodeType===3){
-          prefix=el.previousSibling.nodeValue||'';
-        }
-        var towards=/toward|towards|reach|climb to|get to/i.test(prefix);
-        if(towards){
-          if(whole.indexOf(NEXT)<0){ n.nodeValue=whole.replace(RANK_RE, NEXT); hit++; }
-        } else {
-          // colour the current rank: split the text node and insert a span
-          var before=whole.slice(0, mm.index), after=whole.slice(mm.index+mm[0].length);
-          var sp=document.createElement('span'); sp.textContent=RANK;
-          sp.style.color=RCOL; sp.style.fontWeight='800'; sp.__rk=1;
-          n.nodeValue=before;
-          el.insertBefore(sp, n.nextSibling);
-          el.insertBefore(document.createTextNode(after), sp.nextSibling);
-          hit++;
-        }
-        n.__rk=1;
-      }
-    }
-    return hit>=2;
+    return hit>=1;
   }
   if(!apply()) [200,500,1000,2000,3500,5000].forEach(function(d){ setTimeout(apply,d); });
   else [1000,2500].forEach(function(d){ setTimeout(apply,d); });
+  var root = document.getElementById('dc-root') || document.body;
+  var mo = new MutationObserver(function(){ apply(); });
+  mo.observe(root, { childList: true, subtree: true, characterData: true });
+})();
+`;
+}
 
-  // The CTA (<div sc-camel-on-click="{{ blast }}">) only fires a burst
-  // animation — never navigates. Force its label and wire it to advance.
-  var wired=false;
-  document.addEventListener('pointerdown', function(){ post('__tap'); }, true);
-  function ctaish(el){
-    var t=(el.textContent||'').replace(/\\s+/g,' ').trim();
-    if(!/^(see my potential|let'?s do it|let'?s go|i'?m in)$/i.test(t)) return false;
-    var cs=getComputedStyle(el);
-    return cs.display!=='none' && cs.visibility!=='hidden';
-  }
-  function hunt(){
-    if(wired) return true;
-    var all=document.querySelectorAll('div,button');
+// formconfidence.html — real design for the former native GuessSlider
+// step. Fully self-contained (its own pointer drag logic, snaps to 3
+// discrete states: 0/50/100) — no value is captured outside the WebView
+// unless we read it back out. The rendered LABEL div's text is one of
+// exactly 3 known strings (LABELS in the dc-script) that map 1:1 to the
+// 0/50/100 value, so reading that text — watched live via
+// MutationObserver, same as every value that can change without a full
+// reload — and posting it through the SAME 'editvalue:field:value'
+// channel planReady's pencil-edit already uses (see OnboardingWebScreen's
+// onEditValue) keeps answers.formConfidence live with no new plumbing.
+function formConfidenceInject(a: Record<string, any>): string {
+  // Animation suppression is now applied via extraJsBeforeLoad at the
+  // call site, before the page's own script ever runs.
+  return `
+(function(){
+  function post(m){ try{ window.ReactNativeWebView.postMessage(m); }catch(e){} }
+  var VALS = { 'Not confident': 0, 'Somewhat confident': 50, 'Very confident': 100 };
+  var last = null;
+  function apply(){
+    var all=document.querySelectorAll('#dc-root div');
     for(var i=0;i<all.length;i++){
-      var el=all[i];
-      if(el.children.length>1) continue;     // allow a lone text/span child
-      if(!ctaish(el)) continue;
-      el.textContent='See my potential';
-      el.addEventListener('click', function(ev){ ev.stopPropagation(); post('__tap'); post('advance'); }, true);
-      el.style.setProperty('cursor','pointer','important');
-      wired=true;
-      return true;
+      var el=all[i]; if(el.children.length) continue;
+      var t=(el.textContent||'').trim();
+      if(VALS[t]!=null){
+        if(VALS[t]!==last){ last=VALS[t]; post('editvalue:formConfidence:'+encodeURIComponent(String(last))); }
+        return true;
+      }
     }
     return false;
   }
-  var tries=0, iv=setInterval(function(){ if(hunt() || ++tries>100) clearInterval(iv); }, 200);
+  if(!apply()) [200,500,1000,2000,3500,5000].forEach(function(d){ setTimeout(apply,d); });
+  var root = document.getElementById('dc-root') || document.body;
+  var mo = new MutationObserver(function(){ apply(); });
+  mo.observe(root, { childList: true, subtree: true, characterData: true });
+})();
+`;
+}
 
-  // Both "Replay" AND the CTA itself (hunt()'s own click listener above,
-  // also capture-phase — but added straight on the element, so THIS
-  // document-level listener runs first for the same click) fire
-  // unconditionally the instant they're tapped, including mid-play. The
-  // CTA spans the full width near the bottom of the screen and is
-  // clickable from the very first frame, so any stray tap down there
-  // instantly skips the whole cinematic sequence — reported as "pressing
-  // the bottom of the screen skips it". Swallow taps on either control, in
-  // the capture phase (so this runs before the DC framework's own click
-  // handler AND before hunt()'s own listener on the CTA), until the
-  // sequence's own duration (this.props.durationMs, defaulting to
-  // 15000ms — never overridden here) has actually elapsed.
-  var readyAt = Date.now() + 15000;
-  function isGuardedControl(el){
-    var t = (el.textContent || '').replace(/\\s+/g, ' ').trim();
-    if (t === 'Replay') return true;
-    return /^(see my potential|let'?s do it|let'?s go|i'?m in)$/i.test(t);
-  }
-  document.addEventListener('click', function(ev){
-    if (Date.now() >= readyAt) return;
-    var el = ev.target;
-    for (var d = 0; el && d < 4; d++, el = el.parentElement) {
-      if (isGuardedControl(el)) { ev.stopPropagation(); ev.preventDefault(); return; }
+// goalpace.html — real design for the new 'goalPace' step. Fully
+// self-contained (its own drag logic + animated gait icons for 3 presets:
+// relaxed/balanced/aggressive, continuous 0.25-1.5x multiplier). The
+// rendered rate number (e.g. "1.0", "0.85") is the ONLY plain decimal
+// div on the whole screen, matched by shape rather than exact string
+// since it's continuous, not a fixed set of defaults — watched live and
+// posted as answers.pace through the same editvalue: channel.
+function goalPaceInject(a: Record<string, any>): string {
+  // Animation suppression is now applied via extraJsBeforeLoad at the
+  // call site, before the page's own script ever runs.
+  return `
+(function(){
+  function post(m){ try{ window.ReactNativeWebView.postMessage(m); }catch(e){} }
+  var last = null;
+  function apply(){
+    var all=document.querySelectorAll('#dc-root div');
+    for(var i=0;i<all.length;i++){
+      var el=all[i]; if(el.children.length) continue;
+      var t=(el.textContent||'').trim();
+      if(/^\\d\\.\\d{1,2}$/.test(t)){
+        if(t!==last){ last=t; post('editvalue:pace:'+encodeURIComponent(t)); }
+        return true;
+      }
     }
-  }, true);
+    return false;
+  }
+  if(!apply()) [200,500,1000,2000,3500,5000].forEach(function(d){ setTimeout(apply,d); });
+  var root = document.getElementById('dc-root') || document.body;
+  var mo = new MutationObserver(function(){ apply(); });
+  mo.observe(root, { childList: true, subtree: true, characterData: true });
+})();
+`;
+}
+
+// goodhands.html (the thankYou appState screen) — new subtext per explicit
+// copy change, replacing its real default privacy line.
+function thankYouInject(): string {
+  const MAP: Record<string, string> = {
+    'Your privacy matters to us. Your workout videos are only used to check your form, and we never sell or share your data.':
+      "Your starting point stays on your phone. Here's what we'll do with it.",
+  };
+  // Animation suppression is now applied via extraJsBeforeLoad at the
+  // call site, before the page's own script ever runs.
+  return `
+(function(){
+  var MAP = ${JSON.stringify(MAP)};
+  function apply(){
+    var hit=0;
+    var all=document.querySelectorAll('#dc-root div,#dc-root span');
+    for(var i=0;i<all.length;i++){
+      var el=all[i]; if(el.children.length) continue;
+      var t=(el.textContent||'').trim();
+      if(MAP[t]!=null && t!==MAP[t]){ el.textContent=MAP[t]; hit++; }
+    }
+    return hit>=1;
+  }
+  if(!apply()) [200,500,1000,2000,3500,5000].forEach(function(d){ setTimeout(apply,d); });
+  var root = document.getElementById('dc-root') || document.body;
+  var mo = new MutationObserver(function(){ apply(); });
+  mo.observe(root, { childList: true, subtree: true, characterData: true });
 })();
 `;
 }
@@ -782,12 +921,23 @@ function cinematicGraphInject(a: Record<string, any>): string {
 const DC_PAGE_KEYS: (keyof typeof ONB_HTML)[] = [
   'generatePlan', 'planReady', 'trialTimeline', 'paywall',
   // The redesigned rank + graph pages are the same 390-wide #dc-root format.
-  'rankWheel', 'strengthAssessment', 'rankReveal', 'cinematicGraph', 'recoveryRoute',
+  'strengthAssessment', 'rankReveal',
+  // Real-design replacements for former native placeholder/component
+  // screens — same 390×844 #dc-root format as everything else here.
+  'giveVsWithout', 'giveRealisticTarget', 'formConfidence', 'thankYou', 'goalPace',
+  'giveGoodHands', 'notAlone', 'readyToBuild',
 ];
 // NOTE: no bare "Next" — strengthassesment's in-card "Next exercise" button
 // must NOT advance the whole flow.
 // FOUND THE ACTUAL "Continue does nothing" bug on the rank-reveal-wheel:
-const DC_CTA_RE = "^(Continue|See my plan|See plan|See my potential|See my route|Build my route|Get my rank|Unlock my full plan|Unlock my plan|Unlock|Start my 3-day|Start my 3\\u2011day|Start my free trial|Start free trial|Start free|Done|Get started|Let.s do it|Let.s go|I.m in)\\b";
+// "See my route" is rankReveal.html's own default CTA label — real text,
+// keep it even though Recovery Route (the screen that originally also
+// used that phrase) is now removed from the flow entirely.
+// "Generate plan" added for readytobuild.html — confirmed by direct file
+// extraction that's its real CTA label, not covered by any existing
+// pattern above (would have silently been a dead "Continue does nothing"
+// button otherwise, same bug class as the rankReveal one noted above).
+const DC_CTA_RE = "^(Continue|See my plan|See plan|See my potential|See my route|Get my rank|Unlock my full plan|Unlock my plan|Unlock|Start my 3-day|Start my 3\\u2011day|Start my free trial|Start free trial|Start free|Done|Get started|Let.s do it|Let.s go|I.m in|Generate plan)\\b";
 const DC_PAGE_INJECT = `
 (function () {
   function post(m){ try{ window.ReactNativeWebView.postMessage(m); }catch(e){} }
@@ -963,7 +1113,14 @@ const DC_PAGE_INJECT = `
   // so it isn't doing a getComputedStyle walk while they're playing.
   // Page-specific tidy-ups that are easier to do by matching rendered text
   // than by prop: hide the paywall's own "✕" close chip (we use the native
-  // Restore control) and relabel the plan-ready CTA.
+  // Restore control), relabel the plan-ready CTA, hide the fake "9:41"
+  // status bar every one of these exports bakes in (duplicates/overlaps
+  // the real device status bar), and hide the fake back-circle+progress-
+  // track header row the 5 real-design webview steps (plan comparison,
+  // realistic target, form confidence, goal pace, thank-you/privacy) draw
+  // INSIDE their own canvas — redundant with the native progress header
+  // (STEPS screens) and/or the native floating back button
+  // (OnboardingWebScreen renders one on every DC page regardless).
   function polish(){
     var all=document.querySelectorAll('#dc-root div,#dc-root span,#dc-root button');
     for(var i=0;i<all.length;i++){
@@ -971,6 +1128,45 @@ const DC_PAGE_INJECT = `
       var t=(el.textContent||'').trim();
       if(t==='\\u2715' || t==='\\u2716' || t==='\\u00d7'){ el.style.setProperty('display','none','important'); }
       else if(t==='Unlock my full plan' || t==='Unlock my plan'){ el.textContent='Continue'; }
+      // visibility:hidden, NOT display:none — these fake rows occupy space
+      // the artboard's OWN layout was designed around (the status bar row
+      // reserves the real notch area; the fake header row is what pushes
+      // the real content down below where the native progress header
+      // sits). Collapsing them with display:none pulled everything up
+      // into/behind the native status bar and header — that was the
+      // actual cause of "everything is too high, text overlaps the
+      // header" on these screens. visibility:hidden keeps the same empty
+      // space, just invisible.
+      else if(t==='9:41'){ if(el.parentElement) el.parentElement.style.setProperty('visibility','hidden','important'); }
+    }
+    // BUG FOUND: goalpace.html and formconfidence.html's back chevron is
+    // a DIFFERENT SVG path ("M13 8H3M7 3.6 2.8 8 7 12.4") than the one
+    // used everywhere else in this app ("M10 3 5 8l5 5") — confirmed by
+    // direct extraction. The old single-path selector never matched
+    // these two at all, so their fake header was never hidden — that's
+    // the actual cause of the duplicate-header bug persisting on exactly
+    // those two screens (plan comparison, realistic target and thank-you
+    // all use the OTHER path and were already fixed by the same code).
+    var CHEVRON_PATHS = ['M10 3 5 8l5 5', 'M13 8H3M7 3.6 2.8 8 7 12.4'];
+    var chevron = null;
+    for(var cp=0; cp<CHEVRON_PATHS.length && !chevron; cp++){
+      chevron = document.querySelector('#dc-root svg path[d="'+CHEVRON_PATHS[cp]+'"]');
+    }
+    if(chevron){
+      // closest('div') lands on the 38-40px back-CIRCLE itself; its own
+      // parent is the row that also holds the progress-track sibling —
+      // confirmed via a sibling matching the track's own style (thin,
+      // pill-radius bar), not a fragile offsetTop/offsetHeight guess.
+      var circle=chevron.closest('div');
+      var row=circle && circle.parentElement;
+      if(row){
+        var hasTrack=false;
+        for(var ci=0; ci<row.children.length; ci++){
+          var cstyle=(row.children[ci].getAttribute('style')||'');
+          if(/height:\\s*[234]px/.test(cstyle) && /border-radius:\\s*999px/.test(cstyle)){ hasTrack=true; break; }
+        }
+        if(hasTrack) row.style.setProperty('visibility','hidden','important');
+      }
     }
   }
 
@@ -1027,11 +1223,22 @@ const DC_PAGE_INJECT = `
     setTimeout(polish, 0);
     setTimeout(function(){ fit(); wireEdits(); calmAnims(); polish(); }, 900);
     setTimeout(polish, 2000);
+    // Belt-and-suspenders: a MutationObserver re-runs polish() on every
+    // DOM change too, same robust pattern used elsewhere in this file —
+    // the fixed 0/900/2000ms schedule alone has looked sufficient in
+    // testing but costs nothing extra to also cover here.
+    var polishRoot = document.getElementById('dc-root') || document.body;
+    var polishMo = new MutationObserver(function(){ polish(); });
+    polishMo.observe(polishRoot, { childList: true, subtree: true });
   }
+  // Polling tighter (80ms, was 150ms) — the white-before-content gap is
+  // real WebView HTML/font/asset load time, not eliminable outright, but
+  // catching painted() sooner shrinks it directly. Same total time
+  // budget otherwise (n>10 bump doubled to match the faster interval).
   (function wait(){
     fit();
-    if(painted() || n>10){ reveal(); return; }
-    if(n++<40) setTimeout(wait, 150);
+    if(painted() || n>20){ reveal(); return; }
+    if(n++<80) setTimeout(wait, 80);
   })();
   // Short backstop — worst case the page shows ~1.2s in, never a long hang.
   setTimeout(reveal, 1200);
@@ -1057,9 +1264,36 @@ const FIT_BOTH_INJECT = `window.__dcFitBoth=1;`;
 // generatePlan is a timed "generating…" beat. It shows its own "See my
 // plan" CTA when the progress finishes — the user taps that. NO auto-
 // advance (the screen was skipping itself).
-const GENERATE_PLAN_INJECT = `window.__dcFitBoth=1;`;
+// generateplan.html's loading heading cycles through its own internal
+// STEPS array (baked into its dc-script, not prop-driven), so "Calculating
+// your rank..." only appears briefly near 100% and keeps getting
+// overwritten by the component's own re-renders — a one-shot text replace
+// loses that race. Watch it with a MutationObserver instead, same fix as
+// the goal-route screen used for its own "text flashes, then changes"
+// bug earlier this session. The checklist label ("Rank projection") is static
+// (set once, doesn't re-render), so a plain retry-schedule replace is fine
+// for that one.
+const GENERATE_PLAN_INJECT = `
+window.__dcFitBoth=1;
+(function(){
+  function swapHeading(root){
+    var els = (root || document).querySelectorAll('#dc-root div,#dc-root span,#dc-root p');
+    for (var i=0;i<els.length;i++){
+      var el=els[i]; if (el.children.length) continue;
+      var t=(el.textContent||'').trim();
+      if (t === 'Calculating your rank...') { el.textContent = 'Mapping your goal date...'; }
+      else if (t === 'Rank projection') { el.textContent = 'Goal timeline'; }
+    }
+  }
+  swapHeading();
+  var root = document.getElementById('dc-root') || document.body;
+  var mo = new MutationObserver(function(){ swapHeading(root); });
+  mo.observe(root, { childList: true, subtree: true, characterData: true });
+  [200,500,1000,2000,3500,5000,7000,8500].forEach(function(d){ setTimeout(function(){ swapHeading(); }, d); });
+})();
+`;
 
-function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditValue, onStrengthVals, topInset, extraJs: extraJsProp, extraJsBeforeLoad, poolActive }: {
+function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditValue, onStrengthVals, topInset, progress, extraJs: extraJsProp, extraJsBeforeLoad, poolActive, htmlOverride }: {
   htmlKey: keyof typeof ONB_HTML;
   onAdvance: () => void;
   onBack: () => void;
@@ -1070,6 +1304,12 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
   // map every time it changes.
   onStrengthVals?: (vals: Record<string, any>) => void;
   topInset: number;
+  // 0-1 fraction through the WHOLE onboarding flow (not just the question
+  // steps) — same track/fill the native question header uses, so every
+  // screen in the flow (questions, rank run, post-rank, pre-paywall) shows
+  // the exact same progress bar in the exact same position. Omit only for
+  // screens truly outside the normal flow.
+  progress?: number;
   extraJs?: string;
   // Runs via injectedJavaScriptBeforeContentLoaded (before the page's own
   // scripts execute), unlike extraJs above (which runs after load). Only
@@ -1080,6 +1320,11 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
   // once (DcPagePool). It absolute-fills, only the active one is visible /
   // interactive, and only the active one shows its back button.
   poolActive?: boolean;
+  // planReady only — pre-loaded, token-replaced HTML text (see DcPagePool)
+  // used as the WebView's source instead of the static require()'d asset,
+  // so per-user text ({{HEADER}}/{{SUBLINE}}) is baked in before the page
+  // ever renders rather than searched-and-replaced in the DOM after.
+  htmlOverride?: string;
 }) {
   const inPool = poolActive !== undefined;
   const fade = useRef(new Animated.Value(0)).current;
@@ -1140,7 +1385,11 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
   // planReady stays width-fit (its info rows scroll). Everything else fits
   // to height too so the whole artboard — CTA + "Replay" / footnote under
   // it — is on screen with no scrolling.
-  const fitBothKeys = ['trialTimeline', 'paywall', 'strengthAssessment', 'recoveryRoute', 'cinematicGraph', 'rankReveal'];
+  const fitBothKeys = [
+    'trialTimeline', 'paywall', 'strengthAssessment', 'rankReveal',
+    'giveVsWithout', 'giveRealisticTarget', 'formConfidence', 'thankYou', 'goalPace',
+    'giveGoodHands', 'notAlone', 'readyToBuild',
+  ];
   const dcExtra =
     htmlKey === 'generatePlan' ? GENERATE_PLAN_INJECT :
     fitBothKeys.includes(htmlKey) ? FIT_BOTH_INJECT :
@@ -1160,7 +1409,7 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
       <Animated.View style={{ flex: 1, marginTop: topInset, opacity: fade }}>
         <WebView
           ref={webRef}
-          source={ONB_HTML[htmlKey] as any}
+          source={htmlOverride != null ? { html: htmlOverride } : (ONB_HTML[htmlKey] as any)}
           originWhitelist={['*']}
           injectedJavaScriptBeforeContentLoaded={isDcPage ? VIEWPORT_JS + '\n' + (extraJsBeforeLoad ?? '') : undefined}
           injectedJavaScript={extraJs ? baseInject + '\n' + extraJs : baseInject}
@@ -1211,7 +1460,10 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
           active page shows its back control. */}
       {(inPool && !poolActive) ? null : htmlKey === 'paywall' ? (
         // Paywall: iOS-standard layout — close (X) top-left, plain grey
-        // "Restore" top-right. No glass pill on Restore.
+        // "Restore" top-right. No glass pill on Restore. NO progress bar
+        // here — explicit ask ("random black line at the top"), the last
+        // screen's bar sits at ~100% fill which just read as a stray
+        // black line, not a meaningful progress indicator.
         <Animated.View
           pointerEvents="box-none"
           style={{ position: 'absolute', top: Math.max(6, topInset - 6), left: 0, right: 0, zIndex: 80, opacity: backFade, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20 }}
@@ -1236,18 +1488,28 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
       ) : (
         <Animated.View
           pointerEvents="box-none"
-          style={{ position: 'absolute', top: topInset + 8, left: 20, zIndex: 80, opacity: backFade }}
+          // Same top offset the native question header's back button lands
+          // at (insets.top + that row's own 12px paddingVertical) —
+          // explicit "back button must never move" fix, this was 4px off.
+          style={{ position: 'absolute', top: topInset + 12, left: 0, right: 0, zIndex: 80, opacity: backFade }}
         >
-          <LiquidGlassButton
-            onPress={() => { Haptics.selectionAsync(); onBack(); }}
-            hitSlop={12}
-            radius={17}
-            variant={isDcPage ? 'regular' : 'clear'}
-            fallbackColor={isDcPage ? 'rgba(255,255,255,0.92)' : 'rgba(0,0,0,0.35)'}
-            style={[web.backCircle, isDcPage && web.backCircleDc]}
-          >
-            <SymbolView name="chevron.left" size={15} tintColor={isDcPage ? '#1b1f27' : '#fff'} type="monochrome" style={{ width: 15, height: 15 }} />
-          </LiquidGlassButton>
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20 }}>
+            <LiquidGlassButton
+              onPress={() => { Haptics.selectionAsync(); onBack(); }}
+              hitSlop={12}
+              radius={17}
+              variant={isDcPage ? 'regular' : 'clear'}
+              fallbackColor={isDcPage ? 'rgba(255,255,255,0.92)' : 'rgba(0,0,0,0.35)'}
+              style={[web.backCircle, isDcPage && web.backCircleDc]}
+            >
+              <SymbolView name="chevron.left" size={15} tintColor={isDcPage ? '#1b1f27' : '#fff'} type="monochrome" style={{ width: 15, height: 15 }} />
+            </LiquidGlassButton>
+            {progress != null && (
+              <View style={{ flex: 1, paddingHorizontal: 12 }}>
+                <View style={s.pt}><View style={[s.pf, { width: `${progress * 100}%` }]} /></View>
+              </View>
+            )}
+          </View>
         </Animated.View>
       )}
     </Animated.View>
@@ -1270,22 +1532,60 @@ const web = StyleSheet.create({
 type PoolKey = 'planReady' | 'trialTimeline' | 'paywall';
 const POOL_ORDER: PoolKey[] = ['planReady', 'trialTimeline', 'paywall'];
 
-function DcPagePool({ activeKey, answers, topInset, onAdvance, onBack, onEditInfo, onEditValue }: {
+function DcPagePool({ activeKey, answers, topInset, progressFor, onAdvance, onBack, onEditInfo, onEditValue }: {
   activeKey: PoolKey | null;
   answers: Record<string, any>;
   topInset: number;
+  progressFor: (key: PoolKey) => number;
   onAdvance: (from: PoolKey) => void;
   onBack: (from: PoolKey) => void;
   onEditInfo: (field: string) => void;
   onEditValue: (field: string, value: string) => void;
 }) {
+  // planisreadynow.html's own template now has literal {{HEADER}} /
+  // {{SUBLINE}} tokens baked in (direct file edit) — loaded here as raw
+  // text ONCE, then string-replaced per the user's real answers BEFORE the
+  // WebView ever sees it. This replaces the old approach of injecting JS
+  // after load to search the DOM for the goalWeight span and swap its
+  // parent's textContent, which kept silently failing to re-match across
+  // several rounds. require() on a .html file gives Metro an asset module
+  // (a numeric id resolved to a file/bundle URI), not the raw string, so
+  // expo-asset resolves it to a local URI first and expo-file-system's
+  // File.text() reads the actual bytes.
+  const [rawPlanReadyHtml, setRawPlanReadyHtml] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const asset = Asset.fromModule(ONB_HTML.planReady);
+        await asset.downloadAsync();
+        const uri = asset.localUri || asset.uri;
+        const text = await new File(uri).text();
+        if (!cancelled) setRawPlanReadyHtml(text);
+      } catch (err) {
+        if (__DEV__) console.error('[onboarding] failed to load planisreadynow.html as text', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const planReadyHtml = useMemo(() => {
+    if (!rawPlanReadyHtml) return null;
+    const goal = computeGoalPlan(answers);
+    return rawPlanReadyHtml
+      .replace('{{HEADER}}', planReadyHeaderText(goal))
+      .replace('{{SUBLINE}}', 'Starting today');
+  }, [rawPlanReadyHtml, answers]);
+
   return (
     <View style={StyleSheet.absoluteFill}>
       {POOL_ORDER.map((key) => (
         <OnboardingWebScreen
           key={key}
           htmlKey={key}
+          htmlOverride={key === 'planReady' ? planReadyHtml ?? undefined : undefined}
           topInset={topInset}
+          progress={progressFor(key)}
           poolActive={activeKey === key}
           extraJs={key === 'planReady' ? planReadyInject(answers) : undefined}
           onAdvance={() => onAdvance(key)}
@@ -1408,13 +1708,19 @@ type StepOptions = OptionDef[] | ((a: Record<string, any>) => OptionDef[]);
 interface Step {
   id:             string;
   section:        string;
-  type:           'select' | 'multiselect' | 'wheel' | 'slider' | 'ruler' | 'interstitial' | 'text' | 'locationBubbles' | 'videoClip' | 'webview' | 'guessSlider';
+  type:           'select' | 'multiselect' | 'wheel' | 'slider' | 'ruler' | 'placeholder' | 'text' | 'locationBubbles' | 'videoClip' | 'webview' | 'guessSlider';
   question:       string;
   subtitle?:      string;
   placeholder?:   string;
   options?:       StepOptions;
   wheelKind?:     'age' | 'height';
-  htmlKey?:       'rankWheel' | 'strengthAssessment' | 'rankReveal';
+  htmlKey?:       'strengthAssessment' | 'rankReveal' | 'giveVsWithout' | 'giveRealisticTarget' | 'formConfidence' | 'goalPace' | 'giveGoodHands' | 'notAlone';
+  // Per-step content injection for type: 'webview' steps whose default
+  // copy needs real user data swapped in (same literal-match technique as
+  // every other artboard this session). Steps that are fine with the
+  // artboard's own built-in default copy (e.g. giveVsWithout's generic
+  // marketing line) just omit this.
+  webviewInject?: (a: Record<string, any>) => string;
   showIf?:        (a: Record<string, any>) => boolean;
   clearAllOption?: string;
 }
@@ -1424,136 +1730,161 @@ function resolveOptions(opts: StepOptions | undefined, a: Record<string, any>): 
   return typeof opts === 'function' ? opts(a) : opts;
 }
 
-// goalPace — vertical Cal-AI-style redesign. Real custom icons (dropped
-// into assets/icons/), not SF Symbols — a rough lb/week pace drives the
-// estimate card underneath, not a real calorie/macro model.
-const PACE_ICON: Record<string, any> = { Relaxed: ICON.paceEasy, Balanced: ICON.paceModerate, Aggressive: ICON.paceAggressive };
-// Continuous rate range — the 3 icons are reference anchors along it, not
-// the only selectable values. Dragging snaps live in 0.1 lb steps; tapping
-// an icon jumps straight to its anchor rate.
-const PACE_RATE_MIN = 0.2;
-const PACE_RATE_MAX = 2.0;
-const PACE_RATE_STEP = 0.1;
-const PACE_REF_RATE: Record<string, number> = { Relaxed: 0.5, Balanced: 1, Aggressive: 1.75 };
-
-function paceSnapRate(raw: number): number {
-  const clamped = Math.max(PACE_RATE_MIN, Math.min(PACE_RATE_MAX, raw));
-  return Math.round((Math.round(clamped / PACE_RATE_STEP) * PACE_RATE_STEP) * 10) / 10;
-}
-
-function paceLabelForRate(rate: number, opts: OptionDef[]): string {
-  let best = opts[0]?.label ?? '';
-  let bestDist = Infinity;
-  for (const o of opts) {
-    const d = Math.abs(rate - (PACE_REF_RATE[o.label] ?? 1));
-    if (d < bestDist) { bestDist = d; best = o.label; }
-  }
-  return best;
-}
-
-// ── STEPS — every question from the onboarding-test FLOW, in the same
-// order, rendered in this screen's clean tappable style (no typewriter, no
-// conversational reply lines). fact1 is the `afterAboutYou` interstitial
-// (PlanGrowthMoment) sitting right after followPlan. fact2 was cut per
-// request; the old afterGoal/afterExperience/afterTraining interstitials
-// and the motivation / homeSplit questions are gone (not in FLOW).
+// ── STEPS — the pre-paywall question flow, in order. The former "GIVE"
+// interstitials (giveGoodHands, giveFormConfidence) are now type: 'webview'
+// real-design artboards, same as every other webview step. Any remaining
+// design-pending placeholders (type: 'placeholder') render via a dedicated
+// branch further down.
+// Order per explicit reorder spec. mainGoal's labels are now the full
+// "Build muscle / Gain weight" style single-line copy (no sublabel) — the
+// STORED answer is this exact string now, so every comparison elsewhere
+// (goalWeight's showIf right below, computeGoalPlan in
+// lib/onboardingGoals.ts, MAIN_GOAL_OPTS/EditFieldOverlay) was updated to
+// match these exact new strings, not left on the old short ones.
 const STEPS: Step[] = [
-  { id: 'age',    section: 'About You', type: 'wheel',  wheelKind: 'age',    question: 'How old are you?' },
-  { id: 'height', section: 'About You', type: 'wheel',  wheelKind: 'height', question: 'How tall are you?' },
-  { id: 'weight', section: 'About You', type: 'ruler',  question: 'What do you weigh?' },
-  { id: 'sex', section: 'About You', type: 'select', question: "What's your sex?", options: [
-    { label: 'Male',   sfSymbol: 'person.fill', customIcon: ICON.male   },
-    { label: 'Female', sfSymbol: 'person.fill', customIcon: ICON.female },
-  ]},
-
-  { id: 'trainDuration', section: 'Your Training', type: 'select', question: 'How long have you been training for?', options: [
-    { label: '1-2 months', sfSymbol: 'sparkles', customIcon: ICON.justStarting },
-    { label: '2-6 months', sfSymbol: 'clock.fill', customIcon: ICON.lessThan6mo },
-    { label: '6-12 months', sfSymbol: 'clock.fill', customIcon: ICON.sixTo12mo },
-    { label: '1-2 years', sfSymbol: 'calendar', customIcon: ICON.oneToTwoYr },
-    { label: '2-5 years', sfSymbol: 'calendar', customIcon: ICON.twoToFiveYr },
-    { label: '5-10 years', sfSymbol: 'calendar', customIcon: ICON.fiveToTenYr },
-    { label: '10+ years', sfSymbol: 'calendar', customIcon: ICON.tenPlusYr },
-  ]},
-
-  { id: 'startReason', section: 'Your Training', type: 'select', question: 'Why did you start FormPal?', options: [
-    { label: 'Build muscle', sfSymbol: 'dumbbell.fill', customIcon: ICON.moreMuscle },
-    { label: 'Look better, feel confident', sfSymbol: 'star.fill', customIcon: ICON.lookBetter },
-    { label: 'Learn to train properly', sfSymbol: 'camera.fill', customIcon: ICON.trainProperly },
-    { label: 'Get back on track', sfSymbol: 'arrow.triangle.2.circlepath', customIcon: ICON.backOnTrack },
-    { label: 'Stay consistent', sfSymbol: 'repeat', customIcon: ICON.stayConsistentIcon },
-  ]},
-
-  { id: 'experience', section: 'Your Training', type: 'select', question: 'How well do you know proper form?', options: [
-    { label: 'Beginner', sfSymbol: '1.circle.fill', customIcon: ICON.beginnerGym },
-    { label: 'Some experience', sfSymbol: '2.circle.fill', customIcon: ICON.someExpGym },
-    { label: 'Intermediate', sfSymbol: '3.circle.fill', customIcon: ICON.intermediateGym },
-    { label: 'Advanced', sfSymbol: '4.circle.fill', customIcon: ICON.expertGym },
-  ]},
-
-  { id: 'followPlan', section: 'Your Training', type: 'select', question: 'Do you currently follow a structured training plan?', options: [
-    { label: 'Yes', sfSymbol: 'checkmark.circle.fill', customIcon: ICON.yes },
-    { label: 'No — I wing it', sfSymbol: 'xmark.circle.fill', customIcon: ICON.no },
-    { label: 'On and off', sfSymbol: 'arrow.triangle.2.circlepath', customIcon: ICON.onAndOff },
-  ]},
-
-  { id: 'struggle', section: 'Your Goal', type: 'multiselect', question: "What's been holding your training back?",
-    clearAllOption: 'Nothing — just ready to start',
-    showIf: a => a.experience !== 'Beginner',
+  { id: 'sex', section: 'About You', type: 'select', question: "What's your sex?",
+    subtitle: 'This helps us set accurate numbers for your plan.',
     options: [
-      { label: 'Not seeing results', sfSymbol: 'minus.circle.fill', customIcon: ICON.noResults },
-      { label: "Not sure if I'm training right", sfSymbol: 'questionmark.circle.fill', customIcon: ICON.notSure },
-      { label: 'Staying consistent', sfSymbol: 'repeat', customIcon: ICON.days },
-      { label: 'Losing motivation', sfSymbol: 'flame.fill', customIcon: ICON.scared },
-      { label: 'Injuries or pain', sfSymbol: 'bandage.fill', customIcon: ICON.wrist },
-      { label: 'Nothing — just ready to start', sfSymbol: 'checkmark.circle.fill', customIcon: ICON.good },
-    ],
+      { label: 'Male',   sfSymbol: 'person.fill', customIcon: ICON.male   },
+      { label: 'Female', sfSymbol: 'person.fill', customIcon: ICON.female },
+    ]},
+  { id: 'daysPerWeek', section: 'About You', type: 'select', question: 'How many days a week do you train?',
+    subtitle: 'Be realistic. You can always change this later.',
+    options: (() => {
+      const DAY_ICONS = [ICON.oneDay, ICON.twoDays, ICON.threeDays, ICON.fourDays, ICON.fiveDays, ICON.sixDays];
+      // Always 1-6 here — this now runs before Experience is asked, so the
+      // old 7-day-for-advanced branch (which read answers.experience)
+      // can't apply yet. Simplification, not an oversight.
+      return Array.from({ length: 6 }, (_, i) => ({ label: `${i + 1} day${i === 0 ? '' : 's'}`, sfSymbol: `${i + 1}.circle.fill`, customIcon: DAY_ICONS[i] }));
+    })(),
   },
-  { id: 'frustration', section: 'Your Goal', type: 'select', question: 'What frustrates you most?',
-    showIf: a => a.experience !== 'Beginner',
-    options: [
-      { label: 'Not seeing results', sfSymbol: 'minus.circle.fill', customIcon: ICON.noResults },
-      { label: "Don't know if I'm doing it right", sfSymbol: 'questionmark.circle.fill', customIcon: ICON.notSure },
-      { label: 'Staying consistent', sfSymbol: 'repeat', customIcon: ICON.days },
-      { label: 'Nothing really', sfSymbol: 'checkmark.circle.fill', customIcon: ICON.good },
-    ],
+  { id: 'age', section: 'About You', type: 'wheel', wheelKind: 'age', question: 'How old are you?',
+    subtitle: "We'll use this to set the right pace for you.",
   },
-  { id: 'formConfidence', section: 'Your Goal', type: 'select', question: 'Do you know if your form is right?', options: [
-    { label: 'Yes', sfSymbol: 'checkmark.seal.fill', customIcon: ICON.yes },
-    { label: 'Not sure', sfSymbol: 'questionmark.circle.fill', customIcon: ICON.notSure },
-    { label: 'No idea', sfSymbol: 'xmark.circle.fill', customIcon: ICON.no },
-  ]},
-
-  { id: 'goal', section: 'Your Goal', type: 'multiselect', question: 'What are your goals?', options: [
-    { label: 'Build muscle & strength', sfSymbol: 'dumbbell.fill', customIcon: ICON.muscle },
-    { label: 'Lose weight', sfSymbol: 'flame.fill', customIcon: ICON.scale },
-    { label: 'Improve form', sfSymbol: 'camera.fill', customIcon: ICON.camera },
-    { label: 'Stay consistent', sfSymbol: 'repeat', customIcon: ICON.days },
-    { label: 'General fitness', sfSymbol: 'heart.fill', customIcon: ICON.heart },
-  ]},
-
-  { id: 'goalWeight', section: 'Your Goal', type: 'ruler', question: "What's your goal weight?" },
-  { id: 'goalPace', section: 'Your Goal', type: 'select', question: 'How fast do you want to get there?', options: [
-    { label: 'Relaxed',    sublabel: 'Build a habit that lasts',  sfSymbol: 'tortoise.fill' },
-    { label: 'Balanced',   sublabel: 'A sensible middle ground',  sfSymbol: 'figure.walk' },
-    { label: 'Aggressive', sublabel: 'Push hard, stay safe',      sfSymbol: 'hare.fill' },
-  ]},
-
-  { id: 'injuries', section: 'Your Body', type: 'multiselect', question: 'Any injuries or areas that hurt?',
-    clearAllOption: 'No injuries — all clear',
+  { id: 'howHeard', section: 'About You', type: 'select', question: 'How did you hear\nabout us?',
+    subtitle: "Just curious, there's no wrong answer.",
     options: [
-      { label: 'Knees', sfSymbol: 'figure.walk', customIcon: ICON.knee },
-      { label: 'Shoulders', sfSymbol: 'figure.arms.open', customIcon: ICON.shoulder },
-      { label: 'Lower back', sfSymbol: 'figure.cooldown', customIcon: ICON.back },
-      { label: 'Wrists', sfSymbol: 'hand.raised.fill', customIcon: ICON.wrist },
-      { label: 'Neck', sfSymbol: 'figure.stand', customIcon: ICON.neck },
-      { label: 'Hips', sfSymbol: 'figure.run', customIcon: ICON.hip },
-      { label: 'No injuries — all clear', sfSymbol: 'checkmark.circle.fill', customIcon: ICON.good },
-    ],
+      { label: 'Instagram / TikTok', sfSymbol: 'play.rectangle.fill', customIcon: ICON.socialMedia },
+      { label: 'Friend or referral', sfSymbol: 'person.2.fill',       customIcon: ICON.shareLink },
+      { label: 'App Store search',   sfSymbol: 'magnifyingglass',     customIcon: ICON.appStore },
+      { label: 'Google / web search', sfSymbol: 'globe',              customIcon: ICON.search },
+      { label: 'Other',              sfSymbol: 'ellipsis.circle.fill', customIcon: ICON.other },
+    ]},
+  { id: 'triedOtherApps', section: 'About You', type: 'select', question: 'Have you tried other workout apps?',
+    subtitle: "We want to know what's worked for you and what hasn't.",
+    options: [
+      { label: 'Yes', sfSymbol: 'checkmark.circle.fill', customIcon: ICON.yes },
+      { label: 'No',  sfSymbol: 'xmark.circle.fill',     customIcon: ICON.no  },
+    ]},
+  { id: 'giveVsWithout', section: 'About You', type: 'webview', question: 'With FormPal vs without', htmlKey: 'giveVsWithout' },
+
+  { id: 'height', section: 'About You', type: 'wheel', wheelKind: 'height', question: 'How tall are you?',
+    subtitle: 'This feeds into your form and progress tracking.',
+  },
+  { id: 'weight', section: 'About You', type: 'ruler', question: 'What do you weigh?',
+    subtitle: "This sets your starting point.",
+  },
+  { id: 'hasTrainer', section: 'About You', type: 'select', question: 'Do you work with a personal trainer?',
+    subtitle: 'This helps us understand your current support system.',
+    options: [
+      { label: 'Yes', sfSymbol: 'checkmark.circle.fill', customIcon: ICON.yes },
+      { label: 'No',  sfSymbol: 'xmark.circle.fill',     customIcon: ICON.no  },
+    ]},
+
+  { id: 'mainGoal', section: 'Your Goal', type: 'select', question: "What's your main goal?",
+    subtitle: 'This shapes your whole plan, so pick what matters most.',
+    options: [
+      { label: 'Build muscle · Gain weight',    sfSymbol: 'dumbbell.fill',                customIcon: ICON.muscle },
+      { label: 'Lose fat · Lose weight',        sfSymbol: 'flame.fill',                   customIcon: ICON.scale  },
+      { label: 'Recomp · Lose fat, build muscle', sfSymbol: 'arrow.triangle.2.circlepath', customIcon: ICON.onAndOff },
+    ]},
+  { id: 'goalWeight', section: 'Your Goal', type: 'ruler', question: "What's your goal weight?",
+    subtitle: "We'll build a realistic plan to get you there.",
+    showIf: a => typeof a.mainGoal !== 'string' || !a.mainGoal.startsWith('Recomp'),
+  },
+  // Real design artboard (goalpace.html) — self-contained draggable 3-pace
+  // picker (relaxed/balanced/aggressive, 0.25-1.5x), its own animated gait
+  // icons. The chosen multiplier is captured as answers.pace and feeds
+  // computeGoalPlan()'s rate, so the goal date everywhere downstream
+  // (realistic target, plan ready) reflects it. Its OWN on-screen "weeks"
+  // estimate stays illustrative — it's computed from a static default
+  // goalLbs (11) baked into the export, since this static bundle has no
+  // live prop-override channel to feed it the real number. Recomp-skipped
+  // — explicit ask, pace/target framing doesn't apply there.
+  { id: 'goalPace', section: 'Your Goal', type: 'webview', question: 'Goal pace', htmlKey: 'goalPace', webviewInject: goalPaceInject,
+    showIf: a => typeof a.mainGoal !== 'string' || !a.mainGoal.startsWith('Recomp'),
+  },
+  { id: 'giveRealisticTarget', section: 'Your Goal', type: 'webview', question: 'Realistic target', htmlKey: 'giveRealisticTarget', webviewInject: realisticTargetInject,
+    showIf: a => typeof a.mainGoal !== 'string' || !a.mainGoal.startsWith('Recomp'),
   },
 
-  { id: 'trainingLocation', section: 'Your Training', type: 'locationBubbles', question: 'Where do you train?' },
+  { id: 'trainDuration', section: 'Your Training', type: 'select', question: 'How long have you been training for?',
+    subtitle: 'This helps us set your starting difficulty.',
+    options: [
+      { label: '1-2 months', sfSymbol: 'sparkles', customIcon: ICON.justStarting },
+      { label: '2-6 months', sfSymbol: 'clock.fill', customIcon: ICON.lessThan6mo },
+      { label: '6-12 months', sfSymbol: 'clock.fill', customIcon: ICON.sixTo12mo },
+      { label: '1-2 years', sfSymbol: 'calendar', customIcon: ICON.oneToTwoYr },
+      { label: '2-5 years', sfSymbol: 'calendar', customIcon: ICON.twoToFiveYr },
+      { label: '5-10 years', sfSymbol: 'calendar', customIcon: ICON.fiveToTenYr },
+      { label: '10+ years', sfSymbol: 'calendar', customIcon: ICON.tenPlusYr },
+    ]},
+  { id: 'experience', section: 'Your Training', type: 'select', question: 'How well do you know proper form?',
+    subtitle: 'Be honest. We meet you where you are.',
+    options: [
+      { label: 'Beginner', sfSymbol: '1.circle.fill', customIcon: ICON.beginnerGym },
+      { label: 'Some experience', sfSymbol: '2.circle.fill', customIcon: ICON.someExpGym },
+      { label: 'Intermediate', sfSymbol: '3.circle.fill', customIcon: ICON.intermediateGym },
+      { label: 'Advanced', sfSymbol: '4.circle.fill', customIcon: ICON.expertGym },
+    ]},
+  { id: 'duration', section: 'Your Training', type: 'select', question: 'How long per session?',
+    subtitle: 'How much time can you realistically give each workout?',
+    options: [
+      { label: '15-20 min', sfSymbol: 'clock.fill', customIcon: ICON.fifteenMin },
+      { label: '30 min', sfSymbol: 'clock.fill', customIcon: ICON.thirtyMin },
+      { label: '45 min', sfSymbol: 'clock.fill', customIcon: ICON.fortyFiveMin },
+      { label: '60 min', sfSymbol: 'clock.fill', customIcon: ICON.sixtyMin },
+      { label: '75+ min', sfSymbol: 'clock.fill', customIcon: ICON.seventyFiveMin },
+    ]},
+
+  // Moved back into the main pre-paywall flow — explicit ask, nothing
+  // should run after the paywall any more (the old 'postQuestions'
+  // appState + POST_STEPS array are both gone).
+  { id: 'cardio', section: 'Your Training', type: 'select', question: 'Do you do any cardio or other training?',
+    subtitle: 'This helps us balance your weekly plan.',
+    options: [
+      { label: 'Yes, regularly', sfSymbol: 'figure.run', customIcon: ICON.running },
+      { label: 'Sometimes', sfSymbol: 'figure.walk', customIcon: ICON.walking },
+      { label: 'No, just lifting', sfSymbol: 'dumbbell.fill', customIcon: ICON.dumbbell },
+      { label: 'I want to add some', sfSymbol: 'plus.circle.fill', customIcon: ICON.fire },
+    ]},
+  { id: 'cardioTypes', section: 'Your Training', type: 'multiselect', question: 'What kind?',
+    subtitle: 'Select everything you do.',
+    showIf: a => a.cardio === 'Yes, regularly' || a.cardio === 'Sometimes',
+    options: [
+      { label: 'Running', sfSymbol: 'figure.run', customIcon: ICON.running },
+      { label: 'Cycling', sfSymbol: 'bicycle', customIcon: ICON.cycling },
+      { label: 'Swimming', sfSymbol: 'figure.pool.swim', customIcon: ICON.swimming },
+      { label: 'Rowing', sfSymbol: 'figure.rower', customIcon: ICON.rowing },
+      { label: 'HIIT', sfSymbol: 'bolt.fill', customIcon: ICON.hiit },
+      { label: 'Walking', sfSymbol: 'figure.walk', customIcon: ICON.walking },
+      { label: 'Sports', sfSymbol: 'sportscourt.fill', customIcon: ICON.sports },
+    ],
+  },
+  { id: 'trainTime', section: 'Your Training', type: 'select', question: 'What time of day do you usually train?',
+    subtitle: "We'll time your reminders around this.",
+    options: [
+      { label: 'Morning', sfSymbol: 'sunrise.fill', customIcon: ICON.morning },
+      { label: 'Afternoon', sfSymbol: 'sun.max.fill', customIcon: ICON.afternoon },
+      { label: 'Evening', sfSymbol: 'moon.stars.fill', customIcon: ICON.night },
+      { label: 'Varies', sfSymbol: 'shuffle', customIcon: ICON.onAndOff },
+    ]},
+
+  { id: 'trainingLocation', section: 'Your Training', type: 'locationBubbles', question: 'Where do you train?',
+    subtitle: 'This decides which exercises we give you.',
+  },
   { id: 'homeEquipment', section: 'Your Training', type: 'multiselect', question: 'Equipment you have at home?',
+    subtitle: "Select everything you have. We'll build around it.",
     showIf: a => a.trainingLocation === 'Home' || a.trainingLocation === 'Mix of both',
     clearAllOption: 'Nothing — bodyweight only',
     options: [
@@ -1567,6 +1898,7 @@ const STEPS: Step[] = [
     ],
   },
   { id: 'gymMissingEquipment', section: 'Your Training', type: 'multiselect', question: 'Anything your gym is missing?',
+    subtitle: "We'll avoid exercises that need what you don't have.",
     showIf: a => a.trainingLocation === 'Gym' || a.trainingLocation === 'Mix of both',
     clearAllOption: 'It has everything',
     options: [
@@ -1579,88 +1911,61 @@ const STEPS: Step[] = [
       { label: 'It has everything', sfSymbol: 'checkmark.circle.fill', customIcon: ICON.allGood },
     ],
   },
-  { id: 'days', section: 'Your Training', type: 'select', question: 'How many days a week do you train?', options: (a) => {
-      const advanced = a.experience === 'Intermediate' || a.experience === 'Advanced';
-      const max = advanced ? 7 : 6;
-      const DAY_ICONS = [ICON.oneDay, ICON.twoDays, ICON.threeDays, ICON.fourDays, ICON.fiveDays, ICON.sixDays, ICON.sevenDays];
-      return Array.from({ length: max }, (_, i) => ({ label: `${i + 1} day${i === 0 ? '' : 's'}`, sfSymbol: `${i + 1}.circle.fill`, customIcon: DAY_ICONS[i] }));
-    },
-  },
-  { id: 'duration', section: 'Your Training', type: 'select', question: 'How long per session?', options: [
-    { label: '15-20 min', sfSymbol: 'clock.fill', customIcon: ICON.fifteenMin },
-    { label: '30 min', sfSymbol: 'clock.fill', customIcon: ICON.thirtyMin },
-    { label: '45 min', sfSymbol: 'clock.fill', customIcon: ICON.fortyFiveMin },
-    { label: '60 min', sfSymbol: 'clock.fill', customIcon: ICON.sixtyMin },
-    { label: '75+ min', sfSymbol: 'clock.fill', customIcon: ICON.seventyFiveMin },
-  ]},
 
-  { id: 'cardio', section: 'Your Training', type: 'select', question: 'Do you do any cardio or other training?', options: [
-    { label: 'Yes, regularly', sfSymbol: 'figure.run', customIcon: ICON.running },
-    { label: 'Sometimes', sfSymbol: 'figure.walk', customIcon: ICON.walking },
-    { label: 'No, just lifting', sfSymbol: 'dumbbell.fill', customIcon: ICON.dumbbell },
-    { label: 'I want to add some', sfSymbol: 'plus.circle.fill', customIcon: ICON.fire },
-  ]},
-  { id: 'cardioTypes', section: 'Your Training', type: 'multiselect', question: 'What kind?',
-    showIf: a => a.cardio === 'Yes, regularly' || a.cardio === 'Sometimes',
+  { id: 'struggle', section: 'Your Goal', type: 'multiselect', question: "What's stopping you from reaching your goal?",
+    subtitle: 'Pick everything that applies. This helps us support you.',
+    clearAllOption: 'Nothing — just ready to start',
     options: [
-      { label: 'Running', sfSymbol: 'figure.run', customIcon: ICON.running },
-      { label: 'Cycling', sfSymbol: 'bicycle', customIcon: ICON.cycling },
-      { label: 'Swimming', sfSymbol: 'figure.pool.swim', customIcon: ICON.swimming },
-      { label: 'Rowing', sfSymbol: 'figure.rower', customIcon: ICON.rowing },
-      { label: 'HIIT', sfSymbol: 'bolt.fill', customIcon: ICON.hiit },
-      { label: 'Walking', sfSymbol: 'figure.walk', customIcon: ICON.walking },
-      { label: 'Sports', sfSymbol: 'sportscourt.fill', customIcon: ICON.sports },
+      { label: 'Not seeing results', sfSymbol: 'minus.circle.fill', customIcon: ICON.noResults },
+      { label: "Not sure if I'm training right", sfSymbol: 'questionmark.circle.fill', customIcon: ICON.notSure },
+      { label: 'Staying consistent', sfSymbol: 'repeat', customIcon: ICON.days },
+      { label: 'Losing motivation', sfSymbol: 'flame.fill', customIcon: ICON.scared },
+      { label: 'Injuries or pain', sfSymbol: 'bandage.fill', customIcon: ICON.wrist },
+      { label: 'Nothing — just ready to start', sfSymbol: 'checkmark.circle.fill', customIcon: ICON.good },
     ],
   },
-  { id: 'trainTime', section: 'Your Training', type: 'select', question: 'What time of day do you usually train?', options: [
-    { label: 'Morning', sfSymbol: 'sunrise.fill', customIcon: ICON.morning },
-    { label: 'Afternoon', sfSymbol: 'sun.max.fill', customIcon: ICON.afternoon },
-    { label: 'Evening', sfSymbol: 'moon.stars.fill', customIcon: ICON.night },
-    { label: 'Varies', sfSymbol: 'shuffle', customIcon: ICON.onAndOff },
-  ]},
-  { id: 'successVision', section: 'Wrap up', type: 'select', question: 'What does success look like in 6 months?', options: [
-    { label: 'Visibly more muscle', sfSymbol: 'dumbbell.fill', customIcon: ICON.moreMuscle },
-    { label: 'Noticeably stronger lifts', sfSymbol: 'bolt.fill', customIcon: ICON.getStronger },
-    { label: 'Leaner and more defined', sfSymbol: 'flame.fill', customIcon: ICON.leanerIcon },
-    { label: 'Confident with my shirt off', sfSymbol: 'star.fill', customIcon: ICON.shirtOff },
-    { label: 'Finally seeing results', sfSymbol: 'checkmark.circle.fill', customIcon: ICON.seeingResults },
-    { label: 'Knowing my form is right', sfSymbol: 'camera.fill', customIcon: ICON.betterForm },
-  ]},
-  { id: 'howHeard', section: 'Wrap up', type: 'select', question: 'How did you hear about us?', options: [
-    { label: 'Instagram / TikTok', sfSymbol: 'play.rectangle.fill', customIcon: ICON.socialMedia },
-    { label: 'Friend or referral', sfSymbol: 'person.2.fill', customIcon: ICON.shareLink },
-    { label: 'App Store search', sfSymbol: 'magnifyingglass', customIcon: ICON.appStore },
-    { label: 'Google / web search', sfSymbol: 'globe', customIcon: ICON.search },
-    { label: 'Other', sfSymbol: 'ellipsis.circle.fill', customIcon: ICON.other },
-  ]},
-  // NOTE: the rank run (wheel → assessment → reveal) used to sit here. It
-  // now runs AFTER the math/reversal, as an appState sequence — see the
-  // 'rankWheel'/'rankAssess'/'rankReveal' render blocks below.
+  { id: 'accomplish', section: 'Your Goal', type: 'multiselect', question: 'What would you like to accomplish?',
+    subtitle: "Pick everything you'd like FormPal to help with.",
+    options: [
+      { label: 'Learn proper form', sfSymbol: 'camera.fill', customIcon: ICON.trainProperly },
+      { label: 'Feel confident in the gym', sfSymbol: 'star.fill', customIcon: ICON.lookBetter },
+      { label: 'Train without getting hurt', sfSymbol: 'bandage.fill', customIcon: ICON.wrist },
+      { label: 'Stay consistent', sfSymbol: 'repeat', customIcon: ICON.stayConsistentIcon },
+      { label: 'Finally see results', sfSymbol: 'checkmark.circle.fill', customIcon: ICON.seeingResults },
+    ]},
+  // Real design artboard now (goodhandsv2.html) — static copy, no
+  // struggle/accomplish echo (the old native version's personalization
+  // isn't in the new design).
+  { id: 'giveGoodHands', section: 'Your Goal', type: 'webview', question: "You're in good hands", htmlKey: 'giveGoodHands' },
 
-  { id: 'formGuess', section: 'Wrap up', type: 'select',
-    question: 'What percent of your reps do you think are good?', options: [
-      { label: 'Under 25%', sfSymbol: 'gauge.low',    customIcon: ICON.noResults },
-      { label: '25-50%',    sfSymbol: 'gauge.medium', customIcon: ICON.notSure },
-      { label: '50-75%',    sfSymbol: 'gauge.medium', customIcon: ICON.onAndOff },
-      { label: '75-90%',    sfSymbol: 'gauge.high',   customIcon: ICON.good },
-      { label: 'Over 90%',  sfSymbol: 'checkmark.seal.fill', customIcon: ICON.yes },
-    ] },
-];
-
-// formGuess is now a bucket pick — map it back to a % midpoint for the math.
-const FORM_GUESS_PCT: Record<string, number> = {
-  'Under 25%': 15, '25-50%': 38, '50-75%': 62, '75-90%': 82, 'Over 90%': 95,
-};
-
-// Was a literal engineering task list ("Reading your answers," "Setting
-// your difficulty") — describes what the outcome of each step MEANS for
-// the user instead of the mechanical action taken.
-const LOADING_STEPS = [
-  'Matching exercises to your goals',
-  'Calibrating so every rep is achievable, not overwhelming',
-  'Building a week you can actually stick to',
-  'Getting your camera coach ready',
-  'Almost there — your first win starts here',
+  { id: 'injuries', section: 'Your Body', type: 'multiselect', question: 'Any injuries or areas that hurt?',
+    subtitle: "We'll avoid exercises that could aggravate these.",
+    clearAllOption: 'No injuries — all clear',
+    options: [
+      { label: 'Knees', sfSymbol: 'figure.walk', customIcon: ICON.knee },
+      { label: 'Shoulders', sfSymbol: 'figure.arms.open', customIcon: ICON.shoulder },
+      { label: 'Lower back', sfSymbol: 'figure.cooldown', customIcon: ICON.back },
+      { label: 'Wrists', sfSymbol: 'hand.raised.fill', customIcon: ICON.wrist },
+      { label: 'Neck', sfSymbol: 'figure.stand', customIcon: ICON.neck },
+      { label: 'Hips', sfSymbol: 'figure.run', customIcon: ICON.hip },
+      { label: 'No injuries — all clear', sfSymbol: 'checkmark.circle.fill', customIcon: ICON.good },
+    ],
+  },
+  // Real design artboard now (formconfidence.html) — a fully self-contained
+  // draggable 3-state slider with its own internal drag logic. Captures
+  // its final value through the same editvalue: postMessage channel
+  // planReady's pencil-edit uses (see formConfidenceInject).
+  { id: 'formConfidence', section: 'Your Body', type: 'webview', question: 'How confident are you in your current form?',
+    htmlKey: 'formConfidence', webviewInject: formConfidenceInject,
+  },
+  // Real design artboard now (notalone.html). Shows for "somewhat" or
+  // "not confident" (anything but the top "Very confident" = 100 band) —
+  // explicit ask: "if their form confidence is somewhat or low, show the
+  // you're not alone screen." formConfidenceInject only ever posts 0, 50,
+  // or 100 (see VALS map), so < 100 is exactly "not very confident".
+  { id: 'giveFormConfidence', section: 'Your Body', type: 'webview', question: 'Form confidence check-in', htmlKey: 'notAlone',
+    showIf: a => (typeof a.formConfidence === 'number' ? a.formConfidence : 50) < 100,
+  },
 ];
 
 function getVisibleSteps(a: Record<string, any>): Step[] {
@@ -1700,46 +2005,25 @@ function buildPlan(a: Record<string, any>): { focus: string; exercises: WorkoutE
   return { focus: 'Full Body', exercises };
 }
 
-const GOAL_WORD: Record<string, string> = {
-  'Build muscle':    'building muscle',
-  'Lose weight':     'losing weight',
-  'Get stronger':    'getting noticeably stronger',
-  'Improve form':    'mastering your form',
-  'Stay consistent': 'building a lasting habit',
-};
-
-function projectionLine(a: Record<string, any>): string {
-  const goals   = (a.goal as string[]) ?? [];
-  const primary = goals[0] ?? '';
-  const word    = GOAL_WORD[primary] ?? 'hitting your goal';
-  const daysNum = parseInt((a.days as string) ?? '3') || 3;
-  return `Training ${daysNum} day${daysNum !== 1 ? 's' : ''} a week, you're on track to start seeing real progress toward ${word} in about 8 weeks.`;
-}
-
-function motivationLine(a: Record<string, any>): string {
-  const m = (a.motivation as string[]) ?? [];
-  if (m.includes('Reduce stress'))
-    return 'Every session is a step toward feeling better.';
-  if (m.includes('Look & feel confident'))
-    return "Stay consistent and you'll feel it in how you carry yourself.";
-  if (m.includes('Get strong') || m.includes('Sports & performance'))
-    return 'Strength is built one rep at a time. Your plan starts here.';
-  return 'Track every rep. Build the habit. See the change.';
-}
-
-// ── Section-transition interstitials ──────────────────────────────────────────
-// One per section boundary (see the 'afterAboutYou'/'afterGoal'/
-// 'afterExperience'/'afterTraining' entries in STEPS above). Each is a
-// dedicated component imported from components/ (PlanGrowthMoment,
-// EffortResultsMoment, FormMuscleMoment, InjuryRiskMoment) rebuilt from a
-// standalone HTML reference the user supplied — see each component's own
-// header comment for what it replaced and why. Wired up in the
-// 'interstitial' render branch below; no per-step content computed here
-// since none of the four reflect the user's own answers back at them
-// (unlike the StatsMoment/ComparisonMoment/LevelTrack/WeekDots recaps they
-// replaced).
-
 // ── AnimatedOption ─────────────────────────────────────────────────────────────
+
+// Same back button + progress track/fill the question header (s.qh/s.bb/
+// s.pc/s.pt/s.pf) uses, minus the Skip button — for the handful of fully
+// native screens (connectHealth, notifications) that had no header at
+// all before. Universal "same bar, same position, every screen" fix.
+function SimpleProgressHeader({ progress, onBack }: { progress: number; onBack: () => void }) {
+  return (
+    <View style={s.qh}>
+      <LiquidGlassButton onPress={onBack} hitSlop={12} radius={17} variant="regular" fallbackColor="rgba(255,255,255,0.92)" style={s.bb}>
+        <SymbolView name="chevron.left" size={15} tintColor="#1b1f27" type="monochrome" style={{ width: 15, height: 15 }} />
+      </LiquidGlassButton>
+      <View style={s.pc}>
+        <View style={s.pt}><View style={[s.pf, { width: `${progress * 100}%` }]} /></View>
+      </View>
+      <View style={s.skipBtn} />
+    </View>
+  );
+}
 
 function AnimatedOption({ index, children, style, onPress }: {
   index: number; children: React.ReactNode; style: any; onPress: () => void;
@@ -1800,128 +2084,56 @@ function RankCalcOverlay({ bottomInset }: { bottomInset: number }) {
   );
 }
 
+// New full-screen loader between the last question and the rank run —
+// same visual language as RankCalcOverlay (label + thin progress bar),
+// but standalone (own background, not overlaid on another screen) and
+// two-phase: "Answers locked in." while the bar fills, then swaps to the
+// real copy and reveals a Continue button instead of auto-advancing.
+function PreRankLoaderScreen({ insets, onAdvance }: { insets: { top: number; bottom: number }; onAdvance: () => void }) {
+  const fade = useRef(new Animated.Value(0)).current;
+  const progress = useRef(new Animated.Value(0)).current;
+  const ctaFade = useRef(new Animated.Value(0)).current;
+  const [phase, setPhase] = useState<'locking' | 'ready'>('locking');
+
+  useEffect(() => {
+    Animated.timing(fade, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+    Animated.timing(progress, { toValue: 1, duration: RANK_CALC_MS, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start(() => {
+      setPhase('ready');
+      Animated.timing(ctaFade, { toValue: 1, duration: 260, useNativeDriver: true }).start();
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const widthPct = progress.interpolate({ inputRange: [0, 1], outputRange: ['8%', '100%'] });
+
+  return (
+    <OnboardingBackground>
+      <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
+          <Animated.View style={{ opacity: fade, width: '100%' }}>
+            <Text style={[rc.label, { fontSize: 20, textAlign: 'center', marginBottom: 18 }]}>
+              {phase === 'locking' ? 'Answers locked in.' : "Before we build your plan, let's find your starting point."}
+            </Text>
+            <View style={rc.track}>
+              <Animated.View style={[rc.fill, { width: widthPct }]} />
+            </View>
+          </Animated.View>
+        </View>
+        <Animated.View style={[s.bn, { opacity: ctaFade }]} pointerEvents={phase === 'ready' ? 'auto' : 'none'}>
+          <TouchableOpacity style={s.cb} onPress={onAdvance} activeOpacity={0.85}>
+            <Text style={s.ct}>Continue</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      </View>
+    </OnboardingBackground>
+  );
+}
+
 const rc = StyleSheet.create({
   wrap: { position: 'absolute', left: 24, right: 24 },
   label: { fontFamily: FONT.displayBold, fontSize: 15, color: L.text, marginBottom: 12, letterSpacing: -0.2 },
   track: { width: '100%', height: 9, borderRadius: 4.5, backgroundColor: '#E9ECF3', overflow: 'hidden' },
   fill: { height: '100%', borderRadius: 4.5, backgroundColor: '#2E7DFF' },
 });
-
-// A gentle continuous bob+tilt to suggest motion on the pace icons — NOT
-// literal "legs walking, ball rolling." These are flat single-frame
-// silhouette images (confirmed via a raw pixel check when they were
-// extracted — no alpha-separated layers for the figure vs. the rock), so
-// independently animating a leg or the boulder isn't possible without
-// either a sprite sheet or a Lottie file replacing this art; that's a real
-// asset request, not something to fake here. What IS honest with a single
-// static image: the whole icon bobbing, with its speed tied to that pace's
-// actual rate — Aggressive bobs noticeably faster than Relaxed, so the
-// motion at least means something instead of being decoration.
-function PaceIconBob({ source, tint, rate }: { source: any; tint: string; rate: number }) {
-  const bob = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    // Faster pace = faster bob. Relaxed(0.5) -> ~950ms half-cycle,
-    // Aggressive(1.75) -> ~450ms — linear map over the same PACE_RATE range.
-    const half = Math.round(1050 - ((rate - PACE_RATE_MIN) / (PACE_RATE_MAX - PACE_RATE_MIN)) * 650);
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(bob, { toValue: 1, duration: half, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(bob, { toValue: 0, duration: half, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [rate]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const translateY = bob.interpolate({ inputRange: [0, 1], outputRange: [0, -4] });
-  const rotate = bob.interpolate({ inputRange: [0, 1], outputRange: ['-3deg', '3deg'] });
-
-  return (
-    <Animated.View style={{ width: '100%', height: '100%', transform: [{ translateY }, { rotate }] }}>
-      <Image source={source} style={{ width: '100%', height: '100%' }} resizeMode="contain" tintColor={tint} />
-    </Animated.View>
-  );
-}
-
-// goalPace's picker went through several rejected designs before landing
-// on this: a HORIZONTAL layout matching the Cal-AI reference, with the 3
-// icons as reference anchors — NOT the only 3 selectable values (a real
-// pace picker needs finer control than 3 presets). This track drives a
-// CONTINUOUS rate directly, snapping live in PACE_RATE_STEP (0.1 lb)
-// increments as you drag, with a haptic tick on every notch — the nearest
-// icon just highlights based on which anchor the current rate is closest
-// to. selfUpdateRef distinguishes "this track's own onChange just moved
-// the value prop" (skip re-syncing anim, it's already exactly there) from
-// "an icon was tapped externally" (DO spring the thumb there).
-function HorizontalPaceTrack({ value, min, max, step, onChange }: {
-  value: number; min: number; max: number; step: number; onChange: (v: number) => void;
-}) {
-  const [trackW, setTrackW] = useState(300);
-  const anim = useRef(new Animated.Value(value)).current;
-  const startRef = useRef(value);
-  const selfUpdateRef = useRef(false);
-  const lastSnappedRef = useRef(value);
-
-  useEffect(() => {
-    if (selfUpdateRef.current) { selfUpdateRef.current = false; return; }
-    Animated.spring(anim, { toValue: value, friction: 8, tension: 60, useNativeDriver: false }).start();
-    lastSnappedRef.current = value;
-  }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const snap = (raw: number) => {
-    const clamped = Math.max(min, Math.min(max, raw));
-    // Round to 3dp to kill float noise (e.g. 0.1 steps producing
-    // 0.30000000000000004) before it leaks into the !== comparison below.
-    return Math.round((Math.round(clamped / step) * step) * 1000) / 1000;
-  };
-
-  const pan = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => { startRef.current = (anim as any)._value ?? value; },
-      onPanResponderMove: (_, gs) => {
-        const raw = startRef.current + (gs.dx / trackW) * (max - min);
-        const snapped = snap(raw);
-        anim.setValue(snapped);
-        if (snapped !== lastSnappedRef.current) {
-          lastSnappedRef.current = snapped;
-          void Haptics.selectionAsync();
-          selfUpdateRef.current = true;
-          onChange(snapped);
-        }
-      },
-    })
-  ).current;
-
-  const thumbLeft = anim.interpolate({ inputRange: [min, max], outputRange: [0, trackW], extrapolate: 'clamp' });
-  const fillW = thumbLeft;
-
-  return (
-    <View
-      style={{ height: 34, justifyContent: 'center' }}
-      onLayout={(e) => setTrackW(Math.max(40, e.nativeEvent.layout.width - 26))}
-      {...pan.panHandlers}
-    >
-      <View style={{ position: 'absolute', left: 13, right: 13, height: 4, borderRadius: 2, backgroundColor: '#EFEFF3', overflow: 'hidden' }}>
-        <Animated.View style={{ height: '100%', width: fillW, backgroundColor: '#111114' }} />
-      </View>
-      {/* Plain solid circle, not LiquidGlass — the glass wrapper rendered as
-          a squared-off box on device (the native glass view apparently
-          doesn't reliably respect a plain style borderRadius the way an RN
-          View always does). A guaranteed circle beats a glass effect that
-          might not actually be circular. */}
-      <Animated.View
-        style={{
-          position: 'absolute', left: thumbLeft, top: '50%', marginTop: -15,
-          width: 30, height: 30, borderRadius: 15, backgroundColor: L.accent,
-          borderWidth: 3, borderColor: '#fff',
-          ...({ boxShadow: '0px 3px 10px rgba(0,0,0,0.28)' } as any),
-        }}
-      />
-    </View>
-  );
-}
 
 // ── ProjectionChart ───────────────────────────────────────────────────────────
 
@@ -2339,6 +2551,12 @@ const nb = StyleSheet.create({
   message: { fontSize: 14, color: L.text, marginTop: 3 },
 });
 
+// Notifications screen's own bell icon — NotificationBanner's toast preview
+// does the actual "here's what you'll get" demonstration above this.
+const nq = StyleSheet.create({
+  iconWrap: { width: 72, height: 72, borderRadius: 36, backgroundColor: L.accent, alignItems: 'center', justifyContent: 'center' },
+});
+
 // ── MyPalIntroContent — animated, minimal, icon-forward ──────────────────────
 
 function MyPalIntroContent({ onContinue }: { onContinue: () => void }) {
@@ -2422,47 +2640,14 @@ const mp = StyleSheet.create({
   sub:      { fontSize: 16, color: L.textSub, textAlign: 'center', lineHeight: 24, letterSpacing: -0.2 },
 });
 
-// ── The math ─────────────────────────────────────────────────────────────
-// Ported from onboarding-test's computeWastedReps / getRealFormPct /
-// CinematicMathScreen. Same numbers, same 13 lines in the same order —
-// only the presentation changes (all lines stagger-fade onto one screen,
-// one Continue, instead of one tap-gated line at a time).
-
-const DURATION_WEEKS: Record<string, number> = {
-  '1-2 months': 6, '2-6 months': 16, '6-12 months': 39, '1-2 years': 78,
-  '2-5 years': 182, '5-10 years': 390, '10+ years': 624,
-};
-const DURATION_PLAIN: Record<string, string> = {
-  '1-2 months': 'just starting out', '2-6 months': 'about 4 months', '6-12 months': 'about 9 months',
-  '1-2 years': 'about 1.5 years', '2-5 years': 'about 3.5 years', '5-10 years': 'about 7.5 years', '10+ years': '12+ years',
-};
-const REPS_PER_SESSION_BY_DURATION: Record<string, number> = {
-  '15-20 min': 60, '30 min': 90, '45 min': 120, '60 min': 150, '75+ min': 180,
-};
-const DEFAULT_REPS_PER_SESSION = 90;
-
-function dayWord(n: number): string { return `${n} day${n === 1 ? '' : 's'}`; }
-
-function computeWastedReps(answers: Record<string, any>) {
-  const trainDurationLabel = (answers.trainDuration as string) ?? '1-2 months';
-  const justStarting = trainDurationLabel === '1-2 months';
-  const freq = parseInt(String(answers.days ?? '3 days'), 10) || 3;
-  const durationLabel = answers.duration as string | undefined;
-  const repsPerSession = REPS_PER_SESSION_BY_DURATION[durationLabel ?? ''] ?? DEFAULT_REPS_PER_SESSION;
-  const pct = getRealFormPct(answers);
-  const weeks = justStarting ? 104 : (DURATION_WEEKS[trainDurationLabel] ?? 78);
-  const weeksPlain = justStarting ? 'about 2 years ahead' : (DURATION_PLAIN[trainDurationLabel] ?? 'about 1.5 years');
-  const totalSessions = Math.round(freq * weeks);
-  const totalReps = totalSessions * repsPerSession;
-  const wasted = Math.max(0, Math.round(totalReps * (1 - pct / 100)));
-  return { trainDurationLabel, justStarting, freq, repsPerSession, pct, weeks, weeksPlain, totalSessions, totalReps, wasted };
-}
-
+// The "wasted reps" framing (computeWastedReps/cinematicLines, and the
+// formGuess question that fed it) is gone — the cinematic graph and plan
+// screens now narrate from the real goal-calculation engine
+// (lib/onboardingGoals.ts) instead. getRealFormPct still backs
+// computeRank's form-points component; with no formGuess question left to
+// answer it, it falls straight to the demo-session fallback (also
+// typically absent for a fresh onboarding) and then its default.
 function getRealFormPct(answers: Record<string, any>): number {
-  if (typeof answers.formGuess === 'number') return answers.formGuess;
-  if (typeof answers.formGuess === 'string' && FORM_GUESS_PCT[answers.formGuess] != null) {
-    return FORM_GUESS_PCT[answers.formGuess];
-  }
   if (typeof answers.demoGoodReps === 'number' && typeof answers.demoReps === 'number' && answers.demoReps > 0) {
     return Math.round((answers.demoGoodReps / answers.demoReps) * 100);
   }
@@ -2574,8 +2759,23 @@ const RANK_REVEAL_FOOTER_JS = `
         if ((el.children[c].innerHTML||'').indexOf('Bronze II is your starting point') >= 0) { isMostSpecific = false; break; }
       }
       if (!isMostSpecific) continue;
-      el.innerHTML = html.replace('Bronze II is your starting point', label + ' is your starting point');
+      // Real default sentence (confirmed by extraction): "Bronze II is
+      // your starting point. The right plan and <span>real-time
+      // feedback</span> can make the climb clearer." New copy replaces
+      // the WHOLE line (no highlighted span needed) — textContent, not
+      // innerHTML.replace on just the matched prefix, so none of the
+      // original trailing sentence is left dangling after it.
+      el.textContent = 'Your plan starts here. Your rank climbs as your form gets cleaner.';
       hit++;
+    }
+    // Headline — a plain leaf div OUTSIDE/above the reel (separate sibling
+    // container, confirmed by extraction), so a simple exact-text leaf
+    // match is safe here (none of the reel-DOM-preserving care the footer
+    // line above needs — that one sits INSIDE the live reel's own markup).
+    var heads = document.querySelectorAll('#dc-root div');
+    for (var j=0;j<heads.length;j++){
+      var he = heads[j]; if (he.children.length) continue;
+      if ((he.textContent||'').trim() === 'Your starting rank is...') { he.textContent = 'Your starting point.'; hit++; }
     }
     return hit >= 1;
   }
@@ -2583,96 +2783,13 @@ const RANK_REVEAL_FOOTER_JS = `
 })();
 `;
 
-// One step above the computed starting rank — used for "your route toward X".
-function nextRankLabel(a: Record<string, any>): string {
-  const { name, tier } = computeRank(a);
-  const tiers = ['I', 'II', 'III', 'IV'];
-  const ti = tiers.indexOf(tier);
-  if (ti < 3) return `${name} ${tiers[ti + 1]}`;
-  return name === 'Bronze' ? 'Silver I' : 'Gold I';
-}
-
-function cinematicLines(answers: Record<string, any>): string[] {
-  const m = computeWastedReps({ ...answers, formGuess: getRealFormPct(answers) });
-  const sessionsPerYear = Math.round(m.freq * 52);
-  const repsPerYear = m.repsPerSession * sessionsPerYear;
-  const opener = m.justStarting
-    ? `Let's imagine you do ${m.repsPerSession} reps a session.`
-    : `Okay, so you said you do ${m.repsPerSession} reps a session.`;
-  const trainLine = m.justStarting
-    ? `And let's say you train ${dayWord(m.freq)} a week.`
-    : `You train ${dayWord(m.freq)} a week.`;
-  return [
-    opener,
-    trainLine,
-    'There are 52 weeks in a year.',
-    `${m.freq} × 52 = ${sessionsPerYear} sessions a year.`,
-    `${m.repsPerSession} reps × ${sessionsPerYear} sessions = ${repsPerYear.toLocaleString()} reps a year.`,
-    `Do that for ${m.weeksPlain}, and that's about ${m.totalReps.toLocaleString()} reps total.`,
-    `You said ${m.pct}% of them are good form.`,
-    `That means ${m.wasted.toLocaleString()} of them barely built anything.`,
-    "That's months of muscle — gone.",
-    "But that's not it.",
-    'Every gym injury is a 4-6 week sideline.',
-    'After just 4 weeks off, you start losing the strength you built.',
-    'So one injury = months of progress, undone.',
-  ];
-}
-
-const REVERSAL_LINES = [
-  "But it's not too late.",
-  'FormPal checks every rep.',
-  'So from today, every one counts — and you build nearly 2x the muscle.',
-];
-
-
-// One line at a time: fade in (450ms), hold 2s, fade out (450ms), next.
-// Last line fades in and stays; onDone fires so the caller can show
-// Continue. Ported verbatim from onboarding-test's FadeSequence — the
-// "sentence by sentence" reveal the user asked to keep.
-function FadeSequence({ lines, onDone }: { lines: string[]; onDone: () => void }) {
-  const [index, setIndex] = useState(0);
-  const opacity = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const isLast = index === lines.length - 1;
-    let holdTimer: ReturnType<typeof setTimeout> | null = null;
-    let fadeOut: Animated.CompositeAnimation | null = null;
-    const fadeIn = Animated.timing(opacity, { toValue: 1, duration: 450, useNativeDriver: false });
-    fadeIn.start(({ finished }) => {
-      if (!finished) return;
-      void Haptics.selectionAsync();
-      if (isLast) { onDone(); return; }
-      holdTimer = setTimeout(() => {
-        fadeOut = Animated.timing(opacity, { toValue: 0, duration: 450, useNativeDriver: false });
-        fadeOut.start(({ finished: f2 }) => { if (f2) setIndex(i => i + 1); });
-      }, 2000);
-    });
-    return () => {
-      fadeIn.stop();
-      if (holdTimer) clearTimeout(holdTimer);
-      fadeOut?.stop();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index]);
-
-  return (
-    <Animated.Text
-      style={{
-        opacity,
-        fontFamily: FONT.display, fontSize: 29, lineHeight: 38, fontWeight: '600',
-        color: L.text, textAlign: 'center',
-        textShadowColor: 'rgba(255,255,255,0.9)', textShadowRadius: 10, textShadowOffset: { width: 0, height: 0 },
-      }}
-    >
-      {lines[index]}
-    </Animated.Text>
-  );
-}
-
-// ── GuessSlider — 0-100%, single track. The one demo leftover: "how many
-// of your reps do you think are actually good form?"
-function GuessSlider({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+// ── GuessSlider — 0-100%, single track. Reused now for the form-confidence
+// placeholder (screen 22) — the real "how many of your reps do you think
+// are actually good form?" copy it was originally built for is gone along
+// with the formGuess question, but the slider mechanics are unchanged.
+function GuessSlider({ value, onChange, lowLabel = 'None of them', highLabel = 'Every one' }: {
+  value: number; onChange: (v: number) => void; lowLabel?: string; highLabel?: string;
+}) {
   const [trackWidth, setTrackWidth] = useState(280);
   const [display, setDisplay] = useState(Math.round(value));
   const anim = useRef(new Animated.Value(value)).current;
@@ -2709,8 +2826,8 @@ function GuessSlider({ value, onChange }: { value: number; onChange: (v: number)
         <Animated.View style={{ position: 'absolute', left: thumbL, marginLeft: -15, width: 30, height: 30, borderRadius: 15, backgroundColor: '#fff', borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', ...({ boxShadow: Elev.medium.shadow } as any) }} />
       </View>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Text style={{ fontSize: 12, color: L.textDim }}>None of them</Text>
-        <Text style={{ fontSize: 12, color: L.textDim }}>Every one</Text>
+        <Text style={{ fontSize: 12, color: L.textDim }}>{lowLabel}</Text>
+        <Text style={{ fontSize: 12, color: L.textDim }}>{highLabel}</Text>
       </View>
     </View>
   );
@@ -2719,14 +2836,25 @@ function GuessSlider({ value, onChange }: { value: number; onChange: (v: number)
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 type AppState =
-  | 'welcome' | 'onboarding' | 'cinematic' | 'recoveryRoute' | 'reversal'
-  // Rank run — straight after the last question.
+  | 'welcome' | 'onboarding'
+  // "Answers locked in." loader between the last question and the rank
+  // run — reuses the RankCalcOverlay visual language as a full screen.
+  | 'preRankLoader'
+  // Rank run — straight after the loader.
   | 'rankWheel' | 'rankAssess' | 'rankReveal'
+  // Recovery Route is removed from the flow — rankReveal goes straight to
+  // thankYou now, 2 more native beats, then plan-generation.
+  | 'thankYou' | 'connectHealth' | 'notifications'
+  // Real design artboard (readytobuild.html) — one more beat right before
+  // plan generation actually kicks off.
+  | 'readyToBuild'
   // The pre-paywall pages, in order. saveProgress + tryForFree are native
-  // screens spliced in right after plan-ready.
+  // screens spliced in right after plan-ready. Nothing runs after the
+  // paywall any more — cardio/cardioTypes/trainTime moved back into the
+  // main pre-paywall question flow (see STEPS).
   | 'generatePlan' | 'planReady' | 'saveProgress' | 'tryForFree' | 'trialTimeline' | 'webPaywall';
 
-type EditField = 'age' | 'height' | 'weight' | 'experience';
+type EditField = 'age' | 'height' | 'weight' | 'experience' | 'mainGoal';
 
 export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
@@ -2749,12 +2877,6 @@ export default function OnboardingScreen() {
   const [stepIndex, setStepIndex] = useState(0);
   const [answers,   setAnswers]   = useState<Record<string, any>>({});
   const [plan,      setPlan]      = useState<{ focus: string; exercises: WorkoutExercise[] } | null>(null);
-  // Tap-feedback only, for single-select questions — see handleSelect below
-  // for why this exists separately from `answers`.
-  const [justSelected, setJustSelected] = useState<string | null>(null);
-  // Gates the Continue button on the cinematic-math + reversal screens until
-  // every line has faded in.
-  const [mathLinesDone, setMathLinesDone] = useState(false);
   // Which single info field the plan-ready page's pencil opened for editing
   // (null = not editing). Rendered as an overlay so the WebView stays put.
   const [editField, setEditField] = useState<EditField | null>(null);
@@ -2782,7 +2904,23 @@ export default function OnboardingScreen() {
 
   const visibleSteps = getVisibleSteps(answers);
   const currentStep  = visibleSteps[stepIndex];
-  const progress     = visibleSteps.length > 0 ? (stepIndex + 1) / visibleSteps.length : 0;
+
+  // ── Global progress — ONE bar, same track/fill, spanning the WHOLE
+  // onboarding flow (questions + rank run + post-rank + pre-paywall), not
+  // just the question steps — explicit ask, was inconsistent/missing on
+  // everything after the last question.
+  const RANK_POST_FLOW: AppState[] = [
+    'preRankLoader', 'rankWheel', 'rankAssess', 'rankReveal',
+    'thankYou', 'connectHealth', 'notifications', 'readyToBuild',
+    'generatePlan', 'planReady', 'saveProgress', 'tryForFree', 'trialTimeline', 'webPaywall',
+  ];
+  const TOTAL_FLOW_LEN = visibleSteps.length + RANK_POST_FLOW.length;
+  const progress = (() => {
+    if (appState === 'onboarding') return visibleSteps.length > 0 ? (stepIndex + 1) / TOTAL_FLOW_LEN : 0;
+    const idx = RANK_POST_FLOW.indexOf(appState);
+    if (idx === -1) return 1;
+    return (visibleSteps.length + idx + 1) / TOTAL_FLOW_LEN;
+  })();
 
   // Preload every answer-choice icon up front. They're already require()'d
   // (so Metro bundles them), but each <Image> still decodes lazily the
@@ -2880,14 +3018,13 @@ export default function OnboardingScreen() {
     if (stepIndex < vis.length - 1) {
       animTrans('forward', () => { unstable_batchedUpdates(() => { commit?.(); setStepIndex(i => i + 1); }); });
     } else {
-      // Fade the last question out before the rank wheel mounts, so it isn't
-      // a hard white cut into it.
-      animTrans('forward', () => { unstable_batchedUpdates(() => { commit?.(); setAppState('rankWheel'); }); });
+      // Fade the last question out before the loader mounts, so it isn't a
+      // hard white cut into it.
+      animTrans('forward', () => { unstable_batchedUpdates(() => { commit?.(); setAppState('preRankLoader'); }); });
     }
   };
 
   const goBack = () => {
-    setJustSelected(null);
     if (stepIndex > 0) {
       animTrans('back', () => setStepIndex(i => i - 1));
     } else {
@@ -2912,23 +3049,14 @@ export default function OnboardingScreen() {
         setAnswers({ ...answers, [st.id]: next });
       }
     } else {
-      // Single-select auto-advance: previously called setAnswers(next)
-      // immediately, then advanced 300ms later. But `visibleSteps` (and
-      // therefore `currentStep`) is recomputed from `answers` on every
-      // render — for any question with a showIf further down the list
-      // (homeSplit, homeEquipment, gymMissingEquipment...), that immediate
-      // answers update could change which step landed at the SAME
-      // stepIndex mid-delay, flashing that step's content for the rest of
-      // the 300ms before advance() finally moved stepIndex forward.
-      // justSelected gives the tapped option its immediate visual
-      // highlight without touching `answers` (and therefore
-      // `visibleSteps`) until the actual navigation happens.
-      setJustSelected(opt);
-      setTimeout(() => {
-        const next = { ...answers, [st.id]: opt };
-        advance(next, () => setAnswers(next));
-        setJustSelected(null);
-      }, 300);
+      // No more auto-advance — every question (single-select included) now
+      // waits for an explicit Continue tap, so this can just set the
+      // answer directly like multiselect does. The old 300ms
+      // justSelected/setTimeout dance existed ONLY to avoid flashing a
+      // different question mid-auto-advance when a showIf elsewhere
+      // reacted to the new answer; with no auto-advance to race, that
+      // problem doesn't exist any more.
+      setAnswers({ ...answers, [st.id]: opt });
     }
   };
 
@@ -2982,7 +3110,7 @@ export default function OnboardingScreen() {
         {/* DEV — skip straight to the rank run. Absolute so it doesn't take
             layout space away from the phone. */}
         <TouchableOpacity
-          onPress={() => { haptic(); setMathLinesDone(false); setAppState('rankWheel'); }}
+          onPress={() => { haptic(); setAppState('rankWheel'); }}
           style={h.devWrap}
           activeOpacity={0.6}
         >
@@ -3028,8 +3156,11 @@ export default function OnboardingScreen() {
         <OnboardingBackground>
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
             {header}
-            <Animated.View style={{ paddingHorizontal: 24, paddingTop: 10, flex: 1, opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
-              <Text style={s.qq}>{noOrphan(st.question)}</Text>
+            <Animated.View style={{ flex: 1, opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
+              <View style={s.qBlock}>
+                <Text style={s.qq}>{noOrphan(st.question)}</Text>
+                {!!st.subtitle && <Text style={s.qqSub}>{st.subtitle}</Text>}
+              </View>
               <Picker selectedValue={wheelVal} onValueChange={(v) => { Haptics.selectionAsync(); setAnswers({ ...answers, [st.id]: v as string }); }} style={{ height: 230, marginTop: 8 }} itemStyle={{ color: L.text, fontSize: 28, fontWeight: '600' }}>
                 {opts.map(o => <Picker.Item key={o} label={o} value={o} />)}
               </Picker>
@@ -3076,9 +3207,12 @@ export default function OnboardingScreen() {
         <OnboardingBackground>
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
             {header}
-            <Animated.View style={{ paddingHorizontal: 24, paddingTop: 10, flex: 1, opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
-              <Text style={s.qq}>{noOrphan(st.question)}</Text>
-              <View style={{ marginTop: 12 }}>
+            <Animated.View style={{ flex: 1, opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
+              <View style={s.qBlock}>
+                <Text style={s.qq} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>{noOrphan(st.question)}</Text>
+                {!!st.subtitle && <Text style={s.qqSub}>{st.subtitle}</Text>}
+              </View>
+              <View style={{ marginTop: 12, paddingHorizontal: 24 }}>
                 <WeightRulerSlider
                   value={rulerVal}
                   onChange={(v) => setAnswers({ ...answers, [st.id]: v })}
@@ -3146,9 +3280,12 @@ export default function OnboardingScreen() {
         <OnboardingBackground>
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
             {header}
-            <Animated.View style={{ paddingHorizontal: 24, paddingTop: 10, flex: 1, opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
-              <Text style={s.qq}>{noOrphan(st.question)}</Text>
-              <View style={{ flex: 1, justifyContent: 'center' }}>
+            <Animated.View style={{ flex: 1, opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
+              <View style={s.qBlock}>
+                <Text style={s.qq}>{noOrphan(st.question)}</Text>
+                {!!st.subtitle && <Text style={s.qqSub}>{st.subtitle}</Text>}
+              </View>
+              <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 24 }}>
                 <LocationBubbles
                   selected={picked}
                   onPick={(label) => { haptic(); setAnswers({ ...answers, [st.id]: label }); }}
@@ -3165,17 +3302,25 @@ export default function OnboardingScreen() {
       );
     }
 
-    // Guess slider — 0-100%, feeds the math. Always shown.
+    // Guess slider — 0-100. Currently only formConfidence uses this.
     if (st.type === 'guessSlider') {
       const val = typeof answers[st.id] === 'number' ? (answers[st.id] as number) : 50;
       return (
         <OnboardingBackground>
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
             {header}
-            <View style={{ paddingHorizontal: 24, paddingTop: 10, flex: 1 }}>
-              <Text style={s.qq}>{noOrphan(st.question)}</Text>
-              <View style={{ flex: 1, justifyContent: 'center' }}>
-                <GuessSlider value={val} onChange={(v) => setAnswers({ ...answers, [st.id]: v })} />
+            <View style={{ flex: 1 }}>
+              <View style={s.qBlock}>
+                <Text style={s.qq}>{noOrphan(st.question)}</Text>
+                {!!st.subtitle && <Text style={s.qqSub}>{st.subtitle}</Text>}
+              </View>
+              <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 24 }}>
+                <GuessSlider
+                  value={val}
+                  onChange={(v) => setAnswers({ ...answers, [st.id]: v })}
+                  lowLabel="Not confident at all"
+                  highLabel="Very confident"
+                />
               </View>
             </View>
             <View style={s.bn}>
@@ -3188,14 +3333,36 @@ export default function OnboardingScreen() {
       );
     }
 
-    // Rank WebView screen — full-screen HTML artifact, its own back button.
+    // WebView screen — full-screen HTML artifact, its own back button.
+    // webviewInject personalizes the artboard's default copy (see Step's
+    // own comment). onEditValue reuses the same 'editvalue:field:value'
+    // channel planReady's pencil-edit uses — formConfidence's inject posts
+    // through it to capture the slider's final value before advancing.
     if (st.type === 'webview' && st.htmlKey) {
+      // Animation suppression needs to run BEFORE the page's own script
+      // ever executes (extraJsBeforeLoad), not after (extraJs) — running
+      // it after-load was the actual cause of "white screen, then content
+      // snaps in": the artboard's own entrance animations had already
+      // started (invisible, behind the not-yet-revealed WebView) by the
+      // time the after-load script froze them mid-flight. giveVsWithout
+      // (plan comparison) is the one exception — its own staggered
+      // entrance (title/card rise, then the chart actually draws in) is
+      // real content the user explicitly wants to see play, not screen
+      // chrome to suppress.
+      const suppressAnim = st.htmlKey !== 'giveVsWithout' ? SUPPRESS_DC_ANIM_JS : undefined;
       return (
         <OnboardingWebScreen
           htmlKey={st.htmlKey}
           topInset={insets.top}
+          progress={progress}
+          extraJsBeforeLoad={suppressAnim}
+          extraJs={st.webviewInject ? st.webviewInject(answers) : undefined}
           onAdvance={() => advance(answers)}
           onBack={goBack}
+          onEditValue={(field, value) => {
+            const num = parseFloat(value);
+            setAnswers((a) => ({ ...a, [field]: isNaN(num) ? value : num }));
+          }}
         />
       );
     }
@@ -3231,125 +3398,19 @@ export default function OnboardingScreen() {
       );
     }
 
-    // Interstitial — the one persuasion beat still in the flow: fact1, the
-    // structured-plan stat (PlanGrowthMoment), sitting right after
-    // followPlan. Takes the same shared header + CTA as every other step.
-    if (st.type === 'interstitial') {
-      const content = <PlanGrowthMoment header={header} insets={insets} onContinue={() => advance(answers)} />;
-      return <OnboardingBackground>{content}</OnboardingBackground>;
-    }
-
-    // "How fast do you want to get there?" — a REAL native picker wheel
-    // (same Picker component the 'wheel' step type and StrengthAssessment
-    // use elsewhere), per explicit direction after row-list, dial, and
-    // slider were all tried and rejected. Shows the selected pace's icon +
-    // sublabel above the wheel, updating live as it spins.
-    if (st.id === 'goalPace') {
-      const opts = resolveOptions(st.options, answers);
-      const rate = typeof answers.goalPaceRate === 'number' ? (answers.goalPaceRate as number) : PACE_REF_RATE.Balanced;
-      const nearestLabel = paceLabelForRate(rate, opts);
-      const selectedOpt = opts.find((o) => o.label === nearestLabel) ?? opts[0];
-
-      const weight = typeof answers.weight === 'number' ? (answers.weight as number) : 0;
-      const goalWeight = typeof answers.goalWeight === 'number' ? (answers.goalWeight as number) : weight;
-      const delta = Math.abs(goalWeight - weight);
-      const isLosing = goalWeight < weight;
-      const weeks = delta > 0 ? Math.max(1, Math.round(delta / rate)) : 0;
-      // ~3,500 kcal per lb is the standard (if rough) rule of thumb for
-      // converting a weekly rate into a daily calorie deficit/surplus — a
-      // real, concrete number instead of generic encouragement text.
-      // PACE_REF_RATE.Aggressive (1.75) as the risk threshold: most
-      // general guidance treats sustained rates above ~1.5-2 lb/week as
-      // needing medical supervision, which is exactly where that anchor
-      // already sits.
-      const dailyCal = Math.round((rate * 3500) / 7);
-      const isRisky = rate >= PACE_REF_RATE.Aggressive;
-      // Same treatment, mirrored, for the gentle end of the range — a
-      // green "this is a healthy pace" cue instead of the amber warning.
-      const isHealthy = rate <= PACE_REF_RATE.Relaxed;
-
-      const setRate = (r: number) => {
-        const snapped = paceSnapRate(r);
-        setAnswers({ ...answers, goalPaceRate: snapped, goalPace: paceLabelForRate(snapped, opts) });
-      };
-      const pickIcon = (label: string) => {
-        Haptics.selectionAsync();
-        setRate(PACE_REF_RATE[label] ?? 1);
-      };
-
+    // Design-pending placeholder — clearly labeled, no real content yet
+    // (#7, #12, #30's native equivalent). Advances with no data to capture.
+    if (st.type === 'placeholder') {
       return (
         <OnboardingBackground>
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
             {header}
-            <Animated.View style={{ paddingHorizontal: 24, paddingTop: 4, flex: 1, opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
-              <Text style={s.qq}>{noOrphan(st.question)}</Text>
-
-              <View style={{ alignItems: 'center', marginTop: 26 }}>
-                <Text style={s.paceRateLabel}>Weight {isLosing ? 'loss' : 'gain'} speed per week</Text>
-                <Text style={s.paceRateBig}>{rate} <Text style={s.paceRateUnit}>lbs</Text></Text>
-              </View>
-
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 30, paddingHorizontal: 4 }}>
-                {opts.map((o) => {
-                  const on = o.label === nearestLabel;
-                  return (
-                    <Pressable key={o.label} onPress={() => pickIcon(o.label)} style={{ alignItems: 'center', gap: 8 }}>
-                      {/* No background, no border, fixed size whether
-                          selected or not — these are the extracted (real
-                          alpha channel) versions of your icons, so
-                          tintColor now recolors just the silhouette
-                          instead of flattening the whole square. */}
-                      <View style={s.paceBubble}>
-                        {PACE_ICON[o.label]
-                          ? <PaceIconBob source={PACE_ICON[o.label]} tint={on ? L.accent : '#111114'} rate={PACE_REF_RATE[o.label] ?? 1} />
-                          : <Sym name="circle" size={22} color={on ? L.accent : L.textDim} />}
-                      </View>
-                      <Text style={[s.paceLabel, on && s.paceLabelOn]}>{o.label}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-
-              <View style={{ marginTop: 20 }}>
-                <HorizontalPaceTrack value={rate} min={PACE_RATE_MIN} max={PACE_RATE_MAX} step={PACE_RATE_STEP} onChange={setRate} />
-              </View>
-
-              <View style={s.paceCard}>
-                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
-                    <View style={[s.paceCardIcon, isRisky && s.paceCardIconWarn, isHealthy && s.paceCardIconGood]}>
-                      <Sym
-                        name={isRisky ? 'exclamationmark.triangle.fill' : isHealthy ? 'checkmark.seal.fill' : 'calendar'}
-                        size={16}
-                        color={isRisky ? '#B45300' : isHealthy ? '#1F9D4D' : L.accent}
-                      />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      {weeks > 0 ? (
-                        <Text style={s.paceCardTitle} numberOfLines={1} adjustsFontSizeToFit>
-                          Reach your goal in{' '}
-                          <Text style={s.paceCardBadge}>{weeks}{' '}{weeks === 1 ? 'week' : 'weeks'}</Text>
-                        </Text>
-                      ) : (
-                        <Text style={s.paceCardTitle} numberOfLines={1} adjustsFontSizeToFit>
-                          You're already at your goal weight
-                        </Text>
-                      )}
-                      {/* Short, plain, human copy: a real number (the
-                          implied daily calorie change) plus at most 3
-                          simple sentences — no em dashes, no jargon. */}
-                      <Text style={[s.paceCardSub, isRisky && s.paceCardSubWarn, isHealthy && s.paceCardSubGood]}>
-                        {isRisky
-                          ? `That's about ${dailyCal} calories a day ${isLosing ? 'less' : 'more'} than usual. Going this fast can be risky. Talk to a doctor before you start.`
-                          : isHealthy
-                          ? `That's about ${dailyCal} calories a day ${isLosing ? 'less' : 'more'} than usual. This is a healthy, steady pace that's easy on your body.`
-                          : `That's about ${dailyCal} calories a day ${isLosing ? 'less' : 'more'} than usual. It's a solid pace most people can keep up.`}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-            </Animated.View>
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
+              <Text style={s.placeholderTag}>PLACEHOLDER — DESIGN COMING</Text>
+              <Text style={s.placeholderTitle}>{st.question}</Text>
+            </View>
             <View style={s.bn}>
-              <TouchableOpacity style={s.cb} onPress={() => advance({ ...answers, goalPace: nearestLabel, goalPaceRate: rate })} activeOpacity={0.85}>
+              <TouchableOpacity style={s.cb} onPress={() => advance(answers)} activeOpacity={0.85}>
                 <Text style={s.ct}>Continue</Text>
               </TouchableOpacity>
             </View>
@@ -3358,34 +3419,43 @@ export default function OnboardingScreen() {
       );
     }
 
-    // Select / multiselect — notification overlay is absolute (not in scroll)
-    const isSel      = (o: string) => {
-      if (st.type === 'select' && justSelected !== null) return o === justSelected;
+    // "GIVE" interstitials — native, echo the user's own answers back at
+    // them. Each gets its own id-branch (same pattern goalPace used to).
+    // All share the same centered-text shape, so one small local component
+    // instead of repeating the layout 3 times.
+    // Select / multiselect
+    const isSel = (o: string) => {
       const a = answers[st.id];
       return Array.isArray(a) ? a.includes(o) : a === o;
     };
-    const multiReady = st.type === 'multiselect' && Array.isArray(answers[st.id]) && (answers[st.id] as string[]).length > 0;
-    const isNotif    = st.id === 'notifications';
+    // Every question requires an explicit Continue tap now — single-select
+    // no longer auto-advances on tap, so it needs the same "has an answer"
+    // gate multiselect already had.
+    const stepReady = st.type === 'multiselect'
+      ? Array.isArray(answers[st.id]) && (answers[st.id] as string[]).length > 0
+      : answers[st.id] != null;
+
+    // Back to a scrollable list at normal size — explicit reversal of the
+    // earlier "shrink + never scroll" attempt, which read as cramped/too
+    // small. Long lists (injuries, equipment) scroll; short ones just sit
+    // there with room to spare.
+    const _opts = resolveOptions(st.options, answers);
 
     return (
       <OnboardingBackground>
-        {/* Notification overlay — absolute, never pushes content */}
-        {isNotif && <NotificationBanner topOffset={insets.top} />}
-
         <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
           {header}
           <Animated.View style={{ flex: 1, opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
-            <View style={{ paddingHorizontal: 24, paddingTop: 10 }}>
+            <View style={s.qBlock}>
               <Text style={s.qq}>{noOrphan(st.question)}</Text>
-              {st.subtitle && <Text style={s.qqSub}>{st.subtitle}</Text>}
+              {!!st.subtitle && <Text style={s.qqSub}>{st.subtitle}</Text>}
             </View>
             <ScrollView
               style={{ flex: 1 }}
-              contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: st.type === 'multiselect' ? 140 : 44, flexGrow: 1 }}
+              contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 140, flexGrow: 1, justifyContent: 'center' }}
               showsVerticalScrollIndicator={false}
             >
-              <View>
-              {(() => { const _opts = resolveOptions(st.options, answers); return _opts.map((o, i) => {
+              {_opts.map((o, i) => {
                 const sel = isSel(o.label);
                 const sym = o.sfSymbol || 'person.fill';
                 return (
@@ -3404,78 +3474,128 @@ export default function OnboardingScreen() {
                         : <Sym name={sym} size={24} color={sel ? L.accent : L.textSub} />}
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={[s.optTxt, sel && s.optTxtSel]}>{o.label}</Text>
-                      {o.sublabel && <Text style={s.optSublabel}>{o.sublabel}</Text>}
+                      <Text style={[s.optTxt, sel && s.optTxtSel]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>{o.label}</Text>
                     </View>
                     <View style={[s.radio, sel && s.radioSel]}>
                       {sel && <Sym name="checkmark" size={11} color="#fff" />}
                     </View>
                   </AnimatedOption>
                 );
-              }); })()}
-              </View>
+              })}
             </ScrollView>
           </Animated.View>
-          {st.type === 'multiselect' && (
-            <View style={s.bn}>
-              <TouchableOpacity style={[s.cb, !multiReady && s.cbDisabled]} disabled={!multiReady} onPress={() => advance(answers)} activeOpacity={0.85}>
-                <Text style={[s.ct, !multiReady && s.ctDisabled]}>Continue</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+          <View style={s.bn}>
+            <TouchableOpacity style={[s.cb, !stepReady && s.cbDisabled]} disabled={!stepReady} onPress={() => advance(answers)} activeOpacity={0.85}>
+              <Text style={[s.ct, !stepReady && s.ctDisabled]}>Continue</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </OnboardingBackground>
     );
   }
 
-  // ── CINEMATIC MATH — the "two versions of you" wasted-muscle graph, with
-  // the years / reps-lost / months-lost numbers rewritten from the answers.
-  // Comes AFTER the rank run (it was landing before the ranks, where the
-  // user never got to it).
+  // ── 3 new native beats between the rank run and plan generation ────────────
+  // (Recovery Route removed — rankReveal goes straight to thankYou.)
 
-  if (appState === 'cinematic') {
+  // Real design artboard (goodhands.html — its content turned out to be
+  // this exact privacy/trust screen despite the filename). New subtext
+  // per explicit copy change, via thankYouInject.
+  if (appState === 'thankYou') {
     return (
       <OnboardingWebScreen
-        htmlKey="cinematicGraph"
+        htmlKey="thankYou"
         topInset={insets.top}
-        extraJs={cinematicGraphInject(answers)}
-        onAdvance={() => setAppState('recoveryRoute')}
+        progress={progress}
+        extraJsBeforeLoad={SUPPRESS_DC_ANIM_JS}
+        extraJs={thankYouInject()}
+        onAdvance={() => setAppState('connectHealth')}
         onBack={() => setAppState('rankReveal')}
       />
     );
   }
 
-  if (appState === 'recoveryRoute') {
+  if (appState === 'connectHealth') {
+    return (
+      <OnboardingBackground>
+        <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
+          <SimpleProgressHeader progress={progress} onBack={() => setAppState('thankYou')} />
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
+            <Text style={s.placeholderTag}>PLACEHOLDER — DESIGN COMING</Text>
+            <Text style={s.placeholderTitle}>Connect Apple Health</Text>
+          </View>
+          <View style={s.bn}>
+            <TouchableOpacity style={s.cb} onPress={() => setAppState('notifications')} activeOpacity={0.85}>
+              <Text style={s.ct}>Continue</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </OnboardingBackground>
+    );
+  }
+
+  if (appState === 'notifications') {
+    return (
+      <OnboardingBackground>
+        <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
+          <SimpleProgressHeader progress={progress} onBack={() => setAppState('connectHealth')} />
+          <NotificationBanner topOffset={insets.top} />
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
+            <View style={nq.iconWrap}>
+              <Sym name="bell.fill" size={28} color="#fff" />
+            </View>
+            <Text style={[s.giveTitle, { marginTop: 22 }]}>Don't miss a session.</Text>
+            <Text style={s.giveSub}>We'll remind you when it's time to train and let you know how your form is trending.</Text>
+          </View>
+          <View style={s.bn}>
+            <TouchableOpacity
+              style={s.cb}
+              activeOpacity={0.85}
+              onPress={() => {
+                // TODO(notifications): expo-notifications isn't installed
+                // yet (`npx expo install expo-notifications` + a rebuild —
+                // this is a native module, a JS-only install won't take
+                // effect in an already-running dev client). Wire the real
+                // Notifications.requestPermissionsAsync() call in here once
+                // that's done; for now this just advances.
+                haptic(Haptics.ImpactFeedbackStyle.Medium);
+                setAppState('readyToBuild');
+              }}
+            >
+              <Text style={s.ct}>Enable notifications</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setAppState('readyToBuild')} hitSlop={10} style={{ alignItems: 'center', paddingTop: 14 }}>
+              <Text style={{ fontSize: 14, fontWeight: W.semi, color: L.textSub }}>Not now</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </OnboardingBackground>
+    );
+  }
+
+  // Real design artboard (readytobuild.html) — one more beat right before
+  // generatePlan actually starts building the plan.
+  if (appState === 'readyToBuild') {
     return (
       <OnboardingWebScreen
-        htmlKey="recoveryRoute"
+        htmlKey="readyToBuild"
         topInset={insets.top}
-        extraJs={recoveryRouteInject(answers) + '\n' + RESTART_RECOVERY_ANIM_JS}
+        progress={progress}
+        extraJsBeforeLoad={SUPPRESS_DC_ANIM_JS}
         onAdvance={() => setAppState('generatePlan')}
-        onBack={() => setAppState('cinematic')}
+        onBack={() => setAppState('notifications')}
       />
     );
   }
 
-  // ── REVERSAL — 3 lines, same treatment ──────────────────────────────────────
-
-  if (appState === 'reversal') {
-    return (
-      <OnboardingBackground>
-        <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
-            <FadeSequence key="reversal" lines={REVERSAL_LINES} onDone={() => setMathLinesDone(true)} />
-          </View>
-          {mathLinesDone && (
-            <View style={s.bn}>
-              <TouchableOpacity style={s.cb} onPress={() => { haptic(Haptics.ImpactFeedbackStyle.Medium); setMathLinesDone(false); setAppState('rankWheel'); }} activeOpacity={0.85}>
-                <Text style={s.ct}>Continue</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-      </OnboardingBackground>
-    );
+  // ── "Answers locked in." loader — new beat between the last question and
+  // the rank run. Reuses RankCalcOverlay's visual language (label + thin
+  // progress bar) as a full screen rather than an overlay, since there's
+  // no prior screen's content to sit on top of here. Two-phase text: bar
+  // fills under "Answers locked in.", then the label swaps and a Continue
+  // button fades in — explicit ask, not auto-advancing like the other
+  // RankCalcOverlay usage (strengthAssessment -> rankReveal) still does.
+  if (appState === 'preRankLoader') {
+    return <PreRankLoaderScreen insets={insets} onAdvance={() => setAppState('rankWheel')} />;
   }
 
   // ── Rank run — native screens (rank wheel / reveal + strength assessment).
@@ -3495,6 +3615,7 @@ export default function OnboardingScreen() {
         {appState === 'rankWheel' && (
           <RankWheelScreen
             topInset={insets.top}
+            progress={progress}
             onAdvance={() => setAppState('rankAssess')}
             onBack={() => {
               // Was a raw setAppState('onboarding') with stepIndex untouched —
@@ -3524,6 +3645,7 @@ export default function OnboardingScreen() {
         <OnboardingWebScreen
           htmlKey="strengthAssessment"
           topInset={insets.top}
+          progress={progress}
           poolActive={appState === 'rankAssess'}
           onAdvance={() => setRankCalcOverlay(true)}
           onBack={() => setAppState('rankWheel')}
@@ -3539,9 +3661,10 @@ export default function OnboardingScreen() {
       <OnboardingWebScreen
         htmlKey="rankReveal"
         topInset={insets.top}
+        progress={progress}
         extraJsBeforeLoad={rankRevealPreloadJs(answers)}
         extraJs={RANK_REVEAL_FOOTER_JS}
-        onAdvance={() => setAppState('cinematic')}
+        onAdvance={() => setAppState('thankYou')}
         onBack={() => setAppState('rankAssess')}
       />
     );
@@ -3564,10 +3687,17 @@ export default function OnboardingScreen() {
           activeKey={poolActive}
           answers={answers}
           topInset={insets.top}
+          progressFor={(key) => {
+            const st: AppState = key === 'planReady' ? 'planReady' : key === 'trialTimeline' ? 'trialTimeline' : 'webPaywall';
+            const idx = RANK_POST_FLOW.indexOf(st);
+            return (visibleSteps.length + idx + 1) / TOTAL_FLOW_LEN;
+          }}
           onAdvance={(from) => {
             if (from === 'planReady') setAppState('saveProgress');
             else if (from === 'trialTimeline') setAppState('webPaywall');
-            else finishOnboarding();
+            // from === 'webPaywall' (the paywall's own CTA) — straight into
+            // the app now, nothing runs after the paywall any more.
+            else { void finishOnboarding(); }
           }}
           onBack={(from) => {
             if (from === 'planReady') setAppState('generatePlan');
@@ -3591,13 +3721,15 @@ export default function OnboardingScreen() {
           <OnboardingWebScreen
             htmlKey="generatePlan"
             topInset={insets.top}
+            progress={progress}
             onAdvance={() => setAppState('planReady')}
-            onBack={() => setAppState('recoveryRoute')}
+            onBack={() => setAppState('notifications')}
           />
         )}
         {appState === 'saveProgress' && (
           <SaveProgressScreen
             topInset={insets.top}
+            progress={progress}
             onAdvance={() => setAppState('tryForFree')}
             onBack={() => setAppState('planReady')}
           />
@@ -3605,6 +3737,7 @@ export default function OnboardingScreen() {
         {appState === 'tryForFree' && (
           <TryForFreeScreen
             topInset={insets.top}
+            progress={progress}
             onAdvance={() => setAppState('trialTimeline')}
             onBack={() => setAppState('saveProgress')}
           />
@@ -3630,11 +3763,13 @@ export default function OnboardingScreen() {
 // experience field gets its four options. Save/Cancel dismiss it. ────────────
 
 const EXPERIENCE_OPTS = ['Beginner', 'Some experience', 'Intermediate', 'Advanced'];
+const MAIN_GOAL_OPTS = ['Build muscle · Gain weight', 'Lose fat · Lose weight', 'Recomp · Lose fat, build muscle'];
 const FIELD_META: Record<EditField, { title: string; kbd: 'number-pad' | 'default'; ph: string; unit?: string }> = {
   age:        { title: 'age',        kbd: 'number-pad', ph: '27' },
   height:     { title: 'height',     kbd: 'default',    ph: `5'10"` },
   weight:     { title: 'weight',     kbd: 'number-pad', ph: '168', unit: 'lb' },
   experience: { title: 'experience', kbd: 'default',    ph: '' },
+  mainGoal:   { title: 'goal',       kbd: 'default',    ph: '' },
 };
 
 function EditFieldOverlay({ field, answers, topInset, onSave, onClose }: {
@@ -3648,6 +3783,7 @@ function EditFieldOverlay({ field, answers, topInset, onSave, onClose }: {
   const initial =
     field === 'weight' ? (typeof answers.weight === 'number' ? String(Math.round(answers.weight)) : '') :
     field === 'experience' ? (typeof answers.experience === 'string' ? answers.experience : 'Intermediate') :
+    field === 'mainGoal' ? (typeof answers.mainGoal === 'string' ? answers.mainGoal : 'Build muscle · Gain weight') :
     (answers[field] != null ? String(answers[field]) : '');
   const [val, setVal] = useState<string>(initial);
   const anim = useRef(new Animated.Value(0)).current;
@@ -3657,7 +3793,7 @@ function EditFieldOverlay({ field, answers, topInset, onSave, onClose }: {
 
   const save = () => {
     haptic(Haptics.ImpactFeedbackStyle.Medium);
-    if (field === 'experience') { onSave({ experience: val }); return; }
+    if (field === 'experience' || field === 'mainGoal') { onSave({ [field]: val }); return; }
     if (field === 'weight') {
       const n = parseFloat(val);
       onSave(Number.isNaN(n) ? {} : { weight: n });
@@ -3693,9 +3829,9 @@ function EditFieldOverlay({ field, answers, topInset, onSave, onClose }: {
           </LiquidGlassButton>
         </View>
 
-        {field === 'experience' ? (
+        {field === 'experience' || field === 'mainGoal' ? (
           <View style={{ gap: 8 }}>
-            {EXPERIENCE_OPTS.map(o => {
+            {(field === 'experience' ? EXPERIENCE_OPTS : MAIN_GOAL_OPTS).map(o => {
               const sel = val === o;
               return (
                 <TouchableOpacity key={o} onPress={() => { haptic(); setVal(o); }} activeOpacity={0.7}
@@ -3743,44 +3879,37 @@ const s = StyleSheet.create({
     ...({ boxShadow: '0px 2px 8px rgba(0,0,0,0.10)' } as any),
   },
   pc: { flex: 1, paddingHorizontal: 12 },
+  // Starts light, fills BLACK as the user progresses — explicit correction
+  // (was the accent blue).
   pt: { height: 4, backgroundColor: 'rgba(17,24,39,0.08)', borderRadius: 2, overflow: 'hidden' },
-  pf: { height: 4, backgroundColor: L.accent, borderRadius: 2 },
+  pf: { height: 4, backgroundColor: '#111114', borderRadius: 2 },
   skipBtn: { width: 44, height: 44, alignItems: 'flex-end', justifyContent: 'center' },
   skipTxt: { fontSize: 14, fontWeight: W.semi, color: L.textSub },
 
   // Question
-  qq:     { fontFamily: FONT.displayBold, fontSize: 26, color: '#111114', lineHeight: 32, marginBottom: 18, letterSpacing: -0.7 },
-  qqSub:  { fontSize: 14, color: L.textSub, lineHeight: 21, marginTop: -14, marginBottom: 24 },
+  // Left-aligned, pinned right under the header/progress bar — explicit
+  // reversal of an earlier "center it in the top-middle" request, which
+  // was reading as sitting too low on screen.
+  qq:     { fontFamily: FONT.displayBold, fontSize: 32, color: '#111114', lineHeight: 38, marginBottom: 10, letterSpacing: -0.8, textAlign: 'left' },
+  qqSub:  { fontSize: 15, color: L.textSub, lineHeight: 21, marginBottom: 8, textAlign: 'left' },
+  qBlock: { paddingHorizontal: 28, paddingTop: 6 },
   goalDelta: { fontFamily: FONT.displayBold, fontSize: 20, color: L.text, textAlign: 'center', marginTop: 40, letterSpacing: -0.3 },
-  paceRateLabel: { fontSize: 14.5, fontWeight: W.semi, color: L.textSub },
-  paceRateBig: { fontFamily: FONT.displayBold, fontSize: 46, color: L.text, letterSpacing: -1.2, marginTop: 6 },
-  paceRateUnit: { fontSize: 20, fontWeight: W.semi, color: L.textDim },
-  // No background fill, no border ring — plain white behind the icons,
-  // matching the reference exactly. Selection reads through size only (the
-  // "on" icon renders larger), same as the reference's own icon treatment.
-  // Fixed size always — never changes on selection, per explicit ask.
-  paceBubble: { width: 62, height: 62, alignItems: 'center', justifyContent: 'center' },
-  paceLabel: { fontSize: 11.5, fontWeight: '600', color: L.textDim },
-  paceLabelOn: { fontWeight: '800', color: L.text },
-  paceCard: { backgroundColor: L.card, borderRadius: 18, borderWidth: 1, borderColor: L.border, paddingHorizontal: 18, paddingVertical: 16, marginTop: 10 },
-  paceCardIcon: { width: 30, height: 30, borderRadius: 15, backgroundColor: 'rgba(46,125,255,0.12)', alignItems: 'center', justifyContent: 'center' },
-  paceCardIconWarn: { backgroundColor: 'rgba(180,83,0,0.14)' },
-  paceCardIconGood: { backgroundColor: 'rgba(31,157,77,0.14)' },
-  paceCardTitle: { fontFamily: FONT.displayBold, fontSize: 15.5, color: L.text, letterSpacing: -0.2, lineHeight: 21 },
-  // borderRadius large enough to exceed half the badge's own line-height —
-  // that's what actually reads as a true rounded pill instead of a
-  // barely-rounded rectangle.
-  paceCardBadge: {
-    color: '#fff', backgroundColor: L.accent, fontWeight: '800',
-    borderRadius: 999, paddingHorizontal: 9, paddingVertical: 2, overflow: 'hidden',
-  },
-  paceCardSub: { fontSize: 12.5, color: L.textSub, marginTop: 6, lineHeight: 18 },
-  paceCardSubWarn: { color: '#8a5a00', fontWeight: '600' },
-  paceCardSubGood: { color: '#1a7a3d', fontWeight: '600' },
   textInput: { backgroundColor: L.card, borderRadius: 16, borderWidth: 1, borderColor: L.border, paddingHorizontal: 18, paddingVertical: 16, fontSize: 18, color: L.text, ...({ boxShadow: Elev.low.shadow } as any) },
 
+  // Design-pending placeholder screens (#7/#12/#30)
+  placeholderTag: { fontSize: 11, fontWeight: W.bold, color: L.accent, letterSpacing: 1, marginBottom: 12, textAlign: 'center' },
+  placeholderTitle: { fontFamily: FONT.displayBold, fontSize: 24, color: L.text, textAlign: 'center', letterSpacing: -0.5 },
+
+  // "GIVE" interstitials — centered narration echoing the user's own answers.
+  giveTitle: { fontFamily: FONT.displayBold, fontSize: 30, color: L.text, textAlign: 'center', letterSpacing: -0.8, lineHeight: 36 },
+  giveSub: { fontSize: 15.5, color: L.textSub, textAlign: 'center', lineHeight: 22, marginTop: 14, maxWidth: 320 },
+
   // Options
-  opt:        { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: L.card, borderRadius: 16, borderWidth: 1, borderColor: L.border, paddingHorizontal: 16, paddingVertical: 14, marginBottom: 10, ...({ boxShadow: Elev.low.shadow } as any) },
+  // Bigger again — explicit correction, the previous "clean and curved"
+  // pass went too far the other way and read as cramped/too small. No
+  // sublabel any more (removed from render entirely), so the row's only
+  // content is the icon + single label line — sized generously.
+  opt:        { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: L.card, borderRadius: 20, borderWidth: 1, borderColor: L.border, paddingHorizontal: 18, paddingVertical: 18, marginBottom: 10, ...({ boxShadow: Elev.low.shadow } as any) },
   optSel:     { borderColor: L.accent, backgroundColor: L.accentSoft },
   // No boxed background — selection is already conveyed by the icon's own
   // color (accent when selected, muted gray otherwise, see the render
@@ -3788,15 +3917,14 @@ const s = StyleSheet.create({
   // carrying its own information. Fixed-width slot only, to keep every
   // option's label starting at the same x position regardless of glyph width.
   optIcon:      { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  optIconBadge: { borderRadius: 14, overflow: 'hidden', backgroundColor: L.card, borderWidth: 1, borderColor: L.border },
+  optIconBadge: { borderRadius: 13, overflow: 'hidden', backgroundColor: L.card, borderWidth: 1, borderColor: L.border },
   // Smaller than optIconBadge's 44×44 on purpose — filling the badge exactly
   // (cover, edge-to-edge) cropped these icons' own glyphs at the edges.
   // Leaving margin inside the same-size badge keeps the glyph fully visible.
   optIconImg:   { width: 32, height: 32 },
-  optTxt:     { fontSize: 15, fontWeight: W.medium, color: L.text, letterSpacing: -0.2 },
+  optTxt:     { fontSize: 17, fontWeight: W.medium, color: L.text, letterSpacing: -0.2 },
   optTxtSel:  { fontWeight: W.semi },
-  optSublabel:{ fontSize: 12, color: L.textSub, marginTop: 2 },
-  radio:      { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: 'rgba(17,24,39,0.12)', alignItems: 'center', justifyContent: 'center' },
+  radio:      { width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: 'rgba(17,24,39,0.12)', alignItems: 'center', justifyContent: 'center' },
   radioSel:   { backgroundColor: L.accent, borderColor: L.accent },
 
   // Bottom bar — no background/border now, just the button floating directly

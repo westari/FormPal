@@ -47,10 +47,12 @@ function CheckRow({ checked, onToggle, children }: { checked: boolean; onToggle:
 
 export default function SaveProgressScreen({
   topInset,
+  progress,
   onAdvance,
   onBack,
 }: {
   topInset: number;
+  progress?: number;
   onAdvance: () => void;
   onBack: () => void;
 }) {
@@ -95,6 +97,11 @@ export default function SaveProgressScreen({
         >
           <SymbolView name="chevron.left" size={15} tintColor="#1b1f27" type="monochrome" style={{ width: 15, height: 15 }} />
         </LiquidGlassButton>
+        {progress != null && (
+          <View style={{ flex: 1, paddingHorizontal: 12 }}>
+            <View style={s.progTrack}><View style={[s.progFill, { width: `${progress * 100}%` }]} /></View>
+          </View>
+        )}
       </View>
 
       <Text style={s.h1}>Save your progress</Text>
@@ -134,7 +141,9 @@ export default function SaveProgressScreen({
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#ffffff' },
 
-  headerRow: { paddingTop: 8, paddingHorizontal: 20 },
+  headerRow: { paddingTop: 8, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center' },
+  progTrack: { height: 4, backgroundColor: 'rgba(17,24,39,0.08)', borderRadius: 2, overflow: 'hidden' },
+  progFill:  { height: 4, backgroundColor: '#111114', borderRadius: 2 },
   backBtn: {
     width: 34, height: 34, alignItems: 'center', justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.10)',

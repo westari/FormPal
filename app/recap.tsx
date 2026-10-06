@@ -1,53 +1,77 @@
+/**
+ * app/recap.tsx
+ *
+ * The summary (after-workout) and rep feedback screens are both NATIVE now
+ * — WorkoutSummarySheet and RepFeedbackScreen, further down: a full-screen
+ * expo-video replay (summary) or a nativeControls AVPlayerViewController
+ * (feedback), plus a hand-rolled spring-physics bottom sheet on the
+ * summary screen. Explicit ask after repeated WebView bugs ("laggy, the
+ * drag has no feel. They're WebViews, which is the root problem") —
+ * rebuilt from scratch rather than patched again.
+ *
+ * All sets and muscle ranks are still the real Claude-Design artboards
+ * (assets/app screens/allsetsfullworkout.html, muscleranks.html) rendered
+ * via WebView — next in line for the same native treatment, not yet done.
+ * `view` toggles which screen is shown (native component or WebView
+ * `source` swap, forced to remount via `key` for the WebView pair); each
+ * posts/calls the same handlers (`viewAllSets`, `doneRanks`, etc.)
+ * regardless of whether the screen is native or WebView.
+ *
+ * allsetsfullworkout.html / muscleranks.html are NOT prop-driven — their
+ * dc-scripts never read this.props at all, 100% hardcoded design-tool demo
+ * data (fake Squats/Push-ups tiles, fake rank numbers). Real data goes in
+ * by replacing the default demo tiles/text after mount instead, bypassing
+ * each artboard's own internal logic (see allSetsInject / muscleRanksInject).
+ *
+ * All the actual data logic is unchanged (still real, still correct): the
+ * three-mode load effect (workout / history / solo-live), repFeedbackText
+ * for the rep card's text, generateSummary for the overview line, and the
+ * Share/Share Video/markWorkoutComplete handlers.
+ *
+ * ONE real data gap, not papered over: the design shows a video replay +
+ * rep scrubber on EVERY completion. That's only possible for solo mode
+ * (formcheck.tsx passes its own videoUri/events directly). A multi-exercise
+ * WORKOUT has no reliable per-exercise video today — every exercise in a
+ * workout is logged with the same shared finishedAt timestamp, so there's
+ * no way to tell which recording (if any) belongs to which exercise. Rather
+ * than guess and risk showing the wrong exercise's footage, "View rep
+ * feedback" is hidden entirely in that case — same "only show what's
+ * real" policy the rest of this file already follows.
+ */
+
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, Pressable, ScrollView, Animated, Dimensions, NativeScrollEvent, NativeSyntheticEvent, Share,
+  View, Text, StyleSheet, Share, TouchableOpacity, Animated, PanResponder, Dimensions,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useVideoPlayer, VideoView } from 'expo-video';
-import { SymbolView } from 'expo-symbols';
 import { StatusBar } from 'expo-status-bar';
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Circle, Defs, Path as SvgPath, RadialGradient, Stop } from 'react-native-svg';
-import ViewShot from 'react-native-view-shot';
+import { SymbolView } from 'expo-symbols';
+import { WebView } from 'react-native-webview';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import * as Sharing from 'expo-sharing';
-import { BodyMap } from '../components/MuscleTierMap';
-import RepFeedback from '../components/RepFeedback';
-import { repFeedbackSentence } from '../lib/repFeedbackSentences';
+import { PJS } from '../constants/theme';
+import { repFeedbackText } from '../lib/repFeedbackSentences';
 import {
-  getAllSessions, appendSessions, groupIntoWorkouts, computeMuscleTiers,
-  type SessionEntry, type MuscleTiers, type RepEventData,
+  getAllSessions, appendSessions, groupIntoWorkouts, calcStreak, computeMuscleTiers,
+  TIER_ORDER, type SessionEntry, type RepEventData, type Tier,
 } from '../lib/sessionLog';
 import { findSessionVideoUri } from '../lib/sessionVideo';
 import { EXERCISE_DEFINITIONS } from '../constants/exerciseDefinitions';
-import type { ExerciseId } from '../constants/exercises';
+import { getExerciseDef, muscleCreditParts, type ExerciseId } from '../constants/exercises';
+import { computeOverallStanding, MUSCLE_LABELS } from '../components/MuscleTierMap';
 import { useWorkoutSessionStore } from '../store/workoutSessionStore';
 import type { WorkoutSummary } from '../store/workoutSessionStore';
 import { usePlanStore } from '../store/planStore';
-import { getDebugLog } from '../modules/athlt-camera/src/index';
-import { createCalibSynth } from '../lib/calibLog';
 
-// ─── Error boundary ───────────────────────────────────────────────────────────
-// The recap screen must degrade gracefully instead of taking the whole app
-// down — this guarantees that if a wrapped subtree throws, this screen shows
-// a plain fallback instead of the whole app crashing.
-class RecapSectionBoundary extends React.Component<
-  { fallback: React.ReactNode; children: React.ReactNode },
-  { hasError: boolean }
-> {
-  constructor(props: { fallback: React.ReactNode; children: React.ReactNode }) {
-    super(props);
-    this.state = { hasError: false };
-  }
-  static getDerivedStateFromError() { return { hasError: true }; }
-  componentDidCatch(error: unknown) {
-    console.error('[RecapSectionBoundary] caught render error:', error);
-  }
-  render() {
-    return this.state.hasError ? this.props.fallback : this.props.children;
-  }
-}
+// The remaining real Claude-Design artboards, used directly via WebView —
+// the summary (workoutrecap.html) and rep feedback (repfeedback.html)
+// screens are both native now (WorkoutSummarySheet / RepFeedbackScreen,
+// above), not loaded here any more. Also 100% hardcoded demo data, no
+// props channel — same DOM-replacement approach either of those used (see
+// allSetsInject / muscleRanksInject).
+const ALL_SETS_HTML = require('../assets/app screens/allsetsfullworkout.html');
+const MUSCLE_RANKS_HTML = require('../assets/app screens/muscleranks.html');
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -59,361 +83,609 @@ interface RecapData {
   pct:             number;
   videoUri?:       string;
   repEvents?:      RepEventData[];
-  // Per-exercise version of repEvents, keyed by exerciseId — solo mode has
-  // exactly one entry (mirrors repEvents above); workout mode has one per
-  // completed exercise (see store/workoutSessionStore.ts's ExerciseResult).
-  // Drives the "Rep breakdown" section below the stat grid. History mode
-  // entries never have this (past sessions didn't capture it) — the section
-  // is simply omitted for those, not fabricated.
-  repEventsByExercise?: Record<string, RepEventData[]>;
   isHistory:       boolean;
   workoutSummary?: WorkoutSummary;
-  // Real elapsed session time when we have it — workout mode (WorkoutSummary
-  // tracks this natively) and solo mode (formcheck.tsx now passes it through
-  // from its own session-start timestamp, see doNavigate). History mode has
-  // no duration recorded per past session — stays undefined there, and the
-  // Time stat tile is simply omitted rather than showing a fabricated number.
   durationSec?:    number;
-  // Solo mode only: false = a 'repCounter' exercise (form not judged). The
-  // recap then shows the rep count but suppresses the form % / good-rep
-  // framing, and the saved SessionEntry carries formChecked:false so ranks
-  // and stats treat it as volume-only. Workout mode carries this per entry.
   formChecked?:    boolean;
-  // Any judged reps at all in this recap? false → the Form % tile shows "—"
-  // and the summary sentence drops the good-form framing. Covers all three
-  // modes (solo repCounter, an all-repCounter workout, an all-repCounter
-  // history group).
   hasFormData:     boolean;
 }
 
-// ─── Palette — liquid-glass light theme, matches the pasted mockup ───────────
-// Deliberately a full palette swap from the previous dark-purple version:
-// the mockup's whole visual language is a bright, airy gradient (soft blue →
-// lavender → mint → peach) with white frosted-glass panels floating on top,
-// not a saturated dark background. Every token below is read directly off
-// the mockup's inline styles, not re-invented.
-const C = {
-  bgTop:      '#EDF1FB',
-  bgMid1:     '#E4EAFA',
-  bgMid2:     '#EAF3F4',
-  bgBottom:   '#F6EFE9',
-
-  // Decorative background blobs (radial glows) — approximated in RN via
-  // react-native-svg's RadialGradient rather than CSS blur+radial-gradient,
-  // which has no direct RN equivalent.
-  blobIndigo: 'rgba(96,116,255,0.55)',
-  blobTeal:   'rgba(64,206,190,0.48)',
-  blobCoral:  'rgba(255,167,116,0.42)',
-
-  glassFillHi:   'rgba(255,255,255,0.62)',
-  glassFillLo:   'rgba(255,255,255,0.34)',
-  glassHighlight:'rgba(255,255,255,0.95)',
-  glassEdge:     'rgba(255,255,255,0.7)',
-  shadow:        'rgba(28,44,110,0.30)',
-
-  text:      '#131a2e',
-  muted:     'rgba(30,40,70,0.55)',
-  mutedDim:  'rgba(30,42,74,0.52)',
-  good:      '#2E7D63',
-  bad:       '#FF3B30', // matches constants/theme.ts's Col.low — the app-wide "bad" red
-
-  accentA:   '#5A6CFF',
-  accentB:   '#7A5CF0',
-  accentC:   '#38C3B8',
-
-  ringTrack: 'rgba(90,110,160,0.18)',
-};
-
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function formatFullDateTime(ts: number): string {
-  const datePart = new Date(ts).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-  const timePart = new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-  return `${datePart} · ${timePart}`;
-}
 
 function formatDuration(totalSec: number): string {
   const m = Math.floor(totalSec / 60);
-  const s = totalSec % 60;
+  const sec = totalSec % 60;
   if (m >= 60) {
     const h = Math.floor(m / 60);
-    return `${h}:${String(m % 60).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    return `${h}:${String(m % 60).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
   }
-  return `${m}:${String(s).padStart(2, '0')}`;
+  return `${m}:${String(sec).padStart(2, '0')}`;
 }
 
 function generateSummary(reps: number, goodReps: number, hasFormData = true): string {
   const pct = reps > 0 ? Math.round((goodReps / reps) * 100) : 0;
   if (reps === 0)  return 'No reps were detected this session. Try positioning the phone so your full body is visible from the side.';
-  if (!hasFormData) return `${reps} reps counted. Form wasn't scored for this session — these are rep-counter movements, so they build training volume without a form grade.`;
-  if (pct === 100) return `Clean session — all ${reps} reps hit good form. That kind of consistency is what builds real strength over time.`;
-  if (pct >= 80)   return `Solid work. ${goodReps} of your ${reps} reps (${pct}%) hit good form.`;
-  if (pct >= 50)   return `You hit good form on ${goodReps} of ${reps} reps (${pct}%). Slow down the rep and focus on full range of motion.`;
-  return `${reps} reps completed with ${goodReps} in good form (${pct}%). Focus on control over speed next session.`;
+  if (!hasFormData) return `${reps} reps counted. Form wasn't scored for this session. These are rep-counter movements, so they build training volume without a form grade.`;
+  if (pct === 100) return `Every one of your ${reps} reps hit good form. That's the kind of consistency that builds real strength over time.`;
+  if (pct >= 80)   return `Solid session. You hit good form on ${goodReps} of ${reps} reps (${pct}%).`;
+  if (pct >= 50)   return `You hit good form on ${goodReps} of ${reps} reps (${pct}%). Slow the rep down and focus on full range of motion.`;
+  return `${reps} reps completed, ${goodReps} in good form (${pct}%). Focus on control over speed next session.`;
 }
 
-// ─── GlassSurface — light frosted-glass panel used everywhere on this screen ──
-// Every glass element (icon chip, hero card, stat tile, done chip) renders
-// through this so the treatment can't drift out of sync. Shadow lives on the
-// OUTER (unclipped) wrapper — shadow + overflow:hidden on the same view
-// silently clips the shadow away on iOS, so the rounded-corner clip happens
-// on an inner view instead.
-function GlassSurface({
-  style, radius, children, shadow = true, fillOpacity = 'high',
-}: {
-  style?:  any;
-  radius:  number;
-  children: React.ReactNode;
-  shadow?:  boolean;
-  fillOpacity?: 'high' | 'low';
-}) {
-  // ROOT CAUSE of the stat row reading as cramped/left-aligned instead of
-  // spread across the full width: `style` (which carries statTile's
-  // `flex: 1`) was only ever applied to this INNER View. `flex` only
-  // affects how a component sizes itself within ITS OWN parent's flex
-  // layout — the OUTER wrapper below is the actual child participating in
-  // statGrid's `flexDirection: 'row'`, and it had no flex/width styling at
-  // all, so it shrank to fit its content instead of claiming an even 1/3–1/4
-  // share of the row, leaving every tile bunched at the left with a big gap
-  // on the right. Pulling just `style?.flex` onto the outer wrapper (not the
-  // whole style — padding/alignItems still belong on the inner view, where
-  // the actual children render) fixes this without changing anything for
-  // every other GlassSurface caller, none of which currently pass `flex`.
-  const outerFlex = style?.flex != null ? { flex: style.flex } : undefined;
+type InMsg = {
+  type: 'back' | 'seeRanks' | 'share' | 'shareVideo' | 'viewRepFeedback' | 'closeRepFeedback'
+      | 'viewAllSets' | 'closeAllSets' | 'closeRanks' | 'doneRanks';
+};
+
+// Both remaining WebView artboards are FIXED 390x844 canvases (raw Claude-Design exports,
+// same as onboarding's DC pages and run.tsx's demo/connect-music screens)
+// — scaled to fit both width and height, centered, same technique as
+// everywhere else in the app this applies.
+const DC_VIEWPORT_JS = `(function(){try{
+  var m=document.querySelector('meta[name=viewport]');
+  if(!m){ m=document.createElement('meta'); m.name='viewport'; (document.head||document.documentElement).appendChild(m); }
+  m.setAttribute('content','width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
+}catch(e){}})(); true;`;
+
+// BUG FOUND (device test, round 1): the original version used
+// position:absolute + left/top 50% + translate(-50%,-50%) on #dc-root,
+// with no explicit body height — body's own box was collapsing toward 0
+// height and swallowing hit-testing. Replaced with position:relative +
+// margin:auto + scale-only transform, body height explicitly set.
+//
+// BUG FOUND (device test, round 2): that fix used "contain" scaling
+// (fit both width and height, Math.min) — read as "the card doesn't
+// reach the edges, gap below and on the sides" on these full-bleed
+// screens. Switched to filling the height EXACTLY (S = vh/H, not
+// clamped to <=1) so the bottom-anchored card always lands flush with
+// the real bottom edge; width is best-effort via overflow:hidden +
+// centered margin — same fix applied in run.tsx's copy of this function.
+function dcScaleFitJs(bg: string): string {
+  return `
+  (function(){
+    var W=390, H=844;
+    var st=document.createElement('style');
+    st.textContent='html{background:${bg}!important;overflow:hidden!important;}body{margin:0!important;padding:0!important;background:${bg}!important;overflow:hidden!important;}#dc-root{position:relative!important;margin:0 auto!important;width:'+W+'px!important;transform-origin:top center!important;}*{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}';
+    (document.head||document.documentElement).appendChild(st);
+    var lastS=-1;
+    function fit(){
+      var root=document.getElementById('dc-root'); if(!root) return;
+      var vh=window.innerHeight||H;
+      var S=vh/H;
+      if(Math.abs(S-lastS)>=0.002){ lastS=S; root.style.setProperty('transform','scale('+S+')','important'); }
+      document.body.style.setProperty('height', vh+'px','important');
+      document.documentElement.style.setProperty('height', vh+'px','important');
+    }
+    fit();
+    window.addEventListener('resize', fit);
+    [0,300,900,1500].forEach(function(d){ setTimeout(fit,d); });
+
+    // The fake status bar ("9:41" + signal/battery icons) baked into
+    // every one of these exports duplicates/overlaps the REAL device
+    // status bar — hide it everywhere this bootstrap runs.
+    function hideStatusBar(){
+      var all=document.querySelectorAll('#dc-root div');
+      for(var i=0;i<all.length;i++){
+        var el=all[i]; if(el.children.length) continue;
+        if((el.textContent||'').trim()==='9:41'){
+          var row=el.parentElement;
+          if(row){ row.style.setProperty('display','none','important'); return true; }
+        }
+      }
+      return false;
+    }
+    if(!hideStatusBar()) [200,500,1000,2000].forEach(function(d){ setTimeout(hideStatusBar,d); });
+  })();
+  `;
+}
+
+// ─── allsetsfullworkout.html — grid of every exercise/set completed. Also
+// 100% hardcoded demo data (fake Squats/Push-ups/Rows/Lunges sets, no
+// props read anywhere) — default tiles are torn out and replaced with one
+// real tile per actual exercise. NO video thumbnails on them: this app has
+// no reliable per-exercise video in workout mode (see this file's own
+// top doc comment), and solo/history mode only ever has ONE entry anyway
+// — a real thumbnail grid isn't something real data exists for here, so
+// plain dark cards with the real name + rep/form stats instead. The
+// filter chips and save/search icons are the artboard's own internal demo
+// state with no real equivalent to drive them — left in place (harmless,
+// just inert) rather than torn out for a cosmetic gap.
+function allSetsInject(opts: {
+  tiles: { title: string; meta: string }[];
+  videoTileIndex: number | null;
+}): string {
+  const { tiles, videoTileIndex } = opts;
+  return dcScaleFitJs('#ffffff') + `
+(function(){
+  function post(m){ try{ window.ReactNativeWebView.postMessage(JSON.stringify(m)); }catch(e){} }
+  var TILES = ${JSON.stringify(tiles)};
+  var VIDEO_IDX = ${JSON.stringify(videoTileIndex)};
+  var built=false, recapWired=false, doneWired=false;
+  function build(){
+    if(built) return true;
+    var grid=document.querySelector('#dc-root div[style*="grid-template-columns: 1fr 1fr"]');
+    if(!grid) return false;
+    while(grid.firstChild) grid.removeChild(grid.firstChild);
+    TILES.forEach(function(t, i){
+      var clickable = (i===VIDEO_IDX);
+      var tile=document.createElement('div');
+      tile.style.cssText='position:relative;height:150px;border-radius:22px;background:linear-gradient(180deg,#2c2c32 0%,#18181c 100%);overflow:hidden;'+(clickable?'cursor:pointer;':'');
+      var label=document.createElement('div');
+      label.style.cssText='position:absolute;left:12px;right:12px;bottom:12px;color:#ffffff;';
+      var titleEl=document.createElement('div');
+      titleEl.style.cssText='font-size:15.5px;font-weight:700;letter-spacing:-0.3px;';
+      titleEl.textContent=t.title;
+      var metaEl=document.createElement('div');
+      metaEl.style.cssText='font-size:11.5px;font-weight:500;color:rgba(255,255,255,0.6);padding-top:4px;';
+      metaEl.textContent=t.meta;
+      label.appendChild(titleEl); label.appendChild(metaEl);
+      tile.appendChild(label);
+      if(clickable){ tile.addEventListener('click', function(ev){ ev.stopPropagation(); post({type:'viewRepFeedback'}); }, true); }
+      grid.appendChild(tile);
+    });
+    built=true;
+    return true;
+  }
+  function apply(){
+    var ok=build();
+    var hit=0;
+    if(!recapWired){
+      var recapLink=document.querySelector('#dc-root a[href="Workout Recap v2.dc.html"]');
+      if(recapLink){ recapLink.addEventListener('click', function(ev){ ev.preventDefault(); post({type:'closeAllSets'}); }, true); recapWired=true; hit++; }
+    }
+    if(!doneWired){
+      var doneLink=document.querySelector('#dc-root a[href="Workout Recap.dc.html"]');
+      if(doneLink){ doneLink.addEventListener('click', function(ev){ ev.preventDefault(); post({type:'closeAllSets'}); }, true); doneWired=true; hit++; }
+    }
+    return ok && hit>=2;
+  }
+  if(!apply()) [200,500,1000,2000,3500,5000].forEach(function(d){ setTimeout(apply,d); });
+  var root = document.getElementById('dc-root') || document.body;
+  var mo = new MutationObserver(function(){ apply(); });
+  mo.observe(root, { childList: true, subtree: true, characterData: true });
+})();
+true;
+`;
+}
+
+// ─── muscleranks.html — "today's progress" screen, the real destination
+// for the old "See your ranks" celebration moment. stats (Muscles/Lb
+// lifted/New PRs/Day streak) ARE prop-driven but this app doesn't track
+// lbs-lifted or PRs (bodyweight/rep-based, no such data exists) — those 2
+// slots are honestly relabeled to Reps/Moves (real numbers) rather than
+// fabricated. hits (the 2 muscle chips over the body diagram) and the
+// rank-progress bar fill are NOT prop-driven (hardcoded Quads/Glutes
+// demo, no this.props read for them at all) — real top-2 muscle names +
+// rep counts swapped in via DOM text replace (their baked-in icon assets
+// only exist for Quads/Glutes specifically, so the icon image itself is
+// hidden rather than show the wrong muscle's icon); the progress bar's
+// width is a style attribute, set directly rather than text-matched.
+function muscleRanksInject(opts: {
+  rankName: string; nextRank: string; beforePct: number; afterPct: number;
+  streak: number; totalReps: number; moves: number; muscleCount: number;
+  hits: { name: string; reps: number }[]; note: string;
+}): string {
+  const { rankName, nextRank, beforePct, afterPct, streak, totalReps, moves, muscleCount, hits, note } = opts;
+  const MAP: Record<string, string> = {
+    'Bronze II': rankName,
+    'Bronze III': nextRank,
+    '4': String(muscleCount),
+    '6.2k': String(totalReps),
+    '2': String(moves),
+    '6': String(streak),
+    'Lb lifted': 'Reps',
+    'New PRs': 'Moves',
+    '72%': `${afterPct}%`,
+    'Quads': hits[0]?.name ?? '',
+    '+6%': hits[0] ? `+${hits[0].reps}` : '',
+    'Glutes': hits[1]?.name ?? '',
+    '+5%': hits[1] ? `+${hits[1].reps}` : '',
+    'Clean, deep squats did most of the work today. Keep that depth next session and Bronze III is about two workouts away.': note,
+  };
+  return dcScaleFitJs('#f2f2f5') + `
+(function(){
+  function post(m){ try{ window.ReactNativeWebView.postMessage(JSON.stringify(m)); }catch(e){} }
+  var MAP = ${JSON.stringify(MAP)};
+  var AFTER_PCT = ${JSON.stringify(afterPct + '%')};
+  var HIT_COUNT = ${hits.length};
+  var fillSet=false, iconsHidden=false, backWired=false, doneWired=false, shareWired=false;
+  function apply(){
+    var hit=0;
+    var all=document.querySelectorAll('#dc-root div,#dc-root span');
+    for(var i=0;i<all.length;i++){
+      var el=all[i]; if(el.children.length) continue;
+      var t=(el.textContent||'').trim();
+      if(MAP[t]!=null && t!==MAP[t]){ el.textContent=MAP[t]; hit++; }
+    }
+    // Rank progress bar fill (inline width style, not text).
+    if(!fillSet){
+      var fillBar=document.querySelector('#dc-root div[style*="transition: width 1100ms"]');
+      if(fillBar){ fillBar.style.setProperty('width', AFTER_PCT, 'important'); fillSet=true; hit++; }
+    }
+    // Muscle chip icons only exist as real assets for Quads/Glutes
+    // specifically (baked into this file's manifest) — hidden rather
+    // than risk showing the wrong muscle's icon for whatever the real
+    // top-2 muscles were.
+    if(!iconsHidden){
+      var chipIcons=document.querySelectorAll('#dc-root div[role="img"]');
+      for(var c=0;c<chipIcons.length;c++){
+        var w=chipIcons[c].style && chipIcons[c].style.width;
+        if(w==='24px'){ chipIcons[c].style.display='none'; hit++; }
+      }
+      iconsHidden=true;
+    }
+    // A 2nd chip with nothing real to show (fewer than 2 real muscle
+    // hits this session) — hide its whole row rather than leave "Glutes"-
+    // shaped blank text.
+    if(HIT_COUNT<2){
+      var chips=document.querySelectorAll('#dc-root div');
+      for(var g=0;g<chips.length;g++){
+        if((chips[g].textContent||'').trim()==='' && chips[g].style && chips[g].style.position==='absolute' && chips[g].style.top==='284px'){
+          chips[g].style.display='none';
+        }
+      }
+    }
+    if(!backWired){
+      var backLink=document.querySelector('#dc-root a[href="Workout Recap.dc.html"]');
+      if(backLink){ backLink.addEventListener('click', function(ev){ ev.preventDefault(); post({type:'closeRanks'}); }, true); backWired=true; hit++; }
+    }
+    if(!doneWired){
+      var divs=document.querySelectorAll('#dc-root div');
+      for(var d=0;d<divs.length;d++){
+        var de=divs[d]; if(de.children.length) continue;
+        if((de.textContent||'').trim()==='Done'){
+          de.addEventListener('click', function(ev){ ev.stopPropagation(); post({type:'doneRanks'}); }, true);
+          doneWired=true; hit++; break;
+        }
+      }
+    }
+    if(!shareWired){
+      var shareBtn=document.querySelector('#dc-root div svg path[d^="M8 10V2.5"]');
+      if(shareBtn){
+        var sbtn=shareBtn.closest('div');
+        if(sbtn){ sbtn.addEventListener('click', function(ev){ ev.stopPropagation(); post({type:'shareVideo'}); }, true); }
+        shareWired=true; hit++;
+      }
+    }
+    return hit>=4;
+  }
+  if(!apply()) [200,500,1000,2000,3500,5000].forEach(function(d){ setTimeout(apply,d); });
+  else [1000,2500].forEach(function(d){ setTimeout(apply,d); });
+  var root = document.getElementById('dc-root') || document.body;
+  var mo = new MutationObserver(function(){ apply(); });
+  mo.observe(root, { childList: true, subtree: true, characterData: true });
+})();
+true;
+`;
+}
+
+// ─── WorkoutSummarySheet — native after-workout screen ─────────────────────
+// Replaces workoutrecapInject/workoutrecap.html's WebView for the summary
+// view specifically ("the after-workout and rep feedback screens are
+// broken, laggy, and the drag has no feel. They're WebViews, which is the
+// root problem" — explicit ask to rebuild natively). Full-bleed expo-video
+// background (real AVPlayer, not a WebKit <video> tag loaded from a base64
+// data: URI — that hack existed only to dodge WKWebView's file-sandbox/
+// autoplay restrictions, neither of which apply to a native player, so this
+// plays the real local file:// clip directly) + a hand-rolled spring-
+// physics bottom sheet (Animated + PanResponder, not @gorhom/bottom-sheet —
+// avoids adding a new native dependency / EAS build for this).
+const { height: SCREEN_H, width: SCREEN_W } = Dimensions.get('window');
+
+type SheetSnap = 'peek' | 'mid' | 'full';
+
+function useBottomSheet(opts: { peekY: number; midY: number; fullY: number; initial: SheetSnap }) {
+  const { peekY, midY, fullY } = opts;
+  const snapY: Record<SheetSnap, number> = { peek: peekY, mid: midY, full: fullY };
+  const translateY = useRef(new Animated.Value(snapY[opts.initial])).current;
+  const current = useRef(snapY[opts.initial]);
+  const dragStartY = useRef(snapY[opts.initial]);
+
+  const animateTo = useCallback((snap: SheetSnap, velocityY = 0) => {
+    current.current = snapY[snap];
+    Animated.spring(translateY, {
+      toValue: snapY[snap],
+      velocity: velocityY,
+      tension: 60,
+      friction: 11,
+      useNativeDriver: true,
+    }).start();
+  }, [translateY, snapY.peek, snapY.mid, snapY.full]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 6 && Math.abs(g.dy) > Math.abs(g.dx) * 1.5,
+      onPanResponderGrant: () => { dragStartY.current = current.current; },
+      onPanResponderMove: (_, g) => {
+        let y = dragStartY.current + g.dy;
+        // Rubber-band past the top (fullY) and bottom (peekY) bounds —
+        // same "resistance that gets harder the further you pull" feel
+        // the ask referenced ("like Apple Maps' sheet"), not a hard stop.
+        if (y < fullY) y = fullY - (fullY - y) * 0.35;
+        if (y > peekY) y = peekY + (y - peekY) * 0.35;
+        translateY.setValue(y);
+      },
+      onPanResponderRelease: (_, g) => {
+        const y = dragStartY.current + g.dy;
+        const vy = g.vy;
+        // Fast flick: honor direction regardless of exact position. Slow
+        // release: snap to whichever of the 3 points is nearest.
+        let target: SheetSnap;
+        if (Math.abs(vy) > 0.6) {
+          target = vy > 0
+            ? (current.current === fullY ? 'mid' : 'peek')
+            : (current.current === peekY ? 'mid' : 'full');
+        } else {
+          const dists: [SheetSnap, number][] = [['full', Math.abs(y - fullY)], ['mid', Math.abs(y - midY)], ['peek', Math.abs(y - peekY)]];
+          dists.sort((a, b) => a[1] - b[1]);
+          target = dists[0][0];
+        }
+        animateTo(target, vy * 300);
+      },
+    })
+  ).current;
+
+  return { translateY, panHandlers: panResponder.panHandlers, animateTo };
+}
+
+function StatCell({ label, value }: { label: string; value: string }) {
   return (
-    <View style={shadow ? [gs.shadowWrap, { borderRadius: radius, shadowColor: C.shadow }, outerFlex] : outerFlex}>
-      <View style={[{ borderRadius: radius, overflow: 'hidden' }, style]}>
-        <BlurView intensity={70} tint="light" style={StyleSheet.absoluteFill} />
-        <LinearGradient
-          colors={[fillOpacity === 'high' ? C.glassFillHi : C.glassFillLo, C.glassFillLo]}
-          start={{ x: 0.2, y: 0 }} end={{ x: 0.8, y: 1 }}
-          style={StyleSheet.absoluteFill}
-          pointerEvents="none"
-        />
-        <LinearGradient
-          colors={[C.glassHighlight, 'rgba(255,255,255,0)']}
-          start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 0.5 }}
-          style={StyleSheet.absoluteFill}
-          pointerEvents="none"
-        />
-        <View
-          style={[StyleSheet.absoluteFill, { borderRadius: radius, borderWidth: 1, borderColor: C.glassEdge }]}
-          pointerEvents="none"
-        />
-        {children}
-      </View>
+    <View style={sheetStyles.statCell}>
+      <Text style={sheetStyles.statValue} numberOfLines={1}>{value}</Text>
+      <Text style={sheetStyles.statLabel}>{label}</Text>
     </View>
   );
 }
 
-const gs = StyleSheet.create({
-  shadowWrap: {
-    shadowOffset: { width: 0, height: 14 }, shadowOpacity: 1, shadowRadius: 26, elevation: 8,
+function WorkoutSummarySheet({
+  data, hasFormData, onBack, onShare, onShareVideo, onViewRepFeedback, onViewAllSets, insets,
+}: {
+  data: RecapData;
+  hasFormData: boolean;
+  // Same single exit control as the old WebView back-chevron: history mode
+  // -> router.back(), live mode -> advance to the muscle-ranks screen. No
+  // separate "Continue" button — that's new UI the design didn't have.
+  onBack: () => void;
+  onShare: () => void;
+  onShareVideo: () => void;
+  onViewRepFeedback: (() => void) | null;
+  onViewAllSets: () => void;
+  insets: { top: number; bottom: number };
+}) {
+  const hasVideo = !!data.videoUri;
+  const player = useVideoPlayer(hasVideo ? data.videoUri! : null, p => {
+    p.loop = true;
+    p.muted = false;
+    if (hasVideo) p.play();
+  });
+
+  const moves = data.entries.length;
+  const formValue = hasFormData && data.totalReps > 0 ? `${data.pct}%` : '—';
+  const formLabel = hasFormData ? 'Form' : 'Form n/a';
+  const durationValue = data.durationSec != null ? formatDuration(data.durationSec) : '—';
+  const overview = generateSummary(data.totalReps, data.totalGoodReps, hasFormData);
+
+  const PEEK_H = 176, MID_H = Math.round(SCREEN_H * 0.46), FULL_Y = insets.top + 54;
+  const peekY = SCREEN_H - PEEK_H, midY = SCREEN_H - MID_H;
+  const { translateY, panHandlers, animateTo } = useBottomSheet({ peekY, midY, fullY: FULL_Y, initial: 'mid' });
+
+  // Video dims the further the sheet rises, so the stats/text stay legible
+  // against it at the 'full' snap — driven off the same translateY so it
+  // tracks the drag 1:1 instead of a separately-timed fade.
+  const dimOpacity = translateY.interpolate({
+    inputRange: [FULL_Y, midY, peekY],
+    outputRange: [0.55, 0.15, 0],
+    extrapolate: 'clamp',
+  });
+
+  return (
+    <View style={StyleSheet.absoluteFill}>
+      {hasVideo ? (
+        <VideoView
+          style={StyleSheet.absoluteFill}
+          player={player}
+          contentFit="cover"
+          nativeControls={false}
+          allowsPictureInPicture={false}
+        />
+      ) : (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#111114' }]} />
+      )}
+      <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: '#000000', opacity: dimOpacity }]} pointerEvents="none" />
+
+      <TouchableOpacity onPress={onBack} hitSlop={12} style={[sheetStyles.topBtn, { top: insets.top + 12, left: 16 }]}>
+        <SymbolView name="chevron.left" size={16} tintColor="#ffffff" type="monochrome" style={{ width: 16, height: 16 }} />
+      </TouchableOpacity>
+      <TouchableOpacity onPress={hasVideo ? onShareVideo : onShare} hitSlop={12} style={[sheetStyles.topBtn, { top: insets.top + 12, right: 16 }]}>
+        <SymbolView name="square.and.arrow.up" size={16} tintColor="#ffffff" type="monochrome" style={{ width: 16, height: 16 }} />
+      </TouchableOpacity>
+
+      <Animated.View
+        style={[sheetStyles.sheet, { height: SCREEN_H - FULL_Y + 40, transform: [{ translateY }] }]}
+      >
+        <View {...panHandlers} style={sheetStyles.handleZone}>
+          <View style={sheetStyles.handle} />
+          <View style={sheetStyles.statRow}>
+            <StatCell label="Reps" value={String(data.totalReps)} />
+            <StatCell label="Moves" value={String(moves)} />
+            <StatCell label={formLabel} value={formValue} />
+            <StatCell label="Time" value={durationValue} />
+          </View>
+        </View>
+
+        <View style={[sheetStyles.body, { paddingBottom: insets.bottom + 20 }]}>
+          <Text style={sheetStyles.overview}>{overview}</Text>
+          <View style={sheetStyles.btnCol}>
+            {onViewRepFeedback && (
+              <TouchableOpacity style={sheetStyles.secondaryBtn} activeOpacity={0.85} onPress={onViewRepFeedback}>
+                <Text style={sheetStyles.secondaryBtnTxt}>View rep feedback</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={sheetStyles.primaryBtn} activeOpacity={0.85} onPress={onViewAllSets}>
+              <Text style={sheetStyles.primaryBtnTxt}>All sets</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Animated.View>
+    </View>
+  );
+}
+
+const sheetStyles = StyleSheet.create({
+  topBtn: {
+    position: 'absolute', width: 34, height: 34, borderRadius: 17, zIndex: 50,
+    backgroundColor: 'rgba(20,20,24,0.55)', alignItems: 'center', justifyContent: 'center',
   },
+  sheet: {
+    position: 'absolute', left: 0, right: 0, top: 0, width: SCREEN_W,
+    backgroundColor: '#17171b', borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    ...({ boxShadow: '0px -8px 24px rgba(0,0,0,0.35)' } as any),
+  },
+  handleZone: { paddingTop: 10, paddingBottom: 14 },
+  handle: { width: 36, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.25)', alignSelf: 'center', marginBottom: 14 },
+  statRow: { flexDirection: 'row', paddingHorizontal: 20, gap: 10 },
+  statCell: { flex: 1, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 16, paddingVertical: 12 },
+  statValue: { fontFamily: PJS.extrabold, fontSize: 19, color: '#ffffff', letterSpacing: -0.4 },
+  statLabel: { fontFamily: PJS.medium, fontSize: 11, color: 'rgba(255,255,255,0.55)', marginTop: 2 },
+  body: { flex: 1, paddingHorizontal: 20, paddingTop: 18 },
+  overview: { fontFamily: PJS.medium, fontSize: 14.5, lineHeight: 21, color: 'rgba(255,255,255,0.82)' },
+  btnCol: { marginTop: 22, gap: 10 },
+  secondaryBtn: { height: 50, borderRadius: 25, backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' },
+  secondaryBtnTxt: { fontFamily: PJS.bold, fontSize: 15, color: '#ffffff' },
+  primaryBtn: { height: 54, borderRadius: 27, backgroundColor: '#2E7DFF', alignItems: 'center', justifyContent: 'center' },
+  primaryBtnTxt: { fontFamily: PJS.bold, fontSize: 16, color: '#ffffff' },
 });
 
-// ─── Background — gradient + soft radial blobs ────────────────────────────────
-// The mockup uses CSS radial-gradient + blur for drifting color blobs; RN has
-// no radial-gradient primitive, so this uses react-native-svg's RadialGradient
-// (already a project dependency) over the same 4-stop linear base gradient.
-function BgGradient() {
-  return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      <LinearGradient
-        colors={[C.bgTop, C.bgMid1, C.bgMid2, C.bgBottom]}
-        locations={[0, 0.38, 0.7, 1]}
-        start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
-      <Svg width={SCREEN_W} height={SCREEN_H} style={StyleSheet.absoluteFill}>
-        <Defs>
-          <RadialGradient id="blobIndigo" cx="50%" cy="50%" r="50%">
-            <Stop offset="0%" stopColor={C.blobIndigo} stopOpacity={1} />
-            <Stop offset="100%" stopColor={C.blobIndigo} stopOpacity={0} />
-          </RadialGradient>
-          <RadialGradient id="blobTeal" cx="50%" cy="50%" r="50%">
-            <Stop offset="0%" stopColor={C.blobTeal} stopOpacity={1} />
-            <Stop offset="100%" stopColor={C.blobTeal} stopOpacity={0} />
-          </RadialGradient>
-          <RadialGradient id="blobCoral" cx="50%" cy="50%" r="50%">
-            <Stop offset="0%" stopColor={C.blobCoral} stopOpacity={1} />
-            <Stop offset="100%" stopColor={C.blobCoral} stopOpacity={0} />
-          </RadialGradient>
-        </Defs>
-        <Circle cx={SCREEN_W * 0.05} cy={SCREEN_H * 0.02} r={SCREEN_W * 0.62} fill="url(#blobIndigo)" />
-        <Circle cx={SCREEN_W * 1.05} cy={SCREEN_H * 0.32} r={SCREEN_W * 0.56} fill="url(#blobTeal)" />
-        <Circle cx={SCREEN_W * -0.05} cy={SCREEN_H * 0.92} r={SCREEN_W * 0.58} fill="url(#blobCoral)" />
-      </Svg>
-    </View>
-  );
-}
-
-// ─── Rep timeline — scrubber strip with a colored marker per rep ──────────────
-// Sits below the video, NOT a replacement for the native scrub bar
-// (nativeControls stays — play/pause/fullscreen/native seek all keep
-// working). This is a supplementary strip whose whole reason to exist is the
-// at-a-glance green/red overview across the full session, which a native
-// player control has no concept of. Tapping anywhere seeks the video;
-// tapping a marker seeks to that rep exactly (markers sit on top of the
-// tappable track, so a tap on a marker still resolves to its own position).
-//
-// SMOOTHING: the playhead's position used to be set directly via a
-// percentage `left` recomputed every 100ms poll tick — visually a step/jump
-// each tick rather than motion, which read as "choppy." `left` as a
-// percentage can't be animated on the native thread anyway (only transform/
-// opacity can). Fixed by measuring the track's actual pixel width (onLayout,
-// already had this for tap-to-seek) and driving the playhead via an
-// Animated.Value + translateX in PIXELS, eased with a short timing animation
-// between poll ticks instead of snapping — reads as a smooth glide.
-function RepTimeline({
-  events, duration, currentTime, onSeek,
+// ─── RepFeedbackScreen — native per-rep video review ───────────────────────
+// Replaces repFeedbackInject/repfeedback.html's WebView — explicit ask:
+// "Tapping 'View rep feedback' must do ONE clean push... No flashes, no
+// double mount, no grey screen." This is a plain state swap in the same
+// tree (no navigation stack involved at all, which is the actual fix —
+// there's nothing left to double-mount or flash), with a real native
+// video player: `nativeControls` on so play/pause/scrub/fullscreen/PiP are
+// the real AVPlayerViewController, not hand-drawn buttons. The rep tag/
+// feedback text/tick scrubber below the player are FormPal's own content,
+// not "fake video controls" — they navigate BETWEEN reps, a concept the
+// native player has no notion of.
+function RepFeedbackScreen({
+  exerciseName, videoUri, reps, onClose, onViewAllSets, insets,
 }: {
-  events:      RepEventData[];
-  duration:    number;
-  currentTime: number;
-  onSeek:      (t: number) => void;
+  exerciseName: string;
+  videoUri?: string;
+  reps: { timeSec: number; what: string }[];
+  onClose: () => void;
+  onViewAllSets: () => void;
+  insets: { top: number; bottom: number };
 }) {
-  const [barWidth, setBarWidth] = useState(0);
-  const playheadX = useRef(new Animated.Value(0)).current;
+  const hasVideo = !!videoUri;
+  const hasReps = reps.length > 0;
+  const player = useVideoPlayer(hasVideo ? videoUri! : null, p => {
+    p.muted = false;
+    if (hasVideo) p.play();
+  });
+  const [idx, setIdx] = useState(0);
 
-  useEffect(() => {
-    if (duration <= 0 || barWidth <= 0) return;
-    const frac = Math.min(1, Math.max(0, currentTime / duration));
-    Animated.timing(playheadX, { toValue: frac * barWidth, duration: 100, useNativeDriver: true }).start();
-  }, [currentTime, duration, barWidth, playheadX]);
+  const show = useCallback((i: number) => {
+    if (!hasReps) return;
+    const clamped = Math.max(0, Math.min(reps.length - 1, i));
+    setIdx(clamped);
+    const rep = reps[clamped];
+    if (rep) { try { player.currentTime = rep.timeSec; } catch {} }
+  }, [reps, hasReps, player]);
 
-  if (duration <= 0) return null;
-
-  return (
-    <View>
-      <Text style={s.timelineLabel}>SESSION TIMELINE</Text>
-      <Pressable
-        style={s.timelineTrack}
-        onLayout={e => setBarWidth(e.nativeEvent.layout.width)}
-        onPress={e => {
-          if (barWidth <= 0) return;
-          const frac = Math.min(1, Math.max(0, e.nativeEvent.locationX / barWidth));
-          onSeek(frac * duration);
-        }}
-      >
-        <View style={s.timelineBase} pointerEvents="none" />
-        <Animated.View
-          style={[s.timelinePlayhead, { transform: [{ translateX: playheadX }] }]}
-          pointerEvents="none"
-        />
-        {events.map((ev, i) => {
-          const frac = Math.min(1, Math.max(0, ev.timeSec / duration));
-          return (
-            <View
-              key={i}
-              style={[s.timelineMarker, ev.good ? s.timelineMarkerGood : s.timelineMarkerBad, { left: `${frac * 100}%` }]}
-              pointerEvents="none"
-            />
-          );
-        })}
-      </Pressable>
-    </View>
-  );
-}
-
-// ─── MyPal insight — the same "you're X% better than when you started"
-// blue-sparkle stat used on the home and progress tabs' FormChart, reused
-// here so the recap screen speaks the same brand language. `diff` is
-// current-session pct minus the very first scored session's pct (see the
-// formDiff computation in the load effect) — null hides this entirely
-// (fewer than 2 scored sessions on record, same guard FormChart itself
-// uses before it renders a diff).
-const MYPAL_BLUE = '#0A84FF';
-function MyPalInsight({ diff }: { diff: number | null }) {
-  if (diff == null) return null;
-  return (
-    <View style={s.insightRow}>
-      <Svg width={13} height={13} viewBox="0 0 24 24">
-        <SvgPath d="M12 2.5l1.7 5.3 5.3 1.7-5.3 1.7L12 16.5l-1.7-5.3L5 9.5l5.3-1.7z" fill={MYPAL_BLUE} />
-        <SvgPath d="M18.5 14l.8 2.4 2.4.8-2.4.8-.8 2.4-.8-2.4-2.4-.8 2.4-.8z" fill={MYPAL_BLUE} />
-      </Svg>
-      <Text style={s.insightTxt}>
-        {diff >= 0
-          ? <>You&apos;re <Text style={s.insightBold}>{diff}% better</Text> than when you started.</>
-          : <>Score is <Text style={s.insightBold}>{Math.abs(diff)}% lower</Text> than your start.</>}
-      </Text>
-    </View>
-  );
-}
-
-// ─── MyPal review — one rep at a time, not a scrollable list ──────────────────
-// REDESIGNED from a flat list of every rep (felt like raw cue text dumped on
-// screen) to a focused single-rep card: a natural sentence (see
-// lib/repFeedbackSentences.ts) plus Prev/Next controls that both browse
-// reps AND seek the video to match, so the two stay in sync instead of
-// being two disconnected pieces of UI. currentIndex is kept in sync with
-// whichever rep the video is currently over (see the polling effect below),
-// so it also just naturally follows normal playback with no extra wiring.
-//
-// MOVED inside the same REPLAY card as the video (not its own separate card
-// below) — reported as "hard to see the video and MyPal at the same time,"
-// i.e. too much scroll distance between them. Renders as a plain section
-// (no GlassSurface of its own) so the caller can place it directly under
-// the timeline, inside ONE shared card boundary — closer together without
-// overlapping the video itself, which was the explicit thing to avoid.
-function MyPalReview({
-  events, currentIndex, onPrev, onNext, formDiff,
-}: {
-  events:       RepEventData[];
-  currentIndex: number;
-  onPrev:       () => void;
-  onNext:       () => void;
-  formDiff:     number | null;
-}) {
-  const ev = events[currentIndex];
-  if (!ev) return null;
-  const sentence = repFeedbackSentence(ev.good, ev.reason, currentIndex);
+  const current = hasReps ? reps[idx] : null;
+  const VIDEO_H = Math.round(SCREEN_H * 0.42);
 
   return (
-    <View style={s.reviewSection}>
-      <View style={s.reviewHeader}>
-        <View style={[s.reviewIcon, ev.good ? s.reviewIconGood : s.reviewIconBad]}>
-          <Text style={[s.reviewIconTxt, { color: ev.good ? C.good : C.bad }]}>{ev.good ? '✓' : '✗'}</Text>
+    <View style={StyleSheet.absoluteFill}>
+      <View style={{ height: VIDEO_H, backgroundColor: '#0d0d10' }}>
+        {hasVideo && (
+          <VideoView
+            style={StyleSheet.absoluteFill}
+            player={player}
+            contentFit="cover"
+            nativeControls
+            allowsFullscreen
+            allowsPictureInPicture
+          />
+        )}
+      </View>
+      <TouchableOpacity onPress={onClose} hitSlop={12} style={[sheetStyles.topBtn, { top: insets.top + 12, right: 16 }]}>
+        <SymbolView name="xmark" size={14} tintColor="#ffffff" type="monochrome" style={{ width: 14, height: 14 }} />
+      </TouchableOpacity>
+
+      <View style={feedbackStyles.body}>
+        <Text style={feedbackStyles.exBadge}>{exerciseName.toUpperCase()}</Text>
+
+        <View style={feedbackStyles.card}>
+          <Text style={feedbackStyles.tag}>{hasReps ? `Rep ${idx + 1} of ${reps.length}` : 'No reps recorded'}</Text>
+          <Text style={feedbackStyles.cardBody}>
+            {current ? current.what : "This set didn't capture any rep data."}
+          </Text>
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={s.detailCardLabel}>MYPAL REVIEW</Text>
-          <Text style={s.reviewRepLabel}>Rep {currentIndex + 1} of {events.length}</Text>
-          <MyPalInsight diff={formDiff} />
+
+        {hasReps && (
+          <View style={feedbackStyles.track}>
+            {reps.map((_, i) => (
+              <TouchableOpacity key={i} onPress={() => show(i)} style={feedbackStyles.tickHit} hitSlop={4}>
+                <View style={[feedbackStyles.tick, i <= idx && feedbackStyles.tickDone]} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        <View style={feedbackStyles.navRow}>
+          <TouchableOpacity
+            onPress={() => show(idx - 1)}
+            disabled={!hasReps || idx <= 0}
+            style={[feedbackStyles.navBtn, (!hasReps || idx <= 0) && feedbackStyles.navBtnDisabled]}
+          >
+            <SymbolView name="chevron.left" size={16} tintColor="#ffffff" type="monochrome" style={{ width: 16, height: 16 }} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => show(idx + 1)}
+            disabled={!hasReps || idx >= reps.length - 1}
+            style={[feedbackStyles.navBtn, (!hasReps || idx >= reps.length - 1) && feedbackStyles.navBtnDisabled]}
+          >
+            <SymbolView name="chevron.right" size={16} tintColor="#ffffff" type="monochrome" style={{ width: 16, height: 16 }} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={[feedbackStyles.btnCol, { paddingBottom: insets.bottom + 20 }]}>
+          <TouchableOpacity style={sheetStyles.secondaryBtn} activeOpacity={0.85} onPress={onViewAllSets}>
+            <Text style={sheetStyles.secondaryBtnTxt}>All sets</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={sheetStyles.primaryBtn} activeOpacity={0.85} onPress={onClose}>
+            <Text style={sheetStyles.primaryBtnTxt}>Finish review</Text>
+          </TouchableOpacity>
         </View>
       </View>
-
-      <Text style={s.reviewSentence}>{sentence}</Text>
-
-      <View style={s.reviewNav}>
-        <Pressable
-          onPress={onPrev}
-          disabled={currentIndex === 0}
-          style={({ pressed }) => [s.reviewNavBtn, currentIndex === 0 && s.reviewNavBtnDisabled, pressed && { opacity: 0.6 }]}
-        >
-          <SymbolView name="chevron.left" size={14} tintColor={currentIndex === 0 ? C.mutedDim : C.text} type="monochrome" style={{ width: 14, height: 14 }} />
-          <Text style={[s.reviewNavTxt, currentIndex === 0 && s.reviewNavTxtDisabled]}>Prev rep</Text>
-        </Pressable>
-        <Pressable
-          onPress={onNext}
-          disabled={currentIndex === events.length - 1}
-          style={({ pressed }) => [s.reviewNavBtn, currentIndex === events.length - 1 && s.reviewNavBtnDisabled, pressed && { opacity: 0.6 }]}
-        >
-          <Text style={[s.reviewNavTxt, currentIndex === events.length - 1 && s.reviewNavTxtDisabled]}>Next rep</Text>
-          <SymbolView name="chevron.right" size={14} tintColor={currentIndex === events.length - 1 ? C.mutedDim : C.text} type="monochrome" style={{ width: 14, height: 14 }} />
-        </Pressable>
-      </View>
     </View>
   );
 }
+
+const feedbackStyles = StyleSheet.create({
+  body: { flex: 1, paddingHorizontal: 20, paddingTop: 18, backgroundColor: '#111114' },
+  exBadge: { fontFamily: PJS.extrabold, fontSize: 12, letterSpacing: 0.6, color: 'rgba(255,255,255,0.55)' },
+  card: { marginTop: 14, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 18, padding: 16 },
+  tag: { fontFamily: PJS.bold, fontSize: 13, color: '#2E7DFF' },
+  cardBody: { fontFamily: PJS.medium, fontSize: 15, lineHeight: 21, color: '#ffffff', marginTop: 6 },
+  track: { flexDirection: 'row', gap: 6, marginTop: 18 },
+  tickHit: { flex: 1, paddingVertical: 8 },
+  tick: { height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.15)' },
+  tickDone: { backgroundColor: '#2E7DFF' },
+  navRow: { flexDirection: 'row', justifyContent: 'center', gap: 14, marginTop: 18 },
+  navBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' },
+  navBtnDisabled: { opacity: 0.3 },
+  btnCol: { marginTop: 'auto', gap: 10 },
+});
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function RecapScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const shotRef = useRef<ViewShot>(null);
-  const pagerRef = useRef<ScrollView>(null);
+  const webRef = useRef<WebView>(null);
 
   const {
     reps: repsStr, goodReps: goodRepsStr, videoUri: videoUriParam, events,
@@ -430,22 +702,10 @@ export default function RecapScreen() {
   const abortWorkout        = useWorkoutSessionStore(s => s.abortWorkout);
   const markWorkoutComplete = usePlanStore(s => s.markWorkoutComplete);
 
-  const [data, setData]                   = useState<RecapData | null>(null);
-  const [loadFailed, setLoadFailed]       = useState(false);
-  const [muscleTiers, setMuscleTiers]     = useState<MuscleTiers>({});
-  // "You're X% better than when you started" — same MyPal insight language
-  // as the home/progress tabs' FormChart, computed here from this
-  // session's form score vs. the very first scored session on record.
-  // null until there are at least 2 scored (formChecked) sessions to
-  // compare — same guard FormChart uses before it'll show a diff.
-  const [formDiff, setFormDiff]           = useState<number | null>(null);
-  const [sharing, setSharing]             = useState(false);
-  const [activePage, setActivePage]       = useState(0);
+  const [data, setData]             = useState<RecapData | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const initialized = useRef(false);
-
-  // Entrance animation — visual polish only, no bearing on data/logic.
-  const heroOpac  = useRef(new Animated.Value(0)).current;
-  const heroY     = useRef(new Animated.Value(14)).current;
+  const [view, setView] = useState<'summary' | 'feedback' | 'allsets' | 'ranks'>('summary');
 
   const repEventsParam = useMemo<RepEventData[]>(() => {
     try { return JSON.parse(events ?? '[]'); }
@@ -453,17 +713,13 @@ export default function RecapScreen() {
   }, [events]);
 
   // ── Load recap data (once) — three modes: workout / history / solo-live ────
+  // Identical to the previous native version of this screen — only the
+  // render target changed.
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
 
     (async () => {
-      // Tracks whichever session's form score this page is actually
-      // showing (fresh workout, a past session being viewed, or a solo
-      // live run) — used below to compute formDiff against the first-ever
-      // scored session.
-      let currentPct: number | null = null;
-
       if (isWorkoutMode) {
         const existing = useWorkoutSessionStore.getState().getSummary();
         const summary = existing ?? finishWorkout();
@@ -478,32 +734,18 @@ export default function RecapScreen() {
           }));
         if (entries.length > 0) await appendSessions(entries);
 
-        const repEventsByExercise: Record<string, RepEventData[]> = {};
-        for (const r of summary.results) {
-          // repCounter exercises have per-rep good/bad flags from native, but
-          // we're not judging their form — don't feed them into the ✓/✗
-          // breakdown.
-          if (r.completed && r.formChecked && r.repEvents && r.repEvents.length > 0) {
-            repEventsByExercise[r.exerciseId] = r.repEvents;
-          }
-        }
-
         setData({
           ts: summary.finishedAt, entries,
           totalReps: summary.totalReps, totalGoodReps: summary.totalGoodReps,
           pct: summary.overallFormScore, isHistory: false, workoutSummary: summary,
-          durationSec: summary.durationSeconds, repEventsByExercise,
+          durationSec: summary.durationSeconds,
           hasFormData: summary.results.some(r => r.completed && r.formChecked),
         });
-        if (summary.results.some(r => r.completed && r.formChecked)) currentPct = summary.overallFormScore;
       } else if (isHistoryMode) {
         const all    = await getAllSessions();
         const groups = groupIntoWorkouts(all);
         const group  = groups.find(g => g.ts === Number(tsParam));
         if (!group) { setLoadFailed(true); return; }
-        // Past sessions were never looking up their own recording, so the
-        // replay card just never showed for history views even when a
-        // video was actually logged for that session — see lib/sessionVideo.ts.
         const historyVideoUri = await findSessionVideoUri(group.ts);
         setData({
           ts: group.ts, entries: group.entries,
@@ -512,10 +754,9 @@ export default function RecapScreen() {
           hasFormData: group.entries.some(e => e.formChecked !== false),
           videoUri: historyVideoUri ?? undefined,
         });
-        if (group.entries.some(e => e.formChecked !== false)) currentPct = group.pct;
       } else {
         const reps        = parseInt(repsStr ?? '0', 10);
-        const goodReps    = parseInt(goodRepsStr ?? '0', 10);
+        const goodReps     = parseInt(goodRepsStr ?? '0', 10);
         const formChecked = mode !== 'repCounter';
         const pct         = formChecked && reps > 0 ? Math.round((goodReps / reps) * 100) : 0;
         const soloTs      = Date.now();
@@ -527,693 +768,290 @@ export default function RecapScreen() {
         };
         if (reps > 0) await appendSessions([entry]);
         const parsedDuration = durationSecParam != null ? parseInt(durationSecParam, 10) : undefined;
+        const soloVideoUri = typeof videoUriParam === 'string' && videoUriParam.length > 0 ? videoUriParam : undefined;
         setData({
           ts: soloTs, entries: reps > 0 ? [entry] : [],
           totalReps: reps, totalGoodReps: goodReps, pct, formChecked,
           hasFormData: formChecked,
-          videoUri: typeof videoUriParam === 'string' && videoUriParam.length > 0 ? videoUriParam : undefined,
-          // repCounter: suppress the per-rep ✓/✗ timeline + breakdown entirely.
+          videoUri: soloVideoUri,
           repEvents: formChecked ? repEventsParam : [],
           isHistory: false,
-          repEventsByExercise: formChecked && repEventsParam.length > 0 ? { [exId]: repEventsParam } : undefined,
           durationSec: parsedDuration != null && !isNaN(parsedDuration) ? parsedDuration : undefined,
         });
-        if (formChecked && reps > 0) currentPct = pct;
-      }
-
-      const allAfter = await getAllSessions();
-      setMuscleTiers(computeMuscleTiers(allAfter));
-
-      if (currentPct != null) {
-        const scoredGroups = groupIntoWorkouts(allAfter)
-          .filter(g => g.entries.some(e => e.formChecked !== false))
-          .sort((a, b) => a.ts - b.ts);
-        if (scoredGroups.length >= 2) {
-          setFormDiff(currentPct - scoredGroups[0].pct);
-        }
       }
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Entrance animation once real data has resolved (visual only).
-  useEffect(() => {
-    if (!data) return;
-    Animated.parallel([
-      Animated.timing(heroOpac, { toValue: 1, duration: 420, useNativeDriver: true }),
-      Animated.spring(heroY,    { toValue: 0, tension: 120, friction: 10, useNativeDriver: true }),
-    ]).start();
-  }, [data, heroOpac, heroY]);
-
-  // ── Video replay overlay (solo mode only) ────────────────────────────────────
-  // REBUILT for parity with the live workout view: a rep counter (running
-  // total/good, synced to video time) plus the SAME RepFeedback component
-  // the live camera view uses for its ✓/✗ card — same component, same size,
-  // same fade timing, triggered fresh (via flashSeq) any time the "current
-  // rep" changes, whether from normal forward playback crossing a
-  // timestamp OR an explicit seek/skip. reviewIndex is a SEPARATE, always-
-  // valid-once-data-exists index (starts at 0, not null) that drives the
-  // MyPal review card and the Prev/Next buttons — kept in sync with
-  // whichever rep the video is currently over, but also independently
-  // settable by Prev/Next before/without the video needing to have reached
-  // that point yet.
+  // Native video (expo-video) reads the real local file:// uri directly —
+  // no more base64 data: URI conversion, that hack existed only to dodge
+  // WKWebView's file-sandbox/autoplay restrictions, neither of which apply
+  // to a native player.
   const hasVideo = !!data?.videoUri;
-  const player = useVideoPlayer(data?.videoUri || null, p => { p.loop = false; });
-  const [videoTime, setVideoTime] = useState(0);
-  const [videoDuration, setVideoDuration] = useState(0);
-  const [reviewIndex, setReviewIndex] = useState(0);
-  const [videoFlash, setVideoFlash] = useState<{ seq: number; good: boolean; reason: string } | null>(null);
-  const lastFlashedIndex = useRef<number | null>(null);
-  const flashSeqRef = useRef(0);
 
-  useEffect(() => {
-    if (!hasVideo || !data?.repEvents || data.repEvents.length === 0) return;
-    const evs = data.repEvents; // assumed ascending by timeSec — pushed in order as reps complete
-    const id = setInterval(() => {
-      const t = player.currentTime;
-      setVideoTime(t);
-      if (player.duration > 0) setVideoDuration(d => (d === player.duration ? d : player.duration));
-      let idx = -1;
-      for (let i = 0; i < evs.length; i++) {
-        if (evs[i].timeSec <= t) idx = i; else break;
-      }
-      if (idx === -1) return; // before the first rep — leave reviewIndex at its default (0)
-      if (idx !== lastFlashedIndex.current) {
-        lastFlashedIndex.current = idx;
-        setReviewIndex(idx);
-        flashSeqRef.current += 1;
-        setVideoFlash({ seq: flashSeqRef.current, good: evs[idx].good, reason: evs[idx].reason });
-      }
-    }, 100);
-    return () => clearInterval(id);
-  }, [hasVideo, data, player]);
-
-  const seekTo = useCallback((timeSec: number) => {
-    try { player.currentTime = timeSec; } catch { /* player not ready yet */ }
-  }, [player]);
-
-  // Prev/Next — browse reviewIndex directly (snappy, doesn't wait on the
-  // 100ms poll) AND seek the video to match, so scrubbing via these buttons
-  // and via the timeline/native controls both keep everything in sync.
-  const goToRep = useCallback((direction: 1 | -1) => {
-    const evs = data?.repEvents;
-    if (!evs || evs.length === 0) return;
-    setReviewIndex(prev => {
-      const next = Math.min(evs.length - 1, Math.max(0, prev + direction));
-      lastFlashedIndex.current = next;
-      flashSeqRef.current += 1;
-      setVideoFlash({ seq: flashSeqRef.current, good: evs[next].good, reason: evs[next].reason });
-      seekTo(evs[next].timeSec);
-      return next;
-    });
-  }, [data, seekTo]);
-
-  const runningCounts = useMemo(() => {
-    const evs = data?.repEvents;
-    if (!evs || evs.length === 0) return null;
-    const upTo = evs.slice(0, reviewIndex + 1);
-    return { total: upTo.length, good: upTo.filter(e => e.good).length };
-  }, [data, reviewIndex]);
-
-  // ── Handlers ─────────────────────────────────────────────────────────────────
+  // ── Handlers (same real logic as before, now triggered by postMessage) ────
 
   const handleShare = useCallback(async () => {
-    if (sharing) return;
-    setSharing(true);
-    try {
-      const uri = await shotRef.current?.capture?.();
-      if (uri) {
-        const available = await Sharing.isAvailableAsync();
-        if (available) {
-          await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: 'Share your FormPal recap' });
-        }
-      }
-    } catch {
-      // best-effort — no native share sheet on some platforms/simulators
-    } finally {
-      setSharing(false);
-    }
-  }, [sharing]);
-
-  // Separate from handleShare (which captures the recap card as a PNG via
-  // ViewShot) — this is specifically for the video/replay page, where "share
-  // the video" is the contextually obvious meaning. Falls back to the recap
-  // card share if there's somehow no video (shouldn't happen — only rendered
-  // when hasVideo is true — but staying consistent rather than doing nothing).
-  const handleShareVideo = useCallback(async () => {
-    if (sharing) return;
-    setSharing(true);
-    try {
-      if (data?.videoUri) {
-        const available = await Sharing.isAvailableAsync();
-        if (available) {
-          await Sharing.shareAsync(data.videoUri, { mimeType: 'video/mp4', dialogTitle: 'Share your FormPal replay' });
-        }
-      } else {
-        await handleShare();
-      }
-    } catch {
-      // best-effort — no native share sheet on some platforms/simulators
-    } finally {
-      setSharing(false);
-    }
-  }, [sharing, data, handleShare]);
-
-  // Reads the module-level buffer in modules/athlt-camera/src/index.ts —
-  // NOT a local ref — because this screen is reached by navigating away
-  // from wherever the analysis actually ran (formcheck.tsx for a live
-  // session, analyze-video.tsx for an upload), so a component-scoped log
-  // buffer on either of those screens would already be gone by the time
-  // the user is here. See getDebugLog's own doc comment for why this
-  // exists: recap.tsx previously had no way to surface these logs at all,
-  // even though this is where most analyses actually land (only a hard
-  // failure or a 0-rep result stays on analyze-video.tsx's own error card).
-  const shareLogs = useCallback(() => {
-    const raw = getDebugLog();
-    // Run the raw stream through the calibration synthesizer so the export
-    // carries the clean [CALIB] per-rep lines + the [CALIB-SUMMARY] /
-    // [CALIB-SUGGEST] threshold recommendation (see lib/calibLog.ts).
-    const synth = createCalibSynth();
-    const withCalib: string[] = [];
-    for (const line of raw) {
-      withCalib.push(line);
-      for (const c of synth.feed(line)) withCalib.push(c);
-    }
-    withCalib.push(...synth.flushSummary());
-    const header = [
-      '=== ATHLT Debug Log ===',
-      `Exercise: ${data?.entries?.[0]?.exerciseId ?? exercise ?? 'unknown'}`,
-      `Date: ${new Date().toLocaleDateString()}`,
-      `Reps: ${data?.totalReps ?? 0}${data?.hasFormData ? ` (${data?.totalGoodReps ?? 0} good)` : ' (form not scored)'}`,
-      '========================',
-      '',
+    if (!data) return;
+    const text = [
+      isWorkoutMode ? 'Workout Complete' : 'Session Complete',
+      `${data.totalReps} reps · ${data.entries.length} ${data.entries.length === 1 ? 'move' : 'moves'}` +
+        (data.hasFormData && data.totalReps > 0 ? ` · ${data.pct}% form` : ''),
+      generateSummary(data.totalReps, data.totalGoodReps, data.hasFormData),
     ].join('\n');
-    Share.share({ message: header + (withCalib.length ? withCalib.join('\n') : '(no debug log captured this run)') });
-  }, [data, exercise]);
+    try { await Share.share({ message: text }); } catch {}
+  }, [data, isWorkoutMode]);
 
-  const handleDone = useCallback(async () => {
-    if (data?.isHistory) { router.back(); return; }
+  const handleShareVideo = useCallback(async () => {
+    if (data?.videoUri) {
+      try {
+        const available = await Sharing.isAvailableAsync();
+        if (available) await Sharing.shareAsync(data.videoUri, { mimeType: 'video/mp4', dialogTitle: 'Share your FormPal replay' });
+      } catch {}
+    } else {
+      await handleShare();
+    }
+  }, [data, handleShare]);
+
+  // The real session-complete side effects — fires once, from the muscle-
+  // ranks screen's "Done" (the real end of the flow now — see handleBack).
+  const completeSession = useCallback(async () => {
     if (isWorkoutMode) {
       if (data?.workoutSummary?.workoutId) {
         try { await markWorkoutComplete(data.workoutSummary.workoutId); } catch {}
       }
       abortWorkout();
-      router.replace('/(tabs)/train' as any);
-    } else {
-      router.replace('/(tabs)/' as any);
     }
-  }, [data, isWorkoutMode, router, markWorkoutComplete, abortWorkout]);
+  }, [isWorkoutMode, data, markWorkoutComplete, abortWorkout]);
 
-  const scrollToPage = useCallback((i: number) => {
-    pagerRef.current?.scrollTo({ x: i * SCREEN_W, animated: true });
-    setActivePage(i);
-  }, []);
+  // History mode: a plain back, same as before (reviewing the past, not
+  // finishing anything). Everything else: route through the muscle-ranks
+  // "today's progress" screen first — explicit ask, "show muscle ranks
+  // after the rep feedback, or wherever you exit out, right after all the
+  // workout stuff." Its own "Done" (doneRanks message, below) is what
+  // actually completes the session and navigates away now.
+  const handleBack = useCallback(async () => {
+    if (data?.isHistory) { router.back(); return; }
+    setView('ranks');
+  }, [data, router]);
 
-  const handlePagerScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const page = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
-    setActivePage(page);
-  }, []);
+  const handleDoneRanks = useCallback(async () => {
+    await completeSession();
+    router.replace((isWorkoutMode ? '/(tabs)/train' : '/(tabs)/') as any);
+  }, [isWorkoutMode, completeSession, router]);
+
+  // Real per-rep what/fix text (repFeedbackText — same function this file
+  // already used), only meaningful when there's a real video to scrub to.
+  const repEvents = useMemo(() => {
+    if (!hasVideo || !data) return [];
+    return (data.repEvents ?? []).map((ev, i) => {
+      const { what } = repFeedbackText(ev.good, ev.reason, i);
+      return { timeSec: ev.timeSec, what };
+    });
+  }, [hasVideo, data]);
+
+  const allSetsInjectJs = useMemo(() => {
+    if (!data) return null;
+    return allSetsInject({
+      tiles: data.entries.map(e => ({
+        title: e.displayName,
+        meta: e.formChecked !== false
+          ? `${e.reps} reps · ${e.reps > 0 ? Math.round((e.goodReps / e.reps) * 100) : 0}% form`
+          : `${e.reps} reps`,
+      })),
+      videoTileIndex: hasVideo && data.entries.length > 0 ? 0 : null,
+    });
+  }, [data, hasVideo]);
+
+  // "Today's progress" — real standing before vs. after this session
+  // (computeOverallStanding's own "weakest muscle" philosophy, same one
+  // app/muscle-ranks.tsx already uses), real streak, real top-2 muscles
+  // worked THIS session by rep credit. Not computed for history mode —
+  // "today's progress" doesn't mean anything for a past session being
+  // reviewed, and handleBack never routes there in that case anyway.
+  const [rankData, setRankData] = useState<{
+    rankName: string; nextRank: string; beforePct: number; afterPct: number;
+    streak: number; muscleCount: number; hits: { name: string; reps: number }[];
+  } | null>(null);
+  useEffect(() => {
+    if (!data || data.isHistory) return;
+    (async () => {
+      const all = await getAllSessions(); // already includes this session's own entries
+      const prior = all.filter(s => s.ts < data.ts);
+      const afterStanding = computeOverallStanding(computeMuscleTiers(all));
+      const beforeStanding = computeOverallStanding(computeMuscleTiers(prior));
+      const afterTier: Tier = afterStanding?.tier ?? 'bronze';
+      const idx = TIER_ORDER.indexOf(afterTier);
+      const nextTier = idx >= 0 && idx < TIER_ORDER.length - 1 ? TIER_ORDER[idx + 1] : afterTier;
+      const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+
+      const tally = new Map<string, number>();
+      for (const e of data.entries) {
+        const def = getExerciseDef(e.exerciseId);
+        if (!def) continue;
+        for (const credit of def.muscles) {
+          const { muscle, weight } = muscleCreditParts(credit);
+          tally.set(muscle, (tally.get(muscle) ?? 0) + e.reps * weight);
+        }
+      }
+      const hits = [...tally.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 2)
+        .map(([m, reps]) => ({ name: MUSCLE_LABELS[m as keyof typeof MUSCLE_LABELS], reps: Math.round(reps) }));
+
+      setRankData({
+        rankName: cap(afterTier), nextRank: cap(nextTier),
+        beforePct: Math.round((beforeStanding?.progress ?? 0) * 100),
+        afterPct: Math.round((afterStanding?.progress ?? 0) * 100),
+        streak: calcStreak(all), muscleCount: tally.size, hits,
+      });
+    })();
+  }, [data]);
+
+  const ranksInjectJs = useMemo(() => {
+    if (!data || !rankData) return null;
+    return muscleRanksInject({
+      ...rankData,
+      totalReps: data.totalReps, moves: data.entries.length,
+      note: generateSummary(data.totalReps, data.totalGoodReps, data.hasFormData),
+    });
+  }, [data, rankData]);
 
   // ── Failure / loading states ────────────────────────────────────────────────
 
   if (loadFailed) {
     return (
-      <View style={s.root}>
-        <StatusBar style="dark" />
-        <BgGradient />
-        <View style={[s.centerFill, { paddingTop: insets.top }]}>
-          <Text style={s.failedTxt}>No recap data found.</Text>
-          <GlassSurface radius={22} style={[s.doneChip, { marginTop: 20 }]}>
-            <Pressable onPress={() => router.back()} style={s.doneChipInner}>
-              <Text style={s.doneChipTxt}>Back</Text>
-            </Pressable>
-          </GlassSurface>
-        </View>
+      <View style={styles.root}>
+        <StatusBar style="light" />
       </View>
     );
   }
 
-  if (!data) return <View style={s.root}><StatusBar style="dark" /><BgGradient /></View>;
+  if (!data) {
+    return (
+      <View style={styles.root}>
+        <StatusBar style="light" />
+      </View>
+    );
+  }
 
-  const exCount    = data.entries.length;
-  const doneLabel  = data.isHistory ? 'Back' : 'Done';
-  const breakdown  = data.workoutSummary?.results;
-  const headingTitle = data.isHistory
-    ? 'Session Recap'
-    : isWorkoutMode ? 'Workout Complete' : 'Session Complete';
+  // 'ranks' falls back to 'summary' until rankData/its inject finish
+  // computing (async) — never shows a view with nothing real injected yet.
+  // 'feedback' is gated on hasVideo alone now (native — no inject to wait
+  // on), matching the same condition the summary sheet's own button uses
+  // to decide whether it's even shown.
+  const effectiveView: 'summary' | 'feedback' | 'allsets' | 'ranks' =
+    view === 'feedback' && hasVideo         ? 'feedback' :
+    view === 'allsets'  && allSetsInjectJs  ? 'allsets'  :
+    view === 'ranks'    && ranksInjectJs    ? 'ranks'    :
+    'summary';
 
-  const hasDetails = (data.totalReps > 0) || (breakdown && breakdown.length > 0) || hasVideo;
+  // Summary and rep feedback are both native now (WorkoutSummarySheet /
+  // RepFeedbackScreen, above) — all sets and muscle ranks are still the
+  // real Claude-Design WebView artboards, next in line for the same
+  // native rebuild.
+  if (effectiveView === 'summary') {
+    return (
+      <View style={styles.root}>
+        <StatusBar style="light" />
+        <WorkoutSummarySheet
+          data={data}
+          hasFormData={data.hasFormData}
+          onBack={() => void handleBack()}
+          onShare={() => void handleShare()}
+          onShareVideo={() => void handleShareVideo()}
+          onViewRepFeedback={hasVideo ? () => setView('feedback') : null}
+          onViewAllSets={() => setView('allsets')}
+          insets={insets}
+        />
+      </View>
+    );
+  }
+
+  if (effectiveView === 'feedback') {
+    return (
+      <View style={styles.root}>
+        <StatusBar style="light" />
+        <RepFeedbackScreen
+          exerciseName={data.entries[0]?.displayName ?? 'Exercise'}
+          videoUri={data.videoUri}
+          reps={repEvents}
+          onClose={() => setView('summary')}
+          onViewAllSets={() => setView('allsets')}
+          insets={insets}
+        />
+      </View>
+    );
+  }
+
+  const SOURCE_BY_VIEW = {
+    allsets: ALL_SETS_HTML, ranks: MUSCLE_RANKS_HTML,
+  } as const;
+  const INJECT_BY_VIEW = {
+    allsets: allSetsInjectJs, ranks: ranksInjectJs,
+  } as const;
 
   return (
-    <View style={s.root}>
-      <StatusBar style="dark" />
-      <BgGradient />
-
-      <ScrollView
-        ref={pagerRef}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        onMomentumScrollEnd={handlePagerScroll}
-        scrollEnabled={hasDetails}
+    <View style={styles.root}>
+      <StatusBar style="light" />
+      <WebView
+        key={effectiveView}
+        ref={webRef}
+        source={SOURCE_BY_VIEW[effectiveView]}
+        originWhitelist={['*']}
+        style={styles.web}
+        injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS}
+        injectedJavaScript={INJECT_BY_VIEW[effectiveView] ?? undefined}
+        onMessage={(e) => {
+          let msg: InMsg;
+          try { msg = JSON.parse(e.nativeEvent.data); } catch { return; }
+          if (msg.type === 'back') void handleBack();
+          else if (msg.type === 'share') void handleShare();
+          else if (msg.type === 'shareVideo') void handleShareVideo();
+          else if (msg.type === 'viewRepFeedback') setView('feedback');
+          else if (msg.type === 'closeRepFeedback') setView('summary');
+          else if (msg.type === 'viewAllSets') setView('allsets');
+          else if (msg.type === 'closeAllSets') setView('summary');
+          else if (msg.type === 'closeRanks') setView('summary');
+          else if (msg.type === 'doneRanks') void handleDoneRanks();
+        }}
+        allowFileAccess
+        allowFileAccessFromFileURLs
+        allowUniversalAccessFromFileURLs
+        // iOS-specific WKWebView video props, both missing before — without
+        // these a <video> tag either won't play inline at all (WebKit's
+        // default forces fullscreen-only playback) or won't start from a
+        // JS-triggered play() call without an explicit user tap first. This
+        // is very likely why the replay never appeared: not a JS bug, a
+        // missing native config prop.
+        allowsInlineMediaPlayback
+        mediaPlaybackRequiresUserAction={false}
+        javaScriptEnabled
+        domStorageEnabled
+        bounces={false}
+        overScrollMode="never"
+        cacheEnabled={false}
+      />
+      {/* Native fallback back button — completely independent of the
+          WebView's own injected JS (which has no visibility into whether
+          its own page actually finished loading/rendering). Explicit ask:
+          "make sure there's always a working back button so the user can
+          never get stuck." */}
+      <TouchableOpacity
+        onPress={() => setView('summary')}
+        hitSlop={12}
+        style={[styles.fallbackBack, { top: insets.top + 12 }]}
       >
-        {/* ═══ PAGE 1 — Recap (matches the mockup 1:1: header, hero muscle-
-            heatmap panel, 4-stat grid, Share/Done actions) ═══ */}
-        <ScrollView
-          style={{ width: SCREEN_W }}
-          contentContainerStyle={[s.page, { paddingTop: insets.top + 18, paddingBottom: insets.bottom + 24 }]}
-          showsVerticalScrollIndicator={false}
-        >
-          <Animated.View style={{ opacity: heroOpac, transform: [{ translateY: heroY }] }}>
-            <ViewShot ref={shotRef} options={{ format: 'png', quality: 1 }}>
-              <View style={{ backgroundColor: 'transparent' }}>
-                {/* Header */}
-                <View style={s.header}>
-                  <GlassSurface radius={27} style={s.headerIcon} shadow>
-                    <SymbolView name="checkmark" size={25} tintColor={C.good} type="monochrome" style={{ width: 25, height: 25 }} />
-                  </GlassSurface>
-                  <Text style={s.headerTitle}>{headingTitle}</Text>
-                  <Text style={s.headerSub}>{formatFullDateTime(data.ts)}</Text>
-                </View>
-
-                {/* Body map only — recap intentionally shows just which
-                    muscles got worked this session, not the full ranking
-                    page (hero rank card, tier tiles). BodyMap already
-                    carries its own glass-card chrome, matching the rest of
-                    this screen's cards, so it doesn't need an outer
-                    GlassSurface wrapper. Once rank icons exist, they can
-                    join this section. */}
-                <RecapSectionBoundary
-                  fallback={
-                    <GlassSurface radius={34} style={s.heroCard}>
-                      <Text style={s.cardText}>Muscle map couldn't load this time — your reps are still saved.</Text>
-                    </GlassSurface>
-                  }
-                >
-                  <BodyMap tiers={muscleTiers} scale={0.75} />
-                </RecapSectionBoundary>
-
-                {/* Stat grid */}
-                <View style={s.statGrid}>
-                  <GlassSurface radius={20} style={s.statTile}>
-                    <Text style={s.statVal}>{data.totalReps}</Text>
-                    <Text style={s.statLbl}>Reps</Text>
-                  </GlassSurface>
-                  <GlassSurface radius={20} style={s.statTile}>
-                    <Text style={s.statVal}>{exCount}</Text>
-                    <Text style={s.statLbl}>Moves</Text>
-                  </GlassSurface>
-                  <GlassSurface radius={20} style={s.statTile}>
-                    <Text style={[s.statVal, { color: C.good }]}>
-                      {data.hasFormData && data.totalReps > 0 ? `${data.pct}%` : '—'}
-                    </Text>
-                    <Text style={s.statLbl}>{data.hasFormData ? 'Form' : 'Form n/a'}</Text>
-                  </GlassSurface>
-                  {data.durationSec != null && (
-                    <GlassSurface radius={20} style={s.statTile}>
-                      <Text style={s.statVal}>{formatDuration(data.durationSec)}</Text>
-                      <Text style={s.statLbl}>Time</Text>
-                    </GlassSurface>
-                  )}
-                </View>
-              </View>
-            </ViewShot>
-
-            {/* Actions — outside the ViewShot capture, matches the original
-                convention of not including interactive buttons in the shared
-                image. */}
-            <View style={s.actions}>
-              <Pressable
-                onPress={handleShare}
-                disabled={sharing}
-                style={({ pressed }) => [s.shareBtnShadow, pressed && { transform: [{ scale: 0.98 }] }]}
-              >
-                <LinearGradient
-                  colors={[C.accentA, C.accentB, C.accentC]}
-                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                  style={s.shareBtn}
-                >
-                  <SymbolView name="square.and.arrow.up" size={18} tintColor="#fff" type="monochrome" style={{ width: 18, height: 18 }} />
-                  <Text style={s.shareBtnTxt}>Share Recap</Text>
-                </LinearGradient>
-              </Pressable>
-
-              <GlassSurface radius={22} style={s.doneChip} shadow={false}>
-                <Pressable onPress={handleDone} style={({ pressed }) => [s.doneChipInner, pressed && { opacity: 0.7 }]}>
-                  <Text style={s.doneChipTxt}>{doneLabel}</Text>
-                </Pressable>
-              </GlassSurface>
-            </View>
-
-            {/* Debug log export — not meaningful for a past (history-mode)
-                session, only a just-completed one. See shareLogs' own doc
-                comment for why this lives here and not just on
-                analyze-video.tsx's error card. */}
-            {!data.isHistory && (
-              <Pressable
-                onPress={shareLogs}
-                style={({ pressed }) => [s.shareLogsBtn, pressed && { opacity: 0.6 }]}
-              >
-                <SymbolView name="square.and.arrow.up" size={13} tintColor={C.muted} type="monochrome" style={{ width: 13, height: 13 }} />
-                <Text style={s.shareLogsBtnTxt}>Share Logs</Text>
-              </Pressable>
-            )}
-          </Animated.View>
-        </ScrollView>
-
-        {/* ═══ PAGE 2 — Details (real breakdown / replay / summary text —
-            nothing fabricated; only rendered when there's real data for it) ═══ */}
-        {hasDetails && (
-          <ScrollView
-            style={{ width: SCREEN_W }}
-            contentContainerStyle={[s.page, { paddingTop: insets.top + 18, paddingBottom: insets.bottom + 24 }]}
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={s.header2}>
-              <Pressable onPress={() => scrollToPage(0)} style={s.backChipWrap} hitSlop={8}>
-                <GlassSurface radius={18} style={s.backChip} shadow>
-                  <SymbolView name="chevron.left" size={16} tintColor={C.text} type="monochrome" style={{ width: 16, height: 16 }} />
-                </GlassSurface>
-              </Pressable>
-              <View style={{ gap: 2 }}>
-                <Text style={s.header2Title}>Session Details</Text>
-                <Text style={s.header2Sub}>
-                  {exCount} {exCount === 1 ? 'exercise' : 'exercises'}
-                  {data.durationSec != null ? ` · ${formatDuration(data.durationSec)}` : ''}
-                </Text>
-              </View>
-            </View>
-
-            {data.totalReps > 0 && (
-              <GlassSurface radius={30} style={s.detailCard}>
-                <Text style={s.detailCardLabel}>OVERVIEW</Text>
-                <Text style={s.cardText}>{generateSummary(data.totalReps, data.totalGoodReps, data.hasFormData)}</Text>
-                <MyPalInsight diff={formDiff} />
-              </GlassSurface>
-            )}
-
-            {breakdown && breakdown.length > 0 && (
-              <GlassSurface radius={30} style={s.detailCard}>
-                <Text style={s.detailCardLabel}>BREAKDOWN</Text>
-                {breakdown.map((r, i) => (
-                  <React.Fragment key={r.exerciseId + i}>
-                    <View style={s.exRow}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={s.exName}>{r.displayName}</Text>
-                        {r.completed && <Text style={s.exMeta}>{r.reps} reps</Text>}
-                        {r.skipped   && <Text style={[s.exMeta, { color: C.muted }]}>Skipped</Text>}
-                      </View>
-                      {r.completed && r.reps > 0 && (
-                        r.formChecked
-                          ? <Text style={s.exScore}>{r.formScore}%</Text>
-                          : <Text style={[s.exScore, { color: C.muted }]}>rep count</Text>
-                      )}
-                    </View>
-                    {i < breakdown.length - 1 && <View style={s.divider} />}
-                  </React.Fragment>
-                ))}
-              </GlassSurface>
-            )}
-
-            {hasVideo && (
-              <GlassSurface radius={30} style={[s.detailCard, { padding: 10 }]}>
-                <Text style={[s.detailCardLabel, { paddingHorizontal: 8, paddingTop: 4 }]}>REPLAY</Text>
-                <View style={s.videoWrap}>
-                  <VideoView
-                    player={player}
-                    style={StyleSheet.absoluteFill}
-                    allowsFullscreen
-                    nativeControls
-                    contentFit="contain"
-                  />
-
-                  {/* Rep counter — same style/position language as the live
-                      workout view's repBlock/repNum/repSub (app/formcheck.tsx),
-                      scaled down to fit this much smaller embedded video
-                      instead of a full screen. Shows the running total/good
-                      count AS OF whichever rep is currently in view. */}
-                  {runningCounts && (
-                    <View style={s.videoCounter} pointerEvents="none">
-                      <Text style={s.videoCounterNum}>{runningCounts.total}</Text>
-                      <Text style={s.videoCounterSub}>{runningCounts.good} good</Text>
-                    </View>
-                  )}
-
-                  {/* Live-parity ✓/✗ flash — the EXACT same RepFeedback
-                      component the live camera view uses, same size/timing/
-                      style. Fires fresh (via seq) whenever the current rep
-                      changes, whether from normal forward playback crossing
-                      that rep's timestamp or an explicit seek/skip — see the
-                      polling effect and goToRep above. Genuinely baking this
-                      into the video's own pixels would mean re-encoding the
-                      file (ffmpeg-class processing, a real native dependency
-                      and a much bigger separate undertaking) — this overlay
-                      achieves the same "see the check/X exactly like live"
-                      result without that cost. */}
-                  {videoFlash && (
-                    <RepFeedback
-                      key={videoFlash.seq}
-                      good={videoFlash.good}
-                      reason={videoFlash.reason}
-                      seq={videoFlash.seq}
-                      onComplete={() => setVideoFlash(null)}
-                    />
-                  )}
-                </View>
-
-                {/* Timeline — every rep at its timestamp, green=good/red=bad,
-                    tap anywhere to scrub. See RepTimeline's own doc comment
-                    for why this sits alongside nativeControls rather than
-                    replacing them. */}
-                {data.repEvents && data.repEvents.length > 0 && (
-                  <RepTimeline
-                    events={data.repEvents}
-                    duration={videoDuration}
-                    currentTime={videoTime}
-                    onSeek={seekTo}
-                  />
-                )}
-
-                {/* MyPal review — same card as the video now, right below the
-                    timeline, so both are visible without scrolling between
-                    two separate cards. See MyPalReview's own doc comment. */}
-                {data.repEvents && data.repEvents.length > 0 && (
-                  <>
-                    <View style={s.reviewDivider} />
-                    <MyPalReview
-                      events={data.repEvents}
-                      currentIndex={reviewIndex}
-                      onPrev={() => goToRep(-1)}
-                      onNext={() => goToRep(1)}
-                      formDiff={formDiff}
-                    />
-                  </>
-                )}
-              </GlassSurface>
-            )}
-
-            {/* Actions — this page had neither before; Share here shares the
-                video file itself (contextually the point of this page),
-                Done exits the same way page 1's Done does. */}
-            <View style={s.actions}>
-              <Pressable
-                onPress={hasVideo ? handleShareVideo : handleShare}
-                disabled={sharing}
-                style={({ pressed }) => [s.shareBtnShadow, pressed && { transform: [{ scale: 0.98 }] }]}
-              >
-                <LinearGradient
-                  colors={[C.accentA, C.accentB, C.accentC]}
-                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                  style={s.shareBtn}
-                >
-                  <SymbolView name="square.and.arrow.up" size={18} tintColor="#fff" type="monochrome" style={{ width: 18, height: 18 }} />
-                  <Text style={s.shareBtnTxt}>{hasVideo ? 'Share Replay' : 'Share Recap'}</Text>
-                </LinearGradient>
-              </Pressable>
-
-              <GlassSurface radius={22} style={s.doneChip} shadow={false}>
-                <Pressable onPress={handleDone} style={({ pressed }) => [s.doneChipInner, pressed && { opacity: 0.7 }]}>
-                  <Text style={s.doneChipTxt}>{doneLabel}</Text>
-                </Pressable>
-              </GlassSurface>
-            </View>
-          </ScrollView>
-        )}
-      </ScrollView>
-
-      {/* Fixed page dots — always visible, jump between Recap/Details. */}
-      {hasDetails && (
-        <View style={[s.dotsRow, { bottom: insets.bottom + 12 }]} pointerEvents="box-none">
-          <Pressable onPress={() => scrollToPage(0)} hitSlop={10}>
-            <View style={[s.dot, activePage === 0 && s.dotActive]} />
-          </Pressable>
-          <Pressable onPress={() => scrollToPage(1)} hitSlop={10}>
-            <View style={[s.dot, activePage === 1 && s.dotActive]} />
-          </Pressable>
-        </View>
-      )}
+        <SymbolView name="chevron.left" size={16} tintColor="#ffffff" type="monochrome" style={{ width: 16, height: 16 }} />
+      </TouchableOpacity>
     </View>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-const s = StyleSheet.create({
-  root:       { flex: 1, backgroundColor: C.bgBottom },
-  centerFill: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
-  failedTxt:  { color: C.text, fontSize: 15 },
-  page:       { paddingHorizontal: 20, flexGrow: 1 },
-
-  header: {
-    alignItems: 'center', gap: 10,
-    paddingTop: 6, paddingBottom: 16,
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: '#111114' },
+  web:  { flex: 1, backgroundColor: '#111114' },
+  fallbackBack: {
+    position: 'absolute', left: 16, width: 34, height: 34, borderRadius: 17,
+    backgroundColor: 'rgba(20,20,24,0.65)', alignItems: 'center', justifyContent: 'center', zIndex: 100,
   },
-  headerIcon: { width: 54, height: 54, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: 26, fontWeight: '600', letterSpacing: -0.5, color: C.text },
-  headerSub:   { fontSize: 13, fontWeight: '500', letterSpacing: 0.2, color: C.muted },
-
-  heroCard: {
-    // Intrinsic sizing — no flex/minHeight. See the comment at this card's
-    // JSX for why the previous flex:1-in-a-ScrollView approach was the root
-    // cause of the front/back diagrams crowding each other.
-    padding: 20, alignItems: 'center',
-  },
-
-  statGrid: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 22, width: '100%' },
-  statTile: {
-    flex: 1, alignItems: 'center', gap: 3,
-    paddingVertical: 14, paddingHorizontal: 4,
-  },
-  statVal: { fontSize: 18, fontWeight: '600', letterSpacing: -0.3, color: C.text },
-  statLbl: { fontSize: 10, fontWeight: '600', letterSpacing: 0.5, textTransform: 'uppercase', color: C.mutedDim },
-
-  actions: { gap: 10, marginTop: 22 },
-  shareBtnShadow: {
-    borderRadius: 24,
-    shadowColor: C.accentA, shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.4, shadowRadius: 20,
-  },
-  shareBtn: {
-    height: 56, borderRadius: 24,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-  },
-  shareBtnTxt: { fontSize: 16.5, fontWeight: '600', letterSpacing: -0.2, color: '#fff' },
-  doneChip:      { height: 48 },
-  doneChipInner: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  doneChipTxt:   { fontSize: 15.5, fontWeight: '500', color: C.mutedDim },
-  shareLogsBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    marginTop: 14, paddingVertical: 6,
-  },
-  shareLogsBtnTxt: { fontSize: 13, fontWeight: '500', color: C.muted },
-
-  cardText: { fontSize: 15, fontWeight: '500', color: C.text, lineHeight: 22, letterSpacing: -0.1 },
-
-  insightRow:  { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
-  insightTxt:  { fontSize: 12.5, color: C.text, letterSpacing: -0.2, flexShrink: 1 },
-  insightBold: { fontWeight: '700' },
-
-  header2: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 6, paddingBottom: 18 },
-  backChipWrap: {},
-  backChip:     { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  header2Title: { fontSize: 20, fontWeight: '600', letterSpacing: -0.3, color: C.text },
-  header2Sub:   { fontSize: 12.5, fontWeight: '500', color: C.muted },
-
-  detailCard: { padding: 18, marginBottom: 14 },
-  detailCardLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1.4, textTransform: 'uppercase', color: C.mutedDim, marginBottom: 10 },
-
-  exRow:   { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 12 },
-  exName:  { fontSize: 14.5, fontWeight: '600', color: C.text },
-  exMeta:  { fontSize: 12, color: C.muted, marginTop: 2 },
-  exScore: { fontSize: 13, fontWeight: '700', color: C.good },
-  divider: { height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(90,110,160,0.25)' },
-
-  // ROOT CAUSE of "video content doesn't match container size" in the small
-  // (pre-fullscreen) view: this was a FIXED height (300) with no explicit
-  // width, giving a roughly 1.17:1 (wider-than-tall) box — but the camera
-  // records portrait video (see ATHLTCameraModule.swift's own portrait-check
-  // log), closer to 9:16 (0.5625:1, much taller than wide). contentFit=
-  // "contain" preserves the video's real aspect ratio, so a portrait video
-  // inside a landscape-ish box gets heavily pillarboxed (big black bars on
-  // both sides) — reading as "the video is smaller than its container." Using
-  // aspectRatio instead of a fixed height makes the CONTAINER'S shape match
-  // the video's actual shape, so contain has nothing left to pad. Fullscreen
-  // (via allowsFullscreen/nativeControls) is the OS's own native player UI,
-  // not affected by this container's styling — no separate fix needed there.
-  videoWrap: {
-    width: '100%', aspectRatio: 9 / 16, borderRadius: 22, overflow: 'hidden', backgroundColor: '#000',
-  },
-
-  // Rep counter overlaid on the video — same style language as the live
-  // view's repBlock/repNum/repSub (app/formcheck.tsx: 140/20, white, weight
-  // 800/600), scaled down for this much smaller embedded container instead
-  // of a full screen.
-  videoCounter: {
-    position: 'absolute', top: '6%', left: 0, right: 0, alignItems: 'center',
-  },
-  videoCounterNum: { fontSize: 46, fontWeight: '800', lineHeight: 50, color: '#fff' },
-  videoCounterSub: { fontSize: 12.5, fontWeight: '600', color: 'rgba(255,255,255,0.75)', marginTop: 2 },
-
-  // ── Rep timeline ──────────────────────────────────────────────────────────
-  // Given its own label + more top margin (was flush against the video's
-  // bottom edge before, easy to miss/read as an afterthought) — reported as
-  // "too low/cluttered"; this is the fix for both, along with the animated
-  // playhead in RepTimeline itself (see its own doc comment for the choppy-
-  // motion root cause).
-  timelineLabel: {
-    fontSize: 10.5, fontWeight: '700', letterSpacing: 1.2, textTransform: 'uppercase',
-    color: C.mutedDim, marginTop: 18, marginBottom: 6, marginHorizontal: 6,
-  },
-  timelineTrack: {
-    height: 32, marginHorizontal: 6, justifyContent: 'center',
-  },
-  timelineBase: {
-    height: 4, borderRadius: 2, backgroundColor: 'rgba(19,26,46,0.12)',
-  },
-  timelinePlayhead: {
-    position: 'absolute', top: 6, left: -1, width: 2, height: 20,
-    backgroundColor: C.text, borderRadius: 1,
-  },
-  timelineMarker: {
-    position: 'absolute', top: 10, width: 12, height: 12, marginLeft: -6,
-    borderRadius: 6, borderWidth: 2, borderColor: '#fff',
-  },
-  timelineMarkerGood: { backgroundColor: C.good },
-  timelineMarkerBad:  { backgroundColor: C.bad },
-
-  // ── MyPal review ──────────────────────────────────────────────────────────
-  // Divider between the timeline above and this section — now that MyPal
-  // review lives inside the same REPLAY card as the video/timeline instead
-  // of its own separate card, this is what visually separates the two
-  // areas within one shared boundary.
-  reviewDivider: {
-    height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(90,110,160,0.25)',
-    marginTop: 18, marginHorizontal: 6,
-  },
-  // The REPLAY card uses padding:10 (tighter than detailCard's own 18, to
-  // leave more room for the video) — a little extra horizontal room here so
-  // this section's text doesn't feel as tight as the video/timeline above it.
-  reviewSection: { paddingHorizontal: 6, paddingTop: 16, paddingBottom: 4 },
-  reviewHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  reviewIcon: {
-    width: 36, height: 36, borderRadius: 18,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  reviewIconGood: { backgroundColor: 'rgba(46,125,99,0.15)' },
-  reviewIconBad:  { backgroundColor: 'rgba(255,59,48,0.13)' },
-  reviewIconTxt:  { fontSize: 16, fontWeight: '700' },
-  reviewRepLabel: { fontSize: 15, fontWeight: '600', color: C.text, marginTop: 1 },
-  reviewSentence: { fontSize: 15, fontWeight: '500', color: C.text, lineHeight: 22, letterSpacing: -0.1, marginTop: 14 },
-  reviewNav: {
-    flexDirection: 'row', justifyContent: 'space-between', marginTop: 18,
-    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(90,110,160,0.25)', paddingTop: 14,
-  },
-  reviewNavBtn: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  reviewNavBtnDisabled: { opacity: 0.4 },
-  reviewNavTxt: { fontSize: 13.5, fontWeight: '600', color: C.text },
-  reviewNavTxtDisabled: { color: C.mutedDim },
-
-  dotsRow: {
-    position: 'absolute', left: 0, right: 0,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-  },
-  dot:       { width: 7, height: 7, borderRadius: 4, backgroundColor: 'rgba(25,35,65,0.24)' },
-  dotActive: { width: 22, backgroundColor: 'rgba(25,35,65,0.62)' },
 });

@@ -91,6 +91,9 @@ export default function PlusScreen() {
       // from this menu tile.
       didNavigate.current = true;
       animOut(() => { setVisible(false); router.push('/workout' as any); });
+    } else if (id === 'log') {
+      didNavigate.current = true;
+      animOut(() => { setVisible(false); router.push('/log-session' as any); });
     } else {
       Alert.alert('Coming soon');
     }

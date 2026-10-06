@@ -36,7 +36,7 @@ import Ring from '../../components/Ring';
 import ScreenBackground from '../../components/ScreenBackground';
 import { BodyMap } from '../../components/MuscleTierMap';
 import {
-  getAllSessions, groupIntoWorkouts, computeMuscleTiers, scoredSessions,
+  getAllSessions, groupIntoWorkouts, computeMuscleTiers, scoredSessions, calcStreak,
   type SessionEntry, type WorkoutGroup,
 } from '../../lib/sessionLog';
 
@@ -74,7 +74,6 @@ const SHADOW_ROW = Platform.OS === 'ios' ? {
 
 const THIRTY_DAYS_MS  = 30 * 24 * 60 * 60 * 1000;
 const SEVEN_DAYS_MS   =  7 * 24 * 60 * 60 * 1000;
-const DAY_MS          = 24 * 60 * 60 * 1000;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -103,19 +102,6 @@ function smoothPath(pts: Array<{ x: number; y: number }>): string {
     d += ` C${cp1x.toFixed(2)},${cp1y.toFixed(2)} ${cp2x.toFixed(2)},${cp2y.toFixed(2)} ${p2.x.toFixed(2)},${p2.y.toFixed(2)}`;
   }
   return d;
-}
-
-function calcStreak(sessions: SessionEntry[]): number {
-  if (sessions.length === 0) return 0;
-  const daySet = new Set(sessions.map(s => {
-    const d = new Date(s.ts); d.setHours(0, 0, 0, 0); return d.getTime();
-  }));
-  const todayMs = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); })();
-  const startDay = daySet.has(todayMs) ? todayMs : todayMs - DAY_MS;
-  if (!daySet.has(startDay)) return 0;
-  let streak = 0; let check = startDay;
-  while (daySet.has(check)) { streak++; check -= DAY_MS; }
-  return streak;
 }
 
 // ─── SectionHeader ────────────────────────────────────────────────────────────

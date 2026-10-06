@@ -18,7 +18,7 @@ import { WebView } from 'react-native-webview';
 import * as Haptics from 'expo-haptics';
 import AppBackground from '../../components/AppBackground';
 
-const TRAIN_HTML = require('../../assets/traintab.html');
+const TRAIN_HTML = require('../../assets/app screens/traintab.html');
 
 // Practice-card label → CV exercise id.
 const PRACTICE_MAP: Record<string, string> = {

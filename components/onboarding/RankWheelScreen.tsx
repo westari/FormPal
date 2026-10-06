@@ -35,10 +35,12 @@ const TILE_H = 300;
 
 export default function RankWheelScreen({
   topInset,
+  progress,
   onAdvance,
   onBack,
 }: {
   topInset: number;
+  progress?: number;
   onAdvance: () => void;
   onBack: () => void;
 }) {
@@ -104,11 +106,16 @@ export default function RankWheelScreen({
         >
           <SymbolView name="chevron.left" size={15} tintColor="#1b1f27" type="monochrome" style={{ width: 15, height: 15 }} />
         </LiquidGlassButton>
+        {progress != null && (
+          <View style={{ flex: 1, paddingHorizontal: 12 }}>
+            <View style={s.progTrack}><View style={[s.progFill, { width: `${progress * 100}%` }]} /></View>
+          </View>
+        )}
       </View>
 
       <View style={s.header}>
         <Text style={s.h1}>FormPal has ranks</Text>
-        <Text style={s.sub}>Ranks are earned by training with good form.</Text>
+        <Text style={s.sub}>Your rank climbs as your form gets cleaner.</Text>
       </View>
 
       <View style={s.mid}>
@@ -172,6 +179,10 @@ const s = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.10)',
     ...({ boxShadow: '0px 2px 8px rgba(0,0,0,0.10)' } as any),
   },
+  // Same track/fill spec as onboarding.tsx's question header (s.pt/s.pf) —
+  // one consistent progress bar across the whole flow.
+  progTrack: { height: 4, backgroundColor: 'rgba(17,24,39,0.08)', borderRadius: 2, overflow: 'hidden' },
+  progFill:  { height: 4, backgroundColor: '#111114', borderRadius: 2 },
 
   header: { paddingTop: 22, paddingHorizontal: 26, alignItems: 'center' },
   h1: { fontFamily: PJS.extrabold, fontSize: 28, color: '#111114', letterSpacing: -1, textAlign: 'center', lineHeight: 32 },

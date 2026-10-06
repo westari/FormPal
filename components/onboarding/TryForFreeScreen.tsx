@@ -19,10 +19,12 @@ const DEMO_VIDEO = require('../../assets/videos/demovid.mov');
 
 export default function TryForFreeScreen({
   topInset,
+  progress,
   onAdvance,
   onBack,
 }: {
   topInset: number;
+  progress?: number;
   onAdvance: () => void;
   onBack: () => void;
 }) {
@@ -44,17 +46,24 @@ export default function TryForFreeScreen({
     // the Stack navigator's dark contentStyle behind it as a black flash.
     <View style={[s.root, { paddingTop: topInset }]}>
     <Animated.View style={{ flex: 1, opacity: fade }}>
-      <Animated.View style={[s.backWrap, { top: topInset + 8 }]} pointerEvents="box-none">
-        <LiquidGlassButton
-          onPress={() => { Haptics.selectionAsync(); onBack(); }}
-          hitSlop={12}
-          radius={17}
-          variant="regular"
-          fallbackColor="rgba(255,255,255,0.92)"
-          style={s.backBtn}
-        >
-          <SymbolView name="chevron.left" size={15} tintColor="#1b1f27" type="monochrome" style={{ width: 15, height: 15 }} />
-        </LiquidGlassButton>
+      <Animated.View style={[s.backWrap, { top: topInset + 8, right: progress != null ? 20 : undefined }]} pointerEvents="box-none">
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <LiquidGlassButton
+            onPress={() => { Haptics.selectionAsync(); onBack(); }}
+            hitSlop={12}
+            radius={17}
+            variant="regular"
+            fallbackColor="rgba(255,255,255,0.92)"
+            style={s.backBtn}
+          >
+            <SymbolView name="chevron.left" size={15} tintColor="#1b1f27" type="monochrome" style={{ width: 15, height: 15 }} />
+          </LiquidGlassButton>
+          {progress != null && (
+            <View style={{ flex: 1, paddingHorizontal: 12 }}>
+              <View style={s.progTrack}><View style={[s.progFill, { width: `${progress * 100}%` }]} /></View>
+            </View>
+          )}
+        </View>
       </Animated.View>
 
       <View style={s.body}>
@@ -88,6 +97,8 @@ const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#ffffff' },
 
   backWrap: { position: 'absolute', left: 20, zIndex: 30 },
+  progTrack: { height: 4, backgroundColor: 'rgba(17,24,39,0.08)', borderRadius: 2, overflow: 'hidden' },
+  progFill:  { height: 4, backgroundColor: '#111114', borderRadius: 2 },
   backBtn: {
     width: 34, height: 34, alignItems: 'center', justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.10)',

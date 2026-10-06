@@ -630,10 +630,19 @@ function TierLegendRow({ scale }: { scale: number }) {
   // to compensate for its narrower shape, without perturbing anyone's
   // position.
   const champBoost = 1.15;
+  // FIXED-WIDTH SLOT per item (this is the actual row-alignment fix, not
+  // emblemSize above) — tierLegendItem previously sized itself to its own
+  // content, so a longer label ("Platinum", "Champion") widened its item's
+  // bounding box more than a short one ("Gold"), which shifted that item's
+  // emblem off the evenly-spaced grid the others sit on even though the
+  // gap between item EDGES stayed constant. A slot wide enough for the
+  // longest label, applied to every item alike, makes the gap between
+  // emblem CENTERS constant instead.
+  const itemWidth = Math.round(58 * scale);
   return (
     <View style={[mh.tierLegendRow, { gap: Math.round(3 * scale) }]}>
       {TIER_ORDER.map(t => (
-        <View key={t} style={mh.tierLegendItem}>
+        <View key={t} style={[mh.tierLegendItem, { width: itemWidth }]}>
           <View style={{ width: emblemSize, height: emblemSize, alignItems: 'center', justifyContent: 'center' }}>
             {/* Crown's own visual weight sits toward its base (the points
                 taper to thin peaks with little mass), so mathematically
@@ -646,7 +655,7 @@ function TierLegendRow({ scale }: { scale: number }) {
               style={t === 'champion' ? { marginTop: -Math.round(emblemSize * 0.08) } : undefined}
             />
           </View>
-          <Text style={[mh.tierLegendLabel, { fontSize: Math.round(8.5 * scale) }]}>{TIER_META[t].label}</Text>
+          <Text style={[mh.tierLegendLabel, { fontSize: Math.round(8.5 * scale) }]} numberOfLines={1} adjustsFontSizeToFit>{TIER_META[t].label}</Text>
         </View>
       ))}
     </View>
@@ -667,10 +676,6 @@ export function BodyMap({ tiers, scale, showLegend = true }: { tiers: MuscleTier
   return (
     <View style={{ gap: Math.round(8 * scale) }}>
       {showLegend && <TierLegendRow scale={scale} />}
-      <View style={mh.sectionHeaderRow}>
-        <Text style={[mh.sectionHeader, { fontSize: Math.round(11 * scale) }]}>BODY MAP</Text>
-        <Text style={[mh.sectionSub, { fontSize: Math.round(11 * scale) }]}>Front · Back</Text>
-      </View>
       <View style={[mh.bodyMapShadowWrap, { borderRadius: Math.round(24 * scale) }]}>
         <View style={[mh.bodyMapCard, { borderRadius: Math.round(24 * scale), padding: Math.round(Sp.md * scale) }]}>
           <BlurView intensity={45} tint="light" style={StyleSheet.absoluteFill} />
@@ -687,11 +692,9 @@ export function BodyMap({ tiers, scale, showLegend = true }: { tiers: MuscleTier
           <View style={mh.bodyMapRow}>
             <View style={mh.bodyMapCol}>
               <BodyMapSide tiers={tiers} side="front" width={colWidth} />
-              <Text style={[mh.bodyMapLabel, { fontSize: Math.round(10.5 * scale) }]}>FRONT</Text>
             </View>
             <View style={mh.bodyMapCol}>
               <BodyMapSide tiers={tiers} side="back" width={colWidth} />
-              <Text style={[mh.bodyMapLabel, { fontSize: Math.round(10.5 * scale) }]}>BACK</Text>
             </View>
           </View>
         </View>

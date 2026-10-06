@@ -78,7 +78,14 @@ export default function RootLayout() {
           headerShown:  false,
           contentStyle: { backgroundColor: '#0A0B0C' },
         }}
-      />
+      >
+        {/* "Start Workout" -> this screen used the default native push (a
+            hard slide-in from the right), reported as feeling like a
+            jarring "pan" rather than a clean transition — fade reads as
+            intentional instead. Scoped to just this one screen; every
+            other route keeps the normal push. */}
+        <Stack.Screen name="workout/run" options={{ animation: 'fade' }} />
+      </Stack>
     </SafeAreaProvider>
   );
 }

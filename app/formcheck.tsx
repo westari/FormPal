@@ -1,17 +1,16 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, Animated, Pressable, ScrollView, Share, Platform, Easing,
+  View, Text, StyleSheet, Animated, Pressable, ScrollView, Share, Platform, Easing, PanResponder, Image,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, {
-  Defs, LinearGradient as SvgLinearGradient, RadialGradient, Stop, Rect, Ellipse,
-} from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import GlassButton from '../components/GlassButton';
+import { WebView } from 'react-native-webview';
+import { LiquidGlassButton } from '../components/LiquidGlass';
 import RepFeedback from '../components/RepFeedback';
 import {
   ATHLTCameraView,
@@ -42,6 +41,7 @@ import { createRepDiagnostic } from '../lib/repDiagnostics';
 import { useAudioSettingsStore } from '../store/audioSettingsStore';
 import { useFormTheme, type FormTheme } from '../lib/activeTheme';
 import type { DebugStatsEvent, RepEvent, ExerciseType } from '../modules/athlt-camera/src/index';
+import { getDemoCues } from '../lib/demoCues';
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 const C = {
@@ -64,6 +64,32 @@ const F = {
   bold:    'BricolageGrotesque_700Bold',
   extra:   'BricolageGrotesque_800ExtraBold',
 };
+
+// The real MyPal mark (same two-star shape as app/(tabs)/index.tsx's
+// sparkle SVG, rasterized to a PNG) — a unicode "✦" glyph was tried here
+// first but read as "one big star, wrong shape, same size as the text",
+// since Text can only inline real Text/Image children, not an Svg
+// component. A PNG is the only way to get the exact icon AND have it flow
+// inline right after the cue text's own last word.
+const SPARKLE_DUO = require('../assets/icons/sparkle-duo.png');
+
+// The exact instepdrawer.html artboard — see its render call's own comment
+// for why this is the real file and not a native rebuild of it.
+const IN_STEP_DRAWER_HTML = require('../assets/app screens/instepdrawer.html');
+const DRAWER_HEIGHT = 580;
+const DRAWER_PEEK_HEIGHT = 56; // was 76 — too much of the demo video was peeking up from the bottom
+const DRAWER_PEEK_Y = DRAWER_HEIGHT - DRAWER_PEEK_HEIGHT;
+
+// Workout HUD vertical stack, bottom to top, each clearing the one below it
+// by a real gap — the stop button and the "Set X of Y" pill were landing
+// at the same bottom offset and overlapping (which is what made the
+// button look "square": the pill was cutting across it).
+const HUD_STOP_BOTTOM    = DRAWER_PEEK_HEIGHT + 24; // 100 — circle sits here, 74px tall
+// The "Set X of Y / Next" pill moved up near the top (right under the
+// segment row) per explicit request, so it no longer needs clearance down
+// here — the counter now only has to clear the stop circle below it, so it
+// can sit lower than before (was covering too much of the camera above it).
+const HUD_COUNTER_BOTTOM = HUD_STOP_BOTTOM + 76 + 24; // 200
 
 const VIDEO_LOG_KEY = 'formpal_video_log';
 // JSON array of exercise ids the repCounter-only intro card has already been
@@ -241,81 +267,58 @@ const gp = StyleSheet.create({
   clip:   { overflow: 'hidden' },
 });
 
-// ─── Liquid Glass frame ──────────────────────────────────────────────────────
-// A thick beveled rounded-rect "glass tube" edge, same visual language as the
-// RepFeedback orb's rim: a vertical bevel gradient (bright top → faint mid →
-// dark bottom), a bright inner hairline, a dark outer hairline for depth, and
-// a soft specular glint along the top edge. Drawn as an absolutely-positioned
-// SVG overlay sized to its parent (pass measured w/h). `accent` tints the
-// bevel (e.g. green when the guide box is locked on).
-function LiquidFrame({
-  w, h, radius, thickness, accent,
-}: { w: number; h: number; radius: number; thickness: number; accent?: string }) {
-  if (w <= 0 || h <= 0) return null;
-  const T   = thickness;
-  const hi  = accent ?? '#ffffff';
-  const rID = `lf${Math.round(radius)}_${Math.round(w)}x${Math.round(h)}`;
+// ─── Camera-lens corner brackets ────────────────────────────────────────────
+// Four fixed-size corner marks, matching the real design file exactly
+// (assets/app screens/inworkout.html: 58×58, 4px border, 26 radius) — plain
+// RN border-box Views, not a hand-derived SVG path. Every previous SVG-path
+// version of this (and of the scorecard below) kept producing corner/arc
+// artifacts that only showed up on-device, never in the math on paper.
+// Native per-side border width + per-corner border radius is a real,
+// directly-supported RN style feature — nothing to get subtly wrong here.
+function CornerFrame({ color }: { color: string }) {
+  const SIZE = 58, BW = 4, R = 26;
   return (
-    <Svg width={w} height={h} style={StyleSheet.absoluteFill} pointerEvents="none">
-      <Defs>
-        <SvgLinearGradient id={`${rID}-bevel`} x1="0" y1="0" x2="0.12" y2="1">
-          <Stop offset="0"    stopColor={hi}      stopOpacity="1" />
-          <Stop offset="0.36" stopColor={hi}      stopOpacity="0.34" />
-          <Stop offset="0.7"  stopColor={hi}      stopOpacity="0.14" />
-          <Stop offset="1"    stopColor="#000000" stopOpacity="0.52" />
-        </SvgLinearGradient>
-        <SvgLinearGradient id={`${rID}-inner`} x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0"   stopColor="#ffffff" stopOpacity="0.92" />
-          <Stop offset="0.45" stopColor="#ffffff" stopOpacity="0.06" />
-          <Stop offset="1"   stopColor="#ffffff" stopOpacity="0" />
-        </SvgLinearGradient>
-        <RadialGradient id={`${rID}-glint`} cx="50%" cy="50%" r="50%">
-          <Stop offset="0" stopColor="#ffffff" stopOpacity="0.9" />
-          <Stop offset="1" stopColor="#ffffff" stopOpacity="0" />
-        </RadialGradient>
-      </Defs>
-
-      {/* faint outer dark line — separates the frame from the scene */}
-      <Rect x={0.75} y={0.75} width={w - 1.5} height={h - 1.5} rx={radius} ry={radius}
-        fill="none" stroke="#000000" strokeOpacity="0.35" strokeWidth={1.25} />
-
-      {/* thick beveled body */}
-      <Rect x={T / 2} y={T / 2} width={w - T} height={h - T}
-        rx={Math.max(radius - T / 2, 4)} ry={Math.max(radius - T / 2, 4)}
-        fill="none" stroke={`url(#${rID}-bevel)`} strokeWidth={T} />
-
-      {/* bright inner hairline riding just inside the bevel */}
-      <Rect x={T - 1} y={T - 1} width={w - 2 * (T - 1)} height={h - 2 * (T - 1)}
-        rx={Math.max(radius - T, 3)} ry={Math.max(radius - T, 3)}
-        fill="none" stroke={`url(#${rID}-inner)`} strokeWidth={1.5} />
-
-      {/* specular glint on the top edge */}
-      <Ellipse cx={w * 0.3} cy={T * 0.62} rx={Math.min(w * 0.24, 100)} ry={T * 0.5}
-        fill={`url(#${rID}-glint)`} />
-    </Svg>
+    <>
+      <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, width: SIZE, height: SIZE, borderColor: color, borderTopWidth: BW, borderLeftWidth: BW, borderTopLeftRadius: R }} />
+      <View pointerEvents="none" style={{ position: 'absolute', top: 0, right: 0, width: SIZE, height: SIZE, borderColor: color, borderTopWidth: BW, borderRightWidth: BW, borderTopRightRadius: R }} />
+      <View pointerEvents="none" style={{ position: 'absolute', bottom: 0, left: 0, width: SIZE, height: SIZE, borderColor: color, borderBottomWidth: BW, borderLeftWidth: BW, borderBottomLeftRadius: R }} />
+      <View pointerEvents="none" style={{ position: 'absolute', bottom: 0, right: 0, width: SIZE, height: SIZE, borderColor: color, borderBottomWidth: BW, borderRightWidth: BW, borderBottomRightRadius: R }} />
+    </>
   );
 }
 
-// ─── Positioning-guide box overlay ───────────────────────────────────────────
-// A thick Liquid Glass frame (see LiquidFrame) over a faint glass tint with a
-// soft outer glow — same look as the RepFeedback orb's rim. Goes green
-// (+ green glow) the instant SETUP's joint check passes, then stays through
-// the set. Sized generously (legs / full standing body fit inside). Purely
-// visual — doesn't hit-test joints (that's native).
+// ─── Positioning-guide overlay ───────────────────────────────────────────────
+// A camera-lens / scanner-style viewfinder (see CornerFrame) — four open
+// corner marks, not a filled or fully-bordered box, so the camera preview
+// underneath reads clearly. Always white — no ready/green accent (explicit
+// request). Sized generously (legs / full standing body fit inside).
+// Purely visual — doesn't hit-test joints (that's native).
 function PositioningGuide({
-  box, ready, children, readyAccent = C.good, readyFrame,
-}: { box: 'standing' | 'floor'; ready: boolean; children?: React.ReactNode; readyAccent?: string; readyFrame?: string }) {
+  box, ready, children, clearHud = false,
+}: { box: 'standing' | 'floor'; ready: boolean; children?: React.ReactNode; clearHud?: boolean }) {
+  // Workout-flow sessions (clearHud) stack real chrome along both edges that
+  // a solo session doesn't have — the segment-progress line near the top
+  // (see WorkoutHud's segRow, pinned at insets.top + 80) and the pull-up
+  // drawer's peek strip along the bottom (DRAWER_PEEK_HEIGHT) — so the
+  // generic percentage-based margins below put the box's own corners
+  // visibly behind that white drawer sheet / progress line. Fixed pixel
+  // clearance past each one, only when that chrome actually exists.
+  const hudInsets = useSafeAreaInsets();
+  // clearHud margins bumped (top: 92->160 to clear the taller combined
+  // scoreboard card + segment row now above it; bottom: 16->70 further
+  // clear of the drawer peek) and side margins reduced (9%->5%, 6%->4%) —
+  // the box was reading as way too tall/narrow.
+  // clearHud side margin is a fixed 30px now (matching the real design file
+  // exactly), not a percentage — a plain, predictable number instead of
+  // something that quietly scales with screen width.
   const rect = box === 'floor'
     // Floor exercises (phone raised on a chair, angled down): the body sits as
     // a wide band across the middle. A real framed target with clear dark
     // margins top and bottom — NOT the whole screen (that guides nothing).
-    ? { top: '22%', bottom: '16%', side: '6%'  }
-    : { top: '16%', bottom: '7%',  side: '9%'  };
-  const R = 36;
+    ? { top: clearHud ? hudInsets.top + 160 : '22%', bottom: clearHud ? DRAWER_PEEK_HEIGHT + 70 : '16%', side: clearHud ? 30 : '4%'  }
+    : { top: clearHud ? hudInsets.top + 160 : '16%', bottom: clearHud ? DRAWER_PEEK_HEIGHT + 70 : '7%',  side: clearHud ? 30 : '5%'  };
 
-  const [size, setSize] = useState({ w: 0, h: 0 });
-
-  // Subtle breathe while waiting (0.86 -> 1); locks solid on ready.
+  // Subtle breathe while waiting (0.86 -> 1 opacity); locks solid on ready.
   const pulse = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     if (ready) { pulse.stopAnimation(); pulse.setValue(1); return; }
@@ -330,23 +333,18 @@ function PositioningGuide({
   return (
     <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
       <Animated.View
-        onLayout={(e) => setSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
         style={{
           position: 'absolute',
           top: rect.top as any, bottom: rect.bottom as any,
           left: rect.side as any, right: rect.side as any,
-          borderRadius: R, borderCurve: 'continuous',
-          backgroundColor: ready ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.025)',
           opacity: pulse,
           alignItems: 'center', justifyContent: 'center',
-          shadowColor: ready ? readyAccent : '#000',
-          shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: ready ? 0.95 : 0.5,
-          shadowRadius: ready ? 26 : 18,
-          elevation: 8,
         }}
       >
-        <LiquidFrame w={size.w} h={size.h} radius={R} thickness={8} accent={ready ? (readyFrame ?? '#8affb0') : undefined} />
+        {/* Always white — no ready/green accent any more, per explicit
+            request (the brief green flash was still reading as "it keeps
+            turning green"). */}
+        <CornerFrame color="#ffffff" />
         {children}
       </Animated.View>
     </View>
@@ -361,16 +359,126 @@ function RepCounter({
 }: { reps: number; goodReps: number; repCounterOnly: boolean; theme: FormTheme; spin?: Animated.AnimatedInterpolation<string> }) {
   return (
     <Animated.View style={[s.repBlock, spin ? { transform: [{ rotate: spin }] } : null]} pointerEvents="none">
-      <Text style={[s.repNum, !theme.isDefault && { color: theme.repText }]}>{reps}</Text>
+      {/* Same big-number-over-smaller-label treatment and font as
+          WorkoutHud's counter (wh.counterNum/counterTotal), and the same
+          bottom position (right above the stop button) — was a smaller
+          system-font number pinned near the top, which read as a totally
+          different component from the in-workout one. */}
+      <Text style={[wh.counterNum, !theme.isDefault && { color: theme.repText }]}>{reps}</Text>
       {repCounterOnly ? (
         <Text style={s.repCounterTag}>REP COUNTER · FORM NOT SCORED</Text>
       ) : (
         <View style={s.repSubRow}>
           <View style={[s.repDot, { backgroundColor: theme.accent }]} />
-          <Text style={s.repSub}>{goodReps} good</Text>
+          <Text style={wh.counterTotal}>{goodReps} good</Text>
         </View>
       )}
     </Animated.View>
+  );
+}
+
+// ─── Scorecard corner notch ─────────────────────────────────────────────────
+// Matches the real design file (assets/app screens/inworkout.html) exactly —
+// it doesn't draw one big concave-sided badge shape at all (every attempt at
+// that produced some kind of corner artifact that only ever showed up on a
+// real device, never on paper). Instead the hanging timer tab is just a
+// plain rect with square top corners, and a tiny 16×16 "hole" patch sits at
+// each of its top corners to carve out a quarter-circle — the classic
+// CSS-radial-gradient notch trick, done here as a real SVG cutout (needed
+// since the true background behind it is the live camera feed, not a solid
+// color a gradient could fake). One shape, independently verified by hand:
+// solid square minus the quarter-disk centered at its OWN bottom-left
+// corner. The mirrored (right) notch reuses this exact path via a scaleX
+// flip instead of a second hand-derived formula, so there's only one arc to
+// get right, not two.
+const NOTCH_PATH = 'M0 0 L16 0 L16 16 A16 16 0 0 0 0 0 Z';
+function ScoreNotch({ side }: { side: 'left' | 'right' }) {
+  return (
+    <View
+      pointerEvents="none"
+      style={[
+        wh.scoreNotch, side === 'left' ? { left: -16 } : { right: -16, transform: [{ scaleX: -1 }] },
+      ]}
+    >
+      <Svg width={16} height={16} viewBox="0 0 16 16">
+        <Path d={NOTCH_PATH} fill="#f2f2f5" />
+      </Svg>
+    </View>
+  );
+}
+
+// ─── Workout-flow HUD — the instepdrawer.html/inworkout.html artboard's
+// giant counter + segment progress + Reps/Next pill, restyled onto the
+// SAME real reps/goodReps this screen already tracks (see isWorkoutHud's
+// own comment) — not a second, separate rep-tracking system. ──────────────
+function WorkoutHud({
+  repsIntoSet, targetReps, completedSets, targetSets, nextLabel, elapsedSec,
+}: {
+  repsIntoSet: number; targetReps: number; completedSets: number; targetSets: number; nextLabel: string; elapsedSec: number;
+}) {
+  const insets = useSafeAreaInsets();
+  const m = Math.floor(elapsedSec / 60);
+  const sec = elapsedSec % 60;
+
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFillObject}>
+      {/* Scorecard — built to the real design file exactly (assets/app
+          screens/inworkout.html), not a hand-sketched recreation: a plain
+          light-grey pill (Set X of Y / Next, no inner white chip — that was
+          never in the real design), with the timer tab hanging below it on
+          a scaleX-mirrored notch pair (see ScoreNotch). Sits below the
+          segment row (swapped order, per explicit request). */}
+      <View style={[wh.pillRow, { top: insets.top + 80 }]}>
+        <View style={wh.scoreWrap}>
+          <View style={wh.scorePill}>
+            <Text style={wh.scoreSetTxt}>Set {completedSets + 1} of {targetSets}</Text>
+            <Text style={wh.scoreNextTxt}>Next: {nextLabel}</Text>
+          </View>
+          {/* A normal (non-absolute) flex child, centered by scoreWrap's own
+              alignItems — not position:'absolute' + left:'50%'. That
+              percentage was resolving against the wrong width (the auto-
+              sized pill's intrinsic width isn't settled when an absolute
+              sibling's percentage position gets computed), which is what
+              put the tab visibly off-center. Plain flexbox centering has
+              no such ambiguity. */}
+          <View style={wh.scoreTab}>
+            <ScoreNotch side="left" />
+            <ScoreNotch side="right" />
+            <View style={wh.scoreTimeChip}>
+              <Text style={wh.scoreTimeTxt}>{m}:{String(sec).padStart(2, '0')}</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+
+      {/* Segment progress — one bar per set; the current set's bar fills
+          proportionally, earlier sets are fully filled, later ones empty.
+          Now sits ABOVE the scorecard (swapped order, per explicit
+          request), right under the top bar. */}
+      <View style={[wh.segRow, { top: insets.top + 56 }]}>
+        {Array.from({ length: targetSets }).map((_, i) => {
+          const fillPct = i < completedSets ? 100 : i === completedSets ? Math.round((repsIntoSet / targetReps) * 100) : 0;
+          const isCurrent = i === completedSets;
+          return (
+            <View key={i} style={wh.segTrack}>
+              <View style={[wh.segFill, { width: `${fillPct}%` }]} />
+              {/* Leading dot on the current set's bar only — matches the
+                  real design file; absent from the earlier recreation. */}
+              {isCurrent && (
+                <View style={[wh.segDot, { left: `${fillPct}%` as any }]} />
+              )}
+            </View>
+          );
+        })}
+      </View>
+
+      <View style={[wh.counterWrap, { bottom: HUD_COUNTER_BOTTOM }]}>
+        <View style={wh.counterRow}>
+          <Text style={wh.counterNum}>{repsIntoSet}</Text>
+          <Text style={wh.counterTotal}>/ {targetReps}</Text>
+        </View>
+      </View>
+    </View>
   );
 }
 
@@ -453,12 +561,24 @@ export default function FormCheckScreen() {
     exercise = 'squat',
     returnTo,
     workoutExerciseId,
+    targetSets: targetSetsParam,
+    targetReps: targetRepsParam,
+    nextExerciseName,
   } = useLocalSearchParams<{
     exercise?:          string;
     returnTo?:          string;
     workoutExerciseId?: string;
+    targetSets?:        string;
+    targetReps?:        string;
+    nextExerciseName?:  string;
   }>();
   const exerciseType = (exercise in SETUP_INFO ? exercise : 'squat') as ExerciseType;
+  // Workout-flow sessions only (both come from run.tsx's navigation
+  // params) — drive the reps-per-set progress dots and the "Next" pill.
+  // Falls back to a single "set" the size of whatever's counted so far
+  // for a solo/non-workout session, where there's no real target to show.
+  const targetSets = targetSetsParam != null ? parseInt(targetSetsParam, 10) || 1 : null;
+  const targetReps = targetRepsParam != null ? parseInt(targetRepsParam, 10) || 1 : null;
   // Floor exercises (sit-up): the phone is propped in landscape beside a
   // person on the ground, so the portrait UI text reads sideways to them.
   // Rotate the on-screen commands 90° so they run the way the phone is held.
@@ -474,7 +594,15 @@ export default function FormCheckScreen() {
   // null = still checking AsyncStorage (render nothing extra yet); true =
   // already seen (or this exercise isn't repCounter-only, so it never
   // applies) — proceed straight to the normal flow; false = show it now.
-  const [repCounterIntroSeen, setRepCounterIntroSeen] = useState<boolean | null>(null);
+  // Seeded synchronously (not null) for every ordinary formCheck exercise —
+  // repCounterOnly is already known on this very first render, so there's no
+  // real reason to wait a tick before deciding. Only an actual repCounter
+  // exercise needs the async AsyncStorage check below. Before this, EVERY
+  // exercise paid a guaranteed one-frame blank-white flash between the demo
+  // screen's "I'm ready" tap and the camera appearing — read as "the
+  // transition into the camera looks glitchy" — because the state started
+  // at null regardless of whether there was ever anything to check.
+  const [repCounterIntroSeen, setRepCounterIntroSeen] = useState<boolean | null>(() => repCounterOnly ? null : true);
   useEffect(() => {
     if (!repCounterOnly) { setRepCounterIntroSeen(true); return; }
     let cancelled = false;
@@ -513,10 +641,100 @@ export default function FormCheckScreen() {
 
   const [feedback, setFeedback] = useState<{ good: boolean; reason: string; seq: number } | null>(null);
   const feedbackSeq    = useRef(0);
+
+  // "Watch the demo again" overlay — workout-flow sessions only. Opening it
+  // pauses the SET (both live listeners below early-return while it's open,
+  // so no rep — good or bad — counts while you're reviewing, and nothing
+  // gets pushed into repEvents). The native engine itself has no
+  // pause/resume call (see modules/athlt-camera's exported API — only
+  // stopTracking(), which ends the set for good), so this is a display-
+  // level pause: tracking keeps running underneath, covered by the
+  // overlay, and its next real rep event after Close/Resume just continues
+  // the count normally. Fine in practice — there's no reason to be mid-rep
+  // while stopped to watch a video.
+  // Ref only, not state — nothing renders off this directly any more (the
+  // scrim/stop-button/etc. all key off drawerY or hudActive instead), so a
+  // separate re-render-triggering state would just be dead weight.
+  const demoOpenRef = useRef(false);
+  const demoDrawerRef = useRef<WebView>(null);
+  // Drives the drawer's own position NATIVELY (translateY on the WebView's
+  // outer container), not a CSS transition living inside the WebView's JS
+  // — a WebView reload (which this screen's own re-renders used to cause,
+  // see demoDrawerDataJs's comment) can't reset a value that lives in RN,
+  // so this can't have the "pulling it up does nothing" bug the old
+  // CSS-driven version had. 0 = fully open, DRAWER_PEEK_Y = only the
+  // header peeking above the bottom edge.
+  const drawerY = useRef(new Animated.Value(DRAWER_PEEK_Y)).current;
+  // Real accumulated paused time (ms), so the elapsed-time HUD can freeze
+  // while the drawer's open and resume from where it left off afterward,
+  // instead of jumping forward by however long the drawer was open — see
+  // the elapsedSec effect below, which is the only thing that reads this.
+  const pausedMsRef = useRef(0);
+  const pauseStartRef = useRef<number | null>(null);
+  function setDemoOpenBoth(open: boolean) {
+    demoOpenRef.current = open;
+    if (open) {
+      pauseStartRef.current = Date.now();
+    } else if (pauseStartRef.current != null) {
+      pausedMsRef.current += Date.now() - pauseStartRef.current;
+      pauseStartRef.current = null;
+    }
+    Animated.timing(drawerY, {
+      toValue: open ? 0 : DRAWER_PEEK_Y,
+      duration: 320,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }
+  // Real drag, not a tap target pretending to be one — the grey pill is
+  // there to be pulled. This is a plain RN View + PanResponder sitting on
+  // TOP of the WebView, covering just the peek strip (the handle + title
+  // row), so it captures the gesture before the WebView underneath ever
+  // sees it; the WebView's own click handler on that same area is still
+  // there but can't fire once this overlay exists, so a quick tap with
+  // barely any movement is handled here too (falls through to a toggle),
+  // not dropped. Close/Resume inside the open sheet are below this strip,
+  // still plain WebView taps.
+  const dragStartY = useRef(DRAWER_PEEK_Y);
+  // A little resistance (0.72x finger movement) instead of tracking 1:1 —
+  // 1:1 read as "too easy"/flimsy; real bottom sheets (and Apple's own)
+  // add a touch of drag so it feels like it has actual weight.
+  const DRAG_RESISTANCE = 0.72;
+  const drawerPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        dragStartY.current = demoOpenRef.current ? 0 : DRAWER_PEEK_Y;
+        drawerY.stopAnimation();
+      },
+      onPanResponderMove: (_evt, g) => {
+        const next = Math.min(DRAWER_PEEK_Y, Math.max(0, dragStartY.current + g.dy * DRAG_RESISTANCE));
+        drawerY.setValue(next);
+      },
+      onPanResponderRelease: (_evt, g) => {
+        if (Math.abs(g.dy) < 4 && Math.abs(g.vy) < 0.1) {
+          setDemoOpenBoth(!demoOpenRef.current); // a tap, not a drag
+          return;
+        }
+        const current = dragStartY.current + g.dy * DRAG_RESISTANCE;
+        const shouldOpen = current < DRAWER_PEEK_Y / 2 || g.vy < -0.5;
+        setDemoOpenBoth(shouldOpen);
+      },
+    }),
+  ).current;
   const flashAnim      = useRef(new Animated.Value(0)).current;
   // Floor exercises: smoothly rotate the tracking-phase text 90° once setup
   // is done, so it reads the way the phone is propped beside you.
   const floorRot       = useRef(new Animated.Value(0)).current;
+  // Workout-HUD stop button — a soft spring press-scale (down on touch, back
+  // up on release) so tapping it feels like a real responsive control
+  // instead of a flat image that's either there or not.
+  const stopScale      = useRef(new Animated.Value(1)).current;
+  // Idle circle -> "recording" rounded-square morph (0 = idle, 1 = in
+  // frame) — an animated shape change, not a conditional swap between two
+  // separately-rendered views (that "just spawns in," per explicit
+  // request; real camera shutter buttons morph).
+  const recordMorph    = useRef(new Animated.Value(0)).current;
   const notLinked      = !isNativeModuleLinked();
 
   const startTimestamp = useRef<number | null>(null);
@@ -738,6 +956,7 @@ export default function FormCheckScreen() {
   useEffect(() => {
     if (phase !== 'tracking') return;
     const repSub = addRepListener((rep: RepEvent) => {
+      if (demoOpenRef.current) return;
       setReps(rep.reps);
       setGoodReps(rep.goodReps);
       // A rep landed — re-ask the diagnostic rather than force-clearing. If
@@ -759,6 +978,7 @@ export default function FormCheckScreen() {
       repEvents.current.push({ timeSec, good: rep.good, reason: rep.reason });
     });
     const dbgSub = addDebugStatsListener((e: DebugStatsEvent) => {
+      if (demoOpenRef.current) return;
       setStats(e);
       setReps(e.reps);
       setGoodReps(e.goodReps);
@@ -810,18 +1030,6 @@ export default function FormCheckScreen() {
   // Export the log at any point — the calibration workflow needs it, and
   // getting logs out has been a recurring blocker. Also present on the
   // review screen and on recap.
-  const shareLiveLog = useCallback(() => {
-    const header = [
-      '=== ATHLT Calibration / Debug Log ===',
-      `Exercise: ${exerciseType}`,
-      `Date: ${new Date().toLocaleString()}`,
-      `Reps so far: ${reps} total / ${goodReps} good`,
-      '=====================================', '',
-    ].join('\n');
-    const body = [...sessionLogRef.current, ...calibRef.current.flushSummary()].join('\n');
-    void Share.share({ message: header + body });
-  }, [exerciseType, reps, goodReps]);
-
   const handleStop = useCallback(async () => {
     setPhase('stopping');
     isTrackingRef.current = false;
@@ -868,6 +1076,75 @@ export default function FormCheckScreen() {
   const isStopping     = phase === 'stopping';
   const showRepCounter = isStopping || isTracking;
 
+  // Elapsed time for the workout HUD — real wall-clock time since
+  // startTimestamp (the same source durationSec already uses when the set
+  // actually stops), minus real accumulated paused time (pausedMsRef, see
+  // setDemoOpenBoth) so pulling up the demo drawer actually freezes the
+  // displayed number instead of just looking paused while still ticking
+  // underneath. Ticks every half-second while genuinely tracking; skips the
+  // update entirely while the drawer's open so it visibly holds still
+  // rather than just happening to show the same rounded second.
+  const [elapsedSec, setElapsedSec] = useState(0);
+  useEffect(() => {
+    if (!isTracking) return;
+    const id = setInterval(() => {
+      if (demoOpenRef.current) return;
+      if (startTimestamp.current != null) {
+        setElapsedSec(Math.floor((Date.now() - startTimestamp.current - pausedMsRef.current) / 1000));
+      }
+    }, 500);
+    return () => clearInterval(id);
+  }, [isTracking]);
+
+  // Workout-flow HUD — real numbers, no separate "sets within one camera
+  // session" mechanic needed: targetReps/targetSets came in from run.tsx's
+  // own workout data, and "how far into the current set" is just
+  // reps mod targetReps. A rep count that lands exactly on a multiple of
+  // targetReps (e.g. reps=20 at targetReps=10) reads as the set you JUST
+  // finished, not 0 reps into a new one, until the count actually moves
+  // past it.
+  const isWorkoutHud = !!workoutExerciseId && targetSets != null && targetReps != null;
+  const completedSets = isWorkoutHud ? Math.min(targetSets! - 1, Math.floor(reps / targetReps!)) : 0;
+  const repsIntoSet = isWorkoutHud
+    ? (reps > 0 && reps % targetReps! === 0 ? targetReps! : reps % targetReps!)
+    : 0;
+  // The workout HUD (counter/segments/pill/stop circle/drawer) used to only
+  // mount once isTracking — which meant the whole bottom half of the
+  // screen visibly popped into existence the moment tracking started,
+  // instead of being there from when the screen opens like the existing
+  // top bar already is. Visible through setup too now; only the actual
+  // camera-affecting logic (rep listeners, etc.) stays gated to real
+  // tracking.
+  const hudActive = isWorkoutHud && (phase === 'setup' || phase === 'setup-done' || isTracking || isStopping);
+  // Same visible-window as hudActive, minus the workout-only gate — the
+  // circular morphing stop button is the same component/look in both
+  // modes now (solo form-check used to get a separate pill-shaped
+  // GlassButton here, which is what read as "different from in-workout").
+  const stopButtonActive = phase === 'setup' || phase === 'setup-done' || isTracking || isStopping;
+  // Same "ready" condition PositioningGuide's own corner brackets use —
+  // the person is actually framed/positioned, not just that the HUD itself
+  // is visible. Drives the stop button's idle vs. "recording" look below.
+  const isInFrame = setupAllVisible || phase === 'setup-done' || isTracking || isStopping;
+  useEffect(() => {
+    Animated.spring(recordMorph, { toValue: isInFrame ? 1 : 0, useNativeDriver: false, friction: 6, tension: 80 }).start();
+  }, [isInFrame, recordMorph]);
+
+  // ROOT CAUSE of "pulling the drawer up does nothing": this was a plain
+  // template string, recomputed fresh on every render — and this screen
+  // re-renders roughly once a second (the debug-stats tick alone does it).
+  // injectedJavaScriptBeforeContentLoaded is a WebView CONFIGURATION prop;
+  // handing it a new string identity every render reconfigures/reloads the
+  // underlying native WebView, which wipes the sheet's own open/closed JS
+  // state and cancels its CSS transition before it can ever finish — so
+  // any attempt to pull it open got silently undone within about a
+  // second. exerciseType is fixed for this screen's whole lifetime (a
+  // different exercise is a different screen instance entirely), so this
+  // only needs to be computed once.
+  const demoDrawerDataJs = useMemo(() => `window.__FORMPAL_DRAWER = ${JSON.stringify({
+    name: EXERCISE_DEFINITIONS[exerciseType]?.displayName ?? exerciseType,
+    cues: getDemoCues(exerciseType),
+  })}; window.__formpalRenderDrawer && window.__formpalRenderDrawer(); true;`, [exerciseType]);
+
   // Animate the 90° turn in/out as tracking starts/stops (floor only).
   useEffect(() => {
     Animated.timing(floorRot, {
@@ -887,7 +1164,7 @@ export default function FormCheckScreen() {
   // makes the live metric vs enter/exit/rom thresholds visible on-screen while
   // actually doing reps, not just in the post-session log.
   const isTricepFamily = ['tricepPushdown', 'overheadTricepExtension', 'skullcrusher'].includes(exerciseType);
-  const showPushupMetric = (isPushupFamily || isRaiseFamily || isTricepFamily) && isTracking && liveMetric != null;
+  const showPushupMetric = (isPushupFamily || isRaiseFamily || isTricepFamily) && isTracking && liveMetric != null && !isWorkoutHud;
   const liveMetricLabel = isPushupFamily ? 'ELBOW ANGLE' : isTricepFamily ? 'FOREARM ANGLE' : 'ARM ANGLE';
 
   // First time on THIS exercise (repCounter-only ones only) — show the
@@ -933,27 +1210,43 @@ export default function FormCheckScreen() {
         <PositioningGuide
           box={guideBoxFor(exerciseType)}
           ready={setupAllVisible || phase === 'setup-done' || phase === 'tracking'}
-          readyAccent={theme.isDefault ? C.good : theme.accent}
-          readyFrame={theme.isDefault ? undefined : theme.accent}
+          clearHud={hudActive}
         >
           {phase === 'setup' && (
-            <GlassPanel radius={30} style={s.setupPanel}>
-              <View style={s.setupPanelInner}>
-                {/* ONE short line: the live positioning cue, else the
-                    exercise's instruction, else "Perfect — hold still". */}
-                <Text style={s.setupBig}>
-                  {setupAllVisible
-                    ? 'Perfect — hold still'
-                    : (setupHint || SETUP_INFO[exerciseType].title)}
-                </Text>
-              </View>
-            </GlassPanel>
+            <View style={s.setupPanel}>
+              {/* ONE short line: the live positioning cue, else the
+                  exercise's instruction, else "Perfect — hold still". No
+                  card background — same "just the text" treatment as the
+                  live tracking cues below. */}
+              <Text style={s.setupBig}>
+                {setupAllVisible
+                  ? 'Perfect — hold still'
+                  : (setupHint || SETUP_INFO[exerciseType].title)}
+                <Image source={SPARKLE_DUO} style={s.cueSparkleImg} />
+              </Text>
+            </View>
           )}
         </PositioningGuide>
       )}
 
-      {/* Rep counter — fixed near the top, same Liquid Glass frame as the box. */}
-      {showRepCounter && <RepCounter reps={reps} goodReps={goodReps} repCounterOnly={repCounterOnly} theme={theme} spin={isFloor ? floorSpin : undefined} />}
+      {/* Rep counter — fixed near the top, same Liquid Glass frame as the box.
+          Workout-flow sessions get the new HUD (giant set-relative counter +
+          segment progress + Reps/Next pill, all off real reps/targetReps/
+          targetSets — see isWorkoutHud's own comment); everything else
+          (solo form-check) keeps the existing counter untouched. */}
+      {showRepCounter && !isWorkoutHud && (
+        <RepCounter reps={reps} goodReps={goodReps} repCounterOnly={repCounterOnly} theme={theme} spin={isFloor ? floorSpin : undefined} />
+      )}
+      {hudActive && (
+        <WorkoutHud
+          repsIntoSet={repsIntoSet}
+          targetReps={targetReps!}
+          completedSets={completedSets}
+          targetSets={targetSets!}
+          nextLabel={nextExerciseName || 'Last exercise'}
+          elapsedSec={elapsedSec}
+        />
+      )}
 
       {/* Ready → tracking */}
       {phase === 'setup-done' && (
@@ -967,26 +1260,50 @@ export default function FormCheckScreen() {
         </View>
       )}
 
-      {/* Top bar */}
+      {/* Top bar — real Liquid Glass now (same component/pattern as
+          onboarding's back button, components/LiquidGlass.tsx), not
+          GlassButton's flat rgba(20,21,26,0.88) fill standing in for it.
+          Renders the actual system glass material on a build that has
+          @callstack/liquid-glass linked; falls back to a plain translucent
+          dark surface (still lighter/more honest than GlassButton's flat
+          fill) everywhere else — see LiquidGlass.tsx's own header comment. */}
       <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
-        <GlassButton circular={40} onPress={handleBack}>
+        <LiquidGlassButton
+          onPress={handleBack}
+          radius={20}
+          colorScheme="dark"
+          fallbackColor="rgba(40,41,48,0.55)"
+          style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
+        >
           <SymbolView name="chevron.left" size={18} tintColor={C.text} type="monochrome" style={{ width: 18, height: 18 }} />
-        </GlassButton>
+        </LiquidGlassButton>
         <Text style={s.title} numberOfLines={1}>
           {phase === 'tracking' || phase === 'setup' || phase === 'setup-done' || phase === 'starting'
             ? ''
             : (EXERCISE_DEFINITIONS[exerciseType]?.displayName ?? exerciseType)}
         </Text>
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <GlassButton circular={40} onPress={handleToggleMute}>
+          <LiquidGlassButton
+            onPress={handleToggleMute}
+            radius={20}
+            colorScheme="dark"
+            fallbackColor="rgba(40,41,48,0.55)"
+            style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
+          >
             <SymbolView
               name={audioEnabled ? 'speaker.wave.2.fill' : 'speaker.slash.fill'}
               size={18} tintColor={C.text} type="monochrome" style={{ width: 18, height: 18 }}
             />
-          </GlassButton>
-          <GlassButton circular={40} onPress={handleFlip}>
+          </LiquidGlassButton>
+          <LiquidGlassButton
+            onPress={handleFlip}
+            radius={20}
+            colorScheme="dark"
+            fallbackColor="rgba(40,41,48,0.55)"
+            style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
+          >
             <SymbolView name="arrow.triangle.2.circlepath.camera.fill" size={18} tintColor={C.text} type="monochrome" style={{ width: 18, height: 18 }} />
-          </GlassButton>
+          </LiquidGlassButton>
         </View>
       </View>
 
@@ -1017,14 +1334,15 @@ export default function FormCheckScreen() {
         </View>
       )}
 
-      {/* Live planarity hint */}
-      {isTracking && !!stats?.outOfPlaneCue && (
+      {/* Live planarity hint — gated off workout-flow sessions, same as the
+          trackingCueHint right below it. This one was missing that gate
+          (trackingCueHint already had it), which is exactly how a live
+          pose-correction overlay kept leaking into the workout HUD. */}
+      {isTracking && !!stats?.outOfPlaneCue && !isWorkoutHud && (
         <View style={s.outOfPlaneHint} pointerEvents="none">
-          <GlassPanel radius={999} style={s.outOfPlaneGlass}>
-            <View style={s.outOfPlaneInner}>
-              <Text style={s.outOfPlaneText}>{stats.outOfPlaneCue}</Text>
-            </View>
-          </GlassPanel>
+          <Text style={s.outOfPlaneText}>
+            {stats.outOfPlaneCue}<Image source={SPARKLE_DUO} style={s.cueSparkleImg} />
+          </Text>
         </View>
       )}
 
@@ -1035,58 +1353,150 @@ export default function FormCheckScreen() {
           2. stats.trackingCue — native "step back into frame" (non-floor
              only; a floor body legitimately leaves frame each rep).
           Suppressed while a planarity hint is already showing. */}
-      {isTracking && !stats?.outOfPlaneCue && (() => {
+      {isTracking && !stats?.outOfPlaneCue && !isWorkoutHud && (() => {
         const cue = repDiag
           ?? (isFloor ? null : (stats?.trackingCue || null));
         if (!cue) return null;
         return (
           <Animated.View style={[s.trackingCueHint, { transform: [{ rotate: floorSpin }] }]} pointerEvents="none">
-            <GlassPanel radius={28} style={s.outOfPlaneGlass}>
-              <View style={s.trackingCueInner}>
-                <Text style={s.trackingCueText}>{cue}</Text>
-              </View>
-            </GlassPanel>
+            <Text style={s.trackingCueText}>
+              {cue}<Image source={SPARKLE_DUO} style={s.cueSparkleImg} />
+            </Text>
           </Animated.View>
         );
       })()}
 
-      {/* Debug stats */}
-      {stats && isTracking && (
-        <View style={s.debugPanel}>
-          <Row label="person"  value={stats.personDetected ? 'yes' : 'no'} good={stats.personDetected} />
-          <Row label="ready"   value={stats.ready ? 'yes' : 'no'} good={stats.ready} />
-          <Row
-            label={
-              (['seatedCableRow', 'machineRow'] as string[]).includes(exerciseType) ? 'wrHip' :
-              (['curl','hammerCurl','concentrationCurl','preacherCurl','reverseCurl','cableCurl','pushup','kneePushup','inclinePushup','widePushup','diamondPushup','declinePushup','closegripPushup','tricepPushdown','overheadTricepExtension','skullcrusher','bentOverRow','barbellRow','singleArmRow','invertedRow','tBarRow'] as string[]).includes(exerciseType) ? 'elbow°' :
-              'knee°'
-            }
-            value={stats.kneeAngle.toFixed((['seatedCableRow', 'machineRow'] as string[]).includes(exerciseType) ? 2 : 1)}
-          />
-          <Row label="back°"   value={stats.backAngle.toFixed(1)} />
-          <Row label="phase"   value={stats.phase} />
-          <Row label="frames"  value={`${stats.totalFramesAnalyzed} / ${stats.totalFramesReceived}`} />
-        </View>
-      )}
+      {/* Debug stats panel removed from the default view to match
+          in-workout's clean look (it was solo-only before). stats itself
+          still updates live regardless — if a future session needs the
+          on-screen person/ready/knee/back/phase/frames readout back for
+          exercise-threshold calibration (see CLAUDE.md's exercise-
+          definition process), it's a quick re-add, not a rebuild. */}
 
-      {/* Bottom controls */}
-      <View style={[s.bottomBar, { paddingBottom: Math.max(insets.bottom + 16, 32) }]}>
+      {/* Bottom controls — same circular morphing stop button in both solo
+          form-check and in-workout now (used to be a separate pill-shaped
+          GlassButton here). The debug stats panel + "Share logs" link that
+          used to always show during solo tracking are no longer rendered by
+          default either, to match in-workout's clean look — the underlying
+          stats/shareLiveLog data collection is untouched, just not surfaced
+          here; re-add the JSX below if a threshold-tuning session needs it
+          back (see CLAUDE.md's exercise-definition process). */}
+      <View
+        style={[
+          s.bottomBar,
+          // Clears the demo drawer's own peek (bottom:0, height 56) — the
+          // drawer shows in solo form-check now too (see stopButtonActive),
+          // so both modes need the same clearance.
+          { paddingBottom: HUD_STOP_BOTTOM },
+        ]}
+      >
         {phase === 'starting' && <Text style={s.hint}>Starting camera…</Text>}
         {isStopping          && <Text style={s.hint}>Saving session…</Text>}
-        {isTracking && (
-          <GlassButton style={{ height: 56, width: 240 }} onPress={handleStop}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <SymbolView name="stop.fill" size={18} tintColor={C.warn} type="monochrome" style={{ width: 18, height: 18 }} />
-              <Text style={[s.trackLabel, s.trackLabelStop]}>Stop</Text>
-            </View>
-          </GlassButton>
-        )}
-        {(isTracking || isStopping) && (
-          <Pressable onPress={shareLiveLog} hitSlop={12}>
-            <Text style={s.shareLiveTxt}>Share logs</Text>
+        {stopButtonActive && (
+          // Visible through setup (see hudActive's own comment) but only
+          // actually wired to handleStop once real tracking has begun —
+          // stopTracking()/stopSession() assume a session that's actually
+          // started, so a tap during setup is a no-op instead of calling
+          // those in a state they don't expect.
+          <Pressable
+            onPress={isTracking ? handleStop : undefined}
+            onPressIn={() => Animated.spring(stopScale, { toValue: 0.88, useNativeDriver: true, speed: 30, bounciness: 0 }).start()}
+            onPressOut={() => Animated.spring(stopScale, { toValue: 1, useNativeDriver: true, speed: 14, bounciness: 9 }).start()}
+            hitSlop={12}
+          >
+            <Animated.View style={[wh.stopCircle, { transform: [{ scale: stopScale }] }]}>
+              {/* One shape that MORPHS from a circle (idle) into the
+                  rounded-square "recording" look once the person is
+                  actually in frame — a real animated transition (shape +
+                  a brief scale pop), not two views conditionally swapped
+                  in/out, which read as "just spawning in." Black
+                  throughout, matching the real iOS shutter button's own
+                  "same color, shape changes" approach (just black instead
+                  of red, per earlier explicit request). */}
+              <Animated.View
+                style={[
+                  wh.stopCircleInner,
+                  {
+                    borderRadius: recordMorph.interpolate({ inputRange: [0, 1], outputRange: [15, 9] }),
+                    transform: [{ scale: recordMorph.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.18, 1] }) }],
+                  },
+                ]}
+              />
+            </Animated.View>
           </Pressable>
         )}
       </View>
+
+      {/* ── "Watch the demo again" — available any time stopButtonActive is
+          true (solo form-check included now, not just workout-flow — see
+          stopButtonActive's own comment). The exact instepdrawer.html
+          artboard, not a native rebuild of it — same
+          reasoning as the demo step (see DEMO_STEP_HTML's own comment in
+          workout/run.tsx). Sized to exactly the sheet's own footprint
+          (DRAWER_HEIGHT) and positioned by animating THIS container's
+          translateY, not a transform living inside the WebView's CSS — see
+          drawerY's own comment for why. Because the WebView is only ever
+          as tall as the sheet, the real camera view above it is never
+          covered by anything, transparency tricks included — there's
+          nothing to get wrong there. See demoOpen's own comment above for
+          the pause behavior while it's open. ─────────────────────────── */}
+      {/* Dims the camera feed + HUD behind the drawer as it opens — reps
+          already don't count while it's open (see demoOpen's comment), but
+          nothing on screen actually SHOWED that: the camera feed kept
+          looking fully live underneath, so it wasn't visually obvious
+          nothing was being missed. Tied directly to drawerY (same native-
+          driven value the drawer itself animates/drags on), not a second
+          separate animation, so it can't drift out of sync with the
+          drawer's own position — fully dim exactly when fully open, fully
+          clear exactly when closed, live during the drag too. */}
+      {stopButtonActive && (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFillObject,
+            { backgroundColor: '#48484A', opacity: drawerY.interpolate({ inputRange: [0, DRAWER_PEEK_Y], outputRange: [0.6, 0] }) },
+          ]}
+        />
+      )}
+      {stopButtonActive && (
+        <Animated.View
+          style={{
+            position: 'absolute', left: 0, right: 0, bottom: 0, height: DRAWER_HEIGHT,
+            borderRadius: 30, overflow: 'hidden',
+            transform: [{ translateY: drawerY }],
+          }}
+        >
+          <WebView
+            ref={demoDrawerRef}
+            source={IN_STEP_DRAWER_HTML}
+            originWhitelist={['*']}
+            style={{ flex: 1, backgroundColor: '#ffffff' }}
+            injectedJavaScriptBeforeContentLoaded={demoDrawerDataJs}
+            onMessage={(e) => {
+              const m = e.nativeEvent.data;
+              if (m === 'drawerToggle') setDemoOpenBoth(!demoOpenRef.current);
+              else if (m === 'drawerClose') setDemoOpenBoth(false);
+            }}
+            allowFileAccess
+            allowFileAccessFromFileURLs
+            allowUniversalAccessFromFileURLs
+            javaScriptEnabled
+            domStorageEnabled
+            bounces={false}
+            overScrollMode="never"
+            // This file is still under active, frequent editing — without
+            // this, the WebView can keep serving an old cached response
+            // after a reload, which looks exactly like "nothing changed"
+            // even though the file on disk did.
+            cacheEnabled={false}
+          />
+          {/* The actual drag target — see drawerPanResponder's own comment. */}
+          <View
+            style={{ position: 'absolute', left: 0, right: 0, top: 0, height: DRAWER_PEEK_HEIGHT }}
+            {...drawerPanResponder.panHandlers}
+          />
+        </Animated.View>
+      )}
 
       {/* ── Post-session debug log review (phase === 'review') ──────────────── */}
       {/* Full-screen overlay, shown after Stop when DEBUG_LOG_ENABLED and log is non-empty. */}
@@ -1102,16 +1512,6 @@ export default function FormCheckScreen() {
           onDone={handleReviewDone}
         />
       )}
-    </View>
-  );
-}
-
-// ─── Debug row ────────────────────────────────────────────────────────────────
-function Row({ label, value, good }: { label: string; value: string; good?: boolean }) {
-  return (
-    <View style={d.row}>
-      <Text style={d.key}>{label}</Text>
-      <Text style={[d.val, good === true && d.valGood, good === false && d.valDim]}>{value}</Text>
     </View>
   );
 }
@@ -1235,48 +1635,56 @@ const s = StyleSheet.create({
   title:      { flex: 1, textAlign: 'center', marginHorizontal: 10, fontFamily: F.bold, fontSize: 15, color: C.text, letterSpacing: 0.2 },
   errorCard:  { position: 'absolute', left: 24, right: 24, top: '38%', backgroundColor: C.glass, borderRadius: 16, padding: 24, borderWidth: 1, borderColor: C.border },
   errorText:  { color: C.warn, fontSize: 14, lineHeight: 22, textAlign: 'center' },
-  outOfPlaneHint:  { position: 'absolute', top: '43%', left: 0, right: 0, alignItems: 'center' },
-  outOfPlaneGlass: { alignSelf: 'center' },
-  outOfPlaneInner: { paddingHorizontal: 22, paddingVertical: 11 },
+  // No card any more — just text + shadow for legibility over the camera
+  // feed (explicit "no background, just the text" request; the BlurView
+  // card these used to sit in, and before that GlassPanel, both read as a
+  // bordered frosted box, which is the "ugly"/"liquid glass" look asked to
+  // be removed — kept everywhere else it was already working, e.g. the
+  // setup/ready panels). The trailing sparkle is a nested Image, not a
+  // separately positioned icon — Text's inline layout (Image is a valid
+  // inline child, same as Text) is what lets it sit right after the real
+  // last word, including when the cue wraps to a second line.
+  outOfPlaneHint:  { position: 'absolute', top: '43%', left: 0, right: 0, alignItems: 'center', paddingHorizontal: 26 },
+  // Explicit small size + a raised baseline. A unicode "✦" glyph was tried
+  // here first — it inherited the surrounding cue text's own much bigger
+  // font size (the "one big star, wrong shape, same size as the word" bug)
+  // and wasn't the real two-star MyPal mark anyway. SPARKLE_DUO is the
+  // exact icon, rasterized from the same path used elsewhere in the app.
+  // top offset seems to hit a real ceiling somewhere around -30 to -60 (no
+  // visible change reported between those two) — likely iOS clipping/
+  // capping how far an inline image can rise out of its own text line, not
+  // a units mistake. Backed off into the range that WAS visibly moving it
+  // each time, and leaned on size instead for the "move it up/make it
+  // prominent" ask, since that axis isn't capped the same way.
+  cueSparkleImg: { width: 18, height: 18, top: -40, marginLeft: -18 },
   outOfPlaneText:  {
-    fontFamily: F.extra, fontSize: 22, color: C.warn, letterSpacing: 0.3,
-    textShadowColor: 'rgba(0,0,0,0.7)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 12,
+    fontFamily: 'PlusJakartaSans_700Bold', fontSize: 20, color: C.warn, letterSpacing: 0.1, textAlign: 'center',
   },
   // Calmer than the planarity hint — softer colour, lower on screen, out of
   // the way of the rep counter. Guidance, not an alarm.
-  trackingCueHint: { position: 'absolute', top: '46%', left: 0, right: 0, alignItems: 'center', paddingHorizontal: 20 },
-  trackingCueInner: { paddingHorizontal: 20, paddingVertical: 18, maxWidth: 380 },
-  // The live guidance command — big and loud, readable mid-set from across
-  // the room. Bumped 26 -> 42 per repeated "make it visible" feedback.
+  trackingCueHint: { position: 'absolute', top: '46%', left: 0, right: 0, alignItems: 'center', paddingHorizontal: 26 },
+  // Plus Jakarta Sans now (was the plain system font — the "ugly font"
+  // explicit complaint), and smaller (was 42 — explicit "smaller text"
+  // request now that there's no card giving it visual weight of its own).
   trackingCueText: {
-    fontFamily: undefined, fontWeight: '800', fontSize: 42, lineHeight: 48,
-    color: '#fff', textAlign: 'center', letterSpacing: 0.2,
-    textShadowColor: 'rgba(0,0,0,0.85)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 18,
+    fontFamily: 'PlusJakartaSans_700Bold', fontSize: 24, lineHeight: 30,
+    color: '#fff', textAlign: 'center', letterSpacing: 0.1, maxWidth: 340,
   },
 
   // Rep count — bare, no frame; own shadow for legibility over the camera.
-  repBlock:  { position: 'absolute', top: '12%', left: 0, right: 0, alignItems: 'center' },
-  repNum:    {
-    fontFamily: F.extra, fontSize: 108, lineHeight: 114, color: '#fff', letterSpacing: -2,
-    textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 18,
-  },
+  // Bottom-anchored right above the stop button now (HUD_COUNTER_BOTTOM is
+  // the same constant WorkoutHud's own counter uses), was pinned near the
+  // top before.
+  repBlock:  { position: 'absolute', bottom: HUD_COUNTER_BOTTOM, left: 0, right: 0, alignItems: 'center' },
   repSubRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
   repDot:    { width: 8, height: 8, borderRadius: 4, backgroundColor: C.good },
-  repSub:    {
-    fontFamily: F.bold, fontSize: 15, color: 'rgba(255,255,255,0.92)', letterSpacing: 0.3,
-    textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 10,
-  },
   repCounterTag: {
     fontFamily: F.bold, fontSize: 11, color: 'rgba(255,255,255,0.62)', letterSpacing: 1.4,
     marginTop: 4,
     textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 10,
   },
-  debugPanel: { position: 'absolute', bottom: 140, left: 16, backgroundColor: C.glass, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, minWidth: 210, borderWidth: 1, borderColor: C.border },
   bottomBar:  { position: 'absolute', bottom: 0, left: 0, right: 0, alignItems: 'center', paddingTop: 12, paddingHorizontal: 24, gap: 12 },
   hint:       { color: C.muted, fontSize: 13 },
-  shareLiveTxt: { color: 'rgba(255,255,255,0.66)', fontSize: 12.5, fontFamily: F.bold, letterSpacing: 0.3, textDecorationLine: 'underline' },
-  trackLabel:     { fontSize: 16, fontWeight: '600', color: C.text },
-  trackLabelStop: { color: C.warn },
 
   // ── Live push-up metric readout ───────────────────────────────────────────
   metricReadout: {
@@ -1293,15 +1701,14 @@ const s = StyleSheet.create({
   metricThresh:    { fontFamily: 'Menlo', fontSize: 8, color: C.dim, marginTop: 2 },
 
   // ── Setup instruction — ONE line, centred inside the guide box (see
-  // PositioningGuide children) so it never crosses the box border. ────────
-  setupPanel:      { alignSelf: 'center', maxWidth: 380, marginHorizontal: 12 },
-  setupPanelInner: { paddingHorizontal: 24, paddingTop: 18, paddingBottom: 20, alignItems: 'center' },
-  // Thin display style — matches the home page's "Welcome back." greeting
-  // (FONT.displayLight). Subtle shadow so it survives over the camera.
-  setupBig:        {
-    fontFamily: F.light, fontSize: 28, lineHeight: 34, letterSpacing: -0.8,
+  // PositioningGuide children) so it never crosses the box border. No card
+  // background (same "just the text" treatment as the live tracking cues).
+  setupPanel: { alignSelf: 'center', maxWidth: 340, marginHorizontal: 12, paddingHorizontal: 24 },
+  // Plus Jakarta Sans (the font onboarding uses) — kept bold + smaller to
+  // match the live tracking cue's own text now that neither sits on a card.
+  setupBig: {
+    fontFamily: 'PlusJakartaSans_700Bold', fontSize: 24, lineHeight: 30, letterSpacing: -0.3,
     color: '#fff', textAlign: 'center',
-    textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 10,
   },
 
   setupDoneOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
@@ -1312,12 +1719,89 @@ const s = StyleSheet.create({
   setupSuccessText:  { fontFamily: F.extra, fontSize: 21, color: C.good },
 });
 
-const d = StyleSheet.create({
-  row:     { flexDirection: 'row', justifyContent: 'space-between', gap: 20, paddingVertical: 3 },
-  key:     { fontSize: 11, color: C.dim },
-  val:     { fontSize: 11, color: C.text },
-  valGood: { color: C.good },
-  valDim:  { color: '#444' },
+const wh = StyleSheet.create({
+  segRow: { position: 'absolute', left: 20, right: 20, flexDirection: 'row', gap: 6, alignItems: 'center' },
+  // overflow:hidden removed (was clipping segFill's corners to the track) —
+  // the current-set dot needs to poke slightly above the track, which that
+  // would have clipped too.
+  segTrack: { flex: 1, height: 4, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.3)' },
+  segFill:  { height: '100%', borderRadius: 999, backgroundColor: '#ffffff' },
+  segDot: {
+    position: 'absolute', top: -4, width: 12, height: 12, marginLeft: -6, borderRadius: 6, backgroundColor: '#ffffff',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.35, shadowRadius: 6, elevation: 3,
+  },
+
+  counterWrap: {
+    position: 'absolute', left: 0, right: 0, alignItems: 'center',
+    ...({ textShadow: '0 2px 24px rgba(0,0,0,0.35)' } as any),
+  },
+  counterRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
+  // RN can't use fontWeight to pick a custom font's weight — the per-weight
+  // fontFamily name is the actual switch (see constants/theme.ts's own
+  // header comment); omitting it left these on the bare system font.
+  counterNum: {
+    fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 96, lineHeight: 96, letterSpacing: -4, color: '#ffffff',
+    fontVariant: ['tabular-nums'],
+  },
+  counterTotal: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 26, letterSpacing: -0.6, color: 'rgba(255,255,255,0.8)' },
+
+  pillRow: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+
+  // ── Scorecard — matches assets/app screens/inworkout.html's real markup
+  // (px values, colors, radii) directly, not a recreation from memory. ──────
+  // Plain flex column — centers the pill and the tab below it by ordinary
+  // alignItems, not by computing an overlap offset.
+  scoreWrap: { alignItems: 'center' },
+  // A border read as a drawn line, not what was actually asked for —
+  // "more white stuff around it" meant more PADDING (a rounder, bubblier
+  // pill with more breathing room around the text), not a stroke. Reverted
+  // the border; paddingVertical bumped up instead (was 5).
+  scorePill: {
+    flexDirection: 'row', alignItems: 'center', gap: 18,
+    backgroundColor: '#f2f2f5', borderRadius: 999,
+    paddingVertical: 14, paddingLeft: 22, paddingRight: 28,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 14,
+    elevation: 8,
+  },
+  scoreSetTxt:  { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 16, color: '#111114', letterSpacing: -0.2 },
+  scoreNextTxt: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 15.5, color: '#111114', letterSpacing: -0.2 },
+  // The hanging timer tab — square top corners (butts against the pill
+  // above it), rounded bottom corners. ScoreNotch patches the two top
+  // corners into a smooth concave curve. marginTop:-1 pulls it up flush
+  // against the pill, matching the real file's own -1px overlap — a plain
+  // flex child now, not position:'absolute' (see the JSX's own comment for
+  // why that was the actual bug).
+  scoreTab: {
+    width: 104, height: 41, marginTop: -1,
+    backgroundColor: '#f2f2f5', borderBottomLeftRadius: 22, borderBottomRightRadius: 22,
+    paddingTop: 1, paddingHorizontal: 5, paddingBottom: 5,
+  },
+  scoreNotch: { position: 'absolute', top: 1, width: 16, height: 16 },
+  scoreTimeChip: {
+    height: '100%', backgroundColor: '#ffffff', borderRadius: 17, alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.12, shadowRadius: 5,
+    elevation: 3,
+  },
+  // Design calls for weight 800; this app only has Plus Jakarta Sans up to
+  // 700Bold loaded (see app/_layout.tsx's useFonts list) — 700 is the
+  // closest real weight rather than naming one that isn't actually loaded.
+  scoreTimeTxt: {
+    fontFamily: 'PlusJakartaSans_700Bold', fontSize: 16, color: '#111114', letterSpacing: -0.3,
+    fontVariant: ['tabular-nums'],
+  },
+
+  // White ring + an inner shape that morphs between a circle (idle) and a
+  // rounded square (recording) — see recordMorph's own comment. Black
+  // ('#1c1c20') throughout, not red or blue or white, per earlier explicit
+  // request. 74/#1c1c20/border 6 matches the real design file + the bolder
+  // ring from the reference screenshot. Press-scale spring (stopScale)
+  // still gives the whole button a real tactile press.
+  stopCircle: {
+    width: 74, height: 74, borderRadius: 37, borderWidth: 6, borderColor: '#ffffff',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  // borderRadius intentionally omitted — recordMorph animates it inline.
+  stopCircleInner: { width: 30, height: 30, backgroundColor: '#1c1c20' },
 });
 
 // ─── Session log review styles ─────────────────────────────────────────────────
