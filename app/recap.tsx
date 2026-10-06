@@ -1,27 +1,22 @@
 /**
  * app/recap.tsx
  *
- * The summary (after-workout) and rep feedback screens are both NATIVE now
- * — WorkoutSummarySheet and RepFeedbackScreen, further down: a full-screen
- * expo-video replay (summary) or a nativeControls AVPlayerViewController
- * (feedback), plus a hand-rolled spring-physics bottom sheet on the
- * summary screen. Explicit ask after repeated WebView bugs ("laggy, the
- * drag has no feel. They're WebViews, which is the root problem") —
- * rebuilt from scratch rather than patched again.
+ * Every screen in this flow is NATIVE now — WorkoutSummarySheet,
+ * RepFeedbackScreen, AllSetsScreen, MuscleRanksScreen, all further down.
+ * No WebView left in this file at all. Summary gets a full-screen
+ * expo-video replay + a hand-rolled spring-physics bottom sheet; rep
+ * feedback gets a nativeControls AVPlayerViewController. Explicit ask
+ * after repeated WebView bugs ("laggy, the drag has no feel. They're
+ * WebViews, which is the root problem") — rebuilt from scratch rather
+ * than patched again. The 4 real Claude-Design artboards this used to
+ * render directly (workoutrecap.html, repfeedback.html,
+ * allsetsfullworkout.html, muscleranks.html) are no longer loaded here —
+ * each native component's layout/copy was matched to its artboard by eye,
+ * not pixel-measured, so flag anything that reads visually off.
  *
- * All sets and muscle ranks are still the real Claude-Design artboards
- * (assets/app screens/allsetsfullworkout.html, muscleranks.html) rendered
- * via WebView — next in line for the same native treatment, not yet done.
- * `view` toggles which screen is shown (native component or WebView
- * `source` swap, forced to remount via `key` for the WebView pair); each
- * posts/calls the same handlers (`viewAllSets`, `doneRanks`, etc.)
- * regardless of whether the screen is native or WebView.
- *
- * allsetsfullworkout.html / muscleranks.html are NOT prop-driven — their
- * dc-scripts never read this.props at all, 100% hardcoded design-tool demo
- * data (fake Squats/Push-ups tiles, fake rank numbers). Real data goes in
- * by replacing the default demo tiles/text after mount instead, bypassing
- * each artboard's own internal logic (see allSetsInject / muscleRanksInject).
+ * `view` toggles which native component is shown; each one calls the same
+ * handlers (`onViewAllSets`, `onDone`, etc.) the old postMessage channel
+ * used to carry.
  *
  * All the actual data logic is unchanged (still real, still correct): the
  * three-mode load effect (workout / history / solo-live), repFeedbackText
@@ -41,13 +36,12 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, Share, TouchableOpacity, Animated, PanResponder, Dimensions,
+  View, Text, StyleSheet, Share, TouchableOpacity, Animated, PanResponder, Dimensions, ScrollView,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { SymbolView } from 'expo-symbols';
-import { WebView } from 'react-native-webview';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import * as Sharing from 'expo-sharing';
 import { PJS } from '../constants/theme';
@@ -64,14 +58,6 @@ import { useWorkoutSessionStore } from '../store/workoutSessionStore';
 import type { WorkoutSummary } from '../store/workoutSessionStore';
 import { usePlanStore } from '../store/planStore';
 
-// The remaining real Claude-Design artboards, used directly via WebView —
-// the summary (workoutrecap.html) and rep feedback (repfeedback.html)
-// screens are both native now (WorkoutSummarySheet / RepFeedbackScreen,
-// above), not loaded here any more. Also 100% hardcoded demo data, no
-// props channel — same DOM-replacement approach either of those used (see
-// allSetsInject / muscleRanksInject).
-const ALL_SETS_HTML = require('../assets/app screens/allsetsfullworkout.html');
-const MUSCLE_RANKS_HTML = require('../assets/app screens/muscleranks.html');
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -110,253 +96,6 @@ function generateSummary(reps: number, goodReps: number, hasFormData = true): st
   if (pct >= 80)   return `Solid session. You hit good form on ${goodReps} of ${reps} reps (${pct}%).`;
   if (pct >= 50)   return `You hit good form on ${goodReps} of ${reps} reps (${pct}%). Slow the rep down and focus on full range of motion.`;
   return `${reps} reps completed, ${goodReps} in good form (${pct}%). Focus on control over speed next session.`;
-}
-
-type InMsg = {
-  type: 'back' | 'seeRanks' | 'share' | 'shareVideo' | 'viewRepFeedback' | 'closeRepFeedback'
-      | 'viewAllSets' | 'closeAllSets' | 'closeRanks' | 'doneRanks';
-};
-
-// Both remaining WebView artboards are FIXED 390x844 canvases (raw Claude-Design exports,
-// same as onboarding's DC pages and run.tsx's demo/connect-music screens)
-// — scaled to fit both width and height, centered, same technique as
-// everywhere else in the app this applies.
-const DC_VIEWPORT_JS = `(function(){try{
-  var m=document.querySelector('meta[name=viewport]');
-  if(!m){ m=document.createElement('meta'); m.name='viewport'; (document.head||document.documentElement).appendChild(m); }
-  m.setAttribute('content','width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
-}catch(e){}})(); true;`;
-
-// BUG FOUND (device test, round 1): the original version used
-// position:absolute + left/top 50% + translate(-50%,-50%) on #dc-root,
-// with no explicit body height — body's own box was collapsing toward 0
-// height and swallowing hit-testing. Replaced with position:relative +
-// margin:auto + scale-only transform, body height explicitly set.
-//
-// BUG FOUND (device test, round 2): that fix used "contain" scaling
-// (fit both width and height, Math.min) — read as "the card doesn't
-// reach the edges, gap below and on the sides" on these full-bleed
-// screens. Switched to filling the height EXACTLY (S = vh/H, not
-// clamped to <=1) so the bottom-anchored card always lands flush with
-// the real bottom edge; width is best-effort via overflow:hidden +
-// centered margin — same fix applied in run.tsx's copy of this function.
-function dcScaleFitJs(bg: string): string {
-  return `
-  (function(){
-    var W=390, H=844;
-    var st=document.createElement('style');
-    st.textContent='html{background:${bg}!important;overflow:hidden!important;}body{margin:0!important;padding:0!important;background:${bg}!important;overflow:hidden!important;}#dc-root{position:relative!important;margin:0 auto!important;width:'+W+'px!important;transform-origin:top center!important;}*{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}';
-    (document.head||document.documentElement).appendChild(st);
-    var lastS=-1;
-    function fit(){
-      var root=document.getElementById('dc-root'); if(!root) return;
-      var vh=window.innerHeight||H;
-      var S=vh/H;
-      if(Math.abs(S-lastS)>=0.002){ lastS=S; root.style.setProperty('transform','scale('+S+')','important'); }
-      document.body.style.setProperty('height', vh+'px','important');
-      document.documentElement.style.setProperty('height', vh+'px','important');
-    }
-    fit();
-    window.addEventListener('resize', fit);
-    [0,300,900,1500].forEach(function(d){ setTimeout(fit,d); });
-
-    // The fake status bar ("9:41" + signal/battery icons) baked into
-    // every one of these exports duplicates/overlaps the REAL device
-    // status bar — hide it everywhere this bootstrap runs.
-    function hideStatusBar(){
-      var all=document.querySelectorAll('#dc-root div');
-      for(var i=0;i<all.length;i++){
-        var el=all[i]; if(el.children.length) continue;
-        if((el.textContent||'').trim()==='9:41'){
-          var row=el.parentElement;
-          if(row){ row.style.setProperty('display','none','important'); return true; }
-        }
-      }
-      return false;
-    }
-    if(!hideStatusBar()) [200,500,1000,2000].forEach(function(d){ setTimeout(hideStatusBar,d); });
-  })();
-  `;
-}
-
-// ─── allsetsfullworkout.html — grid of every exercise/set completed. Also
-// 100% hardcoded demo data (fake Squats/Push-ups/Rows/Lunges sets, no
-// props read anywhere) — default tiles are torn out and replaced with one
-// real tile per actual exercise. NO video thumbnails on them: this app has
-// no reliable per-exercise video in workout mode (see this file's own
-// top doc comment), and solo/history mode only ever has ONE entry anyway
-// — a real thumbnail grid isn't something real data exists for here, so
-// plain dark cards with the real name + rep/form stats instead. The
-// filter chips and save/search icons are the artboard's own internal demo
-// state with no real equivalent to drive them — left in place (harmless,
-// just inert) rather than torn out for a cosmetic gap.
-function allSetsInject(opts: {
-  tiles: { title: string; meta: string }[];
-  videoTileIndex: number | null;
-}): string {
-  const { tiles, videoTileIndex } = opts;
-  return dcScaleFitJs('#ffffff') + `
-(function(){
-  function post(m){ try{ window.ReactNativeWebView.postMessage(JSON.stringify(m)); }catch(e){} }
-  var TILES = ${JSON.stringify(tiles)};
-  var VIDEO_IDX = ${JSON.stringify(videoTileIndex)};
-  var built=false, recapWired=false, doneWired=false;
-  function build(){
-    if(built) return true;
-    var grid=document.querySelector('#dc-root div[style*="grid-template-columns: 1fr 1fr"]');
-    if(!grid) return false;
-    while(grid.firstChild) grid.removeChild(grid.firstChild);
-    TILES.forEach(function(t, i){
-      var clickable = (i===VIDEO_IDX);
-      var tile=document.createElement('div');
-      tile.style.cssText='position:relative;height:150px;border-radius:22px;background:linear-gradient(180deg,#2c2c32 0%,#18181c 100%);overflow:hidden;'+(clickable?'cursor:pointer;':'');
-      var label=document.createElement('div');
-      label.style.cssText='position:absolute;left:12px;right:12px;bottom:12px;color:#ffffff;';
-      var titleEl=document.createElement('div');
-      titleEl.style.cssText='font-size:15.5px;font-weight:700;letter-spacing:-0.3px;';
-      titleEl.textContent=t.title;
-      var metaEl=document.createElement('div');
-      metaEl.style.cssText='font-size:11.5px;font-weight:500;color:rgba(255,255,255,0.6);padding-top:4px;';
-      metaEl.textContent=t.meta;
-      label.appendChild(titleEl); label.appendChild(metaEl);
-      tile.appendChild(label);
-      if(clickable){ tile.addEventListener('click', function(ev){ ev.stopPropagation(); post({type:'viewRepFeedback'}); }, true); }
-      grid.appendChild(tile);
-    });
-    built=true;
-    return true;
-  }
-  function apply(){
-    var ok=build();
-    var hit=0;
-    if(!recapWired){
-      var recapLink=document.querySelector('#dc-root a[href="Workout Recap v2.dc.html"]');
-      if(recapLink){ recapLink.addEventListener('click', function(ev){ ev.preventDefault(); post({type:'closeAllSets'}); }, true); recapWired=true; hit++; }
-    }
-    if(!doneWired){
-      var doneLink=document.querySelector('#dc-root a[href="Workout Recap.dc.html"]');
-      if(doneLink){ doneLink.addEventListener('click', function(ev){ ev.preventDefault(); post({type:'closeAllSets'}); }, true); doneWired=true; hit++; }
-    }
-    return ok && hit>=2;
-  }
-  if(!apply()) [200,500,1000,2000,3500,5000].forEach(function(d){ setTimeout(apply,d); });
-  var root = document.getElementById('dc-root') || document.body;
-  var mo = new MutationObserver(function(){ apply(); });
-  mo.observe(root, { childList: true, subtree: true, characterData: true });
-})();
-true;
-`;
-}
-
-// ─── muscleranks.html — "today's progress" screen, the real destination
-// for the old "See your ranks" celebration moment. stats (Muscles/Lb
-// lifted/New PRs/Day streak) ARE prop-driven but this app doesn't track
-// lbs-lifted or PRs (bodyweight/rep-based, no such data exists) — those 2
-// slots are honestly relabeled to Reps/Moves (real numbers) rather than
-// fabricated. hits (the 2 muscle chips over the body diagram) and the
-// rank-progress bar fill are NOT prop-driven (hardcoded Quads/Glutes
-// demo, no this.props read for them at all) — real top-2 muscle names +
-// rep counts swapped in via DOM text replace (their baked-in icon assets
-// only exist for Quads/Glutes specifically, so the icon image itself is
-// hidden rather than show the wrong muscle's icon); the progress bar's
-// width is a style attribute, set directly rather than text-matched.
-function muscleRanksInject(opts: {
-  rankName: string; nextRank: string; beforePct: number; afterPct: number;
-  streak: number; totalReps: number; moves: number; muscleCount: number;
-  hits: { name: string; reps: number }[]; note: string;
-}): string {
-  const { rankName, nextRank, beforePct, afterPct, streak, totalReps, moves, muscleCount, hits, note } = opts;
-  const MAP: Record<string, string> = {
-    'Bronze II': rankName,
-    'Bronze III': nextRank,
-    '4': String(muscleCount),
-    '6.2k': String(totalReps),
-    '2': String(moves),
-    '6': String(streak),
-    'Lb lifted': 'Reps',
-    'New PRs': 'Moves',
-    '72%': `${afterPct}%`,
-    'Quads': hits[0]?.name ?? '',
-    '+6%': hits[0] ? `+${hits[0].reps}` : '',
-    'Glutes': hits[1]?.name ?? '',
-    '+5%': hits[1] ? `+${hits[1].reps}` : '',
-    'Clean, deep squats did most of the work today. Keep that depth next session and Bronze III is about two workouts away.': note,
-  };
-  return dcScaleFitJs('#f2f2f5') + `
-(function(){
-  function post(m){ try{ window.ReactNativeWebView.postMessage(JSON.stringify(m)); }catch(e){} }
-  var MAP = ${JSON.stringify(MAP)};
-  var AFTER_PCT = ${JSON.stringify(afterPct + '%')};
-  var HIT_COUNT = ${hits.length};
-  var fillSet=false, iconsHidden=false, backWired=false, doneWired=false, shareWired=false;
-  function apply(){
-    var hit=0;
-    var all=document.querySelectorAll('#dc-root div,#dc-root span');
-    for(var i=0;i<all.length;i++){
-      var el=all[i]; if(el.children.length) continue;
-      var t=(el.textContent||'').trim();
-      if(MAP[t]!=null && t!==MAP[t]){ el.textContent=MAP[t]; hit++; }
-    }
-    // Rank progress bar fill (inline width style, not text).
-    if(!fillSet){
-      var fillBar=document.querySelector('#dc-root div[style*="transition: width 1100ms"]');
-      if(fillBar){ fillBar.style.setProperty('width', AFTER_PCT, 'important'); fillSet=true; hit++; }
-    }
-    // Muscle chip icons only exist as real assets for Quads/Glutes
-    // specifically (baked into this file's manifest) — hidden rather
-    // than risk showing the wrong muscle's icon for whatever the real
-    // top-2 muscles were.
-    if(!iconsHidden){
-      var chipIcons=document.querySelectorAll('#dc-root div[role="img"]');
-      for(var c=0;c<chipIcons.length;c++){
-        var w=chipIcons[c].style && chipIcons[c].style.width;
-        if(w==='24px'){ chipIcons[c].style.display='none'; hit++; }
-      }
-      iconsHidden=true;
-    }
-    // A 2nd chip with nothing real to show (fewer than 2 real muscle
-    // hits this session) — hide its whole row rather than leave "Glutes"-
-    // shaped blank text.
-    if(HIT_COUNT<2){
-      var chips=document.querySelectorAll('#dc-root div');
-      for(var g=0;g<chips.length;g++){
-        if((chips[g].textContent||'').trim()==='' && chips[g].style && chips[g].style.position==='absolute' && chips[g].style.top==='284px'){
-          chips[g].style.display='none';
-        }
-      }
-    }
-    if(!backWired){
-      var backLink=document.querySelector('#dc-root a[href="Workout Recap.dc.html"]');
-      if(backLink){ backLink.addEventListener('click', function(ev){ ev.preventDefault(); post({type:'closeRanks'}); }, true); backWired=true; hit++; }
-    }
-    if(!doneWired){
-      var divs=document.querySelectorAll('#dc-root div');
-      for(var d=0;d<divs.length;d++){
-        var de=divs[d]; if(de.children.length) continue;
-        if((de.textContent||'').trim()==='Done'){
-          de.addEventListener('click', function(ev){ ev.stopPropagation(); post({type:'doneRanks'}); }, true);
-          doneWired=true; hit++; break;
-        }
-      }
-    }
-    if(!shareWired){
-      var shareBtn=document.querySelector('#dc-root div svg path[d^="M8 10V2.5"]');
-      if(shareBtn){
-        var sbtn=shareBtn.closest('div');
-        if(sbtn){ sbtn.addEventListener('click', function(ev){ ev.stopPropagation(); post({type:'shareVideo'}); }, true); }
-        shareWired=true; hit++;
-      }
-    }
-    return hit>=4;
-  }
-  if(!apply()) [200,500,1000,2000,3500,5000].forEach(function(d){ setTimeout(apply,d); });
-  else [1000,2500].forEach(function(d){ setTimeout(apply,d); });
-  var root = document.getElementById('dc-root') || document.body;
-  var mo = new MutationObserver(function(){ apply(); });
-  mo.observe(root, { childList: true, subtree: true, characterData: true });
-})();
-true;
-`;
 }
 
 // ─── WorkoutSummarySheet — native after-workout screen ─────────────────────
@@ -681,11 +420,172 @@ const feedbackStyles = StyleSheet.create({
   btnCol: { marginTop: 'auto', gap: 10 },
 });
 
+// ─── AllSetsScreen — native grid of every exercise/set completed ───────────
+// Replaces allSetsInject/allsetsfullworkout.html's WebView. No video
+// thumbnails (see the file's original top-doc note: no reliable per-
+// exercise video in workout mode, and solo/history mode only ever has ONE
+// entry anyway) — plain dark cards with the real name + rep/form stats,
+// one tappable through to rep feedback when a real clip exists for it.
+function AllSetsScreen({
+  tiles, videoTileIndex, onClose, onViewRepFeedback, insets,
+}: {
+  tiles: { title: string; meta: string }[];
+  videoTileIndex: number | null;
+  onClose: () => void;
+  onViewRepFeedback: () => void;
+  insets: { top: number; bottom: number };
+}) {
+  return (
+    <View style={[allSetsStyles.root, { paddingTop: insets.top }]}>
+      <View style={allSetsStyles.header}>
+        <TouchableOpacity onPress={onClose} hitSlop={12} style={sheetStyles.topBtn}>
+          <SymbolView name="chevron.left" size={16} tintColor="#ffffff" type="monochrome" style={{ width: 16, height: 16 }} />
+        </TouchableOpacity>
+        <Text style={allSetsStyles.title}>All sets</Text>
+        <View style={{ width: 34 }} />
+      </View>
+      <ScrollView contentContainerStyle={[allSetsStyles.grid, { paddingBottom: insets.bottom + 24 }]}>
+        {tiles.map((t, i) => {
+          const clickable = i === videoTileIndex;
+          const Wrap = clickable ? TouchableOpacity : View;
+          return (
+            <Wrap key={i} style={allSetsStyles.tile} activeOpacity={0.85} {...(clickable ? { onPress: onViewRepFeedback } : {})}>
+              <View style={allSetsStyles.tileLabel}>
+                <Text style={allSetsStyles.tileTitle} numberOfLines={1}>{t.title}</Text>
+                <Text style={allSetsStyles.tileMeta}>{t.meta}</Text>
+              </View>
+            </Wrap>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+}
+
+const allSetsStyles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: '#111114' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10 },
+  title: { fontFamily: PJS.bold, fontSize: 16, color: '#ffffff' },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 16, gap: 12 },
+  tile: {
+    width: (SCREEN_W - 32 - 12) / 2, height: 150, borderRadius: 22, overflow: 'hidden',
+    backgroundColor: '#2c2c32', justifyContent: 'flex-end',
+  },
+  tileLabel: { padding: 12 },
+  tileTitle: { fontFamily: PJS.bold, fontSize: 15.5, color: '#ffffff' },
+  tileMeta: { fontFamily: PJS.medium, fontSize: 11.5, color: 'rgba(255,255,255,0.6)', marginTop: 4 },
+});
+
+// ─── MuscleRanksScreen — native "today's progress" screen ──────────────────
+// Replaces muscleRanksInject/muscleranks.html's WebView. Real standing
+// before vs. after this session, real streak, real top-2 muscles worked —
+// this app doesn't track lbs-lifted or PRs (bodyweight/rep-based, no such
+// data exists), so those 2 stat slots are honestly relabeled Reps/Moves
+// rather than fabricated (same policy the WebView version used).
+function MuscleRanksScreen({
+  rankName, nextRank, beforePct, afterPct, streak, totalReps, moves, muscleCount, hits, note,
+  onBack, onShare, onDone, insets,
+}: {
+  rankName: string; nextRank: string; beforePct: number; afterPct: number;
+  streak: number; totalReps: number; moves: number; muscleCount: number;
+  hits: { name: string; reps: number }[]; note: string;
+  onBack: () => void; onShare: () => void; onDone: () => void;
+  insets: { top: number; bottom: number };
+}) {
+  const fillAnim = useRef(new Animated.Value(beforePct)).current;
+  useEffect(() => {
+    Animated.timing(fillAnim, { toValue: afterPct, duration: 1100, useNativeDriver: false }).start();
+  }, [afterPct]); // eslint-disable-line react-hooks/exhaustive-deps
+  const fillWidth = fillAnim.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'], extrapolate: 'clamp' });
+
+  return (
+    <View style={[ranksStyles.root, { paddingTop: insets.top }]}>
+      <View style={ranksStyles.header}>
+        <TouchableOpacity onPress={onBack} hitSlop={12} style={ranksStyles.headerBtn}>
+          <SymbolView name="chevron.left" size={16} tintColor="#1a1a1c" type="monochrome" style={{ width: 16, height: 16 }} />
+        </TouchableOpacity>
+        <Text style={ranksStyles.headerTitle}>Today's progress</Text>
+        <TouchableOpacity onPress={onShare} hitSlop={12} style={ranksStyles.headerBtn}>
+          <SymbolView name="square.and.arrow.up" size={15} tintColor="#1a1a1c" type="monochrome" style={{ width: 15, height: 15 }} />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 8 }}>
+        <View style={ranksStyles.rankRow}>
+          <Text style={ranksStyles.rankName}>{rankName}</Text>
+          <Text style={ranksStyles.nextRank}>{nextRank}</Text>
+        </View>
+        <View style={ranksStyles.track}>
+          <Animated.View style={[ranksStyles.fill, { width: fillWidth }]} />
+        </View>
+
+        {hits.length > 0 && (
+          <View style={ranksStyles.chipRow}>
+            {hits.map((h, i) => (
+              <View key={i} style={ranksStyles.chip}>
+                <Text style={ranksStyles.chipName}>{h.name}</Text>
+                <Text style={ranksStyles.chipReps}>+{h.reps}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        <View style={ranksStyles.statGrid}>
+          <StatBox label="Muscles" value={String(muscleCount)} />
+          <StatBox label="Reps" value={String(totalReps)} />
+          <StatBox label="Moves" value={String(moves)} />
+          <StatBox label="Streak" value={String(streak)} />
+        </View>
+
+        <Text style={ranksStyles.note}>{note}</Text>
+      </ScrollView>
+
+      <View style={[ranksStyles.btnWrap, { paddingBottom: insets.bottom + 16 }]}>
+        <TouchableOpacity style={ranksStyles.doneBtn} activeOpacity={0.85} onPress={onDone}>
+          <Text style={ranksStyles.doneBtnTxt}>Done</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+function StatBox({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={ranksStyles.statBox}>
+      <Text style={ranksStyles.statValue} numberOfLines={1}>{value}</Text>
+      <Text style={ranksStyles.statLabel}>{label}</Text>
+    </View>
+  );
+}
+
+const ranksStyles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: '#f2f2f5' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10 },
+  headerBtn: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.05)' },
+  headerTitle: { fontFamily: PJS.bold, fontSize: 16, color: '#1a1a1c' },
+  rankRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 8 },
+  rankName: { fontFamily: PJS.extrabold, fontSize: 22, color: '#1a1a1c', letterSpacing: -0.4 },
+  nextRank: { fontFamily: PJS.medium, fontSize: 13, color: '#8a8a8e' },
+  track: { height: 8, borderRadius: 4, backgroundColor: '#e4e4ea', marginTop: 10, overflow: 'hidden' },
+  fill: { height: 8, borderRadius: 4, backgroundColor: '#2E7DFF' },
+  chipRow: { flexDirection: 'row', gap: 10, marginTop: 20 },
+  chip: { flex: 1, backgroundColor: '#ffffff', borderRadius: 16, padding: 14 },
+  chipName: { fontFamily: PJS.bold, fontSize: 14, color: '#1a1a1c' },
+  chipReps: { fontFamily: PJS.semibold, fontSize: 12, color: '#30D158', marginTop: 4 },
+  statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 20 },
+  statBox: { width: '47%', backgroundColor: '#ffffff', borderRadius: 16, paddingVertical: 14, alignItems: 'center' },
+  statValue: { fontFamily: PJS.extrabold, fontSize: 19, color: '#1a1a1c' },
+  statLabel: { fontFamily: PJS.medium, fontSize: 11, color: '#8a8a8e', marginTop: 2 },
+  note: { fontFamily: PJS.medium, fontSize: 14, lineHeight: 20, color: '#4a4a4e', marginTop: 20, marginBottom: 12 },
+  btnWrap: { paddingHorizontal: 20, paddingTop: 10, backgroundColor: '#f2f2f5' },
+  doneBtn: { height: 54, borderRadius: 27, backgroundColor: '#1a1a1c', alignItems: 'center', justifyContent: 'center' },
+  doneBtnTxt: { fontFamily: PJS.bold, fontSize: 16, color: '#ffffff' },
+});
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function RecapScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const webRef = useRef<WebView>(null);
 
   const {
     reps: repsStr, goodReps: goodRepsStr, videoUri: videoUriParam, events,
@@ -849,19 +749,6 @@ export default function RecapScreen() {
     });
   }, [hasVideo, data]);
 
-  const allSetsInjectJs = useMemo(() => {
-    if (!data) return null;
-    return allSetsInject({
-      tiles: data.entries.map(e => ({
-        title: e.displayName,
-        meta: e.formChecked !== false
-          ? `${e.reps} reps · ${e.reps > 0 ? Math.round((e.goodReps / e.reps) * 100) : 0}% form`
-          : `${e.reps} reps`,
-      })),
-      videoTileIndex: hasVideo && data.entries.length > 0 ? 0 : null,
-    });
-  }, [data, hasVideo]);
-
   // "Today's progress" — real standing before vs. after this session
   // (computeOverallStanding's own "weakest muscle" philosophy, same one
   // app/muscle-ranks.tsx already uses), real streak, real top-2 muscles
@@ -907,15 +794,6 @@ export default function RecapScreen() {
     })();
   }, [data]);
 
-  const ranksInjectJs = useMemo(() => {
-    if (!data || !rankData) return null;
-    return muscleRanksInject({
-      ...rankData,
-      totalReps: data.totalReps, moves: data.entries.length,
-      note: generateSummary(data.totalReps, data.totalGoodReps, data.hasFormData),
-    });
-  }, [data, rankData]);
-
   // ── Failure / loading states ────────────────────────────────────────────────
 
   if (loadFailed) {
@@ -934,21 +812,19 @@ export default function RecapScreen() {
     );
   }
 
-  // 'ranks' falls back to 'summary' until rankData/its inject finish
-  // computing (async) — never shows a view with nothing real injected yet.
-  // 'feedback' is gated on hasVideo alone now (native — no inject to wait
-  // on), matching the same condition the summary sheet's own button uses
-  // to decide whether it's even shown.
+  // 'ranks' falls back to 'summary' until rankData finishes computing
+  // (async) — never shows a view with nothing real to show yet. 'feedback'
+  // is gated on hasVideo alone, matching the condition the summary
+  // sheet's own button uses to decide whether it's even shown.
   const effectiveView: 'summary' | 'feedback' | 'allsets' | 'ranks' =
-    view === 'feedback' && hasVideo         ? 'feedback' :
-    view === 'allsets'  && allSetsInjectJs  ? 'allsets'  :
-    view === 'ranks'    && ranksInjectJs    ? 'ranks'    :
+    view === 'feedback' && hasVideo  ? 'feedback' :
+    view === 'allsets'               ? 'allsets'  :
+    view === 'ranks'    && rankData  ? 'ranks'    :
     'summary';
 
-  // Summary and rep feedback are both native now (WorkoutSummarySheet /
-  // RepFeedbackScreen, above) — all sets and muscle ranks are still the
-  // real Claude-Design WebView artboards, next in line for the same
-  // native rebuild.
+  // Every view is native now — WorkoutSummarySheet / RepFeedbackScreen /
+  // AllSetsScreen / MuscleRanksScreen, all above. No WebView left in this
+  // screen at all.
   if (effectiveView === 'summary') {
     return (
       <View style={styles.root}>
@@ -983,75 +859,45 @@ export default function RecapScreen() {
     );
   }
 
-  const SOURCE_BY_VIEW = {
-    allsets: ALL_SETS_HTML, ranks: MUSCLE_RANKS_HTML,
-  } as const;
-  const INJECT_BY_VIEW = {
-    allsets: allSetsInjectJs, ranks: ranksInjectJs,
-  } as const;
+  if (effectiveView === 'allsets') {
+    const tiles = data.entries.map(e => ({
+      title: e.displayName,
+      meta: e.formChecked !== false
+        ? `${e.reps} reps · ${e.reps > 0 ? Math.round((e.goodReps / e.reps) * 100) : 0}% form`
+        : `${e.reps} reps`,
+    }));
+    return (
+      <View style={styles.root}>
+        <StatusBar style="light" />
+        <AllSetsScreen
+          tiles={tiles}
+          videoTileIndex={hasVideo && data.entries.length > 0 ? 0 : null}
+          onClose={() => setView('summary')}
+          onViewRepFeedback={() => setView('feedback')}
+          insets={insets}
+        />
+      </View>
+    );
+  }
 
+  // effectiveView === 'ranks' (rankData is non-null here, narrowed above)
   return (
     <View style={styles.root}>
       <StatusBar style="light" />
-      <WebView
-        key={effectiveView}
-        ref={webRef}
-        source={SOURCE_BY_VIEW[effectiveView]}
-        originWhitelist={['*']}
-        style={styles.web}
-        injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS}
-        injectedJavaScript={INJECT_BY_VIEW[effectiveView] ?? undefined}
-        onMessage={(e) => {
-          let msg: InMsg;
-          try { msg = JSON.parse(e.nativeEvent.data); } catch { return; }
-          if (msg.type === 'back') void handleBack();
-          else if (msg.type === 'share') void handleShare();
-          else if (msg.type === 'shareVideo') void handleShareVideo();
-          else if (msg.type === 'viewRepFeedback') setView('feedback');
-          else if (msg.type === 'closeRepFeedback') setView('summary');
-          else if (msg.type === 'viewAllSets') setView('allsets');
-          else if (msg.type === 'closeAllSets') setView('summary');
-          else if (msg.type === 'closeRanks') setView('summary');
-          else if (msg.type === 'doneRanks') void handleDoneRanks();
-        }}
-        allowFileAccess
-        allowFileAccessFromFileURLs
-        allowUniversalAccessFromFileURLs
-        // iOS-specific WKWebView video props, both missing before — without
-        // these a <video> tag either won't play inline at all (WebKit's
-        // default forces fullscreen-only playback) or won't start from a
-        // JS-triggered play() call without an explicit user tap first. This
-        // is very likely why the replay never appeared: not a JS bug, a
-        // missing native config prop.
-        allowsInlineMediaPlayback
-        mediaPlaybackRequiresUserAction={false}
-        javaScriptEnabled
-        domStorageEnabled
-        bounces={false}
-        overScrollMode="never"
-        cacheEnabled={false}
+      <MuscleRanksScreen
+        {...rankData!}
+        totalReps={data.totalReps}
+        moves={data.entries.length}
+        note={generateSummary(data.totalReps, data.totalGoodReps, data.hasFormData)}
+        onBack={() => setView('summary')}
+        onShare={() => void handleShareVideo()}
+        onDone={() => void handleDoneRanks()}
+        insets={insets}
       />
-      {/* Native fallback back button — completely independent of the
-          WebView's own injected JS (which has no visibility into whether
-          its own page actually finished loading/rendering). Explicit ask:
-          "make sure there's always a working back button so the user can
-          never get stuck." */}
-      <TouchableOpacity
-        onPress={() => setView('summary')}
-        hitSlop={12}
-        style={[styles.fallbackBack, { top: insets.top + 12 }]}
-      >
-        <SymbolView name="chevron.left" size={16} tintColor="#ffffff" type="monochrome" style={{ width: 16, height: 16 }} />
-      </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#111114' },
-  web:  { flex: 1, backgroundColor: '#111114' },
-  fallbackBack: {
-    position: 'absolute', left: 16, width: 34, height: 34, borderRadius: 17,
-    backgroundColor: 'rgba(20,20,24,0.65)', alignItems: 'center', justifyContent: 'center', zIndex: 100,
-  },
 });
