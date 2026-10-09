@@ -11,6 +11,8 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.105.0",
     "@callstack/liquid-glass": "^0.8.0",
+    "@dr.pogodin/react-native-fs": "^2.40.3",
+    "@dr.pogodin/react-native-static-server": "^0.28.0",
     "@expo-google-fonts/bricolage-grotesque": "^0.4.1",
     "@expo-google-fonts/plus-jakarta-sans": "^0.4.2",
     "@expo/vector-icons": "^15.0.3",
