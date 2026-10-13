@@ -170,7 +170,7 @@ export function TierEmblem({ tier, size = 20, style }: { tier: Tier; size?: numb
 // came out as vivid green/blue/purple instead of muted metal. Pixel-level
 // pre-bake is exact and has no runtime cost. Still needed, no art yet:
 // forearms, lower back, calves.
-const MUSCLE_ICON_SOURCES: Partial<Record<Muscle, Record<Tier, ImageSourcePropType>>> = {
+export const MUSCLE_ICON_SOURCES: Partial<Record<Muscle, Record<Tier, ImageSourcePropType>>> = {
   [Muscle.Chest]: {
     bronze: require('../assets/images/muscle-icons/chest-bronze.png'),
     silver: require('../assets/images/muscle-icons/chest-silver.png'),
@@ -275,7 +275,7 @@ const MUSCLE_ICON_SOURCES: Partial<Record<Muscle, Record<Tier, ImageSourcePropTy
 // Flaticon free-tier license requires attribution — shown as a small credit
 // link at the bottom of the muscle-ranks page (app/muscle-ranks.tsx).
 export const MUSCLE_ICON_ATTRIBUTION = {
-  text: 'Muscle icons by cube29 — Flaticon',
+  text: 'Muscle icons by cube29. Flaticon',
   url:  'https://www.flaticon.com/free-icons/muscle',
 };
 

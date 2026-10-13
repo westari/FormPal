@@ -13,5 +13,12 @@
     "**/*.tsx",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
+  ],
+  // supabase/functions/* are Deno Edge Functions, deployed separately via
+  // `supabase functions deploy` — never bundled into the RN app, and Deno's
+  // global APIs/import URLs don't match this project's RN/Node type setup.
+  "exclude": [
+    "node_modules",
+    "supabase/functions/**/*"
   ]
 }

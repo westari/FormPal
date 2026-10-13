@@ -16,7 +16,7 @@ const ACTIONS = [
   { id: 'analyze', symbol: 'video.badge.plus',                    label: 'Analyze a Video'  },
   { id: 'workout', symbol: 'figure.strengthtraining.traditional', label: 'Start Workout'    },
   { id: 'log',     symbol: 'square.and.pencil',                   label: 'Log a Session'    },
-  { id: 'mypal',   symbol: 'sparkles',                            label: 'Ask MyPal'        },
+  { id: 'mypal',   symbol: 'sparkles',                            label: 'Ask Cue'          },
 ] as const;
 
 const BTN  = 68;
@@ -83,7 +83,7 @@ export default function PlusScreen() {
       animOut(() => { setVisible(false); router.push('/analyze-video' as any); });
     } else if (id === 'mypal') {
       didNavigate.current = true;
-      animOut(() => { setVisible(false); router.push('/mypal'); });
+      animOut(() => { setVisible(false); router.push('/cue' as any); });
     } else if (id === 'workout') {
       // Was falling through to the generic "Coming soon" alert despite
       // app/workout/index.tsx + app/workout/run.tsx already being fully

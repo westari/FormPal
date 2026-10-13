@@ -67,7 +67,7 @@ export default function ARExperimentScreen() {
       <View style={s.center}>
         <Text style={s.errorText}>
           ARBodyExperiment native module not linked.{'\n'}
-          Run a dev build — Expo Go does not include this module.
+          Run a dev build. Expo Go does not include this module.
         </Text>
         <Pressable style={s.pill} onPress={() => router.back()}>
           <Text style={s.pillText}>← BACK</Text>

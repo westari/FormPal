@@ -147,14 +147,14 @@ export default function AnalyzeVideoScreen() {
 
       if (!result.success) {
         setStatus('error');
-        setErrorMsg(result.error ?? 'Analysis failed — no further detail from the engine.');
+        setErrorMsg(result.error ?? 'Analysis failed. No further detail from the engine.');
         return;
       }
 
       const finalReps = result.reps ?? repEvents.length;
       if (finalReps === 0) {
         setStatus('error');
-        setErrorMsg("We couldn't detect any reps — make sure your full body is visible and the camera angle matches how you'd film the exercise.");
+        setErrorMsg("We couldn't detect any reps. Make sure your full body is visible and the camera angle matches how you'd film the exercise.");
         return;
       }
 
@@ -201,7 +201,7 @@ export default function AnalyzeVideoScreen() {
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           <Text style={styles.subtitle}>
-            Already have a set on video? Pick the clip and the exercise — we'll run the same rep and form analysis a live session gets.
+            Already have a set on video? Pick the clip and the exercise. We'll run the same rep and form analysis a live session gets.
           </Text>
 
           {/* Step 1 — video */}
@@ -275,7 +275,7 @@ export default function AnalyzeVideoScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.analyzingTitle}>Analyzing…</Text>
                   <Text style={styles.analyzingSub}>
-                    Takes about as long as the clip itself — {liveReps} rep{liveReps === 1 ? '' : 's'} found so far
+                    Takes about as long as the clip itself. {liveReps} rep{liveReps === 1 ? '' : 's'} found so far
                     {liveReps > 0 ? `, ${liveGoodReps} good` : ''}.
                   </Text>
                 </View>

@@ -37,32 +37,32 @@ import type { Plan, Workout, PlannedExercise, PlanProfile,
 
 const FULL_BODY_RATIONALES: Record<string, string[]> = {
   strength:   [
-    'Full body strength — every compound movement, maximum load.',
-    'Full body — heavy and deliberate. Quality over quantity.',
-    'Full body strength — building neuromuscular power from the ground up.',
+    'Full body strength. Every compound movement, maximum load.',
+    'Full body. Heavy and deliberate. Quality over quantity.',
+    'Full body strength. Building neuromuscular power from the ground up.',
   ],
   toned: [
-    'Full body — sculpting every muscle group in one session.',
-    'Full body — moderate reps to build definition and burn fat.',
-    'Full body — balanced stimulus for a lean, strong physique.',
+    'Full body. Sculpting every muscle group in one session.',
+    'Full body. Moderate reps to build definition and burn fat.',
+    'Full body. Balanced stimulus for a lean, strong physique.',
   ],
   general: [
-    'Full body — building your base with balanced movement.',
-    'Full body — hitting every muscle group while you\'re fresh.',
-    'Full body — finishing the week with a complete session.',
+    'Full body. Building your base with balanced movement.',
+    'Full body. Hitting every muscle group while you\'re fresh.',
+    'Full body. Finishing the week with a complete session.',
   ],
   weightloss: [
-    'Full body circuit — maximum calorie burn, minimum rest.',
-    'Full body — high reps, short rest, constant movement.',
-    'Full body circuit — elevating your metabolism for hours.',
+    'Full body circuit. Maximum calorie burn, minimum rest.',
+    'Full body. High reps, short rest, constant movement.',
+    'Full body circuit. Elevating your metabolism for hours.',
   ],
 };
 
-const UPPER_RATIONALES = ['Upper body — chest, shoulders, and arms.', 'Upper — pressing and pulling for a strong upper frame.'];
-const LOWER_RATIONALES = ['Lower body — legs and glutes.', 'Lower — building power from the ground up.'];
-const PUSH_RATIONALE   = 'Push day — chest, shoulders, triceps.';
-const PULL_RATIONALE   = 'Pull day — back and biceps.';
-const LEGS_RATIONALE   = 'Legs day — quads, hamstrings, glutes.';
+const UPPER_RATIONALES = ['Upper body. Chest, shoulders, and arms.', 'Upper. Pressing and pulling for a strong upper frame.'];
+const LOWER_RATIONALES = ['Lower body. Legs and glutes.', 'Lower. Building power from the ground up.'];
+const PUSH_RATIONALE   = 'Push day. Chest, shoulders, triceps.';
+const PULL_RATIONALE   = 'Pull day. Back and biceps.';
+const LEGS_RATIONALE   = 'Legs day. Quads, hamstrings, glutes.';
 
 // ─── Split selection ──────────────────────────────────────────────────────────
 

@@ -30,19 +30,35 @@
  * than guess and risk showing the wrong exercise's footage, "View rep
  * feedback" is hidden entirely in that case — same "only show what's
  * real" policy the rest of this file already follows.
+ *
+ * VIDEO ARCHITECTURE — 4th attempt, the one that actually addresses root
+ * cause (explicit correction after 3 rounds of just changing how bytes got
+ * into the WebView, which never mattered): playing video AT ALL inside
+ * WKWebView runs it through that WebView's own memory-limited content
+ * process, which iOS can and does terminate under pressure — that's the
+ * actual "black/grey screen" cause, independent of base64 vs file:// vs a
+ * local http server (all three just change how the source URL looks; none
+ * of them change WHERE the video decodes). Fix: play it with expo-video
+ * (a real native AVPlayer, its own process, nothing to do with the
+ * WebView) positioned full-screen BEHIND the WebView; the WebView's own
+ * background goes transparent so the native player shows through where
+ * the artboard used to have its own <video>/<image-slot>. The WebView
+ * never touches video bytes again.
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, StyleSheet, Share, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, Share, TouchableOpacity, Animated } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { SymbolView } from 'expo-symbols';
 import { WebView } from 'react-native-webview';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import * as Sharing from 'expo-sharing';
 import { File } from 'expo-file-system';
 import { repFeedbackText } from '../lib/repFeedbackSentences';
-import { getLocalVideoHttpUrl } from '../lib/localVideoServer';
+import VideoControls from '../components/VideoControls';
+import { repFeedbackSignal } from '../lib/repFeedbackSignal';
+import { saveStreakToCloud } from '../lib/formpalSync';
 import {
   getAllSessions, appendSessions, groupIntoWorkouts, calcStreak, computeMuscleTiers,
   TIER_ORDER, type SessionEntry, type RepEventData, type Tier,
@@ -66,6 +82,24 @@ import { usePlanStore } from '../store/planStore';
 const RECAP_HTML = require('../assets/app screens/workoutrecap.html');
 const ALL_SETS_HTML = require('../assets/app screens/allsetsfullworkout.html');
 const MUSCLE_RANKS_HTML = require('../assets/app screens/muscleranks.html');
+
+// Build/bundle confirmation stamp — explicit ask ("add a small visible
+// build stamp so I can confirm on device I'm running the new code").
+// BUILD_TAG is a short label I update by hand each round I touch this
+// file (bump it in the same commit as the real change). The timestamp
+// below it is computed once when this JS MODULE is evaluated — i.e. every
+// time Metro serves a fresh bundle to the device — so even without
+// trusting BUILD_TAG, a changing "loaded at" time after a reload proves
+// new JS actually landed, not a stale cached bundle. Explicit ask this
+// round: remove the on-screen stamp — kept as a console log instead so
+// it's still there to confirm a fresh reload if ever needed, just not
+// visible on the card.
+const BUILD_TAG = 'native-video-10';
+const BUILD_LOADED_AT = new Date().toLocaleTimeString();
+if (__DEV__) {
+  console.log(`[recap] build ${BUILD_TAG}`);
+  console.log(`[recap-debug] build ${BUILD_TAG} loaded ${BUILD_LOADED_AT}`);
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -108,9 +142,10 @@ function generateSummary(reps: number, goodReps: number, hasFormData = true): st
 
 type InMsg = {
   type: 'back' | 'seeRanks' | 'share' | 'shareVideo' | 'viewRepFeedback'
-      | 'viewAllSets' | 'closeAllSets' | 'closeRanks' | 'doneRanks' | 'ready' | 'videoDebug';
+      | 'viewAllSets' | 'closeAllSets' | 'closeRanks' | 'doneRanks' | 'ready' | 'videoDebug' | 'pageConsole';
   msg?: string;
   code?: number;
+  level?: string;
 };
 
 // Both artboards are FIXED 390x844 canvases (raw Claude-Design exports,
@@ -157,8 +192,37 @@ const DC_VIEWPORT_JS = `(function(){try{
 // transform back to the original simple scale(S)-only (byte-identical to
 // the last known-good commit, zero drift risk) — the gap is handled
 // completely differently now, see fillBottomGap below.
+// Explicit ask: "console.log forwarded from inside the WebView page."
+// Page-internal console.log/warn/error normally only reach Safari Web
+// Inspector (not Metro) — intercepting them and re-sending through
+// postMessage is the only way they show up in the same terminal as the
+// native-side [recap-debug] logs. Installed FIRST (prepended ahead of
+// every other injected script), so it catches every console call that
+// follows it in the same injected JS, including this file's own.
+const CONSOLE_FORWARD_JS = `
+(function(){
+  function fwd(level, args){
+    try {
+      var parts = [];
+      for (var i=0;i<args.length;i++){
+        var a = args[i];
+        try { parts.push(typeof a === 'string' ? a : JSON.stringify(a)); } catch(e){ parts.push(String(a)); }
+      }
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'pageConsole', level: level, msg: parts.join(' ') }));
+    } catch(e){}
+  }
+  ['log','warn','error'].forEach(function(level){
+    var orig = console[level];
+    console[level] = function(){
+      fwd(level, arguments);
+      orig.apply(console, arguments);
+    };
+  });
+})();
+`;
+
 function dcScaleFitJs(bg: string, bottomFillColor?: string): string {
-  return `
+  return CONSOLE_FORWARD_JS + `
   (function(){
     var W=390, H=844;
     var st=document.createElement('style');
@@ -168,7 +232,7 @@ function dcScaleFitJs(bg: string, bottomFillColor?: string): string {
     // injected. Killing it means the card just appears already in its
     // resting position — no slide — whatever data is in the DOM at reveal
     // time (which, with the ready-gate below, is always the real data).
-    st.textContent='html{background:${bg}!important;overflow:hidden!important;}body{margin:0!important;padding:0!important;background:${bg}!important;overflow:hidden!important;}#dc-root{position:relative!important;margin:0 auto!important;width:'+W+'px!important;transform-origin:top center!important;}#dc-root *{animation:none!important;-webkit-animation:none!important;}*{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}';
+    st.textContent='html{background:${bg}!important;overflow:hidden!important;}body{margin:0!important;padding:0!important;background:${bg}!important;overflow:hidden!important;}#dc-root{position:relative!important;margin:0 auto!important;width:'+W+'px!important;transform-origin:top center!important;}#dc-root *{animation:none!important;-webkit-animation:none!important;}*{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important;}';
     (document.head||document.documentElement).appendChild(st);
     var lastS=-1;
     function fit(){
@@ -215,7 +279,14 @@ function dcScaleFitJs(bg: string, bottomFillColor?: string): string {
         filler.style.cssText='position:fixed;left:0;right:0;bottom:0;background:${bottomFillColor};z-index:5;pointer-events:none;';
         document.body.appendChild(filler);
       }
-      filler.style.height = (gap>0 ? Math.ceil(gap) : 0) + 'px';
+      // Explicit ask: "the fill is a slightly different white than the
+      // card, make it look like one piece." Both already use the exact
+      // same #ffffff — the visible seam is sub-pixel rounding from the
+      // scale transform leaving a hairline gap, not a real color
+      // difference. +2px of deliberate overlap UNDER the card's own
+      // bottom edge (never past its sides, still pinned bottom/left/right)
+      // closes that hairline rather than butting exactly against it.
+      filler.style.height = (gap>0 ? Math.ceil(gap)+2 : 0) + 'px';
     }
     window.__fpFillBottomGap = fillBottomGap;
     [0,300,900,1500].forEach(function(d){ setTimeout(fillBottomGap,d); });
@@ -282,6 +353,25 @@ function allSetsInject(opts: {
       metaEl.textContent=t.meta;
       label.appendChild(titleEl); label.appendChild(metaEl);
       tile.appendChild(label);
+      // Explicit ask: "each set's video should show... tapping it should
+      // play/replay properly." A real pixel-accurate thumbnail isn't
+      // straightforward here — expo-video's generateThumbnailsAsync
+      // returns a native shared image ref meant for expo-image, not a
+      // URI/base64 this WebView's own HTML can use, and overlaying a
+      // separate native <Image> precisely on this grid cell would mean
+      // replicating this grid's layout math in RN — flagged as separate,
+      // real scope, not done here. What's achievable now: a clear "this
+      // is a tappable video" play-icon affordance (this tile WAS just a
+      // plain stat box with no visual difference from the others), and
+      // tapping it correctly opens rep-feedback.tsx, which now plays the
+      // real clip with real native controls (today's other changes) —
+      // so the "play/replay properly" part is genuinely fixed.
+      if(clickable){
+        var playBadge=document.createElement('div');
+        playBadge.style.cssText='position:absolute;top:12px;right:12px;width:28px;height:28px;border-radius:14px;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;';
+        playBadge.innerHTML='<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M4 2.5v11l10-5.5-10-5.5z" fill="#ffffff"/></svg>';
+        tile.appendChild(playBadge);
+      }
       if(clickable){ tile.addEventListener('click', function(ev){ ev.stopPropagation(); post({type:'viewRepFeedback'}); }, true); }
       grid.appendChild(tile);
     });
@@ -464,14 +554,11 @@ true;
 function workoutrecapInject(opts: {
   totalReps: number; moves: number; pct: number; hasFormData: boolean;
   durationSec?: number; overview: string; hasVideo: boolean;
-  // A loopback http:// URL (see lib/localVideoServer.ts), not a file://
-  // path — the <video> tag loads this directly.
-  videoUri?: string;
 }): string {
-  const { totalReps, moves, pct, hasFormData, durationSec, overview, hasVideo, videoUri } = opts;
-  const formValue = hasFormData && totalReps > 0 ? `${pct}%` : '—';
+  const { totalReps, moves, pct, hasFormData, durationSec, overview, hasVideo } = opts;
+  const formValue = hasFormData && totalReps > 0 ? `${pct}%` : 'N/A';
   const formLabel = hasFormData ? 'Form' : 'Form n/a';
-  const durationValue = durationSec != null ? formatDuration(durationSec) : '—';
+  const durationValue = durationSec != null ? formatDuration(durationSec) : 'N/A';
   const MAP: Record<string, string> = {
     '148': String(totalReps),
     '12': String(moves),
@@ -481,14 +568,16 @@ function workoutrecapInject(opts: {
     'Form': formLabel,
     'Push-up depth improved every set and squats stayed steady. Next time, slow the way down on pull-ups.': overview,
   };
-  return dcScaleFitJs('#111114', '#ffffff') + `
+  return dcScaleFitJs(hasVideo ? 'transparent' : '#111114', '#ffffff') + `
 (function(){
   function post(m){ try{ window.ReactNativeWebView.postMessage(JSON.stringify(m)); }catch(e){} }
   var MAP = ${JSON.stringify(MAP)};
   var HAS_VIDEO = ${JSON.stringify(hasVideo)};
-  var VIDEO_SRC = ${JSON.stringify(videoUri ?? '')};
-  var videoBuilt = false;
-  var videoReady = !HAS_VIDEO;
+  console.log('[recap-page] injected JS running, HAS_VIDEO=', HAS_VIDEO);
+  var bgTransparent = false;
+  var sizeWired = false;
+  var titleSizeWired = false;
+  var cardWidened = false;
   var backWired=false, feedbackWired=false, shareWired=false, allSetsWired=false;
   var readyPosted=false;
   // "Dragging the card down is laggy" — traced to the artboard's OWN
@@ -542,51 +631,25 @@ function workoutrecapInject(opts: {
   }
   function apply(){
     var hit=0;
-    // BUG FOUND: this screen's own replay background was never actually
-    // wired to the real recorded clip — only repFeedbackInject's detail
-    // screen got a real <video> element. The design uses a custom
-    // <image-slot> placeholder with no rendering of its own, so without
-    // this it just always showed blank/the placeholder text — "the
-    // background video doesn't play."
-    if(!videoBuilt && VIDEO_SRC){
+    // Video now plays NATIVELY (expo-video — see this file's header
+    // comment for why) in a real AVPlayer positioned behind this WebView.
+    // This page never creates a <video> element or touches video bytes at
+    // all any more — just hides the artboard's own placeholder slot and
+    // neutralizes the two backgrounds that would otherwise opaquely cover
+    // the native player sitting behind it (the slot's own wrapper, and
+    // the artboard's root content div — both have their own explicit
+    // inline background color baked into the design file, which an
+    // html/body-level transparent background alone doesn't override).
+    if(!bgTransparent && HAS_VIDEO){
       var slot = document.getElementById('recap-replay');
       if(slot){
-        var videoEl = document.createElement('video');
-        videoEl.src = VIDEO_SRC;
-        videoEl.setAttribute('playsinline','');
-        videoEl.setAttribute('controls','');
-        videoEl.muted = false;
-        videoEl.controls = true;
-        videoEl.autoplay = true;
-        videoEl.loop = true;
-        // REVERTED the earlier height cap (484px) — that was a wrong guess
-        // (iOS's native video controls overlay the WHOLE video box when
-        // tapped, they don't just live in a slim bottom strip, so capping
-        // the height didn't help the controls and broke the full-bleed
-        // background look instead, leaving the wrapper's dark placeholder
-        // color visible below 484px). Back to covering the full replay
-        // area exactly like the original design — card sits on top of it,
-        // dragging the card down (wireLiveDrag above) reveals more of it,
-        // same as before.
-        videoEl.style.cssText = 'width:100%;height:100%;object-fit:cover;';
-        slot.parentElement && slot.parentElement.insertBefore(videoEl, slot);
         slot.style.display = 'none';
-        videoBuilt = true;
+        var wrap = slot.parentElement;
+        if(wrap) wrap.style.setProperty('background','transparent','important');
+        var rootDiv = document.querySelector('[data-screen-label="Workout recap"]');
+        if(rootDiv) rootDiv.style.setProperty('background','transparent','important');
+        bgTransparent = true;
         hit++;
-        // DIAGNOSTIC — "tap the video, nothing happens, no native controls
-        // ever appear": logging actual playback events so next test tells
-        // us whether the video is even loading/playing at all, instead of
-        // guessing at the cause a third time.
-        videoEl.addEventListener('error', function(){ post({type:'videoDebug', msg:'error', code: videoEl.error && videoEl.error.code}); });
-        videoEl.addEventListener('canplay', function(){ post({type:'videoDebug', msg:'canplay'}); });
-        videoEl.addEventListener('play', function(){ post({type:'videoDebug', msg:'play'}); });
-        videoEl.addEventListener('pause', function(){ post({type:'videoDebug', msg:'pause'}); });
-        // Don't reveal the screen until the video actually has a real
-        // frame decoded — otherwise the card appears first (text/stats
-        // ready before the video finishes loading) and the video visibly
-        // pops in a beat later. Wait for it, then re-run apply() so the
-        // ready-check below re-evaluates with videoReady now true.
-        videoEl.addEventListener('loadeddata', function(){ videoReady = true; apply(); }, { once: true });
       }
     }
     var all=document.querySelectorAll('#dc-root div,#dc-root span');
@@ -594,6 +657,104 @@ function workoutrecapInject(opts: {
       var el=all[i]; if(el.children.length) continue;
       var t=(el.textContent||'').trim();
       if(MAP[t]!=null && t!==MAP[t]){ el.textContent=MAP[t]; hit++; }
+    }
+    // Explicit ask: "make the 'Workout complete' text and the check icon
+    // bigger." The title div's own authored style (22px/800 weight) is a
+    // unique signature; the check-icon circle is its very next sibling.
+    if(!titleSizeWired){
+      var titleEl = document.querySelector('#dc-root div[style*="font-size: 22px; line-height: 1.12; font-weight: 800"]');
+      if(titleEl){
+        titleEl.style.setProperty('font-size','27px','important');
+        var checkIcon = titleEl.nextElementSibling;
+        if(checkIcon){
+          checkIcon.style.setProperty('width','29px','important');
+          checkIcon.style.setProperty('height','29px','important');
+          var checkSvg = checkIcon.querySelector('svg');
+          if(checkSvg){ checkSvg.setAttribute('width','16'); checkSvg.setAttribute('height','16'); }
+        }
+        titleSizeWired = true; hit++;
+      }
+    }
+    // Explicit ask: "the Overview label and the overview text are too
+    // small, make them bigger." Both are static artboard structure (never
+    // text-matched/replaced above), so found by their own authored style
+    // strings rather than content. Asked twice before with a smaller bump
+    // (13->15, 15.5->17) that apparently wasn't "much bigger" — pushing
+    // further this round, and now also sizing the label's own icon (the
+    // little grid svg next to "Overview"), which was never touched.
+    if(!sizeWired){
+      var ovLabel = document.querySelector('#dc-root div[style*="font-size: 13px; font-weight: 700"]');
+      if(ovLabel){
+        ovLabel.style.setProperty('font-size','19px','important');
+        var ovIcon = ovLabel.querySelector('svg');
+        if(ovIcon){ ovIcon.setAttribute('width','17'); ovIcon.setAttribute('height','17'); }
+      }
+      // Explicit ask (new this round): "lines stop after a couple words
+      // and wrap too early — have each line go across the whole card."
+      // 19px on this body paragraph was too aggressive for the card's
+      // width — dialing back to 17px (still clearly bigger than the
+      // original 15.5px) so more words fit per line. The short
+      // "Overview" label above isn't affected by this — it's one word,
+      // wrapping was never a concern there.
+      var ovBody = document.querySelector('#dc-root div[style*="font-size: 15.5px; line-height: 1.48"]');
+      if(ovBody) ovBody.style.setProperty('font-size','17px','important');
+      if(ovLabel || ovBody){
+        sizeWired=true; hit++;
+        console.log('[recap-page] sizeWired applied, ovLabel=', !!ovLabel, 'ovBody=', !!ovBody);
+      }
+    }
+    // Explicit ask: "edges stick out, gaps at left/right... full width,
+    // edge to edge... same for the bottom." Read straight from the
+    // artboard: the card div is authored with an 8px left/right margin
+    // and border-radius: 36px on all four corners. Two fixes: (1)
+    // left/right to 0 removes the side margins. (2) rounding only the
+    // TOP corners (36px 36px 0 0) removes the bottom-corner rounding,
+    // which is what was actually causing the
+    // "bottom still looks different" seam: fillBottomGap's filler strip
+    // below the card is a plain square-cornered rectangle, so the card's
+    // OWN rounded bottom corners were leaving two small gaps at the
+    // bottom-left/right where the dark/video background showed through.
+    if(!cardWidened){
+      var wCard = document.querySelector('#dc-root div[style*="border-radius: 36px"]');
+      if(wCard){
+        wCard.style.setProperty('left','0px','important');
+        wCard.style.setProperty('right','0px','important');
+        wCard.style.setProperty('border-radius','36px 36px 0 0','important');
+        // BUG FOUND ("bottom fill still doesn't match the card's color"):
+        // the card has decorative blurred gradient blobs as absolutely-
+        // positioned children (one pinned with a negative bottom offset,
+        // clipped by the card's own overflow:hidden) that tint the card's real bottom
+        // few pixels slightly off pure white — a flat #ffffff filler can
+        // never match a gradient exactly. The card is authored
+        // top:484px + height:352px, leaving an 8px canvas gap before the
+        // true 844px bottom even by original design (same family as the
+        // 8px side margins already removed above). Closing that gap by
+        // extending the card's OWN height means its bottom edge — blobs
+        // included — reaches the true bottom directly: nothing for a
+        // separate fill color to match in the resting (non-dragged)
+        // position. fillBottomGap right below still runs as a backstop
+        // for the dragged-down case, where a gap reopens below the
+        // (still 360px-tall) card.
+        wCard.style.setProperty('height','360px','important');
+        // BUG FOUND ("card still comes in a little late"): the card's own
+        // inline style carries a transition on its top property
+        // UNCONDITIONALLY — that's a separate CSS mechanism from
+        // animation (which is already killed globally above), so
+        // animation:none never touched it. If the artboard's own
+        // framework re-renders this element's top value after first paint
+        // (even to the same 484px value — common in these reactive
+        // templates doing a default-then-real-state pass), that
+        // transition animates it, reading as a slide-in / "comes in
+        // late". Force transition:none for exactly one frame on first
+        // successful apply (a reflow flush in between) so whatever top
+        // value lands first is shown immediately, then restore the real
+        // transition so the drag-snap animation (wireLiveDrag below)
+        // still works normally afterward.
+        wCard.style.setProperty('transition','none','important');
+        void wCard.offsetHeight;
+        wCard.style.setProperty('transition','top 480ms cubic-bezier(.22,.9,.24,1)','important');
+        cardWidened=true; hit++;
+      }
     }
     // Back chevron (top-left circle, no handler on this fresh export).
     if(!backWired){
@@ -640,7 +801,7 @@ function workoutrecapInject(opts: {
     // few hundred ms.
     if(window.__fpFillBottomGap) window.__fpFillBottomGap();
     var ok = hit>=3;
-    if(ok && videoReady && !readyPosted){ readyPosted=true; post({type:'ready'}); }
+    if(ok && !readyPosted){ readyPosted=true; post({type:'ready'}); }
     return ok;
   }
   if(!apply()) [200,500,1000,2000,3500,5000].forEach(function(d){ setTimeout(apply,d); });
@@ -675,6 +836,14 @@ export default function RecapScreen() {
   useFocusEffect(
     useCallback(() => {
       navigatingToFeedback.current = false;
+      // Explicit ask: "Finish review" on rep-feedback.tsx should continue
+      // on to the ranks/bodymap screen, not just return to summary — see
+      // lib/repFeedbackSignal.ts for why a module-level flag is the
+      // simplest way to signal that across the two screens.
+      if (repFeedbackSignal.finishedReview) {
+        repFeedbackSignal.finishedReview = false;
+        setView('ranks');
+      }
     }, [])
   );
 
@@ -707,26 +876,91 @@ export default function RecapScreen() {
   const initialized = useRef(false);
   const [view, setView] = useState<'summary' | 'allsets' | 'ranks'>('summary');
 
-  // The recorded clip's real file:// path resolved to a loopback http://
-  // URL (see lib/localVideoServer.ts) — a <video> tag can load this
-  // directly, unlike a bare file:// src which WKWebView's
-  // allowingReadAccessToURL couldn't be made to actually permit (two
-  // confirmed-correct attempts at the grant still failed; see that file's
-  // header comment for the full history).
-  const [videoHttpUrl, setVideoHttpUrl] = useState<string | null>(null);
+  // VIDEO — real native AVPlayer via expo-video, positioned full-screen
+  // behind the WebView (see file header). Source is data.videoUri
+  // directly, the real recorded file — no conversion step of any kind.
+  // useVideoPlayer recreates the player whenever the source actually
+  // changes (it's keyed internally on JSON.stringify(source)), so passing
+  // `null` until `data` loads and then the real path once it does is safe.
+  const videoPlayer = useVideoPlayer(data?.videoUri ?? null, (p) => { p.loop = true; p.muted = false; });
+  const videoFade = useRef(new Animated.Value(0)).current;
+  const videoViewRef = useRef<VideoView>(null);
+  // BUG FOUND ("black top", "video glitches on start"): the WebView's own
+  // background was going transparent as soon as `hasVideo` was true — a
+  // STATIC fact about the data, not about whether the video had an actual
+  // frame on screen yet. `readyToPlay` only means the player has enough
+  // data to BEGIN playback, not that a frame has been decoded/painted —
+  // in the gap between "transparent" and "a real frame is actually
+  // showing", there was nothing opaque left covering that area (WebView
+  // transparent, video still faded to 0) except the screen's own dark
+  // root background — that gap IS the black flash / glitch. Fix: track
+  // actual visual readiness as its own state, flip it on `playingChange`
+  // (isPlaying truly started, a stronger signal than merely "ready") not
+  // `statusChange`, and gate the WebView's transparency on THAT instead
+  // of the static `hasVideo` — so the WebView only goes transparent at
+  // the exact moment there's something real to show through it.
+  const [videoVisuallyReady, setVideoVisuallyReady] = useState(false);
   useEffect(() => {
-    let cancelled = false;
-    if (!data?.videoUri) { setVideoHttpUrl(null); return; }
-    (async () => {
-      try {
-        const url = await getLocalVideoHttpUrl(data.videoUri!);
-        if (!cancelled) setVideoHttpUrl(url);
-      } catch (err) {
-        if (__DEV__) console.error('[recap] getLocalVideoHttpUrl failed:', err);
+    if (!data?.videoUri) return;
+    videoFade.setValue(0);
+    setVideoVisuallyReady(false);
+    const statusSub = videoPlayer.addListener('statusChange', ({ status }) => {
+      if (__DEV__) console.log('[recap-debug] videoPlayer statusChange:', status);
+      if (status === 'readyToPlay') videoPlayer.play();
+    });
+    const playingSub = videoPlayer.addListener('playingChange', ({ isPlaying }) => {
+      // DIAGNOSTIC — explicit ask: find why playingChange keeps flapping
+      // false/true in a loop. currentTime near 0 each time points to the
+      // loop (p.loop=true) restarting on a very short clip; a currentTime
+      // that's NOT near the loop boundary points to something else
+      // (buffering, audio session interruption) interrupting playback.
+      if (__DEV__) console.log('[recap-debug] videoPlayer playingChange:', isPlaying, 'currentTime=', videoPlayer.currentTime, 'duration=', videoPlayer.duration);
+      if (isPlaying) {
+        setVideoVisuallyReady(true);
+        Animated.timing(videoFade, { toValue: 1, duration: 220, useNativeDriver: true }).start();
       }
-    })();
-    return () => { cancelled = true; };
-  }, [data?.videoUri]);
+    });
+    return () => { statusSub.remove(); playingSub.remove(); };
+  }, [videoPlayer, data?.videoUri, videoFade]);
+
+  // BUG FOUND ("closing the page glitches at the start of the close
+  // animation"): the video block below used to be conditionally rendered
+  // on `effectiveView === 'summary'`, so leaving summary (e.g. tapping
+  // back, which calls setView('ranks')) UNMOUNTED the live VideoView
+  // outright, with no fade — at the exact same moment the WebView below
+  // tears down and remounts a brand new document (its `key={effectiveView}`
+  // changes too). Two abrupt resets landing in the same render is the
+  // glitch. Fix: keep VideoView mounted across view changes (gated on
+  // `hasVideo` only, further down) and just fade/pause it here instead —
+  // nothing to abruptly reset when the view switches.
+  // BUG FOUND (device logs, this round): the above only accounted for
+  // switching `view` WITHIN this screen — it never covered navigating
+  // AWAY to a different route (e.g. "View rep feedback", which does a
+  // router.push, not a setView). This screen stays mounted underneath the
+  // new route, `view` never changes, so this player kept calling play()
+  // the whole time rep-feedback.tsx's own screen — and its OWN unmuted
+  // player — was active on top. Two simultaneously-playing, unmuted
+  // AVPlayer instances fighting over the audio session is exactly what
+  // the logs showed: both screens' `playingChange` flapping false/true in
+  // an endless loop. Track real navigation focus (useFocusEffect, already
+  // used elsewhere in this file) alongside `view`, and only play when
+  // BOTH this screen is focused AND the view is 'summary'.
+  const [isFocused, setIsFocused] = useState(true);
+  useFocusEffect(
+    useCallback(() => {
+      setIsFocused(true);
+      return () => setIsFocused(false);
+    }, [])
+  );
+  useEffect(() => {
+    if (!data?.videoUri) return;
+    if (view === 'summary' && isFocused) {
+      videoPlayer.play();
+    } else {
+      videoPlayer.pause();
+      Animated.timing(videoFade, { toValue: 0, duration: 150, useNativeDriver: true }).start();
+    }
+  }, [view, isFocused, data?.videoUri, videoPlayer, videoFade]);
 
   // Reveal-gate for the summary screen only (the one with the reported
   // "grey -> wrong data at top -> slides into place" bug). Stays hidden
@@ -867,17 +1101,59 @@ export default function RecapScreen() {
 
   const handleDoneRanks = useCallback(async () => {
     await completeSession();
-    router.replace((isWorkoutMode ? '/(tabs)/train' : '/(tabs)/') as any);
+    // Explicit ask: streak screen after every completed workout, with the
+    // real current streak (sessions were already appended earlier in this
+    // screen's own load, so calcStreak() here already reflects THIS
+    // workout). The streak screen itself decides whether a progress-photo
+    // prompt comes next (first-ever workout, or 14+ days since the last
+    // prompt) before finally landing on dest.
+    const dest = isWorkoutMode ? '/(tabs)/train' : '/(tabs)/';
+    const sessions = await getAllSessions();
+    const streakCount = calcStreak(sessions);
+    const lastTs = sessions.length > 0 ? sessions[sessions.length - 1].ts : Date.now();
+    saveStreakToCloud(streakCount, lastTs).catch(() => {});
+    router.replace({ pathname: '/streak-screen', params: { count: String(streakCount), dest } } as any);
   }, [isWorkoutMode, completeSession, router]);
 
   // Real per-rep what/fix text (repFeedbackText — same function this file
   // already used), only meaningful when there's a real video to scrub to.
+  // repFeedbackText now needs the exercise id (not a rotating index) to
+  // pick exercise-specific wording — same id used for the history-mode
+  // SessionEntry/EXERCISE_DEFINITIONS lookups elsewhere in this file.
   const repEvents = useMemo(() => {
     if (!hasVideo || !data) return [];
-    return (data.repEvents ?? []).map((ev, i) => {
-      const { what } = repFeedbackText(ev.good, ev.reason, i);
-      return { timeSec: ev.timeSec, what };
+    const exerciseId = data.entries[0]?.exerciseId ?? '';
+    // Explicit ask: "even if they're not back to back, [a repeated
+    // issue] shouldn't repeat [the exact same feedback]." Counts how
+    // many times this EXACT case (good, or this exact cue) has shown up
+    // so far in the set — not the overall rep index — so the same issue
+    // recurring later (with other reps in between) still rotates to a
+    // different variant instead of repeating verbatim.
+    const seenCount: Record<string, number> = {};
+    const mapped = (data.repEvents ?? []).map((ev) => {
+      const key = ev.good ? 'GOOD' : ev.reason;
+      const occurrence = seenCount[key] ?? 0;
+      seenCount[key] = occurrence + 1;
+      // BUG FOUND ("feedback still sucks... too short"): repFeedbackText()
+      // returns {what, fix} — a short observation AND the actual
+      // instruction — but only `what` ever got extracted here. `fix`
+      // (the real substance, e.g. "Push the weight all the way up until
+      // your arms are completely straight overhead.") was computed and
+      // thrown away, never reaching the screen at all. The rep-feedback
+      // card only has one text slot (no separate line for `fix` in the
+      // artboard), so both are combined into the one string it shows.
+      const { what, fix } = repFeedbackText(ev.good, ev.reason, exerciseId, occurrence);
+      return { timeSec: ev.timeSec, good: ev.good, what: `${what} ${fix}` };
     });
+    // DIAGNOSTIC — explicit ask: "its stored form result/score, which
+    // branch repFeedbackText() picked, and the final text shown."
+    if (__DEV__) {
+      console.log('[recap-debug] repEvents exerciseId=', exerciseId);
+      mapped.forEach((m, i) => {
+        console.log('[recap-debug] repEvent', i, 'good=', data.repEvents?.[i]?.good, 'reason=', JSON.stringify(data.repEvents?.[i]?.reason), '-> what=', JSON.stringify(m.what));
+      });
+    }
+    return mapped;
   }, [hasVideo, data]);
 
   const summaryInjectJs = useMemo(() => {
@@ -886,9 +1162,9 @@ export default function RecapScreen() {
       totalReps: data.totalReps, moves: data.entries.length, pct: data.pct,
       hasFormData: data.hasFormData, durationSec: data.durationSec,
       overview: generateSummary(data.totalReps, data.totalGoodReps, data.hasFormData),
-      hasVideo, videoUri: videoHttpUrl ?? undefined,
+      hasVideo,
     });
-  }, [data, hasVideo, videoHttpUrl]);
+  }, [data, hasVideo]);
 
   const allSetsInjectJs = useMemo(() => {
     if (!data) return null;
@@ -1006,7 +1282,11 @@ export default function RecapScreen() {
     );
   }
 
-  if (!data || !summaryInjectJs || (hasVideo && !videoHttpUrl)) {
+  if (!data || !summaryInjectJs) {
+    // Explicit ask: never gate the card on the video. The card (WebView)
+    // shows as soon as its own real data is ready; the native video fades
+    // in independently, whenever IT'S ready, via videoFade above.
+    if (__DEV__) console.log('[recap-debug] blocked on loading gate:', { hasData: !!data, hasSummaryInjectJs: !!summaryInjectJs });
     return (
       <View style={styles.root}>
         <StatusBar style="light" />
@@ -1031,12 +1311,42 @@ export default function RecapScreen() {
   return (
     <View style={styles.root}>
       <StatusBar style="light" />
+      {/* Native video — a real AVPlayer, its own process, nothing to do
+          with the WebView (see file header). Sits BEHIND the WebView;
+          the summary WebView's own background goes transparent above so
+          this shows through where the artboard's own video slot was.
+          Fades in independently of the card via videoFade — never blocks
+          the card's own reveal. Stays mounted across view changes (gated
+          on hasVideo only, not effectiveView) — see the close-glitch fix
+          above; the pause/fade effect handles hiding it when not on
+          'summary', so there's nothing to abruptly unmount here.
+          Explicit ask: sized to the area ABOVE the card only (not full-
+          bleed) so it doesn't get covered by it — bottom:'42.65%' is the
+          same card-top boundary (844-484=360, 360/844≈42.65%) already
+          used for the tap-to-reveal Pressable and the old video-only
+          Pressable zone, not a new guessed number. */}
+      {hasVideo && (
+        <Animated.View style={[styles.videoArea, { opacity: videoFade }]} pointerEvents="none">
+          <VideoView
+            ref={videoViewRef}
+            player={videoPlayer}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            nativeControls={false}
+            allowsPictureInPicture={false}
+          />
+        </Animated.View>
+      )}
       <WebView
         key={effectiveView}
         ref={webRef}
         source={SOURCE_BY_VIEW[effectiveView]}
         originWhitelist={['*']}
-        style={effectiveView === 'summary' ? [styles.web, { opacity: webReady ? 1 : 0 }] : styles.web}
+        style={
+          effectiveView === 'summary'
+            ? [styles.web, videoVisuallyReady && { backgroundColor: 'transparent' }, { opacity: webReady ? 1 : 0 }]
+            : styles.web
+        }
         injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS}
         injectedJavaScript={INJECT_BY_VIEW[effectiveView] ?? undefined}
         // DIAGNOSTIC LOGGING — explicit ask ("add console logs on every
@@ -1064,6 +1374,7 @@ export default function RecapScreen() {
           if (__DEV__) console.log('[recap-debug] onMessage:', msg.type, 'current view=', view, 'effectiveView=', effectiveView);
           if (msg.type === 'ready') setWebReady(true);
           else if (msg.type === 'videoDebug') { if (__DEV__) console.log('[recap-debug] video event:', msg.msg, msg.code); }
+          else if (msg.type === 'pageConsole') { if (__DEV__) console.log(`[recap-page:${msg.level}]`, msg.msg); }
           else if (msg.type === 'back') void handleBack();
           else if (msg.type === 'share') void handleShare();
           else if (msg.type === 'shareVideo') void handleShareVideo();
@@ -1106,6 +1417,7 @@ export default function RecapScreen() {
         bounces={false}
         overScrollMode="never"
         cacheEnabled={false}
+        scrollEnabled={false}
         // "card isn't flush with the bottom of the screen" — WKWebView's
         // default content-inset-adjustment inserts extra space at the
         // bottom to clear the home-indicator safe area, which would throw
@@ -1117,24 +1429,33 @@ export default function RecapScreen() {
         automaticallyAdjustContentInsets={false}
         contentInsetAdjustmentBehavior="never"
       />
-      {/* Native fallback back button — completely independent of the
-          WebView's own injected JS (which has no visibility into whether
-          its own page actually finished loading/rendering). Explicit ask:
-          "make sure there's always a working back button so the user can
-          never get stuck." Summary has its own real back/exit flow, and
-          'ranks' ALSO already has its own real, working back button
-          (muscleRanksInject's backWired) — showing this one too on that
-          screen specifically was a visible literal duplicate ("two back
-          buttons"), not a safety net. */}
-      {effectiveView !== 'summary' && effectiveView !== 'ranks' && (
-        <TouchableOpacity
-          onPress={() => setView('summary')}
-          hitSlop={12}
-          style={[styles.fallbackBack, { top: insets.top + 12 }]}
-        >
-          <SymbolView name="chevron.left" size={16} tintColor="#ffffff" type="monochrome" style={{ width: 16, height: 16 }} />
-        </TouchableOpacity>
+      {/* Custom inline controls — explicit ask: real Apple fullscreen was
+          rejected in an earlier round (it took the card/page off screen),
+          and plain nativeControls never shows anything inline without it.
+          Plain RN views wired straight to videoPlayer sidesteps the whole
+          problem — no fullscreen, no native controls at all any more.
+          Positioned to the same WebView-swallows-all-touches zone the old
+          tap-to-fullscreen Pressable used (below the back-chevron/all-sets
+          strip, above the card), same fixed canvas fractions as before.
+          BUG FOUND (explains "cluttered, two sets of controls" on the rep-
+          feedback screen): this screen stays mounted underneath rep-
+          feedback.tsx (same reason the video player itself already checks
+          isFocused, above). This render was only gated on effectiveView,
+          which never changes just from pushing a new screen on top — so
+          if these controls had ever been tapped open here, they stayed
+          rendered and visible the whole time rep-feedback.tsx was in
+          front. Added the same isFocused check the player already uses. */}
+      {effectiveView === 'summary' && hasVideo && isFocused && (
+        <VideoControls player={videoPlayer} style={{ position: 'absolute', left: 0, right: 0, top: '11.85%', bottom: '42.65%' }} />
       )}
+      {/* No native fallback back button any more — explicit ask ("one
+          clear back button, not two"). Both non-summary views now have
+          their own real, working back button: 'ranks' already did
+          (muscleRanksInject's backWired), and 'allsets' already did too
+          (allSetsInject's recapWired/doneWired) — this native one was
+          showing ALONGSIDE allsets' own, the literal duplicate reported.
+          Removing it entirely rather than re-scoping it further, since no
+          view actually needs it any more. */}
     </View>
   );
 }
@@ -1142,8 +1463,14 @@ export default function RecapScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#111114' },
   web:  { flex: 1, backgroundColor: '#111114' },
-  fallbackBack: {
-    position: 'absolute', left: 16, width: 34, height: 34, borderRadius: 17,
-    backgroundColor: 'rgba(20,20,24,0.65)', alignItems: 'center', justifyContent: 'center', zIndex: 100,
-  },
+  // BUG FOUND ("black shows behind the card's corners"): this used to
+  // stop exactly at the card's top edge (42.65% ≈ 484px, same boundary).
+  // The card's rounded top corners curve inward from that exact line, so
+  // any sub-pixel mismatch between the two independently-computed
+  // boundaries (this is a plain RN percentage; the card's is a scaled
+  // CSS px value inside the WebView) exposes the dark root background
+  // right at the corner notch. Extending a bit further down (~22px,
+  // hidden safely under the now-opaque card — see cardWidened's height
+  // bump above) removes any chance of that gap regardless of rounding.
+  videoArea: { position: 'absolute', left: 0, right: 0, top: 0, bottom: '40%' },
 });

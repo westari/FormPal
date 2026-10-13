@@ -2539,7 +2539,7 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     readyGate: PASSTHROUGH_GATE,
 
     cameraSetup: {
-      setupInstruction: 'Stand sideways to the camera — full body in frame',
+      setupInstruction: 'Stand sideways to the camera. Full body in frame',
       // NEAR / FAR — the rep metric tracks one leg (avg/min jointAngle L/R);
       // the far leg is partly occluded from a side-on angle.
       requiredJoints:    ['leftShoulder',  'leftHip',  'leftKnee',  'leftAnkle'],
@@ -2790,7 +2790,7 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     // Dropped hip from the gate so a flickering hip can no longer break
     // the hold on either side.
     cameraSetup: {
-      setupInstruction: 'Lay your phone on its side on the floor, a few feet to your side — a side-on or clear three-quarter angle both work',
+      setupInstruction: 'Lay your phone on its side on the floor, a few feet to your side. A side-on or clear three-quarter angle both work',
       // Now shared as PUSHUP_CAMERA_JOINTS_A/B — see that const's own comment.
       requiredJoints:    PUSHUP_CAMERA_JOINTS_A,
       requiredJointsAlt: PUSHUP_CAMERA_JOINTS_B,
@@ -2861,7 +2861,7 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     readyGate: PASSTHROUGH_GATE,
 
     cameraSetup: {
-      setupInstruction: 'Stand sideways to the camera — full body in frame',
+      setupInstruction: 'Stand sideways to the camera. Full body in frame',
       // NEAR / FAR — the rep metric tracks one leg (avg/min jointAngle L/R);
       // the far leg is partly occluded from a side-on angle.
       requiredJoints:    ['leftShoulder',  'leftHip',  'leftKnee',  'leftAnkle'],
@@ -2992,7 +2992,7 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
       // bestSide repMetric picks whichever arm gives a cleaner reading.
       // Wrists removed from requiredJoints: repMetric doesn't use wrists; requiring
       // them makes setup fail if wrists are cropped at top of frame.
-      setupInstruction: 'Stand FACING the camera directly — do NOT turn sideways — both arms and shoulders clearly visible',
+      setupInstruction: 'Stand FACING the camera directly. Do NOT turn sideways. Both arms and shoulders clearly visible',
       // NEAR / FAR — repMetric is bestSide(lineVsVertical(shoulder→elbow)).
       requiredJoints:    ['leftShoulder',  'leftElbow'],
       requiredJointsAlt: ['rightShoulder', 'rightElbow'],
@@ -3066,7 +3066,7 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     // Swift-only readyGate values.
     readyGate: PASSTHROUGH_GATE,
     cameraSetup: {
-      setupInstruction: 'Face the camera — stand back so head to feet are fully in frame',
+      setupInstruction: 'Face the camera. Stand back so head to feet are fully in frame',
       // NEAR / FAR — repMetric is average(normalizedVerticalGap(shoulder,wrist) L/R).
       // (Jumping jack is a front-on movement; the split just keeps setup from
       // stalling on a partly-occluded side.)
@@ -3092,7 +3092,7 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
   curl: curlVariant(
     'curl',
     'Bicep Curl',
-    'Face the camera — stand back so both arms are fully in frame',
+    'Face the camera. Stand back so both arms are fully in frame',
   ),
 
   // ─── Curl-family variants ─────────────────────────────────────────────────
@@ -3107,35 +3107,35 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
   hammerCurl: curlVariant(
     'hammerCurl',
     'Hammer Curl',
-    'Face the camera — stand back so both arms are fully in frame',
+    'Face the camera. Stand back so both arms are fully in frame',
     // Neutral grip (thumbs up). Pose-identical to curl from Vision's perspective.
   ),
 
   concentrationCurl: curlVariant(
     'concentrationCurl',
     'Concentration Curl',
-    'Film your working arm clearly — both shoulders and elbows in frame',
+    'Film your working arm clearly. Both shoulders and elbows in frame',
     // Seated single-arm. Film side-on or facing camera; same elbow joints tracked.
   ),
 
   preacherCurl: curlVariant(
     'preacherCurl',
     'Preacher Curl',
-    'Face the camera — upper arms and both elbows clearly in frame',
+    'Face the camera. Upper arms and both elbows clearly in frame',
     // Arm braced on preacher pad. Same shoulder→elbow→wrist landmarks tracked.
   ),
 
   reverseCurl: curlVariant(
     'reverseCurl',
     'Reverse Curl',
-    'Face the camera — stand back so both arms are fully in frame',
+    'Face the camera. Stand back so both arms are fully in frame',
     // Overhand (pronated) grip. Elbow angles are identical to standard curl.
   ),
 
   cableCurl: curlVariant(
     'cableCurl',
     'Cable Curl',
-    'Face the cable machine — stand back so both arms are fully in frame',
+    'Face the cable machine. Stand back so both arms are fully in frame',
     // Low cable pulley. Same joint angles; constant tension vs free weight.
   ),
 
@@ -3147,35 +3147,35 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
   gobletSquat: squatVariant(
     'gobletSquat',
     'Goblet Squat',
-    'Stand side-on to the camera — full body in frame',
+    'Stand side-on to the camera. Full body in frame',
     // Weight held at chest. Side camera gives clean knee-angle read.
   ),
 
   airSquat: squatVariant(
     'airSquat',
     'Air Squat',
-    'Stand side-on to the camera — full body in frame',
+    'Stand side-on to the camera. Full body in frame',
     // Bodyweight only. Identical movement to barbell back squat.
   ),
 
   frontSquat: squatVariant(
     'frontSquat',
     'Front Squat',
-    'Stand side-on to the camera — full body in frame',
+    'Stand side-on to the camera. Full body in frame',
     // Bar front-racked; more upright torso but same knee-angle metric.
   ),
 
   backSquat: squatVariant(
     'backSquat',
     'Back Squat',
-    'Stand side-on to the camera — full body in frame',
+    'Stand side-on to the camera. Full body in frame',
     // Bar on traps. Canonical squat pattern.
   ),
 
   sumoSquat: squatVariant(
     'sumoSquat',
     'Sumo Squat',
-    'Stand side-on to the camera — full body in frame',
+    'Stand side-on to the camera. Full body in frame',
     // Wide stance, toes out. Knee-angle metric is the same; stance width
     // affects WHICH knee Vision tracks but both are measured.
   ),
@@ -3189,42 +3189,42 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
   kneePushup: kneePushupVariant(
     'kneePushup',
     'Knee Push-up',
-    'Place phone on floor to your side — knees and hands in frame',
+    'Place phone on floor to your side. Knees and hands in frame',
     // Knees on floor. Hip checks use shoulder→knee line instead of shoulder→ankle.
   ),
 
   inclinePushup: pushupVariant(
     'inclinePushup',
     'Incline Push-up',
-    'Place phone on floor to your side — shoulders and hands in frame',
+    'Place phone on floor to your side. Shoulders and hands in frame',
     // Hands elevated on a bench or box. Same elbow-angle metric.
   ),
 
   widePushup: pushupVariant(
     'widePushup',
     'Wide Push-up',
-    'Place phone on floor to your side — shoulders and hands in frame',
+    'Place phone on floor to your side. Shoulders and hands in frame',
     // Hands wider than shoulder-width. Same movement plane.
   ),
 
   diamondPushup: pushupVariant(
     'diamondPushup',
     'Diamond Push-up',
-    'Place phone on floor to your side — shoulders and hands in frame',
+    'Place phone on floor to your side. Shoulders and hands in frame',
     // Hands form a diamond. Narrow grip; same elbow-angle metric.
   ),
 
   declinePushup: pushupVariant(
     'declinePushup',
     'Decline Push-up',
-    'Place phone on floor to your side — shoulders and hands in frame',
+    'Place phone on floor to your side. Shoulders and hands in frame',
     // Feet elevated on a bench. Same shoulder→elbow→wrist metric.
   ),
 
   closegripPushup: pushupVariant(
     'closegripPushup',
     'Close-grip Push-up',
-    'Place phone on floor to your side — shoulders and hands in frame',
+    'Place phone on floor to your side. Shoulders and hands in frame',
     // Hands under shoulders (narrow). Same elbow-angle metric and hip checks.
     // Belongs to the push-up family, not tricep — uses jointAngle(shoulder,elbow,wrist).
   ),
@@ -3236,28 +3236,28 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
   overheadPress: shoulderPressVariant(
     'overheadPress',
     'Overhead Press',
-    'Face the camera — stand back so both arms are clearly in frame',
+    'Face the camera. Stand back so both arms are clearly in frame',
     // Barbell or EZ-bar. Same upper-arm lineVsVertical metric.
   ),
 
   arnoldPress: shoulderPressVariant(
     'arnoldPress',
     'Arnold Press',
-    'Face the camera — stand back so both arms are clearly in frame',
+    'Face the camera. Stand back so both arms are clearly in frame',
     // Rotating press. Vision tracks the end positions; rotation is invisible.
   ),
 
   dumbbellShoulderPress: shoulderPressVariant(
     'dumbbellShoulderPress',
     'Dumbbell Shoulder Press',
-    'Face the camera — stand back so both arms are clearly in frame',
+    'Face the camera. Stand back so both arms are clearly in frame',
     // Independent dumbbells. Same joint landmarks.
   ),
 
   machineShoulderPress: shoulderPressVariant(
     'machineShoulderPress',
     'Machine Shoulder Press',
-    'Face the camera — stand back so both arms are clearly in frame',
+    'Face the camera. Stand back so both arms are clearly in frame',
     // Fixed path. Same upper-arm metric applies.
   ),
 
@@ -3268,7 +3268,7 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
   chestPress: chestPressVariant(
     'chestPress',
     'Chest Press',
-    'Stand or lie sideways to the camera — shoulder, elbow, and wrist visible',
+    'Stand or lie sideways to the camera. Shoulder, elbow, and wrist visible',
   ),
 
   // ─── Barbell Bench Press (flat) ─────────────────────────────────────────────
@@ -3351,7 +3351,7 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
   barbellBenchPress: chestPressVariant(
     'barbellBenchPress',
     'Barbell Bench Press',
-    'Lie on a bench, side-on to the camera — shoulder, elbow, and wrist in frame',
+    'Lie on a bench, side-on to the camera. Shoulder, elbow, and wrist in frame',
   ),
 
   // ─── Lunge-family variants ──────────────────────────────────────────────────
@@ -3365,28 +3365,28 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
   splitSquat: lungeVariant(
     'splitSquat',
     'Split Squat',
-    'Stand side-on to the camera — full body in frame',
+    'Stand side-on to the camera. Full body in frame',
     // Static split stance. Front-leg knee angle is what the metric tracks.
   ),
 
   reverseLunge: lungeVariant(
     'reverseLunge',
     'Reverse Lunge',
-    'Stand side-on to the camera — full body in frame',
+    'Stand side-on to the camera. Full body in frame',
     // Step back instead of forward. Same front-knee angle metric.
   ),
 
   stepUp: lungeVariant(
     'stepUp',
     'Step-up',
-    'Stand side-on to the camera — full body and box in frame',
+    'Stand side-on to the camera. Full body and box in frame',
     // Foot placed on a box; knee angle tracks the stepping leg.
   ),
 
   bulgarianSplitSquat: lungeVariant(
     'bulgarianSplitSquat',
     'Bulgarian Split Squat',
-    'Stand side-on to the camera — full body and bench in frame',
+    'Stand side-on to the camera. Full body and bench in frame',
     // Rear foot elevated. Front-leg knee is the metric joint.
   ),
 
@@ -3399,21 +3399,21 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
   tricepPushdown: tricepVariant(
     'tricepPushdown',
     'Tricep Pushdown',
-    'Stand sideways to the camera — shoulder, elbow, and wrist in frame',
+    'Stand sideways to the camera. Shoulder, elbow, and wrist in frame',
     // Cable or band, standing. Upper arm vertical at side, forearm swings down.
   ),
 
   overheadTricepExtension: tricepVariant(
     'overheadTricepExtension',
     'Overhead Tricep Extension',
-    'Stand sideways to the camera — arms fully above head in frame',
+    'Stand sideways to the camera. Arms fully above head in frame',
     // Dumbbell or cable overhead. Elbow bent behind head, forearm extends up.
   ),
 
   skullcrusher: skullcrusherVariant(
     'skullcrusher',
     'Skullcrusher',
-    'Set camera to your side at bench height — lie flat, arms in frame',
+    'Set camera to your side at bench height. Lie flat, arms in frame',
     // EZ-bar or dumbbell, lying on bench. Elbows bent (rest), extend upward (bottom).
     // Torso lean check disabled (meaningless when lying flat).
   ),
@@ -3422,25 +3422,25 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
   bentOverRow: bentOverRowVariant(
     'bentOverRow',
     'Bent-Over Row',
-    'Stand side-on — hinge forward, arm hangs from shoulder to wrist in frame',
+    'Stand side-on. Hinge forward, arm hangs from shoulder to wrist in frame',
   ),
 
   barbellRow: bentOverRowVariant(
     'barbellRow',
     'Barbell Row',
-    'Stand side-on — hinge forward over the bar, shoulder to wrist in frame',
+    'Stand side-on. Hinge forward over the bar, shoulder to wrist in frame',
   ),
 
   singleArmRow: bentOverRowVariant(
     'singleArmRow',
     'Single-Arm Row',
-    'Stand side-on — working arm in frame, shoulder to wrist clearly visible',
+    'Stand side-on. Working arm in frame, shoulder to wrist clearly visible',
   ),
 
   invertedRow: bentOverRowVariant(
     'invertedRow',
     'Inverted Row',
-    'Set camera to your side — body straight under the bar, arms in frame',
+    'Set camera to your side. Body straight under the bar, arms in frame',
     // Body is horizontal (~90° from vertical). Torso swing check (throughoutMin < 25°)
     // never fires. Primary fault (hips dropping) not expressible with current primitives.
   ),
@@ -3448,20 +3448,20 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
   tBarRow: bentOverRowVariant(
     'tBarRow',
     'T-Bar Row',
-    'Stand side-on — hinge forward over the bar, shoulder to wrist in frame',
+    'Stand side-on. Hinge forward over the bar, shoulder to wrist in frame',
   ),
 
   // ─── Row family — seated sub-family ─────────────────────────────────────────
   seatedCableRow: seatedRowVariant(
     'seatedCableRow',
     'Seated Cable Row',
-    'Sit side-on — hip and wrist both in frame, arm extended toward cable',
+    'Sit side-on. Hip and wrist both in frame, arm extended toward cable',
   ),
 
   machineRow: seatedRowVariant(
     'machineRow',
     'Machine Row',
-    'Sit side-on — hip and wrist both in frame, arm extended toward handles',
+    'Sit side-on. Hip and wrist both in frame, arm extended toward handles',
   ),
 
   // ─── Hip-hinge family ───────────────────────────────────────────────────────
@@ -3475,13 +3475,13 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
   romanianDeadlift: hingeVariant(
     'romanianDeadlift',
     'Romanian Deadlift',
-    'Stand sideways to the camera — full body in frame, hips and shoulders visible',
+    'Stand sideways to the camera. Full body in frame, hips and shoulders visible',
   ),
 
   deadlift: hingeVariant(
     'deadlift',
     'Deadlift',
-    'Stand sideways to the camera — full body in frame, hips and shoulders visible',
+    'Stand sideways to the camera. Full body in frame, hips and shoulders visible',
     // Conventional deadlift starts from the floor (more knee bend at the very
     // bottom than an RDL) but the working ROM and torso-angle signal are the
     // same hinge pattern. Flag if on-device data shows this needs its own
@@ -3491,7 +3491,7 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
   goodMorning: hingeVariant(
     'goodMorning',
     'Good Morning',
-    'Stand sideways to the camera — full body in frame, hips and shoulders visible',
+    'Stand sideways to the camera. Full body in frame, hips and shoulders visible',
     // Bar-on-back hinge — same torso-angle mechanics as RDL, just loaded
     // differently. No mechanical reason to expect different thresholds.
   ),
@@ -3500,7 +3500,7 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     ...hingeVariant(
       'kettlebellSwing',
       'Kettlebell Swing',
-      'Stand sideways to the camera — full body in frame, hips and shoulders visible',
+      'Stand sideways to the camera. Full body in frame, hips and shoulders visible',
       // Explosive/ballistic — noticeably faster tempo than a controlled RDL, so
       // minRepInterval is set shorter here (placeholder: 0.3 vs the family
       // default 0.5) to avoid missing fast reps. This is a guess about tempo
@@ -3520,7 +3520,7 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
   singleLegRDL: hingeVariant(
     'singleLegRDL',
     'Single-Leg RDL',
-    'Stand sideways to the camera — full body in frame, hips and shoulders visible',
+    'Stand sideways to the camera. Full body in frame, hips and shoulders visible',
     // Single-leg balance changes the difficulty, not the torso-angle mechanics
     // being measured — same repMetric and placeholder thresholds as the rest.
   ),
@@ -3556,7 +3556,7 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
   cablePullThrough: hingeVariant(
     'cablePullThrough',
     'Cable Pull-Through',
-    'Stand sideways to the camera — full body in frame, hips and shoulders visible',
+    'Stand sideways to the camera. Full body in frame, hips and shoulders visible',
   ),
 
   // ─── Shoulder/arm isolation raise family ───────────────────────────────────
@@ -3571,13 +3571,13 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
   lateralRaise: lateralRaiseVariant(
     'lateralRaise',
     'Lateral Raise',
-    'Face the camera — stand back so both arms are fully in frame',
+    'Face the camera. Stand back so both arms are fully in frame',
   ),
 
   frontRaise: frontRaiseVariant(
     'frontRaise',
     'Front Raise',
-    'Stand sideways to the camera — full arm in frame, shoulder to wrist visible',
+    'Stand sideways to the camera. Full arm in frame, shoulder to wrist visible',
     // Side camera, not front — see RAISE_CAMERA_JOINTS_SIDE_A/B comment above:
     // a front raise's arc points straight at a front camera and would
     // foreshorten to nearly nothing at the top.
@@ -3613,7 +3613,7 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
   latPulldown: latPulldownVariant(
     'latPulldown',
     'Lat Pulldown',
-    'Back to the camera — sit back so both arms are fully in frame overhead to shoulders',
+    'Back to the camera. Sit back so both arms are fully in frame overhead to shoulders',
   ),
 
   // ─── Face pull ────────────────────────────────────────────────────────────────
@@ -3623,7 +3623,7 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
   facePull: facePullVariant(
     'facePull',
     'Face Pull',
-    'Face the camera — stand back so both arms are fully in frame',
+    'Face the camera. Stand back so both arms are fully in frame',
   ),
 
   // ─── Pull-up ────────────────────────────────────────────────────────────────
@@ -3696,7 +3696,7 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     readyGate: PASSTHROUGH_GATE,
 
     cameraSetup: {
-      setupInstruction: "Face the camera — shoulders, elbows, and hips in frame (hands on the bar don't need to be)",
+      setupInstruction: "Face the camera. Shoulders, elbows, and hips in frame (hands on the bar don't need to be)",
       // NEAR / FAR — repMetric is bestSide(bodyRelativeDeviation(elbow; hip→shoulder)).
       requiredJoints:    ['leftShoulder',  'leftElbow',  'leftHip'],
       requiredJointsAlt: ['rightShoulder', 'rightElbow', 'rightHip'],
@@ -3749,7 +3749,7 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     readyGate: PASSTHROUGH_GATE,
 
     cameraSetup: {
-      setupInstruction: "Side-on to the camera — hip, knee, and ankle in frame (the machine partially blocking the leg is expected)",
+      setupInstruction: "Side-on to the camera. Hip, knee, and ankle in frame (the machine partially blocking the leg is expected)",
       // NEAR / FAR — repMetric is average(jointAngle(hip,knee,ankle) L/R).
       requiredJoints:    ['leftHip',  'leftKnee',  'leftAnkle'],
       requiredJointsAlt: ['rightHip', 'rightKnee', 'rightAnkle'],
@@ -4059,7 +4059,7 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
       // down at you — a floor-level lens can't fit your head-to-knees in frame
       // unless you're unrealistically far, and this metric needs your upper
       // body visible. Line your whole body up inside the box.
-      setupInstruction: 'Phone on a chair beside you, angled down. Fit your whole body with space above your head — that space is where you go when you sit up.',
+      setupInstruction: 'Phone on a chair beside you, angled down. Fit your whole body with space above your head, that space is where you go when you sit up.',
       // Advisory only after the FIX 1 build (the gate reads the rep metric).
       requiredJoints:    ['nose'],
       requiredJointsAlt: ['nose'],
@@ -4204,7 +4204,7 @@ export const EXERCISE_DEFINITIONS: Record<ExerciseId, ExerciseDefinitionDef> = {
     readyGate: PASSTHROUGH_GATE,
 
     cameraSetup: {
-      setupInstruction: 'Stand side-on to the camera on the bars/bench — one shoulder and elbow in frame, whole body visible',
+      setupInstruction: 'Stand side-on to the camera on the bars/bench. One shoulder and elbow in frame, whole body visible',
       requiredJoints:    ['leftShoulder',  'leftElbow'],
       requiredJointsAlt: ['rightShoulder', 'rightElbow'],
     },

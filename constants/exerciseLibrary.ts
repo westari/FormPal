@@ -11511,7 +11511,7 @@ export const LIBRARY: Exercise[] = [
     "equipment": "cable",
     "difficulty": "beginner",
     "instructions": [
-      "Connect a standard handle to a tower, and—if possible—position the cable to shoulder height. If not, a low pulley will suffice.",
+      "Connect a standard handle to a tower, and, if possible, position the cable to shoulder height. If not, a low pulley will suffice.",
       "With your side to the cable, grab the handle with both hands and step away from the tower. You should be approximately arm's length away from the pulley, with the tension of the weight on the cable.",
       "With your feet positioned hip-width apart and knees slightly bent, hold the cable to the middle of your chest. This will be your starting position.",
       "Press the cable away from your chest, fully extending both arms. You core should be tight and engaged.",
@@ -15043,7 +15043,7 @@ export const LIBRARY: Exercise[] = [
     "difficulty": "intermediate",
     "instructions": [
       "Roller skating is a fun activity which can be effective in improving cardiorespiratory fitness and muscular endurance. It requires relatively good balance and coordination. It is necessary to learn the basics of skating including turning and stopping and to wear protective gear to avoid possible injury.",
-      "You can skate at a comfortable pace for 30 minutes straight. If you want a cardio challenge, do interval skating — speed skate two minutes of every five minutes, using the remaining three minutes to recover. A 150 lb person will typically burn about 175 calories in 30 minutes skating at a comfortable pace, similar to brisk walking."
+      "You can skate at a comfortable pace for 30 minutes straight. If you want a cardio challenge, do interval skating. Speed skate two minutes of every five minutes, using the remaining three minutes to recover. A 150 lb person will typically burn about 175 calories in 30 minutes skating at a comfortable pace, similar to brisk walking."
     ],
     "secondaryMuscles": [
       "abductors",

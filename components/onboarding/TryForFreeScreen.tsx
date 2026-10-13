@@ -78,7 +78,7 @@ export default function TryForFreeScreen({
 
         <Text style={s.h1}>Try FormPal for free</Text>
         <Text style={s.sub}>
-          Full access to your plan and live form-check for 3 days. We'll remind you before it ends — cancel anytime.
+          Full access to your plan and live form-check for 3 days. We'll remind you before it ends. Cancel anytime.
         </Text>
       </View>
 

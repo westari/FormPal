@@ -371,7 +371,7 @@ function InteractiveFormChart({
         <Text style={ifc.insightTxt}>
           {diff >= 0
             ? <Text>Up <Text style={ifc.insightBold}>{diff}%</Text> since your first session.</Text>
-            : <Text>Down <Text style={ifc.insightBold}>{Math.abs(diff)}%</Text> — keep logging to turn it around.</Text>
+            : <Text>Down <Text style={ifc.insightBold}>{Math.abs(diff)}%</Text>. Keep logging to turn it around.</Text>
           }
         </Text>
       </View>
@@ -479,7 +479,7 @@ function MilestoneCard({ sessions }: { sessions: SessionEntry[] }) {
       icon: 'trophy.fill',
       grad: C.formGrad,
       label: 'Best form',
-      value: best ? `${best.pct}%` : '—',
+      value: best ? `${best.pct}%` : 'N/A',
       sub: best ? formatShort(best.ts) : 'no scored reps yet',
     },
     {
@@ -576,7 +576,7 @@ function ExerciseBreakdown({ sessions }: { sessions: SessionEntry[] }) {
             progress={0}
             colors={ex.colors}
             gradientId={ex.grad}
-            value="—"
+            value="N/A"
             unit=""
             label=""
             size={60}
@@ -609,6 +609,7 @@ const SESSIONS_PREVIEW = 3;
 
 export default function ProgressScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
 
   const [sessions,          setSessions]          = useState<SessionEntry[]>([]);
   const [progressTab,       setProgressTab]       = useState<'week' | 'month' | 'all'>('all');
@@ -676,9 +677,25 @@ export default function ProgressScreen() {
           <View style={{ gap: 10 }}>
             <SectionHeader
               title="By exercise"
-              sub="Detailed per-exercise trends — coming soon"
+              sub="Detailed per-exercise trends. Coming soon"
             />
             <ExerciseBreakdown sessions={sessions} />
+          </View>
+
+          {/* ── QUICK ACTIONS (My workouts / Create workout / Log session) ──
+              Real screens built this pass — see OVERNIGHT_REPORT.md for why
+              these are plain native rows rather than the new Claude-Design
+              artboards for this tab. */}
+          <View style={s.quickActionsRow}>
+            <Pressable style={s.quickActionBtn} onPress={() => router.push('/my-workouts' as any)}>
+              <Text style={s.quickActionTxt}>My workouts</Text>
+            </Pressable>
+            <Pressable style={s.quickActionBtn} onPress={() => router.push('/create-workout' as any)}>
+              <Text style={s.quickActionTxt}>Create workout</Text>
+            </Pressable>
+            <Pressable style={s.quickActionBtn} onPress={() => router.push('/log-session' as any)}>
+              <Text style={s.quickActionTxt}>Log session</Text>
+            </Pressable>
           </View>
 
           {/* ── SESSION HISTORY ───────────────────────────────────────── */}
@@ -734,6 +751,13 @@ export default function ProgressScreen() {
 
 const s = StyleSheet.create({
   scroll: { gap: Sp.lg, paddingHorizontal: 16 },
+
+  quickActionsRow: { flexDirection: 'row', gap: 8 },
+  quickActionBtn: {
+    flex: 1, paddingVertical: 12, borderRadius: 14, alignItems: 'center',
+    backgroundColor: C.card, borderWidth: 1, borderColor: C.border,
+  },
+  quickActionTxt: { fontSize: 12.5, fontWeight: W.semi, color: C.text, textAlign: 'center' },
 
   // Header
   header:  { gap: 6, paddingHorizontal: 8 },

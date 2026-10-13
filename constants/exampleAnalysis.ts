@@ -24,8 +24,8 @@ export const EXAMPLE_ANALYSIS: ExampleFilmAnalysis = {
   isExample: true,
   playerLabel: 'Sample Player · Point Guard',
   overallGrade: 'B-',
-  openingLine: "You're a real point guard. But your handle's predictable — defenders are reading you.",
-  summary: "I watched 45 seconds of you running offense. You see the floor well and you make the right pass most of the time. The problem is your dribble — same pace, same moves, no change of speed. That's why you're getting walled off in the lane.",
+  openingLine: "You're a real point guard. But your handle's predictable. Defenders are reading you.",
+  summary: "I watched 45 seconds of you running offense. You see the floor well and you make the right pass most of the time. The problem is your dribble. Same pace, same moves, no change of speed. That's why you're getting walled off in the lane.",
   strengths: [
     {
       skill: 'Court Vision',

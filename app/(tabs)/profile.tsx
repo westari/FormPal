@@ -23,6 +23,7 @@ import { useCustomizationStore } from '../../store/customizationStore';
 import { useRankStanding } from '../../lib/rank';
 import { TIER_META, TierEmblem } from '../../components/MuscleTierMap';
 import { unlockProgress } from '../../constants/customization';
+import { signOutAndClear, deleteAccountAndClear } from '../../lib/formpalSync';
 
 // ─── Design tokens (exact match to index.tsx) ─────────────────────────────────
 
@@ -210,6 +211,41 @@ export default function ProfileScreen() {
     );
   };
 
+  const signOut = () => {
+    Alert.alert(
+      'Sign Out',
+      'This clears everything saved on this device. Your account data stays safe in the cloud.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign Out', style: 'destructive',
+          onPress: async () => {
+            await signOutAndClear();
+            router.replace('/onboarding');
+          },
+        },
+      ],
+    );
+  };
+
+  const deleteAccount = () => {
+    Alert.alert(
+      'Delete Account',
+      'This permanently deletes your account and everything saved with it — onboarding answers, plan, workout history, streaks, and progress photos. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete', style: 'destructive',
+          onPress: async () => {
+            const { error } = await deleteAccountAndClear();
+            if (error) { Alert.alert('Could not delete account', error); return; }
+            router.replace('/onboarding');
+          },
+        },
+      ],
+    );
+  };
+
   const clearCalibrationOverrides = () => {
     Alert.alert(
       'Clear Calibration Overrides',
@@ -273,7 +309,7 @@ export default function ProfileScreen() {
                     </Text>
                   </>
                 ) : (
-                  <Text style={s.avatarSub}>Unranked — train to earn your first colour</Text>
+                  <Text style={s.avatarSub}>Unranked. Train to earn your first colour</Text>
                 )}
               </View>
             </View>
@@ -300,19 +336,19 @@ export default function ProfileScreen() {
               icon="target"
               colors={C.formGrad}
               label="Goal"
-              value={plan.goal ? GOAL_LABELS[plan.goal] : '—'}
+              value={plan.goal ? GOAL_LABELS[plan.goal] : 'N/A'}
             />
             <SettingRow
               icon="chart.bar.fill"
               colors={C.weekGrad}
               label="Experience"
-              value={plan.experience ? EXP_LABELS[plan.experience] : '—'}
+              value={plan.experience ? EXP_LABELS[plan.experience] : 'N/A'}
             />
             <SettingRow
               icon="calendar"
               colors={C.repsGrad}
               label="Days per week"
-              value={plan.daysPerWeek ? `${plan.daysPerWeek} days` : '—'}
+              value={plan.daysPerWeek ? `${plan.daysPerWeek} days` : 'N/A'}
               last
             />
           </SettingsCard>
@@ -380,6 +416,25 @@ export default function ProfileScreen() {
               colors={['#d4d7dd', '#9aa0ad']}
               label="Help & feedback"
               value="Coming soon"
+              last
+            />
+          </SettingsCard>
+
+          {/* ── ACCOUNT ─────────────────────────────────────────────────── */}
+          <SectionHeader title="Account" />
+          <SettingsCard>
+            <SettingRow
+              icon="arrow.right.square"
+              colors={['#9aa0ad', '#6e7482']}
+              label="Sign Out"
+              onPress={signOut}
+            />
+            <SettingRow
+              icon="trash.fill"
+              colors={['#FF6B6B', '#FF3B30']}
+              label="Delete Account"
+              onPress={deleteAccount}
+              danger
               last
             />
           </SettingsCard>

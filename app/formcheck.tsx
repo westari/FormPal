@@ -30,6 +30,7 @@ import {
   addSetupStatusListener,
   addDebugLogListener,
   isNativeModuleLinked,
+  setSkeletonVisible,
 } from '../modules/athlt-camera/src/index';
 import { EXERCISE_STANDARDS } from '../constants/exerciseStandards';
 import { EXERCISE_DEFINITIONS } from '../constants/exerciseDefinitions';
@@ -42,6 +43,9 @@ import { useAudioSettingsStore } from '../store/audioSettingsStore';
 import { useFormTheme, type FormTheme } from '../lib/activeTheme';
 import type { DebugStatsEvent, RepEvent, ExerciseType } from '../modules/athlt-camera/src/index';
 import { getDemoCues } from '../lib/demoCues';
+
+const FORMCHECK_BUILD = 'fc-1';
+if (__DEV__) console.log(`[formcheck] build ${FORMCHECK_BUILD}`);
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 const C = {
@@ -111,36 +115,36 @@ async function logSessionVideo(uri: string) {
 // : 'squat'`) — now impossible to ship without an entry for every exercise.
 const SETUP_INFO: Record<ExerciseId, { icon: string; title: string; sub: string }> = {
   // Side-view exercises
-  squat:               { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame — ankle to shoulder' },
-  lunge:               { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame — ankle to shoulder' },
-  gobletSquat:         { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame — ankle to shoulder' },
-  airSquat:            { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame — ankle to shoulder' },
-  frontSquat:          { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame — ankle to shoulder' },
-  backSquat:           { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame — ankle to shoulder' },
-  sumoSquat:           { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame — ankle to shoulder' },
-  splitSquat:          { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame — ankle to shoulder' },
-  reverseLunge:        { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame — ankle to shoulder' },
+  squat:               { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame. Ankle to shoulder' },
+  lunge:               { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame. Ankle to shoulder' },
+  gobletSquat:         { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame. Ankle to shoulder' },
+  airSquat:            { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame. Ankle to shoulder' },
+  frontSquat:          { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame. Ankle to shoulder' },
+  backSquat:           { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame. Ankle to shoulder' },
+  sumoSquat:           { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame. Ankle to shoulder' },
+  splitSquat:          { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame. Ankle to shoulder' },
+  reverseLunge:        { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body in frame. Ankle to shoulder' },
   stepUp:              { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body and box in frame' },
   bulgarianSplitSquat: { icon: 'arrow.left.and.right', title: 'Stand sideways',                   sub: 'Full body and bench in frame' },
   // Phone-on-floor exercises (push-up family)
-  pushup:              { icon: 'iphone', title: 'Phone on the floor, to your side',               sub: 'Get in position — full body in frame' },
-  kneePushup:          { icon: 'iphone', title: 'Phone on the floor, to your side',               sub: 'Get in position — knees and hands in frame' },
-  inclinePushup:       { icon: 'iphone', title: 'Phone on the floor, to your side',               sub: 'Get in position — shoulders and hands in frame' },
-  widePushup:          { icon: 'iphone', title: 'Phone on the floor, to your side',               sub: 'Get in position — full body in frame' },
-  diamondPushup:       { icon: 'iphone', title: 'Phone on the floor, to your side',               sub: 'Get in position — full body in frame' },
-  declinePushup:       { icon: 'iphone', title: 'Phone on the floor, to your side',               sub: 'Get in position — shoulders and hands in frame' },
+  pushup:              { icon: 'iphone', title: 'Phone on the floor, to your side',               sub: 'Get in position. Full body in frame' },
+  kneePushup:          { icon: 'iphone', title: 'Phone on the floor, to your side',               sub: 'Get in position. Knees and hands in frame' },
+  inclinePushup:       { icon: 'iphone', title: 'Phone on the floor, to your side',               sub: 'Get in position. Shoulders and hands in frame' },
+  widePushup:          { icon: 'iphone', title: 'Phone on the floor, to your side',               sub: 'Get in position. Full body in frame' },
+  diamondPushup:       { icon: 'iphone', title: 'Phone on the floor, to your side',               sub: 'Get in position. Full body in frame' },
+  declinePushup:       { icon: 'iphone', title: 'Phone on the floor, to your side',               sub: 'Get in position. Shoulders and hands in frame' },
   // Face-camera exercises (curl + shoulder press families)
-  curl:                { icon: 'camera.fill', title: 'Face the camera',                           sub: 'Stand back — both arms and hands in view' },
-  hammerCurl:          { icon: 'camera.fill', title: 'Face the camera',                           sub: 'Stand back — both arms and hands in view' },
+  curl:                { icon: 'camera.fill', title: 'Face the camera',                           sub: 'Stand back. Both arms and hands in view' },
+  hammerCurl:          { icon: 'camera.fill', title: 'Face the camera',                           sub: 'Stand back. Both arms and hands in view' },
   concentrationCurl:   { icon: 'camera.fill', title: 'Face the camera',                           sub: 'Working arm and elbow clearly visible' },
   preacherCurl:        { icon: 'camera.fill', title: 'Face the camera',                           sub: 'Both arms and elbows fully in frame' },
-  reverseCurl:         { icon: 'camera.fill', title: 'Face the camera',                           sub: 'Stand back — both arms and hands in view' },
-  cableCurl:           { icon: 'camera.fill', title: 'Face the cable machine',                    sub: 'Stand back — both arms and hands in view' },
-  shoulderPress:         { icon: 'camera.fill', title: 'Face the camera',                         sub: 'Stand back — arms and shoulders in frame' },
-  overheadPress:         { icon: 'camera.fill', title: 'Face the camera',                         sub: 'Stand back — arms and shoulders in frame' },
-  arnoldPress:           { icon: 'camera.fill', title: 'Face the camera',                         sub: 'Stand back — arms and shoulders in frame' },
-  dumbbellShoulderPress: { icon: 'camera.fill', title: 'Face the camera',                         sub: 'Stand back — arms and shoulders in frame' },
-  machineShoulderPress:  { icon: 'camera.fill', title: 'Face the camera',                         sub: 'Stand back — arms and shoulders in frame' },
+  reverseCurl:         { icon: 'camera.fill', title: 'Face the camera',                           sub: 'Stand back. Both arms and hands in view' },
+  cableCurl:           { icon: 'camera.fill', title: 'Face the cable machine',                    sub: 'Stand back. Both arms and hands in view' },
+  shoulderPress:         { icon: 'camera.fill', title: 'Face the camera',                         sub: 'Stand back. Arms and shoulders in frame' },
+  overheadPress:         { icon: 'camera.fill', title: 'Face the camera',                         sub: 'Stand back. Arms and shoulders in frame' },
+  arnoldPress:           { icon: 'camera.fill', title: 'Face the camera',                         sub: 'Stand back. Arms and shoulders in frame' },
+  dumbbellShoulderPress: { icon: 'camera.fill', title: 'Face the camera',                         sub: 'Stand back. Arms and shoulders in frame' },
+  machineShoulderPress:  { icon: 'camera.fill', title: 'Face the camera',                         sub: 'Stand back. Arms and shoulders in frame' },
   // Chest press — unlike the squat/tricep/row side-camera families, this one
   // is normally done LYING DOWN (bench/floor dumbbell press), not standing;
   // the exerciseDefinitions.ts cameraSetup.setupInstruction already said
@@ -152,54 +156,54 @@ const SETUP_INFO: Record<ExerciseId, { icon: string; title: string; sub: string 
   // already caused a real complaint, "stand sideways" shown while the
   // person was actually lying on a bench).
   barbellBenchPress:     { icon: 'arrow.left.and.right', title: 'Lie on a bench, side-on',          sub: 'Shoulder, elbow, and wrist in frame' },
-  jumpingJack:           { icon: 'camera.fill', title: 'Face the camera',                         sub: 'Full body in frame — arms and legs visible' },
+  jumpingJack:           { icon: 'camera.fill', title: 'Face the camera',                         sub: 'Full body in frame. Arms and legs visible' },
   // Close-grip push-up (push-up family) — same as other push-up variants
-  closegripPushup:          { icon: 'iphone', title: 'Phone on the floor, to your side',          sub: 'Get in position — shoulders and hands in frame' },
+  closegripPushup:          { icon: 'iphone', title: 'Phone on the floor, to your side',          sub: 'Get in position. Shoulders and hands in frame' },
   // Tricep family — side-on camera
-  tricepPushdown:           { icon: 'arrow.left.and.right', title: 'Stand sideways',              sub: 'Arms in frame — shoulder to wrist' },
+  tricepPushdown:           { icon: 'arrow.left.and.right', title: 'Stand sideways',              sub: 'Arms in frame. Shoulder to wrist' },
   overheadTricepExtension:  { icon: 'arrow.left.and.right', title: 'Stand sideways',              sub: 'Arms fully above head in frame' },
-  skullcrusher:             { icon: 'arrow.left.and.right', title: 'Set camera to your side',     sub: 'Lie flat on bench — arms in frame' },
+  skullcrusher:             { icon: 'arrow.left.and.right', title: 'Set camera to your side',     sub: 'Lie flat on bench. Arms in frame' },
   // Row family — all side-on camera
-  bentOverRow:    { icon: 'arrow.left.and.right', title: 'Stand sideways',            sub: 'Hinge forward — shoulder to wrist in frame' },
-  barbellRow:     { icon: 'arrow.left.and.right', title: 'Stand sideways',            sub: 'Hinge forward over bar — shoulder to wrist in frame' },
-  singleArmRow:   { icon: 'arrow.left.and.right', title: 'Stand sideways',            sub: 'Working arm in frame — shoulder to wrist visible' },
-  invertedRow:    { icon: 'arrow.left.and.right', title: 'Set camera to your side',   sub: 'Body straight under bar — arms clearly in frame' },
-  tBarRow:        { icon: 'arrow.left.and.right', title: 'Stand sideways',            sub: 'Hinge forward over bar — shoulder to wrist in frame' },
-  seatedCableRow: { icon: 'arrow.left.and.right', title: 'Sit sideways to camera',   sub: 'Hip and wrist both in frame — arm extended toward cable' },
-  machineRow:     { icon: 'arrow.left.and.right', title: 'Sit sideways to camera',   sub: 'Hip and wrist both in frame — arm extended toward handles' },
+  bentOverRow:    { icon: 'arrow.left.and.right', title: 'Stand sideways',            sub: 'Hinge forward. Shoulder to wrist in frame' },
+  barbellRow:     { icon: 'arrow.left.and.right', title: 'Stand sideways',            sub: 'Hinge forward over bar. Shoulder to wrist in frame' },
+  singleArmRow:   { icon: 'arrow.left.and.right', title: 'Stand sideways',            sub: 'Working arm in frame. Shoulder to wrist visible' },
+  invertedRow:    { icon: 'arrow.left.and.right', title: 'Set camera to your side',   sub: 'Body straight under bar. Arms clearly in frame' },
+  tBarRow:        { icon: 'arrow.left.and.right', title: 'Stand sideways',            sub: 'Hinge forward over bar. Shoulder to wrist in frame' },
+  seatedCableRow: { icon: 'arrow.left.and.right', title: 'Sit sideways to camera',   sub: 'Hip and wrist both in frame. Arm extended toward cable' },
+  machineRow:     { icon: 'arrow.left.and.right', title: 'Sit sideways to camera',   sub: 'Hip and wrist both in frame. Arm extended toward handles' },
   // Hip-hinge family — side-on camera, torso travel + hip movement both visible
-  romanianDeadlift: { icon: 'arrow.left.and.right', title: 'Stand sideways', sub: 'Full body in frame — hips and shoulders visible' },
-  deadlift:         { icon: 'arrow.left.and.right', title: 'Stand sideways', sub: 'Full body in frame — hips and shoulders visible' },
-  goodMorning:      { icon: 'arrow.left.and.right', title: 'Stand sideways', sub: 'Full body in frame — hips and shoulders visible' },
-  kettlebellSwing:  { icon: 'arrow.left.and.right', title: 'Stand sideways', sub: 'Full body in frame — hips and shoulders visible' },
-  singleLegRDL:     { icon: 'arrow.left.and.right', title: 'Stand sideways', sub: 'Full body in frame — hips and shoulders visible' },
+  romanianDeadlift: { icon: 'arrow.left.and.right', title: 'Stand sideways', sub: 'Full body in frame. Hips and shoulders visible' },
+  deadlift:         { icon: 'arrow.left.and.right', title: 'Stand sideways', sub: 'Full body in frame. Hips and shoulders visible' },
+  goodMorning:      { icon: 'arrow.left.and.right', title: 'Stand sideways', sub: 'Full body in frame. Hips and shoulders visible' },
+  kettlebellSwing:  { icon: 'arrow.left.and.right', title: 'Stand sideways', sub: 'Full body in frame. Hips and shoulders visible' },
+  singleLegRDL:     { icon: 'arrow.left.and.right', title: 'Stand sideways', sub: 'Full body in frame. Hips and shoulders visible' },
   // Shoulder/arm isolation raise family
-  lateralRaise: { icon: 'camera.fill', title: 'Face the camera', sub: 'Stand back — both arms and shoulders in view' },
-  frontRaise:   { icon: 'arrow.left.and.right', title: 'Stand sideways', sub: 'Full arm in frame — shoulder to wrist visible' },
+  lateralRaise: { icon: 'camera.fill', title: 'Face the camera', sub: 'Stand back. Both arms and shoulders in view' },
+  frontRaise:   { icon: 'arrow.left.and.right', title: 'Stand sideways', sub: 'Full arm in frame. Shoulder to wrist visible' },
   // Lat pulldown — back-to-camera, seated (CHANGED this round — was
   // front-facing; see constants/exerciseDefinitions.ts's latPulldownVariant()
   // for the full orientation investigation). Grip variants removed — one
   // exercise only.
-  latPulldown: { icon: 'camera.fill', title: 'Back to the camera', sub: 'Sit back — both arms in frame, overhead to shoulders' },
+  latPulldown: { icon: 'camera.fill', title: 'Back to the camera', sub: 'Sit back. Both arms in frame, overhead to shoulders' },
   // Face pull — front-facing, both arms visible at once (no near/far-side
   // ambiguity, unlike every side-on pull family). Copy matched to
   // facePullVariant()'s own setupInstruction, same convention as chestPress/
   // barbellBenchPress above.
-  facePull: { icon: 'camera.fill', title: 'Face the camera', sub: 'Stand back — both arms fully in frame' },
+  facePull: { icon: 'camera.fill', title: 'Face the camera', sub: 'Stand back. Both arms fully in frame' },
   // Cable pull-through — same side-on, standing camera copy as the rest of
   // the hip-hinge family (romanianDeadlift/deadlift/etc above).
-  cablePullThrough: { icon: 'arrow.left.and.right', title: 'Stand sideways', sub: 'Full body in frame — hips and shoulders visible' },
+  cablePullThrough: { icon: 'arrow.left.and.right', title: 'Stand sideways', sub: 'Full body in frame. Hips and shoulders visible' },
   // Pull-up — front-facing, matches pullup's own cameraSetup.setupInstruction
   // in exerciseDefinitions.ts (shoulders/elbows/hips visible, hands don't
   // need to be — that's the whole point of the wrist-free metric).
-  pullup: { icon: 'camera.fill', title: 'Face the camera', sub: "Shoulders, elbows, and hips in frame — hands don't need to be" },
+  pullup: { icon: 'camera.fill', title: 'Face the camera', sub: "Shoulders, elbows, and hips in frame. Hands don't need to be" },
   // Leg curl (machine) — side-on, matches its own setupInstruction.
   legCurl: { icon: 'arrow.left.and.right', title: 'Set camera to your side', sub: 'Hip, knee, and ankle in frame' },
   // Crunch — lying down, side-on. Matches its own setupInstruction; see
   // that exercise's comment for the confirmed on-device
   // lying-pose-detection risk this shares with the removed gluteBridge.
   crunch: { icon: 'arrow.left.and.right', title: 'Phone on a chair beside you, angled down', sub: 'Fit your whole body with room above your head' },
-  dips:   { icon: 'figure.strengthtraining.functional', title: 'Stand side-on to the camera', sub: 'Shoulder and elbow in frame — whole body visible' },
+  dips:   { icon: 'figure.strengthtraining.functional', title: 'Stand side-on to the camera', sub: 'Shoulder and elbow in frame. Whole body visible' },
 };
 
 // ─── Positioning-guide box orientation ───────────────────────────────────────
@@ -524,7 +528,7 @@ function RepCounterIntro({ topInset, bottomInset, onContinue }: {
           <Text style={ri.badgeTxt}>8</Text>
         </View>
         <Text style={ri.h1}>Some exercises{'\n'}only count reps</Text>
-        <Text style={ri.sub}>No form check on this one — just the count. Nothing here affects your rank.</Text>
+        <Text style={ri.sub}>No form check on this one, just the count. Nothing here affects your rank.</Text>
       </View>
       <Pressable style={ri.cta} onPress={onContinue}>
         <Text style={ri.ctaTxt}>Continue</Text>
@@ -817,7 +821,7 @@ export default function FormCheckScreen() {
 
   useEffect(() => {
     if (notLinked) {
-      setError('ATHLTCamera native module not linked.\nRun a dev build — Expo Go does not support this screen.');
+      setError('ATHLTCamera native module not linked.\nRun a dev build. Expo Go does not support this screen.');
       return;
     }
 
@@ -919,6 +923,10 @@ export default function FormCheckScreen() {
 
     setPhase('starting');
     void setDiagnosticMode(true);
+    // Explicit ask: "remove the blue skeleton overlay, it's broken" — the
+    // native toggle for this already existed (setSkeletonVisible) but was
+    // never actually called anywhere, so the overlay always rendered.
+    void setSkeletonVisible(false);
     startSession().then(async result => {
       if (!mounted) return;
       if (!result.success) {
@@ -1220,7 +1228,7 @@ export default function FormCheckScreen() {
                   live tracking cues below. */}
               <Text style={s.setupBig}>
                 {setupAllVisible
-                  ? 'Perfect — hold still'
+                  ? 'Perfect. Hold still'
                   : (setupHint || SETUP_INFO[exerciseType].title)}
                 <Image source={SPARKLE_DUO} style={s.cueSparkleImg} />
               </Text>
@@ -1254,7 +1262,7 @@ export default function FormCheckScreen() {
           <GlassPanel radius={999} style={s.setupSuccessCard}>
             <View style={s.setupSuccessInner}>
               <SymbolView name="checkmark.circle.fill" size={40} tintColor={C.good} type="monochrome" style={{ width: 40, height: 40 }} />
-              <Text style={s.setupSuccessText}>Ready — go!</Text>
+              <Text style={s.setupSuccessText}>Ready. Go!</Text>
             </View>
           </GlassPanel>
         </View>
@@ -1659,6 +1667,7 @@ const s = StyleSheet.create({
   cueSparkleImg: { width: 18, height: 18, top: -40, marginLeft: -18 },
   outOfPlaneText:  {
     fontFamily: 'PlusJakartaSans_700Bold', fontSize: 20, color: C.warn, letterSpacing: 0.1, textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 10,
   },
   // Calmer than the planarity hint — softer colour, lower on screen, out of
   // the way of the rep counter. Guidance, not an alarm.
@@ -1669,6 +1678,11 @@ const s = StyleSheet.create({
   trackingCueText: {
     fontFamily: 'PlusJakartaSans_700Bold', fontSize: 24, lineHeight: 30,
     color: '#fff', textAlign: 'center', letterSpacing: 0.1, maxWidth: 340,
+    // Explicit ask: "the font and overall look of the text looks weird" —
+    // the rep counter right below already gets a legibility shadow over
+    // the live camera feed (see repBlock's comment); this text never did,
+    // so flat white text could read as washed-out depending on background.
+    textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 10,
   },
 
   // Rep count — bare, no frame; own shadow for legibility over the camera.

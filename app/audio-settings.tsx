@@ -28,7 +28,7 @@ import {
 const SHADOW_MED = Platform.OS === 'ios' ? { boxShadow: Elev.medium.shadow } as any : { elevation: Elev.medium.android };
 
 const FREQUENCY_OPTIONS: { value: VoiceFrequency; label: string; sub: string }[] = [
-  { value: 'off',                   label: 'Off',                    sub: 'No spoken cues — just the good-rep chime' },
+  { value: 'off',                   label: 'Off',                    sub: 'No spoken cues, just the good-rep chime' },
   { value: 'correctionsOnly',       label: 'Corrections only',       sub: 'Speaks only when a rep needs fixing' },
   { value: 'correctionsAndCounts',  label: 'Corrections + counts',   sub: 'Also calls out your rep count every so often' },
 ];
@@ -72,7 +72,7 @@ export default function AudioSettingsScreen() {
           </Pressable>
           <View style={{ gap: 2 }}>
             <Text style={s.title}>Audio coaching</Text>
-            <Text style={s.sub}>MyPal speaks over your music, never stops it.</Text>
+            <Text style={s.sub}>Cue speaks over your music, never stops it.</Text>
           </View>
         </View>
 
@@ -80,10 +80,10 @@ export default function AudioSettingsScreen() {
           <View style={s.notice}>
             <Text style={s.noticeText}>
               {!voiceAvailable && !chimeAvailable
-                ? 'Voice and chime need a fresh app build to turn on — this device build predates the audio feature.'
+                ? 'Voice and chime need a fresh app build to turn on. This device build predates the audio feature.'
                 : !voiceAvailable
-                  ? 'Voice needs a fresh app build to turn on — the chime works now.'
-                  : 'The chime needs a fresh app build to turn on — voice works now.'}
+                  ? 'Voice needs a fresh app build to turn on. The chime works now.'
+                  : 'The chime needs a fresh app build to turn on. Voice works now.'}
             </Text>
           </View>
         )}
@@ -105,7 +105,7 @@ export default function AudioSettingsScreen() {
           <View style={s.row}>
             <View style={{ flex: 1 }}>
               <Text style={[s.rowLabel, !audioEnabled && s.dimmed]}>Good-rep chime</Text>
-              <Text style={[s.rowSub, !audioEnabled && s.dimmed]}>A quiet sound when a rep looks solid — no words</Text>
+              <Text style={[s.rowSub, !audioEnabled && s.dimmed]}>A quiet sound when a rep looks solid. No words</Text>
             </View>
             <Switch
               value={soundEffectEnabled}
@@ -117,7 +117,7 @@ export default function AudioSettingsScreen() {
         </View>
 
         {/* ── Talk frequency ──────────────────────────────────────────── */}
-        <Text style={s.sectionTitle}>How much should MyPal talk?</Text>
+        <Text style={s.sectionTitle}>How much should Cue talk?</Text>
         <View style={[s.card, SHADOW_MED]}>
           {FREQUENCY_OPTIONS.map((opt, i) => (
             <Pressable
@@ -154,8 +154,8 @@ export default function AudioSettingsScreen() {
           <Text style={s.noticeText}>
             This voice is used ONLY for spoken rep counts ("Five", "Ten"...), and only
             plays live when "Corrections + counts" is selected above. Form-correction
-            cues (like "KEEP ELBOWS IN") always use a separate, fixed coach voice —
-            they don't change here.
+            cues (like "KEEP ELBOWS IN") always use a separate, fixed coach voice.
+            They don't change here.
           </Text>
         </View>
         <View style={[s.card, SHADOW_MED]}>

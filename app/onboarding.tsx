@@ -25,6 +25,10 @@ import TryForFreeScreen from '../components/onboarding/TryForFreeScreen';
 import { PUSHUP_ICON, PULLUP_ICON, SQUAT_ICON } from '../assets/onboarding/onbIcons';
 import { FONT, W, Col, Elev } from '../constants/theme';
 import { computeGoalPlan } from '../lib/onboardingGoals';
+import { hasGiftOfferBeenShown, markGiftOfferShown } from '../lib/giftOffer';
+import { loadPlan } from '../lib/planStorage';
+import type { Plan as PlanT } from '../types/plan';
+import { Camera as ExpoCamera } from 'expo-camera';
 
 // Onboarding video clips — drop the real files in at these paths and flip
 // the consts to require(...). null renders a plain black frame instead, so
@@ -359,8 +363,22 @@ const ONB_HTML = {
   // *Inject helpers).
   generatePlan:       require('../assets/app screens/generateplan.html'),
   planReady:          require('../assets/app screens/planisreadynow.html'),
-  trialTimeline:      require('../assets/app screens/trialtimeline2.html'),
-  paywall:            require('../assets/app screens/paywall.html'),
+  // Explicit ask: "Trial reminder screen: goes right before the paywall,
+  // replacing the current one" — this ('trialTimeline') IS the step
+  // immediately before webPaywall, so repointed its source rather than
+  // adding a parallel step (same key, new file — smallest change).
+  trialTimeline:      require('../assets/app screens/trialreminder.html'),
+  // Explicit ask: "New paywall: replaces the current paywall."
+  paywall:            require('../assets/app screens/paywallv2.html'),
+  // Explicit ask: gift offer, shown at most once ever when the paywall is
+  // closed without buying (see the 'giftOffer' appState block below).
+  giftOffer:          require('../assets/app screens/giftoffer.html'),
+  // After-purchase one-time sequence (task 3): Welcome -> How it works ->
+  // Allow camera -> Ready to train -> app.
+  welcomeToFormPal:   require('../assets/app screens/welcometoformpal.html'),
+  howFormPalWorks:    require('../assets/app screens/formpalhowitworks.html'),
+  allowCamera:        require('../assets/app screens/allowcamera.html'),
+  readyToTrain:       require('../assets/app screens/readytotrain.html'),
   // Real Claude-Design artboards for steps that were native placeholders
   // (plain "PLACEHOLDER — DESIGN COMING" text / a hand-built slider /
   // native centered-text component) — used directly via WebView, not
@@ -386,6 +404,17 @@ const ONB_HTML = {
   // Not a STEPS screen — a standalone appState shown right before
   // generatePlan (see the 'readyToBuild' appState block).
   readyToBuild:        require('../assets/app screens/readytobuild.html'),
+  // Replaces PreRankLoaderScreen (the native "Answers locked in" / "Before
+  // we build your plan..." two-phase placeholder) entirely — explicit ask,
+  // real design now exists. Shown right after the "Remembering your
+  // answers" overlay fills, before the rank wheel.
+  startingPoint:       require('../assets/app screens/startingpoint.html'),
+  // New — explicit ask: "add Meet Cue right after the injuries question."
+  // Its own template vars ({{message}}, {{showReply}}, {{zoom}}, etc.) are
+  // a self-contained scripted demo intro to the Cue feature, same as
+  // giveGoodHands/notAlone — no webviewInject needed, no real user data to
+  // swap in, it's an introduction, not the live chat screen (see app/cue.tsx).
+  meetCue:             require('../assets/app screens/meetcue.html'),
 } as const;
 
 // Same 7 files RankWheelScreen's own RANKS array requires — kept as a
@@ -473,6 +502,56 @@ const RESTART_GRAPH_ANIM_JS = `
     return true;
   }
   if (!run()) [150, 400, 900, 1600].forEach(function(d){ setTimeout(run, d); });
+
+  // Recomp's two-line graph (built fresh in JS, not the artboard's own
+  // default path) needs its own restart — same pool-prewarm problem: its
+  // draw-in (see planReadyInject) runs once on first apply(), which
+  // usually happens invisibly during generatePlan's prewarm, so by the
+  // time the user actually sees this page it's already finished. Found by
+  // stroke-width (2.6 = the two real line paths; the fill/guide/dot/text
+  // siblings sharing the same class don't have it), re-run the exact same
+  // dash-offset draw-in.
+  function runRecomp(){
+    var lines = document.querySelectorAll('#dc-root .__formpalRecompLine[stroke-width="2.6"]');
+    if (!lines.length) return false;
+    // End dots (r="7", solid-filled, no stroke) ride each line's tip —
+    // paired to their line by matching fill color to the line's stroke
+    // color, same as the initial build in planReadyInject.
+    var endDots = document.querySelectorAll('#dc-root .__formpalRecompLine[r="6"]');
+    var items = [];
+    for (var i=0;i<lines.length;i++){
+      var line = lines[i];
+      var total;
+      try { total = line.getTotalLength(); } catch(e) { total = 400; }
+      line.style.strokeDasharray = String(total);
+      line.style.strokeDashoffset = String(total);
+      var color = line.getAttribute('stroke');
+      var dot = null;
+      for (var d=0; d<endDots.length; d++){ if (endDots[d].getAttribute('fill') === color) { dot = endDots[d]; break; } }
+      items.push({ line: line, total: total, dot: dot });
+    }
+    var start = null, DUR = 3200;
+    function ease(t){ return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2; }
+    function frame(ts){
+      if (start === null) start = ts;
+      var t = Math.min(1, (ts - start) / DUR);
+      var e = ease(t);
+      for (var j=0;j<items.length;j++){
+        items[j].line.style.strokeDashoffset = String(items[j].total - items[j].total * e);
+        if (items[j].dot) {
+          try {
+            var pt = items[j].line.getPointAtLength(items[j].total * e);
+            items[j].dot.setAttribute('cx', String(pt.x));
+            items[j].dot.setAttribute('cy', String(pt.y));
+          } catch(err){}
+        }
+      }
+      if (t < 1) requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+    return true;
+  }
+  if (!runRecomp()) [150, 400, 900, 1600].forEach(function(d){ setTimeout(runRecomp, d); });
   true;
 })();
 `;
@@ -512,9 +591,26 @@ const PR_FILL_D_DOWN  = PR_LINE_D_DOWN + ' L292 160 L14 160 Z';
 // ask — since its two-line crossing graph doesn't carry the same "Starting
 // today" sub-line read as clearly as the single-line kinds do.
 function planReadyHeaderText(goal: ReturnType<typeof computeGoalPlan>): string {
-  if (goal.kind === 'fat')    return `Your goal is to lose <span style="color: #2E7DFF;">${goal.deltaLbs} lbs</span>`;
-  if (goal.kind === 'recomp') return `Your goal is to <span style="color: #2E7DFF;">lose fat and gain muscle</span>. Starting today.`;
-  return `Your goal is to gain <span style="color: #2E7DFF;">${goal.deltaLbs} lbs</span>`;
+  // Date is back — explicit ask: "by [date], date comes from the goal
+  // helper using realistic rates" — goalDateLabel is exactly that
+  // (computeGoalPlan's own rate-projected date, lib/onboardingGoals.ts).
+  // Bigger again — explicit ask repeated this round ("make the header text
+  // bigger," after an earlier bump to 34/26 still read small) — the
+  // artboard's own default is 28px.
+  if (goal.kind === 'fat')    return `<span style="font-size: 38px;">Your goal is to lose <span style="color: #2E7DFF;">${goal.deltaLbs} lbs</span> by ${goal.goalDateLabel}</span>`;
+  // Exact two-line split per explicit ask — same 30px font size, untouched
+  // ("don't change the font size"). Line 1: "Your goal is to lose fat".
+  // Line 2: "and gain muscle, starting today." Blue stays on the two
+  // goal-defining phrases, split across the forced line break with them.
+  // BUG FOUND ("still 3 lines, starting today should be the 2nd line"):
+  // the <br/> forced "Your goal is to lose fat" / "and gain muscle,
+  // starting today." — that second half is too long for this card width
+  // at 30px, so it auto-wrapped AGAIN, landing "starting today." on an
+  // unplanned 3rd line instead of cleanly owning line 2. Moved the break
+  // to right before "starting today." so it's isolated as its own line
+  // regardless of how the rest wraps above it.
+  if (goal.kind === 'recomp') return `<span style="font-size: 30px; line-height: 1.3; font-weight: 800;">Your goal is to <span style="color: #2E7DFF;">lose fat</span> and <span style="color: #2E7DFF;">gain muscle</span>,<br/>starting today.</span>`;
+  return `<span style="font-size: 38px;">Your goal is to gain <span style="color: #2E7DFF;">${goal.deltaLbs} lbs</span> by ${goal.goalDateLabel}</span>`;
 }
 
 function planReadyInject(a: Record<string, any>): string {
@@ -537,6 +633,7 @@ function planReadyInject(a: Record<string, any>): string {
   };
   var GOAL_VALUE = ${JSON.stringify(goal.shortGoal)};
   var MILESTONE_LINE = ${JSON.stringify('Hit 90% clean form by ' + goal.milestoneDateLabel)};
+  var GOAL_DATE_LABEL = ${JSON.stringify(goal.goalDateLabel)};
   var DAYS = ${days};
   var KIND = ${JSON.stringify(goal.kind)};
   function apply(){
@@ -550,6 +647,28 @@ function planReadyInject(a: Record<string, any>): string {
     // The "Dec 1" date div is hidden via inline style in the same file
     // edit, so it's not touched here either.
     var hit=0;
+
+    // Spacing — explicit ask: "the header text is cramped because the
+    // graph sits too close to it... spread the whole screen out." The
+    // header wrapper's own bottom gap and the card section's top padding +
+    // inter-card gap were all tight artboard defaults (44px/0/24px/16px).
+    var headerWrap = document.querySelector('#dc-root div[style*="padding: 44px 26px 0"]');
+    if (headerWrap) headerWrap.style.setProperty('padding', '50px 26px 20px', 'important');
+    var cardsWrap = document.querySelector('#dc-root div[style*="padding: 24px 18px 0"]');
+    if (cardsWrap) {
+      cardsWrap.style.setProperty('padding-top', '40px', 'important');
+      cardsWrap.style.setProperty('gap', '28px', 'important');
+    }
+    // The "Estimated progress" graph card's own inner padding. An earlier
+    // round bumped this UP (20/18/16 -> 26/22/22) for more breathing room
+    // around the card overall; explicit ask this round is the opposite —
+    // "too much grey space along the border" specifically on the graph —
+    // pulled back down, past even the original default, since the bigger
+    // recomp graph (36-176 of a 190 viewBox) already fills most of its
+    // own space and doesn't need as much surrounding padding as the
+    // smaller original line did.
+    var graphCard = document.querySelector('#dc-root div[style*="padding: 20px 18px 16px"]');
+    if (graphCard) graphCard.style.setProperty('padding', '16px 14px 14px', 'important');
 
     var all=document.querySelectorAll('#dc-root div,#dc-root span,#dc-root p');
     for(var i=0;i<all.length;i++){
@@ -651,12 +770,30 @@ function planReadyInject(a: Record<string, any>): string {
         if (startDot) startDot.style.display = 'none';
         if (endDot) endDot.style.display = 'none';
         if (badge) badge.style.display = 'none';
+        // BUG FOUND ("too much grey along the border, the y-axis is too
+        // long"): the recomp rebuild below hides the original line/fill/
+        // dots but never touched the artboard's OWN 3 default guide lines
+        // (2 dashed at y=56/108, 1 solid baseline at y=160) — those kept
+        // rendering underneath the new, bigger custom lines (which use a
+        // completely different 36-176 range), showing as extra clutter at
+        // mismatched heights. Hiding them here, recomp-only — fat/muscle
+        // still use (and need) them, untouched.
+        var origGuideLines = svg.querySelectorAll('line');
+        for (var gl = 0; gl < origGuideLines.length; gl++) origGuideLines[gl].style.display = 'none';
         if (badgeTriEl) badgeTriEl.style.display = 'none';
         var old = svg.querySelectorAll('.__formpalRecompLine');
         for (var oi = 0; oi < old.length; oi++) old[oi].parentNode.removeChild(old[oi]);
 
         var NS = 'http://www.w3.org/2000/svg';
-        var TOP_Y = 70, BOT_Y = 152, FAT_COLOR = '#15171c', MUSCLE_COLOR = '#2E7DFF';
+        // Bigger per explicit ask ("much better but too small") — same
+        // 300x190 viewBox, but the curves now use almost its full height
+        // (36-176, was 70-152: +60% vertical span) and width (8-296, was
+        // 14-292) instead of sitting in a small band in the middle.
+        var TOP_Y = 36, BOT_Y = 176, X0 = 8, X1 = 296, FAT_COLOR = '#15171c', MUSCLE_COLOR = '#2E7DFF';
+        var MUSCLE_LINE_D = 'M 8.00 176.00 C 43.22 172.59 66.01 165.76 95.02 148.68 C 130.24 128.20 153.04 76.98 192.40 56.49 C 221.41 41.12 248.35 37.71 296.00 36.00';
+        var FAT_LINE_D    = 'M 8.00 36.00 C 43.22 39.41 66.01 46.24 95.02 63.32 C 130.24 83.80 153.04 135.02 192.40 155.51 C 221.41 170.88 248.35 174.29 296.00 176.00';
+        var MUSCLE_FILL_D = MUSCLE_LINE_D + ' L 296 184 L 8 184 Z';
+        var FAT_FILL_D    = FAT_LINE_D + ' L 296 184 L 8 184 Z';
         function mk(tag, attrs){
           var el = document.createElementNS(NS, tag);
           el.setAttribute('class', '__formpalRecompLine');
@@ -664,24 +801,91 @@ function planReadyInject(a: Record<string, any>): string {
           return el;
         }
         // Dotted guides at the shared top/bottom levels, behind everything.
-        svg.appendChild(mk('line', { x1: '14', y1: String(TOP_Y), x2: '292', y2: String(TOP_Y), stroke: '#c7c9d1', 'stroke-width': '1', 'stroke-dasharray': '2.5 4' }));
-        svg.appendChild(mk('line', { x1: '14', y1: String(BOT_Y), x2: '292', y2: String(BOT_Y), stroke: '#c7c9d1', 'stroke-width': '1', 'stroke-dasharray': '2.5 4' }));
-        // Fat: falling, starts high (reuses the proven PR_LINE_D_DOWN
-        // shape/smoothness) — soft fill underneath, drawn first so the
-        // muscle fill reads as the dominant accent where they overlap.
-        svg.appendChild(mk('path', { d: ${JSON.stringify(PR_FILL_D_DOWN)}, fill: FAT_COLOR, opacity: '0.05' }));
-        svg.appendChild(mk('path', { d: ${JSON.stringify(PR_LINE_D_DOWN)}, fill: 'none', stroke: FAT_COLOR, 'stroke-width': '2.6', 'stroke-linecap': 'round' }));
-        // Muscle: rising, starts low (reuses PR_LINE_D).
-        svg.appendChild(mk('path', { d: ${JSON.stringify(PR_FILL_D)}, fill: MUSCLE_COLOR, opacity: '0.08' }));
-        svg.appendChild(mk('path', { d: ${JSON.stringify(PR_LINE_D)}, fill: 'none', stroke: MUSCLE_COLOR, 'stroke-width': '2.6', 'stroke-linecap': 'round' }));
-        // Open-circle endpoints — white fill, colored ring, on top of fills.
-        [[14, BOT_Y, MUSCLE_COLOR], [292, TOP_Y, MUSCLE_COLOR], [14, TOP_Y, FAT_COLOR], [292, BOT_Y, FAT_COLOR]].forEach(function(c){
-          svg.appendChild(mk('circle', { cx: String(c[0]), cy: String(c[1]), r: '4.5', fill: '#ffffff', stroke: c[2], 'stroke-width': '2.5' }));
+        svg.appendChild(mk('line', { x1: String(X0), y1: String(TOP_Y), x2: String(X1), y2: String(TOP_Y), stroke: '#c7c9d1', 'stroke-width': '1', 'stroke-dasharray': '2.5 4' }));
+        svg.appendChild(mk('line', { x1: String(X0), y1: String(BOT_Y), x2: String(X1), y2: String(BOT_Y), stroke: '#c7c9d1', 'stroke-width': '1', 'stroke-dasharray': '2.5 4' }));
+        // Fat: falling — soft fill underneath, drawn first so the muscle
+        // fill reads as the dominant accent where they overlap.
+        svg.appendChild(mk('path', { d: FAT_FILL_D, fill: FAT_COLOR, opacity: '0.05' }));
+        var fatLine = mk('path', { d: FAT_LINE_D, fill: 'none', stroke: FAT_COLOR, 'stroke-width': '2.6', 'stroke-linecap': 'round' });
+        svg.appendChild(fatLine);
+        // Muscle: rising.
+        svg.appendChild(mk('path', { d: MUSCLE_FILL_D, fill: MUSCLE_COLOR, opacity: '0.08' }));
+        var muscleLine = mk('path', { d: MUSCLE_LINE_D, fill: 'none', stroke: MUSCLE_COLOR, 'stroke-width': '2.6', 'stroke-linecap': 'round' });
+        svg.appendChild(muscleLine);
+        // Dots — explicit ask this round: ALL FOUR (both ends of both
+        // lines) get the same look — white center, thin black outline,
+        // bigger than before (was r=5 start / r=6 end, mixed colored
+        // outlines/fills; now r=7 everywhere, stroke is near-black
+        // (#111114, this app's standard near-black, not pure #000) and
+        // thin (1.5, down from 2.5).
+        var DOT_R = '7', DOT_STROKE = '#111114', DOT_STROKE_W = '1.5';
+        var muscleStartDot = mk('circle', { cx: String(X0), cy: String(BOT_Y), r: DOT_R, fill: '#ffffff', stroke: DOT_STROKE, 'stroke-width': DOT_STROKE_W });
+        var fatStartDot = mk('circle', { cx: String(X0), cy: String(TOP_Y), r: DOT_R, fill: '#ffffff', stroke: DOT_STROKE, 'stroke-width': DOT_STROKE_W });
+        svg.appendChild(muscleStartDot);
+        svg.appendChild(fatStartDot);
+        // End dots: ride the tip of their own line as it draws, arriving
+        // at the true end exactly when the draw finishes — explicit ask
+        // ("must appear only when the line reaches them," not sit
+        // pre-placed at the destination). Same getPointAtLength-per-frame
+        // technique RESTART_GRAPH_ANIM_JS's single-line dot already uses,
+        // just one per line here instead of one shared dot.
+        var muscleEndDot = mk('circle', { cx: String(X0), cy: String(BOT_Y), r: DOT_R, fill: '#ffffff', stroke: DOT_STROKE, 'stroke-width': DOT_STROKE_W });
+        var fatEndDot = mk('circle', { cx: String(X0), cy: String(TOP_Y), r: DOT_R, fill: '#ffffff', stroke: DOT_STROKE, 'stroke-width': DOT_STROKE_W });
+        svg.appendChild(muscleEndDot);
+        svg.appendChild(fatEndDot);
+
+        // Draw-in animation — both lines draw left to right on load,
+        // slowed down a lot (explicit ask — was 1400ms, way too fast).
+        [fatLine, muscleLine].forEach(function(line){
+          var total;
+          try { total = line.getTotalLength(); } catch(e) { total = 400; }
+          line.style.strokeDasharray = String(total);
+          line.style.strokeDashoffset = String(total);
+          line.__formpalTotal = total;
         });
-        // Labels beside each line's own end, inside the viewBox (not
-        // pinned to the right edge, which crowded the old version).
-        [['Muscle', MUSCLE_COLOR, 236, TOP_Y - 10], ['Fat', FAT_COLOR, 252, BOT_Y + 18]].forEach(function(row){
-          var txt = mk('text', { x: String(row[2]), y: String(row[3]), 'text-anchor': 'start', 'font-size': '13', 'font-weight': '800', 'font-family': 'Plus Jakarta Sans, Helvetica, sans-serif', fill: row[1] });
+        (function(){
+          var start = null, DUR = 3200;
+          function ease(t){ return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2; }
+          function frame(ts){
+            if (start === null) start = ts;
+            var t = Math.min(1, (ts - start) / DUR);
+            var e = ease(t);
+            fatLine.style.strokeDashoffset = String(fatLine.__formpalTotal - fatLine.__formpalTotal * e);
+            muscleLine.style.strokeDashoffset = String(muscleLine.__formpalTotal - muscleLine.__formpalTotal * e);
+            try {
+              var fp = fatLine.getPointAtLength(fatLine.__formpalTotal * e);
+              fatEndDot.setAttribute('cx', String(fp.x)); fatEndDot.setAttribute('cy', String(fp.y));
+              var mp = muscleLine.getPointAtLength(muscleLine.__formpalTotal * e);
+              muscleEndDot.setAttribute('cx', String(mp.x)); muscleEndDot.setAttribute('cy', String(mp.y));
+            } catch(err){}
+            if (t < 1) requestAnimationFrame(frame);
+          }
+          requestAnimationFrame(frame);
+        })();
+        // Labels right-aligned to just inside the end dot's own x — explicit
+        // ask: "match the reference image's whole look: circle sizes and
+        // style, label text and placement, spacing." The old left-aligned
+        // position (fixed x=230/250) sat at an arbitrary offset unrelated
+        // to where the dot actually was; this reads the real end dot's x
+        // every time and sits the label just above/below it with real
+        // clearance from the card's right edge (X1=296 is close to the
+        // 300-wide viewBox's edge, same as the reference's own end dots).
+        [['Muscle', MUSCLE_COLOR, X1 - 8, TOP_Y - 16], ['Fat', FAT_COLOR, X1 - 8, BOT_Y + 24]].forEach(function(row){
+          var txt = mk('text', { x: String(row[2]), y: String(row[3]), 'text-anchor': 'end', 'font-size': '15', 'font-weight': '800', 'font-family': 'Plus Jakarta Sans, Helvetica, sans-serif', fill: row[1] });
+          txt.textContent = row[0];
+          svg.appendChild(txt);
+        });
+        // X-axis labels — explicit ask: "Now" at the start, the real
+        // projected goal date (GOAL_DATE_LABEL, same value the header
+        // above uses) at the end. The obvious spot (bottom corners) is
+        // already taken by the Muscle/Fat end labels above and below —
+        // placed instead at the vertical MIDPOINT of the two lines'
+        // range, pinned to the far left/right edges, which is clear space
+        // on both rows (the lines are near TOP_Y/BOT_Y at the edges, not
+        // the center). Can't fully verify the exact pixel fit without
+        // seeing it on device — flag if it collides with anything.
+        [['Now', X0, 'start'], [GOAL_DATE_LABEL, X1, 'end']].forEach(function(row){
+          var txt = mk('text', { x: String(row[1]), y: String((TOP_Y + BOT_Y) / 2 + 4), 'text-anchor': row[2], 'font-size': '12', 'font-weight': '600', 'font-family': 'Plus Jakarta Sans, Helvetica, sans-serif', fill: '#9a9aa3' });
           txt.textContent = row[0];
           svg.appendChild(txt);
         });
@@ -744,70 +948,37 @@ const DURATION_YEARS: Record<string, number> = {
   '1-2 years': 2, '2-5 years': 3, '5-10 years': 7, '10+ years': 12,
 };
 
-// These 5 real-design webview screens (plan comparison, realistic target,
-// form confidence, goal pace, thank-you/privacy) each ship their own CSS
-// @keyframes entrance animation (rt-rise, fc-rise, gp-rise, gh-rise...),
-// on top of the native fade every DC page already gets — explicit
-// complaint: they should look like every other question screen's
-// transition, not have a second bespoke intro animation playing over it.
-// Prepended to each of their inject functions below.
-const SUPPRESS_DC_ANIM_JS = `(function(){var s=document.createElement('style');s.textContent='#dc-root *{animation:none!important;}';(document.head||document.documentElement).appendChild(s);})();`;
-
-// realistictarget.html — real design for the former 'giveRealisticTarget'
-// placeholder. Its dc-script already computes a goal-aware sentence
-// (verb/amount/recomp framing) from this.props.goal/lbs — but props are
-// baked in at export time with no live override channel, so the rendered
-// default is always "Gaining 12 lbs is a realistic target!" regardless of
-// the real user. Rather than fighting that, this matches that ONE known
-// default sentence (the only one the static export ever actually renders)
-// and swaps in the real one — same literal-match technique as everywhere
-// else, just applied to a screen whose default happens to come from a
-// prop instead of being hand-authored directly in the markup.
+// These real-design webview screens each ship their own CSS @keyframes
+// entrance animation (rt-rise, fc-rise, gp-rise, al-rise/al-hero...), on
+// top of the native fade every DC page already gets — explicit complaint:
+// they should look like every other question screen's transition
+// (everything together, no staggered per-element reveal), not play a
+// second, staggered bespoke intro animation over it. Prepended to each of
+// their inject functions below, via extraJsBeforeLoad.
 //
-// BUG FOUND: this used to pick the verb from goal.kind (which goal the
-// user SELECTED) — "always says Gaining 12 lbs" was reported because that
-// read goal.kind correctly but the verb should follow the ACTUAL numbers
-// instead: gaining if goal weight is above current weight, losing if
-// below, regardless of which goal category got picked. This step is also
-// now Recomp-skipped entirely (see its showIf), so there's no recomp
-// case to handle here any more.
-function realisticTargetInject(a: Record<string, any>): string {
-  const weight = typeof a.weight === 'number' ? a.weight : 160;
-  const goalWeight = typeof a.goalWeight === 'number' ? a.goalWeight : weight;
-  const delta = Math.round(Math.abs(goalWeight - weight));
-  // Equal weights -> X = 0, verb follows whichever goal was actually
-  // selected (there's no real direction to infer from the numbers when
-  // the delta is 0) — explicit spec. Otherwise the verb follows the real
-  // numbers, same as before.
-  const mainGoalStr = typeof a.mainGoal === 'string' ? a.mainGoal : '';
-  const verb = delta === 0
-    ? (mainGoalStr.startsWith('Lose fat') ? 'Losing' : 'Gaining')
-    : (goalWeight >= weight ? 'Gaining' : 'Losing');
-  const sentence = `${verb} ${delta} lbs is a realistic target!`;
-  // Animation suppression is now applied via extraJsBeforeLoad at the
-  // call site (see the 'webview' step render branch) — before the page's
-  // own script ever runs, instead of after.
-  return `
-(function(){
-  var MAP = { 'Gaining 12 lbs is a realistic target!': ${JSON.stringify(sentence)} };
-  function apply(){
-    var hit=0;
-    var all=document.querySelectorAll('#dc-root div,#dc-root span');
-    for(var i=0;i<all.length;i++){
-      var el=all[i]; if(el.children.length) continue;
-      var t=(el.textContent||'').trim();
-      if(MAP[t]!=null && t!==MAP[t]){ el.textContent=MAP[t]; hit++; }
-    }
-    return hit>=1;
+// BUG FOUND (still reported, several rounds running): still staggering in
+// on the 4 newest screens (notAlone/goodhandsv2/readytobuild/
+// startingPoint). The single synchronous append below is correctly wired
+// for all of them (confirmed by re-reading every call site), so the one
+// remaining explanation is injectedJavaScriptBeforeContentLoaded's own
+// known inconsistency — on some platform/webview versions it can run
+// against a transient pre-navigation document rather than the one that
+// ends up actually loading, in which case the appended <style> tag never
+// makes it into the real page at all. Hedge: ALSO re-append on
+// DOMContentLoaded, which still fires well before these elements' own
+// animations (which start on load/paint, not on DOMContentLoaded) — this
+// is NOT the same mistake as suppressing via plain injectedJavaScript
+// (which runs after the FULL load event, by which point the animations
+// have already started and visibly snap when frozen mid-flight).
+const SUPPRESS_DC_ANIM_JS = `(function(){
+  function suppress(){
+    var s=document.createElement('style');
+    s.textContent='#dc-root *{animation:none!important;-webkit-animation:none!important;}';
+    (document.head||document.documentElement).appendChild(s);
   }
-  if(!apply()) [200,500,1000,2000,3500,5000].forEach(function(d){ setTimeout(apply,d); });
-  else [1000,2500].forEach(function(d){ setTimeout(apply,d); });
-  var root = document.getElementById('dc-root') || document.body;
-  var mo = new MutationObserver(function(){ apply(); });
-  mo.observe(root, { childList: true, subtree: true, characterData: true });
-})();
-`;
-}
+  suppress();
+  document.addEventListener('DOMContentLoaded', suppress);
+})();`;
 
 // formconfidence.html — real design for the former native GuessSlider
 // step. Fully self-contained (its own pointer drag logic, snaps to 3
@@ -827,7 +998,68 @@ function formConfidenceInject(a: Record<string, any>): string {
   function post(m){ try{ window.ReactNativeWebView.postMessage(m); }catch(e){} }
   var VALS = { 'Not confident': 0, 'Somewhat confident': 50, 'Very confident': 100 };
   var last = null;
+  var titleFixed = false;
+  function fixTitle(){
+    if (titleFixed) return;
+    // BUG FOUND (device re-test, round 2): the whole #dc-root canvas gets
+    // transform:scale(S) applied by the shared fit() function elsewhere in
+    // this page's injected JS (S = min(1, vw/390, vh/844) for fitBothKeys
+    // screens like this one — almost always <1 on a real device, since the
+    // fixed 844pt artboard height is usually taller than the actual space
+    // left for the WebView under the native progress-bar header). That
+    // scale applies to EVERYTHING inside #dc-root, including any font-size
+    // this function sets — so the previous round's "font-size: 32px" was
+    // correct in the DOM but rendered smaller than 32 true px on screen,
+    // which is exactly "still too small" even though the fix "worked."
+    // Fix: read the REAL applied scale off #dc-root's own transform style
+    // and divide the target sizes by it, so the POST-scale rendered size
+    // matches the native question header's actual 32px/38px/6px exactly,
+    // on any device/scale factor.
+    var root = document.getElementById('dc-root');
+    var scale = 1;
+    if (root) {
+      var m = /scale\(([^)]+)\)/.exec(root.style.transform || '');
+      if (m) { var sv = parseFloat(m[1]); if (sv > 0) scale = sv; }
+    }
+    // This artboard has its OWN fake progress bar baked in above the
+    // title (a thin rounded track, separate from FormPal's real native
+    // one drawn in the header on top of this WebView) — that extra bar's
+    // height was pushing the question down, reported as "doesn't sit
+    // directly under the progress bar like the other questions." Hide
+    // just the track itself, not its parent row (the parent row also
+    // holds this artboard's own back-chevron icon as a sibling — hiding
+    // the whole row would take that with it too).
+    var fakeBar = document.querySelector('#dc-root div[style*="border-radius: 999px"][style*="background: #ececf0"]');
+    if (fakeBar) fakeBar.style.setProperty('display', 'none', 'important');
+    // Title: match the native question header exactly — fontSize 32,
+    // lineHeight 38, same -0.8 letter-spacing, same tight 6px top gap
+    // under the (real) progress bar (s.qq / s.qBlock in the native
+    // question screens) — this artboard's own title was smaller (30px)
+    // and sat lower (22px top padding), BEFORE accounting for the scale
+    // compensation above.
+    var all = document.querySelectorAll('#dc-root div');
+    for (var i=0;i<all.length;i++){
+      var el = all[i];
+      if (el.children.length) continue;
+      var t = (el.textContent||'').trim();
+      if (t === 'How confident are you in your form?') {
+        // Size confirmed good at 36px now — don't touch it, explicit ask.
+        // Position still needs to move UP (14px top padding overshot from
+        // the previous "move it down more" round) — pulled back to 4px,
+        // tighter than even the original native-match 6px, to sit right
+        // under the progress bar like the other questions.
+        el.style.setProperty('font-size', (36 / scale) + 'px', 'important');
+        el.style.setProperty('line-height', (42 / scale) + 'px', 'important');
+        el.style.setProperty('letter-spacing', (-0.8 / scale) + 'px', 'important');
+        var wrap = el.parentElement;
+        if (wrap) wrap.style.setProperty('padding', (4 / scale) + 'px ' + (24 / scale) + 'px 0', 'important');
+        titleFixed = true;
+        break;
+      }
+    }
+  }
   function apply(){
+    fixTitle();
     var all=document.querySelectorAll('#dc-root div');
     for(var i=0;i<all.length;i++){
       var el=all[i]; if(el.children.length) continue;
@@ -883,6 +1115,49 @@ function goalPaceInject(a: Record<string, any>): string {
 
 // goodhands.html (the thankYou appState screen) — new subtext per explicit
 // copy change, replacing its real default privacy line.
+// allowcamera.html's own "OK"/"Don't Allow" buttons are a COSMETIC fake iOS
+// dialog (its allow() handler just does window.location.href to a
+// nonexistent local prototyping page — never a real permission request).
+// Explicit ask: "Allow camera must trigger the real iOS camera permission."
+// Intercepts both taps before the artboard's own handler/href-navigation
+// fires, and tells RN to show the REAL system dialog instead — see
+// ALLOW_CAMERA_EXTRA_JS's onMessage branch below for the expo-camera call.
+const ALLOW_CAMERA_EXTRA_JS = `
+(function(){
+  function post(m){ try{ window.ReactNativeWebView.postMessage(m); }catch(e){} }
+  document.addEventListener('click', function(ev){
+    var t = (ev.target && ev.target.textContent || '').trim();
+    if (t === 'OK' || t === "Don't Allow") {
+      ev.preventDefault();
+      ev.stopPropagation();
+      post('requestCameraPermission');
+    }
+  }, true);
+})();
+`;
+
+function readyToTrainInject(workoutName: string | null, workoutMeta: string | null): string {
+  const MAP: Record<string, string> = {};
+  if (workoutName) MAP['Full body'] = workoutName;
+  if (workoutMeta) MAP['38 min · 4 exercises'] = workoutMeta;
+  return `
+(function(){
+  var MAP = ${JSON.stringify(MAP)};
+  function apply(){
+    var hit=0;
+    var all=document.querySelectorAll('#dc-root div,#dc-root span');
+    for(var i=0;i<all.length;i++){
+      var el=all[i]; if(el.children.length) continue;
+      var t=(el.textContent||'').trim();
+      if(Object.prototype.hasOwnProperty.call(MAP,t)){ el.textContent = MAP[t]; hit++; }
+    }
+    return hit;
+  }
+  if(!apply()){ [100,300,700].forEach(function(d){ setTimeout(apply,d); }); }
+})();
+`;
+}
+
 function thankYouInject(): string {
   const MAP: Record<string, string> = {
     'Your privacy matters to us. Your workout videos are only used to check your form, and we never sell or share your data.':
@@ -925,7 +1200,8 @@ const DC_PAGE_KEYS: (keyof typeof ONB_HTML)[] = [
   // Real-design replacements for former native placeholder/component
   // screens — same 390×844 #dc-root format as everything else here.
   'giveVsWithout', 'giveRealisticTarget', 'formConfidence', 'thankYou', 'goalPace',
-  'giveGoodHands', 'notAlone', 'readyToBuild',
+  'giveGoodHands', 'notAlone', 'readyToBuild', 'startingPoint', 'meetCue', 'giftOffer',
+  'welcomeToFormPal', 'howFormPalWorks', 'allowCamera', 'readyToTrain',
 ];
 // NOTE: no bare "Next" — strengthassesment's in-card "Next exercise" button
 // must NOT advance the whole flow.
@@ -937,7 +1213,7 @@ const DC_PAGE_KEYS: (keyof typeof ONB_HTML)[] = [
 // extraction that's its real CTA label, not covered by any existing
 // pattern above (would have silently been a dead "Continue does nothing"
 // button otherwise, same bug class as the rankReveal one noted above).
-const DC_CTA_RE = "^(Continue|See my plan|See plan|See my potential|See my route|Get my rank|Unlock my full plan|Unlock my plan|Unlock|Start my 3-day|Start my 3\\u2011day|Start my free trial|Start free trial|Start free|Done|Get started|Let.s do it|Let.s go|I.m in|Generate plan)\\b";
+const DC_CTA_RE = "^(Continue|See my plan|See plan|See my potential|See my route|Get my rank|Unlock my full plan|Unlock my plan|Unlock|Start my 3-day|Start my 3\\u2011day|Start my free trial|Start free trial|Start free|Done|Get started|Let.s do it|Let.s go|Let.s get started|I.m in|Generate plan|Claim my gift)\\b";
 const DC_PAGE_INJECT = `
 (function () {
   function post(m){ try{ window.ReactNativeWebView.postMessage(m); }catch(e){} }
@@ -1293,12 +1569,15 @@ window.__dcFitBoth=1;
 })();
 `;
 
-function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditValue, onStrengthVals, topInset, progress, extraJs: extraJsProp, extraJsBeforeLoad, poolActive, htmlOverride }: {
+function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditValue, onStrengthVals, onCustomMessage, topInset, progress, extraJs: extraJsProp, extraJsBeforeLoad, poolActive, htmlOverride }: {
   htmlKey: keyof typeof ONB_HTML;
   onAdvance: () => void;
   onBack: () => void;
   onEditInfo?: (field: string) => void;
   onEditValue?: (field: string, value: string) => void;
+  // Escape hatch for the rare screen whose postMessage isn't one of the
+  // generic ones below — currently just allowCamera's 'requestCameraPermission'.
+  onCustomMessage?: (msg: string) => void;
   // strengthAssessment only — see STRENGTH_CAPTURE_JS. Fires with the
   // running { pushup:{reps}, pullup:{reps}, squat:{reps}, deadlift:{weight,reps} }
   // map every time it changes.
@@ -1330,11 +1609,23 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
   const fade = useRef(new Animated.Value(0)).current;
   const backFade = useRef(new Animated.Value(0)).current;
   const webRef = useRef<WebView>(null);
-  // Container visibility. In the pool it cross-fades between pages. Standalone
-  // it starts visible (white) — the inner WebView `fade` + the artboard's own
-  // #dc-root opacity gate are the single, clean content reveal; a second
-  // container fade on top of them just read as a glitch.
-  const containerFade = useRef(new Animated.Value(inPool ? (poolActive ? 1 : 0) : 1)).current;
+  // BUG FOUND (explicit ask: "tell me what's actually causing the white
+  // screen"): for standalone (non-pooled) screens, this container used to
+  // start at full opacity (1) IMMEDIATELY on mount — painting its own
+  // solid white/`#f4f4f2` background instantly — while the WebView content
+  // itself stayed invisible (the separate `fade` value below, 0 until the
+  // page loads and the injected JS successfully finds/replaces its real
+  // data) until `reveal()` fires. THAT gap — blank white container up
+  // front, real content popping in some number of hundred ms later — IS
+  // the white screen. An earlier round deliberately split these into two
+  // values because animating them as a SECOND fade on top of the content's
+  // own fade read as a glitch (a visible two-step reveal). Fix: reuse the
+  // SAME Animated.Value for both — one single opacity transition, so the
+  // container and its content become visible at the literal same instant
+  // (also directly satisfies "every element must appear at the same
+  // moment" — there's only one fade left to desync from anything).
+  const poolContainerFade = useRef(new Animated.Value(poolActive ? 1 : 0)).current;
+  const containerFade = inPool ? poolContainerFade : fade;
   const shown = useRef(false);
   const [webReady, setWebReady] = useState(false);
 
@@ -1372,11 +1663,21 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
   // page hidden if it doesn't arrive.
   useEffect(() => {
     if (!webReady) return;
-    const t = setTimeout(reveal, DC_PAGE_KEYS.includes(htmlKey) ? 800 : 350);
+    // Tightened again — still reported as a visible white flash before
+    // every new (non-pooled) webview screen. This reduces the WORST-CASE
+    // wait once the page has already fired its load event, but can't
+    // eliminate the gap entirely: a cold WebView mount is still genuinely
+    // blank for some amount of time before its own content paints, no
+    // matter how fast this fallback fires. The pool (DcPagePool, the last
+    // 3 pre-paywall pages) has ZERO flash because those pages are already
+    // mounted and painted ahead of time — true "enters exactly like a
+    // native screen" parity for the REST of the webview screens needs that
+    // same prewarm treatment, not just a shorter timer here.
+    const t = setTimeout(reveal, DC_PAGE_KEYS.includes(htmlKey) ? 400 : 200);
     return () => clearTimeout(t);
   }, [webReady]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    const hard = setTimeout(reveal, 3500); // absolute backstop from mount
+    const hard = setTimeout(reveal, 2200); // absolute backstop from mount
     return () => clearTimeout(hard);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1388,7 +1689,7 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
   const fitBothKeys = [
     'trialTimeline', 'paywall', 'strengthAssessment', 'rankReveal',
     'giveVsWithout', 'giveRealisticTarget', 'formConfidence', 'thankYou', 'goalPace',
-    'giveGoodHands', 'notAlone', 'readyToBuild',
+    'giveGoodHands', 'notAlone', 'readyToBuild', 'startingPoint',
   ];
   const dcExtra =
     htmlKey === 'generatePlan' ? GENERATE_PLAN_INJECT :
@@ -1428,6 +1729,7 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
               try { onStrengthVals?.(JSON.parse(m.slice('savals:'.length))); } catch (e) {}
               return;
             }
+            if (m === 'requestCameraPermission') { onCustomMessage?.(m); return; }
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             if (m === 'advance' || m === 'skip') onAdvance();
           }}
@@ -1484,6 +1786,27 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
           >
             <Text style={web.restoreTxt}>Restore</Text>
           </TouchableOpacity>
+        </Animated.View>
+      ) : htmlKey === 'giftOffer' ? (
+        // Gift offer: same X-close-only treatment as paywall (its own
+        // internal "Close" link has no real handler — handled natively
+        // here instead), no Restore (nothing to restore), no progress bar
+        // (same reasoning as paywall — this is a terminal post-paywall
+        // screen, not a flow step).
+        <Animated.View
+          pointerEvents="box-none"
+          style={{ position: 'absolute', top: Math.max(6, topInset - 6), left: 0, right: 0, zIndex: 80, opacity: backFade, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', paddingHorizontal: 20 }}
+        >
+          <LiquidGlassButton
+            onPress={() => { Haptics.selectionAsync(); onBack(); }}
+            hitSlop={12}
+            radius={17}
+            variant="regular"
+            fallbackColor="rgba(255,255,255,0.92)"
+            style={[web.backCircle, web.backCircleDc]}
+          >
+            <SymbolView name="xmark" size={14} tintColor="#1b1f27" type="monochrome" style={{ width: 14, height: 14 }} />
+          </LiquidGlassButton>
         </Animated.View>
       ) : (
         <Animated.View
@@ -1585,9 +1908,14 @@ function DcPagePool({ activeKey, answers, topInset, progressFor, onAdvance, onBa
     // JSON.stringify(x).slice(1,-1) gives exactly that escaped inner
     // content without the wrapping quotes.
     const esc = (s: string) => JSON.stringify(s).slice(1, -1);
+    // Recomp's header sentence already ends in "...starting today" itself
+    // now — the grey sub-line under the graph repeating it was redundant,
+    // explicit ask to remove it (for recomp only; fat/muscle still need it,
+    // it's the only place they show that text).
+    const subline = goal.kind === 'recomp' ? '' : 'Starting today';
     return rawPlanReadyHtml
       .replace('{{HEADER}}', esc(planReadyHeaderText(goal)))
-      .replace('{{SUBLINE}}', esc('Starting today'));
+      .replace('{{SUBLINE}}', esc(subline));
   }, [rawPlanReadyHtml, answers]);
 
   return (
@@ -1607,6 +1935,79 @@ function DcPagePool({ activeKey, answers, topInset, progressFor, onAdvance, onBa
           onEditValue={key === 'planReady' ? onEditValue : undefined}
         />
       ))}
+    </View>
+  );
+}
+
+// ── ShadowPrewarmPool — explicit ask ("every new screen flashes a black
+// screen before showing"), confirmed specific to the 4 newest screens
+// (notAlone/giveGoodHands/readyToBuild/startingPoint) because they're the
+// only ones that cold-mount on arrival instead of being prewarmed like
+// DcPagePool's 3 pages. Same technique, generalized: each of these 4 gets
+// mounted (hidden, poolActive=false) one step BEFORE the user actually
+// reaches it, while whatever real screen precedes it is still showing —
+// by the time they tap through, it's already loaded and just fades in,
+// same as planReady/trialTimeline/paywall already do. Can't use
+// DcPagePool itself — it only starts booting at generatePlan, which is
+// AFTER readyToBuild and has nothing to do with the other 3 — so this is
+// its own small pool with its own 4 independent trigger points instead of
+// one shared one.
+type ShadowKey = 'giveGoodHands' | 'notAlone' | 'readyToBuild' | 'startingPoint';
+
+function ShadowPrewarmPool({
+  activeKey, mounted, topInset, progressFor, onAdvanceStep, onBackStep, onAdvanceReadyToBuild, onBackReadyToBuild, onAdvanceStartingPoint, onBackStartingPoint,
+}: {
+  activeKey: ShadowKey | null;
+  mounted: Record<ShadowKey, boolean>;
+  topInset: number;
+  progressFor: (key: ShadowKey) => number;
+  // giveGoodHands/notAlone are regular STEPS-array entries — advancing
+  // from either is identical to advancing from any other question step
+  // (same advance()/goBack() the switch already uses for them).
+  onAdvanceStep: () => void;
+  onBackStep: () => void;
+  onAdvanceReadyToBuild: () => void;
+  onBackReadyToBuild: () => void;
+  onAdvanceStartingPoint: () => void;
+  onBackStartingPoint: () => void;
+}) {
+  // Safety net: `mounted` reflects an EARLIER trigger (e.g. 'notifications'
+  // for readyToBuild) that should always have fired well before this key
+  // becomes active. But if it somehow hasn't (an unexpected nav path, back-
+  // button oscillation, anything), fall back to mounting it right now —
+  // "not prewarmed this one time" is a fine degrade; "renders nothing at
+  // all" (mounted.X false and nothing else filling in for it) is not.
+  const effectiveMounted = activeKey ? { ...mounted, [activeKey]: true } : mounted;
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents={activeKey ? 'auto' : 'none'}>
+      {effectiveMounted.giveGoodHands && (
+        <OnboardingWebScreen
+          htmlKey="giveGoodHands" topInset={topInset} progress={progressFor('giveGoodHands')}
+          extraJsBeforeLoad={SUPPRESS_DC_ANIM_JS} poolActive={activeKey === 'giveGoodHands'}
+          onAdvance={onAdvanceStep} onBack={onBackStep}
+        />
+      )}
+      {effectiveMounted.notAlone && (
+        <OnboardingWebScreen
+          htmlKey="notAlone" topInset={topInset} progress={progressFor('notAlone')}
+          extraJsBeforeLoad={SUPPRESS_DC_ANIM_JS} poolActive={activeKey === 'notAlone'}
+          onAdvance={onAdvanceStep} onBack={onBackStep}
+        />
+      )}
+      {effectiveMounted.readyToBuild && (
+        <OnboardingWebScreen
+          htmlKey="readyToBuild" topInset={topInset} progress={progressFor('readyToBuild')}
+          extraJsBeforeLoad={SUPPRESS_DC_ANIM_JS} poolActive={activeKey === 'readyToBuild'}
+          onAdvance={onAdvanceReadyToBuild} onBack={onBackReadyToBuild}
+        />
+      )}
+      {effectiveMounted.startingPoint && (
+        <OnboardingWebScreen
+          htmlKey="startingPoint" topInset={topInset} progress={progressFor('startingPoint')}
+          extraJsBeforeLoad={SUPPRESS_DC_ANIM_JS} poolActive={activeKey === 'startingPoint'}
+          onAdvance={onAdvanceStartingPoint} onBack={onBackStartingPoint}
+        />
+      )}
     </View>
   );
 }
@@ -1727,7 +2128,7 @@ interface Step {
   placeholder?:   string;
   options?:       StepOptions;
   wheelKind?:     'age' | 'height';
-  htmlKey?:       'strengthAssessment' | 'rankReveal' | 'giveVsWithout' | 'giveRealisticTarget' | 'formConfidence' | 'goalPace' | 'giveGoodHands' | 'notAlone';
+  htmlKey?:       'strengthAssessment' | 'rankReveal' | 'giveVsWithout' | 'giveRealisticTarget' | 'formConfidence' | 'goalPace' | 'giveGoodHands' | 'notAlone' | 'meetCue';
   // Per-step content injection for type: 'webview' steps whose default
   // copy needs real user data swapped in (same literal-match technique as
   // every other artboard this session). Steps that are fine with the
@@ -1809,11 +2210,11 @@ const STEPS: Step[] = [
     options: [
       { label: 'Build muscle · Gain weight',    sfSymbol: 'dumbbell.fill',                customIcon: ICON.muscle },
       { label: 'Lose fat · Lose weight',        sfSymbol: 'flame.fill',                   customIcon: ICON.scale  },
-      { label: 'Recomp · Lose fat, build muscle', sfSymbol: 'arrow.triangle.2.circlepath', customIcon: ICON.onAndOff },
+      { label: 'Tone up · Lose fat & build muscle', sfSymbol: 'arrow.triangle.2.circlepath', customIcon: ICON.onAndOff },
     ]},
   { id: 'goalWeight', section: 'Your Goal', type: 'ruler', question: "What's your goal weight?",
     subtitle: "We'll build a realistic plan to get you there.",
-    showIf: a => typeof a.mainGoal !== 'string' || !a.mainGoal.startsWith('Recomp'),
+    showIf: a => typeof a.mainGoal !== 'string' || !a.mainGoal.startsWith('Tone up'),
   },
   // Real design artboard (goalpace.html) — self-contained draggable 3-pace
   // picker (relaxed/balanced/aggressive, 0.25-1.5x), its own animated gait
@@ -1825,10 +2226,13 @@ const STEPS: Step[] = [
   // live prop-override channel to feed it the real number. Recomp-skipped
   // — explicit ask, pace/target framing doesn't apply there.
   { id: 'goalPace', section: 'Your Goal', type: 'webview', question: 'Goal pace', htmlKey: 'goalPace', webviewInject: goalPaceInject,
-    showIf: a => typeof a.mainGoal !== 'string' || !a.mainGoal.startsWith('Recomp'),
+    showIf: a => typeof a.mainGoal !== 'string' || !a.mainGoal.startsWith('Tone up'),
   },
-  { id: 'giveRealisticTarget', section: 'Your Goal', type: 'webview', question: 'Realistic target', htmlKey: 'giveRealisticTarget', webviewInject: realisticTargetInject,
-    showIf: a => typeof a.mainGoal !== 'string' || !a.mainGoal.startsWith('Recomp'),
+  // No webviewInject — its sentence is now pre-load token-replaced into
+  // the raw HTML (realisticTargetHtml, see the render switch) instead of
+  // searched for in the live DOM.
+  { id: 'giveRealisticTarget', section: 'Your Goal', type: 'webview', question: 'Realistic target', htmlKey: 'giveRealisticTarget',
+    showIf: a => typeof a.mainGoal !== 'string' || !a.mainGoal.startsWith('Tone up'),
   },
 
   { id: 'trainDuration', section: 'Your Training', type: 'select', question: 'How long have you been training for?',
@@ -1860,9 +2264,100 @@ const STEPS: Step[] = [
       { label: '75+ min', sfSymbol: 'clock.fill', customIcon: ICON.seventyFiveMin },
     ]},
 
-  // Moved back into the main pre-paywall flow — explicit ask, nothing
-  // should run after the paywall any more (the old 'postQuestions'
-  // appState + POST_STEPS array are both gone).
+  { id: 'trainingLocation', section: 'Your Training', type: 'locationBubbles', question: 'Where do you train?',
+    subtitle: 'This decides which exercises we give you.',
+  },
+  { id: 'homeEquipment', section: 'Your Training', type: 'multiselect', question: 'Equipment you have at home?',
+    subtitle: "Select everything you have. We'll build around it.",
+    showIf: a => a.trainingLocation === 'Home' || a.trainingLocation === 'Mix of both',
+    clearAllOption: 'Nothing. Bodyweight only',
+    options: [
+      { label: 'Dumbbells', sfSymbol: 'dumbbell.fill', customIcon: ICON.dumbbell },
+      { label: 'Resistance bands', sfSymbol: 'figure.flexibility', customIcon: ICON.bands },
+      { label: 'Kettlebells', sfSymbol: 'figure.strengthtraining.functional', customIcon: ICON.kettlebell },
+      { label: 'Pull-up bar', sfSymbol: 'figure.gymnastics', customIcon: ICON.pullupBar },
+      { label: 'Bench', sfSymbol: 'rectangle.fill', customIcon: ICON.bench },
+      { label: 'Barbell & plates', sfSymbol: 'figure.strengthtraining.traditional', customIcon: ICON.barbell },
+      { label: 'Nothing. Bodyweight only', sfSymbol: 'figure.walk', customIcon: ICON.bodyweight },
+    ],
+  },
+  { id: 'gymMissingEquipment', section: 'Your Training', type: 'multiselect', question: 'Anything your gym is missing?',
+    subtitle: "We'll avoid exercises that need what you don't have.",
+    showIf: a => a.trainingLocation === 'Gym' || a.trainingLocation === 'Mix of both',
+    clearAllOption: 'It has everything',
+    options: [
+      { label: 'Free weights', sfSymbol: 'dumbbell.fill', customIcon: ICON.dumbbell },
+      { label: 'Cable machines', sfSymbol: 'figure.strengthtraining.functional', customIcon: ICON.cableMachine },
+      { label: 'Leg machines', sfSymbol: 'figure.walk', customIcon: ICON.legMachine },
+      { label: 'Chest / press machines', sfSymbol: 'figure.strengthtraining.traditional', customIcon: ICON.chestMachine },
+      { label: 'Back / row machines', sfSymbol: 'figure.rower', customIcon: ICON.backMachine },
+      { label: 'Squat rack', sfSymbol: 'figure.cross.training', customIcon: ICON.squatMachine },
+      { label: 'It has everything', sfSymbol: 'checkmark.circle.fill', customIcon: ICON.allGood },
+    ],
+  },
+
+  { id: 'struggle', section: 'Your Goal', type: 'multiselect', question: "What's stopping you from reaching your goal?",
+    subtitle: 'Pick everything that applies. This helps us support you.',
+    clearAllOption: 'Nothing, just ready to start',
+    options: [
+      { label: 'Not seeing results', sfSymbol: 'minus.circle.fill', customIcon: ICON.noResults },
+      { label: "Not sure if I'm training right", sfSymbol: 'questionmark.circle.fill', customIcon: ICON.notSure },
+      { label: 'Staying consistent', sfSymbol: 'repeat', customIcon: ICON.days },
+      { label: 'Losing motivation', sfSymbol: 'flame.fill', customIcon: ICON.scared },
+      { label: 'Injuries or pain', sfSymbol: 'bandage.fill', customIcon: ICON.wrist },
+      { label: 'Nothing, just ready to start', sfSymbol: 'checkmark.circle.fill', customIcon: ICON.good },
+    ],
+  },
+  { id: 'accomplish', section: 'Your Goal', type: 'multiselect', question: 'What would you like to accomplish?',
+    subtitle: "Pick everything you'd like FormPal to help with.",
+    options: [
+      { label: 'Learn proper form', sfSymbol: 'camera.fill', customIcon: ICON.trainProperly },
+      { label: 'Feel confident in the gym', sfSymbol: 'star.fill', customIcon: ICON.lookBetter },
+      { label: 'Train without getting hurt', sfSymbol: 'bandage.fill', customIcon: ICON.wrist },
+      { label: 'Stay consistent', sfSymbol: 'repeat', customIcon: ICON.stayConsistentIcon },
+      { label: 'Finally see results', sfSymbol: 'checkmark.circle.fill', customIcon: ICON.seeingResults },
+    ]},
+  // Real design artboard now (goodhandsv2.html) — static copy, no
+  // struggle/accomplish echo (the old native version's personalization
+  // isn't in the new design).
+  { id: 'giveGoodHands', section: 'Your Goal', type: 'webview', question: "You're in good hands", htmlKey: 'giveGoodHands' },
+
+  { id: 'injuries', section: 'Your Body', type: 'multiselect', question: 'Any injuries or areas that hurt?',
+    subtitle: "We'll avoid exercises that could aggravate these.",
+    clearAllOption: 'No injuries. All clear',
+    options: [
+      { label: 'Knees', sfSymbol: 'figure.walk', customIcon: ICON.knee },
+      { label: 'Shoulders', sfSymbol: 'figure.arms.open', customIcon: ICON.shoulder },
+      { label: 'Lower back', sfSymbol: 'figure.cooldown', customIcon: ICON.back },
+      { label: 'Wrists', sfSymbol: 'hand.raised.fill', customIcon: ICON.wrist },
+      { label: 'Neck', sfSymbol: 'figure.stand', customIcon: ICON.neck },
+      { label: 'Hips', sfSymbol: 'figure.run', customIcon: ICON.hip },
+      { label: 'No injuries. All clear', sfSymbol: 'checkmark.circle.fill', customIcon: ICON.good },
+    ],
+  },
+  // New — explicit ask: "Meet Cue: add it right after the injuries
+  // question." Static scripted-demo introduction to the Cue coach feature.
+  { id: 'meetCue', section: 'Your Body', type: 'webview', question: 'Meet Cue', htmlKey: 'meetCue' },
+  // Real design artboard now (formconfidence.html) — a fully self-contained
+  // draggable 3-state slider with its own internal drag logic. Captures
+  // its final value through the same editvalue: postMessage channel
+  // planReady's pencil-edit uses (see formConfidenceInject).
+  { id: 'formConfidence', section: 'Your Body', type: 'webview', question: 'How confident are you in your current form?',
+    htmlKey: 'formConfidence', webviewInject: formConfidenceInject,
+  },
+  // Real design artboard now (notalone.html). Shows for "somewhat" or
+  // "not confident" (anything but the top "Very confident" = 100 band) —
+  // explicit ask: "if their form confidence is somewhat or low, show the
+  // you're not alone screen." formConfidenceInject only ever posts 0, 50,
+  // or 100 (see VALS map), so < 100 is exactly "not very confident".
+  { id: 'giveFormConfidence', section: 'Your Body', type: 'webview', question: 'Form confidence check-in', htmlKey: 'notAlone',
+    showIf: a => (typeof a.formConfidence === 'number' ? a.formConfidence : 50) < 100,
+  },
+  // Moved here (end of the main question flow, after formConfidence/
+  // giveFormConfidence) per explicit reorder: form confidence slider ->
+  // 55% screen (low confidence only) -> cardio -> cardio types
+  // (conditional) -> what time of day -> Remembering your answers
+  // overlay -> Starting point screen -> rank wheel.
   { id: 'cardio', section: 'Your Training', type: 'select', question: 'Do you do any cardio or other training?',
     subtitle: 'This helps us balance your weekly plan.',
     options: [
@@ -1893,92 +2388,6 @@ const STEPS: Step[] = [
       { label: 'Varies', sfSymbol: 'shuffle', customIcon: ICON.onAndOff },
     ]},
 
-  { id: 'trainingLocation', section: 'Your Training', type: 'locationBubbles', question: 'Where do you train?',
-    subtitle: 'This decides which exercises we give you.',
-  },
-  { id: 'homeEquipment', section: 'Your Training', type: 'multiselect', question: 'Equipment you have at home?',
-    subtitle: "Select everything you have. We'll build around it.",
-    showIf: a => a.trainingLocation === 'Home' || a.trainingLocation === 'Mix of both',
-    clearAllOption: 'Nothing — bodyweight only',
-    options: [
-      { label: 'Dumbbells', sfSymbol: 'dumbbell.fill', customIcon: ICON.dumbbell },
-      { label: 'Resistance bands', sfSymbol: 'figure.flexibility', customIcon: ICON.bands },
-      { label: 'Kettlebells', sfSymbol: 'figure.strengthtraining.functional', customIcon: ICON.kettlebell },
-      { label: 'Pull-up bar', sfSymbol: 'figure.gymnastics', customIcon: ICON.pullupBar },
-      { label: 'Bench', sfSymbol: 'rectangle.fill', customIcon: ICON.bench },
-      { label: 'Barbell & plates', sfSymbol: 'figure.strengthtraining.traditional', customIcon: ICON.barbell },
-      { label: 'Nothing — bodyweight only', sfSymbol: 'figure.walk', customIcon: ICON.bodyweight },
-    ],
-  },
-  { id: 'gymMissingEquipment', section: 'Your Training', type: 'multiselect', question: 'Anything your gym is missing?',
-    subtitle: "We'll avoid exercises that need what you don't have.",
-    showIf: a => a.trainingLocation === 'Gym' || a.trainingLocation === 'Mix of both',
-    clearAllOption: 'It has everything',
-    options: [
-      { label: 'Free weights', sfSymbol: 'dumbbell.fill', customIcon: ICON.dumbbell },
-      { label: 'Cable machines', sfSymbol: 'figure.strengthtraining.functional', customIcon: ICON.cableMachine },
-      { label: 'Leg machines', sfSymbol: 'figure.walk', customIcon: ICON.legMachine },
-      { label: 'Chest / press machines', sfSymbol: 'figure.strengthtraining.traditional', customIcon: ICON.chestMachine },
-      { label: 'Back / row machines', sfSymbol: 'figure.rower', customIcon: ICON.backMachine },
-      { label: 'Squat rack', sfSymbol: 'figure.cross.training', customIcon: ICON.squatMachine },
-      { label: 'It has everything', sfSymbol: 'checkmark.circle.fill', customIcon: ICON.allGood },
-    ],
-  },
-
-  { id: 'struggle', section: 'Your Goal', type: 'multiselect', question: "What's stopping you from reaching your goal?",
-    subtitle: 'Pick everything that applies. This helps us support you.',
-    clearAllOption: 'Nothing — just ready to start',
-    options: [
-      { label: 'Not seeing results', sfSymbol: 'minus.circle.fill', customIcon: ICON.noResults },
-      { label: "Not sure if I'm training right", sfSymbol: 'questionmark.circle.fill', customIcon: ICON.notSure },
-      { label: 'Staying consistent', sfSymbol: 'repeat', customIcon: ICON.days },
-      { label: 'Losing motivation', sfSymbol: 'flame.fill', customIcon: ICON.scared },
-      { label: 'Injuries or pain', sfSymbol: 'bandage.fill', customIcon: ICON.wrist },
-      { label: 'Nothing — just ready to start', sfSymbol: 'checkmark.circle.fill', customIcon: ICON.good },
-    ],
-  },
-  { id: 'accomplish', section: 'Your Goal', type: 'multiselect', question: 'What would you like to accomplish?',
-    subtitle: "Pick everything you'd like FormPal to help with.",
-    options: [
-      { label: 'Learn proper form', sfSymbol: 'camera.fill', customIcon: ICON.trainProperly },
-      { label: 'Feel confident in the gym', sfSymbol: 'star.fill', customIcon: ICON.lookBetter },
-      { label: 'Train without getting hurt', sfSymbol: 'bandage.fill', customIcon: ICON.wrist },
-      { label: 'Stay consistent', sfSymbol: 'repeat', customIcon: ICON.stayConsistentIcon },
-      { label: 'Finally see results', sfSymbol: 'checkmark.circle.fill', customIcon: ICON.seeingResults },
-    ]},
-  // Real design artboard now (goodhandsv2.html) — static copy, no
-  // struggle/accomplish echo (the old native version's personalization
-  // isn't in the new design).
-  { id: 'giveGoodHands', section: 'Your Goal', type: 'webview', question: "You're in good hands", htmlKey: 'giveGoodHands' },
-
-  { id: 'injuries', section: 'Your Body', type: 'multiselect', question: 'Any injuries or areas that hurt?',
-    subtitle: "We'll avoid exercises that could aggravate these.",
-    clearAllOption: 'No injuries — all clear',
-    options: [
-      { label: 'Knees', sfSymbol: 'figure.walk', customIcon: ICON.knee },
-      { label: 'Shoulders', sfSymbol: 'figure.arms.open', customIcon: ICON.shoulder },
-      { label: 'Lower back', sfSymbol: 'figure.cooldown', customIcon: ICON.back },
-      { label: 'Wrists', sfSymbol: 'hand.raised.fill', customIcon: ICON.wrist },
-      { label: 'Neck', sfSymbol: 'figure.stand', customIcon: ICON.neck },
-      { label: 'Hips', sfSymbol: 'figure.run', customIcon: ICON.hip },
-      { label: 'No injuries — all clear', sfSymbol: 'checkmark.circle.fill', customIcon: ICON.good },
-    ],
-  },
-  // Real design artboard now (formconfidence.html) — a fully self-contained
-  // draggable 3-state slider with its own internal drag logic. Captures
-  // its final value through the same editvalue: postMessage channel
-  // planReady's pencil-edit uses (see formConfidenceInject).
-  { id: 'formConfidence', section: 'Your Body', type: 'webview', question: 'How confident are you in your current form?',
-    htmlKey: 'formConfidence', webviewInject: formConfidenceInject,
-  },
-  // Real design artboard now (notalone.html). Shows for "somewhat" or
-  // "not confident" (anything but the top "Very confident" = 100 band) —
-  // explicit ask: "if their form confidence is somewhat or low, show the
-  // you're not alone screen." formConfidenceInject only ever posts 0, 50,
-  // or 100 (see VALS map), so < 100 is exactly "not very confident".
-  { id: 'giveFormConfidence', section: 'Your Body', type: 'webview', question: 'Form confidence check-in', htmlKey: 'notAlone',
-    showIf: a => (typeof a.formConfidence === 'number' ? a.formConfidence : 50) < 100,
-  },
 ];
 
 function getVisibleSteps(a: Record<string, any>): Step[] {
@@ -2001,7 +2410,7 @@ interface WorkoutExercise { name: string; scheme: string; formCheck: boolean; }
 function buildPlan(a: Record<string, any>): { focus: string; exercises: WorkoutExercise[] } {
   const loc       = a.trainingLocation ?? 'Home';
   const homeEquip = (a.homeEquipment as string[]) ?? [];
-  const noEquip   = loc === 'Home' && (homeEquip.includes('Nothing — bodyweight only') || homeEquip.length === 0);
+  const noEquip   = loc === 'Home' && (homeEquip.includes('Nothing. Bodyweight only') || homeEquip.length === 0);
   const exercises: WorkoutExercise[] = noEquip
     ? [
         { name: 'Bodyweight Squats', scheme: '3 × 12',      formCheck: true  },
@@ -2071,7 +2480,16 @@ function AnimatedOption({ index, children, style, onPress }: {
 // uses this exact same value, so there's no dead pause once it fills.
 const RANK_CALC_MS = 1900;
 
-function RankCalcOverlay({ bottomInset }: { bottomInset: number }) {
+// Shared by both progress overlays ("Reading your answers" before the rank
+// reveal, "Remembering your answers" after trainTime) — explicit ask: same
+// style for both. Icon (checkmark-circle, matching the attached reference
+// image's style) to the LEFT of the text, the row centered (not left-
+// aligned) above the bar, bar a bit thicker (12px, matching
+// generateplan.html's real track exactly) with the SAME gradient fill
+// generateplan.html's own progress bar uses — explicit ask: "not blue",
+// since solid #2E7DFF was a guess at that screen's color, not the real
+// (blue -> periwinkle -> purple -> pink) gradient it actually is.
+function ProgressOverlay({ label, bottomInset }: { label: string; bottomInset: number }) {
   const fade = useRef(new Animated.Value(0)).current;
   const progress = useRef(new Animated.Value(0)).current;
 
@@ -2088,64 +2506,35 @@ function RankCalcOverlay({ bottomInset }: { bottomInset: number }) {
         <BlurView intensity={26} tint="light" style={StyleSheet.absoluteFill} />
       </Animated.View>
       <Animated.View style={[rc.wrap, { opacity: fade, bottom: bottomInset + 110 }]}>
-        <Text style={rc.label}>Reading your answers</Text>
+        <View style={rc.labelRow}>
+          <SymbolView name="checkmark.circle.fill" size={16} tintColor={L.text} type="monochrome" style={{ width: 16, height: 16, marginRight: 6 }} />
+          <Text style={rc.label}>{label}</Text>
+        </View>
         <View style={rc.track}>
-          <Animated.View style={[rc.fill, { width: widthPct }]} />
+          <Animated.View style={[rc.fill, { width: widthPct }]}>
+            <LinearGradient
+              colors={['#2E7DFF', '#5C86F0', '#8A7BE0', '#C98BB4']}
+              locations={[0, 0.46, 0.78, 1]}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={StyleSheet.absoluteFill}
+            />
+          </Animated.View>
         </View>
       </Animated.View>
     </View>
   );
 }
 
-// New full-screen loader between the last question and the rank run —
-// same visual language as RankCalcOverlay (label + thin progress bar),
-// but standalone (own background, not overlaid on another screen) and
-// two-phase: "Answers locked in." while the bar fills, then swaps to the
-// real copy and reveals a Continue button instead of auto-advancing.
-function PreRankLoaderScreen({ insets, onAdvance }: { insets: { top: number; bottom: number }; onAdvance: () => void }) {
-  const fade = useRef(new Animated.Value(0)).current;
-  const progress = useRef(new Animated.Value(0)).current;
-  const ctaFade = useRef(new Animated.Value(0)).current;
-  const [phase, setPhase] = useState<'locking' | 'ready'>('locking');
-
-  useEffect(() => {
-    Animated.timing(fade, { toValue: 1, duration: 200, useNativeDriver: true }).start();
-    Animated.timing(progress, { toValue: 1, duration: RANK_CALC_MS, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start(() => {
-      setPhase('ready');
-      Animated.timing(ctaFade, { toValue: 1, duration: 260, useNativeDriver: true }).start();
-    });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const widthPct = progress.interpolate({ inputRange: [0, 1], outputRange: ['8%', '100%'] });
-
-  return (
-    <OnboardingBackground>
-      <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
-          <Animated.View style={{ opacity: fade, width: '100%' }}>
-            <Text style={[rc.label, { fontSize: 20, textAlign: 'center', marginBottom: 18 }]}>
-              {phase === 'locking' ? 'Answers locked in.' : "Before we build your plan, let's find your starting point."}
-            </Text>
-            <View style={rc.track}>
-              <Animated.View style={[rc.fill, { width: widthPct }]} />
-            </View>
-          </Animated.View>
-        </View>
-        <Animated.View style={[s.bn, { opacity: ctaFade }]} pointerEvents={phase === 'ready' ? 'auto' : 'none'}>
-          <TouchableOpacity style={s.cb} onPress={onAdvance} activeOpacity={0.85}>
-            <Text style={s.ct}>Continue</Text>
-          </TouchableOpacity>
-        </Animated.View>
-      </View>
-    </OnboardingBackground>
-  );
-}
-
 const rc = StyleSheet.create({
   wrap: { position: 'absolute', left: 24, right: 24 },
-  label: { fontFamily: FONT.displayBold, fontSize: 15, color: L.text, marginBottom: 12, letterSpacing: -0.2 },
-  track: { width: '100%', height: 9, borderRadius: 4.5, backgroundColor: '#E9ECF3', overflow: 'hidden' },
-  fill: { height: '100%', borderRadius: 4.5, backgroundColor: '#2E7DFF' },
+  label: { fontFamily: FONT.displayBold, fontSize: 15, color: L.text, letterSpacing: -0.2 },
+  // Centered (not left-aligned) — explicit ask: "Text centered above the
+  // bar."
+  labelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  // 12px — matches generateplan.html's own track exactly (was 9px).
+  track: { width: '100%', height: 12, borderRadius: 6, backgroundColor: '#E9ECF3', overflow: 'hidden' },
+  fill: { height: '100%', borderRadius: 6, overflow: 'hidden' },
 });
 
 // ── ProjectionChart ───────────────────────────────────────────────────────────
@@ -2359,12 +2748,20 @@ function RollingWeightValue({ value }: { value: number }) {
   );
 }
 
-function WeightRulerSlider({ value, onChange }: {
+function WeightRulerSlider({ value, onChange, min, max }: {
   value: number; onChange: (v: number) => void;
+  // Optional drag clamp — narrower than the full WEIGHT_MIN-WEIGHT_MAX
+  // track (which still renders/scrolls its full normal range; only how
+  // far the THUMB can actually be dragged is restricted). Used by the
+  // goalWeight question: can't drag above current weight when the goal is
+  // Lose fat, can't drag below it when the goal is Build muscle.
+  min?: number; max?: number;
 }) {
   const trackWidth = (WEIGHT_MAX - WEIGHT_MIN) * TICK_GAP;
   const pxFromValue = (v: number) => Math.max(0, Math.min(trackWidth, (v - WEIGHT_MIN) * TICK_GAP));
   const valueFromPx = (px: number) => WEIGHT_MIN + px / TICK_GAP;
+  const minPx = min != null ? pxFromValue(min) : 0;
+  const maxPx = max != null ? pxFromValue(max) : trackWidth;
 
   const [displayVal, setDisplayVal] = useState(value);
   const [viewportWidth, setViewportWidth] = useState(340); // real value lands via onLayout below
@@ -2403,7 +2800,7 @@ function WeightRulerSlider({ value, onChange }: {
         // Dragging LEFT reveals higher numbers at center (same feel as
         // scrolling a horizontal picker) — subtract dx, not add it.
         const raw  = startRef.current - gs.dx;
-        const next = Math.max(0, Math.min(trackWidth, raw));
+        const next = Math.max(minPx, Math.min(maxPx, raw));
         valuePx.setValue(next);
         const v = Math.round(valueFromPx(next) * 10) / 10;
         onChange(v);
@@ -2424,7 +2821,7 @@ function WeightRulerSlider({ value, onChange }: {
       },
       onPanResponderRelease: (_, gs) => {
         const raw  = startRef.current - gs.dx;
-        const next = Math.max(0, Math.min(trackWidth, raw));
+        const next = Math.max(minPx, Math.min(maxPx, raw));
         const v = Math.round(valueFromPx(next) * 10) / 10;
         valuePx.setValue(pxFromValue(v));
         setDisplayVal(v);
@@ -2632,8 +3029,8 @@ function MyPalIntroContent({ onContinue }: { onContinue: () => void }) {
 
         {/* Text */}
         <Animated.View style={{ alignItems: 'center', opacity: textOpacity, transform: [{ translateY: textY }] }}>
-          <Text style={mp.headline}>Meet MyPal</Text>
-          <Text style={mp.sub}>Your AI coach — chat anytime to adjust your plan or ask anything.</Text>
+          <Text style={mp.headline}>Meet Cue</Text>
+          <Text style={mp.sub}>Your AI coach. Chat anytime to adjust your plan or ask anything.</Text>
         </Animated.View>
       </View>
 
@@ -2850,10 +3247,11 @@ function GuessSlider({ value, onChange, lowLabel = 'None of them', highLabel = '
 
 type AppState =
   | 'welcome' | 'onboarding'
-  // "Answers locked in." loader between the last question and the rank
-  // run — reuses the RankCalcOverlay visual language as a full screen.
-  | 'preRankLoader'
-  // Rank run — straight after the loader.
+  // Real design artboard (startingpoint.html) between the last question
+  // (trainTime, via the "Remembering your answers" overlay) and the rank
+  // run — replaces the old native PreRankLoaderScreen placeholder.
+  | 'startingPoint'
+  // Rank run — straight after it.
   | 'rankWheel' | 'rankAssess' | 'rankReveal'
   // Recovery Route is removed from the flow — rankReveal goes straight to
   // thankYou now, 2 more native beats, then plan-generation.
@@ -2865,7 +3263,15 @@ type AppState =
   // screens spliced in right after plan-ready. Nothing runs after the
   // paywall any more — cardio/cardioTypes/trainTime moved back into the
   // main pre-paywall question flow (see STEPS).
-  | 'generatePlan' | 'planReady' | 'saveProgress' | 'tryForFree' | 'trialTimeline' | 'webPaywall';
+  | 'generatePlan' | 'planReady' | 'saveProgress' | 'tryForFree' | 'trialTimeline' | 'webPaywall'
+  // Shown at most once ever per account (device + Supabase flag — see
+  // lib/giftOffer.ts) when the paywall is closed without buying.
+  | 'giftOffer'
+  // After-purchase one-time in-app onboarding — runs once, right before
+  // finishOnboarding() actually sends the user into the real app for the
+  // first time (inherits "shown once" for free from onboarding.tsx itself
+  // only ever running once — no separate flag needed).
+  | 'welcomeToFormPal' | 'howFormPalWorks' | 'allowCamera' | 'readyToTrain';
 
 type EditField = 'age' | 'height' | 'weight' | 'experience' | 'mainGoal';
 
@@ -2887,12 +3293,69 @@ export default function OnboardingScreen() {
     const t = setTimeout(() => { setRankCalcOverlay(false); setAppState('rankReveal'); }, RANK_CALC_MS);
     return () => clearTimeout(t);
   }, [rankCalcOverlay]);
+  // "Remembering your answers" beat — overlaid on the still-mounted
+  // formConfidence WebView (not a navigation to a new screen), same
+  // pattern as rankCalcOverlay above. pendingAdvance holds the exact
+  // answers snapshot to commit once the bar finishes, so the delayed
+  // advance() call below can't pick up a stale/different answers value.
+  const [rememberingOverlay, setRememberingOverlay] = useState(false);
+  const pendingAdvanceRef = useRef<Record<string, any> | null>(null);
+  useEffect(() => {
+    if (!rememberingOverlay) return;
+    const t = setTimeout(() => {
+      setRememberingOverlay(false);
+      const ans = pendingAdvanceRef.current;
+      pendingAdvanceRef.current = null;
+      if (ans) advance(ans);
+    }, RANK_CALC_MS);
+    return () => clearTimeout(t);
+  }, [rememberingOverlay]); // eslint-disable-line react-hooks/exhaustive-deps
+  // realistictarget.html's sentence is NOT static text — it's computed by
+  // the artboard's OWN reactive component (renderVals(), reading
+  // this.props.goal/lbs, default "gain"/12, no live override channel) and
+  // interpolated into "{{ verb }} {{ amount }} is a realistic target!"
+  // inside an <sc-if> block. The old approach (wait for it to render, then
+  // text-match "Gaining 12 lbs is a realistic target!" and swap it) was
+  // racing that reactive render and silently losing — same root-cause
+  // SHAPE as the Plan Ready header bug from earlier this session (runtime
+  // DOM text-injection racing a page's own render), fixed there by editing
+  // the artboard directly with a literal token and pre-load string-
+  // replacing it instead of searching the DOM at all. Same fix here: the
+  // span's reactive content was replaced with the literal marker
+  // "__REALISTIC_TARGET_TEXT__" directly in realistictarget.html (not
+  // "{{...}}" — that syntax risks the bundler's OWN template engine trying
+  // to interpret it as one of its expressions).
+  const [rawRealisticTargetHtml, setRawRealisticTargetHtml] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const asset = Asset.fromModule(ONB_HTML.giveRealisticTarget);
+        await asset.downloadAsync();
+        const uri = asset.localUri || asset.uri;
+        const text = await new File(uri).text();
+        if (!cancelled) setRawRealisticTargetHtml(text);
+      } catch (err) {
+        if (__DEV__) console.error('[onboarding] failed to load realistictarget.html as text', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   const [stepIndex, setStepIndex] = useState(0);
   const [answers,   setAnswers]   = useState<Record<string, any>>({});
   const [plan,      setPlan]      = useState<{ focus: string; exercises: WorkoutExercise[] } | null>(null);
   // Which single info field the plan-ready page's pencil opened for editing
   // (null = not editing). Rendered as an overlay so the WebView stays put.
   const [editField, setEditField] = useState<EditField | null>(null);
+  // The real generated plan's next workout, for readyToTrain's card — loaded
+  // once the user is actually approaching that screen (no need any earlier).
+  const [planForReadyScreen, setPlanForReadyScreen] = useState<PlanT | null>(null);
+  useEffect(() => {
+    if (appState === 'allowCamera' || appState === 'readyToTrain') {
+      loadPlan().then(setPlanForReadyScreen).catch(() => {});
+    }
+  }, [appState]);
 
   const fadeAnim  = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
@@ -2918,12 +3381,55 @@ export default function OnboardingScreen() {
   const visibleSteps = getVisibleSteps(answers);
   const currentStep  = visibleSteps[stepIndex];
 
+  // See ShadowPrewarmPool above — once true, a flag never goes back to
+  // false (the whole point is to keep each screen's WebView mounted from
+  // its trigger point all the way through to when it's actually shown).
+  const [shadowMounted, setShadowMounted] = useState<Record<ShadowKey, boolean>>({
+    giveGoodHands: false, notAlone: false, readyToBuild: false, startingPoint: false,
+  });
+  useEffect(() => {
+    setShadowMounted((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      // One step before each: 'accomplish' precedes giveGoodHands,
+      // 'formConfidence' precedes notAlone AND is early enough to also
+      // start startingPoint (nothing but select/multiselect steps in
+      // between, all covered by the same fallthrough render below —
+      // content is static, no risk of it going stale by the time it's
+      // actually shown), 'notifications' precedes readyToBuild.
+      if (!next.giveGoodHands && currentStep?.id === 'accomplish') { next.giveGoodHands = true; changed = true; }
+      if (!next.notAlone && currentStep?.id === 'formConfidence') { next.notAlone = true; changed = true; }
+      if (!next.startingPoint && currentStep?.id === 'formConfidence') { next.startingPoint = true; changed = true; }
+      if (!next.readyToBuild && appState === 'notifications') { next.readyToBuild = true; changed = true; }
+      return changed ? next : prev;
+    });
+  }, [currentStep?.id, appState]);
+
+  // Same delta/verb logic as before (computeGoalPlan-adjacent, not that
+  // function itself since this screen wants the RAW delta/direction, not
+  // the rate-projected one) — just spliced into the pre-loaded raw HTML
+  // text instead of searched for in the live DOM. goalWeight above current
+  // -> "Gaining"; below -> "Losing"; equal -> follows the selected goal
+  // (no real direction to infer from the numbers at delta 0).
+  const realisticTargetHtml = useMemo(() => {
+    if (!rawRealisticTargetHtml) return null;
+    const weight = typeof answers.weight === 'number' ? answers.weight : 160;
+    const goalWeight = typeof answers.goalWeight === 'number' ? answers.goalWeight : weight;
+    const delta = Math.round(Math.abs(goalWeight - weight));
+    const mainGoalStr = typeof answers.mainGoal === 'string' ? answers.mainGoal : '';
+    const verb = delta === 0
+      ? (mainGoalStr.startsWith('Lose fat') ? 'Losing' : 'Gaining')
+      : (goalWeight >= weight ? 'Gaining' : 'Losing');
+    const sentence = `${verb} ${delta} lbs is a realistic target!`;
+    return rawRealisticTargetHtml.replace('__REALISTIC_TARGET_TEXT__', sentence);
+  }, [rawRealisticTargetHtml, answers]);
+
   // ── Global progress — ONE bar, same track/fill, spanning the WHOLE
   // onboarding flow (questions + rank run + post-rank + pre-paywall), not
   // just the question steps — explicit ask, was inconsistent/missing on
   // everything after the last question.
   const RANK_POST_FLOW: AppState[] = [
-    'preRankLoader', 'rankWheel', 'rankAssess', 'rankReveal',
+    'startingPoint', 'rankWheel', 'rankAssess', 'rankReveal',
     'thankYou', 'connectHealth', 'notifications', 'readyToBuild',
     'generatePlan', 'planReady', 'saveProgress', 'tryForFree', 'trialTimeline', 'webPaywall',
   ];
@@ -2934,6 +3440,19 @@ export default function OnboardingScreen() {
     if (idx === -1) return 1;
     return (visibleSteps.length + idx + 1) / TOTAL_FLOW_LEN;
   })();
+
+  // Same formula as `progress` above, computed for a specific shadow-pool
+  // screen regardless of where the user currently is in the flow (needed
+  // because these 4 can be MOUNTED well before they're actually current).
+  const shadowProgress = (key: ShadowKey): number => {
+    if (key === 'readyToBuild' || key === 'startingPoint') {
+      const idx = RANK_POST_FLOW.indexOf(key);
+      return idx === -1 ? progress : (visibleSteps.length + idx + 1) / TOTAL_FLOW_LEN;
+    }
+    const stepId = key === 'giveGoodHands' ? 'giveGoodHands' : 'giveFormConfidence';
+    const idx = visibleSteps.findIndex((s) => s.id === stepId);
+    return idx === -1 ? progress : (idx + 1) / TOTAL_FLOW_LEN;
+  };
 
   // Preload every answer-choice icon up front. They're already require()'d
   // (so Metro bundles them), but each <Image> still decodes lazily the
@@ -3033,7 +3552,7 @@ export default function OnboardingScreen() {
     } else {
       // Fade the last question out before the loader mounts, so it isn't a
       // hard white cut into it.
-      animTrans('forward', () => { unstable_batchedUpdates(() => { commit?.(); setAppState('preRankLoader'); }); });
+      animTrans('forward', () => { unstable_batchedUpdates(() => { commit?.(); setAppState('startingPoint'); }); });
     }
   };
 
@@ -3226,9 +3745,28 @@ export default function OnboardingScreen() {
                 {!!st.subtitle && <Text style={s.qqSub}>{st.subtitle}</Text>}
               </View>
               <View style={{ marginTop: 12, paddingHorizontal: 24 }}>
+                {/* BUG FOUND (traced per explicit ask): 'weight' and
+                    'goalWeight' are both type:'ruler', rendered through
+                    this SAME JSX call site — React reconciles them as the
+                    SAME component instance (same type, same tree position,
+                    no key), not a fresh mount per step. WeightRulerSlider's
+                    PanResponder is a useRef(PanResponder.create(...)),
+                    created ONCE — its closures captured min/max from
+                    whichever step happened to mount it FIRST (always
+                    'weight', which has no clamp), and never saw later
+                    prop changes. The clamp code itself was correct; it
+                    just never ran with current values. key={st.id} forces
+                    a real remount on every step change, so a fresh
+                    PanResponder closes over the CURRENT min/max/value
+                    every time — this also fixes "including the initial
+                    value" per the ask, since the one-time mount-sync
+                    effect now actually re-fires per step too. */}
                 <WeightRulerSlider
+                  key={st.id}
                   value={rulerVal}
                   onChange={(v) => setAnswers({ ...answers, [st.id]: v })}
+                  min={st.id === 'goalWeight' && typeof answers.mainGoal === 'string' && answers.mainGoal.startsWith('Build muscle') ? answers.weight : undefined}
+                  max={st.id === 'goalWeight' && typeof answers.mainGoal === 'string' && answers.mainGoal.startsWith('Lose fat') ? answers.weight : undefined}
                 />
               </View>
               {st.id === 'goalWeight' && typeof answers.weight === 'number' && (
@@ -3352,6 +3890,30 @@ export default function OnboardingScreen() {
     // channel planReady's pencil-edit uses — formConfidence's inject posts
     // through it to capture the slider's final value before advancing.
     if (st.type === 'webview' && st.htmlKey) {
+      // giveGoodHands/notAlone are shadow-pooled (see ShadowPrewarmPool) —
+      // by the time stepIndex actually points at either, the pool already
+      // mounted it one step earlier (while 'accomplish'/'formConfidence'
+      // was showing), so this just shows the already-loaded instance
+      // instead of cold-mounting a fresh one here.
+      const shadowKey: ShadowKey | null =
+        st.htmlKey === 'giveGoodHands' ? 'giveGoodHands' :
+        st.htmlKey === 'notAlone' ? 'notAlone' : null;
+      if (shadowKey) {
+        return (
+          <ShadowPrewarmPool
+            activeKey={shadowKey}
+            mounted={shadowMounted}
+            topInset={insets.top}
+            progressFor={shadowProgress}
+            onAdvanceStep={() => advance(answers)}
+            onBackStep={goBack}
+            onAdvanceReadyToBuild={() => setAppState('generatePlan')}
+            onBackReadyToBuild={() => setAppState('notifications')}
+            onAdvanceStartingPoint={() => setAppState('rankWheel')}
+            onBackStartingPoint={() => setAppState('onboarding')}
+          />
+        );
+      }
       // Animation suppression needs to run BEFORE the page's own script
       // ever executes (extraJsBeforeLoad), not after (extraJs) — running
       // it after-load was the actual cause of "white screen, then content
@@ -3363,20 +3925,44 @@ export default function OnboardingScreen() {
       // real content the user explicitly wants to see play, not screen
       // chrome to suppress.
       const suppressAnim = st.htmlKey !== 'giveVsWithout' ? SUPPRESS_DC_ANIM_JS : undefined;
+      // Pre-load token replace (see realisticTargetHtml above) instead of
+      // runtime DOM text-injection for this one screen — webviewInject is
+      // skipped for it since there's nothing left for it to do.
+      const htmlOverride = st.htmlKey === 'giveRealisticTarget' ? realisticTargetHtml ?? undefined : undefined;
       return (
-        <OnboardingWebScreen
-          htmlKey={st.htmlKey}
-          topInset={insets.top}
-          progress={progress}
-          extraJsBeforeLoad={suppressAnim}
-          extraJs={st.webviewInject ? st.webviewInject(answers) : undefined}
-          onAdvance={() => advance(answers)}
-          onBack={goBack}
-          onEditValue={(field, value) => {
-            const num = parseFloat(value);
-            setAnswers((a) => ({ ...a, [field]: isNaN(num) ? value : num }));
-          }}
-        />
+        <>
+          <OnboardingWebScreen
+            htmlKey={st.htmlKey}
+            htmlOverride={htmlOverride}
+            topInset={insets.top}
+            progress={progress}
+            extraJsBeforeLoad={suppressAnim}
+            extraJs={st.htmlKey !== 'giveRealisticTarget' && st.webviewInject ? st.webviewInject(answers) : undefined}
+            onAdvance={() => advance(answers)}
+            onBack={goBack}
+            onEditValue={(field, value) => {
+              const num = parseFloat(value);
+              setAnswers((a) => ({ ...a, [field]: isNaN(num) ? value : num }));
+            }}
+          />
+          {/* Keeps any already-triggered shadow-pool screens (e.g.
+              startingPoint, triggered back on 'formConfidence') mounted
+              while other webview steps (goalPace, giveRealisticTarget...)
+              render in between — invisible/non-interactive, nothing here
+              is "active" yet. */}
+          <ShadowPrewarmPool
+            activeKey={null}
+            mounted={shadowMounted}
+            topInset={insets.top}
+            progressFor={shadowProgress}
+            onAdvanceStep={() => advance(answers)}
+            onBackStep={goBack}
+            onAdvanceReadyToBuild={() => setAppState('generatePlan')}
+            onBackReadyToBuild={() => setAppState('notifications')}
+            onAdvanceStartingPoint={() => setAppState('rankWheel')}
+            onBackStartingPoint={() => setAppState('onboarding')}
+          />
+        </>
       );
     }
 
@@ -3419,7 +4005,7 @@ export default function OnboardingScreen() {
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
             {header}
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
-              <Text style={s.placeholderTag}>PLACEHOLDER — DESIGN COMING</Text>
+              <Text style={s.placeholderTag}>PLACEHOLDER. DESIGN COMING</Text>
               <Text style={s.placeholderTitle}>{st.question}</Text>
             </View>
             <View style={s.bn}>
@@ -3454,6 +4040,12 @@ export default function OnboardingScreen() {
     // there with room to spare.
     const _opts = resolveOptions(st.options, answers);
 
+    // trainTime's own Continue doesn't navigate to a new screen — explicit
+    // ask (moved here from formConfidence) — it shows the "Remembering
+    // your answers" overlay ON this same screen instead, and the
+    // overlay's own timer (see the rememberingOverlay effect) is what
+    // actually calls advance() once its bar fills.
+    const isTrainTime = st.id === 'trainTime';
     return (
       <OnboardingBackground>
         <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
@@ -3498,11 +4090,40 @@ export default function OnboardingScreen() {
             </ScrollView>
           </Animated.View>
           <View style={s.bn}>
-            <TouchableOpacity style={[s.cb, !stepReady && s.cbDisabled]} disabled={!stepReady} onPress={() => advance(answers)} activeOpacity={0.85}>
+            <TouchableOpacity
+              style={[s.cb, !stepReady && s.cbDisabled]}
+              disabled={!stepReady}
+              onPress={() => {
+                if (isTrainTime) {
+                  pendingAdvanceRef.current = answers;
+                  setRememberingOverlay(true);
+                } else {
+                  advance(answers);
+                }
+              }}
+              activeOpacity={0.85}
+            >
               <Text style={[s.ct, !stepReady && s.ctDisabled]}>Continue</Text>
             </TouchableOpacity>
           </View>
         </View>
+        {isTrainTime && rememberingOverlay && <ProgressOverlay label="Reviewing your responses" bottomInset={insets.bottom} />}
+        {/* Keeps shadow-pooled screens mounted across every select/
+            multiselect step (accomplish, cardio, cardioTypes, trainTime —
+            all render through this same fallthrough) — invisible/
+            non-interactive, nothing here is "active" yet. */}
+        <ShadowPrewarmPool
+          activeKey={null}
+          mounted={shadowMounted}
+          topInset={insets.top}
+          progressFor={shadowProgress}
+          onAdvanceStep={() => advance(answers)}
+          onBackStep={goBack}
+          onAdvanceReadyToBuild={() => setAppState('generatePlan')}
+          onBackReadyToBuild={() => setAppState('notifications')}
+          onAdvanceStartingPoint={() => setAppState('rankWheel')}
+          onBackStartingPoint={() => setAppState('onboarding')}
+        />
       </OnboardingBackground>
     );
   }
@@ -3533,7 +4154,7 @@ export default function OnboardingScreen() {
         <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
           <SimpleProgressHeader progress={progress} onBack={() => setAppState('thankYou')} />
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
-            <Text style={s.placeholderTag}>PLACEHOLDER — DESIGN COMING</Text>
+            <Text style={s.placeholderTag}>PLACEHOLDER. DESIGN COMING</Text>
             <Text style={s.placeholderTitle}>Connect Apple Health</Text>
           </View>
           <View style={s.bn}>
@@ -3581,34 +4202,65 @@ export default function OnboardingScreen() {
             </TouchableOpacity>
           </View>
         </View>
+        {/* Starts readyToBuild's prewarm here, one screen early — see
+            ShadowPrewarmPool. Invisible/non-interactive until active. */}
+        <ShadowPrewarmPool
+          activeKey={null}
+          mounted={shadowMounted}
+          topInset={insets.top}
+          progressFor={shadowProgress}
+          onAdvanceStep={() => advance(answers)}
+          onBackStep={goBack}
+          onAdvanceReadyToBuild={() => setAppState('generatePlan')}
+          onBackReadyToBuild={() => setAppState('notifications')}
+          onAdvanceStartingPoint={() => setAppState('rankWheel')}
+          onBackStartingPoint={() => setAppState('onboarding')}
+        />
       </OnboardingBackground>
     );
   }
 
   // Real design artboard (readytobuild.html) — one more beat right before
-  // generatePlan actually starts building the plan.
+  // generatePlan actually starts building the plan. Shadow-pooled (see
+  // ShadowPrewarmPool) — prewarmed one screen early, while 'notifications'
+  // was showing, instead of cold-mounting fresh here.
   if (appState === 'readyToBuild') {
     return (
-      <OnboardingWebScreen
-        htmlKey="readyToBuild"
+      <ShadowPrewarmPool
+        activeKey="readyToBuild"
+        mounted={shadowMounted}
         topInset={insets.top}
-        progress={progress}
-        extraJsBeforeLoad={SUPPRESS_DC_ANIM_JS}
-        onAdvance={() => setAppState('generatePlan')}
-        onBack={() => setAppState('notifications')}
+        progressFor={shadowProgress}
+        onAdvanceStep={() => advance(answers)}
+        onBackStep={goBack}
+        onAdvanceReadyToBuild={() => setAppState('generatePlan')}
+        onBackReadyToBuild={() => setAppState('notifications')}
+        onAdvanceStartingPoint={() => setAppState('rankWheel')}
+        onBackStartingPoint={() => setAppState('onboarding')}
       />
     );
   }
 
-  // ── "Answers locked in." loader — new beat between the last question and
-  // the rank run. Reuses RankCalcOverlay's visual language (label + thin
-  // progress bar) as a full screen rather than an overlay, since there's
-  // no prior screen's content to sit on top of here. Two-phase text: bar
-  // fills under "Answers locked in.", then the label swaps and a Continue
-  // button fades in — explicit ask, not auto-advancing like the other
-  // RankCalcOverlay usage (strengthAssessment -> rankReveal) still does.
-  if (appState === 'preRankLoader') {
-    return <PreRankLoaderScreen insets={insets} onAdvance={() => setAppState('rankWheel')} />;
+  // Real design artboard (startingpoint.html) — "Answers locked in, / Time
+  // to set your starting point." + "Let's go" CTA. Replaces the old native
+  // PreRankLoaderScreen placeholder entirely (explicit ask). Shadow-pooled
+  // (see ShadowPrewarmPool) — prewarmed back on 'formConfidence', long
+  // before the user actually reaches it.
+  if (appState === 'startingPoint') {
+    return (
+      <ShadowPrewarmPool
+        activeKey="startingPoint"
+        mounted={shadowMounted}
+        topInset={insets.top}
+        progressFor={shadowProgress}
+        onAdvanceStep={() => advance(answers)}
+        onBackStep={goBack}
+        onAdvanceReadyToBuild={() => setAppState('generatePlan')}
+        onBackReadyToBuild={() => setAppState('notifications')}
+        onAdvanceStartingPoint={() => setAppState('rankWheel')}
+        onBackStartingPoint={() => setAppState('onboarding')}
+      />
+    );
   }
 
   // ── Rank run — native screens (rank wheel / reveal + strength assessment).
@@ -3664,7 +4316,7 @@ export default function OnboardingScreen() {
           onBack={() => setAppState('rankWheel')}
           onStrengthVals={(vals) => setAnswers((a) => ({ ...a, strength: vals }))}
         />
-        {rankCalcOverlay && <RankCalcOverlay bottomInset={insets.bottom} />}
+        {rankCalcOverlay && <ProgressOverlay label="Reading your answers" bottomInset={insets.bottom} />}
       </View>
     );
   }
@@ -3679,6 +4331,79 @@ export default function OnboardingScreen() {
         extraJs={RANK_REVEAL_FOOTER_JS}
         onAdvance={() => setAppState('thankYou')}
         onBack={() => setAppState('rankAssess')}
+      />
+    );
+  }
+
+  // Explicit ask: "if the user closes the paywall without buying, show the
+  // gift offer screen. It must show ONLY ONCE EVER per user." Not part of
+  // the prewarm pool (rare path, no need to pay the prewarm cost) — by the
+  // time we're here it's already been marked shown (see the pool's onBack
+  // below), both locally and in Supabase.
+  if (appState === 'giftOffer') {
+    return (
+      <OnboardingWebScreen
+        htmlKey="giftOffer"
+        topInset={insets.top}
+        progress={progress}
+        onAdvance={() => setAppState('welcomeToFormPal')}
+        onBack={() => setAppState('welcomeToFormPal')}
+      />
+    );
+  }
+
+  // Explicit ask: after-purchase one-time sequence — Welcome -> How it
+  // works -> Allow camera -> Ready to train -> app. Reached either from the
+  // paywall's own CTA or from the gift offer (whichever happened), both
+  // immediately above.
+  if (appState === 'welcomeToFormPal') {
+    return (
+      <OnboardingWebScreen
+        htmlKey="welcomeToFormPal"
+        topInset={insets.top}
+        onAdvance={() => setAppState('howFormPalWorks')}
+        onBack={() => setAppState('welcomeToFormPal')}
+      />
+    );
+  }
+  if (appState === 'howFormPalWorks') {
+    return (
+      <OnboardingWebScreen
+        htmlKey="howFormPalWorks"
+        topInset={insets.top}
+        onAdvance={() => setAppState('allowCamera')}
+        onBack={() => setAppState('welcomeToFormPal')}
+      />
+    );
+  }
+  if (appState === 'allowCamera') {
+    return (
+      <OnboardingWebScreen
+        htmlKey="allowCamera"
+        topInset={insets.top}
+        extraJs={ALLOW_CAMERA_EXTRA_JS}
+        onAdvance={() => setAppState('readyToTrain')}
+        onBack={() => setAppState('howFormPalWorks')}
+        onCustomMessage={(msg) => {
+          if (msg === 'requestCameraPermission') {
+            void ExpoCamera.requestCameraPermissionsAsync().finally(() => setAppState('readyToTrain'));
+          }
+        }}
+      />
+    );
+  }
+  if (appState === 'readyToTrain') {
+    const nextWorkout = planForReadyScreen?.workouts?.[planForReadyScreen.currentWorkoutIndex ?? 0] ?? null;
+    return (
+      <OnboardingWebScreen
+        htmlKey="readyToTrain"
+        topInset={insets.top}
+        extraJs={readyToTrainInject(
+          nextWorkout?.splitLabel ?? null,
+          nextWorkout ? `${nextWorkout.exercises.length} exercise${nextWorkout.exercises.length === 1 ? '' : 's'}` : null,
+        )}
+        onAdvance={() => void finishOnboarding()}
+        onBack={() => setAppState('allowCamera')}
       />
     );
   }
@@ -3715,7 +4440,16 @@ export default function OnboardingScreen() {
           onBack={(from) => {
             if (from === 'planReady') setAppState('generatePlan');
             else if (from === 'trialTimeline') setAppState('tryForFree');
-            else setAppState('trialTimeline');
+            else {
+              // from === 'webPaywall' — closing the paywall without buying.
+              // Explicit ask: show the gift offer, but only the first time
+              // this ever happens for this account/device.
+              void hasGiftOfferBeenShown().then((shown) => {
+                if (shown) { void finishOnboarding(); return; }
+                void markGiftOfferShown();
+                setAppState('giftOffer');
+              });
+            }
           }}
           onEditInfo={(f) => setEditField(f as EditField)}
           onEditValue={(field, value) => {
@@ -3743,6 +4477,7 @@ export default function OnboardingScreen() {
           <SaveProgressScreen
             topInset={insets.top}
             progress={progress}
+            answers={answers}
             onAdvance={() => setAppState('tryForFree')}
             onBack={() => setAppState('planReady')}
           />
@@ -3776,7 +4511,7 @@ export default function OnboardingScreen() {
 // experience field gets its four options. Save/Cancel dismiss it. ────────────
 
 const EXPERIENCE_OPTS = ['Beginner', 'Some experience', 'Intermediate', 'Advanced'];
-const MAIN_GOAL_OPTS = ['Build muscle · Gain weight', 'Lose fat · Lose weight', 'Recomp · Lose fat, build muscle'];
+const MAIN_GOAL_OPTS = ['Build muscle · Gain weight', 'Lose fat · Lose weight', 'Tone up · Lose fat & build muscle'];
 const FIELD_META: Record<EditField, { title: string; kbd: 'number-pad' | 'default'; ph: string; unit?: string }> = {
   age:        { title: 'age',        kbd: 'number-pad', ph: '27' },
   height:     { title: 'height',     kbd: 'default',    ph: `5'10"` },
@@ -3918,11 +4653,12 @@ const s = StyleSheet.create({
   giveSub: { fontSize: 15.5, color: L.textSub, textAlign: 'center', lineHeight: 22, marginTop: 14, maxWidth: 320 },
 
   // Options
-  // Bigger again — explicit correction, the previous "clean and curved"
-  // pass went too far the other way and read as cramped/too small. No
-  // sublabel any more (removed from render entirely), so the row's only
-  // content is the icon + single label line — sized generously.
-  opt:        { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: L.card, borderRadius: 20, borderWidth: 1, borderColor: L.border, paddingHorizontal: 18, paddingVertical: 18, marginBottom: 10, ...({ boxShadow: Elev.low.shadow } as any) },
+  // Vertical padding cut — explicit ask: "too much empty space above/below
+  // the text, fewer choices fit, users have to scroll. Keep the text size,
+  // cut the vertical padding." Text size (optTxt, below) and optIcon's
+  // 44px slot are both untouched — only the row's own top/bottom padding
+  // and the gap between rows shrank (18->12, 10->8).
+  opt:        { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: L.card, borderRadius: 20, borderWidth: 1, borderColor: L.border, paddingHorizontal: 18, paddingVertical: 12, marginBottom: 8, ...({ boxShadow: Elev.low.shadow } as any) },
   optSel:     { borderColor: L.accent, backgroundColor: L.accentSoft },
   // No boxed background — selection is already conveyed by the icon's own
   // color (accent when selected, muted gray otherwise, see the render

@@ -167,7 +167,7 @@ function GlassCard({ good, reason }: { good: boolean; reason: string }) {
         {/* Header */}
         <View style={card.header}>
           <Star size={12} />
-          <Text style={card.headerTxt}>MYPAL</Text>
+          <Text style={card.headerTxt}>CUE</Text>
         </View>
 
         {/* Thin divider */}

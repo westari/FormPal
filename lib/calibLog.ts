@@ -67,7 +67,7 @@ export function createCalibSynth(): CalibSynth {
     // ── [REP] rejected — <reason> ──────────────────────────────────────
     if (/^\[REP\] rejected/.test(line)) {
       const reason = line.replace(/^\[REP\] rejected\s*[—-]\s*/, '').split('|')[0].trim();
-      return [`[CALIB] rep dropped — ${reason}`];
+      return [`[CALIB] rep dropped. ${reason}`];
     }
 
     // ── [REP] #N top=MAX bottom=MIN swing=RANGE ROM=ok|short cue=CUE ────

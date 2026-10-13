@@ -655,16 +655,16 @@ export default function HomeScreen() {
             </View>
 
             {/* MyPal insight — tucked 30px under rings */}
-            <Pressable onPress={() => router.push('/mypal' as any)} style={[s.mypalCard, SHADOW_MED]}>
+            <Pressable onPress={() => router.push('/cue' as any)} style={[s.mypalCard, SHADOW_MED]}>
               <View style={s.mypalHeader}>
                 <Svg width={16} height={16} viewBox="0 0 24 24">
                   <SvgPath d="M12 2.5l1.7 5.3 5.3 1.7-5.3 1.7L12 16.5l-1.7-5.3L5 9.5l5.3-1.7z" fill={C.accent} />
                   <SvgPath d="M18.5 14l.8 2.4 2.4.8-2.4.8-.8 2.4-.8-2.4-2.4-.8 2.4-.8z" fill={C.accent} />
                 </Svg>
-                <Text style={s.mypalLabel}>MYPAL</Text>
+                <Text style={s.mypalLabel}>CUE</Text>
               </View>
               <Text style={s.mypalBody}>
-                Consistent reps build real strength — your form improves with every rep you log.{' '}
+                Consistent reps build real strength. Your form improves with every rep you log.{' '}
                 <Text style={s.mypalCta}>Tap to chat with your coach ›</Text>
               </Text>
             </Pressable>

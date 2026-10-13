@@ -93,7 +93,7 @@ function buildSteps(def: ExerciseDefinitionDef): CalibStep[] {
       label: check.id.replace(/_/g, ' '),
       instruction:
         `Deliberately demonstrate the fault this check catches. ` +
-        `In a real workout you'd see the cue "${check.cue}" when this happens — exaggerate it clearly.`,
+        `In a real workout you'd see the cue "${check.cue}" when this happens. Exaggerate it clearly.`,
     });
   }
   return steps;
@@ -258,7 +258,7 @@ export default function CalibrateScreen() {
       }
       const moduleRepNum = parseModuleRepMarker(line);
       if (moduleRepNum !== null && moduleRepNum !== lastUsableRepRef.current) {
-        showNotice(`Rep #${moduleRepNum} discarded automatically — low confidence, redo it`);
+        showNotice(`Rep #${moduleRepNum} discarded automatically. Low confidence, redo it`);
       }
     });
 
@@ -299,7 +299,7 @@ export default function CalibrateScreen() {
     } else if (step.check) {
       const c = parsed.checks[step.check.id];
       if (!c) {
-        showNotice('Rep recorded but this check wasn’t measurable — low joint confidence, redo it');
+        showNotice('Rep recorded but this check wasn’t measurable. Low joint confidence, redo it');
         return;
       }
       setFaultSamples(prev => ({
@@ -427,8 +427,8 @@ export default function CalibrateScreen() {
     }
     showNotice(
       targetIds.length > 1
-        ? `Saved to ${targetIds.length} exercises — takes effect next time each is started.`
-        : 'Calibration saved — takes effect next time you start this exercise.',
+        ? `Saved to ${targetIds.length} exercises. Takes effect next time each is started.`
+        : 'Calibration saved. Takes effect next time you start this exercise.',
     );
   };
 
@@ -465,7 +465,7 @@ export default function CalibrateScreen() {
   if (notLinked) {
     return (
       <View style={[s.root, { paddingTop: insets.top + 40 }]}>
-        <Text style={s.errorText}>ATHLTCamera native module not linked.{'\n'}Run a dev build — Expo Go does not support this screen.</Text>
+        <Text style={s.errorText}>ATHLTCamera native module not linked.{'\n'}Run a dev build. Expo Go does not support this screen.</Text>
         <GlassButton style={{ marginTop: 24, paddingHorizontal: 24, paddingVertical: 12 }} onPress={() => router.back()}>
           <Text style={s.buttonTxt}>Back</Text>
         </GlassButton>
@@ -478,7 +478,7 @@ export default function CalibrateScreen() {
     return (
       <View style={[s.root, { paddingTop: insets.top + 16 }]}>
         <Text style={s.h1}>Calibrate an Exercise</Text>
-        <Text style={s.subtitle}>Pick an exercise — you'll demonstrate a few reps and the tool learns the thresholds.</Text>
+        <Text style={s.subtitle}>Pick an exercise. You'll demonstrate a few reps and the tool learns the thresholds.</Text>
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
           {(Object.keys(EXERCISE_DEFINITIONS) as ExerciseId[]).map(id => {
             const rec = calibList[id];
@@ -510,7 +510,7 @@ export default function CalibrateScreen() {
         <Text style={s.h1}>{def.displayName}</Text>
         <Text style={s.subtitle}>Already calibrated {new Date(existingRecord.calibratedAt).toLocaleDateString()} ({existingRecord.sampleSize} reps/step).</Text>
         <GlassButton style={s.wideBtn} onPress={() => { setValidateMode(true); setStepIndex(0); setGoodSamples([]); setFaultSamples({}); setSessionSub('setup'); setPhase('session'); }}>
-          <Text style={s.buttonTxt}>Validate — check for drift</Text>
+          <Text style={s.buttonTxt}>Validate. Check for drift</Text>
         </GlassButton>
         <GlassButton style={s.wideBtn} onPress={() => { setValidateMode(false); setStepIndex(0); setGoodSamples([]); setFaultSamples({}); overridesRef.current = {}; distributionsRef.current = {}; setSessionSub('setup'); setPhase('session'); }}>
           <Text style={s.buttonTxt}>Recalibrate from scratch</Text>
@@ -533,15 +533,15 @@ export default function CalibrateScreen() {
     const driftFlag = Math.abs(romDrift) >= 5;
     return (
       <View style={[s.root, { paddingTop: insets.top + 24, paddingHorizontal: 20 }]}>
-        <Text style={s.h1}>Drift check — {def.displayName}</Text>
+        <Text style={s.h1}>Drift check. {def.displayName}</Text>
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
           <View style={s.reportCard}>
             <Text style={s.reportLabel}>goodROMThreshold</Text>
             <Text style={s.reportBig}>{storedROM}° stored → {newROM}° now</Text>
             <Text style={[s.reportNote, driftFlag ? s.reportNoteWarn : s.reportNoteGood]}>
               {driftFlag
-                ? `${Math.abs(romDrift)}° ${romDrift > 0 ? 'stricter' : 'looser'} than what's set — your good reps now bottom out at ~${newROM}°. Consider recalibrating.`
-                : 'No meaningful drift — current setting still matches your reps.'}
+                ? `${Math.abs(romDrift)}° ${romDrift > 0 ? 'stricter' : 'looser'} than what's set. Your good reps now bottom out at ~${newROM}°. Consider recalibrating.`
+                : 'No meaningful drift. Current setting still matches your reps.'}
             </Text>
           </View>
           <View style={s.reportCard}>
@@ -565,7 +565,7 @@ export default function CalibrateScreen() {
     const o = overridesRef.current;
     return (
       <View style={[s.root, { paddingTop: insets.top + 24, paddingHorizontal: 20 }]}>
-        <Text style={s.h1}>Review — {def.displayName}</Text>
+        <Text style={s.h1}>Review. {def.displayName}</Text>
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
           <View style={s.reportCard}>
             <Text style={s.reportLabel}>Rep range</Text>
@@ -582,7 +582,7 @@ export default function CalibrateScreen() {
           {familyMembers.length > 0 ? (
             <>
               <Text style={s.subtitle}>
-                These share {def.displayName}'s exact rep metric — pre-selected, uncheck any you don't want:
+                These share {def.displayName}'s exact rep metric. Pre-selected, uncheck any you don't want:
               </Text>
               {familyMembers.map(id => (
                 <FamilyRow
@@ -820,14 +820,14 @@ function ReviewView({
 
   return (
     <View style={[s.reviewWrap, { paddingBottom: insetBottom + 20 }]}>
-      <Text style={s.reviewTitle}>Suggested limit — {step.label}</Text>
+      <Text style={s.reviewTitle}>Suggested limit. {step.label}</Text>
       {!boundary.directionMatches && (
         <Text style={s.warnTxt}>
-          Your fault demo didn't clearly separate from good reps on this metric — try exaggerating more, or redo with a clearer motion.
+          Your fault demo didn't clearly separate from good reps on this metric. Try exaggerating more, or redo with a clearer motion.
         </Text>
       )}
       {goodVals.length === 0 && (
-        <Text style={s.warnTxt}>No usable good-rep data for this metric — the good-reps step may not have moved it enough. Suggestion may be unreliable.</Text>
+        <Text style={s.warnTxt}>No usable good-rep data for this metric. The good-reps step may not have moved it enough. Suggestion may be unreliable.</Text>
       )}
       <DistributionRow label="Good reps" result={goodResult} />
       <DistributionRow label="Fault reps" result={faultResult} />

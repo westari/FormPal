@@ -20,10 +20,7 @@
         "NSMicrophoneUsageDescription": "FormPal may record audio during sessions for performance analysis.",
         "ITSAppUsesNonExemptEncryption": false,
         "UIViewControllerBasedStatusBarAppearance": false,
-        "UIStatusBarStyle": "UIStatusBarStyleDarkContent",
-        "NSAppTransportSecurity": {
-          "NSAllowsLocalNetworking": true
-        }
+        "UIStatusBarStyle": "UIStatusBarStyleDarkContent"
       },
       "bundleIdentifier": "com.athlt.formpal"
     },
@@ -35,14 +32,15 @@
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"
-      ],
-      "usesCleartextTraffic": true
+      ]
     },
     "plugins": [
       "expo-router",
       "expo-font",
       "expo-dev-client",
-      "expo-audio"
+      "expo-audio",
+      "expo-apple-authentication",
+      "expo-camera"
     ],
     "experiments": {
       "typedRoutes": true

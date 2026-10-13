@@ -191,7 +191,7 @@ function resolveMultiOptions(turn: Extract<Turn, { kind: 'multiselect' }>, answe
 }
 
 const FLOW: Turn[] = [
-  { id: 'name', kind: 'text', prompt: "Hey — I'm going to build your training plan. What should I call you?", placeholder: 'Your name' },
+  { id: 'name', kind: 'text', prompt: "Hey. I'm going to build your training plan. What should I call you?", placeholder: 'Your name' },
 
   { id: 'age', kind: 'wheel', wheelKind: 'age', prompt: 'How old are you?' },
   { id: 'height', kind: 'wheel', wheelKind: 'height', prompt: 'How tall are you?' },
@@ -239,7 +239,7 @@ const FLOW: Turn[] = [
   // that immediately follows.
   { id: 'followPlan', kind: 'select', prompt: 'Do you currently follow a structured training plan?', options: [
     { label: 'Yes', sfSymbol: 'checkmark.circle.fill', customIcon: ICON.yes },
-    { label: 'No — I wing it', sfSymbol: 'xmark.circle.fill', customIcon: ICON.no },
+    { label: 'No. I wing it', sfSymbol: 'xmark.circle.fill', customIcon: ICON.no },
     { label: 'On and off', sfSymbol: 'arrow.triangle.2.circlepath', customIcon: ICON.onAndOff },
   ]},
   fact('fact1', [
@@ -249,7 +249,7 @@ const FLOW: Turn[] = [
 
   // Branches by experience — a beginner's "in the way" is different from
   // an advanced lifter's. Both lists end in a real "Nothing" option.
-  { id: 'struggle', kind: 'multiselect', prompt: "What's been holding your training back?", clearAllOption: 'Nothing — just ready to start',
+  { id: 'struggle', kind: 'multiselect', prompt: "What's been holding your training back?", clearAllOption: 'Nothing, just ready to start',
     showIf: a => a.experience !== 'Beginner',
     options: [
       { label: 'Not seeing results', sfSymbol: 'minus.circle.fill', customIcon: ICON.noResults },
@@ -257,7 +257,7 @@ const FLOW: Turn[] = [
       { label: 'Staying consistent', sfSymbol: 'repeat', customIcon: ICON.days },
       { label: 'Losing motivation', sfSymbol: 'flame.fill', customIcon: ICON.scared },
       { label: 'Injuries or pain', sfSymbol: 'bandage.fill', customIcon: ICON.wrist },
-      { label: 'Nothing — just ready to start', sfSymbol: 'checkmark.circle.fill', customIcon: ICON.good },
+      { label: 'Nothing, just ready to start', sfSymbol: 'checkmark.circle.fill', customIcon: ICON.good },
     ],
   },
   { id: 'frustration', kind: 'select', prompt: 'What frustrates you most about your training?',
@@ -290,14 +290,14 @@ const FLOW: Turn[] = [
     { text: ' you put in.' },
   ], 'effortBars'),
 
-  { id: 'injuries', kind: 'multiselect', prompt: 'Any injuries or areas that hurt?', clearAllOption: 'No injuries — all clear', options: [
+  { id: 'injuries', kind: 'multiselect', prompt: 'Any injuries or areas that hurt?', clearAllOption: 'No injuries. All clear', options: [
     { label: 'Knees', sfSymbol: 'figure.walk', customIcon: ICON.knee },
     { label: 'Shoulders', sfSymbol: 'figure.arms.open', customIcon: ICON.shoulder },
     { label: 'Lower back', sfSymbol: 'figure.cooldown', customIcon: ICON.back },
     { label: 'Wrists', sfSymbol: 'hand.raised.fill', customIcon: ICON.wrist },
     { label: 'Neck', sfSymbol: 'figure.stand', customIcon: ICON.neck },
     { label: 'Hips', sfSymbol: 'figure.run', customIcon: ICON.hip },
-    { label: 'No injuries — all clear', sfSymbol: 'checkmark.circle.fill', customIcon: ICON.good },
+    { label: 'No injuries. All clear', sfSymbol: 'checkmark.circle.fill', customIcon: ICON.good },
   ]},
 
   // The home/gym/both question — the bubbles ARE the answer options now
@@ -307,7 +307,7 @@ const FLOW: Turn[] = [
 
   { id: 'homeEquipment', kind: 'multiselect', prompt: 'Equipment you have at home?',
     showIf: a => a.trainingLocation === 'Home' || a.trainingLocation === 'Mix of both',
-    clearAllOption: 'Nothing — bodyweight only',
+    clearAllOption: 'Nothing. Bodyweight only',
     options: [
       { label: 'Dumbbells', sfSymbol: 'dumbbell.fill', customIcon: ICON.dumbbell },
       { label: 'Resistance bands', sfSymbol: 'figure.flexibility', customIcon: ICON.bands },
@@ -315,7 +315,7 @@ const FLOW: Turn[] = [
       { label: 'Pull-up bar', sfSymbol: 'figure.gymnastics', customIcon: ICON.pullupBar },
       { label: 'Bench', sfSymbol: 'rectangle.fill', customIcon: ICON.bench },
       { label: 'Barbell & plates', sfSymbol: 'figure.strengthtraining.traditional', customIcon: ICON.barbell },
-      { label: 'Nothing — bodyweight only', sfSymbol: 'figure.walk', customIcon: ICON.bodyweight },
+      { label: 'Nothing. Bodyweight only', sfSymbol: 'figure.walk', customIcon: ICON.bodyweight },
     ],
   },
   { id: 'gymMissingEquipment', kind: 'multiselect', prompt: 'Anything your gym is missing?',
@@ -458,7 +458,7 @@ const FLOW: Turn[] = [
   // calculatingRank, step 2). PlanReveal's own steps now call back to
   // their rank and the real wasted-reps number, not just the generic 4
   // steps it had before.
-  { id: 'planReveal', kind: 'planReveal', prompt: "Alright — let's put it all together." },
+  { id: 'planReveal', kind: 'planReveal', prompt: "Alright. Let's put it all together." },
   // 12 — PLACEHOLDER for the real paywall (built separately).
   { id: 'paywallPlaceholder', kind: 'paywallPlaceholder' },
 ];
@@ -1480,7 +1480,7 @@ function RankFillingScreen({ onDone }: { onDone: () => void }) {
     <RankShell>
       <View style={styles.rankScreenPad}>
         <Text style={styles.rankScreenHeading}>Every muscle, ranked.</Text>
-        <Text style={styles.rankScreenBody}>Train it right and it lights up — one muscle at a time, all the way to Champion.</Text>
+        <Text style={styles.rankScreenBody}>Train it right and it lights up. One muscle at a time, all the way to Champion.</Text>
         <View style={styles.rankBodyStage}>
           <RankBodyPreview tiers={fillTiers} />
         </View>
@@ -1515,7 +1515,7 @@ function RankAssessScreen({ onDone }: { onDone: (pushups: number, pullups: numbe
     <RankShell>
       <ScrollView contentContainerStyle={styles.rankAssessScroll} showsVerticalScrollIndicator={false}>
         <Text style={styles.rankScreenHeading}>Where do you stand?</Text>
-        <Text style={styles.rankScreenBody}>How many can you do in a row? Be honest — this sets your starting point.</Text>
+        <Text style={styles.rankScreenBody}>How many can you do in a row? Be honest. This sets your starting point.</Text>
         {rows.map(row => (
           <View key={row.label} style={styles.rankAssessRow}>
             <Text style={styles.rankAssessLabel}>{row.label}</Text>
@@ -1772,7 +1772,7 @@ function RankProjectionScreen({ answers, onDone }: { answers: Record<string, any
         <Animated.View style={{ opacity: copyOpacity }}>
           <Text style={styles.rankProjPotential}>You have amazing potential!</Text>
           <Text style={styles.rankScreenBody}>Ranks are a direct way to measure your progress. Keep it up!</Text>
-          <Text style={styles.rankProjDisclaimer}>*This projection is a rough estimate based on your starting numbers — not a guarantee.</Text>
+          <Text style={styles.rankProjDisclaimer}>*This projection is a rough estimate based on your starting numbers. Not a guarantee.</Text>
         </Animated.View>
       </ScrollView>
       <Animated.View style={[styles.momentBtnWrap, { opacity: btnOpacity }]}>
@@ -1788,7 +1788,7 @@ function RankProjectionScreen({ answers, onDone }: { answers: Record<string, any
 
 const REVIEWS = [
   { name: 'Jordan M.', quote: 'Finally know my squat depth is actually right. Game changer.' },
-  { name: 'Casey R.', quote: 'Caught my shoulder form issue in week one — saved me an injury.' },
+  { name: 'Casey R.', quote: 'Caught my shoulder form issue in week one. Saved me an injury.' },
   { name: 'Priya S.', quote: 'Feels like having a coach in my pocket every session.' },
 ];
 
@@ -2555,7 +2555,7 @@ function CinematicMathScreen({ answers, onDone }: { answers: Record<string, any>
       `Do that for ${m.weeksPlain}, and that's about ${m.totalReps.toLocaleString()} reps total.`,
       `You said ${m.pct}% of them are good form.`,
       `That means ${m.wasted.toLocaleString()} of them barely built anything.`,
-      "That's months of muscle — gone.",
+      "That's months of muscle. Gone.",
       "But that's not it.",
       'Every gym injury is a 4-6 week sideline.',
       'After just 4 weeks off, you start losing the strength you built.',
@@ -2571,7 +2571,7 @@ function ReversalScreen({ onDone }: { onDone: () => void }) {
   const lines = useMemo(() => [
     "But it's not too late.",
     'FormPal checks every rep.',
-    'So from today, every one counts — and you build nearly 2x the muscle.',
+    'So from today, every one counts, and you build nearly 2x the muscle.',
   ], []);
   return <FullScreenMoment lines={lines} onDone={onDone} wash={false} />;
 }
@@ -2623,7 +2623,7 @@ function RankPlaceholderScreen({ onDone }: { onDone: () => void }) {
       <View style={styles.calcCenter}>
         <SymbolView name="rectangle.dashed" size={34} tintColor={Col.textDim} type="monochrome" style={{ width: 34, height: 34 }} />
         <Text style={styles.placeholderTitleLight}>Rank screens go here</Text>
-        <Text style={styles.placeholderBodyLight}>Designed separately in Claude Design — drop in later.</Text>
+        <Text style={styles.placeholderBodyLight}>Designed separately in Claude Design. Drop in later.</Text>
       </View>
       <View style={styles.momentBtnWrap}>
         <BounceBtn style={styles.continueBtn} onPress={onDone}>
@@ -2764,11 +2764,11 @@ function DemoRunSimulated({ exercise, onDone }: { exercise: 'pushup' | 'squat'; 
     <View style={styles.momentOverlay}>
       <AppBackground />
       <View style={styles.demoCenter}>
-        <Text style={styles.demoRunTitle}>{exName} — Demo</Text>
+        <Text style={styles.demoRunTitle}>{exName}. Demo</Text>
         <View style={styles.demoCameraCard}>
           <SymbolView name="camera.fill" size={26} tintColor="rgba(11,16,32,0.3)" type="monochrome" style={{ width: 26, height: 26 }} />
           <Text style={styles.demoCameraTxt}>Camera unavailable here</Text>
-          <Text style={styles.demoCameraSub}>Simulated — run a dev build for the real check</Text>
+          <Text style={styles.demoCameraSub}>Simulated. Run a dev build for the real check</Text>
         </View>
         <Text style={styles.demoRunCount}>{count}<Text style={styles.demoRunCountOf}> / {DEMO_TARGET_REPS}</Text></Text>
       </View>
@@ -2852,7 +2852,7 @@ function DemoRunLive({ exercise, onDone }: { exercise: 'pushup' | 'squat'; onDon
   const exName = exercise === 'pushup' ? 'Push-up' : 'Squat';
   const status =
     phase === 'error'    ? 'Camera unavailable' :
-    phase === 'tracking' ? `${exName}s — go` :
+    phase === 'tracking' ? `${exName}s. Go` :
     hint || 'Get your whole body in the frame';
 
   return (
@@ -2901,15 +2901,15 @@ function DemoVerdictScreen({ answers, onDone }: { answers: Record<string, any>; 
           <>
             <Text style={styles.verdictBig}>{reps} reps.</Text>
             <Text style={styles.verdictBody}>
-              <Text style={styles.accent}>{reps - good} didn't count</Text> — {cue ?? 'your form broke down'}.
+              <Text style={styles.accent}>{reps - good} didn't count</Text>. {cue ?? 'your form broke down'}.
             </Text>
           </>
         ) : (
           <>
             <Text style={styles.verdictBig}>5 / 5.</Text>
             <Text style={styles.verdictBody}>
-              Nice — solid form on that {exercise}. But that's one lift, fresh.{'\n\n'}
-              Across everything you do, when you're tired at rep 10 — how many are actually clean?
+              Nice. Solid form on that {exercise}. But that's one lift, fresh.{'\n\n'}
+              Across everything you do, when you're tired at rep 10. How many are actually clean?
             </Text>
           </>
         )}
@@ -2954,7 +2954,7 @@ function PaywallPlaceholderScreen({ onRestart }: { onRestart: () => void }) {
       <View style={styles.demoCenter}>
         <SymbolView name="lock.rectangle.fill" size={32} tintColor={Col.textDim} type="monochrome" style={{ width: 32, height: 32 }} />
         <Text style={styles.placeholderTitleLight}>Paywall</Text>
-        <Text style={styles.placeholderBodyLight}>Built separately — drop in here.</Text>
+        <Text style={styles.placeholderBodyLight}>Built separately. Drop in here.</Text>
         <Pressable onPress={onRestart} style={styles.restartBtn} hitSlop={8}>
           <Text style={styles.restartBtnTxt}>Restart flow</Text>
         </Pressable>
@@ -3147,61 +3147,61 @@ function reactionFor(id: string, value: any): string | null {
       switch (value) {
         case 'Build muscle': return "Perfect. That's exactly what we'll focus on.";
         case 'Look better, feel confident': return "That confidence shows up fast once the work starts paying off.";
-        case 'Learn to train properly': return "Smart move — form is what actually makes the reps count.";
+        case 'Learn to train properly': return "Smart move. Form is what actually makes the reps count.";
         case 'Get back on track': return "Everyone needs a reset sometimes. Let's make this one stick.";
         case 'Stay consistent': return "Consistency's the real unlock. Let's build a routine you can keep.";
         default: return null;
       }
     case 'followPlan':
-      if (value === 'Yes') return "Good — we'll make it even more effective.";
+      if (value === 'Yes') return "Good. We'll make it even more effective.";
       if (value === 'On and off') return "Let's make it stick this time.";
       return "That's about to change.";
     case 'frustration':
       switch (value) {
-        case 'Not seeing results': return "That's the most frustrating place to be — let's change that.";
+        case 'Not seeing results': return "That's the most frustrating place to be. Let's change that.";
         case "Don't know if I'm doing it right": return "That uncertainty ends here.";
-        case 'Staying consistent': return "Consistency's a skill, not a personality trait — it's learnable.";
-        case 'Nothing really': return "Good — let's keep it that way.";
+        case 'Staying consistent': return "Consistency's a skill, not a personality trait. It's learnable.";
+        case 'Nothing really': return "Good. Let's keep it that way.";
         default: return null;
       }
     case 'formConfidence':
       if (value === 'Yes') return "We'll put that to the test.";
-      if (value === 'Not sure') return "Most people aren't — that's exactly the gap we're closing.";
+      if (value === 'Not sure') return "Most people aren't. That's exactly the gap we're closing.";
       return "Totally normal. That's what we're here to fix.";
     case 'cardio':
       switch (value) {
         case 'Yes, regularly': return 'Good base to build on.';
         case 'Sometimes': return "That's a solid start.";
-        case 'No, just lifting': return "Nothing wrong with that — lifting's the priority here anyway.";
+        case 'No, just lifting': return "Nothing wrong with that. Lifting's the priority here anyway.";
         case 'I want to add some': return "We'll work that in.";
         default: return null;
       }
     case 'cardioTypes': {
       if (!Array.isArray(value) || !value.length) return null;
       const lines: Record<string, string> = {
-        Running: 'Good — running pairs well with a lifting split.',
+        Running: 'Good. Running pairs well with a lifting split.',
         Cycling: "Nice, cardio's covered then.",
         Swimming: 'Full-body conditioning, nice pick.',
         Rowing: "That's a serious engine builder.",
-        HIIT: 'Short and brutal — respect.',
+        HIIT: 'Short and brutal. Respect.',
         Walking: "Underrated. Keep it up.",
         Sports: "Nothing beats getting your cardio from something you actually enjoy.",
       };
-      return lines[value[0]] ?? "Good — that'll round things out.";
+      return lines[value[0]] ?? "Good. That'll round things out.";
     }
     case 'trainTime':
       switch (value) {
         case 'Morning': return 'Mornings set the tone for the whole day.';
-        case 'Afternoon': return 'Good — a natural break in the day.';
+        case 'Afternoon': return 'Good. A natural break in the day.';
         case 'Evening': return "Evening training's great for shaking off the day.";
         case 'Varies': return "Flexible works too, as long as it happens.";
         default: return null;
       }
     case 'successVision':
       switch (value) {
-        case 'Visibly more muscle': return "That's the classic payoff — and it's closer than you think.";
+        case 'Visibly more muscle': return "That's the classic payoff, and it's closer than you think.";
         case 'Noticeably stronger lifts': return "Strength numbers don't lie. We'll chase those.";
-        case 'Leaner and more defined': return "Definition comes from the details — exactly what we're dialing in.";
+        case 'Leaner and more defined': return "Definition comes from the details. Exactly what we're dialing in.";
         case 'Confident with my shirt off': return "That confidence is earned, not given. Let's earn it.";
         case 'Finally seeing results': return "The frustrating part is almost over.";
         case 'Knowing my form is right': return "That certainty is the whole point of this app.";
@@ -3211,7 +3211,7 @@ function reactionFor(id: string, value: any): string | null {
       switch (value) {
         case 'Instagram / TikTok': return 'Glad it caught your eye.';
         case 'Friend or referral': return 'The best kind of recommendation.';
-        case 'App Store search': return 'You went looking — that says something.';
+        case 'App Store search': return 'You went looking, that says something.';
         case 'Google / web search': return 'Good research instincts.';
         default: return 'Glad you found us either way.';
       }
@@ -3224,9 +3224,9 @@ function reactionFor(id: string, value: any): string | null {
     }
     case 'trainDuration':
       switch (value) {
-        case 'Just starting': return 'Clean slate — no bad habits to unlearn.';
-        case '1-6 months': return "You're past the hardest part — showing up.";
-        case '6-12 months': return "Almost a year in — that's real momentum.";
+        case 'Just starting': return 'Clean slate. No bad habits to unlearn.';
+        case '1-6 months': return "You're past the hardest part. Showing up.";
+        case '6-12 months': return "Almost a year in. That's real momentum.";
         case '1-2 years': return "That's enough time to know this isn't a phase.";
         case '2-5 years': return "You've clearly put in the time.";
         case '5-10 years': return "That's serious dedication.";
@@ -3234,20 +3234,20 @@ function reactionFor(id: string, value: any): string | null {
         default: return null;
       }
     case 'formGuess':
-      if (value >= 85) return 'Most people land lower than they think — we\'ll see.';
+      if (value >= 85) return 'Most people land lower than they think. We\'ll see.';
       if (value <= 40) return "At least you're being honest with yourself.";
       return "Let's see what that actually adds up to.";
     case 'experience':
       switch (value) {
-        case 'Beginner': return 'Honestly the best time to start — before bad habits set in.';
+        case 'Beginner': return 'Honestly the best time to start. Before bad habits set in.';
         case 'Some experience': return "Enough to know what you don't know yet.";
-        case 'Intermediate': return "Good base — let's sharpen it.";
+        case 'Intermediate': return "Good base. Let's sharpen it.";
         case 'Advanced': return "Let's make sure your form matches your effort.";
         default: return null;
       }
     case 'duration':
       switch (value) {
-        case '15-20 min': return 'Short and efficient — no wasted time.';
+        case '15-20 min': return 'Short and efficient. No wasted time.';
         case '30 min': return 'A solid, sustainable window.';
         case '45 min': return 'Enough time to really work.';
         case '60 min': return 'A real session.';
@@ -3260,37 +3260,37 @@ function reactionFor(id: string, value: any): string | null {
       if (!Array.isArray(value) || !value.length) return null;
       const lines: Record<string, string> = {
         'Build muscle & strength': "That's the foundation everything else builds on.",
-        'Lose weight': "Form matters even more when you're cutting — good call focusing on it.",
+        'Lose weight': "Form matters even more when you're cutting. Good call focusing on it.",
         'Improve form': 'That\'s exactly what this app is built for.',
         'Stay consistent': 'Consistency beats any single great workout.',
         'General fitness': 'A solid, well-rounded goal.',
       };
-      const base = lines[value[0]] ?? "Good — that'll shape the plan.";
+      const base = lines[value[0]] ?? "Good. That'll shape the plan.";
       return value.length > 1 ? `${base} Plus a few more in the mix.` : base;
     }
     case 'injuries':
-      return Array.isArray(value) && value.length && value[0] !== 'No injuries — all clear' ? "Noted — we'll train around that." : "Good — nothing holding you back.";
+      return Array.isArray(value) && value.length && value[0] !== 'No injuries. All clear' ? "Noted. We'll train around that." : "Good. Nothing holding you back.";
     case 'struggle': {
       if (!Array.isArray(value) || !value.length) return null;
       const lines: Record<string, string> = {
-        'Not seeing results': "That's the most frustrating place to be — let's change that.",
+        'Not seeing results': "That's the most frustrating place to be. Let's change that.",
         "Not sure if I'm training right": 'That uncertainty ends here.',
-        'Staying consistent': "Consistency's a skill, not a personality trait — it's learnable.",
+        'Staying consistent': "Consistency's a skill, not a personality trait. It's learnable.",
         'Losing motivation': 'That happens to everyone eventually. A visible plan helps a lot.',
         'Injuries or pain': "We'll make sure your form isn't making that worse.",
-        'Nothing — just ready to start': "Then let's get started.",
+        'Nothing, just ready to start': "Then let's get started.",
       };
-      return lines[value[0]] ?? "Noted — we'll factor that in.";
+      return lines[value[0]] ?? "Noted. We'll factor that in.";
     }
     case 'trainingLocation':
       switch (value) {
-        case 'Home': return 'Minimal kit, maximum consistency — that works.';
-        case 'Gym': return "Full setup — we'll put it to use.";
+        case 'Home': return 'Minimal kit, maximum consistency, that works.';
+        case 'Gym': return "Full setup. We'll put it to use.";
         case 'Mix of both': return "Flexible. We'll build around wherever you are.";
         default: return null;
       }
     case 'notifications':
-      return value === 'Yes please' ? 'Good — reminders make consistency easier.' : "Noted — you'll drive it yourself.";
+      return value === 'Yes please' ? 'Good. Reminders make consistency easier.' : "Noted. You'll drive it yourself.";
     default:
       return null;
   }

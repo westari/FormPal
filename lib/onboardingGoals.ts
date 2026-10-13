@@ -93,7 +93,7 @@ export function computeGoalPlan(answers: Record<string, any>): GoalPlan {
     };
   }
 
-  if (goalStr.startsWith('Recomp')) {
+  if (goalStr.startsWith('Tone up')) {
     // Fixed 12-week window (not scaled by pace — a faster pace changes how
     // much happens in that window, not the window itself) — 0.7 lbs/month
     // each direction — halved for Advanced, scaled by chosen pace.

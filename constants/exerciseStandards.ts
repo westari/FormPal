@@ -62,7 +62,7 @@ const CURL_STATIC_CHECKS: JointAngleCheckDef[] = [
     b: 'leftHip',
     c: 'leftKnee',
     maxRangeDeg: 15.0,
-    cue: 'KEEP TORSO STILL — swinging body',
+    cue: 'KEEP TORSO STILL. Swinging body',
   },
   {
     description: 'Right torso upright — shoulder–hip–knee angle range',
@@ -70,14 +70,14 @@ const CURL_STATIC_CHECKS: JointAngleCheckDef[] = [
     b: 'rightHip',
     c: 'rightKnee',
     maxRangeDeg: 15.0,
-    cue: 'KEEP TORSO STILL — swinging body',
+    cue: 'KEEP TORSO STILL. Swinging body',
   },
 ];
 
 const CURL_TOP_FAULTS = [
-  'HALF REP — never fully contracting or fully extending',
-  'SWINGING — using body momentum instead of bicep strength',
-  'ELBOW DRIFT — upper arms should stay vertical and back',
+  'HALF REP. Never fully contracting or fully extending',
+  'SWINGING. Using body momentum instead of bicep strength',
+  'ELBOW DRIFT. Upper arms should stay vertical and back',
 ];
 
 function curlStandard(exerciseId: string): ExerciseStandardDef {
@@ -93,8 +93,8 @@ function curlStandard(exerciseId: string): ExerciseStandardDef {
     // Full extension ≈ 165–170°; 150° allows for natural carry angle.
     standardStartAngleMin: 150.0,
 
-    romCue:    'CURL FURTHER — not reaching full contraction',
-    extendCue: 'FULLY EXTEND — arm not straightening at bottom',
+    romCue:    'CURL FURTHER. Not reaching full contraction',
+    extendCue: 'FULLY EXTEND. Arm not straightening at bottom',
 
     staticChecks: CURL_STATIC_CHECKS,
 
@@ -127,7 +127,7 @@ const SQUAT_STATIC_CHECKS: JointAngleCheckDef[] = [
     b: 'leftKnee',
     c: 'leftAnkle',
     maxRangeDeg: 15.0,
-    cue: 'KNEES TRACKING — lateral knee drift',
+    cue: 'KNEES TRACKING. Lateral knee drift',
   },
   {
     description: 'Right torso upright — hip→knee→ankle lateral lean range',
@@ -135,14 +135,14 @@ const SQUAT_STATIC_CHECKS: JointAngleCheckDef[] = [
     b: 'rightKnee',
     c: 'rightAnkle',
     maxRangeDeg: 15.0,
-    cue: 'KNEES TRACKING — lateral knee drift',
+    cue: 'KNEES TRACKING. Lateral knee drift',
   },
 ];
 
 const SQUAT_TOP_FAULTS = [
-  'SHALLOW SQUAT — not reaching parallel depth',
-  'CAVING KNEES — knees collapsing inward',
-  'FORWARD LEAN — excessive torso lean forward',
+  'SHALLOW SQUAT. Not reaching parallel depth',
+  'CAVING KNEES. Knees collapsing inward',
+  'FORWARD LEAN. Excessive torso lean forward',
 ];
 
 function squatStandard(exerciseId: string): ExerciseStandardDef {
@@ -151,8 +151,8 @@ function squatStandard(exerciseId: string): ExerciseStandardDef {
     reviewed: false,
     standardPeakAngleMax:  110.0,
     standardStartAngleMin: 155.0,
-    romCue:    'GO DEEPER — not reaching parallel',
-    extendCue: 'STAND FULLY — not returning to standing',
+    romCue:    'GO DEEPER. Not reaching parallel',
+    extendCue: 'STAND FULLY. Not returning to standing',
     staticChecks: SQUAT_STATIC_CHECKS,
     // LOOSENED 2.0→1.2 (preemptive, before ever enforced — see curlStandard's
     // comment for why). Squats are naturally slower than isolation lifts
@@ -179,9 +179,9 @@ function squatStandard(exerciseId: string): ExerciseStandardDef {
 const SHOULDER_PRESS_STATIC_CHECKS: JointAngleCheckDef[] = [];
 
 const SHOULDER_PRESS_TOP_FAULTS = [
-  'HALF REP — not pressing fully overhead',
-  'BACK ARCH — excessive lumbar extension during press (not camera-detectable — watch for this yourself)',
-  'FORWARD HEAD — neck jutting forward at lockout',
+  'HALF REP. Not pressing fully overhead',
+  'BACK ARCH. Excessive lumbar extension during press (not camera-detectable. Watch for this yourself)',
+  'FORWARD HEAD. Neck jutting forward at lockout',
 ];
 
 function shoulderPressStandard(exerciseId: string): ExerciseStandardDef {
@@ -193,8 +193,8 @@ function shoulderPressStandard(exerciseId: string): ExerciseStandardDef {
     // small margin above the observed 63° max.
     standardPeakAngleMax:  65.0,
     standardStartAngleMin: 65.0,
-    romCue:    'PRESS HIGHER — not reaching overhead',
-    extendCue: 'LOWER MORE — not returning to shoulder height',
+    romCue:    'PRESS HIGHER. Not reaching overhead',
+    extendCue: 'LOWER MORE. Not returning to shoulder height',
     staticChecks: SHOULDER_PRESS_STATIC_CHECKS,
     // LOOSENED AGAIN, 0.8→0.45 — reported: a normal-paced, controlled press
     // was still tripping "TOO FAST" at 0.8s. computeRepStats() in
@@ -231,8 +231,8 @@ function shoulderPressStandard(exerciseId: string): ExerciseStandardDef {
 const CHEST_PRESS_STATIC_CHECKS: JointAngleCheckDef[] = [];
 
 const CHEST_PRESS_TOP_FAULTS = [
-  'PARTIAL REP — not lowering to ~90° elbow bend or not locking out at top',
-  'ELBOW FLARE — elbows drifting out to the sides instead of tracking down',
+  'PARTIAL REP. Not lowering to ~90° elbow bend or not locking out at top',
+  'ELBOW FLARE. Elbows drifting out to the sides instead of tracking down',
 ];
 
 function chestPressStandard(exerciseId: string): ExerciseStandardDef {
@@ -243,8 +243,8 @@ function chestPressStandard(exerciseId: string): ExerciseStandardDef {
     standardPeakAngleMax:  95.0,
     standardStartAngleMin: 150.0,
 
-    romCue:    'LOWER FURTHER — not reaching ~90° at the bottom',
-    extendCue: 'PRESS ALL THE WAY UP — not locking out at the top',
+    romCue:    'LOWER FURTHER. Not reaching ~90° at the bottom',
+    extendCue: 'PRESS ALL THE WAY UP. Not locking out at the top',
 
     // Empty, deliberately — same reasoning as latPulldownStandard(): whether
     // this is done lying on a bench or standing with dumbbells is ambiguous
@@ -272,7 +272,7 @@ const LUNGE_STATIC_CHECKS: JointAngleCheckDef[] = [
     b: 'leftHip',
     c: 'leftKnee',
     maxRangeDeg: 15.0,
-    cue: 'CHEST UP — excessive forward lean',
+    cue: 'CHEST UP. Excessive forward lean',
   },
   {
     description: 'Right torso upright — shoulder–hip–knee angle range',
@@ -280,14 +280,14 @@ const LUNGE_STATIC_CHECKS: JointAngleCheckDef[] = [
     b: 'rightHip',
     c: 'rightKnee',
     maxRangeDeg: 15.0,
-    cue: 'CHEST UP — excessive forward lean',
+    cue: 'CHEST UP. Excessive forward lean',
   },
 ];
 
 const LUNGE_TOP_FAULTS = [
-  'SHALLOW LUNGE — front knee not bending enough',
-  'FORWARD LEAN — torso leaning too far forward',
-  'KNEE COLLAPSE — front knee caving inward',
+  'SHALLOW LUNGE. Front knee not bending enough',
+  'FORWARD LEAN. Torso leaning too far forward',
+  'KNEE COLLAPSE. Front knee caving inward',
 ];
 
 function lungeStandard(exerciseId: string): ExerciseStandardDef {
@@ -296,8 +296,8 @@ function lungeStandard(exerciseId: string): ExerciseStandardDef {
     reviewed: false,
     standardPeakAngleMax:  120.0,
     standardStartAngleMin: 155.0,
-    romCue:    'LUNGE DEEPER — not reaching depth',
-    extendCue: 'STAND FULLY — not returning upright',
+    romCue:    'LUNGE DEEPER. Not reaching depth',
+    extendCue: 'STAND FULLY. Not returning upright',
     staticChecks: LUNGE_STATIC_CHECKS,
     // LOOSENED 2.0→1.2 — same reasoning as squatStandard (balance-dependent
     // movement, kept higher than isolation lifts, but 2.0 risked firing on a
@@ -339,7 +339,7 @@ const TRICEP_STATIC_CHECKS: JointAngleCheckDef[] = [
     b: 'leftHip',
     c: 'leftKnee',
     maxRangeDeg: 25.0,
-    cue: 'KEEP TORSO STILL — using body to push',
+    cue: 'KEEP TORSO STILL. Using body to push',
   },
   {
     description: 'Right torso — shoulder–hip–knee range (no body swing)',
@@ -347,14 +347,14 @@ const TRICEP_STATIC_CHECKS: JointAngleCheckDef[] = [
     b: 'rightHip',
     c: 'rightKnee',
     maxRangeDeg: 25.0,
-    cue: 'KEEP TORSO STILL — using body to push',
+    cue: 'KEEP TORSO STILL. Using body to push',
   },
 ];
 
 const TRICEP_TOP_FAULTS = [
-  'PARTIAL REP — not fully extending at the bottom',
-  'ELBOW FLARE — upper arms not staying close to the body',
-  'BODY SWING — using momentum instead of tricep strength',
+  'PARTIAL REP. Not fully extending at the bottom',
+  'ELBOW FLARE. Upper arms not staying close to the body',
+  'BODY SWING. Using momentum instead of tricep strength',
 ];
 
 function tricepStandard(exerciseId: string): ExerciseStandardDef {
@@ -363,8 +363,8 @@ function tricepStandard(exerciseId: string): ExerciseStandardDef {
     reviewed: false,
     standardPeakAngleMax:  20.0,
     standardStartAngleMin: 65.0,
-    romCue:    'EXTEND FULLY — not reaching full lockout',
-    extendCue: 'RETURN TO START — forearm not returning to horizontal',
+    romCue:    'EXTEND FULLY. Not reaching full lockout',
+    extendCue: 'RETURN TO START. Forearm not returning to horizontal',
     staticChecks: TRICEP_STATIC_CHECKS,
     // LOOSENED 1.5→0.7 (preemptive). Pushdowns/extensions have a short ROM
     // and are commonly done briskly even with good form, especially on
@@ -405,15 +405,15 @@ const ROW_STATIC_CHECKS_BENT_OVER: JointAngleCheckDef[] = [];
 const ROW_STATIC_CHECKS_SEATED:    JointAngleCheckDef[] = [];
 
 const ROW_TOP_FAULTS_BENT_OVER = [
-  'HALF ROW — not pulling elbow past torso',
-  'BODY SWING — using momentum to heave the weight',
-  'SHRUG — trapping with shoulder instead of pulling through elbow',
+  'HALF ROW. Not pulling elbow past torso',
+  'BODY SWING. Using momentum to heave the weight',
+  'SHRUG. Trapping with shoulder instead of pulling through elbow',
 ];
 
 const ROW_TOP_FAULTS_SEATED = [
-  'HALF ROW — not pulling handle all the way back',
-  'LEAN BACK — rocking body instead of pulling with lats',
-  'SHRUG — shoulder rising instead of staying packed',
+  'HALF ROW. Not pulling handle all the way back',
+  'LEAN BACK. Rocking body instead of pulling with lats',
+  'SHRUG. Shoulder rising instead of staying packed',
 ];
 
 function bentOverRowStandard(exerciseId: string): ExerciseStandardDef {
@@ -422,8 +422,8 @@ function bentOverRowStandard(exerciseId: string): ExerciseStandardDef {
     reviewed:              false,
     standardPeakAngleMax:  90.0,   // must flex to ≤90° for quality rep
     standardStartAngleMin: 150.0,  // must straighten to ≥150° before next pull
-    romCue:    'PULL HIGHER — not reaching elbow flexion',
-    extendCue: 'LOWER FULLY — arm not returning to straight',
+    romCue:    'PULL HIGHER. Not reaching elbow flexion',
+    extendCue: 'LOWER FULLY. Arm not returning to straight',
     staticChecks: ROW_STATIC_CHECKS_BENT_OVER,
     // LOOSENED 1.0→0.6 (preemptive) — a quick pull-and-return can be well
     // under 1.0s with real control. Not device-verified.
@@ -444,8 +444,8 @@ function seatedRowStandard(exerciseId: string): ExerciseStandardDef {
     reviewed:              false,
     standardPeakAngleMax:  0.85,  // wrist-to-hip distanceRatio at peak of good rep
     standardStartAngleMin: 1.9,   // wrist-to-hip distanceRatio at full arm extension
-    romCue:    'PULL TO YOUR STOMACH — handle not reaching the torso',
-    extendCue: 'REACH FORWARD — arm not fully extending between reps',
+    romCue:    'PULL TO YOUR STOMACH. Handle not reaching the torso',
+    extendCue: 'REACH FORWARD. Arm not fully extending between reps',
     staticChecks: ROW_STATIC_CHECKS_SEATED,
     // LOOSENED 1.0→0.6 — same reasoning as bentOverRowStandard. Not verified.
     tempoMinSec: 0.6,
@@ -484,9 +484,9 @@ function seatedRowStandard(exerciseId: string): ExerciseStandardDef {
 const HINGE_STATIC_CHECKS: JointAngleCheckDef[] = [];
 
 const HINGE_TOP_FAULTS = [
-  'INCOMPLETE HINGE — not reaching enough torso travel toward horizontal',
-  'SQUATTING IT — bending the knees too much instead of sending the hips back',
-  'ROUNDED BACK — losing a neutral spine at the bottom (not camera-detectable — watch for this yourself)',
+  'INCOMPLETE HINGE. Not reaching enough torso travel toward horizontal',
+  'SQUATTING IT. Bending the knees too much instead of sending the hips back',
+  'ROUNDED BACK. Losing a neutral spine at the bottom (not camera-detectable. Watch for this yourself)',
 ];
 
 function hingeStandard(exerciseId: string): ExerciseStandardDef {
@@ -495,8 +495,8 @@ function hingeStandard(exerciseId: string): ExerciseStandardDef {
     reviewed: false,  // PLACEHOLDER numbers below — verify on-device before flipping to true
     standardPeakAngleMax:  60.0,   // must hinge to at least this close to horizontal
     standardStartAngleMin: 80.0,   // must return to near-vertical before rep counts
-    romCue:    'HINGE DEEPER — not reaching enough depth',
-    extendCue: 'STAND FULLY — not returning upright',
+    romCue:    'HINGE DEEPER. Not reaching enough depth',
+    extendCue: 'STAND FULLY. Not returning upright',
     staticChecks: HINGE_STATIC_CHECKS,
     // LOOSENED 1.5→1.0 (preemptive) — kept a bit higher than isolation lifts
     // (balance-dependent, larger ROM) but 1.5 still risked firing on a fast,
@@ -547,7 +547,7 @@ const RAISE_STATIC_CHECKS: JointAngleCheckDef[] = [
     b: 'leftHip',
     c: 'leftKnee',
     maxRangeDeg: 15.0,
-    cue: 'CONTROL IT — no swinging',
+    cue: 'CONTROL IT. No swinging',
   },
   {
     description: 'Right torso upright — shoulder-hip-knee angle range (no swinging)',
@@ -555,7 +555,7 @@ const RAISE_STATIC_CHECKS: JointAngleCheckDef[] = [
     b: 'rightHip',
     c: 'rightKnee',
     maxRangeDeg: 15.0,
-    cue: 'CONTROL IT — no swinging',
+    cue: 'CONTROL IT. No swinging',
   },
 ];
 
@@ -564,9 +564,9 @@ const RAISE_STATIC_CHECKS: JointAngleCheckDef[] = [
 // the matching Layer-1 check was removed for the same reason. See
 // constants/exerciseDefinitions.ts's raiseVariant comment.
 const RAISE_TOP_FAULTS = [
-  'PARTIAL REP — not raising to shoulder height',
-  'WRONG DIRECTION — raising forward instead of out to the sides (lateral raise)',
-  'SWINGING — using body momentum instead of controlled raise strength',
+  'PARTIAL REP. Not raising to shoulder height',
+  'WRONG DIRECTION. Raising forward instead of out to the sides (lateral raise)',
+  'SWINGING. Using body momentum instead of controlled raise strength',
 ];
 
 function raiseStandard(exerciseId: string): ExerciseStandardDef {
@@ -581,8 +581,8 @@ function raiseStandard(exerciseId: string): ExerciseStandardDef {
     // real arms-up reading and I'll set the exact number.
     standardPeakAngleMax:  8.0,   // must raise to at least this close to shoulder height
     standardStartAngleMin: 80.0,   // must return arms fully down before rep counts
-    romCue:    'RAISE HIGHER — not reaching enough depth',
-    extendCue: 'LOWER FULLY — not returning arms down',
+    romCue:    'RAISE HIGHER. Not reaching enough depth',
+    extendCue: 'LOWER FULLY. Not returning arms down',
     staticChecks: RAISE_STATIC_CHECKS,
     // LOOSENED 1.0→0.6 (preemptive) — a controlled raise can be brisk. Not verified.
     tempoMinSec: 0.6,
@@ -624,9 +624,9 @@ function raiseStandard(exerciseId: string): ExerciseStandardDef {
 // angle involved) is the swing/lean-back signal for this family instead.
 
 const LAT_PULLDOWN_TOP_FAULTS = [
-  'PARTIAL REP — not pulling the bar down far enough',
-  'SWINGING — using body momentum/lean instead of controlled pulling strength',
-  'LEANING BACK TOO FAR — turning the pulldown into a row',
+  'PARTIAL REP. Not pulling the bar down far enough',
+  'SWINGING. Using body momentum/lean instead of controlled pulling strength',
+  'LEANING BACK TOO FAR. Turning the pulldown into a row',
 ];
 
 function latPulldownStandard(exerciseId: string): ExerciseStandardDef {
@@ -644,8 +644,8 @@ function latPulldownStandard(exerciseId: string): ExerciseStandardDef {
     standardPeakAngleMax:  10.0,
     standardStartAngleMin: 30.0,
 
-    romCue:    'PULL DOWN FURTHER — not reaching full contraction',
-    extendCue: 'FULLY EXTEND — arms not returning straight overhead',
+    romCue:    'PULL DOWN FURTHER. Not reaching full contraction',
+    extendCue: 'FULLY EXTEND. Arms not returning straight overhead',
 
     staticChecks: [],
 
@@ -686,8 +686,8 @@ export const EXERCISE_STANDARDS: Partial<Record<ExerciseId, ExerciseStandardDef>
     standardPeakAngleMax:  110.0,   // must reach at least this deep (past parallel = ~90°)
     standardStartAngleMin: 155.0,   // must stand fully upright before rep counts
 
-    romCue:    'GO DEEPER — not reaching parallel',
-    extendCue: 'STAND FULLY — not returning to standing',
+    romCue:    'GO DEEPER. Not reaching parallel',
+    extendCue: 'STAND FULLY. Not returning to standing',
 
     staticChecks: [
       {
@@ -696,7 +696,7 @@ export const EXERCISE_STANDARDS: Partial<Record<ExerciseId, ExerciseStandardDef>
         b: 'leftKnee',
         c: 'leftAnkle',
         maxRangeDeg: 15.0,
-        cue: 'KNEES TRACKING — lateral knee drift',
+        cue: 'KNEES TRACKING. Lateral knee drift',
       },
       {
         description: 'Right torso upright — hip→knee→ankle lateral lean range',
@@ -704,7 +704,7 @@ export const EXERCISE_STANDARDS: Partial<Record<ExerciseId, ExerciseStandardDef>
         b: 'rightKnee',
         c: 'rightAnkle',
         maxRangeDeg: 15.0,
-        cue: 'KNEES TRACKING — lateral knee drift',
+        cue: 'KNEES TRACKING. Lateral knee drift',
       },
     ],
 
@@ -714,9 +714,9 @@ export const EXERCISE_STANDARDS: Partial<Record<ExerciseId, ExerciseStandardDef>
     tempoMaxSec: 6.0,
 
     topFaults: [
-      'SHALLOW SQUAT — not reaching parallel depth',
-      'CAVING KNEES — knees collapsing inward',
-      'FORWARD LEAN — excessive torso lean forward',
+      'SHALLOW SQUAT. Not reaching parallel depth',
+      'CAVING KNEES. Knees collapsing inward',
+      'FORWARD LEAN. Excessive torso lean forward',
     ],
   },
 
@@ -735,8 +735,8 @@ export const EXERCISE_STANDARDS: Partial<Record<ExerciseId, ExerciseStandardDef>
     standardPeakAngleMax:  120.0,   // front knee must bend to at least this
     standardStartAngleMin: 155.0,   // must return to standing before rep counts
 
-    romCue:    'LUNGE DEEPER — not reaching depth',
-    extendCue: 'STAND FULLY — not returning upright',
+    romCue:    'LUNGE DEEPER. Not reaching depth',
+    extendCue: 'STAND FULLY. Not returning upright',
 
     staticChecks: [
       {
@@ -745,7 +745,7 @@ export const EXERCISE_STANDARDS: Partial<Record<ExerciseId, ExerciseStandardDef>
         b: 'leftHip',
         c: 'leftKnee',
         maxRangeDeg: 15.0,
-        cue: 'CHEST UP — excessive forward lean',
+        cue: 'CHEST UP. Excessive forward lean',
       },
       {
         description: 'Right torso upright — shoulder–hip–knee angle range',
@@ -753,7 +753,7 @@ export const EXERCISE_STANDARDS: Partial<Record<ExerciseId, ExerciseStandardDef>
         b: 'rightHip',
         c: 'rightKnee',
         maxRangeDeg: 15.0,
-        cue: 'CHEST UP — excessive forward lean',
+        cue: 'CHEST UP. Excessive forward lean',
       },
     ],
 
@@ -763,9 +763,9 @@ export const EXERCISE_STANDARDS: Partial<Record<ExerciseId, ExerciseStandardDef>
     tempoMaxSec: 6.0,
 
     topFaults: [
-      'SHALLOW LUNGE — front knee not bending enough',
-      'FORWARD LEAN — torso leaning too far forward',
-      'KNEE COLLAPSE — front knee caving inward',
+      'SHALLOW LUNGE. Front knee not bending enough',
+      'FORWARD LEAN. Torso leaning too far forward',
+      'KNEE COLLAPSE. Front knee caving inward',
     ],
   },
 
@@ -789,8 +789,8 @@ export const EXERCISE_STANDARDS: Partial<Record<ExerciseId, ExerciseStandardDef>
     standardPeakAngleMax:  65.0,    // must press close to overhead
     standardStartAngleMin: 65.0,    // must lower arms to shoulder height
 
-    romCue:    'PRESS HIGHER — not reaching overhead',
-    extendCue: 'LOWER MORE — not returning to shoulder height',
+    romCue:    'PRESS HIGHER. Not reaching overhead',
+    extendCue: 'LOWER MORE. Not returning to shoulder height',
 
     staticChecks: [],
 
@@ -803,9 +803,9 @@ export const EXERCISE_STANDARDS: Partial<Record<ExerciseId, ExerciseStandardDef>
     tempoMaxSec: 5.0,
 
     topFaults: [
-      'HALF REP — not pressing fully overhead',
-      'BACK ARCH — excessive lumbar extension during press (not camera-detectable — watch for this yourself)',
-      'FORWARD HEAD — neck jutting forward at lockout',
+      'HALF REP. Not pressing fully overhead',
+      'BACK ARCH. Excessive lumbar extension during press (not camera-detectable. Watch for this yourself)',
+      'FORWARD HEAD. Neck jutting forward at lockout',
     ],
   },
 

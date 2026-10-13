@@ -87,7 +87,7 @@ export function rejectOutliers(
     if (distance > MAD_REJECT_K * scaledMad) {
       rejected.push({
         value: v,
-        reason: `outlier — ${distance.toFixed(1)} from median ${med.toFixed(1)} ` +
+        reason: `outlier. ${distance.toFixed(1)} from median ${med.toFixed(1)} ` +
                 `(> ${MAD_REJECT_K}× robust spread ${scaledMad.toFixed(1)}), likely occlusion`,
       });
     } else {

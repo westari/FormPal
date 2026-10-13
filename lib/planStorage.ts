@@ -3,14 +3,15 @@
  *
  * AsyncStorage-backed persistence for the plan system.
  *
- * SUPABASE SYNC (later, without changing callers):
- *   Wrap savePlan / loadPlan to also upsert/fetch from Supabase.
- *   Callers (planStore.ts) won't change — only this file changes.
- *   Strategy: write-through (save locally + to Supabase on mutation).
+ * SUPABASE SYNC: done — savePlan/saveProfile now also write-through to
+ * Supabase (lib/formpalSync.ts), best-effort (failures are swallowed, the
+ * app must keep working fully offline). Callers (planStore.ts) didn't
+ * change, exactly as planned here.
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Plan, PlanProfile } from '../types/plan';
+import { savePlanToCloud } from './formpalSync';
 
 const KEYS = {
   plan:    'formpal_plan',
@@ -21,6 +22,7 @@ const KEYS = {
 
 export async function savePlan(plan: Plan): Promise<void> {
   await AsyncStorage.setItem(KEYS.plan, JSON.stringify(plan));
+  loadProfile().then(profile => savePlanToCloud(plan, profile)).catch(() => {});
 }
 
 export async function loadPlan(): Promise<Plan | null> {
@@ -37,6 +39,7 @@ export async function clearPlan(): Promise<void> {
 
 export async function saveProfile(profile: PlanProfile): Promise<void> {
   await AsyncStorage.setItem(KEYS.profile, JSON.stringify(profile));
+  loadPlan().then(plan => { if (plan) savePlanToCloud(plan, profile); }).catch(() => {});
 }
 
 export async function loadProfile(): Promise<PlanProfile | null> {

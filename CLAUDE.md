@@ -15,3 +15,7 @@ Before writing any new exercise definition or threshold in `constants/exerciseDe
 4. **Check feasibility against the Metric framework before building a form check.** If a fault isn't reliably detectable with the available Metric primitives and Apple Vision's actual pose landmarks (e.g. no mid-spine landmark exists, so upper-back rounding can't be measured directly), say so up front and skip building it, rather than shipping a check that will fire randomly.
 
 This applies to every future request to add or fix an exercise definition/threshold in this project.
+
+## Design files: use as-is, never rebuild
+
+When the user provides exact design files for a screen, use those files as-is. NEVER rebuild, recreate, or redesign those screens, even if asked to fix bugs or performance. Always make the smallest possible change to the existing file. If a fix seems to require rebuilding, stop and ask first.

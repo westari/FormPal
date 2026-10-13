@@ -244,7 +244,7 @@ export default function CustomizeScreen() {
 
             {!hasRank && loaded && (
               <Text style={s.preRankNote}>
-                Train with form checks to earn your first rank — Bronze unlocks your first colour.
+                Train with form checks to earn your first rank. Bronze unlocks your first colour.
               </Text>
             )}
 

@@ -54,7 +54,7 @@ function useCountUp(target: number, durationMs: number) {
 // a single reveal — not two separate groups popping in side by side.
 const WORDS: { text: string; accent: boolean }[] = [
   ...'gym injuries hit the ER every year.'.split(' ').map(text => ({ text, accent: false })),
-  ...'Most are caused by bad form — the one thing you can control.'.split(' ').map(text => ({ text, accent: true })),
+  ...'Most are caused by bad form. The one thing you can control.'.split(' ').map(text => ({ text, accent: true })),
 ];
 
 export default function InjuryRiskMoment({ header, insets, onContinue }: {

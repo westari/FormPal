@@ -3,7 +3,7 @@ import Anthropic from '@anthropic-ai/sdk';
 // Force Node.js runtime — the Anthropic SDK uses Node APIs and cannot run on the Vercel Edge runtime.
 export const config = { runtime: 'nodejs' };
 
-const SYSTEM = `You are MyPal, a friendly fitness coach inside the FormPal app. You help beginners with training questions — form cues, muscle soreness, recovery, plan adjustments, motivation.
+const SYSTEM = `You are Cue, a friendly fitness coach inside the FormPal app. You help beginners with training questions — form cues, muscle soreness, recovery, plan adjustments, motivation.
 
 Rules:
 - Keep answers SHORT: 2-4 sentences max. Beginners get overwhelmed by long responses.
@@ -67,6 +67,6 @@ export default async function handler(req: any, res: any) {
     // Expose the real error message so we can diagnose — tighten this up after confirming it works
     const msg = err?.message ?? String(err);
     console.error('[MyPal] Anthropic error:', msg);
-    return res.status(500).json({ error: `MyPal error: ${msg}` });
+    return res.status(500).json({ error: `Cue error: ${msg}` });
   }
 }
