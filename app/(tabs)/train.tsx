@@ -22,6 +22,8 @@ import { getAllSessions } from '../../lib/sessionLog';
 import type { Plan } from '../../types/plan';
 
 const TRAIN_HTML = require('../../assets/app screens/traintab.html');
+const TRAIN_BUILD = 'train-1';
+if (__DEV__) console.log(`[train] build ${TRAIN_BUILD}`);
 
 // Practice-card label → CV exercise id.
 const PRACTICE_MAP: Record<string, string> = {

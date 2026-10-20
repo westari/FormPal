@@ -79,6 +79,12 @@ export function dcScaleFitJs(bg: string): string {
       if(!vh) return;
       var S=vh/H;
       if(Math.abs(S-lastS)>=0.002){ lastS=S; root.style.setProperty('transform','scale('+S+')','important'); }
+      // Exposed so a screen can convert a NATIVE pixel offset (e.g. the
+      // real keyboard height, in device points) into this canvas's own
+      // 390x844 design-space units: designPx = nativePx / __dcCanvasScale.
+      // Needed because position:absolute children inside #dc-root are laid
+      // out in PRE-scale units, not real device pixels.
+      window.__dcCanvasScale = S;
       document.body.style.setProperty('height', vh+'px','important');
       document.documentElement.style.setProperty('height', vh+'px','important');
     }

@@ -23,7 +23,7 @@
  * return a structured suggestion first.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Keyboard, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Keyboard, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import {
@@ -33,7 +33,7 @@ import {
 import { MYPAL_API_URL } from '../constants/api';
 
 const CUE_HTML = require('../assets/app screens/cue.html');
-const CUE_BUILD = 'cue-3';
+const CUE_BUILD = 'cue-4';
 if (__DEV__) console.log(`[cue] build ${CUE_BUILD}`);
 
 interface Message { role: 'user' | 'assistant'; content: string }
@@ -77,6 +77,34 @@ function cueInject(): string {
     // second, separate, OS-level one. 16px is the documented threshold —
     // using 17px for margin.
     inputEl.style.setProperty('font-size', '17px', 'important');
+    // Explicit ask: "nothing moves except the input bar itself — it moves
+    // above the keyboard, cleanly, and moves back down after." Not
+    // KeyboardAvoidingView (resizes/shrinks the whole WebView, which is
+    // what caused the zoom bug) and not translating the whole canvas
+    // either (same whole-screen-shift problem, just via a different
+    // mechanism) — only this one element gets repositioned.
+    var inputBarEl = inputEl.closest('div');
+    inputBarEl = inputBarEl ? inputBarEl.parentElement : null; // the padding wrapper around the pill row — verified via scripts/verify-cue-inputbar.js, NOT the raw source's "padding: 0 14px 30px" string (browsers normalize that to "0px 14px 30px", so a style-string selector would silently never match)
+    window.__cueSetKeyboardHeight = function(nativeH){
+      if(!inputBarEl) return;
+      if(nativeH > 0){
+        var scale = window.__dcCanvasScale || 1;
+        var designOffset = nativeH / scale;
+        inputBarEl.style.setProperty('position','absolute','important');
+        inputBarEl.style.setProperty('left','0','important');
+        inputBarEl.style.setProperty('right','0','important');
+        inputBarEl.style.setProperty('bottom', designOffset+'px','important');
+        inputBarEl.style.setProperty('background','#eeeef1','important');
+        inputBarEl.style.setProperty('transition','bottom 220ms ease','important');
+      } else {
+        inputBarEl.style.removeProperty('position');
+        inputBarEl.style.removeProperty('left');
+        inputBarEl.style.removeProperty('right');
+        inputBarEl.style.removeProperty('bottom');
+        inputBarEl.style.removeProperty('background');
+        inputBarEl.style.removeProperty('transition');
+      }
+    };
     wireUp();
     dcPost({ type: 'ready' });
     return true;
@@ -171,32 +199,22 @@ export default function CueScreen() {
   const webRef = useRef<WebView>(null);
   const [ready, setReady] = useState(false);
   const historyRef = useRef<Message[]>([]);
-  // Moves the WHOLE WebView up by a position shift (translateY), never a
-  // size change — see this file's own comment on why KeyboardAvoidingView
-  // (which shrinks the view) was removed. A position shift never touches
-  // window.innerHeight inside the page, so dcScaleFitJs's fit() never
-  // recalculates and the canvas never rescales, but the input still ends
-  // up above the keyboard instead of hidden behind it.
-  const keyboardOffset = useRef(new Animated.Value(0)).current;
+  // Explicit ask: "nothing moves except the input bar — the rest of the
+  // screen stays completely still." Earlier this moved the WHOLE WebView
+  // via translateY, which fixed the zoom bug but still shifted everything
+  // on screen — not what was wanted. The page itself now repositions ONLY
+  // its own input bar in response to the real keyboard height (see
+  // window.__cueSetKeyboardHeight in cueInject) — this side just forwards
+  // the real native keyboard height into the page, nothing moves natively.
   useEffect(() => {
-    const showEvt = 'keyboardWillShow';
-    const hideEvt = 'keyboardWillHide';
-    const showSub = Keyboard.addListener(showEvt, (e) => {
-      Animated.timing(keyboardOffset, {
-        toValue: -e.endCoordinates.height,
-        duration: e.duration || 250,
-        useNativeDriver: true,
-      }).start();
+    const showSub = Keyboard.addListener('keyboardWillShow', (e) => {
+      webRef.current?.injectJavaScript(`window.__cueSetKeyboardHeight && window.__cueSetKeyboardHeight(${e.endCoordinates.height}); true;`);
     });
-    const hideSub = Keyboard.addListener(hideEvt, (e) => {
-      Animated.timing(keyboardOffset, {
-        toValue: 0,
-        duration: e.duration || 250,
-        useNativeDriver: true,
-      }).start();
+    const hideSub = Keyboard.addListener('keyboardWillHide', () => {
+      webRef.current?.injectJavaScript(`window.__cueSetKeyboardHeight && window.__cueSetKeyboardHeight(0); true;`);
     });
     return () => { showSub.remove(); hideSub.remove(); };
-  }, [keyboardOffset]);
+  }, []);
 
   const handleSend = useCallback(async (text: string) => {
     const history = historyRef.current.slice(-20).map(m => ({ role: m.role, content: m.content }));
@@ -229,38 +247,46 @@ export default function CueScreen() {
     // reason — removed here to match. The keyboard will cover the input
     // bar instead of the canvas rescaling to dodge it.
     <View style={styles.flex}>
-      <Animated.View style={[styles.flex, { transform: [{ translateY: keyboardOffset }] }]}>
-        <WebView
-          ref={webRef}
-          source={CUE_HTML}
-          originWhitelist={['*']}
-          style={[styles.web, { opacity: ready ? 1 : 0 }]}
-          injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS}
-          injectedJavaScript={CONSOLE_FORWARD_JS + cueInject()}
-          onMessage={(e) => {
-            let msg: { type?: string };
-            try { msg = JSON.parse(e.nativeEvent.data); } catch { return; }
-            if (msg.type === 'ready') { setReady(true); return; }
-            if (msg.type === 'pageConsole') { if (__DEV__) console.log(`[cue-page:${(msg as any).level}]`, (msg as any).msg); return; }
-            if (msg.type === 'send') { void handleSend((msg as any).text); return; }
-            if (msg.type === 'navigate') {
-              // The artboard's own internal prototyping links (e.g.
-              // "Train.dc.html") — the only one that exists here is the
-              // back arrow, which always means "leave Cue."
-              router.back();
-            }
-          }}
-          allowFileAccess
-          allowFileAccessFromFileURLs
-          allowUniversalAccessFromFileURLs
-          javaScriptEnabled
-          domStorageEnabled
-          bounces={false}
-          overScrollMode="never"
-          cacheEnabled={false}
-          scrollEnabled={false}
-        />
-      </Animated.View>
+      <WebView
+        ref={webRef}
+        source={CUE_HTML}
+        originWhitelist={['*']}
+        style={[styles.web, { opacity: ready ? 1 : 0 }]}
+        injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS}
+        injectedJavaScript={CONSOLE_FORWARD_JS + cueInject()}
+        onMessage={(e) => {
+          let msg: { type?: string };
+          try { msg = JSON.parse(e.nativeEvent.data); } catch { return; }
+          if (msg.type === 'ready') { setReady(true); return; }
+          if (msg.type === 'pageConsole') { if (__DEV__) console.log(`[cue-page:${(msg as any).level}]`, (msg as any).msg); return; }
+          if (msg.type === 'send') { void handleSend((msg as any).text); return; }
+          if (msg.type === 'navigate') {
+            // The artboard's own internal prototyping links (e.g.
+            // "Train.dc.html") — the only one that exists here is the
+            // back arrow, which always means "leave Cue."
+            router.back();
+          }
+        }}
+        allowFileAccess
+        allowFileAccessFromFileURLs
+        allowUniversalAccessFromFileURLs
+        javaScriptEnabled
+        domStorageEnabled
+        bounces={false}
+        overScrollMode="never"
+        cacheEnabled={false}
+        scrollEnabled={false}
+      />
+      {/* Explicit ask: the screen was reading as "broken" during the real
+          unpack delay (cue.html is a self-extracting bundle — see
+          cueInject's own comment) because it was just plain white with no
+          feedback. A spinner doesn't make the unpack itself faster, but it
+          stops it from looking stuck. */}
+      {!ready && (
+        <View style={styles.loadingOverlay} pointerEvents="none">
+          <ActivityIndicator color="#9a9aa2" />
+        </View>
+      )}
     </View>
   );
 }
@@ -268,4 +294,5 @@ export default function CueScreen() {
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: '#eeeef1' },
   web: { flex: 1, backgroundColor: '#eeeef1' },
+  loadingOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
 });

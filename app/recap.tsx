@@ -94,7 +94,7 @@ const MUSCLE_RANKS_HTML = require('../assets/app screens/muscleranks.html');
 // round: remove the on-screen stamp — kept as a console log instead so
 // it's still there to confirm a fresh reload if ever needed, just not
 // visible on the card.
-const BUILD_TAG = 'native-video-11';
+const BUILD_TAG = 'native-video-12';
 const BUILD_LOADED_AT = new Date().toLocaleTimeString();
 if (__DEV__) {
   console.log(`[recap] build ${BUILD_TAG}`);
@@ -754,23 +754,22 @@ function workoutrecapInject(opts: {
         // for the dragged-down case, where a gap reopens below the
         // (still 360px-tall) card.
         wCard.style.setProperty('height','360px','important');
-        // BUG FOUND ("card still comes in a little late"): the card's own
-        // inline style carries a transition on its top property
-        // UNCONDITIONALLY — that's a separate CSS mechanism from
-        // animation (which is already killed globally above), so
-        // animation:none never touched it. If the artboard's own
-        // framework re-renders this element's top value after first paint
-        // (even to the same 484px value — common in these reactive
-        // templates doing a default-then-real-state pass), that
-        // transition animates it, reading as a slide-in / "comes in
-        // late". Force transition:none for exactly one frame on first
-        // successful apply (a reflow flush in between) so whatever top
-        // value lands first is shown immediately, then restore the real
-        // transition so the drag-snap animation (wireLiveDrag below)
-        // still works normally afterward.
+        // BUG FOUND ("card still spawns in the middle, then slides down to
+        // the bottom after a tenth of a second" — reported again after the
+        // original fix below): this used to restore the card's top
+        // transition unconditionally right after locking in the first
+        // frame, reasoning that only the drag-snap (wireLiveDrag) would
+        // ever touch the top property again. Wrong — the artboard's own reactive
+        // framework can re-render this element's top value AGAIN later
+        // (switching from its default/demo render pass to the real
+        // summary-view render pass, even landing on the same 484px), and
+        // by then transition was already restored, so THAT later change is
+        // what was visibly animating — not the first paint at all.
+        // Fix: leave transition permanently 'none' here. wireLiveDrag
+        // below already enables it on its own pointerdown and disables it
+        // again on pointerup, entirely independently of this block, so
+        // real drag-to-dismiss still animates correctly either way.
         wCard.style.setProperty('transition','none','important');
-        void wCard.offsetHeight;
-        wCard.style.setProperty('transition','top 480ms cubic-bezier(.22,.9,.24,1)','important');
         cardWidened=true; hit++;
       }
     }

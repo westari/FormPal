@@ -24,6 +24,7 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
 import { loadPlan } from '../../lib/planStorage';
@@ -31,6 +32,8 @@ import { getAllSessions, calcStreak, groupIntoWorkouts, scoredSessions, type Ses
 import type { Plan } from '../../types/plan';
 
 const HOME_HTML = require('../../assets/app screens/home.html');
+const HOME_BUILD = 'home-2';
+if (__DEV__) console.log(`[home] build ${HOME_BUILD}`);
 // Hides the artboard's own fake tab bar + FAB (a REAL native tab bar + the
 // Plus tab already exist) — same category of fix as train.tsx already does
 // for its own fake chrome. Selectors matched to the exact inline styles
@@ -153,6 +156,7 @@ function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[]): string 
 
 export default function HomeScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const webRef = useRef<WebView>(null);
   const [injectJs, setInjectJs] = useState<string | null>(null);
   const [pageLoaded, setPageLoaded] = useState(false);
@@ -185,7 +189,13 @@ export default function HomeScreen() {
           if (msg.type === 'progress') { router.push('/(tabs)/progress' as any); return; }
           if (msg.type === 'recap' && msg.ts != null) { router.push({ pathname: '/recap', params: { ts: String(msg.ts) } } as any); return; }
         }}
-        style={styles.web}
+        // BUG FOUND ("too cramped at the top, Tuesday October 20th is too
+        // high"): the design's own 62px top padding assumes it's placed in
+        // a canvas that already starts below the status bar/notch — this
+        // WebView was filling the ENTIRE screen including that area
+        // (train.tsx's own wrapper already applies this same inset; this
+        // screen just hadn't gotten it).
+        style={[styles.web, { marginTop: insets.top }]}
         scrollEnabled
         bounces={false}
         overScrollMode="never"
