@@ -28,7 +28,17 @@ import { computeGoalPlan } from '../lib/onboardingGoals';
 import { hasGiftOfferBeenShown, markGiftOfferShown } from '../lib/giftOffer';
 import { loadPlan } from '../lib/planStorage';
 import type { Plan as PlanT } from '../types/plan';
-import { Camera as ExpoCamera } from 'expo-camera';
+// BUG FOUND (device crash, confirmed via the real error overlay — "Cannot
+// find native module 'ExpoCamera'", thrown from a top-level `import {
+// Camera } from 'expo-camera'` that used to live here): expo-camera's own
+// index.js does `export default requireNativeModule('ExpoCamera')` at
+// IMPORT TIME, not lazily — so a plain static import crashes this whole
+// file (not just the allowCamera screen) the instant it's evaluated on any
+// binary that hasn't been rebuilt with the new native module linked yet
+// (exactly what happens on a plain JS reload instead of a fresh EAS/dev-
+// client build). Deferred to a guarded require() inside the one place that
+// actually uses it (see the allowCamera appState block's onCustomMessage)
+// so an unrebuilt binary can still run the rest of onboarding normally.
 
 // Onboarding video clips — drop the real files in at these paths and flip
 // the consts to require(...). null renders a plain black frame instead, so
@@ -4386,7 +4396,18 @@ export default function OnboardingScreen() {
         onBack={() => setAppState('howFormPalWorks')}
         onCustomMessage={(msg) => {
           if (msg === 'requestCameraPermission') {
-            void ExpoCamera.requestCameraPermissionsAsync().finally(() => setAppState('readyToTrain'));
+            (async () => {
+              try {
+                // Deferred require — see this file's own import-site comment
+                // for why a top-level import crashed the whole screen on any
+                // binary that hasn't linked the native module yet.
+                const { Camera } = require('expo-camera') as typeof import('expo-camera');
+                await Camera.requestCameraPermissionsAsync();
+              } catch (e) {
+                if (__DEV__) console.log('[onboarding] camera permission request failed (native module not linked yet?):', e);
+              }
+              setAppState('readyToTrain');
+            })();
           }
         }}
       />
