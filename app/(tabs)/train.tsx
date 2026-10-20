@@ -9,14 +9,17 @@
  * back out to the app's navigation.
  */
 
-import React, { useRef, useEffect } from 'react';
+import React, { useCallback, useRef, useState, useEffect } from 'react';
 import { View, StyleSheet, Animated, Easing } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
 import * as Haptics from 'expo-haptics';
 import AppBackground from '../../components/AppBackground';
+import { loadPlan } from '../../lib/planStorage';
+import { getAllSessions } from '../../lib/sessionLog';
+import type { Plan } from '../../types/plan';
 
 const TRAIN_HTML = require('../../assets/app screens/traintab.html');
 
@@ -109,16 +112,106 @@ const TRAIN_WEB_INJECT = `
 })();
 `;
 
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function timeAgoLabel(ts: number | null): string {
+  if (ts == null) return 'Never checked';
+  const days = Math.floor((Date.now() - ts) / DAY_MS);
+  if (days <= 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  return `${days} days ago`;
+}
+
+// Builds the exact-text-replace MAP for traintab.html's hardcoded demo
+// strings — real default text confirmed by reading the unpacked file
+// (.scratch/unpacked-designs/traintab.html), never guessed. The 4
+// "Practice your form" cards are fixed static markup (not a data-driven
+// list in the design), so real data goes into those exact 4 slots.
+function buildTrainDataJs(plan: Plan | null, sessions: { exerciseId: string; pct: number; ts: number; formChecked?: boolean }[]): string {
+  const map: Record<string, string> = {};
+
+  if (plan && plan.workouts.length > 0) {
+    const w = plan.workouts[plan.currentWorkoutIndex] ?? plan.workouts[0];
+    const today = new Date();
+    map['Sunday · Day 12'] = `${WEEKDAYS[today.getDay()]} · Day ${plan.currentWorkoutIndex + 1}`;
+    map['Session 2 of 3'] = `Session ${plan.currentWorkoutIndex + 1} of ${plan.workouts.length}`;
+    map['Upper body'] = w.splitLabel;
+    const totalSets = w.exercises.reduce((a, e) => a + e.targetSets, 0);
+    map['5 lifts · 18 sets'] = `${w.exercises.length} lift${w.exercises.length === 1 ? '' : 's'} · ${totalSets} sets`;
+  }
+
+  const byExercise: Record<string, { pct: number; ts: number }[]> = {};
+  for (const s of sessions) {
+    if (s.formChecked === false) continue;
+    (byExercise[s.exerciseId] ??= []).push({ pct: s.pct, ts: s.ts });
+  }
+  const cards: { demoScore: string; demoWhen: string; exerciseId: string }[] = [
+    { demoScore: '94 form', demoWhen: '2 days ago', exerciseId: 'pushup' },
+    { demoScore: '81 form', demoWhen: 'Yesterday', exerciseId: 'squat' },
+    { demoScore: 'New', demoWhen: 'Never checked', exerciseId: 'pullup' },
+    { demoScore: '88 form', demoWhen: '5 days ago', exerciseId: 'lunge' },
+  ];
+  for (const c of cards) {
+    const hist = byExercise[c.exerciseId];
+    if (hist && hist.length > 0) {
+      hist.sort((a, b) => b.ts - a.ts);
+      const avgPct = Math.round(hist.reduce((a, h) => a + h.pct, 0) / hist.length);
+      map[c.demoScore] = `${avgPct} form`;
+      map[c.demoWhen] = timeAgoLabel(hist[0].ts);
+    } else {
+      map[c.demoWhen] = 'Never checked';
+      // demoScore ('New'/'81 form' etc.) stays — "New" is already correct
+      // for a never-done exercise; the two cards whose demo score isn't
+      // literally "New" would otherwise keep a fabricated number, so map
+      // those down to "New" too when there's no real data.
+      if (c.demoScore !== 'New') map[c.demoScore] = 'New';
+    }
+  }
+
+  return `(function(){
+    var MAP = ${JSON.stringify(map)};
+    function apply(){
+      var hit = 0;
+      var all = document.querySelectorAll('div');
+      for (var i=0;i<all.length;i++){
+        var el = all[i]; if (el.children.length) continue;
+        var t = (el.textContent||'').trim();
+        if (Object.prototype.hasOwnProperty.call(MAP, t)) { el.textContent = MAP[t]; hit++; }
+      }
+      return hit;
+    }
+    if (!apply()) { [100,300,700,1500].forEach(function(d){ setTimeout(apply, d); }); }
+  })();`;
+}
+
 export default function TrainScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const fade = useRef(new Animated.Value(0)).current;
+  const [dataJs, setDataJs] = useState('');
+  const [pageLoaded, setPageLoaded] = useState(false);
+  const webRef = useRef<WebView>(null);
 
   useEffect(() => {
     const a = Animated.timing(fade, { toValue: 1, duration: 240, easing: Easing.out(Easing.quad), useNativeDriver: true });
     a.start();
     return () => a.stop();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useFocusEffect(useCallback(() => {
+    Promise.all([loadPlan(), getAllSessions()]).then(([plan, sessions]) => {
+      setDataJs(buildTrainDataJs(plan, sessions));
+    }).catch(() => {});
+  }, []));
+
+  // injectedJavaScript only runs on the page's initial load — dataJs
+  // arrives later (async storage reads), so it's pushed in imperatively
+  // once BOTH the page has loaded and the real data is ready, whichever
+  // comes last.
+  useEffect(() => {
+    if (pageLoaded && dataJs) webRef.current?.injectJavaScript(dataJs + '; true;');
+  }, [pageLoaded, dataJs]);
 
   function onMsg(m: string) {
     if (m === '__tap') { Haptics.selectionAsync(); return; }
@@ -136,9 +229,11 @@ export default function TrainScreen() {
       <AppBackground />
       <Animated.View style={{ flex: 1, marginTop: insets.top, opacity: fade }}>
         <WebView
+          ref={webRef}
           source={TRAIN_HTML as any}
           originWhitelist={['*']}
           injectedJavaScript={TRAIN_WEB_INJECT}
+          onLoadEnd={() => setPageLoaded(true)}
           onMessage={(e) => onMsg(e.nativeEvent.data)}
           style={s.web}
           opaque={false}

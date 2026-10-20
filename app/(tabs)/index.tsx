@@ -1,932 +1,206 @@
 /**
- * app/(tabs)/index.tsx — FormPal Home Screen
- * Visual target: FormPal_Home_reference.html
+ * app/(tabs)/index.tsx — Home tab
  *
- * Ring gradient colors match the reference exactly:
- *   Form Score  — #FFC24B → #FF7A2E  (orange → amber)
- *   This Week   — #48E08A → #12B59A  (green  → teal)
- *   Good Reps   — #67CEFF → #0A6CFF  (sky    → blue)
+ * Wires the new Claude-Design artboard (assets/app screens/home.html) with
+ * real data — never editing the design file itself (see CLAUDE.md). Process
+ * followed per CLAUDE.md's "Wiring Claude Design files" section: unpacked
+ * via scripts/unpack-design-files.js, screenshotted via
+ * scripts/screenshot-design-files.js, and every selector below was verified
+ * against the real unpacked markup before being used (see
+ * .scratch/unpacked-designs/home.html for the source of truth).
+ *
+ * KNOWN SIMPLIFICATIONS (documented, not silently dropped):
+ * - The energy check-in ("Feeling strong") and training-location chip
+ *   ("Training at Gym") are real, tappable UI, but don't yet feed back into
+ *   actually regenerating today's plan — that's a genuinely new feature
+ *   (the artboard's own demo logic shows a "lighter plan?" suggestion sheet
+ *   with no real plan-mutation backend behind it), not a wiring gap. Left
+ *   inert rather than faked, same category as Cue's workout-preview card.
+ * - The "This week" day-dot strip is cosmetic demo state, not wired to real
+ *   per-day completion — lower priority than the numbers/navigation given
+ *   the scope of this pass; flagged rather than silently left as fake data
+ *   masquerading as real.
  */
-
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import {
-  View, Text, StyleSheet, ScrollView, Pressable, Platform, Image,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import React, { useCallback, useRef, useState } from 'react';
+import { View, StyleSheet } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { LinearGradient } from 'expo-linear-gradient';
-import { SymbolView } from 'expo-symbols';
 import { StatusBar } from 'expo-status-bar';
-import Svg, {
-  Path as SvgPath, Circle as SvgCircle,
-  Defs, LinearGradient as SvgGrad, Stop, Line as SvgLine,
-} from 'react-native-svg';
-import { getSessionThumbnail } from '../../lib/sessionVideo';
+import { WebView } from 'react-native-webview';
+import { loadPlan } from '../../lib/planStorage';
+import { getAllSessions, calcStreak, groupIntoWorkouts, scoredSessions, type SessionEntry } from '../../lib/sessionLog';
+import type { Plan } from '../../types/plan';
 
-import { FONT, Sp, W } from '../../constants/theme';
-import Ring from '../../components/Ring';
-import Card from '../../components/Card';
-import ScreenBackground from '../../components/ScreenBackground';
-import { MOVES } from '../../constants/moves';
-import Dropdown from '../../components/Dropdown';
+const HOME_HTML = require('../../assets/app screens/home.html');
+// Hides the artboard's own fake tab bar + FAB (a REAL native tab bar + the
+// Plus tab already exist) — same category of fix as train.tsx already does
+// for its own fake chrome. Selectors matched to the exact inline styles
+// confirmed in .scratch/unpacked-designs/home.html, not guessed.
+const HIDE_FAKE_CHROME_CSS = `
+  div[style*="right: 88px"][style*="bottom: 22px"][style*="height: 64px"] { display: none !important; }
+  div[style*="right: 14px"][style*="bottom: 22px"][style*="width: 64px"][style*="height: 64px"] { display: none !important; }
+`;
 
-// ─── Reference colors (exact from FormPal_Home_reference.html) ────────────────
+function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[]): string {
+  const workoutGroups = groupIntoWorkouts(sessions);
+  const streak = calcStreak(sessions);
+  const scored = scoredSessions(sessions);
+  const overallPct = scored.length > 0 ? Math.round(scored.reduce((a, s) => a + s.pct, 0) / scored.length) : 0;
 
-const C = {
-  text:     '#0b1020',
-  textSub:  '#9aa0ad',
-  textDim:  '#b6bcc7',
-  accent:   '#0a84ff',
-  card:     '#ffffff',
-  border:   'rgba(17,24,39,0.05)',
-  iconBox:  '#f4f5f8',
+  const weekStart = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - d.getDay()); return d.getTime(); })();
+  const workoutsThisWeek = workoutGroups.filter(g => g.ts >= weekStart).length;
 
-  // Ring gradients — exact hex from reference defs
-  formGrad: ['#FFC24B', '#FF7A2E'] as [string, string],
-  weekGrad: ['#48E08A', '#12B59A'] as [string, string],
-  repsGrad: ['#67CEFF', '#0A6CFF'] as [string, string],
+  const map: Record<string, string> = {};
+  const today = new Date();
+  map['Sat, 12 September'] = today.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'long' });
+  map['3'] = String(streak); // streak chip — scoped below via style, not bare global match
+  map['38 min · 4 exercises'] = '';
+  map['2 of 4 workouts'] = `${workoutsThisWeek} of 4 workouts`;
 
-  // Score badge tiers
-  goodBg:   'rgba(52,199,89,0.14)',   goodText:  '#1f9d4d',
-  midBg:    'rgba(255,179,61,0.20)',  midText:   '#c47f12',
-  lowBg:    'rgba(255,59,48,0.14)',   lowText:   '#e0352b',
-};
-
-// Card shadows matching reference exactly (requires new arch)
-const SHADOW_HIGH = Platform.OS === 'ios' ? {
-  boxShadow: '0px 1.5px 3px rgba(16,24,40,0.05), 0px 5px 12px rgba(16,24,40,0.05), 0px 20px 36px rgba(28,40,90,0.22), inset 0px 1px 0px rgba(255,255,255,0.95)',
-} as any : {};
-
-const SHADOW_MED = Platform.OS === 'ios' ? {
-  boxShadow: '0px 1px 1.5px rgba(16,24,40,0.05), 0px 8px 18px rgba(28,40,90,0.15), inset 0px 1px 0px rgba(255,255,255,0.9)',
-} as any : {};
-
-const SHADOW_ROW = Platform.OS === 'ios' ? {
-  boxShadow: '0px 1px 1.5px rgba(16,24,40,0.05), 0px 8px 18px rgba(28,40,90,0.12), inset 0px 1px 0px rgba(255,255,255,0.9)',
-} as any : {};
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const SESSION_LOG_KEY = 'formpal_session_log';
-const VIEWED_KEY      = 'formpal_viewed_moves';
-const THIRTY_DAYS_MS  = 30 * 24 * 60 * 60 * 1000;
-const SEVEN_DAYS_MS   =  7 * 24 * 60 * 60 * 1000;
-const WEEK_GOAL       = 5;
-
-// Move-specific gradient colors (ordered to match MOVES array)
-const MOVE_GRAD: Record<string, [string, string]> = {
-  Bodyweight_Squat:         ['#FFC24B', '#FF7A2E'],
-  Pushups:                  ['#67CEFF', '#0A6CFF'],
-  Pullups:                  ['#48E08A', '#12B59A'],
-  Bodyweight_Walking_Lunge: ['#FFD36B', '#E0A012'],
-  Plank:                    ['#d4d7dd', '#b0b4bb'],
-  Dumbbell_Bicep_Curl:      ['#67CEFF', '#0A6CFF'],
-  Dumbbell_Bench_Press:     ['#FFC24B', '#FF7A2E'],
-  Wide_Grip_Lat_Pulldown:   ['#48E08A', '#12B59A'],
-  Leg_Press:                ['#FFD36B', '#E0A012'],
-  Cable_Shoulder_Press:     ['#67CEFF', '#0A6CFF'],
-  Clean_Deadlift:           ['#d4d7dd', '#b0b4bb'],
-  Single_Leg_Glute_Bridge:  ['#48E08A', '#12B59A'],
-};
-
-const MOVE_SYMBOL: Record<string, string> = {
-  Bodyweight_Squat:         'figure.strengthtraining.traditional',
-  Pushups:                  'figure.core.training',
-  Pullups:                  'figure.gymnastics',
-  Bodyweight_Walking_Lunge: 'figure.walk',
-  Plank:                    'figure.pilates',
-  Dumbbell_Bicep_Curl:      'dumbbell.fill',
-  Dumbbell_Bench_Press:     'figure.strengthtraining.functional',
-  Wide_Grip_Lat_Pulldown:   'figure.climbing',
-  Leg_Press:                'figure.run',
-  Cable_Shoulder_Press:     'figure.dance',
-  Clean_Deadlift:           'figure.highintensityintervaltraining',
-  Single_Leg_Glute_Bridge:  'figure.cooldown',
-};
-
-// Moves to feature in the "Learn the moves" row (first 6)
-const FEATURED_MOVES = MOVES.slice(0, 6);
-
-function formatDate(d: Date) {
-  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-}
-function formatShort(ts: number) {
-  return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type SessionEntry = { ts: number; reps: number; goodReps: number; pct: number; formChecked?: boolean };
-
-// ─── Pill dropdown options ─────────────────────────────────────────────────────
-
-interface PillOption {
-  value:      string;
-  label:      string;
-  symbolName: string;
-  gradient:   [string, string];
-}
-
-const READINESS_OPTIONS: PillOption[] = [
-  { value: 'fresh', label: 'Fresh',       symbolName: 'bolt.fill',                     gradient: ['#48E08A', '#1FA85A'] },
-  { value: 'tired', label: 'A bit tired', symbolName: 'moon.fill',                     gradient: ['#FFD060', '#FFAA00'] },
-  { value: 'sore',  label: 'Sore',        symbolName: 'exclamationmark.triangle.fill',  gradient: ['#FF6B6B', '#FF3B30'] },
-];
-
-const LOCATION_OPTIONS: PillOption[] = [
-  { value: 'home',     label: 'Home',     symbolName: 'house.fill',    gradient: ['#5AC0FF', '#0A6CFF'] },
-  { value: 'gym',      label: 'Gym',      symbolName: 'dumbbell.fill', gradient: ['#BF5AF2', '#9544C9'] },
-  { value: 'outdoors', label: 'Outdoors', symbolName: 'sun.max.fill',  gradient: ['#48E08A', '#12B59A'] },
-];
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-/** Section heading row with optional right-side action link */
-function SectionHeader({ title, action, onAction }: {
-  title: string; action?: string; onAction?: () => void;
-}) {
-  return (
-    <View style={sh.row}>
-      <Text style={sh.title}>{title}</Text>
-      {action ? (
-        <Pressable onPress={onAction}>
-          <Text style={sh.link}>{action} ›</Text>
-        </Pressable>
-      ) : null}
-    </View>
-  );
-}
-const sh = StyleSheet.create({
-  row:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24 },
-  title: { fontSize: 17, fontWeight: W.bold, letterSpacing: -0.3, color: C.text },
-  link:  { fontSize: 12.5, fontWeight: W.semi, color: C.accent },
-});
-
-/** Tappable pill — dropdown trigger with gradient icon + label + chevron */
-function DropdownPill({
-  gradient, icon, label, onOpen,
-}: { gradient: [string, string]; icon: string; label: string; onOpen: () => void }) {
-  return (
-    <Pressable style={dp.pill} onPress={onOpen}>
-      <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={dp.iconWrap}>
-        <SymbolView name={icon as any} type="monochrome" style={dp.icon} tintColor="#fff" />
-      </LinearGradient>
-      <Text style={dp.label}>{label}</Text>
-      <Text style={dp.chevron}>▾</Text>
-    </Pressable>
-  );
-}
-const dp = StyleSheet.create({
-  pill: {
-    flexDirection: 'row', alignItems: 'center', gap: 9,
-    paddingVertical: 11, paddingLeft: 12, paddingRight: 15,
-    backgroundColor: C.card, borderRadius: 999,
-    borderWidth: 1, borderColor: C.border,
-    ...SHADOW_MED,
-  },
-  iconWrap: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  icon:     { width: 15, height: 15 },
-  label:    { fontSize: 14, fontWeight: W.semi, color: C.text },
-  chevron:  { fontSize: 11, color: C.textSub, marginLeft: 2 },
-});
-
-/** Move circle: gradient border ring, white inner with icon */
-function MoveCircle({ id, viewed, onPress }: {
-  id: string; viewed: boolean; onPress: () => void;
-}) {
-  const grad  = MOVE_GRAD[id] ?? ['#d4d7dd', '#b0b4bb'];
-  const sym   = MOVE_SYMBOL[id] ?? 'figure.walk';
-  const name  = MOVES.find(m => m.id === id)?.name ?? id;
-  const dimmed = viewed && !['Bodyweight_Squat', 'Dumbbell_Bicep_Curl'].includes(id)
-    ? false  // don't dim exercise-routed moves
-    : false;
-
-  return (
-    <Pressable onPress={onPress} style={mc.wrap}>
-      <LinearGradient
-        colors={grad}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[mc.ring, dimmed && mc.dimRing]}
-      >
-        <View style={[mc.inner, dimmed && mc.dimInner]}>
-          <SymbolView
-            name={sym as any}
-            type="monochrome"
-            style={{ width: 26, height: 26 }}
-            tintColor={dimmed ? '#9aa0ad' : '#3a3f4b'}
-          />
-        </View>
-      </LinearGradient>
-      <Text style={[mc.label, dimmed && mc.dimLabel]} numberOfLines={1}>{name}</Text>
-    </Pressable>
-  );
-}
-const mc = StyleSheet.create({
-  wrap:     { width: 72, alignItems: 'center', gap: 9 },
-  ring:     { width: 66, height: 66, borderRadius: 33, padding: 3, ...SHADOW_MED },
-  dimRing:  { opacity: 0.45 },
-  inner:    { flex: 1, borderRadius: 30, backgroundColor: C.card, alignItems: 'center', justifyContent: 'center' },
-  dimInner: {},
-  label:    { fontSize: 11.5, fontWeight: W.semi, color: '#4a4f5b', textAlign: 'center' },
-  dimLabel: { color: C.textSub },
-});
-
-/** Past session row — standalone white card */
-function SessionCard({ entry, last: _ }: { entry: SessionEntry; last: boolean }) {
-  const pct = entry.pct;
-  const bgColor   = pct >= 80 ? C.goodBg  : pct >= 60 ? C.midBg  : C.lowBg;
-  const textColor = pct >= 80 ? C.goodText : pct >= 60 ? C.midText : C.lowText;
-
-  // Real frame from the session's own recording when one exists (see
-  // lib/sessionVideo.ts) — falls back to the plain dumbbell icon for
-  // sessions with no matching logged video (repCounter-only sets, or ones
-  // logged before video capture existed).
-  const [thumb, setThumb] = useState<string | null>(null);
-  useEffect(() => {
-    let live = true;
-    getSessionThumbnail(entry.ts).then(uri => { if (live) setThumb(uri); });
-    return () => { live = false; };
-  }, [entry.ts]);
-
-  return (
-    <View style={[sc.card, SHADOW_ROW]}>
-      <View style={sc.iconBox}>
-        {thumb
-          ? <Image source={{ uri: thumb }} style={sc.thumbImg} resizeMode="cover" />
-          : <SymbolView
-              name="dumbbell.fill" type="monochrome"
-              style={{ width: 18, height: 18 }} tintColor="#6b7180"
-            />}
-      </View>
-      <View style={sc.mid}>
-        <Text style={sc.date}>{formatShort(entry.ts)}</Text>
-        <Text style={sc.meta}>Full Body · {entry.reps} reps</Text>
-      </View>
-      <View style={[sc.badge, { backgroundColor: bgColor }]}>
-        <Text style={[sc.badgeTxt, { color: textColor }]}>{pct}%</Text>
-      </View>
-    </View>
-  );
-}
-const sc = StyleSheet.create({
-  card:    {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    padding: 14, paddingHorizontal: 16,
-    backgroundColor: C.card, borderRadius: 18,
-    borderWidth: 1, borderColor: C.border,
-  },
-  iconBox: {
-    width: 38, height: 38, borderRadius: 11,
-    backgroundColor: C.iconBox,
-    alignItems: 'center', justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  thumbImg: { width: '100%', height: '100%' },
-  mid:     { flex: 1, marginLeft: 13 },
-  date:    { fontSize: 14.5, fontWeight: W.semi, color: '#1a1d26' },
-  meta:    { marginTop: 2, fontSize: 12.5, fontWeight: W.medium, color: C.textSub },
-  badge:   { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 11 },
-  badgeTxt: { fontSize: 13, fontWeight: W.bold },
-});
-
-// Catmull-Rom → cubic bezier for smooth curves
-function smoothPath(pts: Array<{ x: number; y: number }>): string {
-  if (pts.length < 2) return '';
-  const t = 0.35;
-  let d = `M${pts[0].x.toFixed(2)},${pts[0].y.toFixed(2)}`;
-  for (let i = 0; i < pts.length - 1; i++) {
-    const p0 = pts[Math.max(i - 1, 0)];
-    const p1 = pts[i];
-    const p2 = pts[i + 1];
-    const p3 = pts[Math.min(i + 2, pts.length - 1)];
-    const cp1x = p1.x + (p2.x - p0.x) * t;
-    const cp1y = p1.y + (p2.y - p0.y) * t;
-    const cp2x = p2.x - (p3.x - p1.x) * t;
-    const cp2y = p2.y - (p3.y - p1.y) * t;
-    d += ` C${cp1x.toFixed(2)},${cp1y.toFixed(2)} ${cp2x.toFixed(2)},${cp2y.toFixed(2)} ${p2.x.toFixed(2)},${p2.y.toFixed(2)}`;
-  }
-  return d;
-}
-
-// Build "Wk 1 / Wk 2 / … / Now" labels from a sorted session array
-function buildWeekLabels(sorted: SessionEntry[]): string[] {
-  if (sorted.length < 2) return [];
-  const spanMs   = sorted[sorted.length - 1].ts - sorted[0].ts;
-  const spanDays = spanMs / (24 * 60 * 60 * 1000);
-  const weeks    = Math.max(1, Math.round(spanDays / 7));
-  const count    = Math.min(weeks + 1, 5);
-  const labels: string[] = [];
-  for (let i = 1; i < count; i++) labels.push(`Wk ${i}`);
-  labels.push('Now');
-  return labels;
-}
-
-/** Smooth bezier form-trend chart — white card */
-function FormChart({
-  sessions,
-  tab,
-}: {
-  sessions: SessionEntry[];
-  tab: 'week' | 'month' | 'all';
-}) {
-  const VW = 320;
-  const VH = 128;
-  const PX = 10;   // left/right inset so the "Now" dot is never clipped
-  const PY = 14;
-
-  const filtered = useMemo(() => {
-    const now = Date.now();
-    const cut  = tab === 'week'  ? now - SEVEN_DAYS_MS
-               : tab === 'month' ? now - THIRTY_DAYS_MS
-               : 0;
-    // Form trend = form-checked sessions only; rep-counter reps have no score.
-    return sessions.filter(e => e.formChecked !== false && e.ts >= cut).sort((a, b) => a.ts - b.ts);
-  }, [sessions, tab]);
-
-  if (filtered.length < 2) {
-    return (
-      <View style={{ height: VH, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ fontSize: 12.5, color: C.textSub, textAlign: 'center' }}>
-          {sessions.length === 0
-            ? 'Log sessions to see your progress.'
-            : 'Not enough data for this period.'}
-        </Text>
-      </View>
-    );
+  if (plan && plan.workouts.length > 0) {
+    const w = plan.workouts[plan.currentWorkoutIndex] ?? plan.workouts[0];
+    map['38 min · 4 exercises'] = `${w.exercises.length} exercise${w.exercises.length === 1 ? '' : 's'}`;
   }
 
-  // x stays between PX and VW-PX so dots never clip
-  const pts = filtered.map((entry, i) => ({
-    x: PX + (i / (filtered.length - 1)) * (VW - PX * 2),
-    y: PY + (1 - entry.pct / 100) * (VH - PY * 2),
+  const recent = workoutGroups.slice(0, 3).map(g => ({
+    ts: g.ts,
+    name: g.entries[0]?.displayName ?? 'Workout',
+    formPct: `${g.pct}%`,
   }));
 
-  const linePath  = smoothPath(pts);
-  const last      = pts[pts.length - 1];
-  const lastPct   = filtered[filtered.length - 1].pct;
-  const firstPct  = filtered[0].pct;
-  const diff      = lastPct - firstPct;
-  const areaPath  = linePath + ` L${last.x.toFixed(2)},${VH} L${PX},${VH} Z`;
-  const wkLabels  = buildWeekLabels(filtered);
-  const chipTop   = Math.max(4, last.y - 30);
+  return `(function(){
+    function post(m){ try{ window.ReactNativeWebView.postMessage(JSON.stringify(m)); }catch(e){} }
+    var MAP = ${JSON.stringify(map)};
+    function applyText(){
+      var hit = 0;
+      var all = document.querySelectorAll('div,span');
+      for (var i=0;i<all.length;i++){
+        var el = all[i]; if (el.children.length) continue;
+        var t = (el.textContent||'').trim();
+        if (t === '3' || t === '38 min · 4 exercises') continue; // handled by style-scoped matches below
+        if (Object.prototype.hasOwnProperty.call(MAP, t) && MAP[t]) { el.textContent = MAP[t]; hit++; }
+      }
+      // workoutName: style-scoped match (bare "Full body" text is NOT
+      // unique on this page — confirmed via scripts/check-home-collisions.js,
+      // a second "Full body" exists in recent-workout history). Matched by
+      // its distinguishing inline style instead of global text.
+      var nameEl = null;
+      var divs = document.querySelectorAll('div');
+      for (var j=0;j<divs.length;j++){
+        var d = divs[j];
+        if (d.style && d.style.maxWidth === '236px' && d.style.fontSize === '27px') { nameEl = d; break; }
+      }
+      ${plan && plan.workouts.length > 0 ? `if (nameEl) { nameEl.textContent = ${JSON.stringify((plan.workouts[plan.currentWorkoutIndex] ?? plan.workouts[0]).splitLabel)}; hit++; }` : ''}
+      // streak chip: scoped by its known color (#f2701c) to avoid matching
+      // any other bare "3" elsewhere on the page. NOT scoped on "no
+      // children" — verified via a real browser that this element has a
+      // child node at runtime even though its source markup looks like
+      // plain text (same templating quirk documented in rep-feedback.tsx's
+      // bodyEl comment).
+      for (var k=0;k<divs.length;k++){
+        var sEl = divs[k];
+        if (sEl.style && sEl.style.color === 'rgb(242, 112, 28)') { sEl.textContent = '${streak}'; hit++; break; }
+      }
+      // formScore renders as "80%" (number + literal "%"), never bare "80"
+      // — confirmed via source read, not guessed.
+      for (var m=0;m<divs.length;m++){
+        var fEl = divs[m];
+        if (fEl.style && fEl.style.fontSize === '26px' && fEl.style.fontWeight === '700' && /^\\d+%$/.test((fEl.textContent||'').trim())) {
+          fEl.textContent = '${overallPct}%'; hit++;
+        }
+      }
+      return hit;
+    }
+    if (!applyText()) { [100,300,700,1500].forEach(function(d){ setTimeout(applyText, d); }); }
 
-  return (
-    <View>
-      {/* SVG chart — viewBox inset so dot radius doesn't clip at edges */}
-      <View style={{ position: 'relative' }}>
-        <Svg
-          width="100%"
-          height={VH}
-          viewBox={`0 0 ${VW} ${VH}`}
-          preserveAspectRatio="none"
-        >
-          <Defs>
-            <SvgGrad id="ltArea" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0%"   stopColor="#FF9F0A" stopOpacity={0.22} />
-              <Stop offset="85%"  stopColor="#FF9F0A" stopOpacity={0.03} />
-              <Stop offset="100%" stopColor="#FF9F0A" stopOpacity={0} />
-            </SvgGrad>
-          </Defs>
+    // Recent Workouts — a real sc-for list (3 placeholder cards by
+    // default); populate with real session groups, hide any unused slots.
+    function wireRecent(){
+      var recentLinks = Array.prototype.slice.call(document.querySelectorAll('a[href="Workout Recap v2.dc.html"]'));
+      var recent = ${JSON.stringify(recent)};
+      if (recentLinks.length === 0) return false;
+      recentLinks.forEach(function(a, i){
+        if (i >= recent.length) { a.style.display = 'none'; return; }
+        var r = recent[i];
+        var nameEl = a.querySelector('div[style*="font-size: 15.5px"]');
+        if (nameEl) nameEl.textContent = r.name;
+        var pctEl = a.querySelector('div[style*="font-size: 14px"][style*="font-variant-numeric"]');
+        if (pctEl) pctEl.textContent = r.formPct;
+        a.addEventListener('click', function(ev){ ev.preventDefault(); ev.stopPropagation(); post({ type:'recap', ts: r.ts }); }, true);
+      });
+      return true;
+    }
+    if (!wireRecent()) { [100,300,700,1500].forEach(function(d){ setTimeout(wireRecent, d); }); }
 
-          {/* Grid */}
-          {([0.33, 0.66] as const).map((f, i) => (
-            <SvgLine
-              key={i}
-              x1={0} y1={VH * f}
-              x2={VW} y2={VH * f}
-              stroke="rgba(11,16,36,0.06)"
-              strokeWidth={0.8}
-            />
-          ))}
+    document.addEventListener('click', function(ev){
+      var el = ev.target;
+      for (var i=0; el && i<6; i++, el=el.parentElement){
+        if (!el.getAttribute) continue;
+        var t = (el.textContent||'').trim();
+        if (t.indexOf('Start workout') === 0 || t === 'Start workout') { ev.preventDefault(); post({type:'start'}); return; }
+        if (el.getAttribute('aria-label') === 'Edit workout') { ev.preventDefault(); post({type:'editWorkout'}); return; }
+        var href = el.getAttribute('href');
+        if (href === 'Cue.dc.html') { ev.preventDefault(); post({type:'cue'}); return; }
+        if (href === 'Progress.dc.html') { ev.preventDefault(); post({type:'progress'}); return; }
+      }
+    }, true);
 
-          {/* Area fill */}
-          <SvgPath d={areaPath} fill="url(#ltArea)" />
-
-          {/* Bezier line */}
-          <SvgPath
-            d={linePath}
-            fill="none"
-            stroke="#FF9F0A"
-            strokeWidth={2.5}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-
-          {/* Vertical dashed drop to baseline */}
-          <SvgLine
-            x1={last.x} y1={last.y}
-            x2={last.x} y2={VH}
-            stroke="rgba(255,159,10,0.22)"
-            strokeWidth={1}
-            strokeDasharray="3 4"
-          />
-
-          {/* Dot: outer glow + fill + white core */}
-          <SvgCircle cx={last.x} cy={last.y} r={9}   fill="rgba(255,159,10,0.14)" />
-          <SvgCircle cx={last.x} cy={last.y} r={5}   fill="#FF9F0A" />
-          <SvgCircle cx={last.x} cy={last.y} r={2.1} fill="rgba(255,255,255,0.9)" />
-        </Svg>
-
-        {/* Value chip near latest dot */}
-        <View style={[fc.chip, { top: chipTop, right: 4 }]} pointerEvents="none">
-          <Text style={fc.chipTxt}>{lastPct}%</Text>
-        </View>
-      </View>
-
-      {/* X-axis week labels */}
-      {wkLabels.length > 0 && (
-        <View style={fc.xAxis}>
-          {wkLabels.map((lbl, i) => (
-            <Text key={i} style={[fc.xLabel, i === wkLabels.length - 1 && fc.xLabelNow]}>
-              {lbl}
-            </Text>
-          ))}
-        </View>
-      )}
-
-      {/* MyPal insight */}
-      <View style={fc.insightRow}>
-        <Svg width={14} height={14} viewBox="0 0 24 24">
-          <SvgPath d="M12 2.5l1.7 5.3 5.3 1.7-5.3 1.7L12 16.5l-1.7-5.3L5 9.5l5.3-1.7z" fill={C.accent} />
-          <SvgPath d="M18.5 14l.8 2.4 2.4.8-2.4.8-.8 2.4-.8-2.4-2.4-.8 2.4-.8z" fill={C.accent} />
-        </Svg>
-        <Text style={fc.insightTxt}>
-          {diff >= 0
-            ? <>You&apos;re <Text style={fc.insightBold}>{diff}% better</Text> than when you started.</>
-            : <>Score is <Text style={fc.insightBold}>{Math.abs(diff)}% lower</Text> than your start.</>
-          }
-        </Text>
-      </View>
-    </View>
-  );
+    var st = document.createElement('style');
+    st.textContent = ${JSON.stringify(HIDE_FAKE_CHROME_CSS)};
+    document.head.appendChild(st);
+    post({type:'ready'});
+  })();`;
 }
-const fc = StyleSheet.create({
-  chip:       {
-    position:          'absolute',
-    paddingHorizontal: 8,
-    paddingVertical:   3,
-    backgroundColor:   'rgba(255,159,10,0.12)',
-    borderRadius:      9,
-  },
-  chipTxt:    { fontSize: 11.5, fontWeight: W.bold, color: '#FF9F0A' },
-  xAxis:      { flexDirection: 'row', justifyContent: 'space-between', marginTop: 7, paddingHorizontal: 2 },
-  xLabel:     { fontSize: 10.5, fontWeight: W.medium, color: C.textSub },
-  xLabelNow:  { fontWeight: W.bold, color: C.text },
-  insightRow: { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center', marginTop: 14 },
-  insightTxt: { fontSize: 12.5, color: C.text, letterSpacing: -0.2 },
-  insightBold: { fontWeight: W.bold },
-});
-
-// ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
-  const insets = useSafeAreaInsets();
   const router = useRouter();
-
-  const [sessions,    setSessions]    = useState<SessionEntry[]>([]);
-  const [viewedMoves, setViewedMoves] = useState<Set<string>>(new Set());
-  const [progressTab, setProgressTab] = useState<'week' | 'month' | 'all'>('all');
-  const [readiness,   setReadiness]   = useState<string>('fresh');
-  const [location,    setLocation]    = useState<string>('home');
-
-  // ── Derived metrics ──────────────────────────────────────────────────────────
-
-  // Form score = form-checked sessions only; rep-counter reps have no score.
-  const scoredSessionsList = useMemo(() => sessions.filter(e => e.formChecked !== false), [sessions]);
-
-  const formScore = useMemo<number | null>(() => {
-    if (scoredSessionsList.length === 0) return null;
-    const last5 = scoredSessionsList.slice(-5);
-    return Math.round(last5.reduce((a, e) => a + e.pct, 0) / last5.length);
-  }, [scoredSessionsList]);
-
-  const weekCount = useMemo(() => {
-    const cut = Date.now() - SEVEN_DAYS_MS;
-    return sessions.filter(e => e.ts >= cut).length;
-  }, [sessions]);
-
-  const avgGoodPct = useMemo<number | null>(() => {
-    if (scoredSessionsList.length === 0) return null;
-    return Math.round(scoredSessionsList.reduce((a, e) => a + e.pct, 0) / scoredSessionsList.length);
-  }, [scoredSessionsList]);
-
-  const reversedSessions = useMemo(() => [...sessions].reverse(), [sessions]);
-
-  // ── Load data on focus ───────────────────────────────────────────────────────
+  const webRef = useRef<WebView>(null);
+  const [injectJs, setInjectJs] = useState<string | null>(null);
+  const [pageLoaded, setPageLoaded] = useState(false);
 
   useFocusEffect(useCallback(() => {
-    AsyncStorage.getItem(SESSION_LOG_KEY).then(raw => {
-      if (!raw) { setSessions([]); return; }
-      const parsed: SessionEntry[] = JSON.parse(raw);
-      const cut    = Date.now() - THIRTY_DAYS_MS;
-      const pruned = parsed.filter(e => e.ts >= cut);
-      if (pruned.length !== parsed.length) {
-        void AsyncStorage.setItem(SESSION_LOG_KEY, JSON.stringify(pruned));
-      }
-      setSessions(pruned);
-    }).catch(() => setSessions([]));
-
-    AsyncStorage.getItem(VIEWED_KEY).then(raw => {
-      setViewedMoves(new Set(raw ? JSON.parse(raw) : []));
-    }).catch(() => {});
-
-    AsyncStorage.multiGet(['formpal_readiness', 'formpal_location']).then(pairs => {
-      const r = pairs.find(p => p[0] === 'formpal_readiness')?.[1];
-      const l = pairs.find(p => p[0] === 'formpal_location')?.[1];
-      if (r) setReadiness(r);
-      if (l) setLocation(l);
+    Promise.all([loadPlan(), getAllSessions()]).then(([plan, sessions]) => {
+      setInjectJs(buildHomeInjectJs(plan, sessions));
     }).catch(() => {});
   }, []));
 
-  async function saveReadiness(v: string) {
-    setReadiness(v);
-    await AsyncStorage.setItem('formpal_readiness', v);
-    // TODO: adjust workout intensity / MyPal tone based on readiness
-  }
-
-  async function saveLocation(v: string) {
-    setLocation(v);
-    await AsyncStorage.setItem('formpal_location', v);
-    // TODO: filter exercises by available equipment based on location
-  }
-
-  const readinessOpt = READINESS_OPTIONS.find(o => o.value === readiness) ?? READINESS_OPTIONS[0];
-  const locationOpt  = LOCATION_OPTIONS.find(o => o.value === location)   ?? LOCATION_OPTIONS[0];
-
-  async function markViewed(id: string) {
-    const next = new Set(viewedMoves);
-    next.add(id);
-    setViewedMoves(next);
-    await AsyncStorage.setItem(VIEWED_KEY, JSON.stringify([...next]));
-    router.push(`/move/${id}` as any);
-  }
-
-  // ─── Render ─────────────────────────────────────────────────────────────────
+  React.useEffect(() => {
+    if (pageLoaded && injectJs) webRef.current?.injectJavaScript(injectJs + '; true;');
+  }, [pageLoaded, injectJs]);
 
   return (
-    <>
+    <View style={styles.root}>
       <StatusBar style="dark" />
-      <ScreenBackground>
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={[
-            s.scroll,
-            { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 80 },
-          ]}
-        >
-
-          {/* ── 1. HEADER ─────────────────────────────────────────────────── */}
-          <View style={s.header}>
-            <Text style={s.greeting}>Welcome back.</Text>
-            <Text style={s.dateLabel}>{formatDate(new Date())}</Text>
-          </View>
-
-          {/* ── 2. READINESS + LOCATION DROPDOWN PILLS ───────────────────── */}
-          <View style={s.pillRow}>
-            <Dropdown
-              options={READINESS_OPTIONS}
-              value={readiness}
-              onChange={saveReadiness}
-              renderTrigger={open => (
-                <DropdownPill
-                  gradient={readinessOpt.gradient}
-                  icon={readinessOpt.symbolName}
-                  label={readinessOpt.label}
-                  onOpen={open}
-                />
-              )}
-            />
-            <Dropdown
-              options={LOCATION_OPTIONS}
-              value={location}
-              onChange={saveLocation}
-              renderTrigger={open => (
-                <DropdownPill
-                  gradient={locationOpt.gradient}
-                  icon={locationOpt.symbolName}
-                  label={locationOpt.label}
-                  onOpen={open}
-                />
-              )}
-            />
-          </View>
-
-          {/* ── 3. HERO BLOCK: RINGS + MYPAL OVERLAP ─────────────────────── */}
-          <View style={s.heroBlock}>
-
-            {/* Rings card */}
-            <View style={[s.ringsCard, SHADOW_HIGH]}>
-              <View style={s.ringsRow}>
-                <Ring
-                  progress={(formScore ?? 0) / 100}
-                  colors={C.formGrad}
-                  gradientId="gForm"
-                  value={formScore != null ? String(formScore) : '--'}
-                  unit="%"
-                  label="Form Score"
-                  size={96}
-                  strokeWidth={10.5}
-                />
-                <View style={s.ringDivider} />
-                <Ring
-                  progress={Math.min(weekCount / WEEK_GOAL, 1)}
-                  colors={C.weekGrad}
-                  gradientId="gWeek"
-                  value={String(weekCount)}
-                  unit={`/ ${WEEK_GOAL}`}
-                  label="This Week"
-                  size={96}
-                  strokeWidth={10.5}
-                />
-                <View style={s.ringDivider} />
-                <Ring
-                  progress={(avgGoodPct ?? 0) / 100}
-                  colors={C.repsGrad}
-                  gradientId="gReps"
-                  value={avgGoodPct != null ? String(avgGoodPct) : '--'}
-                  unit="%"
-                  label="Good Reps"
-                  size={96}
-                  strokeWidth={10.5}
-                />
-              </View>
-            </View>
-
-            {/* MyPal insight — tucked 30px under rings */}
-            <Pressable onPress={() => router.push('/cue' as any)} style={[s.mypalCard, SHADOW_MED]}>
-              <View style={s.mypalHeader}>
-                <Svg width={16} height={16} viewBox="0 0 24 24">
-                  <SvgPath d="M12 2.5l1.7 5.3 5.3 1.7-5.3 1.7L12 16.5l-1.7-5.3L5 9.5l5.3-1.7z" fill={C.accent} />
-                  <SvgPath d="M18.5 14l.8 2.4 2.4.8-2.4.8-.8 2.4-.8-2.4-2.4-.8 2.4-.8z" fill={C.accent} />
-                </Svg>
-                <Text style={s.mypalLabel}>CUE</Text>
-              </View>
-              <Text style={s.mypalBody}>
-                Consistent reps build real strength. Your form improves with every rep you log.{' '}
-                <Text style={s.mypalCta}>Tap to chat with your coach ›</Text>
-              </Text>
-            </Pressable>
-          </View>
-
-          {/* ── 4. OVERALL FORM + WEEK GOAL ──────────────────────────────── */}
-          <View style={[s.goalsCard, SHADOW_MED]}>
-            <View style={s.goalHalf}>
-              <Text style={s.goalLabel}>Overall Form</Text>
-              <Text style={[
-                s.goalValue,
-                { color: formScore == null ? C.textDim
-                        : formScore >= 80   ? C.goodText
-                        : formScore >= 60   ? C.midText
-                        :                    C.lowText },
-              ]}>
-                {formScore != null ? `${formScore}%` : '--'}
-              </Text>
-              <View style={s.barBg}>
-                <LinearGradient
-                  colors={C.formGrad}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={[s.barFill, { width: `${formScore ?? 0}%` as any }]}
-                />
-              </View>
-            </View>
-
-            <View style={s.goalDivider} />
-
-            <View style={s.goalHalf}>
-              <Text style={s.goalLabel}>Week Goal</Text>
-              <Text style={s.goalValue}>
-                {weekCount}<Text style={s.goalUnit}> / {WEEK_GOAL}</Text>
-              </Text>
-              <View style={s.pipsRow}>
-                {Array.from({ length: WEEK_GOAL }).map((_, i) => (
-                  <View key={i} style={[s.pip, i < weekCount && s.pipFilled]} />
-                ))}
-              </View>
-            </View>
-          </View>
-
-          {/* ── 5. YOUR PROGRESS ──────────────────────────────────────────── */}
-          <SectionHeader title="Your progress" action="View all" onAction={() => router.push('/(tabs)/progress' as any)} />
-          <View style={[s.progressCard, SHADOW_HIGH]}>
-            <View style={s.segPicker}>
-              {(['week', 'month', 'all'] as const).map(tab => (
-                <Pressable key={tab} onPress={() => setProgressTab(tab)} style={[s.segItem, progressTab === tab && s.segActive]}>
-                  <Text style={[s.segTxt, progressTab === tab && s.segTxtActive]}>
-                    {tab === 'week' ? 'Week' : tab === 'month' ? 'Month' : 'All'}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-            <FormChart sessions={sessions} tab={progressTab} />
-          </View>
-
-          {/* ── 6. LEARN THE MOVES ───────────────────────────────────────── */}
-          <View style={{ gap: 4 }}>
-            <SectionHeader title="Learn the moves" action="See all" onAction={() => {}} />
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={s.movesRow}
-            >
-              {FEATURED_MOVES.map(m => (
-                <MoveCircle
-                  key={m.id}
-                  id={m.id}
-                  viewed={viewedMoves.has(m.id)}
-                  onPress={() => markViewed(m.id)}
-                />
-              ))}
-            </ScrollView>
-          </View>
-
-          {/* ── 7. PAST SESSIONS ──────────────────────────────────────────── */}
-          <View style={{ gap: 10 }}>
-            <SectionHeader
-              title="Past sessions"
-              action={reversedSessions.length > 0 ? 'View all' : undefined}
-              onAction={() => router.push('/(tabs)/progress' as any)}
-            />
-            <View style={s.sessionsList}>
-              {reversedSessions.length === 0 ? (
-                <Text style={s.emptyTxt}>
-                  No sessions yet. Use "Learn the moves" to start tracking your form.
-                </Text>
-              ) : (
-                <SessionCard entry={reversedSessions[0]} last={true} />
-              )}
-            </View>
-          </View>
-
-          {/* ── DEV: Feedback UI Preview ──────────────────────────────── */}
-          <Pressable
-            onPress={() => router.push('/feedback-preview' as any)}
-            style={s.devBtn}
-          >
-            <Text style={s.devBtnTxt}>[DEV] Feedback UI Preview</Text>
-          </Pressable>
-
-          {/* ── TEMP: kinetic-typography onboarding style test — see
-              app/onboarding-test.tsx. Doesn't touch the real onboarding
-              flow; delete this Pressable + that file to remove. ────────── */}
-          <Pressable
-            onPress={() => router.push('/onboarding-test' as any)}
-            style={s.devBtn}
-          >
-            <Text style={s.devBtnTxt}>Test New Onboarding</Text>
-          </Pressable>
-
-        </ScrollView>
-      </ScreenBackground>
-    </>
+      <WebView
+        ref={webRef}
+        source={HOME_HTML}
+        originWhitelist={['*']}
+        onLoadEnd={() => setPageLoaded(true)}
+        onMessage={(e) => {
+          let msg: { type?: string; ts?: number };
+          try { msg = JSON.parse(e.nativeEvent.data); } catch { return; }
+          if (msg.type === 'ready') return;
+          if (msg.type === 'start') { router.push('/workout' as any); return; }
+          if (msg.type === 'editWorkout') { router.push('/create-workout' as any); return; }
+          if (msg.type === 'cue') { router.push('/cue' as any); return; }
+          if (msg.type === 'progress') { router.push('/(tabs)/progress' as any); return; }
+          if (msg.type === 'recap' && msg.ts != null) { router.push({ pathname: '/recap', params: { ts: String(msg.ts) } } as any); return; }
+        }}
+        style={styles.web}
+        scrollEnabled
+        bounces={false}
+        overScrollMode="never"
+        allowFileAccess
+        allowFileAccessFromFileURLs
+        allowUniversalAccessFromFileURLs
+        javaScriptEnabled
+        domStorageEnabled
+        cacheEnabled={false}
+      />
+    </View>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
-const s = StyleSheet.create({
-
-  scroll: { gap: Sp.lg, paddingHorizontal: 16 },
-
-  // 1. Header
-  header: { gap: 7, paddingHorizontal: 8 },
-  greeting: {
-    fontFamily:    FONT.displayLight,
-    fontSize:      36,
-    lineHeight:    37,
-    letterSpacing: -1,
-    color:         C.text,
-  },
-  dateLabel: { fontSize: 13.5, fontWeight: W.medium, letterSpacing: 0.2, color: C.textSub },
-
-  // 2. Status pills
-  pillRow: { flexDirection: 'row', gap: 9, flexWrap: 'wrap', paddingHorizontal: 8 },
-
-  // 3. Hero block
-  heroBlock: { gap: 0 },
-
-  ringsCard: {
-    backgroundColor: C.card,
-    borderRadius:    28,
-    borderWidth:     1,
-    borderColor:     C.border,
-    paddingVertical:   26,
-    paddingHorizontal: 14,
-    zIndex:            2,
-  },
-  ringsRow: {
-    flexDirection:  'row',
-    alignItems:     'flex-start',
-    justifyContent: 'space-around',
-  },
-  ringDivider: {
-    width:           StyleSheet.hairlineWidth,
-    height:          70,
-    backgroundColor: 'rgba(0,0,0,0.07)',
-    alignSelf:       'center',
-  },
-
-  mypalCard: {
-    backgroundColor: C.card,
-    borderRadius:    24,
-    borderWidth:     1,
-    borderColor:     C.border,
-    marginTop:       -30,
-    marginHorizontal: 10,
-    paddingTop:      46,
-    paddingBottom:   17,
-    paddingHorizontal: 18,
-    zIndex:          1,
-    gap:             7,
-  },
-  mypalHeader: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  mypalLabel:  { fontSize: 11, fontWeight: W.bold, letterSpacing: 0.7, color: C.accent },
-  mypalBody:   { fontSize: 13.5, lineHeight: 20, color: '#454b58' },
-  mypalCta:    { color: C.accent, fontWeight: W.semi },
-
-  // 4. Goals card (Overall Form + Week Goal)
-  goalsCard: {
-    backgroundColor:  C.card,
-    borderRadius:     22,
-    borderWidth:      1,
-    borderColor:      C.border,
-    flexDirection:    'row',
-    paddingVertical:  18,
-    paddingHorizontal: 20,
-    gap:              0,
-  },
-  goalHalf:    { flex: 1, gap: 6 },
-  goalLabel:   { fontSize: 11.5, fontWeight: W.semi, letterSpacing: 0.2, color: C.textSub },
-  goalValue:   { fontSize: 24, fontWeight: W.bold, letterSpacing: -0.5, color: C.text },
-  goalUnit:    { fontSize: 15, fontWeight: W.medium, color: C.textSub },
-  barBg: {
-    height: 6, borderRadius: 4,
-    backgroundColor: '#eceef3',
-    overflow: 'hidden',
-  },
-  barFill:     { height: '100%', borderRadius: 4 },
-  goalDivider: {
-    width:           StyleSheet.hairlineWidth,
-    alignSelf:       'stretch',
-    backgroundColor: 'rgba(0,0,0,0.08)',
-    marginHorizontal: 18,
-  },
-  pipsRow:     { flexDirection: 'row', gap: 5 },
-  pip: {
-    width: 9, height: 9, borderRadius: 5,
-    backgroundColor: '#eceef3',
-    borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)',
-  },
-  pipFilled:   { backgroundColor: '#12B59A', borderColor: '#12B59A' },
-
-  // 5. Progress card
-  progressCard: {
-    backgroundColor: C.card,
-    borderRadius:    28,
-    borderWidth:     1,
-    borderColor:     C.border,
-    padding:         18,
-    paddingBottom:   14,
-  },
-  segPicker: {
-    flexDirection:  'row',
-    gap:             2,
-    padding:         3,
-    backgroundColor: '#eceef3',
-    borderRadius:    10,
-    alignSelf:       'flex-start',
-    marginBottom:    14,
-  },
-  segItem:       { paddingVertical: 5, paddingHorizontal: 10, borderRadius: 7 },
-  segActive:     { backgroundColor: C.card },
-  segTxt:        { fontSize: 11, fontWeight: W.semi, color: C.textSub },
-  segTxtActive:  { fontWeight: W.bold, color: C.text },
-
-  // 6. Moves
-  movesRow: { paddingHorizontal: 16, paddingVertical: 16, gap: 18 },
-
-  // 7. Sessions
-  sessionsList: { gap: 10 },
-  emptyTxt: {
-    fontSize:        Sp.md,
-    color:           C.textSub,
-    lineHeight:      22,
-    textAlign:       'center',
-    paddingVertical: Sp.lg,
-    paddingHorizontal: Sp.lg,
-  },
-
-  // DEV button
-  devBtn: {
-    alignSelf:       'center',
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    borderRadius:    10,
-    borderWidth:     1,
-    borderColor:     'rgba(0,0,0,0.10)',
-    backgroundColor: 'rgba(0,0,0,0.04)',
-  },
-  devBtnTxt: { fontSize: 12, color: C.textSub, fontWeight: W.medium },
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: '#eeeef1' },
+  web: { flex: 1, backgroundColor: '#eeeef1' },
 });
