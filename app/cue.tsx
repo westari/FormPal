@@ -83,25 +83,34 @@ function cueInject(): string {
     // what caused the zoom bug) and not translating the whole canvas
     // either (same whole-screen-shift problem, just via a different
     // mechanism) — only this one element gets repositioned.
+    // BUG FOUND ("there's still a bit of background that goes with it —
+    // should just be the button, not the background behind it"): moving
+    // the OUTER padding wrapper (the whole "padding: 0 14px 30px" box)
+    // brought its own background along as a visible rectangle. Moving the
+    // pill itself (inputEl.closest('div')) instead — it has its own
+    // rounded background already, nothing extra around it. Its own
+    // 14px/30px side+bottom spacing came from the wrapper's padding, which
+    // it no longer has once pulled out of flow, so that's set explicitly
+    // below instead (14px side, matching the original; a tighter ~10px
+    // gap above the keyboard rather than the resting-state 30px, which was
+    // sized for bottom-safe-area clearance that isn't relevant once a
+    // keyboard is actually covering that space).
     var inputBarEl = inputEl.closest('div');
-    inputBarEl = inputBarEl ? inputBarEl.parentElement : null; // the padding wrapper around the pill row — verified via scripts/verify-cue-inputbar.js, NOT the raw source's "padding: 0 14px 30px" string (browsers normalize that to "0px 14px 30px", so a style-string selector would silently never match)
     window.__cueSetKeyboardHeight = function(nativeH){
       if(!inputBarEl) return;
       if(nativeH > 0){
         var scale = window.__dcCanvasScale || 1;
-        var designOffset = nativeH / scale;
+        var designOffset = (nativeH / scale) + 10;
         inputBarEl.style.setProperty('position','absolute','important');
-        inputBarEl.style.setProperty('left','0','important');
-        inputBarEl.style.setProperty('right','0','important');
+        inputBarEl.style.setProperty('left','14px','important');
+        inputBarEl.style.setProperty('right','14px','important');
         inputBarEl.style.setProperty('bottom', designOffset+'px','important');
-        inputBarEl.style.setProperty('background','#eeeef1','important');
         inputBarEl.style.setProperty('transition','bottom 220ms ease','important');
       } else {
         inputBarEl.style.removeProperty('position');
         inputBarEl.style.removeProperty('left');
         inputBarEl.style.removeProperty('right');
         inputBarEl.style.removeProperty('bottom');
-        inputBarEl.style.removeProperty('background');
         inputBarEl.style.removeProperty('transition');
       }
     };

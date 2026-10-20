@@ -174,6 +174,7 @@ function repFeedbackInject(opts: {
   var REPS = ${JSON.stringify(reps)};
   var EX_NAME = ${JSON.stringify(exerciseName.toUpperCase())};
   var HAS_VIDEO = ${JSON.stringify(hasVideo)};
+  var PAGE_START = Date.now();
   var idx = 0;
   var bgTransparent = false;
   var cardWidened = false;
@@ -573,7 +574,20 @@ function repFeedbackInject(opts: {
     // for the old HTML5 <video>, but visibly stutters a real AVPlayer.
     // show(0) (and the resulting seek) now only ever fires once, the
     // first time apply() actually succeeds.
+    // BUG FOUND (reported again as "spawns immediately but in the wrong
+    // place, then quickly glitches into the right place"): 'ready' used to
+    // fire the INSTANT build()/wireNav() succeeded, which the retry
+    // schedule can do in well under 100ms — long before dcScaleFitJs's own
+    // fit() has settled on the real canvas scale (its own retries run on a
+    // separate [0,300,900,1500]ms schedule). RN reveals the WebView
+    // (opacity 0->1) the moment 'ready' arrives, so it was possible to
+    // reveal at a transient, not-yet-correct scale and visibly correct a
+    // moment later. Holding 'ready' back until PAGE_START + 350ms (past
+    // the 300ms fit() checkpoint) means the scale is already settled
+    // before anything is ever shown.
     if(ok && !readyPosted){
+      var elapsed = Date.now() - PAGE_START;
+      if(elapsed < 350){ setTimeout(apply, 350 - elapsed); return; }
       show(0);
       readyPosted = true;
       console.log('[rep-feedback-page] ready, posting to RN');

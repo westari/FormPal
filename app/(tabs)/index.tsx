@@ -43,7 +43,7 @@ const HIDE_FAKE_CHROME_CSS = `
   div[style*="right: 14px"][style*="bottom: 22px"][style*="width: 64px"][style*="height: 64px"] { display: none !important; }
 `;
 
-function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[]): string {
+function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[], insetTop: number, insetBottom: number): string {
   const workoutGroups = groupIntoWorkouts(sessions);
   const streak = calcStreak(sessions);
   const scored = scoredSessions(sessions);
@@ -73,6 +73,52 @@ function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[]): string 
   return `(function(){
     function post(m){ try{ window.ReactNativeWebView.postMessage(JSON.stringify(m)); }catch(e){} }
     var MAP = ${JSON.stringify(map)};
+    // BUG FOUND ("clear cutoff — colored background then blank white on
+    // top, doesn't match"): an RN-level marginTop on the WebView created a
+    // gap ABOVE the canvas showing the screen's plain background color,
+    // which doesn't match the design's own gradient — a visible seam. The
+    // design's gradient should run edge-to-edge behind the status bar/
+    // notch like the rest of this app's full-bleed screens; only the
+    // actual CONTENT needs pushing down to clear it, via extra padding on
+    // the header itself, not an external native gap.
+    var INSET_TOP = ${insetTop};
+    function pushHeaderDown(){
+      var scale = window.__dcCanvasScale;
+      if(!scale) return false;
+      var all = document.querySelectorAll('div');
+      var header = null;
+      for (var i=0;i<all.length;i++){ if (all[i].style.paddingTop === '62px') { header = all[i]; break; } }
+      if(!header) return false;
+      header.style.setProperty('padding-top', (62 + INSET_TOP/scale) + 'px', 'important');
+      return true;
+    }
+    if(!pushHeaderDown()){ [50,150,300,600,1000].forEach(function(d){ setTimeout(pushHeaderDown, d); }); }
+
+    // BUG FOUND ("edit sheet gets put behind the tab bar, bottom cut off,
+    // Done button covered"): this app's tab bar is a REAL NATIVE one
+    // (expo-router's NativeTabs, a translucent overlay per standard iOS
+    // tab bar behavior) — it physically sits on top of the bottom slice of
+    // this screen's content, not excluded from it the way a plain View
+    // layout would. The edit sheet's own "bottom: 8px" (relative to this
+    // 844-unit canvas) lands underneath that real tab bar. insets.bottom
+    // (home-indicator safe area) alone isn't enough — ~49px is the
+    // standard iOS tab bar's own height on top of that, which safe-area
+    // insets don't include since it's a navigation chrome element, not a
+    // system inset.
+    var INSET_BOTTOM = ${insetBottom};
+    var TAB_BAR_ESTIMATE = 49;
+    function pushEditSheetUp(){
+      var scale = window.__dcCanvasScale;
+      if(!scale) return false;
+      var divs = document.querySelectorAll('div');
+      var sheet = null;
+      for (var i=0;i<divs.length;i++){ if (divs[i].style.maxHeight === '620px') { sheet = divs[i]; break; } }
+      if(!sheet) return false;
+      var extra = (INSET_BOTTOM + TAB_BAR_ESTIMATE) / scale;
+      sheet.style.setProperty('bottom', (8 + extra) + 'px', 'important');
+      return true;
+    }
+    if(!pushEditSheetUp()){ [50,150,300,600,1000].forEach(function(d){ setTimeout(pushEditSheetUp, d); }); }
     function applyText(){
       var hit = 0;
       var all = document.querySelectorAll('div,span');
@@ -140,7 +186,14 @@ function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[]): string 
         if (!el.getAttribute) continue;
         var t = (el.textContent||'').trim();
         if (t.indexOf('Start workout') === 0 || t === 'Start workout') { ev.preventDefault(); post({type:'start'}); return; }
-        if (el.getAttribute('aria-label') === 'Edit workout') { ev.preventDefault(); post({type:'editWorkout'}); return; }
+        // Explicit ask: the edit (pencil) button should open the design's
+        // OWN built-in edit-workout sheet (openEdit/closeEdit/addMove/
+        // editToCue — a real bottom sheet with its own Done button), not
+        // navigate to a separate native screen. This used to intercept
+        // that click and redirect to /create-workout, which both fought
+        // the artboard's own handler (both fired off the same click) and
+        // wasn't what was wanted anyway — removed, so sc-camel-on-click's
+        // own openEdit runs uninterrupted, same as goPlan/goHome elsewhere.
         var href = el.getAttribute('href');
         if (href === 'Cue.dc.html') { ev.preventDefault(); post({type:'cue'}); return; }
         if (href === 'Progress.dc.html') { ev.preventDefault(); post({type:'progress'}); return; }
@@ -150,7 +203,21 @@ function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[]): string 
     var st = document.createElement('style');
     st.textContent = ${JSON.stringify(HIDE_FAKE_CHROME_CSS)};
     document.head.appendChild(st);
-    post({type:'ready'});
+    // BUG FOUND ("home tab still glitches when first opening the app"):
+    // this screen's WebView was never actually opacity-gated on anything
+    // at all — unlike every other screen in this app, it was visible from
+    // the moment it loaded, so its own demo content (and the canvas-scale
+    // snap already fixed elsewhere) was always shown raw before this
+    // script ever got a chance to apply real data. Delaying 'ready' past
+    // dcScaleFitJs's own 300ms fit() checkpoint (same fix as recap.tsx/
+    // rep-feedback.tsx) and actually using it on the RN side now.
+    var SCRIPT_START = Date.now();
+    function postReadyWhenStable(){
+      var elapsed = Date.now() - SCRIPT_START;
+      if(elapsed < 350){ setTimeout(postReadyWhenStable, 350 - elapsed); return; }
+      post({type:'ready'});
+    }
+    postReadyWhenStable();
   })();`;
 }
 
@@ -160,10 +227,11 @@ export default function HomeScreen() {
   const webRef = useRef<WebView>(null);
   const [injectJs, setInjectJs] = useState<string | null>(null);
   const [pageLoaded, setPageLoaded] = useState(false);
+  const [ready, setReady] = useState(false);
 
   useFocusEffect(useCallback(() => {
     Promise.all([loadPlan(), getAllSessions()]).then(([plan, sessions]) => {
-      setInjectJs(buildHomeInjectJs(plan, sessions));
+      setInjectJs(buildHomeInjectJs(plan, sessions, insets.top, insets.bottom));
     }).catch(() => {});
   }, []));
 
@@ -182,20 +250,21 @@ export default function HomeScreen() {
         onMessage={(e) => {
           let msg: { type?: string; ts?: number };
           try { msg = JSON.parse(e.nativeEvent.data); } catch { return; }
-          if (msg.type === 'ready') return;
+          if (msg.type === 'ready') { setReady(true); return; }
           if (msg.type === 'start') { router.push('/workout' as any); return; }
-          if (msg.type === 'editWorkout') { router.push('/create-workout' as any); return; }
           if (msg.type === 'cue') { router.push('/cue' as any); return; }
           if (msg.type === 'progress') { router.push('/(tabs)/progress' as any); return; }
           if (msg.type === 'recap' && msg.ts != null) { router.push({ pathname: '/recap', params: { ts: String(msg.ts) } } as any); return; }
         }}
-        // BUG FOUND ("too cramped at the top, Tuesday October 20th is too
-        // high"): the design's own 62px top padding assumes it's placed in
-        // a canvas that already starts below the status bar/notch — this
-        // WebView was filling the ENTIRE screen including that area
-        // (train.tsx's own wrapper already applies this same inset; this
-        // screen just hadn't gotten it).
-        style={[styles.web, { marginTop: insets.top }]}
+        // BUG FOUND ("clear cutoff, colored background then blank white on
+        // top, doesn't match"): an earlier fix added marginTop here to fix
+        // the cramped-header complaint, but that created a visible seam —
+        // the gap showed this screen's plain background instead of the
+        // design's own gradient, which should run edge-to-edge behind the
+        // status bar like every other full-bleed screen in this app. Fixed
+        // properly in buildHomeInjectJs's pushHeaderDown instead — the
+        // WebView stays full-screen, only the header's own padding grows.
+        style={[styles.web, { opacity: ready ? 1 : 0 }]}
         scrollEnabled
         bounces={false}
         overScrollMode="never"

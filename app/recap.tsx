@@ -598,6 +598,7 @@ function workoutrecapInject(opts: {
   var cardWidened = false;
   var backWired=false, feedbackWired=false, shareWired=false, allSetsWired=false;
   var readyPosted=false;
+  var PAGE_START=Date.now();
   // "Dragging the card down is laggy" — traced to the artboard's OWN
   // grabStart/grabEnd logic on the grab-handle pill: it only reacts on
   // RELEASE (measures total pointerdown->pointerup distance, then snaps
@@ -818,7 +819,20 @@ function workoutrecapInject(opts: {
     // few hundred ms.
     if(window.__fpFillBottomGap) window.__fpFillBottomGap();
     var ok = hit>=3;
-    if(ok && !readyPosted){ readyPosted=true; post({type:'ready'}); }
+    // BUG FOUND (reported again as "spawns immediately but in the wrong
+    // place, then quickly glitches into the right place"): 'ready' used to
+    // fire the instant enough elements were wired, which can happen well
+    // under 300ms — before dcScaleFitJs's own fit() has settled on the
+    // real canvas scale (its retries run on a separate schedule). RN
+    // reveals the WebView the moment 'ready' arrives, so a transient,
+    // not-yet-correct scale could get shown and visibly correct itself a
+    // moment later. Holding 'ready' back until PAGE_START + 350ms means
+    // the scale is already settled before anything is ever shown.
+    if(ok && !readyPosted){
+      var elapsed = Date.now() - PAGE_START;
+      if(elapsed < 350){ setTimeout(apply, 350 - elapsed); return false; }
+      readyPosted=true; post({type:'ready'});
+    }
     return ok;
   }
   if(!apply()) [200,500,1000,2000,3500,5000].forEach(function(d){ setTimeout(apply,d); });
