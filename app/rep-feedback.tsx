@@ -403,10 +403,23 @@ function repFeedbackInject(opts: {
     bodyEl = sparkle ? sparkle.closest('div') : null;
     console.log('[rep-feedback-page] bodyEl found via sparkle-icon selector:', !!bodyEl);
 
+    // BUG FOUND (confirmed by loading the real design file in a real
+    // browser and reading the ACTUAL live style values back, not guessing
+    // from the raw source — see scripts/debug-track-element.js): the
+    // source markup says "flex: 1", but the browser NORMALIZES that
+    // shorthand the instant it's parsed, so el.style.flex reads back as
+    // "1 1 0%", never "1". This selector has therefore NEVER matched,
+    // ever, in any round this session — trackEl was always null, so the
+    // ENTIRE scrub bar block below (fill/thumb detection, tick creation,
+    // AND the drag wiring) never ran a single time. Not a timing bug, not
+    // a touch-interception bug — the element was simply never found.
+    // style.flexGrow is NOT normalized the same way and reads back "1"
+    // for the track vs "0" for the round thumb/tick dots (which use
+    // "flex: 0 0 auto") — a reliable way to tell them apart.
     var tracks=document.querySelectorAll('#dc-root div');
     for(var m=0;m<tracks.length;m++){
       var cs=tracks[m].style;
-      if(cs && cs.position==='relative' && cs.flex==='1' && cs.height==='30px'){ trackEl=tracks[m]; break; }
+      if(cs && cs.position==='relative' && cs.flexGrow==='1' && cs.height==='30px'){ trackEl=tracks[m]; break; }
     }
     if(trackEl){
       // BUG FOUND (reviewing this before relying on it again): fillEl/

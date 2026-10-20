@@ -22,8 +22,8 @@
  * than faked. If real plan-editing-via-chat is wanted, the backend needs to
  * return a structured suggestion first.
  */
-import React, { useCallback, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Animated, Keyboard, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import {
@@ -33,7 +33,7 @@ import {
 import { MYPAL_API_URL } from '../constants/api';
 
 const CUE_HTML = require('../assets/app screens/cue.html');
-const CUE_BUILD = 'cue-2';
+const CUE_BUILD = 'cue-3';
 if (__DEV__) console.log(`[cue] build ${CUE_BUILD}`);
 
 interface Message { role: 'user' | 'assistant'; content: string }
@@ -67,6 +67,16 @@ function cueInject(): string {
     console.log('[cue-page] listEl=', !!listEl, 'inputEl=', !!inputEl, 'sendBtn=', !!sendBtn, 'chipsRow=', !!chipsRow);
     if(!listEl || !inputEl || !sendBtn) return false;
     wired = true;
+    // BUG FOUND ("zooms the whole screen out... less than before, but
+    // still zooms"): the real design's input is font-size: 15px (confirmed
+    // via the unpacked file) — iOS auto-zooms the ENTIRE page on focus for
+    // any input/textarea under 16px, as a built-in accessibility behavior,
+    // independent of the viewport meta's maximum-scale/user-scalable
+    // settings. Removing KeyboardAvoidingView (see this file's other
+    // comment) fixed the canvas-rescale source of zoom; this fixes the
+    // second, separate, OS-level one. 16px is the documented threshold —
+    // using 17px for margin.
+    inputEl.style.setProperty('font-size', '17px', 'important');
     wireUp();
     dcPost({ type: 'ready' });
     return true;
@@ -161,6 +171,32 @@ export default function CueScreen() {
   const webRef = useRef<WebView>(null);
   const [ready, setReady] = useState(false);
   const historyRef = useRef<Message[]>([]);
+  // Moves the WHOLE WebView up by a position shift (translateY), never a
+  // size change — see this file's own comment on why KeyboardAvoidingView
+  // (which shrinks the view) was removed. A position shift never touches
+  // window.innerHeight inside the page, so dcScaleFitJs's fit() never
+  // recalculates and the canvas never rescales, but the input still ends
+  // up above the keyboard instead of hidden behind it.
+  const keyboardOffset = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const showEvt = 'keyboardWillShow';
+    const hideEvt = 'keyboardWillHide';
+    const showSub = Keyboard.addListener(showEvt, (e) => {
+      Animated.timing(keyboardOffset, {
+        toValue: -e.endCoordinates.height,
+        duration: e.duration || 250,
+        useNativeDriver: true,
+      }).start();
+    });
+    const hideSub = Keyboard.addListener(hideEvt, (e) => {
+      Animated.timing(keyboardOffset, {
+        toValue: 0,
+        duration: e.duration || 250,
+        useNativeDriver: true,
+      }).start();
+    });
+    return () => { showSub.remove(); hideSub.remove(); };
+  }, [keyboardOffset]);
 
   const handleSend = useCallback(async (text: string) => {
     const history = historyRef.current.slice(-20).map(m => ({ role: m.role, content: m.content }));
@@ -193,7 +229,7 @@ export default function CueScreen() {
     // reason — removed here to match. The keyboard will cover the input
     // bar instead of the canvas rescaling to dodge it.
     <View style={styles.flex}>
-      <View style={styles.flex}>
+      <Animated.View style={[styles.flex, { transform: [{ translateY: keyboardOffset }] }]}>
         <WebView
           ref={webRef}
           source={CUE_HTML}
@@ -224,7 +260,7 @@ export default function CueScreen() {
           cacheEnabled={false}
           scrollEnabled={false}
         />
-      </View>
+      </Animated.View>
     </View>
   );
 }
