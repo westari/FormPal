@@ -19,3 +19,7 @@ This applies to every future request to add or fix an exercise definition/thresh
 ## Design files: use as-is, never rebuild
 
 When the user provides exact design files for a screen, use those files as-is. NEVER rebuild, recreate, or redesign those screens, even if asked to fix bugs or performance. Always make the smallest possible change to the existing file. If a fix seems to require rebuilding, stop and ask first.
+
+## Never ask the user to close and reopen the app
+
+Do not suggest closing and reopening the app, or otherwise doing a full restart, as a troubleshooting step or way to pick up a fix. The user is always already closing and reopening between tests on their own — asking for it again wastes their time. If a fresh native rebuild (not just a reload) is genuinely required, say that plainly and explain why, but don't frame it as "close and reopen."

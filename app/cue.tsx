@@ -23,7 +23,7 @@
  * return a structured suggestion first.
  */
 import React, { useCallback, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import {
@@ -33,7 +33,7 @@ import {
 import { MYPAL_API_URL } from '../constants/api';
 
 const CUE_HTML = require('../assets/app screens/cue.html');
-const CUE_BUILD = 'cue-1';
+const CUE_BUILD = 'cue-2';
 if (__DEV__) console.log(`[cue] build ${CUE_BUILD}`);
 
 interface Message { role: 'user' | 'assistant'; content: string }
@@ -41,16 +41,36 @@ interface Message { role: 'user' | 'assistant'; content: string }
 function cueInject(): string {
   return dcScaleFitJs('#eeeef1') + DC_TEXT_REPLACE_HELPER_JS + DC_LINK_INTERCEPT_JS + `
 (function(){
-  var listEl = document.querySelector('#dc-root div[style*="overflow-y: auto"]');
-  var inputEl = document.querySelector('#dc-root input[placeholder]');
-  var sendPath = document.querySelector('#dc-root svg path[d="M12 19.5V5M5.8 11 12 4.8l6.2 6.2"]');
-  var sendBtn = sendPath ? sendPath.closest('div') : null;
-  var chipsRow = document.querySelector('#dc-root div[style*="overflow-x: auto"]');
-  var dotsTemplate = null;
-  // The artboard's own first dot-row (inside its typing indicator, never
-  // shown at load since typing starts false) — found once, cloned later,
-  // rather than hand-building the exact same markup twice.
-  console.log('[cue-page] listEl=', !!listEl, 'inputEl=', !!inputEl, 'sendBtn=', !!sendBtn, 'chipsRow=', !!chipsRow);
+  // BUG FOUND ("white screen for 5 seconds, then it works"): cue.html ships
+  // as a self-extracting bundle (base64 fonts/assets unpacked by its own
+  // loader script — "Unpacking..." placeholder visible in the raw file),
+  // not a plain static page like repfeedback.html/workoutrecap.html. That
+  // unpacking replaces the DOM in a way WebView treats as fresh navigation,
+  // re-running this whole injected script — confirmed by device logs
+  // showing "listEl= false..." several times in a row before the real
+  // page settled. The OLD version here queried the DOM exactly ONCE and
+  // posted 'ready' unconditionally regardless of whether anything was
+  // found, so it could reveal a half-unpacked page, or never finish wiring
+  // at all if that one attempt landed mid-unpack. Retrying on the same
+  // schedule every other screen in this app already uses, and only
+  // posting 'ready' once the elements are actually found, fixes both.
+  var wired = false;
+  var listEl, inputEl, sendBtn, chipsRow;
+
+  function build(){
+    if(wired) return true;
+    listEl = document.querySelector('#dc-root div[style*="overflow-y: auto"]');
+    inputEl = document.querySelector('#dc-root input[placeholder]');
+    var sendPath = document.querySelector('#dc-root svg path[d="M12 19.5V5M5.8 11 12 4.8l6.2 6.2"]');
+    sendBtn = sendPath ? sendPath.closest('div') : null;
+    chipsRow = document.querySelector('#dc-root div[style*="overflow-x: auto"]');
+    console.log('[cue-page] listEl=', !!listEl, 'inputEl=', !!inputEl, 'sendBtn=', !!sendBtn, 'chipsRow=', !!chipsRow);
+    if(!listEl || !inputEl || !sendBtn) return false;
+    wired = true;
+    wireUp();
+    dcPost({ type: 'ready' });
+    return true;
+  }
 
   function scrollToEnd(){ if(listEl) listEl.scrollTop = listEl.scrollHeight + 9999; }
 
@@ -99,23 +119,21 @@ function cueInject(): string {
     dcPost({ type: 'send', text: text });
   }
 
-  if(inputEl){
+  function wireUp(){
     inputEl.addEventListener('keydown', function(ev){
       if(ev.key === 'Enter'){ ev.preventDefault(); doSend(inputEl.value); }
     }, true);
-  }
-  if(sendBtn){
     sendBtn.addEventListener('click', function(ev){
       ev.stopPropagation();
       doSend(inputEl ? inputEl.value : '');
     }, true);
-  }
-  if(chipsRow){
-    var chipEls = Array.prototype.slice.call(chipsRow.children);
-    chipEls.forEach(function(chip){
-      var label = (chip.textContent || '').trim();
-      chip.addEventListener('click', function(ev){ ev.stopPropagation(); doSend(label); }, true);
-    });
+    if(chipsRow){
+      var chipEls = Array.prototype.slice.call(chipsRow.children);
+      chipEls.forEach(function(chip){
+        var label = (chip.textContent || '').trim();
+        chip.addEventListener('click', function(ev){ ev.stopPropagation(); doSend(label); }, true);
+      });
+    }
   }
 
   // RN calls this once the real API reply (or an error) is known.
@@ -133,7 +151,7 @@ function cueInject(): string {
     }
   };
 
-  dcPost({ type: 'ready' });
+  if(!build()){ [100,300,700,1500,3000].forEach(function(d){ setTimeout(build,d); }); }
 })();
 `;
 }
@@ -164,7 +182,17 @@ export default function CueScreen() {
   }, []);
 
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+    // BUG FOUND ("major issue — it zooms the whole screen out" when the
+    // keyboard opens): KeyboardAvoidingView was shrinking this WebView's
+    // rendered height to make room for the keyboard, which fed straight
+    // into the page's own dcScaleFitJs fit() (S = window.innerHeight/844)
+    // — the whole 390x844 canvas rescaled SMALLER the instant the keyboard
+    // appeared, reading as a "zoom out." No other DC-canvas screen in this
+    // app (recap.tsx, rep-feedback.tsx, onboarding.tsx) uses
+    // KeyboardAvoidingView around one of these WebViews for exactly this
+    // reason — removed here to match. The keyboard will cover the input
+    // bar instead of the canvas rescaling to dodge it.
+    <View style={styles.flex}>
       <View style={styles.flex}>
         <WebView
           ref={webRef}
@@ -197,7 +225,7 @@ export default function CueScreen() {
           scrollEnabled={false}
         />
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 

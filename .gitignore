@@ -1,5 +1,6 @@
 constants/api.ts
 .env
+supabase/.temp/
 node_modules/
 .expo/
 dist/

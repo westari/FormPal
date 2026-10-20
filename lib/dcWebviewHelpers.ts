@@ -59,12 +59,24 @@ export function dcScaleFitJs(bg: string): string {
   (function(){
     var W=390, H=844;
     var st=document.createElement('style');
-    st.textContent='html{background:${bg}!important;overflow:hidden!important;}body{margin:0!important;padding:0!important;background:${bg}!important;overflow:hidden!important;}#dc-root{position:relative!important;margin:0 auto!important;width:'+W+'px!important;transform-origin:top center!important;}#dc-root *{animation:none!important;-webkit-animation:none!important;}*{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important;}';
+    // transition:none alongside animation:none — a CSS *transition* is a
+    // different mechanism from a @keyframes animation and animation:none
+    // alone doesn't touch it (confirmed via device log: a card's own
+    // opacity visibly climbing 0 -> ~0.97 over ~300ms even with
+    // animation:none already applied elsewhere).
+    st.textContent='html{background:${bg}!important;overflow:hidden!important;}body{margin:0!important;padding:0!important;background:${bg}!important;overflow:hidden!important;}#dc-root{position:relative!important;margin:0 auto!important;width:'+W+'px!important;transform-origin:top center!important;}#dc-root *{animation:none!important;-webkit-animation:none!important;transition:none!important;-webkit-transition:none!important;}*{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important;}';
     (document.head||document.documentElement).appendChild(st);
     var lastS=-1;
     function fit(){
       var root=document.getElementById('dc-root'); if(!root) return;
-      var vh=window.innerHeight||H;
+      // BUG FOUND (device log in recap.tsx/rep-feedback.tsx, same pattern
+      // here): the very first fit() call runs before the WebView has
+      // actually laid out, so window.innerHeight reads 0 — falling back to
+      // H there applies a WRONG scale that's visibly revealed, then snaps
+      // once a later retry sees the real height. Skipping until a real
+      // height exists means the first transform ever applied is correct.
+      var vh=window.innerHeight;
+      if(!vh) return;
       var S=vh/H;
       if(Math.abs(S-lastS)>=0.002){ lastS=S; root.style.setProperty('transform','scale('+S+')','important'); }
       document.body.style.setProperty('height', vh+'px','important');

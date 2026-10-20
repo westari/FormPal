@@ -56,7 +56,7 @@ const REP_FEEDBACK_HTML = require('../assets/app screens/repfeedback.html');
 // Build/bundle confirmation — explicit ask this round: a loud, impossible
 // -to-miss tag to confirm the device is actually running this reload
 // before trusting any other log below it.
-const BUILD_TAG = 'native-video-13';
+const BUILD_TAG = 'native-video-14';
 const BUILD_LOADED_AT = new Date().toLocaleTimeString();
 if (__DEV__) {
   console.log(`[rep-feedback] build ${BUILD_TAG}`);
@@ -99,12 +99,26 @@ function dcScaleFitJs(bg: string): string {
   (function(){
     var W=390, H=844;
     var st=document.createElement('style');
-    st.textContent='html{background:${bg}!important;overflow:hidden!important;}body{margin:0!important;padding:0!important;background:${bg}!important;overflow:hidden!important;}#dc-root{position:relative!important;margin:0 auto!important;width:'+W+'px!important;transform-origin:top center!important;}#dc-root *{animation:none!important;-webkit-animation:none!important;}*{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important;}';
+    // transition:none alongside animation:none — a CSS *transition* (e.g.
+    // "opacity 300ms" on mount) is a different mechanism from a @keyframes
+    // animation and animation:none alone doesn't touch it; device logs
+    // showed the card's opacity visibly climbing 0 -> ~0.97 over the first
+    // ~300ms even with animation:none already applied.
+    st.textContent='html{background:${bg}!important;overflow:hidden!important;}body{margin:0!important;padding:0!important;background:${bg}!important;overflow:hidden!important;}#dc-root{position:relative!important;margin:0 auto!important;width:'+W+'px!important;transform-origin:top center!important;}#dc-root *{animation:none!important;-webkit-animation:none!important;transition:none!important;-webkit-transition:none!important;}*{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important;}';
     (document.head||document.documentElement).appendChild(st);
     var lastS=-1, lastNudge=0;
     function fit(){
       var root=document.getElementById('dc-root'); if(!root) return;
-      var vh=window.innerHeight||H;
+      var vh=window.innerHeight;
+      // BUG FOUND (device log, confirmed): fit()'s very first call runs
+      // before the WebView has laid out, so window.innerHeight reads 0 —
+      // the old "||H" fallback applied a WRONG scale (1.0, i.e. 390px
+      // wide) as if it were real, visibly revealed at that size, then
+      // SNAPPED to the real ~403px scale once the 300ms retry saw the
+      // real height. That snap is exactly "card spawns in, then
+      // everything moves" — skipping until a real height exists means the
+      // first transform ever applied is already correct.
+      if(!vh) return;
       var S=vh/H;
       if(Math.abs(S-lastS)>=0.002){ lastS=S; }
       root.style.setProperty('transform','translateY('+lastNudge+'px) scale('+S+')','important');

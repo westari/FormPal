@@ -94,7 +94,7 @@ const MUSCLE_RANKS_HTML = require('../assets/app screens/muscleranks.html');
 // round: remove the on-screen stamp — kept as a console log instead so
 // it's still there to confirm a fresh reload if ever needed, just not
 // visible on the card.
-const BUILD_TAG = 'native-video-10';
+const BUILD_TAG = 'native-video-11';
 const BUILD_LOADED_AT = new Date().toLocaleTimeString();
 if (__DEV__) {
   console.log(`[recap] build ${BUILD_TAG}`);
@@ -232,12 +232,30 @@ function dcScaleFitJs(bg: string, bottomFillColor?: string): string {
     // injected. Killing it means the card just appears already in its
     // resting position — no slide — whatever data is in the DOM at reveal
     // time (which, with the ready-gate below, is always the real data).
-    st.textContent='html{background:${bg}!important;overflow:hidden!important;}body{margin:0!important;padding:0!important;background:${bg}!important;overflow:hidden!important;}#dc-root{position:relative!important;margin:0 auto!important;width:'+W+'px!important;transform-origin:top center!important;}#dc-root *{animation:none!important;-webkit-animation:none!important;}*{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important;}';
+    // transition:none added alongside animation:none — a CSS *transition*
+    // (e.g. a plain "opacity 300ms" rule the artboard uses for its own
+    // mount fade) is a completely different mechanism from a @keyframes
+    // animation and animation:none does nothing to it — device logs showed
+    // the card's own opacity visibly climbing from 0 to ~0.97 over the
+    // first ~300ms even with animation:none already in place, which is
+    // exactly that.
+    st.textContent='html{background:${bg}!important;overflow:hidden!important;}body{margin:0!important;padding:0!important;background:${bg}!important;overflow:hidden!important;}#dc-root{position:relative!important;margin:0 auto!important;width:'+W+'px!important;transform-origin:top center!important;}#dc-root *{animation:none!important;-webkit-animation:none!important;transition:none!important;-webkit-transition:none!important;}*{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important;}';
     (document.head||document.documentElement).appendChild(st);
     var lastS=-1;
     function fit(){
       var root=document.getElementById('dc-root'); if(!root) return;
-      var vh=window.innerHeight||H;
+      var vh=window.innerHeight;
+      // BUG FOUND (device log, confirmed): the very FIRST fit() call runs
+      // synchronously before the WebView has actually laid out, so
+      // window.innerHeight reads 0 — the old "||H" fallback then applied a
+      // scale of exactly 1.0 (390px wide) as if that were real, visibly
+      // revealed at that wrong size, then SNAPPED to the real scale
+      // (~403px) once the 300ms retry finally saw the real height. That
+      // snap IS the "card spawns in, then everything moves" glitch.
+      // Skipping entirely until a real height is available means the
+      // FIRST transform ever applied is already the correct one — nothing
+      // to visibly correct later.
+      if(!vh) return;
       var S=vh/H;
       if(Math.abs(S-lastS)>=0.002){ lastS=S; root.style.setProperty('transform','scale('+S+')','important'); }
       document.body.style.setProperty('height', vh+'px','important');
