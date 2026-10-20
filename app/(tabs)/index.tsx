@@ -30,10 +30,53 @@ import { WebView } from 'react-native-webview';
 import { loadPlan } from '../../lib/planStorage';
 import { getAllSessions, calcStreak, groupIntoWorkouts, scoredSessions, type SessionEntry } from '../../lib/sessionLog';
 import type { Plan } from '../../types/plan';
+import { DC_VIEWPORT_JS } from '../../lib/dcWebviewHelpers';
 
 const HOME_HTML = require('../../assets/app screens/home.html');
-const HOME_BUILD = 'home-2';
+const HOME_BUILD = 'home-3';
 if (__DEV__) console.log(`[home] build ${HOME_BUILD}`);
+
+// BUG FOUND (root cause of "glitches at start / white screen", "white
+// space fix got undone", "edit sheet still hidden under tab bar" — all
+// three traced back to this ONE thing): unlike recap.tsx/rep-feedback.tsx/
+// onboarding.tsx's artboards, home.html's canvas has no #dc-root id at all
+// — it's a plain div hardcoded to EXACTLY width:390px/height:844px, with
+// NO scaling logic of its own. Confirmed directly: even given a 926px-tall
+// viewport, it stayed locked at 844px, leaving the real remainder of the
+// screen showing whatever's behind the WebView. Every fix in this file
+// that reads window.__dcCanvasScale (header padding, edit-sheet position)
+// was silently failing this whole time because nothing was ever setting
+// it — dcScaleFitJs (which does) assumes #dc-root and was never actually
+// wired in for this file. train.tsx already solved this exact problem for
+// its own non-#dc-root 472x1024 canvas; this follows the same approach,
+// adapted for home.html's 390x844 one.
+const HOME_SCALE_FIT_JS = `
+(function(){
+  function fit(){
+    var root = null;
+    var all = document.querySelectorAll('div');
+    for (var i=0;i<all.length;i++){ if (all[i].style.width === '390px' && all[i].style.height === '844px'){ root = all[i]; break; } }
+    if(!root) return;
+    var vh = window.innerHeight;
+    if(!vh) return;
+    var S = vh / 844;
+    window.__dcCanvasScale = S;
+    root.style.setProperty('position','relative','important');
+    root.style.setProperty('margin','0 auto','important');
+    root.style.setProperty('transform-origin','top center','important');
+    root.style.setProperty('transform','scale(' + S + ')','important');
+    document.documentElement.style.setProperty('margin','0','important');
+    document.documentElement.style.setProperty('overflow','hidden','important');
+    document.body.style.setProperty('margin','0','important');
+    document.body.style.setProperty('overflow','hidden','important');
+    document.body.style.setProperty('height', vh + 'px','important');
+  }
+  fit();
+  window.addEventListener('resize', fit);
+  [0,100,300,600,1000].forEach(function(d){ setTimeout(fit, d); });
+})();
+true;
+`;
 // Hides the artboard's own fake tab bar + FAB (a REAL native tab bar + the
 // Plus tab already exist) — same category of fix as train.tsx already does
 // for its own fake chrome. Selectors matched to the exact inline styles
@@ -246,6 +289,8 @@ export default function HomeScreen() {
         ref={webRef}
         source={HOME_HTML}
         originWhitelist={['*']}
+        injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS}
+        injectedJavaScript={HOME_SCALE_FIT_JS}
         onLoadEnd={() => setPageLoaded(true)}
         onMessage={(e) => {
           let msg: { type?: string; ts?: number };
