@@ -266,3 +266,68 @@ Account.
 recommended path forward. Real Apple/StoreKit purchases were also never
 part of what existed before tonight and weren't built now — flagged, not
 silently skipped.
+
+## Follow-up session (2026-10-20) — real bugs found and fixed, 2 more tabs wired
+
+A real crash (`Cannot find native module 'ExpoCamera'`) and several
+recurring glitches (scrub bar, rep-feedback card spawn, Cue zoom) all got
+fixed with actual verified root causes this round, not more guessing. New
+tooling now exists specifically to prevent the guessing that caused these:
+`scripts/unpack-design-files.js` (decodes a Claude Design export's real
+markup out of its packed format), `scripts/screenshot-design-files.js`
+(renders one in real headless Chromium via Playwright), and
+`scripts/extract-ts-function.js` (pulls an exact function out of a `.tsx`
+file via the TypeScript compiler API for use in real browser tests). The
+process this enables is now mandatory per CLAUDE.md's new "Wiring Claude
+Design files" section — read that before touching any other design file.
+
+**Real bugs found and fixed, each verified against the real rendered file
+(not assumed):**
+- `expo-camera`'s own `index.js` calls `requireNativeModule()` at import
+  time, not lazily — a plain top-level import crashed the whole onboarding
+  screen on any binary without the native module linked yet. Moved to a
+  guarded, deferred `require()`.
+- The scrub bar's track-detection selector checked `style.flex === '1'`,
+  but browsers normalize `flex: 1` to `"1 1 0%"` on parse — it never
+  matched, ever, across every round this project. Fixed to check
+  `style.flexGrow` instead; verified end-to-end with a real simulated
+  mouse drag (track found, postMessage fired through the whole range,
+  thumb position updated).
+- `rep-feedback.tsx` was missing the CSS `transition:none` suppression
+  `recap.tsx` already had (animation:none alone doesn't stop a transition)
+  and the `window.innerHeight` can read 0 on a canvas-scaler's very first
+  call — both fixed, explaining the "card spawns in then jumps to
+  position" glitch.
+- Cue's keyboard zoom had two separate causes: `KeyboardAvoidingView`
+  shrinking the WebView (fixed last round) and, separately, iOS
+  auto-zooming the page because the real input is 15px font (under the
+  16px threshold) — fixed by injecting a font-size override. Keyboard
+  avoidance switched to a position-only `translateY` so the canvas never
+  rescales at all.
+
+**Two more tabs wired with real data, both verified against the real file
+before shipping:**
+- Train (`traintab.html`) already had navigation wired from an earlier
+  session; added real workout/session header text and real per-exercise
+  form%/last-trained data.
+- Home (`app/(tabs)/index.tsx`) fully replaced with `home.html`, wired to
+  real date/streak/today's-workout/this-week-progress/form-score/recent-
+  workouts data. Caught two more selector bugs during verification before
+  shipping: "Full body" text isn't unique on the page (collides with a
+  workout-history entry), and the streak number's div has an extra child
+  at runtime despite looking like plain text in the source — same
+  templating quirk as rep-feedback.tsx's body text, caught this time
+  before shipping instead of after.
+
+**Progress and Profile tabs: NOT migrated to `progress.html`/`profile.html`
+this round — a deliberate call, not a stall.** Both turned out to be at
+least as complex as Home (weight-tracking with its own chart and manual
+entry, a badge/achievement system, muscle-by-muscle breakdowns) — new
+feature surface, not just re-skinning. Both existing native screens
+already have substantial real, working functionality (interactive form
+trend chart, milestones, full session history, the quick-actions row and
+Sign Out/Delete Account added earlier this build) that a rushed
+replacement risked breaking. Given the choice between shipping two more
+screens fast-but-unverified or being honest about the boundary, left them
+as-is. Recommend tackling one at a time in a dedicated pass, same depth as
+Home got.
