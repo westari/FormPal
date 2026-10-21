@@ -2,16 +2,23 @@
  * lib/repDiagnostics.ts
  *
  * "Why aren't my reps counting?" — a live analyzer that reads the native
- * engine's own debug-log stream during a tracking session and, when reps
- * AREN'T landing, works out the likely reason and returns one short
- * on-screen instruction.
+ * engine's own debug-log stream during a tracking session and, when the
+ * camera genuinely can't see/track the person, works out why and returns
+ * one short on-screen instruction.
  *
- * Explicit rule (direct user feedback — previous messages like "Go deeper
- * into each rep" / "Come all the way back up between reps" were rejected as
- * "it should never explain how to do the exercise, the user already watched
- * the demo video"): every message here is ONLY about camera framing/
- * positioning, never exercise technique. Short — 1-4 words — never a full
- * instructional sentence.
+ * Explicit rules from direct user feedback:
+ * - Never exercise technique ("go deeper", "come all the way back up") —
+ *   this screen is only about whether the camera can see the user, never
+ *   how to do the exercise (they already watched the demo video). Short —
+ *   1-4 words — never a full instructional sentence.
+ * - Never fire at the same time a rep result (GOOD/BAD/PRESS HIGHER) is
+ *   showing — "there's nothing to fix if it's able to see you." This is
+ *   why this file ONLY tracks genuine tracking-loss signals (dead frame
+ *   stream, no person, unreliable confidence, settle problems) — NOT
+ *   phantom-rep rejections or ambiguous rep-attempt/miss counting, both of
+ *   which are about movement quality, not camera framing, and used to fire
+ *   "Move back" on perfectly ordinary movement noise while a rep was
+ *   correctly being counted right alongside it.
  *
  * `message()` re-evaluates against the wall clock on every call, so callers
  * should poll it on a timer too (not only on new log lines) — otherwise a
@@ -37,21 +44,10 @@ export function createRepDiagnostic(): RepDiagnostic {
   let lastRepAt      = 0;
   let lastMetricAt   = 0;
   let repCount       = 0;
-  let metricFrames   = 0;
   let noPersonHits   = 0;
   let unreliable     = 0;
-  let phantom        = 0;
   let settleActive   = false; // saw "rep counting active"
   let settleWaiting  = 0;     // [SETTLE] rejected / still-waiting lines
-  // Metric-vs-threshold tracking — the exercises here DECREASE into a rep
-  // (rest = high value, working = low). enter < exit (exit has hysteresis).
-  let crossedEnter    = false; // value dropped below enter at least once
-  let returnedToExit  = false; // after that, rose back above exit
-  // Rep ATTEMPTS (value dipped below enter, with hysteresis) vs reps COUNTED.
-  // A big gap = the user is moving but reps aren't landing (partial / merged
-  // reps that never come back far enough to complete).
-  let attempts        = 0;
-  let belowEnter      = false;
   let msg: string | null = null;
 
   const now = () => Date.now();
@@ -60,16 +56,6 @@ export function createRepDiagnostic(): RepDiagnostic {
     if (line.startsWith('[METRIC]')) {
       if (!startedAt) startedAt = now();
       lastMetricAt = now();
-      metricFrames++;
-      const v  = parseFloat(line.match(/value=([-\d.]+)/)?.[1]  ?? 'NaN');
-      const en = parseFloat(line.match(/enter=([-\d.]+)/)?.[1]  ?? 'NaN');
-      const ex = parseFloat(line.match(/exit=([-\d.]+)/)?.[1]   ?? 'NaN');
-      if (!Number.isNaN(v) && !Number.isNaN(en) && v < en) crossedEnter = true;
-      if (crossedEnter && !Number.isNaN(v) && !Number.isNaN(ex) && v > ex) returnedToExit = true;
-      if (!Number.isNaN(v) && !Number.isNaN(en) && !Number.isNaN(ex)) {
-        if (!belowEnter && v < en) { belowEnter = true; attempts++; }
-        else if (belowEnter && v > ex) { belowEnter = false; }
-      }
     } else if (/rep counting active|entering ACTIVE/i.test(line)) {
       settleActive = true;
     } else if (/\[SETTLE\][^]*?(rejected|still waiting|not a genuine)/i.test(line)) {
@@ -78,13 +64,10 @@ export function createRepDiagnostic(): RepDiagnostic {
       noPersonHits++;
     } else if (/\[REP\] rejected.*tracking unreliable/i.test(line)) {
       unreliable++;
-    } else if (/\[REP\] rejected.*phantom/i.test(line)) {
-      phantom++;
     } else if (/^\[REP\] #\d+/.test(line)) {
       repCount++;
       lastRepAt = now();
-      noPersonHits = 0; unreliable = 0; phantom = 0;
-      crossedEnter = false; returnedToExit = false;
+      noPersonHits = 0; unreliable = 0;
     }
     recompute();
   }
@@ -100,31 +83,17 @@ export function createRepDiagnostic(): RepDiagnostic {
     // Pose is GONE — wins over everything.
     if (streamDead) { msg = 'Get in frame'; return; }
 
-    // How many rep attempts never turned into a counted rep.
-    const missed = attempts - repCount;
+    // A working set that's keeping pace — don't nag. Rep-quality ambiguity
+    // (phantom rejections, shallow attempts) never overrides this any
+    // more — those aren't framing problems, see file header.
+    if (repCount > 0 && sinceRep < STALE_REP_SEC) { msg = null; return; }
 
-    // A working set that's keeping pace — don't nag.
-    if (repCount > 0 && sinceRep < STALE_REP_SEC && missed <= 1) { msg = null; return; }
-
-    // Every branch below is a framing/positioning instruction ONLY — never
-    // exercise technique (explicit rule, see file header). Real-world
-    // testing confirmed almost all of these trace back to the user being
-    // too close/cut off, so "Move back" is the safe default for anything
-    // ambiguous rather than guessing at a form explanation.
     if (noPersonHits >= 2) {
       msg = 'Move back';
     } else if (unreliable >= 2) {
       msg = 'Move back';
     } else if (!settleActive && settleWaiting >= 4) {
       msg = 'Hold still';
-    } else if (phantom >= 1) {
-      msg = 'Move back';
-    } else if (missed >= 2 && metricFrames > 10) {
-      msg = 'Move back';
-    } else if (repCount === 0 && !crossedEnter && metricFrames > 8) {
-      msg = 'Move back';
-    } else if (repCount === 0 && crossedEnter && !returnedToExit && metricFrames > 8) {
-      msg = 'Stay in frame';
     } else {
       msg = null;
     }
@@ -133,10 +102,9 @@ export function createRepDiagnostic(): RepDiagnostic {
   function message(): string | null { recompute(); return msg; }
 
   function reset(): void {
-    startedAt = lastRepAt = lastMetricAt = repCount = metricFrames = 0;
-    noPersonHits = unreliable = phantom = settleWaiting = 0;
-    settleActive = crossedEnter = returnedToExit = false;
-    attempts = 0; belowEnter = false;
+    startedAt = lastRepAt = lastMetricAt = repCount = 0;
+    noPersonHits = unreliable = settleWaiting = 0;
+    settleActive = false;
     msg = null;
   }
 

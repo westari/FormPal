@@ -1132,13 +1132,19 @@ export default function RecapScreen() {
 
   const handleDoneRanks = useCallback(async () => {
     await completeSession();
-    // Explicit ask: streak screen after every completed workout, with the
-    // real current streak (sessions were already appended earlier in this
-    // screen's own load, so calcStreak() here already reflects THIS
-    // workout). The streak screen itself decides whether a progress-photo
-    // prompt comes next (first-ever workout, or 14+ days since the last
-    // prompt) before finally landing on dest.
     const dest = isWorkoutMode ? '/(tabs)/train' : '/(tabs)/';
+    // Explicit ask: "if you do a form check, it should never talk about
+    // your streak — that has nothing to do with your streak, only on live
+    // workouts." Streak is a real-workout concept (calcStreak counts
+    // workout days) — a solo form-check session isn't one, so it skips
+    // straight to dest instead of the streak screen.
+    if (!isWorkoutMode) { router.replace(dest as any); return; }
+    // Streak screen after every completed workout, with the real current
+    // streak (sessions were already appended earlier in this screen's own
+    // load, so calcStreak() here already reflects THIS workout). The
+    // streak screen itself decides whether a progress-photo prompt comes
+    // next (first-ever workout, or 14+ days since the last prompt) before
+    // finally landing on dest.
     const sessions = await getAllSessions();
     const streakCount = calcStreak(sessions);
     const lastTs = sessions.length > 0 ? sessions[sessions.length - 1].ts : Date.now();

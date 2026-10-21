@@ -638,6 +638,22 @@ enum ExerciseRegistry {
         goodROMThreshold:   55,    // must reach within 55° of vertical overhead
         insufficientROMCue: "PRESS HIGHER",
 
+        // DOUBLE-COUNT FIX — real device log (2026-10-21): bottom=62.2/62.5°
+        // shallow blips were getting COUNTED (not phantom-rejected) and
+        // immediately followed by a real full press, producing "one rep
+        // counted twice — once shallow/early, once real" (reported directly:
+        // "it is counting reps once you go up and are at the peak you're up,
+        // and one when you go back down"). The existing requiredPastEntry
+        // guard (effectiveEnterThreshold(68) - effectiveROMThreshold(55)) *
+        // 0.30 default = 3.9 — the shallow blips cleared it by only
+        // 1.6-1.9° (movementPastEntry 5.5-5.8). Genuine full reps in the
+        // SAME log bottomed at 31.7-50.4° (movementPastEntry 17.6-36.3) —
+        // a wide, clean gap above the shallow cluster. Raised to 0.65
+        // (requiredPastEntry ≈ 8.45) — comfortably above the shallow
+        // cluster (5.5-5.8), comfortably below the genuine cluster
+        // (17.6+), using this exercise's own real numbers, not a guess.
+        phantomGuardFraction: 0.65,
+
         formChecks: [
 
             // Torso lean-back: hip→shoulder angle from vertical.
