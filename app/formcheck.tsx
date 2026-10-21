@@ -44,7 +44,7 @@ import { useFormTheme, type FormTheme } from '../lib/activeTheme';
 import type { DebugStatsEvent, RepEvent, ExerciseType } from '../modules/athlt-camera/src/index';
 import { getDemoCues } from '../lib/demoCues';
 
-const FORMCHECK_BUILD = 'fc-3';
+const FORMCHECK_BUILD = 'fc-4';
 if (__DEV__) console.log(`[formcheck] build ${FORMCHECK_BUILD}`);
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
@@ -1142,6 +1142,30 @@ export default function FormCheckScreen() {
     Animated.spring(recordMorph, { toValue: isInFrame ? 1 : 0, useNativeDriver: false, friction: 6, tension: 80 }).start();
   }, [isInFrame, recordMorph]);
 
+  // ── "Camera lock" meter — V1 ────────────────────────────────────────────
+  // Explicit ask: a live 0-100 number showing how confident the camera is
+  // that it can see/track the user, so they have a concrete signal instead
+  // of guessing. Built from signals already emitted natively this round —
+  // NOT yet backed by a real continuous confidence number from the native
+  // engine (that doesn't exist yet; DebugStatsEvent only has booleans/cue
+  // strings — see modules/athlt-camera/src/index.ts). Labeled V1
+  // deliberately: a real per-frame joint-confidence average from native
+  // would make this precise instead of a reasonable heuristic off existing
+  // signals. Take this as a solid first version, not a finished number.
+  const cameraLockPct = (() => {
+    if (phase === 'setup') {
+      if (!setupAllVisible) return 25; // can't confirm trackable joints yet
+      return Math.round(60 + setupHoldProgress * 40); // climbs through the hold
+    }
+    if (phase === 'setup-done') return 100;
+    if (isTracking || isStopping) {
+      if (stats?.personDetected === false) return 20;
+      if (stats?.trackingCue || stats?.outOfPlaneCue) return 55;
+      return 100;
+    }
+    return 0;
+  })();
+
   // ROOT CAUSE of "pulling the drawer up does nothing": this was a plain
   // template string, recomputed fresh on every render — and this screen
   // re-renders roughly once a second (the debug-stats tick alone does it).
@@ -1332,6 +1356,18 @@ export default function FormCheckScreen() {
         </View>
       </View>
 
+      {/* Camera lock meter — explicit ask: a big, live 0-100 number showing
+          how confident the camera is that it can see/track the user,
+          visible in solo form-check (where this was specifically asked
+          for) same as in-workout. See cameraLockPct's own comment for what
+          it's built from. */}
+      {stopButtonActive && (
+        <View pointerEvents="none" style={[s.cameraLockWrap, { top: insets.top + 56 }]}>
+          <Text style={s.cameraLockPct}>{cameraLockPct}%</Text>
+          <Text style={s.cameraLockLabel}>CAMERA LOCK</Text>
+        </View>
+      )}
+
       {/* Error */}
       {error && (
         <View style={s.errorCard}>
@@ -1388,11 +1424,19 @@ export default function FormCheckScreen() {
         const cue = repDiag
           ?? (isFloor ? null : (stats?.trackingCue || null));
         if (!cue) return null;
+        // Redesigned from bare floating text to a contained glass pill —
+        // explicit complaint: "I don't like the design of the live cues...
+        // it just doesn't feel clean at all." Same GlassPanel treatment
+        // the "Ready. Go!" setup-success card already uses, instead of
+        // raw drop-shadowed text floating over the camera feed.
         return (
           <Animated.View style={[s.trackingCueHint, { transform: [{ rotate: floorSpin }] }]} pointerEvents="none">
-            <Text style={s.trackingCueText}>
-              {cue}<Image source={SPARKLE_DUO} style={s.cueSparkleImg} />
-            </Text>
+            <GlassPanel radius={999} style={s.trackingCueCard}>
+              <View style={s.trackingCueInner}>
+                <Image source={SPARKLE_DUO} style={s.trackingCueIcon} />
+                <Text style={s.trackingCueText}>{cue}</Text>
+              </View>
+            </GlassPanel>
           </Animated.View>
         );
       })()}
@@ -1664,6 +1708,15 @@ const s = StyleSheet.create({
   root:       { flex: 1, backgroundColor: '#000' },
   topBar:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 8 },
   title:      { flex: 1, textAlign: 'center', marginHorizontal: 10, fontFamily: F.bold, fontSize: 15, color: C.text, letterSpacing: 0.2 },
+  cameraLockWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  cameraLockPct: {
+    fontFamily: 'PlusJakartaSans_700Bold', fontSize: 40, lineHeight: 46, color: '#fff',
+    textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 10,
+  },
+  cameraLockLabel: {
+    fontFamily: F.bold, fontSize: 11, color: 'rgba(255,255,255,0.75)', letterSpacing: 1.6, marginTop: 2,
+    textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 10,
+  },
   errorCard:  { position: 'absolute', left: 24, right: 24, top: '38%', backgroundColor: C.glass, borderRadius: 16, padding: 24, borderWidth: 1, borderColor: C.border },
   errorText:  { color: C.warn, fontSize: 14, lineHeight: 22, textAlign: 'center' },
   // No card any more — just text + shadow for legibility over the camera
@@ -1695,19 +1748,19 @@ const s = StyleSheet.create({
   // Calmer than the planarity hint — softer colour, lower on screen, out of
   // the way of the rep counter. Guidance, not an alarm.
   trackingCueHint: { position: 'absolute', top: '46%', left: 0, right: 0, alignItems: 'center', paddingHorizontal: 26 },
-  // Plus Jakarta Sans now (was the plain system font — the "ugly font"
-  // explicit complaint). Messages are now short, framing-only instructions
-  // (see lib/repDiagnostics.ts — "Move back", "Hold still", etc.), not full
-  // sentences, so a bigger size (was 24, before that 42) reads better
-  // without overflowing — explicit ask: "the cues need to be a bit bigger".
+  // Contained glass pill now — explicit complaint: bare floating drop-
+  // shadowed text "doesn't feel clean at all." Same GlassPanel surface the
+  // setup-success "Ready. Go!" card already uses.
+  trackingCueCard:  { alignSelf: 'center', maxWidth: 340 },
+  trackingCueInner: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 26, paddingVertical: 16 },
+  trackingCueIcon:  { width: 22, height: 22 },
+  // Messages are now short, framing-only instructions (see
+  // lib/repDiagnostics.ts — "Move back", "Hold still", etc.), so a bigger
+  // size reads fine inside the pill without overflowing — explicit ask:
+  // "the cues need to be a bit bigger".
   trackingCueText: {
-    fontFamily: 'PlusJakartaSans_700Bold', fontSize: 34, lineHeight: 40,
-    color: '#fff', textAlign: 'center', letterSpacing: 0.1, maxWidth: 340,
-    // Explicit ask: "the font and overall look of the text looks weird" —
-    // the rep counter right below already gets a legibility shadow over
-    // the live camera feed (see repBlock's comment); this text never did,
-    // so flat white text could read as washed-out depending on background.
-    textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 10,
+    fontFamily: 'PlusJakartaSans_700Bold', fontSize: 24, lineHeight: 28,
+    color: '#fff', letterSpacing: 0.1,
   },
 
   // Rep count — bare, no frame; own shadow for legibility over the camera.

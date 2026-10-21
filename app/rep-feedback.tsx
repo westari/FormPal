@@ -56,7 +56,7 @@ const REP_FEEDBACK_HTML = require('../assets/app screens/repfeedback.html');
 // Build/bundle confirmation — explicit ask this round: a loud, impossible
 // -to-miss tag to confirm the device is actually running this reload
 // before trusting any other log below it.
-const BUILD_TAG = 'native-video-16';
+const BUILD_TAG = 'native-video-17';
 const BUILD_LOADED_AT = new Date().toLocaleTimeString();
 if (__DEV__) {
   console.log(`[rep-feedback] build ${BUILD_TAG}`);
@@ -778,7 +778,13 @@ export default function RepFeedbackScreen() {
           independently of the card via videoFade — never blocks the
           card's own reveal (which only waits on `ready` below). */}
       {hasVideo && (
-        <Animated.View style={[StyleSheet.absoluteFill, { opacity: videoFade }]} pointerEvents="none">
+        // Explicit ask: "I like how the whole video is kind of moved up a
+        // bit [on the workout complete card]... I want you to do the same
+        // thing for [rep feedback]." recap.tsx constrains its video to the
+        // top portion of the screen (styles.videoArea: top 0, bottom 40%)
+        // instead of filling the whole screen behind the card — same
+        // layout here now, instead of the full-screen video this had.
+        <Animated.View style={[styles.videoArea, { opacity: videoFade }]} pointerEvents="none">
           <VideoView
             ref={videoViewRef}
             player={videoPlayer}
@@ -928,6 +934,9 @@ export default function RepFeedbackScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#0d0d10' },
   web: { flex: 1, backgroundColor: '#0d0d10' },
+  // Matches recap.tsx's own styles.videoArea exactly — see this file's
+  // VideoView comment for why.
+  videoArea: { position: 'absolute', left: 0, right: 0, top: 0, bottom: '40%' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
   msg: { color: '#ffffff', fontSize: 15, textAlign: 'center' },
   backBtn: {
