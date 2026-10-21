@@ -56,7 +56,7 @@ const REP_FEEDBACK_HTML = require('../assets/app screens/repfeedback.html');
 // Build/bundle confirmation — explicit ask this round: a loud, impossible
 // -to-miss tag to confirm the device is actually running this reload
 // before trusting any other log below it.
-const BUILD_TAG = 'native-video-15';
+const BUILD_TAG = 'native-video-16';
 const BUILD_LOADED_AT = new Date().toLocaleTimeString();
 if (__DEV__) {
   console.log(`[rep-feedback] build ${BUILD_TAG}`);
@@ -653,6 +653,18 @@ export default function RepFeedbackScreen() {
   const hasVideo = !!videoUri;
   const videoPlayer = useVideoPlayer(videoUri ?? null, (p) => { p.loop = true; p.muted = false; p.timeUpdateEventInterval = 0.2; });
   const videoViewRef = useRef<VideoView>(null);
+
+  // Parsed here (not down with the rest of the derived state below) so the
+  // video-ready effect right below can seek to the first rep's real
+  // position BEFORE playback starts — see that effect's own comment for why.
+  const reps = useMemo<{ timeSec: number; good: boolean; what: string }[]>(() => {
+    try {
+      const parsed = JSON.parse(repEventsParam ?? '[]');
+      if (__DEV__) console.log('[rep-feedback-debug] parsed reps from route param:', JSON.stringify(parsed));
+      return parsed;
+    }
+    catch (err) { if (__DEV__) console.log('[rep-feedback-debug] repEvents JSON.parse failed:', err); return []; }
+  }, [repEventsParam]);
   const webRef = useRef<WebView>(null);
   const videoFade = useRef(new Animated.Value(0)).current;
   // See recap.tsx's identical comment for the full reasoning — gates the
@@ -667,6 +679,21 @@ export default function RepFeedbackScreen() {
     const statusSub = videoPlayer.addListener('statusChange', ({ status }) => {
       if (__DEV__) console.log('[rep-feedback-debug] videoPlayer statusChange:', status);
       if (status === 'readyToPlay') {
+        // BUG FOUND ("it keeps playing your video, like on the time you
+        // were at on the workout complete card... then it resets everything
+        // and goes to the right spot"): this used to call .play() straight
+        // away, which starts the player from 0 (or wherever it already was)
+        // — the correct start position (REPS[0].timeSec) was only ever sent
+        // once the WebView's own injected JS unpacked and called show(0),
+        // which posts a 'seek' message. That unpack takes real, multi-second
+        // time (same bundle-unpack cost as every other artboard here), so
+        // the video visibly played from the wrong spot for that whole
+        // window before snapping to the right one. Seeking FIRST, using the
+        // `reps` already available natively from the route param (no need
+        // to wait on the page's own JS at all for this), means playback
+        // starts in the right place from frame one — the page's own later
+        // seek-to-REPS[0] becomes a harmless no-op.
+        if (reps.length > 0) videoPlayer.currentTime = reps[0].timeSec;
         videoPlayer.play();
         // BUG FOUND ("time bar has to start at the beginning and go with
         // the actual video length"): the page's own scrub-bar thumb/fill
@@ -703,18 +730,9 @@ export default function RepFeedbackScreen() {
       webRef.current?.injectJavaScript(`window.__fpSetCurrentTime && window.__fpSetCurrentTime(${currentTime}); true;`);
     });
     return () => { statusSub.remove(); playingSub.remove(); timeUpdateSub.remove(); };
-  }, [videoPlayer, videoUri, videoFade]);
+  }, [videoPlayer, videoUri, videoFade, reps]);
 
   const [ready, setReady] = useState(false);
-
-  const reps = useMemo<{ timeSec: number; good: boolean; what: string }[]>(() => {
-    try {
-      const parsed = JSON.parse(repEventsParam ?? '[]');
-      if (__DEV__) console.log('[rep-feedback-debug] parsed reps from route param:', JSON.stringify(parsed));
-      return parsed;
-    }
-    catch (err) { if (__DEV__) console.log('[rep-feedback-debug] repEvents JSON.parse failed:', err); return []; }
-  }, [repEventsParam]);
 
   // Backstop — if the injected JS's own {type:'ready'} message never
   // arrives (e.g. the artboard's markup doesn't match what repFeedbackInject

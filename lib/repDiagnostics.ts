@@ -6,6 +6,13 @@
  * AREN'T landing, works out the likely reason and returns one short
  * on-screen instruction.
  *
+ * Explicit rule (direct user feedback — previous messages like "Go deeper
+ * into each rep" / "Come all the way back up between reps" were rejected as
+ * "it should never explain how to do the exercise, the user already watched
+ * the demo video"): every message here is ONLY about camera framing/
+ * positioning, never exercise technique. Short — 1-4 words — never a full
+ * instructional sentence.
+ *
  * `message()` re-evaluates against the wall clock on every call, so callers
  * should poll it on a timer too (not only on new log lines) — otherwise a
  * lost pose that stops the log stream leaves a stale message on screen.
@@ -91,11 +98,7 @@ export function createRepDiagnostic(): RepDiagnostic {
     if (elapsed < GRACE_SEC) { msg = null; return; }
 
     // Pose is GONE — wins over everything.
-    if (streamDead) { msg = 'Point the camera at your body'; return; }
-
-    // NOTE: form cues (KEEP KNEES BENT, DON'T SWING ARMS, FULL RANGE) are the
-    // native engine's job and show through the normal rep feedback — this
-    // analyzer is ONLY "why isn't a rep counting", never a form coach.
+    if (streamDead) { msg = 'Get in frame'; return; }
 
     // How many rep attempts never turned into a counted rep.
     const missed = attempts - repCount;
@@ -103,28 +106,25 @@ export function createRepDiagnostic(): RepDiagnostic {
     // A working set that's keeping pace — don't nag.
     if (repCount > 0 && sinceRep < STALE_REP_SEC && missed <= 1) { msg = null; return; }
 
-    // Framing / tracking problems first.
+    // Every branch below is a framing/positioning instruction ONLY — never
+    // exercise technique (explicit rule, see file header). Real-world
+    // testing confirmed almost all of these trace back to the user being
+    // too close/cut off, so "Move back" is the safe default for anything
+    // ambiguous rather than guessing at a form explanation.
     if (noPersonHits >= 2) {
-      msg = 'Fit your whole body in frame';
+      msg = 'Move back';
     } else if (unreliable >= 2) {
-      msg = 'Move farther back';
+      msg = 'Move back';
     } else if (!settleActive && settleWaiting >= 4) {
-      msg = 'Hold still at the start';
+      msg = 'Hold still';
     } else if (phantom >= 1) {
-      msg = 'Slower, fuller reps';
+      msg = 'Move back';
     } else if (missed >= 2 && metricFrames > 10) {
-      // Ambiguous between lost tracking and genuinely shallow reps — but
-      // the user must always see SOME actionable instruction here, never
-      // silence ("can't confirm that rep" was rejected as unhelpful, but
-      // showing nothing at all left the user with no idea what to do).
-      // This message is safe advice for both causes at once.
-      msg = 'Step back and go all the way down each rep';
+      msg = 'Move back';
     } else if (repCount === 0 && !crossedEnter && metricFrames > 8) {
-      // Never got deep enough for a rep to even begin.
-      msg = 'Go deeper into each rep';
+      msg = 'Move back';
     } else if (repCount === 0 && crossedEnter && !returnedToExit && metricFrames > 8) {
-      // Started a rep but never came back up to the top.
-      msg = 'Come all the way back up between reps';
+      msg = 'Stay in frame';
     } else {
       msg = null;
     }

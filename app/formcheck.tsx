@@ -363,17 +363,22 @@ function RepCounter({
 }: { reps: number; goodReps: number; repCounterOnly: boolean; theme: FormTheme; spin?: Animated.AnimatedInterpolation<string> }) {
   return (
     <Animated.View style={[s.repBlock, spin ? { transform: [{ rotate: spin }] } : null]} pointerEvents="none">
-      {/* Same big-number-over-smaller-label treatment and font as
-          WorkoutHud's counter (wh.counterNum/counterTotal), and the same
-          bottom position (right above the stop button) — was a smaller
-          system-font number pinned near the top, which read as a totally
-          different component from the in-workout one. */}
-      <Text style={[wh.counterNum, !theme.isDefault && { color: theme.repText }]}>{reps}</Text>
+      {/* Identical layout to WorkoutHud's counter now — same wh.counterRow
+          (big number + smaller label INLINE on one row), not a stacked
+          dot+label row underneath. Explicit complaint: "the form check has
+          a different layout than the workout stuff — it has this green dot
+          and then says like 5 good reps... I don't know why it's not the
+          exact same." Solo mode has no target-reps to show "/ N" against,
+          so the second slot shows "N good" instead — same row, same fonts,
+          just a different label. */}
       {repCounterOnly ? (
-        <Text style={s.repCounterTag}>REP COUNTER · FORM NOT SCORED</Text>
+        <>
+          <Text style={[wh.counterNum, !theme.isDefault && { color: theme.repText }]}>{reps}</Text>
+          <Text style={s.repCounterTag}>REP COUNTER · FORM NOT SCORED</Text>
+        </>
       ) : (
-        <View style={s.repSubRow}>
-          <View style={[s.repDot, { backgroundColor: theme.accent }]} />
+        <View style={wh.counterRow}>
+          <Text style={[wh.counterNum, !theme.isDefault && { color: theme.repText }]}>{reps}</Text>
           <Text style={wh.counterTotal}>{goodReps} good</Text>
         </View>
       )}
@@ -1691,10 +1696,12 @@ const s = StyleSheet.create({
   // the way of the rep counter. Guidance, not an alarm.
   trackingCueHint: { position: 'absolute', top: '46%', left: 0, right: 0, alignItems: 'center', paddingHorizontal: 26 },
   // Plus Jakarta Sans now (was the plain system font — the "ugly font"
-  // explicit complaint), and smaller (was 42 — explicit "smaller text"
-  // request now that there's no card giving it visual weight of its own).
+  // explicit complaint). Messages are now short, framing-only instructions
+  // (see lib/repDiagnostics.ts — "Move back", "Hold still", etc.), not full
+  // sentences, so a bigger size (was 24, before that 42) reads better
+  // without overflowing — explicit ask: "the cues need to be a bit bigger".
   trackingCueText: {
-    fontFamily: 'PlusJakartaSans_700Bold', fontSize: 24, lineHeight: 30,
+    fontFamily: 'PlusJakartaSans_700Bold', fontSize: 34, lineHeight: 40,
     color: '#fff', textAlign: 'center', letterSpacing: 0.1, maxWidth: 340,
     // Explicit ask: "the font and overall look of the text looks weird" —
     // the rep counter right below already gets a legibility shadow over
@@ -1708,8 +1715,6 @@ const s = StyleSheet.create({
   // the same constant WorkoutHud's own counter uses), was pinned near the
   // top before.
   repBlock:  { position: 'absolute', bottom: HUD_COUNTER_BOTTOM, left: 0, right: 0, alignItems: 'center' },
-  repSubRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
-  repDot:    { width: 8, height: 8, borderRadius: 4, backgroundColor: C.good },
   repCounterTag: {
     fontFamily: F.bold, fontSize: 11, color: 'rgba(255,255,255,0.62)', letterSpacing: 1.4,
     marginTop: 4,
