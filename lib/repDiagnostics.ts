@@ -113,20 +113,19 @@ export function createRepDiagnostic(): RepDiagnostic {
     } else if (phantom >= 1) {
       msg = 'Slower, fuller reps';
     } else if (missed >= 2 && metricFrames > 10) {
-      // Moving, but reps aren't landing — partial reps that never come back
-      // far enough to complete, so several merge into one. Explicit user
-      // feedback: this condition fires just as often from lost tracking
-      // (framing) as from genuinely shallow reps, so the message no longer
-      // asserts depth is the problem — it says what's actually true either
-      // way (can't confirm the rep) and gives a framing-safe fix.
-      msg = "Can't confirm that rep. Stay fully in frame";
+      // Explicit user feedback: "can't confirm that rep... I don't need
+      // that" — this condition is too ambiguous (fires just as often from
+      // lost tracking as from genuinely shallow reps) to give actionable
+      // mid-workout feedback, so it's suppressed entirely now rather than
+      // showing an uncertain message. Nothing shown is better than a
+      // not-actionable one here.
+      msg = null;
     } else if (repCount === 0 && !crossedEnter && metricFrames > 8) {
       // Never got deep enough for a rep to even begin.
       msg = 'Go deeper into each rep';
     } else if (repCount === 0 && crossedEnter && !returnedToExit && metricFrames > 8) {
-      // Went into a rep but never came back to the start — same reasoning
-      // as above, same reworded message.
-      msg = "Can't confirm that rep. Stay fully in frame";
+      // Same ambiguity as above — suppressed, not guessed at again.
+      msg = null;
     } else {
       msg = null;
     }

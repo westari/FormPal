@@ -47,7 +47,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, StyleSheet, Share, TouchableOpacity, Animated } from 'react-native';
+import { View, StyleSheet, Share, TouchableOpacity, Animated, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -94,7 +94,7 @@ const MUSCLE_RANKS_HTML = require('../assets/app screens/muscleranks.html');
 // round: remove the on-screen stamp — kept as a console log instead so
 // it's still there to confirm a fresh reload if ever needed, just not
 // visible on the card.
-const BUILD_TAG = 'native-video-12';
+const BUILD_TAG = 'native-video-13';
 const BUILD_LOADED_AT = new Date().toLocaleTimeString();
 if (__DEV__) {
   console.log(`[recap] build ${BUILD_TAG}`);
@@ -1460,6 +1460,18 @@ export default function RecapScreen() {
         automaticallyAdjustContentInsets={false}
         contentInsetAdjustmentBehavior="never"
       />
+      {/* Explicit ask: "instead of the workout card it's just a black
+          page... now has to come in immediately" — the underlying wait
+          (this artboard's own bundle has to unpack before 'ready' can
+          fire) isn't something a JS fix can make faster, same conclusion
+          as Cue's identical loading delay. A spinner doesn't shorten the
+          wait, but stops a plain black/blank screen from reading as
+          stuck or broken while it's genuinely still loading. */}
+      {effectiveView === 'summary' && !webReady && (
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          <ActivityIndicator style={{ flex: 1 }} color="#9a9aa2" />
+        </View>
+      )}
       {/* Custom inline controls — explicit ask: real Apple fullscreen was
           rejected in an earlier round (it took the card/page off screen),
           and plain nativeControls never shows anything inline without it.

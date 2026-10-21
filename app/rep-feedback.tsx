@@ -41,7 +41,7 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -56,7 +56,7 @@ const REP_FEEDBACK_HTML = require('../assets/app screens/repfeedback.html');
 // Build/bundle confirmation — explicit ask this round: a loud, impossible
 // -to-miss tag to confirm the device is actually running this reload
 // before trusting any other log below it.
-const BUILD_TAG = 'native-video-14';
+const BUILD_TAG = 'native-video-15';
 const BUILD_LOADED_AT = new Date().toLocaleTimeString();
 if (__DEV__) {
   console.log(`[rep-feedback] build ${BUILD_TAG}`);
@@ -864,6 +864,17 @@ export default function RepFeedbackScreen() {
         cacheEnabled={false}
         scrollEnabled={false}
       />
+      {/* Explicit ask: "shows the full video, no rep feedback card... the
+          video glitches into place, then the white card comes in" — same
+          underlying wait as recap.tsx (this artboard's own bundle has to
+          unpack before 'ready' can fire), not something a JS fix can make
+          faster. Spinner stops it reading as stuck while genuinely still
+          loading. */}
+      {!ready && (
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          <ActivityIndicator style={{ flex: 1 }} color="#9a9aa2" />
+        </View>
+      )}
       {/* Custom inline controls — same mechanism and same reasoning as
           recap.tsx: real Apple fullscreen was rejected (took the card off
           screen) and plain nativeControls never shows anything inline

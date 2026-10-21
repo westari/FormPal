@@ -44,7 +44,7 @@ import { useFormTheme, type FormTheme } from '../lib/activeTheme';
 import type { DebugStatsEvent, RepEvent, ExerciseType } from '../modules/athlt-camera/src/index';
 import { getDemoCues } from '../lib/demoCues';
 
-const FORMCHECK_BUILD = 'fc-1';
+const FORMCHECK_BUILD = 'fc-2';
 if (__DEV__) console.log(`[formcheck] build ${FORMCHECK_BUILD}`);
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
@@ -1225,9 +1225,21 @@ export default function FormCheckScreen() {
               {/* ONE short line: the live positioning cue, else the
                   exercise's instruction, else "Perfect — hold still". No
                   card background — same "just the text" treatment as the
-                  live tracking cues below. */}
+                  live tracking cues below.
+                  BUG FOUND ("says perfect hold still, then immediately
+                  says move back"): this used to show "Perfect" the INSTANT
+                  setupAllVisible flipped true — i.e. holdProgress=0, right
+                  as the native 2s hold timer starts, not once it's near
+                  done. Any wobble/partial occlusion during that whole 2s
+                  window resets the hold, so the user could see "Perfect"
+                  then immediately get corrective guidance again, 2 seconds
+                  too early. setupHoldProgress was already being tracked
+                  from native events (line above) but never actually read
+                  anywhere — gating on it being most of the way through (so
+                  there's only a brief window left to actually wobble)
+                  instead of the very start. */}
               <Text style={s.setupBig}>
-                {setupAllVisible
+                {setupAllVisible && setupHoldProgress >= 0.8
                   ? 'Perfect. Hold still'
                   : (setupHint || SETUP_INFO[exerciseType].title)}
                 <Image source={SPARKLE_DUO} style={s.cueSparkleImg} />

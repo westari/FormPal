@@ -33,7 +33,7 @@ import type { Plan } from '../../types/plan';
 import { DC_VIEWPORT_JS } from '../../lib/dcWebviewHelpers';
 
 const HOME_HTML = require('../../assets/app screens/home.html');
-const HOME_BUILD = 'home-3';
+const HOME_BUILD = 'home-4';
 if (__DEV__) console.log(`[home] build ${HOME_BUILD}`);
 
 // BUG FOUND (root cause of "glitches at start / white screen", "white
@@ -150,15 +150,24 @@ function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[], insetTop
     // system inset.
     var INSET_BOTTOM = ${insetBottom};
     var TAB_BAR_ESTIMATE = 49;
+    // Same fix, two sheets — the edit-workout sheet (max-height: 620px)
+    // AND the separate in-page "Edit via Cue" chat overlay (height: 520px,
+    // its own send button at the bottom) have the identical bottom:8px-
+    // under-the-real-tab-bar problem.
     function pushEditSheetUp(){
       var scale = window.__dcCanvasScale;
       if(!scale) return false;
       var divs = document.querySelectorAll('div');
-      var sheet = null;
-      for (var i=0;i<divs.length;i++){ if (divs[i].style.maxHeight === '620px') { sheet = divs[i]; break; } }
-      if(!sheet) return false;
+      var editSheet = null, cueSheet = null;
+      for (var i=0;i<divs.length;i++){
+        if (!editSheet && divs[i].style.maxHeight === '620px') editSheet = divs[i];
+        if (!cueSheet && divs[i].style.height === '520px') cueSheet = divs[i];
+        if (editSheet && cueSheet) break;
+      }
+      if(!editSheet && !cueSheet) return false;
       var extra = (INSET_BOTTOM + TAB_BAR_ESTIMATE) / scale;
-      sheet.style.setProperty('bottom', (8 + extra) + 'px', 'important');
+      if(editSheet) editSheet.style.setProperty('bottom', (8 + extra) + 'px', 'important');
+      if(cueSheet) cueSheet.style.setProperty('bottom', (8 + extra) + 'px', 'important');
       return true;
     }
     if(!pushEditSheetUp()){ [50,150,300,600,1000].forEach(function(d){ setTimeout(pushEditSheetUp, d); }); }
