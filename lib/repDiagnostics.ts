@@ -113,19 +113,18 @@ export function createRepDiagnostic(): RepDiagnostic {
     } else if (phantom >= 1) {
       msg = 'Slower, fuller reps';
     } else if (missed >= 2 && metricFrames > 10) {
-      // Explicit user feedback: "can't confirm that rep... I don't need
-      // that" — this condition is too ambiguous (fires just as often from
-      // lost tracking as from genuinely shallow reps) to give actionable
-      // mid-workout feedback, so it's suppressed entirely now rather than
-      // showing an uncertain message. Nothing shown is better than a
-      // not-actionable one here.
-      msg = null;
+      // Ambiguous between lost tracking and genuinely shallow reps — but
+      // the user must always see SOME actionable instruction here, never
+      // silence ("can't confirm that rep" was rejected as unhelpful, but
+      // showing nothing at all left the user with no idea what to do).
+      // This message is safe advice for both causes at once.
+      msg = 'Step back and go all the way down each rep';
     } else if (repCount === 0 && !crossedEnter && metricFrames > 8) {
       // Never got deep enough for a rep to even begin.
       msg = 'Go deeper into each rep';
     } else if (repCount === 0 && crossedEnter && !returnedToExit && metricFrames > 8) {
-      // Same ambiguity as above — suppressed, not guessed at again.
-      msg = null;
+      // Started a rep but never came back up to the top.
+      msg = 'Come all the way back up between reps';
     } else {
       msg = null;
     }

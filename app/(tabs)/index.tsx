@@ -31,9 +31,10 @@ import { loadPlan } from '../../lib/planStorage';
 import { getAllSessions, calcStreak, groupIntoWorkouts, scoredSessions, type SessionEntry } from '../../lib/sessionLog';
 import type { Plan } from '../../types/plan';
 import { DC_VIEWPORT_JS } from '../../lib/dcWebviewHelpers';
+import { MYPAL_API_URL } from '../../constants/api';
 
 const HOME_HTML = require('../../assets/app screens/home.html');
-const HOME_BUILD = 'home-4';
+const HOME_BUILD = 'home-5';
 if (__DEV__) console.log(`[home] build ${HOME_BUILD}`);
 
 // BUG FOUND (root cause of "glitches at start / white screen", "white
@@ -74,6 +75,97 @@ const HOME_SCALE_FIT_JS = `
   fit();
   window.addEventListener('resize', fit);
   [0,100,300,600,1000].forEach(function(d){ setTimeout(fit, d); });
+})();
+true;
+`;
+// BUG FOUND ("edit with Q... says made those changes... same message no
+// matter what you type"): the "Edit with Cue" sheet is the artboard's own
+// scripted demo (its sendCue() ALWAYS returns one of two hardcoded strings
+// after a fake 700ms delay — confirmed directly in
+// .scratch/unpacked-designs/home.html's Component.sendCue()), never a real
+// backend call — same category of fake demo logic as app/cue.tsx's own
+// artboard, which that screen already bypasses with real DOM manipulation
+// + a real MYPAL_API_URL call. This does the same thing here: a
+// capture-phase listener on the sheet's real send button/input (same
+// technique as cue.tsx's wireUp — stopPropagation in the capture phase
+// beats the artboard's own bubble-phase handler) builds real bubbles by
+// hand and posts the typed text to RN, which calls the real backend and
+// injects the real reply back via window.__homeCueReplyReceived — verified
+// against the real rendered DOM (scripts/_check_home_cue_dom.js) before
+// shipping: the sheet is always mounted (shown/hidden via transform, not
+// conditional mount), found via the same style.height==='520px' selector
+// pushEditSheetUp already uses below.
+const HOME_CUE_REAL_JS = `
+(function(){
+  function findCueSheet(){
+    var all = document.querySelectorAll('#dc-root div');
+    for (var i=0;i<all.length;i++){ if (all[i].style.height === '520px' && all[i].style.position === 'absolute') return all[i]; }
+    return null;
+  }
+  var wired = false;
+  function wire(){
+    if (wired) return true;
+    var sheet = findCueSheet();
+    if (!sheet) return false;
+    var input = sheet.querySelector('input[placeholder]');
+    var sendBtn = sheet.querySelector('div[aria-label="Send"]');
+    var msgArea = sheet.querySelector('div[style*="overflow-y: auto"]');
+    if (!input || !sendBtn || !msgArea) return false;
+    wired = true;
+
+    function bubble(text, isUser){
+      var b = document.createElement('div');
+      b.style.cssText = (isUser
+        ? 'align-self:flex-end; max-width:82%; border-radius:20px 20px 6px 20px; padding:11px 15px; background:#111114; color:#ffffff;'
+        : 'align-self:flex-start; max-width:82%; border-radius:20px 20px 20px 6px; padding:11px 15px; background:#f1f1f4; color:#111114;'
+      ) + ' font-size:15px; line-height:1.4; font-weight:500; white-space:pre-wrap;';
+      b.textContent = text;
+      msgArea.appendChild(b);
+      msgArea.scrollTop = msgArea.scrollHeight + 9999;
+      return b;
+    }
+    var typingEl = null;
+    function showTyping(){
+      if (typingEl) return;
+      typingEl = document.createElement('div');
+      typingEl.style.cssText = 'align-self:flex-start; border-radius:20px 20px 20px 6px; padding:13px 16px; background:#f1f1f4; display:flex; gap:5px;';
+      for (var i=0;i<3;i++){
+        var dot = document.createElement('div');
+        dot.style.cssText = 'width:6px; height:6px; border-radius:50%; background:#b7b7c0;';
+        typingEl.appendChild(dot);
+      }
+      msgArea.appendChild(typingEl);
+      msgArea.scrollTop = msgArea.scrollHeight + 9999;
+    }
+    function hideTyping(){
+      if (typingEl && typingEl.parentNode) typingEl.parentNode.removeChild(typingEl);
+      typingEl = null;
+    }
+
+    var sending = false;
+    function doSend(){
+      var text = (input.value || '').trim();
+      if (!text || sending) return;
+      sending = true;
+      bubble(text, true);
+      input.value = '';
+      showTyping();
+      window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'homeCueSend', text: text }));
+    }
+
+    sendBtn.addEventListener('click', function(ev){ ev.stopPropagation(); doSend(); }, true);
+    input.addEventListener('keydown', function(ev){
+      if (ev.key === 'Enter'){ ev.preventDefault(); ev.stopPropagation(); doSend(); }
+    }, true);
+
+    window.__homeCueReplyReceived = function(text){
+      hideTyping();
+      bubble(text, false);
+      sending = false;
+    };
+    return true;
+  }
+  if (!wire()){ [100,300,700,1500,3000].forEach(function(d){ setTimeout(wire, d); }); }
 })();
 true;
 `;
@@ -291,6 +383,24 @@ export default function HomeScreen() {
     if (pageLoaded && injectJs) webRef.current?.injectJavaScript(injectJs + '; true;');
   }, [pageLoaded, injectJs]);
 
+  // Real backend call for the "Edit with Cue" sheet — see HOME_CUE_REAL_JS's
+  // comment. Same request/response contract as app/cue.tsx's handleSend.
+  const handleHomeCueSend = useCallback(async (text: string) => {
+    try {
+      const res = await fetch(MYPAL_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, history: [] }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error ?? 'Request failed');
+      webRef.current?.injectJavaScript(`window.__homeCueReplyReceived && window.__homeCueReplyReceived(${JSON.stringify(data.reply)}); true;`);
+    } catch {
+      const msg = "Couldn't reach Cue. Check your connection and try again.";
+      webRef.current?.injectJavaScript(`window.__homeCueReplyReceived && window.__homeCueReplyReceived(${JSON.stringify(msg)}); true;`);
+    }
+  }, []);
+
   return (
     <View style={styles.root}>
       <StatusBar style="dark" />
@@ -299,16 +409,17 @@ export default function HomeScreen() {
         source={HOME_HTML}
         originWhitelist={['*']}
         injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS}
-        injectedJavaScript={HOME_SCALE_FIT_JS}
+        injectedJavaScript={HOME_SCALE_FIT_JS + HOME_CUE_REAL_JS}
         onLoadEnd={() => setPageLoaded(true)}
         onMessage={(e) => {
-          let msg: { type?: string; ts?: number };
+          let msg: { type?: string; ts?: number; text?: string };
           try { msg = JSON.parse(e.nativeEvent.data); } catch { return; }
           if (msg.type === 'ready') { setReady(true); return; }
           if (msg.type === 'start') { router.push('/workout' as any); return; }
           if (msg.type === 'cue') { router.push('/cue' as any); return; }
           if (msg.type === 'progress') { router.push('/(tabs)/progress' as any); return; }
           if (msg.type === 'recap' && msg.ts != null) { router.push({ pathname: '/recap', params: { ts: String(msg.ts) } } as any); return; }
+          if (msg.type === 'homeCueSend' && msg.text) { void handleHomeCueSend(msg.text); return; }
         }}
         // BUG FOUND ("clear cutoff, colored background then blank white on
         // top, doesn't match"): an earlier fix added marginTop here to fix

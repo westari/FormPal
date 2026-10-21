@@ -44,7 +44,7 @@ import { useFormTheme, type FormTheme } from '../lib/activeTheme';
 import type { DebugStatsEvent, RepEvent, ExerciseType } from '../modules/athlt-camera/src/index';
 import { getDemoCues } from '../lib/demoCues';
 
-const FORMCHECK_BUILD = 'fc-2';
+const FORMCHECK_BUILD = 'fc-3';
 if (__DEV__) console.log(`[formcheck] build ${FORMCHECK_BUILD}`);
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
@@ -1372,8 +1372,14 @@ export default function FormCheckScreen() {
              the counter and the on-screen command the user asked for.
           2. stats.trackingCue — native "step back into frame" (non-floor
              only; a floor body legitimately leaves frame each rep).
-          Suppressed while a planarity hint is already showing. */}
-      {isTracking && !stats?.outOfPlaneCue && !isWorkoutHud && (() => {
+          Suppressed while a planarity hint is already showing.
+          Now shown during real workouts too (isWorkoutHud), not just solo
+          form-check — explicit user requirement: whenever a rep isn't
+          being counted mid-workout, the user needs to see WHY and what to
+          do about it, same as solo mode. Previously this whole block was
+          gated off for workouts, which is why reps could silently fail to
+          count with zero on-screen explanation. */}
+      {isTracking && !stats?.outOfPlaneCue && (() => {
         const cue = repDiag
           ?? (isFloor ? null : (stats?.trackingCue || null));
         if (!cue) return null;
