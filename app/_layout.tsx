@@ -6,6 +6,7 @@ import * as FileSystem from 'expo-file-system';
 import * as SplashScreen from 'expo-splash-screen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { configureAudioSession } from '../lib/audioFeedback';
+import RecapPrewarm from '../components/RecapPrewarm';
 import {
   useFonts,
   BricolageGrotesque_300Light,
@@ -73,6 +74,10 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <StatusBar style="light" />
+      {/* See components/RecapPrewarm.tsx's own header comment — a hidden,
+          permanently-mounted attempt at the workout-complete-card delay.
+          Experimental, low confidence, needs a real device test. */}
+      <RecapPrewarm />
       <Stack
         screenOptions={{
           headerShown:  false,
