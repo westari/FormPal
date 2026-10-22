@@ -56,7 +56,7 @@ const REP_FEEDBACK_HTML = require('../assets/app screens/repfeedback.html');
 // Build/bundle confirmation — explicit ask this round: a loud, impossible
 // -to-miss tag to confirm the device is actually running this reload
 // before trusting any other log below it.
-const BUILD_TAG = 'native-video-17';
+const BUILD_TAG = 'native-video-18';
 const BUILD_LOADED_AT = new Date().toLocaleTimeString();
 if (__DEV__) {
   console.log(`[rep-feedback] build ${BUILD_TAG}`);
@@ -934,9 +934,15 @@ export default function RepFeedbackScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#0d0d10' },
   web: { flex: 1, backgroundColor: '#0d0d10' },
-  // Matches recap.tsx's own styles.videoArea exactly — see this file's
-  // VideoView comment for why.
-  videoArea: { position: 'absolute', left: 0, right: 0, top: 0, bottom: '40%' },
+  // BUG FOUND ("too high up... black space, then the video" — a gap
+  // between the video's bottom edge and the card's real top edge):
+  // recap.tsx's own card happens to sit at 40% of screen height, but THIS
+  // screen's card sits lower — confirmed directly from a real device log's
+  // own card rect: top=559.19 of a 874-tall screen (bottom=874, confirming
+  // full height), i.e. the card occupies the bottom 36.02% of the screen,
+  // not 40%. Using that measured value closes the gap exactly instead of
+  // guessing recap's number would also fit here.
+  videoArea: { position: 'absolute', left: 0, right: 0, top: 0, bottom: '36%' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
   msg: { color: '#ffffff', fontSize: 15, textAlign: 'center' },
   backBtn: {

@@ -44,7 +44,7 @@ import { useFormTheme, type FormTheme } from '../lib/activeTheme';
 import type { DebugStatsEvent, RepEvent, ExerciseType } from '../modules/athlt-camera/src/index';
 import { getDemoCues } from '../lib/demoCues';
 
-const FORMCHECK_BUILD = 'fc-4';
+const FORMCHECK_BUILD = 'fc-5';
 if (__DEV__) console.log(`[formcheck] build ${FORMCHECK_BUILD}`);
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
@@ -1142,29 +1142,55 @@ export default function FormCheckScreen() {
     Animated.spring(recordMorph, { toValue: isInFrame ? 1 : 0, useNativeDriver: false, friction: 6, tension: 80 }).start();
   }, [isInFrame, recordMorph]);
 
-  // ── "Camera lock" meter — V1 ────────────────────────────────────────────
+  // ── "Tracking" meter — V1 ────────────────────────────────────────────────
   // Explicit ask: a live 0-100 number showing how confident the camera is
-  // that it can see/track the user, so they have a concrete signal instead
-  // of guessing. Built from signals already emitted natively this round —
-  // NOT yet backed by a real continuous confidence number from the native
-  // engine (that doesn't exist yet; DebugStatsEvent only has booleans/cue
-  // strings — see modules/athlt-camera/src/index.ts). Labeled V1
-  // deliberately: a real per-frame joint-confidence average from native
-  // would make this precise instead of a reasonable heuristic off existing
-  // signals. Take this as a solid first version, not a finished number.
-  const cameraLockPct = (() => {
+  // that it can see/track the user. Renamed from "Camera lock" — explicit
+  // complaint the old name "doesn't make sense". Built from signals already
+  // emitted natively this round — NOT yet backed by a real continuous
+  // confidence number from the native engine (that doesn't exist yet;
+  // DebugStatsEvent only has booleans/cue strings — see
+  // modules/athlt-camera/src/index.ts). Labeled V1 deliberately: a real
+  // per-frame joint-confidence average from native would make this precise
+  // instead of a reasonable heuristic off existing signals.
+  //
+  // BUG FOUND ("camera lock says 100 and I'm not getting any feedback" /
+  // "it doesn't want to move out of 100"): this used to ONLY look at
+  // personDetected/trackingCue/outOfPlaneCue, none of which reflect "a rep
+  // just isn't registering" — so it could sit at 100 the whole time repDiag
+  // (lib/repDiagnostics.ts) was showing a real "Move back"/"Hold still"
+  // cue, exactly the good-result-vs-bad-cue contradiction already fixed for
+  // the cue itself. Now reads the SAME repDiag signal the live cue pill
+  // uses, so the number and the cue can never disagree.
+  const cameraLockTarget = (() => {
     if (phase === 'setup') {
       if (!setupAllVisible) return 25; // can't confirm trackable joints yet
       return Math.round(60 + setupHoldProgress * 40); // climbs through the hold
     }
     if (phase === 'setup-done') return 100;
     if (isTracking || isStopping) {
-      if (stats?.personDetected === false) return 20;
+      if (stats?.personDetected === false) return 15;
+      if (repDiag) return 35; // same signal driving the live cue pill
       if (stats?.trackingCue || stats?.outOfPlaneCue) return 55;
       return 100;
     }
     return 0;
   })();
+  // Steps through every number toward the target instead of jumping —
+  // explicit complaint: "it can't just jump from numbers... it needs to
+  // show every number."
+  const cameraLockTargetRef = useRef(cameraLockTarget);
+  cameraLockTargetRef.current = cameraLockTarget;
+  const [cameraLockDisplay, setCameraLockDisplay] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => {
+      setCameraLockDisplay(prev => {
+        const target = cameraLockTargetRef.current;
+        if (prev === target) return prev;
+        return prev < target ? prev + 1 : prev - 1;
+      });
+    }, 15);
+    return () => clearInterval(id);
+  }, []);
 
   // ROOT CAUSE of "pulling the drawer up does nothing": this was a plain
   // template string, recomputed fresh on every render — and this screen
@@ -1356,15 +1382,15 @@ export default function FormCheckScreen() {
         </View>
       </View>
 
-      {/* Camera lock meter — explicit ask: a big, live 0-100 number showing
+      {/* Tracking meter — explicit ask: a big, live 0-100 number showing
           how confident the camera is that it can see/track the user,
           visible in solo form-check (where this was specifically asked
-          for) same as in-workout. See cameraLockPct's own comment for what
-          it's built from. */}
+          for) same as in-workout. See cameraLockTarget's own comment for
+          what it's built from. */}
       {stopButtonActive && (
         <View pointerEvents="none" style={[s.cameraLockWrap, { top: insets.top + 56 }]}>
-          <Text style={s.cameraLockPct}>{cameraLockPct}%</Text>
-          <Text style={s.cameraLockLabel}>CAMERA LOCK</Text>
+          <Text style={s.cameraLockPct}>{cameraLockDisplay}%</Text>
+          <Text style={s.cameraLockLabel}>TRACKING</Text>
         </View>
       )}
 
