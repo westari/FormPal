@@ -44,3 +44,11 @@ Before writing or editing ANY injection code against a design file, in order, ev
    - A design file that ships as a self-extracting bundle (vs. a plain static page) can make the WebView fire what looks like repeated fresh page loads while it unpacks — injected JS that only tries once and gives up (or posts "ready" unconditionally) can reveal a half-unpacked page. Always retry on a schedule and only signal ready once the real elements are actually found.
 6. **Finish the whole pass before asking for a device test.** Don't ask the user to check after every small change — verify as much as the tooling above allows first, batch every fix, and ask for one test only once everything in scope is done.
 7. **Ask upfront, not mid-task.** If genuinely unsure about scope or an ambiguous requirement, ask at the start of the work, not after starting and hitting the ambiguity.
+
+## Testing is YOUR job, not mine
+
+- Never say "fixed" until you have tested it yourself with Playwright: load the real design file, do the exact action (drag the scrub bar, type in Cue, open the card), and take a before-and-after screenshot.
+- If a bug only shows up on a real iPhone, say so and ask for one screenshot. Don't guess.
+- Batch your work. Finish everything, then give me ONE short list to test on my phone. Never ask me to check in the middle.
+- **Don't stop until it's actually done.** Once given a task, loop on it yourself — test with Playwright, find what's still broken, fix it, test again — without stopping to report back partway or asking "should I continue?" No excuses, no settling for "this needs more investigation" as a way to end the turn early. Keep going until the task is genuinely finished and verified, not until you've made some progress on it.
+- The ONLY acceptable reasons to stop before the task is done: something that truly requires the user's phone (a bug Playwright can't reproduce, confirmed only on-device) or a real decision only the user can make (ambiguous scope, conflicting requirements). Even then, finish everything else in the batch first, and say exactly what's blocked and why — never use it as cover for stopping early on something you could have kept pushing on.

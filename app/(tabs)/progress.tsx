@@ -1,807 +1,454 @@
 /**
- * app/(tabs)/progress.tsx — FormPal Progress Screen
+ * app/(tabs)/progress.tsx — Progress tab
  *
- * Features:
- *   • Muscle rank preview at the top — tap for the full page (app/muscle-ranks.tsx)
- *   • Interactive form-trend chart — tap any dot to inspect that session
- *   • Personal bests / milestones
- *   • Per-exercise breakdown cards
- *   • Full session history with home-style SessionCards
+ * Replaces the old native screen with the real Claude-Design artboard
+ * (assets/app screens/progress.html), wired with real data — never editing
+ * the design file itself (see CLAUDE.md). Process followed per CLAUDE.md's
+ * "Wiring Claude Design files" section: unpacked via
+ * scripts/unpack-design-files.js, screenshotted via
+ * scripts/screenshot-design-files.js, every selector below verified against
+ * the real unpacked markup + live DOM before being used (see
+ * .scratch/unpacked-designs/progress.html for the source of truth).
  *
- * Design: exact same tokens, shadows, and components as index.tsx.
+ * SCOPE THIS PASS (explicit, agreed with the user — Progress/Profile are a
+ * genuinely large rebuild, done incrementally, not silently):
+ * Wired for real: the rank card (reuses the same computeOverallStanding/
+ * computeMuscleTiers this app already uses in recap.tsx/muscle-ranks.tsx),
+ * and the "Weight Progress" chart + "Log weight" entry flow — a brand new
+ * feature (lib/weightLog.ts), since no body-weight tracking existed in this
+ * app before this pass.
+ *
+ * NOT wired yet, hidden rather than shipped with fake demo numbers posing
+ * as real (Progress Photos, Form Score, Personal Bests, Past Workouts, the
+ * Muscle Map / All Ranks / All Workouts modals) — these need their own real
+ * data wiring pass. Hiding beats showing placeholder numbers as if they
+ * were the user's real stats.
+ *
+ * KNOWN SIMPLIFICATION: the weigh-in sheet's date picker (tap "Date" to
+ * expand a calendar) is left as the artboard's own cosmetic toggle — it
+ * opens/closes, but picking a day in it does NOT change what date Submit
+ * actually saves to; every entry saves to TODAY. Flagged, not silently
+ * faked — logging for a past day is a reasonable follow-up, not done here.
  */
-
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import {
-  View, Text, StyleSheet, ScrollView, Pressable, Platform, Image,
-} from 'react-native';
+import React, { useCallback, useRef, useState } from 'react';
+import { View, StyleSheet } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { SymbolView } from 'expo-symbols';
 import { StatusBar } from 'expo-status-bar';
-import { getSessionThumbnail } from '../../lib/sessionVideo';
-import Svg, {
-  G,
-  Path as SvgPath,
-  Circle as SvgCircle,
-  Defs,
-  LinearGradient as SvgGrad,
-  Stop,
-  Line as SvgLine,
-} from 'react-native-svg';
-
-import { FONT, Sp, W } from '../../constants/theme';
-import Ring from '../../components/Ring';
-import ScreenBackground from '../../components/ScreenBackground';
-import { BodyMap } from '../../components/MuscleTierMap';
+import { WebView } from 'react-native-webview';
 import {
-  getAllSessions, groupIntoWorkouts, computeMuscleTiers, scoredSessions, calcStreak,
-  type SessionEntry, type WorkoutGroup,
-} from '../../lib/sessionLog';
+  DC_VIEWPORT_JS, dcScaleFitJs, DC_TEXT_REPLACE_HELPER_JS,
+} from '../../lib/dcWebviewHelpers';
+import { getAllSessions, calcStreak, computeMuscleTiers } from '../../lib/sessionLog';
+import { computeOverallStanding } from '../../components/MuscleTierMap';
+import {
+  getWeightLog, logWeight, filterWeightRange,
+  type WeightEntry,
+} from '../../lib/weightLog';
 
-// ─── Design tokens — exact match to index.tsx ────────────────────────────────
+// UI-level range, matching the design's own pill labels exactly
+// ('All', capitalized) — distinct from weightLog.ts's lowercase
+// WeightRange, converted at the one call site that needs it.
+type UiRange = '2m' | '6m' | '1y' | 'All';
 
-const C = {
-  text:     '#0b1020',
-  textSub:  '#9aa0ad',
-  textDim:  '#b6bcc7',
-  accent:   '#0a84ff',
-  card:     '#ffffff',
-  border:   'rgba(17,24,39,0.05)',
-  iconBox:  '#f4f5f8',
-  formGrad: ['#FFC24B', '#FF7A2E'] as [string, string],
-  weekGrad: ['#48E08A', '#12B59A'] as [string, string],
-  repsGrad: ['#67CEFF', '#0A6CFF'] as [string, string],
-  goodBg:   'rgba(52,199,89,0.14)',  goodText:  '#1f9d4d',
-  midBg:    'rgba(255,179,61,0.20)', midText:   '#c47f12',
-  lowBg:    'rgba(255,59,48,0.14)',  lowText:   '#e0352b',
-};
+const PROGRESS_HTML = require('../../assets/app screens/progress.html');
+const PROGRESS_BUILD = 'progress-1';
+if (__DEV__) console.log(`[progress] build ${PROGRESS_BUILD}`);
 
-const SHADOW_HIGH = Platform.OS === 'ios' ? {
-  boxShadow: '0px 1.5px 3px rgba(16,24,40,0.05), 0px 5px 12px rgba(16,24,40,0.05), 0px 20px 36px rgba(28,40,90,0.22), inset 0px 1px 0px rgba(255,255,255,0.95)',
-} as any : {};
+// Same fake tab-bar/FAB selectors Home already verified — identical inline
+// styles confirmed in .scratch/unpacked-designs/progress.html (both export
+// from the same design system). A real native tab bar + FAB already exist
+// app-wide; this app's own screens never use the artboard's fake chrome.
+const HIDE_FAKE_CHROME_CSS = `
+  div[style*="right: 88px"][style*="bottom: 22px"][style*="height: 64px"] { display: none !important; }
+  div[style*="right: 14px"][style*="bottom: 22px"][style*="width: 64px"][style*="height: 64px"] { display: none !important; }
+`;
 
-const SHADOW_MED = Platform.OS === 'ios' ? {
-  boxShadow: '0px 1px 1.5px rgba(16,24,40,0.05), 0px 8px 18px rgba(28,40,90,0.15), inset 0px 1px 0px rgba(255,255,255,0.9)',
-} as any : {};
-
-const SHADOW_ROW = Platform.OS === 'ios' ? {
-  boxShadow: '0px 1px 1.5px rgba(16,24,40,0.05), 0px 8px 18px rgba(28,40,90,0.12), inset 0px 1px 0px rgba(255,255,255,0.9)',
-} as any : {};
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const THIRTY_DAYS_MS  = 30 * 24 * 60 * 60 * 1000;
-const SEVEN_DAYS_MS   =  7 * 24 * 60 * 60 * 1000;
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function formatShort(ts: number) {
-  return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-
-function formatLong(ts: number) {
-  return new Date(ts).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-}
-
-// Catmull-Rom → cubic bezier smooth path (exact from index.tsx)
-function smoothPath(pts: Array<{ x: number; y: number }>): string {
+// Catmull-Rom -> cubic bezier smooth path — exact port of the same function
+// already used natively in this file's previous version / index.tsx's own
+// trend chart, just plain JS since it runs inside the WebView.
+const SMOOTH_PATH_JS = `
+function dcSmoothPath(pts){
   if (pts.length < 2) return '';
-  const t = 0.35;
-  let d = `M${pts[0].x.toFixed(2)},${pts[0].y.toFixed(2)}`;
-  for (let i = 0; i < pts.length - 1; i++) {
-    const p0 = pts[Math.max(i - 1, 0)];
-    const p1 = pts[i];
-    const p2 = pts[i + 1];
-    const p3 = pts[Math.min(i + 2, pts.length - 1)];
-    const cp1x = p1.x + (p2.x - p0.x) * t;
-    const cp1y = p1.y + (p2.y - p0.y) * t;
-    const cp2x = p2.x - (p3.x - p1.x) * t;
-    const cp2y = p2.y - (p3.y - p1.y) * t;
-    d += ` C${cp1x.toFixed(2)},${cp1y.toFixed(2)} ${cp2x.toFixed(2)},${cp2y.toFixed(2)} ${p2.x.toFixed(2)},${p2.y.toFixed(2)}`;
+  var t = 0.35;
+  var d = 'M' + pts[0].x.toFixed(2) + ',' + pts[0].y.toFixed(2);
+  for (var i=0;i<pts.length-1;i++){
+    var p0 = pts[Math.max(i-1,0)], p1 = pts[i], p2 = pts[i+1], p3 = pts[Math.min(i+2,pts.length-1)];
+    var c1x = p1.x + (p2.x-p0.x)*t, c1y = p1.y + (p2.y-p0.y)*t;
+    var c2x = p2.x - (p3.x-p1.x)*t, c2y = p2.y - (p3.y-p1.y)*t;
+    d += ' C' + c1x.toFixed(2) + ',' + c1y.toFixed(2) + ' ' + c2x.toFixed(2) + ',' + c2y.toFixed(2) + ' ' + p2.x.toFixed(2) + ',' + p2.y.toFixed(2);
   }
   return d;
 }
+`;
 
-// ─── SectionHeader ────────────────────────────────────────────────────────────
-
-function SectionHeader({ title, sub }: { title: string; sub?: string }) {
-  return (
-    <View style={sh.wrap}>
-      <Text style={sh.title}>{title}</Text>
-      {sub ? <Text style={sh.sub}>{sub}</Text> : null}
-    </View>
-  );
+function monthLabel(dateKey: string): string {
+  return new Date(dateKey).toLocaleDateString('en-US', { month: 'short' });
 }
-const sh = StyleSheet.create({
-  wrap:  { paddingHorizontal: 8 },
-  title: { fontSize: 17, fontWeight: W.bold, letterSpacing: -0.3, color: C.text },
-  sub:   { marginTop: 2, fontSize: 12, fontWeight: W.medium, color: C.textSub },
-});
 
-// ─── SessionCard — one row per WORKOUT (grouped by ts), taps into /recap ──────
+interface RankInfo { rankName: string; rankPct: number; nextRank: string; streakLine: string }
 
-function SessionCard({ group }: { group: WorkoutGroup }) {
-  const router = useRouter();
-  const pct = group.pct;
-  const bgColor   = pct >= 80 ? C.goodBg  : pct >= 60 ? C.midBg  : C.lowBg;
-  const textColor = pct >= 80 ? C.goodText : pct >= 60 ? C.midText : C.lowText;
-  const title = group.entries.length === 1
-    ? group.entries[0].displayName
-    : `Workout · ${group.entries.length} exercises`;
-
-  // Real frame from the session's own recording when one exists (see
-  // lib/sessionVideo.ts) — falls back to the plain dumbbell icon for
-  // sessions with no matching logged video.
-  const [thumb, setThumb] = useState<string | null>(null);
-  useEffect(() => {
-    let live = true;
-    getSessionThumbnail(group.ts).then(uri => { if (live) setThumb(uri); });
-    return () => { live = false; };
-  }, [group.ts]);
-
-  return (
-    <Pressable
-      style={({ pressed }) => [sc.card, SHADOW_ROW, pressed && { opacity: 0.7 }]}
-      onPress={() => router.push({ pathname: '/recap', params: { ts: String(group.ts) } })}
-    >
-      <View style={sc.iconBox}>
-        {thumb
-          ? <Image source={{ uri: thumb }} style={sc.thumbImg} resizeMode="cover" />
-          : <SymbolView name="dumbbell.fill" type="monochrome"
-              style={{ width: 18, height: 18 }} tintColor="#6b7180" />}
-      </View>
-      <View style={sc.mid}>
-        <Text style={sc.date}>{title}</Text>
-        <Text style={sc.meta}>{formatLong(group.ts)} · {group.totalReps} reps</Text>
-      </View>
-      <View style={[sc.badge, { backgroundColor: bgColor }]}>
-        <Text style={[sc.badgeTxt, { color: textColor }]}>{pct}%</Text>
-      </View>
-    </Pressable>
-  );
-}
-const sc = StyleSheet.create({
-  card: {
-    flexDirection: 'row', alignItems: 'center',
-    padding: 14, paddingHorizontal: 16,
-    backgroundColor: C.card, borderRadius: 18,
-    borderWidth: 1, borderColor: C.border,
-  },
-  iconBox: {
-    width: 38, height: 38, borderRadius: 11,
-    backgroundColor: C.iconBox, alignItems: 'center', justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  thumbImg: { width: '100%', height: '100%' },
-  mid:      { flex: 1, marginLeft: 13 },
-  date:     { fontSize: 14, fontWeight: W.semi, color: '#1a1d26' },
-  meta:     { marginTop: 2, fontSize: 12.5, fontWeight: W.medium, color: C.textSub },
-  badge:    { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 11 },
-  badgeTxt: { fontSize: 13, fontWeight: W.bold },
-});
-
-// ─── InteractiveFormChart ─────────────────────────────────────────────────────
-//
-// Bigger than the home preview (VH=220). Each data point is individually
-// tappable via SVG G/onPress. A RN View tooltip appears over the selected dot.
-
-function InteractiveFormChart({
-  sessions, tab,
-}: {
-  sessions: SessionEntry[];
-  tab: 'week' | 'month' | 'all';
-}) {
-  const VH = 220;
-  const PX = 14;
-  const PY = 20;
-
-  const [containerW, setContainerW] = useState(320);
-  const [selIdx,     setSelIdx]     = useState<number | null>(null);
-
-  // Reset selection when tab changes
-  useEffect(() => { setSelIdx(null); }, [tab]);
-
-  const filtered = useMemo(() => {
-    const now = Date.now();
-    const cut = tab === 'week' ? now - SEVEN_DAYS_MS : tab === 'month' ? now - THIRTY_DAYS_MS : 0;
-    // Form trend = only form-checked sessions; rep-counter reps have no score.
-    return scoredSessions(sessions).filter(e => e.ts >= cut).sort((a, b) => a.ts - b.ts);
-  }, [sessions, tab]);
-
-  const pts = useMemo(() => {
-    if (filtered.length < 2) return [];
-    return filtered.map((e, i) => ({
-      x: PX + (i / (filtered.length - 1)) * (containerW - PX * 2),
-      y: PY + (1 - e.pct / 100) * (VH - PY * 2),
-    }));
-  }, [filtered, containerW]);
-
-  if (filtered.length < 2) {
-    return (
-      <View style={{ height: VH, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 }}>
-        <SymbolView name="chart.line.uptrend.xyaxis" type="monochrome"
-          style={{ width: 34, height: 34, marginBottom: 10 }} tintColor={C.textDim} />
-        <Text style={{ fontSize: 13.5, color: C.textSub, textAlign: 'center', lineHeight: 20 }}>
-          {sessions.length === 0
-            ? 'Log your first form check to start tracking progress.'
-            : 'Not enough sessions for this time range.'}
-        </Text>
-      </View>
-    );
-  }
-
-  const linePath = smoothPath(pts);
-  const last     = pts[pts.length - 1];
-  const areaPath = linePath + ` L${last.x.toFixed(2)},${VH} L${PX},${VH} Z`;
-
-  const selPt    = selIdx !== null ? pts[selIdx]     : null;
-  const selEntry = selIdx !== null ? filtered[selIdx] : null;
-
-  const firstPct = filtered[0].pct;
-  const lastPct  = filtered[filtered.length - 1].pct;
-  const diff     = lastPct - firstPct;
-
-  // Build evenly spaced date labels (4 labels)
-  const dateLabels: string[] = (() => {
+function buildProgressInjectJs(
+  rank: RankInfo, range: UiRange, entries: WeightEntry[], insetBottom: number,
+): string {
+  const filtered = filterWeightRange(entries, range === 'All' ? 'all' : range);
+  const last = filtered[filtered.length - 1] ?? null;
+  const first = filtered[0] ?? null;
+  const goalLine = filtered.length >= 2 && first && last
+    ? `${Math.abs(Math.round(last.weightLb - first.weightLb))} lb ${last.weightLb < first.weightLb ? 'lost' : 'gained'} since you started logging`
+    : filtered.length === 1
+      ? 'Log again soon to start seeing a trend'
+      : 'Log your weight to start tracking';
+  // 4 evenly spaced month labels across the filtered range (oldest -> newest).
+  const monthXs: string[] = (() => {
+    if (filtered.length === 0) return ['', '', '', ''];
     const n = Math.min(4, filtered.length);
-    return Array.from({ length: n }, (_, i) => {
-      const idx = Math.round(i * (filtered.length - 1) / (n - 1));
-      return formatShort(filtered[idx].ts);
+    return Array.from({ length: 4 }, (_, i) => {
+      if (i >= n) return '';
+      const idx = n === 1 ? 0 : Math.round((i * (filtered.length - 1)) / (n - 1));
+      return monthLabel(filtered[idx].dateKey);
     });
   })();
 
-  // Tooltip X: clamp so it doesn't go off-screen (tooltip ~120px wide)
-  const tooltipW = 140;
-  const tooltipX = selPt
-    ? Math.max(4, Math.min(containerW - tooltipW - 4, selPt.x - tooltipW / 2))
-    : 0;
-  const tooltipY = selPt ? Math.max(6, selPt.y - 68) : 0;
+  return dcScaleFitJs('#eeeef1') + DC_TEXT_REPLACE_HELPER_JS + SMOOTH_PATH_JS + `
+  (function(){
+    var st = document.createElement('style');
+    st.textContent = ${JSON.stringify(HIDE_FAKE_CHROME_CSS)};
+    document.head.appendChild(st);
 
-  return (
-    <View>
-      {/* Y-axis labels */}
-      <View style={{ flexDirection: 'row', marginBottom: 2 }}>
-        <View style={ifc.yAxis}>
-          <Text style={ifc.yLbl}>100%</Text>
-          <Text style={ifc.yLbl}>50%</Text>
-          <Text style={ifc.yLbl}>0%</Text>
-        </View>
-        <View style={{ flex: 1, position: 'relative' }}
-          onLayout={e => setContainerW(e.nativeEvent.layout.width)}
-        >
-          <Svg width={containerW} height={VH} viewBox={`0 0 ${containerW} ${VH}`}>
-            <Defs>
-              <SvgGrad id="icArea" x1="0" y1="0" x2="0" y2="1">
-                <Stop offset="0%"   stopColor="#FF9F0A" stopOpacity={0.22} />
-                <Stop offset="85%"  stopColor="#FF9F0A" stopOpacity={0.03} />
-                <Stop offset="100%" stopColor="#FF9F0A" stopOpacity={0} />
-              </SvgGrad>
-            </Defs>
+    var WEIGHT_DATA = ${JSON.stringify(filtered.map(e => ({ d: e.dateKey, w: e.weightLb })))};
+    var RANGE = ${JSON.stringify(range)};
+    var LAST_WEIGHT = ${JSON.stringify(last ? last.weightLb : null)};
 
-            {/* Grid lines */}
-            {[0.25, 0.5, 0.75].map((f, i) => (
-              <SvgLine key={i}
-                x1={0} y1={VH * f} x2={containerW} y2={VH * f}
-                stroke={i === 1 ? 'rgba(11,16,36,0.10)' : 'rgba(11,16,36,0.05)'}
-                strokeWidth={i === 1 ? 1 : 0.7}
-              />
-            ))}
+    function findWeightCard(){
+      var svgs = document.querySelectorAll('#dc-root svg');
+      for (var i=0;i<svgs.length;i++){
+        if (svgs[i].getAttribute('viewBox') === '0 0 292 150') return svgs[i].closest('div[style*="border-radius: 28px"]');
+      }
+      return null;
+    }
 
-            {/* Area fill */}
-            <SvgPath d={areaPath} fill="url(#icArea)" />
+    // Out-of-scope sections — hidden (not faked). Each is a heading div
+    // immediately followed by its content card; both get display:none.
+    function hideSection(headingText){
+      // BUG FOUND (verified against the live DOM): the real nesting under
+      // #dc-root is 4 levels deep to reach a heading, not 2 — this used to
+      // silently match nothing. Search every descendant instead.
+      var all = document.querySelectorAll('#dc-root *');
+      for (var i=0;i<all.length;i++){
+        var el = all[i];
+        if (el.children.length === 0 && (el.textContent||'').trim() === headingText) {
+          el.style.setProperty('display','none','important');
+          var sib = el.nextElementSibling;
+          if (sib) sib.style.setProperty('display','none','important');
+          return;
+        }
+        // Headings that are themselves a tappable row (Progress Photos / Past Workouts)
+        if ((el.textContent||'').trim().indexOf(headingText) === 0 && el.tagName === 'A') {
+          el.style.setProperty('display','none','important');
+          var sib2 = el.nextElementSibling;
+          if (sib2) sib2.style.setProperty('display','none','important');
+          return;
+        }
+      }
+    }
 
-            {/* Bezier line */}
-            <SvgPath
-              d={linePath}
-              fill="none"
-              stroke="#FF9F0A"
-              strokeWidth={2.5}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
+    function build(){
+      var card = findWeightCard();
+      if (!card) return false;
 
-            {/* Dashed vertical drop from last point */}
-            <SvgLine
-              x1={last.x} y1={last.y} x2={last.x} y2={VH}
-              stroke="rgba(255,159,10,0.20)"
-              strokeWidth={1}
-              strokeDasharray="3 4"
-            />
+      // ── Rank card ──────────────────────────────────────────────────────
+      // BUG FOUND (verified against the live DOM, not the raw markup): "72%
+      // to Bronze III" is NOT one text node — it's a span ("72%") + a bare
+      // text node (" to ") + another span ("Bronze III"), so dcReplaceText's
+      // whole-string match never fires. Set each span directly instead.
+      dcReplaceText({ 'Bronze II': ${JSON.stringify(rank.rankName)} });
+      // BUG FOUND (verified against the live DOM, not the raw markup): the
+      // browser normalizes "#e2b27a" to "rgb(226, 178, 122)" in the
+      // serialized style attribute — same category of gotcha as
+      // flex:1 -> "1 1 0%" (see CLAUDE.md). A selector hunting for the
+      // literal hex string never matches live. Found structurally instead:
+      // the bar's TRACK is the only "height: 9px; border-radius: 999px"
+      // element on the page, and the fill is simply its one child.
+      var rankTrack = document.querySelector('#dc-root div[style*="height: 9px"][style*="border-radius: 999px"]');
+      var rankBar = rankTrack ? rankTrack.children[0] : null;
+      if (rankBar) rankBar.style.setProperty('width', ${JSON.stringify(`${rank.rankPct}%`)}, 'important');
+      // rankBar -> track(height:9px) -> wrapper(margin-top:14px) -> next
+      // sibling is the "X% to Y / Top Z%" row (confirmed via the real
+      // unpacked markup's exact nesting).
+      var rankRow = rankBar ? rankBar.parentElement.parentElement.nextElementSibling : null;
+      if (rankRow && rankRow.children[0]) {
+        var pctSpans = rankRow.children[0].querySelectorAll('span');
+        if (pctSpans[0]) pctSpans[0].textContent = ${JSON.stringify(`${rank.rankPct}%`)};
+        if (pctSpans[1]) pctSpans[1].textContent = ${JSON.stringify(rank.nextRank)};
+      }
+      if (rankRow && rankRow.children[1]) {
+        rankRow.children[1].textContent = ${JSON.stringify(rank.streakLine)};
+      }
+      // The rank card's own tap target (sc-camel-on-click="openRank") opens
+      // a "Muscle Map" modal that's out of scope this pass (would show
+      // fake demo data) — block just THIS anchor, not every <a> on the
+      // page (DC_LINK_INTERCEPT_JS was tried and found to break "Log
+      // weight" too, since it intercepts every <a href> globally).
+      var rankLink = document.querySelector('#dc-root a[style*="padding: 18px 18px 14px"]');
+      if (rankLink && !rankLink.__dcBlocked) {
+        rankLink.__dcBlocked = true;
+        rankLink.addEventListener('click', function(ev){ ev.preventDefault(); ev.stopPropagation(); }, true);
+      }
 
-            {/* Tappable data points */}
-            {pts.map((pt, i) => {
-              const isSel = selIdx === i;
-              return (
-                <G key={i} onPress={() => setSelIdx(isSel ? null : i)}>
-                  {/* Large transparent hit area */}
-                  <SvgCircle cx={pt.x} cy={pt.y} r={22} fill="transparent" />
-                  {isSel ? (
-                    <>
-                      <SvgCircle cx={pt.x} cy={pt.y} r={15} fill="rgba(255,159,10,0.15)" />
-                      <SvgCircle cx={pt.x} cy={pt.y} r={7}  fill="#FF9F0A" />
-                      <SvgCircle cx={pt.x} cy={pt.y} r={2.8} fill="rgba(255,255,255,0.92)" />
-                    </>
-                  ) : (
-                    <SvgCircle cx={pt.x} cy={pt.y} r={i === pts.length - 1 ? 5 : 3.5}
-                      fill={i === pts.length - 1 ? '#FF9F0A' : 'rgba(255,159,10,0.50)'} />
-                  )}
-                </G>
-              );
-            })}
-          </Svg>
+      // ── Weight chart ─────────────────────────────────────────────────────
+      var values = WEIGHT_DATA.map(function(e){ return e.w; });
+      var hasData = values.length > 0;
+      var minV = hasData ? Math.min.apply(null, values) : 170;
+      var maxV = hasData ? Math.max.apply(null, values) : 190;
+      if (minV === maxV) { minV -= 5; maxV += 5; }
+      var pad = (maxV - minV) * 0.15;
+      minV -= pad; maxV += pad;
+      var W = 292, H = 150, PL = 4, PR = 12, PT = 10, PB = 10;
+      var pts = WEIGHT_DATA.map(function(e, i){
+        return {
+          x: PL + (WEIGHT_DATA.length <= 1 ? (W-PL-PR) : (i/(WEIGHT_DATA.length-1)) * (W-PL-PR)),
+          y: PT + (1 - (e.w - minV)/(maxV - minV)) * (H-PT-PB),
+        };
+      });
+      var paths = card.querySelectorAll('svg path');
+      var areaPathEl = paths[0], linePathEl = paths[1];
+      var lineD = dcSmoothPath(pts);
+      if (linePathEl) linePathEl.setAttribute('d', lineD);
+      if (areaPathEl) {
+        if (pts.length >= 2) areaPathEl.setAttribute('d', lineD + ' L' + pts[pts.length-1].x.toFixed(2) + ',' + H + ' L' + pts[0].x.toFixed(2) + ',' + H + ' Z');
+        else areaPathEl.setAttribute('d', '');
+      }
+      var lastPt = pts[pts.length - 1];
+      var lineEl = card.querySelector('svg line');
+      var circleEl = card.querySelector('svg circle');
+      var tooltipEl = card.querySelector('div[style*="translate(-50%, -100%)"]');
+      if (lastPt) {
+        if (lineEl) { lineEl.setAttribute('x1', lastPt.x); lineEl.setAttribute('y1', lastPt.y); lineEl.setAttribute('x2', lastPt.x); lineEl.setAttribute('y2', '140'); lineEl.style.setProperty('display', pts.length ? '' : 'none'); }
+        if (circleEl) { circleEl.setAttribute('cx', lastPt.x); circleEl.setAttribute('cy', lastPt.y); circleEl.style.setProperty('display', pts.length ? '' : 'none'); }
+        if (tooltipEl) {
+          tooltipEl.style.display = pts.length ? '' : 'none';
+          tooltipEl.textContent = LAST_WEIGHT != null ? (LAST_WEIGHT + ' lb') : '';
+          // Measured after attributes applied so layout is real — avoids
+          // hand-deriving the demo's own px-to-percent formula (see this
+          // file's own investigation notes).
+          requestAnimationFrame(function(){
+            var contDiv = card.querySelector('div[style*="height: 150px"]');
+            if (!contDiv || !circleEl) return;
+            var contRect = contDiv.getBoundingClientRect();
+            var circRect = circleEl.getBoundingClientRect();
+            if (contRect.width === 0) return;
+            var leftPct = ((circRect.left + circRect.width/2 - contRect.left) / contRect.width) * 100;
+            var topPx = (circRect.top - contRect.top) - 12;
+            tooltipEl.style.setProperty('left', leftPct.toFixed(1) + '%', 'important');
+            tooltipEl.style.setProperty('top', topPx.toFixed(1) + 'px', 'important');
+          });
+        }
+      } else if (tooltipEl) { tooltipEl.style.display = 'none'; }
 
-          {/* Session tooltip — appears above the tapped dot */}
-          {selPt && selEntry ? (
-            <View style={[ifc.tooltip, { left: tooltipX, top: tooltipY }]}
-              pointerEvents="none">
-              <Text style={ifc.ttDate}>{formatLong(selEntry.ts)}</Text>
-              <View style={ifc.ttRow}>
-                <Text style={ifc.ttScore}>{selEntry.pct}%</Text>
-                <Text style={ifc.ttSub}> form · {selEntry.reps} reps</Text>
-              </View>
-            </View>
-          ) : null}
-        </View>
-      </View>
+      // Y-axis tick labels — reuse however many placeholder rows exist.
+      var tickRows = card.querySelectorAll('div[style*="height: 150px"] > div[style*="pointer-events: none"]');
+      var tickCount = tickRows.length || 5;
+      for (var ti=0; ti<tickRows.length; ti++){
+        var frac = tickCount > 1 ? ti/(tickCount-1) : 0;
+        var val = maxV - frac*(maxV-minV);
+        var lbl = tickRows[ti].querySelector('div');
+        if (lbl) lbl.textContent = Math.round(val);
+      }
+      // X-axis month labels.
+      var monthEls = card.querySelectorAll('div[style*="justify-content: space-between"][style*="padding: 6px 0 0 34px"] > div');
+      var MONTHS = ${JSON.stringify(monthXs)};
+      for (var mi=0; mi<monthEls.length; mi++){ monthEls[mi].textContent = MONTHS[mi] || ''; }
 
-      {/* X-axis date labels */}
-      {dateLabels.length > 0 ? (
-        <View style={[ifc.xAxis, { marginLeft: 34 }]}>
-          {dateLabels.map((lbl, i) => (
-            <Text key={i} style={[ifc.xLbl, i === dateLabels.length - 1 && ifc.xLblNow]}>
-              {lbl}
-            </Text>
-          ))}
-        </View>
-      ) : null}
+      // Goal/trend line text (text-replace won't catch this — it's dynamic,
+      // not a fixed default string).
+      var goalLineEl = card.querySelector('div[style*="line-height: 1.35"]');
+      if (goalLineEl) {
+        var orbWrap = goalLineEl.parentElement;
+        // Preserve the orb icon (goalLineEl's own first element child, if any sits before it structurally it's a sibling) — just replace this element's own text content, which the markup gives as "You're <span>X%</span> of the way..." — simplest honest replacement: own textContent entirely.
+        goalLineEl.textContent = ${JSON.stringify(goalLine)};
+      }
 
-      {/* Tap hint when nothing selected */}
-      {selIdx === null ? (
-        <Text style={ifc.hint}>Tap any dot to inspect that session</Text>
-      ) : null}
+      // Range pills — scoped to THIS card only (Form Score has identical pills).
+      var pills = card.querySelectorAll('div[style*="border-radius: 999px"][style*="cursor: pointer"]');
+      for (var pi=0; pi<pills.length; pi++){
+        (function(p){
+          var label = (p.textContent||'').trim();
+          if (['2m','6m','1y','All'].indexOf(label) === -1) return;
+          p.style.background = label === RANGE ? '#ffffff' : 'transparent';
+          p.style.boxShadow = label === RANGE ? '0 1px 3px rgba(17,17,20,0.15)' : 'none';
+          p.addEventListener('click', function(ev){
+            ev.stopPropagation();
+            dcPost({ type: 'rangePick', range: label });
+          }, true);
+        })(pills[pi]);
+      }
 
-      {/* Insight */}
-      <View style={ifc.insightRow}>
-        <Svg width={14} height={14} viewBox="0 0 24 24">
-          <SvgPath d="M12 2.5l1.7 5.3 5.3 1.7-5.3 1.7L12 16.5l-1.7-5.3L5 9.5l5.3-1.7z" fill={C.accent} />
-          <SvgPath d="M18.5 14l.8 2.4 2.4.8-2.4.8-.8 2.4-.8-2.4-2.4-.8 2.4-.8z" fill={C.accent} />
-        </Svg>
-        <Text style={ifc.insightTxt}>
-          {diff >= 0
-            ? <Text>Up <Text style={ifc.insightBold}>{diff}%</Text> since your first session.</Text>
-            : <Text>Down <Text style={ifc.insightBold}>{Math.abs(diff)}%</Text>. Keep logging to turn it around.</Text>
-          }
-        </Text>
-      </View>
-    </View>
-  );
+      // Hide out-of-scope sections (text content, not UI the user still needs).
+      hideSection('Progress Photos');
+      hideSection('Form Score');
+      hideSection('Personal Bests');
+      hideSection('Past Workouts');
+
+      // ── Weigh-in sheet — mounts on demand (sc-if, not just hidden), so a
+      // persistent watcher (not just the initial build() retries) wires it
+      // the moment it appears. Verified via scripts/_check_progress_*.js:
+      // the sheet does not exist in the DOM until "Log weight" is tapped. ──
+      var sheetWired = false;
+      var typedDigits = '';
+      var editingFresh = true;
+      function wireWeighSheet(){
+        var bigNum = null;
+        var divs = document.querySelectorAll('#dc-root div');
+        for (var i=0;i<divs.length;i++){
+          var d = divs[i];
+          if (d.style.fontSize === '52px' && d.nextElementSibling && (d.nextElementSibling.textContent||'').trim() === 'lbs') { bigNum = d; break; }
+        }
+        if (!bigNum) { sheetWired = false; return; }
+        if (sheetWired) return;
+        sheetWired = true;
+        typedDigits = LAST_WEIGHT != null ? String(LAST_WEIGHT) : '';
+        editingFresh = true;
+        bigNum.textContent = typedDigits || '0';
+
+        var keys = document.querySelectorAll('#dc-root div[style*="height: 48px"][style*="border-radius: 9px"]');
+        for (var ki=0; ki<keys.length; ki++){
+          (function(keyEl){
+            var digitEl = keyEl.children[0];
+            if (!digitEl) return;
+            keyEl.addEventListener('click', function(ev){
+              ev.stopPropagation();
+              var key = (digitEl.textContent||'').trim();
+              if (editingFresh) { typedDigits = ''; editingFresh = false; }
+              if (key === '⌫') { typedDigits = typedDigits.slice(0, -1); }
+              else if (key === '.') { if (typedDigits.indexOf('.') === -1) typedDigits += '.'; }
+              else if (/^[0-9]$/.test(key)) { if (typedDigits.length < 6) typedDigits += key; }
+              bigNum.textContent = typedDigits || '0';
+              // Same wInColor cosmetic gap as Submit's own fix — verified
+              // via screenshot: stays in its "unedited placeholder" grey
+              // forever since nothing updates it. Real input means real
+              // (dark) text.
+              bigNum.style.setProperty('color', '#111114', 'important');
+            }, true);
+          })(keys[ki]);
+        }
+
+        var submitBtn = null;
+        var anchors = document.querySelectorAll('#dc-root a');
+        for (var ai=0; ai<anchors.length; ai++){ if ((anchors[ai].textContent||'').trim() === 'Submit') { submitBtn = anchors[ai]; break; } }
+        if (submitBtn) {
+          // Cosmetic fix — verified via screenshot: the button's
+          // background/color are driven by the artboard's own internal
+          // validation state (subBg/subFg), which never updates since we
+          // bypass its reactive engine, so it rendered stuck in its grey
+          // "disabled" look even though the click handler above always
+          // works. Any typed value here is submittable, so force the
+          // "enabled" look.
+          submitBtn.style.setProperty('background', '#111114', 'important');
+          submitBtn.style.setProperty('color', '#ffffff', 'important');
+          submitBtn.addEventListener('click', function(ev){
+            ev.preventDefault(); ev.stopPropagation();
+            var val = parseFloat(typedDigits);
+            if (!(val > 0)) return;
+            dcPost({ type: 'logWeight', weightLb: val });
+            // Close via the sheet's own real back button — reuses its
+            // existing close animation instead of reimplementing one.
+            var backBtn = document.querySelector('#dc-root a[aria-label="Back"]');
+            if (backBtn) backBtn.click();
+          }, true);
+        }
+      }
+      var weighWatcher = setInterval(wireWeighSheet, 250);
+
+      dcPost({ type: 'ready' });
+      return true;
+    }
+
+    var SCRIPT_START = Date.now();
+    function tryBuild(){
+      if (build()) return;
+      setTimeout(tryBuild, 200);
+    }
+    tryBuild();
+  })();
+  `;
 }
-const ifc = StyleSheet.create({
-  yAxis: {
-    width: 34, justifyContent: 'space-between',
-    paddingTop: 20, paddingBottom: 20,
-  },
-  yLbl: { fontSize: 9.5, fontWeight: W.medium, color: C.textSub, textAlign: 'right' },
-  tooltip: {
-    position: 'absolute',
-    backgroundColor: C.card,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    ...SHADOW_HIGH,
-    borderWidth: 1,
-    borderColor: C.border,
-    minWidth: 140,
-  },
-  ttDate:  { fontSize: 11, fontWeight: W.semi, color: C.textSub, marginBottom: 3 },
-  ttRow:   { flexDirection: 'row', alignItems: 'baseline' },
-  ttScore: { fontSize: 18, fontWeight: W.bold, color: '#FF9F0A' },
-  ttSub:   { fontSize: 12.5, fontWeight: W.medium, color: C.textSub },
-  xAxis:   { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingHorizontal: 2 },
-  xLbl:    { fontSize: 10.5, fontWeight: W.medium, color: C.textSub },
-  xLblNow: { fontWeight: W.bold, color: C.text },
-  hint:    { textAlign: 'center', fontSize: 11, color: C.textDim, marginTop: 6, fontWeight: W.medium },
-  insightRow:  { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center', marginTop: 14 },
-  insightTxt:  { fontSize: 12.5, color: C.text, letterSpacing: -0.2 },
-  insightBold: { fontWeight: W.bold },
-});
-
-// ─── MuscleMapPreview ───────────────────────────────────────────────────────
-// REPLACES the old tile-row preview (one small tier emblem per muscle,
-// capped at 6 + a "+N" tally) with the actual BodyMap diagram — per explicit
-// ask: "show the MUSCLE BODY MAP as a preview... tapping it opens the full
-// standings page." BodyMap is the same component muscle-ranks.tsx and
-// recap.tsx already render (front+back diagram + tier legend row) — reused
-// directly, not a new one-off, at a compact scale so it doesn't reintroduce
-// the "too crowded" problem the ORIGINAL full MuscleMapCard (this exact
-// diagram PLUS a legend list PLUS a per-muscle list, all at once) was
-// reported for and replaced because of. BodyMap alone is a fraction of that:
-// diagram + legend row, no per-muscle list underneath (that's what tapping
-// through to /muscle-ranks is for). No separate empty-state text needed —
-// BodyMap already reads as "nothing trained yet" on its own (an all-neutral-
-// gray figure), same as how recap.tsx and muscle-ranks.tsx both already rely
-// on that same fallback with zero special-casing.
-function MuscleMapPreview({ sessions }: { sessions: SessionEntry[] }) {
-  const router = useRouter();
-  const tiers = useMemo(() => computeMuscleTiers(sessions), [sessions]);
-
-  return (
-    <Pressable
-      onPress={() => router.push('/muscle-ranks' as any)}
-      style={({ pressed }) => [pressed && { opacity: 0.85 }]}
-    >
-      <View style={[mm.card, SHADOW_HIGH]}>
-        <View style={mm.headerRow}>
-          <View style={mm.header}>
-            <Text style={mm.title}>Muscle ranks</Text>
-            <Text style={mm.sub}>Volume AND form quality</Text>
-          </View>
-          <SymbolView name="chevron.right" size={13} tintColor={C.textDim} type="monochrome" style={{ width: 13, height: 13 }} />
-        </View>
-        {/* pointerEvents="none" — the whole card is already one Pressable
-            (tap anywhere to open /muscle-ranks); BodyMap has no interactive
-            elements of its own, this just stops it from ever intercepting
-            the tap on some inner element. */}
-        <View pointerEvents="none">
-          <BodyMap tiers={tiers} scale={0.6} />
-        </View>
-      </View>
-    </Pressable>
-  );
-}
-const mm = StyleSheet.create({
-  card: {
-    backgroundColor: C.card, borderRadius: 28,
-    borderWidth: 1, borderColor: C.border,
-    padding: 18, gap: 14,
-  },
-  headerRow:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  header:         { gap: 2 },
-  title:          { fontSize: 15.5, fontWeight: W.bold, letterSpacing: -0.2, color: C.text },
-  sub:            { fontSize: 11, fontWeight: W.medium, color: C.textSub },
-});
-
-// ─── MilestoneCard ────────────────────────────────────────────────────────────
-
-function MilestoneCard({ sessions }: { sessions: SessionEntry[] }) {
-  if (sessions.length === 0) return null;
-
-  const scored   = scoredSessions(sessions);
-  const best     = scored.length ? scored.reduce((a, b) => b.pct > a.pct ? b : a) : null;
-  const mostReps = sessions.reduce((a, b) => b.reps > a.reps ? b : a);
-  const streak   = calcStreak(sessions);
-  const total    = sessions.reduce((s, e) => s + e.reps, 0);
-
-  const items = [
-    {
-      icon: 'trophy.fill',
-      grad: C.formGrad,
-      label: 'Best form',
-      value: best ? `${best.pct}%` : 'N/A',
-      sub: best ? formatShort(best.ts) : 'no scored reps yet',
-    },
-    {
-      icon: 'bolt.fill',
-      grad: ['#48E08A', '#12B59A'] as [string,string],
-      label: 'Most reps',
-      value: String(mostReps.reps),
-      sub: formatShort(mostReps.ts),
-    },
-    {
-      icon: 'flame.fill',
-      grad: ['#FF6B6B', '#FF3B30'] as [string,string],
-      label: 'Day streak',
-      value: String(streak),
-      sub: streak === 1 ? '1 day' : `${streak} days`,
-    },
-    {
-      icon: 'sum',
-      grad: C.repsGrad,
-      label: 'Total reps',
-      value: total >= 1000 ? `${(total / 1000).toFixed(1)}k` : String(total),
-      sub: `${sessions.length} sessions`,
-    },
-  ];
-
-  return (
-    <View style={[mil.card, SHADOW_MED]}>
-      {items.map((item, i) => (
-        <View key={i} style={[mil.item, i < items.length - 1 && mil.itemBorder]}>
-          <LinearGradient colors={item.grad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={mil.iconBox}>
-            <SymbolView name={item.icon as any} type="monochrome"
-              style={{ width: 15, height: 15 }} tintColor="#fff" />
-          </LinearGradient>
-          <Text style={mil.label}>{item.label}</Text>
-          <Text style={mil.value}>{item.value}</Text>
-          <Text style={mil.sub}>{item.sub}</Text>
-        </View>
-      ))}
-    </View>
-  );
-}
-const mil = StyleSheet.create({
-  card: {
-    backgroundColor: C.card, borderRadius: 22,
-    borderWidth: 1, borderColor: C.border,
-    flexDirection: 'row',
-  },
-  item: {
-    flex: 1, alignItems: 'center', gap: 5,
-    paddingVertical: 16, paddingHorizontal: 6,
-  },
-  itemBorder: {
-    borderRightWidth: StyleSheet.hairlineWidth,
-    borderRightColor: 'rgba(17,24,39,0.08)',
-  },
-  iconBox: { width: 30, height: 30, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-  label:   { fontSize: 10, fontWeight: W.semi, color: C.textSub, letterSpacing: 0.1, textAlign: 'center' },
-  value:   { fontSize: 18, fontWeight: W.bold, letterSpacing: -0.3, color: C.text },
-  sub:     { fontSize: 10, fontWeight: W.medium, color: C.textDim },
-});
-
-// ─── ExerciseCards ────────────────────────────────────────────────────────────
-
-const EX_CONFIG = [
-  {
-    id: 'squat',  name: 'Squat',
-    icon: 'figure.strengthtraining.traditional',
-    colors: C.formGrad,
-    grad: 'gExSq',
-    muscles: 'Legs · Glutes',
-  },
-  {
-    id: 'pushup', name: 'Push-up',
-    icon: 'figure.core.training',
-    colors: C.repsGrad,
-    grad: 'gExPu',
-    muscles: 'Chest · Shoulders · Arms',
-  },
-  {
-    id: 'curl',   name: 'Curl',
-    icon: 'dumbbell.fill',
-    colors: C.weekGrad,
-    grad: 'gExCu',
-    muscles: 'Biceps · Back',
-  },
-];
-
-function ExerciseBreakdown({ sessions }: { sessions: SessionEntry[] }) {
-  return (
-    <View style={ebd.row}>
-      {EX_CONFIG.map(ex => (
-        <View key={ex.id} style={[ebd.card, SHADOW_MED]}>
-          <Ring
-            progress={0}
-            colors={ex.colors}
-            gradientId={ex.grad}
-            value="N/A"
-            unit=""
-            label=""
-            size={60}
-            strokeWidth={7}
-          />
-          <Text style={ebd.name}>{ex.name}</Text>
-          <Text style={ebd.muscles}>{ex.muscles}</Text>
-          <Text style={ebd.coming}>Track soon</Text>
-        </View>
-      ))}
-    </View>
-  );
-}
-const ebd = StyleSheet.create({
-  row:     { flexDirection: 'row', gap: 10 },
-  card: {
-    flex: 1, alignItems: 'center', gap: 7,
-    backgroundColor: C.card, borderRadius: 20,
-    borderWidth: 1, borderColor: C.border,
-    paddingVertical: 18, paddingHorizontal: 8,
-  },
-  name:    { fontSize: 12.5, fontWeight: W.semi, color: C.text, textAlign: 'center' },
-  muscles: { fontSize: 10, fontWeight: W.medium, color: C.textSub, textAlign: 'center', lineHeight: 14 },
-  coming:  { fontSize: 10, fontWeight: W.medium, color: C.textDim, textAlign: 'center' },
-});
-
-// ─── ProgressScreen ───────────────────────────────────────────────────────────
-
-const SESSIONS_PREVIEW = 3;
 
 export default function ProgressScreen() {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
+  const webRef = useRef<WebView>(null);
+  const [injectJs, setInjectJs] = useState<string | null>(null);
+  const [pageLoaded, setPageLoaded] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [range, setRange] = useState<UiRange>('6m');
+  const rankRef = useRef<RankInfo>({ rankName: 'Bronze I', rankPct: 0, nextRank: 'Bronze II', streakLine: '0-day streak' });
+  const entriesRef = useRef<WeightEntry[]>([]);
 
-  const [sessions,          setSessions]          = useState<SessionEntry[]>([]);
-  const [progressTab,       setProgressTab]       = useState<'week' | 'month' | 'all'>('all');
-  const [sessionsExpanded,  setSessionsExpanded]  = useState(false);
+  const rebuild = useCallback(() => {
+    setInjectJs(buildProgressInjectJs(rankRef.current, range, entriesRef.current, insets.bottom));
+  }, [range, insets.bottom]);
 
   useFocusEffect(useCallback(() => {
-    getAllSessions().then(all => {
-      setSessions([...all].sort((a, b) => a.ts - b.ts));
-    });
-  }, []));
+    Promise.all([getAllSessions(), getWeightLog()]).then(([sessions, entries]) => {
+      const tiers = computeMuscleTiers(sessions);
+      const standing = computeOverallStanding(tiers);
+      const tierCap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+      const TIER_ORDER = ['bronze', 'silver', 'gold', 'platinum', 'diamond'] as const;
+      const idx = standing ? TIER_ORDER.indexOf(standing.tier as typeof TIER_ORDER[number]) : 0;
+      const nextTier = idx >= 0 && idx < TIER_ORDER.length - 1 ? TIER_ORDER[idx + 1] : (standing?.tier ?? 'bronze');
+      rankRef.current = {
+        rankName: standing ? `${tierCap(standing.tier)} I` : 'Unranked',
+        rankPct:  standing ? Math.round(standing.progress * 100) : 0,
+        nextRank: tierCap(nextTier),
+        streakLine: `${calcStreak(sessions)}-day streak`,
+      };
+      entriesRef.current = entries;
+      setInjectJs(buildProgressInjectJs(rankRef.current, range, entries, insets.bottom));
+    }).catch(() => {});
+  }, [range, insets.bottom]));
 
-  const workoutGroups = useMemo(() => groupIntoWorkouts(sessions), [sessions]);
+  React.useEffect(() => {
+    if (pageLoaded && injectJs) webRef.current?.injectJavaScript(injectJs + '; true;');
+  }, [pageLoaded, injectJs]);
+
+  const handleLogWeight = useCallback(async (weightLb: number) => {
+    await logWeight(weightLb, new Date());
+    entriesRef.current = await getWeightLog();
+    rebuild();
+  }, [rebuild]);
 
   return (
-    <>
+    <View style={styles.root}>
       <StatusBar style="dark" />
-      <ScreenBackground>
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={[
-            s.scroll,
-            { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 90 },
-          ]}
-        >
-
-          {/* ── HEADER ────────────────────────────────────────────────── */}
-          <View style={s.header}>
-            <Text style={s.heading}>Progress</Text>
-            <Text style={s.sub}>Your form score and training history.</Text>
-          </View>
-
-          {/* ── MUSCLE MAP PREVIEW — moved above the chart, per explicit ask.
-              Compact only; tap opens the full dedicated page. ──────────── */}
-          <MuscleMapPreview sessions={sessions} />
-
-          {/* ── FORM TREND CHART ──────────────────────────────────────── */}
-          <View>
-            <View style={s.chartTopRow}>
-              <SectionHeader title="Form trend" />
-              <View style={s.segPicker}>
-                {(['week', 'month', 'all'] as const).map(tab => (
-                  <Pressable key={tab} onPress={() => setProgressTab(tab)}
-                    style={[s.segItem, progressTab === tab && s.segActive]}>
-                    <Text style={[s.segTxt, progressTab === tab && s.segTxtActive]}>
-                      {tab === 'week' ? 'Week' : tab === 'month' ? 'Month' : 'All'}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-            <View style={[s.chartCard, SHADOW_HIGH]}>
-              <InteractiveFormChart sessions={sessions} tab={progressTab} />
-            </View>
-          </View>
-
-          {/* ── MILESTONES ────────────────────────────────────────────── */}
-          {sessions.length > 0 ? (
-            <View style={{ gap: 10 }}>
-              <SectionHeader title="Personal bests" />
-              <MilestoneCard sessions={sessions} />
-            </View>
-          ) : null}
-
-          {/* ── EXERCISE BREAKDOWN ────────────────────────────────────── */}
-          <View style={{ gap: 10 }}>
-            <SectionHeader
-              title="By exercise"
-              sub="Detailed per-exercise trends. Coming soon"
-            />
-            <ExerciseBreakdown sessions={sessions} />
-          </View>
-
-          {/* ── QUICK ACTIONS (My workouts / Create workout / Log session) ──
-              Real screens built this pass — see OVERNIGHT_REPORT.md for why
-              these are plain native rows rather than the new Claude-Design
-              artboards for this tab. */}
-          <View style={s.quickActionsRow}>
-            <Pressable style={s.quickActionBtn} onPress={() => router.push('/my-workouts' as any)}>
-              <Text style={s.quickActionTxt}>My workouts</Text>
-            </Pressable>
-            <Pressable style={s.quickActionBtn} onPress={() => router.push('/create-workout' as any)}>
-              <Text style={s.quickActionTxt}>Create workout</Text>
-            </Pressable>
-            <Pressable style={s.quickActionBtn} onPress={() => router.push('/log-session' as any)}>
-              <Text style={s.quickActionTxt}>Log session</Text>
-            </Pressable>
-          </View>
-
-          {/* ── SESSION HISTORY ───────────────────────────────────────── */}
-          <View style={{ gap: 10 }}>
-            {/* Header row with "View all / Show less" action */}
-            <View style={s.sessionHeader}>
-              <View>
-                <Text style={sh.title}>All sessions</Text>
-                {workoutGroups.length > 0 && (
-                  <Text style={sh.sub}>{workoutGroups.length} logged</Text>
-                )}
-              </View>
-              {workoutGroups.length > SESSIONS_PREVIEW && (
-                <Pressable
-                  onPress={() => setSessionsExpanded(v => !v)}
-                  hitSlop={10}
-                >
-                  <Text style={s.viewAll}>
-                    {sessionsExpanded ? 'Show less' : `View all ${workoutGroups.length}`}
-                  </Text>
-                </Pressable>
-              )}
-            </View>
-
-            <View style={s.sessionList}>
-              {workoutGroups.length === 0 ? (
-                <View style={[s.emptyCard, SHADOW_MED]}>
-                  <SymbolView name="figure.run" type="monochrome"
-                    style={{ width: 32, height: 32, marginBottom: 12 }} tintColor={C.textDim} />
-                  <Text style={s.emptyTitle}>No sessions yet</Text>
-                  <Text style={s.emptySub}>
-                    Use Quick Form Check to start logging reps and form scores.
-                  </Text>
-                </View>
-              ) : (
-                (sessionsExpanded
-                  ? workoutGroups
-                  : workoutGroups.slice(0, SESSIONS_PREVIEW)
-                ).map(group => (
-                  <SessionCard key={group.ts} group={group} />
-                ))
-              )}
-            </View>
-          </View>
-
-        </ScrollView>
-      </ScreenBackground>
-    </>
+      <WebView
+        ref={webRef}
+        source={PROGRESS_HTML}
+        originWhitelist={['*']}
+        injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS}
+        onLoadEnd={() => setPageLoaded(true)}
+        onMessage={(e) => {
+          let msg: { type?: string; range?: UiRange; weightLb?: number };
+          try { msg = JSON.parse(e.nativeEvent.data); } catch { return; }
+          if (msg.type === 'ready') { setReady(true); return; }
+          if (msg.type === 'rangePick' && msg.range) { setRange(msg.range); return; }
+          if (msg.type === 'logWeight' && msg.weightLb) { void handleLogWeight(msg.weightLb); return; }
+        }}
+        style={[styles.web, { opacity: ready ? 1 : 0 }]}
+        scrollEnabled
+        bounces={false}
+        overScrollMode="never"
+        allowFileAccess
+        allowFileAccessFromFileURLs
+        allowUniversalAccessFromFileURLs
+        javaScriptEnabled
+        domStorageEnabled
+        cacheEnabled={false}
+      />
+    </View>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
-const s = StyleSheet.create({
-  scroll: { gap: Sp.lg, paddingHorizontal: 16 },
-
-  quickActionsRow: { flexDirection: 'row', gap: 8 },
-  quickActionBtn: {
-    flex: 1, paddingVertical: 12, borderRadius: 14, alignItems: 'center',
-    backgroundColor: C.card, borderWidth: 1, borderColor: C.border,
-  },
-  quickActionTxt: { fontSize: 12.5, fontWeight: W.semi, color: C.text, textAlign: 'center' },
-
-  // Header
-  header:  { gap: 6, paddingHorizontal: 8 },
-  heading: {
-    fontFamily: FONT.displayLight,
-    fontSize: 36, lineHeight: 38,
-    letterSpacing: -1, color: C.text,
-  },
-  sub: { fontSize: 13.5, fontWeight: W.medium, letterSpacing: 0.1, color: C.textSub },
-
-  // Chart
-  chartTopRow: {
-    flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between', paddingHorizontal: 8,
-    marginBottom: 10,
-  },
-  chartCard: {
-    backgroundColor: C.card, borderRadius: 28,
-    borderWidth: 1, borderColor: C.border,
-    padding: 18, paddingBottom: 14,
-  },
-  segPicker: {
-    flexDirection: 'row', gap: 2, padding: 3,
-    backgroundColor: '#eceef3', borderRadius: 10,
-  },
-  segItem:      { paddingVertical: 5, paddingHorizontal: 10, borderRadius: 7 },
-  segActive:    { backgroundColor: C.card },
-  segTxt:       { fontSize: 11, fontWeight: W.semi, color: C.textSub },
-  segTxtActive: { fontWeight: W.bold, color: C.text },
-
-  // Sessions
-  sessionHeader: {
-    flexDirection: 'row', alignItems: 'flex-end',
-    justifyContent: 'space-between', paddingHorizontal: 8,
-  },
-  viewAll: {
-    fontSize: 13, fontWeight: W.semi, color: C.accent,
-  },
-  sessionList: { gap: 10 },
-  emptyCard: {
-    backgroundColor: C.card, borderRadius: 22,
-    borderWidth: 1, borderColor: C.border,
-    alignItems: 'center', paddingVertical: 36, paddingHorizontal: 32,
-  },
-  emptyTitle: { fontSize: 16, fontWeight: W.semi, color: C.text, marginBottom: 8 },
-  emptySub:   { fontSize: 13.5, color: C.textSub, textAlign: 'center', lineHeight: 20 },
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: '#eeeef1' },
+  web:  { flex: 1, backgroundColor: '#eeeef1' },
 });
