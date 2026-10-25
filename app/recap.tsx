@@ -905,6 +905,7 @@ export default function RecapScreen() {
   const [data, setData]             = useState<RecapData | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const initialized = useRef(false);
+  const persistRef = useRef<Promise<unknown>>(Promise.resolve());
   const [view, setView] = useState<'summary' | 'allsets' | 'ranks'>('summary');
 
   // VIDEO — real native AVPlayer via expo-video, positioned full-screen
@@ -1032,8 +1033,13 @@ export default function RecapScreen() {
             reps: r.reps, goodReps: r.goodReps, pct: r.formScore,
             formChecked: r.formChecked,
           }));
-        if (entries.length > 0) await appendSessions(entries);
-
+        // ROOT CAUSE ("[recap-debug] blocked on loading gate: hasData:false"):
+        // setData used to run only AFTER `await appendSessions` (an
+        // AsyncStorage disk write), so the card's data — which is fully
+        // known synchronously right here — sat behind storage I/O and the
+        // screen rendered blank until it finished. Publish the data first;
+        // persist in the background. The rank effect awaits persistRef so it
+        // still reads sessions that include this one.
         setData({
           ts: summary.finishedAt, entries,
           totalReps: summary.totalReps, totalGoodReps: summary.totalGoodReps,
@@ -1041,6 +1047,7 @@ export default function RecapScreen() {
           durationSec: summary.durationSeconds,
           hasFormData: summary.results.some(r => r.completed && r.formChecked),
         });
+        if (entries.length > 0) persistRef.current = appendSessions(entries).catch(() => {});
       } else if (isHistoryMode) {
         const all    = await getAllSessions();
         const groups = groupIntoWorkouts(all);
@@ -1066,7 +1073,8 @@ export default function RecapScreen() {
           displayName: EXERCISE_DEFINITIONS[exId as ExerciseId]?.displayName ?? exId,
           reps, goodReps, pct, formChecked,
         };
-        if (reps > 0) await appendSessions([entry]);
+        // Same fix as workout mode above: data first, persist in background.
+        if (reps > 0) persistRef.current = appendSessions([entry]).catch(() => {});
         const parsedDuration = durationSecParam != null ? parseInt(durationSecParam, 10) : undefined;
         const soloVideoUri = typeof videoUriParam === 'string' && videoUriParam.length > 0 ? videoUriParam : undefined;
         setData({
@@ -1267,6 +1275,7 @@ export default function RecapScreen() {
   useEffect(() => {
     if (!data || data.isHistory) return;
     (async () => {
+      await persistRef.current; // this session's own entries must be written first
       const all = await getAllSessions(); // already includes this session's own entries
       const prior = all.filter(s => s.ts < data.ts);
       const afterStanding = computeOverallStanding(computeMuscleTiers(all));
