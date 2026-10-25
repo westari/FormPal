@@ -52,3 +52,7 @@ Before writing or editing ANY injection code against a design file, in order, ev
 - Batch your work. Finish everything, then give me ONE short list to test on my phone. Never ask me to check in the middle.
 - **Don't stop until it's actually done.** Once given a task, loop on it yourself — test with Playwright, find what's still broken, fix it, test again — without stopping to report back partway or asking "should I continue?" No excuses, no settling for "this needs more investigation" as a way to end the turn early. Keep going until the task is genuinely finished and verified, not until you've made some progress on it.
 - The ONLY acceptable reasons to stop before the task is done: something that truly requires the user's phone (a bug Playwright can't reproduce, confirmed only on-device) or a real decision only the user can make (ambiguous scope, conflicting requirements). Even then, finish everything else in the batch first, and say exactly what's blocked and why — never use it as cover for stopping early on something you could have kept pushing on.
+
+## Never stop to ask
+
+Never stop mid-task to ask me anything. Never ask "should I start?", "should I continue?", or "are you sure?". The answer is always yes, just do it. Only ask a question if it truly changes the result and you can't make a safe choice yourself. Even then, keep working on everything else and put the question at the END of your final message.
