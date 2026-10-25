@@ -65,6 +65,7 @@ export function dcLogicPatchJs(extSrc: string): string {
   }
   window.__athltSetData = function(d){
     window.__athltData = d;
+    if (window.__athltBump) window.__athltBump();
     var e = entry();
     if (e && e.__athltPatched) rerender(e);
     announce();
