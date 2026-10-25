@@ -1,12 +1,22 @@
 /**
  * app/(tabs)/train.tsx — Train tab
  *
- * Renders assets/traintab.html VERBATIM in a WebView (same approach as the
- * onboarding screens). The mockup's own fake chrome — status bar, bottom
- * nav, home indicator, blur-blob backdrop — is hidden by injected CSS; the
- * real AppBackground shows through the transparent WebView, and the real tab
- * bar sits below. Taps on the practice cards and the plan CTA are bridged
- * back out to the app's navigation.
+ * Renders assets/app screens/traintab.html in a WebView. The mockup's own
+ * fake chrome (status bar, bottom nav, home indicator, blur-blob backdrop) is
+ * hidden by injected CSS; the real AppBackground shows through the
+ * transparent WebView, and the real tab bar sits below.
+ *
+ * ROBUSTNESS (the "Train tab doesn't work on my phone" fix): the design ships
+ * as a self-extracting bundle that REPLACES the whole <html> element some
+ * time after the page's `load` event — on a phone that can be several
+ * seconds. The old version injected its CSS/scale once at `load` and stopped
+ * watching after 2s, so a slow unpack lost the CSS + scale for good (fake
+ * status bar, unscaled page, wrong layout). Now everything is installed in
+ * injectedJavaScriptBeforeContentLoaded with a observer that never stops
+ * (re-applies after the swap, and after every remount), the WebView stays
+ * hidden until the page reports it's really ready, and the plan view's
+ * exercise list is real data via lib/dcLogicPatch.ts instead of the mockup's
+ * hard-coded "Incline press / Cable fly / ..." demo list.
  */
 
 import React, { useCallback, useRef, useState, useEffect } from 'react';
@@ -17,12 +27,15 @@ import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
 import * as Haptics from 'expo-haptics';
 import AppBackground from '../../components/AppBackground';
+import { DC_VIEWPORT_JS } from '../../lib/dcWebviewHelpers';
+import { dcLogicPatchJs, athltSetDataJs } from '../../lib/dcLogicPatch';
 import { loadPlan } from '../../lib/planStorage';
 import { getAllSessions } from '../../lib/sessionLog';
+import { exerciseMode } from '../../constants/exerciseDefinitions';
 import type { Plan } from '../../types/plan';
 
 const TRAIN_HTML = require('../../assets/app screens/traintab.html');
-const TRAIN_BUILD = 'train-1';
+const TRAIN_BUILD = 'train-2';
 if (__DEV__) console.log(`[train] build ${TRAIN_BUILD}`);
 
 // Practice-card label → CV exercise id.
@@ -33,8 +46,24 @@ const PRACTICE_MAP: Record<string, string> = {
   'lunges':   'lunge',
 };
 
+// Subclass of the design's own logic: the plan view's exercise list is real.
+// (Verified: `workout` is the only data-driven list in this design — the hero
+// and the 4 practice cards are static markup, handled by the text map below.)
+const TRAIN_LOGIC_EXT = `function (Orig) {
+  return class extends Orig {
+    renderVals() {
+      var v = super.renderVals();
+      var D = window.__athltData;
+      if (D && D.workout) v.workout = D.workout;
+      return v;
+    }
+  };
+}`;
+
 const TRAIN_WEB_INJECT = `
 (function () {
+  if (window.__trainInstalled) return;
+  window.__trainInstalled = true;
   function post(m) { try { window.ReactNativeWebView.postMessage(m); } catch (e) {} }
   function btnFor(el) {
     for (var i = 0; el && i < 7; i++, el = el.parentElement) {
@@ -44,18 +73,15 @@ const TRAIN_WEB_INJECT = `
     return null;
   }
   document.addEventListener('pointerdown', function (e) { if (btnFor(e.target)) post('__tap'); }, true);
-  document.addEventListener('touchstart', function (e) { if (btnFor(e.target)) post('__tap'); }, true);
   document.addEventListener('click', function (e) {
     var b = btnFor(e.target);
     if (!b) return;
-    var oc = b.getAttribute('sc-camel-on-click') || '';
-    // Hero "Start" (goPlan) and the plan-view back arrow (goHome) are the
-    // mockup's own internal view switch — let its handler run, don't leave.
-    if (/goPlan|goHome/.test(oc)) return;
     var t = (b.textContent || '').replace(/\\s+/g, ' ').trim();
     // Plan-view CTA
     if (/^Begin first exercise/i.test(t)) return post('begin');
-    // A practice card: it carries an exercise name in its text
+    // A practice card: it carries an exercise name in its text. (The hero
+    // "Start" and the plan back-arrow are the mockup's own view switch — they
+    // match nothing here, so the mockup's handler runs untouched.)
     if (b.getAttribute('data-glass') === 'panel') {
       var name = t.toLowerCase();
       var keys = ['push-ups','pull-ups','squats','lunges'];
@@ -82,37 +108,80 @@ const TRAIN_WEB_INJECT = `
 
   function ensure() {
     if (document.getElementById('__rn_css')) return;
+    var host = document.head || document.documentElement;
+    if (!host) return; // before-content-loaded: the document may not exist yet
     var s = document.createElement('style');
     s.id = '__rn_css';
     s.textContent = CSS;
-    (document.head || document.documentElement).appendChild(s);
+    host.appendChild(s);
   }
   function fit() {
     ensure();
     var vw = window.innerWidth, vh = window.innerHeight;
-    if (!vw || !vh) return;
+    if (!vw || !vh) return false;
     var S = Math.min(vw / 472, vh / 1024);
     var b = document.body;
-    if (!b || b.__rnFit === S) return;
-    b.__rnFit = S;
-    b.style.setProperty('width', '472px', 'important');
-    b.style.setProperty('height', '1024px', 'important');
-    b.style.setProperty('position', 'absolute', 'important');
-    b.style.setProperty('top', '0', 'important');
-    b.style.setProperty('left', Math.round((vw - 472 * S) / 2) + 'px', 'important');
-    b.style.setProperty('transform', 'scale(' + S + ')', 'important');
-    b.style.setProperty('transform-origin', 'top left', 'important');
+    if (!b) return false;
+    if (b.__rnFit !== S) {
+      b.__rnFit = S;
+      b.style.setProperty('width', '472px', 'important');
+      b.style.setProperty('height', '1024px', 'important');
+      b.style.setProperty('position', 'absolute', 'important');
+      b.style.setProperty('top', '0', 'important');
+      b.style.setProperty('left', Math.round((vw - 472 * S) / 2) + 'px', 'important');
+      b.style.setProperty('transform', 'scale(' + S + ')', 'important');
+      b.style.setProperty('transform-origin', 'top left', 'important');
+    }
+    return true;
   }
-  fit();
+
+  // Exact-text replace of the mockup's hard-coded demo strings. Idempotent and
+  // re-run on every DOM change, because a view switch remounts the static
+  // markup with its demo text again.
+  function applyMap() {
+    var D = window.__athltData;
+    if (!D || !D.map) return 0;
+    var MAP = D.map, hit = 0;
+    var all = document.querySelectorAll('div');
+    for (var i = 0; i < all.length; i++) {
+      var el = all[i]; if (el.children.length) continue;
+      var t = (el.textContent || '').trim();
+      if (Object.prototype.hasOwnProperty.call(MAP, t) && el.textContent !== MAP[t]) { el.textContent = MAP[t]; hit++; t = MAP[t]; }
+      // The score pill's colour is part of the demo too (amber on a card that now says "New", etc).
+      var m = /^(\\d+) form$/.exec(t);
+      if (m) el.style.setProperty('color', +m[1] >= 85 ? '#0A9D5A' : '#C08A21');
+      else if (t === 'New') el.style.setProperty('color', 'rgba(26,26,28,0.5)');
+    }
+    return hit;
+  }
+
+  var reported = false, lastAsk = 0;
+  function tick() {
+    var ok = fit();
+    applyMap();
+    // Native's first push can land before this document exists (and be lost) —
+    // so the page asks until it has data.
+    if (!window.__athltData && Date.now() - lastAsk > 700) { lastAsk = Date.now(); post('need-data'); }
+    // Ready = real layout exists, the logic swap + data landed, and the hero is mounted.
+    if (!reported && ok && window.__athltData && window.__athltLogicReady && document.querySelector('[data-glass="hero"]')) {
+      reported = true;
+      post('ready');
+    }
+  }
   var deb;
-  var obs = new MutationObserver(function () { clearTimeout(deb); deb = setTimeout(fit, 120); });
-  obs.observe(document, { childList: true, subtree: true });
-  window.addEventListener('resize', fit);
-  [30, 120, 320, 700, 1400].forEach(function (d) { setTimeout(fit, d); });
-  setTimeout(function () { obs.disconnect(); }, 2000);
-  true;
+  function schedule() { clearTimeout(deb); deb = setTimeout(tick, 60); }
+  try { new MutationObserver(schedule).observe(document, { childList: true, subtree: true }); } catch (e) {}
+  window.addEventListener('resize', schedule);
+  window.__trainTick = tick;
+  setInterval(tick, 400);
+  tick();
 })();
+true;
 `;
+
+// The train bridge posts plain strings ('__tap', 'begin', 'practice:x',
+// 'ready'); dcLogicPatch posts JSON status — both arrive in onMsg.
+const TRAIN_BEFORE = DC_VIEWPORT_JS + dcLogicPatchJs(TRAIN_LOGIC_EXT) + TRAIN_WEB_INJECT;
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -125,22 +194,50 @@ function timeAgoLabel(ts: number | null): string {
   return `${days} days ago`;
 }
 
-// Builds the exact-text-replace MAP for traintab.html's hardcoded demo
-// strings — real default text confirmed by reading the unpacked file
-// (.scratch/unpacked-designs/traintab.html), never guessed. The 4
-// "Practice your form" cards are fixed static markup (not a data-driven
-// list in the design), so real data goes into those exact 4 slots.
-function buildTrainDataJs(plan: Plan | null, sessions: { exerciseId: string; pct: number; ts: number; formChecked?: boolean }[]): string {
-  const map: Record<string, string> = {};
+interface TrainData {
+  map: Record<string, string>;
+  workout: { n: string; name: string; sets: string; tag: string; tagColor: string }[];
+}
 
-  if (plan && plan.workouts.length > 0) {
-    const w = plan.workouts[plan.currentWorkoutIndex] ?? plan.workouts[0];
-    const today = new Date();
+// Real default text confirmed by reading the unpacked file
+// (.scratch/unpacked-designs/traintab.html), never guessed. The 4 "Practice
+// your form" cards are fixed static markup, so real data goes into those 4 slots.
+function buildTrainData(
+  plan: Plan | null,
+  sessions: { exerciseId: string; pct: number; ts: number; formChecked?: boolean }[],
+): TrainData {
+  const map: Record<string, string> = {};
+  const today = new Date();
+  const workout: TrainData['workout'] = [];
+
+  const w = plan && plan.workouts.length > 0 ? (plan.workouts[plan.currentWorkoutIndex] ?? plan.workouts[0]) : null;
+  if (plan && w) {
+    const totalSets = w.exercises.reduce((a, e) => a + e.targetSets, 0);
+    const mins = Math.max(10, Math.round(w.exercises.reduce((a, e) => a + e.targetSets * (e.restSeconds + 40), 0) / 60));
     map['Sunday · Day 12'] = `${WEEKDAYS[today.getDay()]} · Day ${plan.currentWorkoutIndex + 1}`;
     map['Session 2 of 3'] = `Session ${plan.currentWorkoutIndex + 1} of ${plan.workouts.length}`;
     map['Upper body'] = w.splitLabel;
-    const totalSets = w.exercises.reduce((a, e) => a + e.targetSets, 0);
     map['5 lifts · 18 sets'] = `${w.exercises.length} lift${w.exercises.length === 1 ? '' : 's'} · ${totalSets} sets`;
+    map['Upper body · Push'] = w.splitLabel;
+    map['5 exercises · 18 sets · 32 min'] = `${w.exercises.length} exercise${w.exercises.length === 1 ? '' : 's'} · ${totalSets} sets · ${mins} min`;
+    w.exercises.forEach((e, i) => {
+      const fc = exerciseMode(e.exerciseId) === 'formCheck';
+      workout.push({
+        n: String(i + 1),
+        name: e.displayName,
+        sets: `${e.targetSets} × ${e.targetReps}`,
+        tag: fc ? 'Form check' : '',
+        tagColor: '#007AFF',
+      });
+    });
+  } else {
+    // No plan yet — empty state instead of the mockup's fake "Upper body".
+    map['Sunday · Day 12'] = WEEKDAYS[today.getDay()];
+    map['Session 2 of 3'] = '';
+    map['Upper body'] = 'No plan yet';
+    map['5 lifts · 18 sets'] = 'Build a plan to get started';
+    map['Upper body · Push'] = '';
+    map['5 exercises · 18 sets · 32 min'] = '';
   }
 
   const byExercise: Record<string, { pct: number; ts: number }[]> = {};
@@ -163,64 +260,49 @@ function buildTrainDataJs(plan: Plan | null, sessions: { exerciseId: string; pct
       map[c.demoWhen] = timeAgoLabel(hist[0].ts);
     } else {
       map[c.demoWhen] = 'Never checked';
-      // demoScore ('New'/'81 form' etc.) stays — "New" is already correct
-      // for a never-done exercise; the two cards whose demo score isn't
-      // literally "New" would otherwise keep a fabricated number, so map
-      // those down to "New" too when there's no real data.
       if (c.demoScore !== 'New') map[c.demoScore] = 'New';
     }
   }
-
-  return `(function(){
-    var MAP = ${JSON.stringify(map)};
-    function apply(){
-      var hit = 0;
-      var all = document.querySelectorAll('div');
-      for (var i=0;i<all.length;i++){
-        var el = all[i]; if (el.children.length) continue;
-        var t = (el.textContent||'').trim();
-        if (Object.prototype.hasOwnProperty.call(MAP, t)) { el.textContent = MAP[t]; hit++; }
-      }
-      return hit;
-    }
-    if (!apply()) { [100,300,700,1500].forEach(function(d){ setTimeout(apply, d); }); }
-  })();`;
+  return { map, workout };
 }
 
 export default function TrainScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const fade = useRef(new Animated.Value(0)).current;
-  const [dataJs, setDataJs] = useState('');
-  const [pageLoaded, setPageLoaded] = useState(false);
   const webRef = useRef<WebView>(null);
+  const [revealed, setRevealed] = useState(false);
+  const dataJsRef = useRef<string | null>(null);
 
+  // Show only once the page says it's genuinely laid out + wired (or after a
+  // 7s safety net so a missing signal can never leave a blank tab).
   useEffect(() => {
-    const a = Animated.timing(fade, { toValue: 1, duration: 240, easing: Easing.out(Easing.quad), useNativeDriver: true });
+    if (!revealed) return;
+    const a = Animated.timing(fade, { toValue: 1, duration: 200, easing: Easing.out(Easing.quad), useNativeDriver: true });
     a.start();
     return () => a.stop();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [revealed]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const t = setTimeout(() => setRevealed(true), 7000);
+    return () => clearTimeout(t);
+  }, []);
 
   useFocusEffect(useCallback(() => {
     Promise.all([loadPlan(), getAllSessions()]).then(([plan, sessions]) => {
-      setDataJs(buildTrainDataJs(plan, sessions));
+      dataJsRef.current = athltSetDataJs(buildTrainData(plan, sessions));
+      webRef.current?.injectJavaScript(dataJsRef.current);
     }).catch(() => {});
   }, []));
 
-  // injectedJavaScript only runs on the page's initial load — dataJs
-  // arrives later (async storage reads), so it's pushed in imperatively
-  // once BOTH the page has loaded and the real data is ready, whichever
-  // comes last.
-  useEffect(() => {
-    if (pageLoaded && dataJs) webRef.current?.injectJavaScript(dataJs + '; true;');
-  }, [pageLoaded, dataJs]);
-
-  function onMsg(m: string) {
-    if (m === '__tap') { Haptics.selectionAsync(); return; }
+  function onMsg(raw: string) {
+    if (raw === '__tap') { Haptics.selectionAsync(); return; }
+    if (raw === 'ready') { setRevealed(true); return; }
+    if (raw === 'need-data') { if (dataJsRef.current) webRef.current?.injectJavaScript(dataJsRef.current); return; }
+    if (raw.startsWith('{')) return; // lib/dcLogicPatch's own JSON status posts
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    if (m === 'begin') { router.push('/workout' as any); return; }
-    if (m.startsWith('practice:')) {
-      const id = PRACTICE_MAP[m.slice('practice:'.length)];
+    if (raw === 'begin') { router.push('/workout' as any); return; }
+    if (raw.startsWith('practice:')) {
+      const id = PRACTICE_MAP[raw.slice('practice:'.length)];
       if (id) router.push(`/formcheck?exercise=${id}` as any);
     }
   }
@@ -234,8 +316,7 @@ export default function TrainScreen() {
           ref={webRef}
           source={TRAIN_HTML as any}
           originWhitelist={['*']}
-          injectedJavaScript={TRAIN_WEB_INJECT}
-          onLoadEnd={() => setPageLoaded(true)}
+          injectedJavaScriptBeforeContentLoaded={TRAIN_BEFORE}
           onMessage={(e) => onMsg(e.nativeEvent.data)}
           style={s.web}
           opaque={false}
