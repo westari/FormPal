@@ -1,527 +1,205 @@
 /**
- * app/(tabs)/profile.tsx — FormPal Profile & Settings Screen
+ * app/(tabs)/profile.tsx — Profile tab
  *
- * Design tokens, shadows, and typography are identical to index.tsx.
+ * Renders the real Claude-Design artboard (assets/app screens/profile.html)
+ * wired with real data, same architecture + process as the Progress tab (see
+ * app/(tabs)/progress.tsx, lib/dcLogicPatch.ts, lib/profileInject.ts). The
+ * design file is never edited.
+ *
+ * Everything the old native Profile screen could do is still here: sign out,
+ * delete account, audio settings, rank & customization, reset onboarding, and
+ * the dev tools (they now live as rows in the artboard's own list style).
+ * Rows for features the app doesn't have yet (reminders, Apple Health,
+ * membership, referrals, support messaging) say "Coming soon" instead of
+ * showing the artboard's demo values.
  */
-
-import React, { useState, useCallback } from 'react';
-import {
-  View, Text, StyleSheet, ScrollView, Pressable, Platform, Alert,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { View, StyleSheet, Alert } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { LinearGradient } from 'expo-linear-gradient';
-import { SymbolView } from 'expo-symbols';
 import { StatusBar } from 'expo-status-bar';
-
-import { FONT, Sp, W } from '../../constants/theme';
-import ScreenBackground from '../../components/ScreenBackground';
+import { WebView } from 'react-native-webview';
+import * as Haptics from 'expo-haptics';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { CONSOLE_FORWARD_JS, DC_VIEWPORT_JS } from '../../lib/dcWebviewHelpers';
+import { dcLogicPatchJs, athltSetDataJs } from '../../lib/dcLogicPatch';
+import { PROFILE_LOGIC_EXT, PROFILE_DOM_JS } from '../../lib/profileInject';
+import { buildProfileData, GOAL_IDS, PLACE_IDS, type ProfileData, type ProfileDetails } from '../../lib/profileData';
+import { getAllSessions, calcStreak, computeMuscleTiers } from '../../lib/sessionLog';
+import { getWeightLog, logWeight } from '../../lib/weightLog';
+import { loadPlan, loadProfile, saveProfile, savePlan } from '../../lib/planStorage';
+import { generatePlan } from '../../lib/planGenerator';
 import { clearAllCalibrations } from '../../lib/calibration/store';
-import { useAudioSettingsStore } from '../../store/audioSettingsStore';
-import { useCustomizationStore } from '../../store/customizationStore';
-import { useRankStanding } from '../../lib/rank';
-import { TIER_META, TierEmblem } from '../../components/MuscleTierMap';
-import { unlockProgress } from '../../constants/customization';
 import { signOutAndClear, deleteAccountAndClear } from '../../lib/formpalSync';
+import { useCustomizationStore } from '../../store/customizationStore';
+import { useAudioSettingsStore } from '../../store/audioSettingsStore';
+import { supabase } from '../../constants/supabase';
+import Constants from 'expo-constants';
+import type { PlanProfile } from '../../types/plan';
 
-// ─── Design tokens (exact match to index.tsx) ─────────────────────────────────
+const PROFILE_HTML = require('../../assets/app screens/profile.html');
+const PROFILE_BUILD = 'profile-1';
+if (__DEV__) console.log(`[profile] build ${PROFILE_BUILD}`);
 
-const C = {
-  text:     '#0b1020',
-  textSub:  '#9aa0ad',
-  textDim:  '#b6bcc7',
-  accent:   '#0a84ff',
-  card:     '#ffffff',
-  border:   'rgba(17,24,39,0.05)',
-  iconBox:  '#f4f5f8',
-  formGrad: ['#FFC24B', '#FF7A2E'] as [string, string],
-  weekGrad: ['#48E08A', '#12B59A'] as [string, string],
-  repsGrad: ['#67CEFF', '#0A6CFF'] as [string, string],
-};
+const ONBOARDING_KEY = 'formpal_onboarding_complete';
+const LOCATION_KEY   = 'formpal_location';
+const PROFILE_DETAILS_KEY = 'formpal_profile_details';
 
-const SHADOW_HIGH = Platform.OS === 'ios' ? {
-  boxShadow: '0px 1.5px 3px rgba(16,24,40,0.05), 0px 5px 12px rgba(16,24,40,0.05), 0px 20px 36px rgba(28,40,90,0.22), inset 0px 1px 0px rgba(255,255,255,0.95)',
-} as any : {};
+const PROFILE_BEFORE = DC_VIEWPORT_JS + CONSOLE_FORWARD_JS + dcLogicPatchJs(PROFILE_LOGIC_EXT) + PROFILE_DOM_JS;
 
-const SHADOW_MED = Platform.OS === 'ios' ? {
-  boxShadow: '0px 1px 1.5px rgba(16,24,40,0.05), 0px 8px 18px rgba(28,40,90,0.15), inset 0px 1px 0px rgba(255,255,255,0.9)',
-} as any : {};
-
-const SHADOW_ROW = Platform.OS === 'ios' ? {
-  boxShadow: '0px 1px 1.5px rgba(16,24,40,0.05), 0px 8px 18px rgba(28,40,90,0.12), inset 0px 1px 0px rgba(255,255,255,0.9)',
-} as any : {};
-
-// ─── Storage keys ─────────────────────────────────────────────────────────────
-
-const ONBOARDING_KEY    = 'formpal_onboarding_complete';
-const PLAN_PROFILE_KEY  = 'formpal_plan_profile';
-const READINESS_KEY     = 'formpal_readiness';
-const LOCATION_KEY      = 'formpal_location';
-
-// ─── Display maps ─────────────────────────────────────────────────────────────
-
-const GOAL_LABELS: Record<string, string> = {
-  strength:   'Build strength',
-  toned:      'Get toned',
-  general:    'General fitness',
-  weightloss: 'Lose weight',
-};
-const EXP_LABELS: Record<string, string> = {
-  beginner:     'Beginner',
-  intermediate: 'Intermediate',
-  advanced:     'Advanced',
-};
-const READINESS_LABELS: Record<string, string> = {
-  fresh:  'Fresh',
-  tired:  'A bit tired',
-  sore:   'Sore',
-};
-const LOCATION_LABELS: Record<string, string> = {
-  home:     'Home',
-  gym:      'Gym',
-  outdoors: 'Outdoors',
-};
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface PlanProfile {
-  goal?:        string;
-  experience?:  string;
-  daysPerWeek?: number;
+async function loadDetails(): Promise<ProfileDetails> {
+  try { const raw = await AsyncStorage.getItem(PROFILE_DETAILS_KEY); return raw ? JSON.parse(raw) : {}; } catch { return {}; }
 }
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function SectionHeader({ title }: { title: string }) {
-  return <Text style={sh.title}>{title}</Text>;
+async function patchDetails(patch: ProfileDetails) {
+  try { await AsyncStorage.setItem(PROFILE_DETAILS_KEY, JSON.stringify({ ...(await loadDetails()), ...patch })); } catch {}
 }
-const sh = StyleSheet.create({
-  title: { fontSize: 17, fontWeight: W.bold, letterSpacing: -0.3, color: C.text, paddingHorizontal: 8 },
-});
-
-interface SettingRowProps {
-  icon:     string;
-  colors:   [string, string];
-  label:    string;
-  value?:   string;
-  onPress?: () => void;
-  danger?:  boolean;
-  last?:    boolean;
-}
-
-function SettingRow({ icon, colors, label, value, onPress, danger, last }: SettingRowProps) {
-  const inner = (
-    <View style={[sr.row, !last && sr.rowBorder]}>
-      <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={sr.iconBox}>
-        <SymbolView name={icon as any} type="monochrome" style={{ width: 16, height: 16 }} tintColor="#fff" />
-      </LinearGradient>
-      <Text style={[sr.label, danger && sr.labelDanger]}>{label}</Text>
-      <View style={sr.right}>
-        {value ? <Text style={sr.value}>{value}</Text> : null}
-        {onPress ? <Text style={sr.chevron}>›</Text> : null}
-      </View>
-    </View>
-  );
-  if (!onPress) return inner;
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => pressed ? { opacity: 0.7 } : undefined}
-    >
-      {inner}
-    </Pressable>
-  );
-}
-const sr = StyleSheet.create({
-  row: {
-    flexDirection: 'row', alignItems: 'center', gap: 13,
-    paddingVertical: 13, paddingHorizontal: 16,
-  },
-  rowBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(17,24,39,0.07)',
-  },
-  iconBox: {
-    width: 32, height: 32, borderRadius: 9,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  label:       { flex: 1, fontSize: 15, fontWeight: W.medium, color: C.text },
-  labelDanger: { color: '#e0352b' },
-  right:       { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  value:       { fontSize: 14, fontWeight: W.medium, color: C.textSub },
-  chevron:     { fontSize: 18, color: C.textDim, lineHeight: 22 },
-});
-
-function SettingsCard({ children }: { children: React.ReactNode }) {
-  return (
-    <View style={[scard.card, SHADOW_MED]}>
-      {children}
-    </View>
-  );
-}
-const scard = StyleSheet.create({
-  card: {
-    backgroundColor: C.card, borderRadius: 22,
-    borderWidth: 1, borderColor: C.border,
-    overflow: 'hidden',
-  },
-});
-
-// ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function ProfileScreen() {
-  const insets = useSafeAreaInsets();
   const router = useRouter();
-  const audioEnabled = useAudioSettingsStore(s => s.audioEnabled);
-  const displayName  = useCustomizationStore(s => s.displayName);
-  const { peakTier } = useRankStanding();
-  const unlocks = unlockProgress(peakTier);
+  const webRef = useRef<WebView>(null);
+  const [ready, setReady] = useState(false);
+  const dataRef = useRef<ProfileData | null>(null);
+  const seedRef = useRef(0);
 
-  const [plan,      setPlan]      = useState<PlanProfile>({});
-  const [readiness, setReadiness] = useState<string | null>(null);
-  const [location,  setLocation]  = useState<string | null>(null);
+  const push = useCallback(() => {
+    if (dataRef.current) webRef.current?.injectJavaScript(athltSetDataJs(dataRef.current));
+  }, []);
 
-  useFocusEffect(useCallback(() => {
-    Promise.all([
-      AsyncStorage.getItem(PLAN_PROFILE_KEY),
-      AsyncStorage.getItem(READINESS_KEY),
-      AsyncStorage.getItem(LOCATION_KEY),
-    ]).then(([planRaw, readRaw, locRaw]) => {
-      if (planRaw) setPlan(JSON.parse(planRaw));
-      if (readRaw) setReadiness(readRaw);
-      if (locRaw)  setLocation(locRaw);
-    }).catch(() => {});
-  }, []));
+  // Safety net so a missing ready signal can never leave a blank tab.
+  useEffect(() => {
+    const t = setTimeout(() => setReady(true), 7000);
+    return () => clearTimeout(t);
+  }, []);
 
-  const resetOnboarding = async () => {
-    Alert.alert(
-      'Reset Onboarding',
-      'This will clear your plan and send you back to onboarding.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset', style: 'destructive',
-          onPress: async () => {
-            await AsyncStorage.removeItem(ONBOARDING_KEY);
-            router.replace('/onboarding');
-          },
-        },
-      ],
-    );
-  };
+  const load = useCallback(async (reseed: boolean) => {
+    const [sessions, weights, plan, planProfile, location, details, userRes] = await Promise.all([
+      getAllSessions(), getWeightLog(), loadPlan(), loadProfile(),
+      AsyncStorage.getItem(LOCATION_KEY), loadDetails(), supabase.auth.getUser().catch(() => null),
+    ]);
+    if (reseed) seedRef.current += 1;
+    const audio = useAudioSettingsStore.getState();
+    dataRef.current = buildProfileData({
+      seedVersion: seedRef.current,
+      name: useCustomizationStore.getState().displayName,
+      email: userRes?.data?.user?.email ?? null,
+      sessions, streak: calcStreak(sessions),
+      planProfile, planGeneratedAt: plan?.generatedAt ?? null,
+      location, latestWeightLb: weights.length ? weights[weights.length - 1].weightLb : null,
+      details,
+      audio: { enabled: audio.audioEnabled, voiceFrequency: audio.voiceFrequency },
+      appVersion: `FormPal ${Constants.expoConfig?.version ?? ''}${Constants.expoConfig?.ios?.buildNumber ? ` (${Constants.expoConfig.ios.buildNumber})` : ''}`.trim(),
+    });
+    push();
+  }, [push]);
 
-  const signOut = () => {
-    Alert.alert(
-      'Sign Out',
-      'This clears everything saved on this device. Your account data stays safe in the cloud.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign Out', style: 'destructive',
-          onPress: async () => {
-            await signOutAndClear();
-            router.replace('/onboarding');
-          },
-        },
-      ],
-    );
-  };
+  useFocusEffect(useCallback(() => { load(true).catch(() => {}); }, [load]));
 
-  const deleteAccount = () => {
-    Alert.alert(
-      'Delete Account',
-      'This permanently deletes your account and everything saved with it — onboarding answers, plan, workout history, streaks, and progress photos. This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete', style: 'destructive',
-          onPress: async () => {
+  // Persist edits made on the page to their real homes.
+  const save = useCallback(async (p: Record<string, any>) => {
+    try {
+      if (p.name !== undefined) useCustomizationStore.getState().setDisplayName(String(p.name));
+      const det: ProfileDetails = {};
+      if (p.age !== undefined) det.age = p.age;
+      if (p.height !== undefined) det.height = p.height;
+      if (p.sex !== undefined) det.sex = p.sex;
+      if (p.units !== undefined) det.units = p.units;
+      if (p.days !== undefined) det.days = p.days;
+      if (p.pinned !== undefined) det.pinned = p.pinned;
+      if (Object.keys(det).length) await patchDetails(det);
+
+      if (p.place !== undefined) await AsyncStorage.setItem(LOCATION_KEY, PLACE_IDS[p.place] ?? 'gym');
+
+      if (p.goal !== undefined || p.experience !== undefined || p.days !== undefined) {
+        const base: PlanProfile = (await loadProfile()) ?? { goal: 'strength', experience: 'beginner', daysPerWeek: 3, location: 'gym' as any };
+        const next: PlanProfile = { ...base };
+        if (p.goal !== undefined) next.goal = GOAL_IDS[p.goal] ?? base.goal;
+        if (p.experience !== undefined) next.experience = String(p.experience).toLowerCase() as PlanProfile['experience'];
+        if (p.days !== undefined) next.daysPerWeek = Math.max(1, (p.days as boolean[]).filter(Boolean).length);
+        await saveProfile(next);
+      }
+      if (p.weight !== undefined && p.weight > 0) await logWeight(p.weight, new Date());
+    } catch {}
+  }, []);
+
+  const applyPlan = useCallback(async () => {
+    try {
+      const profile = await loadProfile();
+      if (!profile) return;
+      const sessions = await getAllSessions();
+      await savePlan(generatePlan(profile, computeMuscleTiers(sessions)));
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {}
+  }, []);
+
+  const onMessage = useCallback((raw: string) => {
+    let msg: { type?: string; to?: string; patch?: Record<string, any>; msg?: string };
+    try { msg = JSON.parse(raw); } catch { return; }
+    switch (msg.type) {
+      case 'ready': setReady(true); break;
+      case 'needData': push(); break;
+      case 'pageConsole': if (__DEV__) console.log('[profile-page]', msg.msg); break;
+      case 'save': if (msg.patch) void save(msg.patch); break;
+      case 'applyPlan': void applyPlan(); break;
+      case 'nav': {
+        const route = msg.to === 'audio' ? '/audio-settings' : msg.to === 'ar' ? '/ar-experiment' : msg.to === 'calibrate' ? '/calibrate' : null;
+        if (route) router.push(route as any);
+        break;
+      }
+      case 'signOut':
+        Alert.alert('Sign Out', 'This clears everything saved on this device. Your account data stays safe in the cloud.', [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Sign Out', style: 'destructive', onPress: async () => { await signOutAndClear(); router.replace('/onboarding'); } },
+        ]);
+        break;
+      case 'deleteAccount':
+        Alert.alert('Delete Account', 'This permanently deletes your account and everything saved with it — onboarding answers, plan, workout history, streaks, and progress photos. This cannot be undone.', [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Delete', style: 'destructive', onPress: async () => {
             const { error } = await deleteAccountAndClear();
             if (error) { Alert.alert('Could not delete account', error); return; }
             router.replace('/onboarding');
-          },
-        },
-      ],
-    );
-  };
-
-  const clearCalibrationOverrides = () => {
-    Alert.alert(
-      'Clear Calibration Overrides',
-      'This deletes every saved exercise calibration. Every exercise reverts to its built-in thresholds until you recalibrate. Use this if the calibration tool may have saved a bad override while you were testing it.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear', style: 'destructive',
-          onPress: async () => {
-            await clearAllCalibrations();
-            Alert.alert('Cleared', 'All saved calibration overrides have been removed.');
-          },
-        },
-      ],
-    );
-  };
+          } },
+        ]);
+        break;
+      case 'resetOnboarding':
+        Alert.alert('Reset Onboarding', 'This will clear your plan and send you back to onboarding.', [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Reset', style: 'destructive', onPress: async () => { await AsyncStorage.removeItem(ONBOARDING_KEY); router.replace('/onboarding'); } },
+        ]);
+        break;
+      case 'clearCalibration':
+        Alert.alert('Clear Calibration Overrides', 'This deletes every saved exercise calibration. Every exercise reverts to its built-in thresholds until you recalibrate. Use this if the calibration tool may have saved a bad override while you were testing it.', [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Clear', style: 'destructive', onPress: async () => { await clearAllCalibrations(); Alert.alert('Cleared', 'All saved calibration overrides have been removed.'); } },
+        ]);
+        break;
+    }
+  }, [push, save, applyPlan, router]);
 
   return (
-    <>
+    <View style={styles.root}>
       <StatusBar style="dark" />
-      <ScreenBackground>
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={[
-            s.scroll,
-            { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 90 },
-          ]}
-        >
-
-          {/* ── 1. HEADER ──────────────────────────────────────────────── */}
-          <View style={s.header}>
-            <Text style={s.heading}>Profile</Text>
-            <Text style={s.sub}>Your plan, preferences, and settings.</Text>
-          </View>
-
-          {/* ── 2. AVATAR CARD — taps into the rank / customization screen ── */}
-          <Pressable
-            onPress={() => router.push('/customize')}
-            style={({ pressed }) => [s.avatarCard, SHADOW_HIGH, pressed && { opacity: 0.85 }]}
-          >
-            {/* Gradient circle avatar */}
-            <LinearGradient
-              colors={peakTier ? [TIER_META[peakTier].hi, TIER_META[peakTier].lo] : C.formGrad}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={s.avatar}
-            >
-              <Text style={[s.avatarLetter, peakTier && { color: TIER_META[peakTier].ink }]}>
-                {(displayName[0] || 'A').toUpperCase()}
-              </Text>
-            </LinearGradient>
-
-            <View style={s.avatarInfo}>
-              <Text style={s.avatarName}>{displayName}</Text>
-              <View style={s.rankRow}>
-                {peakTier ? (
-                  <>
-                    <TierEmblem tier={peakTier} size={16} />
-                    <Text style={s.avatarSub}>
-                      {TIER_META[peakTier].label} · {unlocks.unlocked}/{unlocks.total} unlocked
-                    </Text>
-                  </>
-                ) : (
-                  <Text style={s.avatarSub}>Unranked. Train to earn your first colour</Text>
-                )}
-              </View>
-            </View>
-            <Text style={s.avatarChevron}>›</Text>
-          </Pressable>
-
-          {/* ── RANK & CUSTOMIZATION ───────────────────────────────────── */}
-          <SectionHeader title="Rank" />
-          <SettingsCard>
-            <SettingRow
-              icon="paintpalette.fill"
-              colors={peakTier ? [TIER_META[peakTier].lo, TIER_META[peakTier].ink] : ['#BF5AF2', '#9544C9']}
-              label="Rank & customization"
-              value={peakTier ? TIER_META[peakTier].label : 'Unranked'}
-              onPress={() => router.push('/customize')}
-              last
-            />
-          </SettingsCard>
-
-          {/* ── 3. YOUR PLAN ────────────────────────────────────────────── */}
-          <SectionHeader title="Your plan" />
-          <SettingsCard>
-            <SettingRow
-              icon="target"
-              colors={C.formGrad}
-              label="Goal"
-              value={plan.goal ? GOAL_LABELS[plan.goal] : 'N/A'}
-            />
-            <SettingRow
-              icon="chart.bar.fill"
-              colors={C.weekGrad}
-              label="Experience"
-              value={plan.experience ? EXP_LABELS[plan.experience] : 'N/A'}
-            />
-            <SettingRow
-              icon="calendar"
-              colors={C.repsGrad}
-              label="Days per week"
-              value={plan.daysPerWeek ? `${plan.daysPerWeek} days` : 'N/A'}
-              last
-            />
-          </SettingsCard>
-
-          {/* ── 4. PREFERENCES ──────────────────────────────────────────── */}
-          <SectionHeader title="Preferences" />
-          <SettingsCard>
-            <SettingRow
-              icon="bolt.fill"
-              colors={['#48E08A', '#1FA85A']}
-              label="Today's readiness"
-              value={readiness ? READINESS_LABELS[readiness] : 'Not set'}
-            />
-            <SettingRow
-              icon="house.fill"
-              colors={C.repsGrad}
-              label="Workout location"
-              value={location ? LOCATION_LABELS[location] : 'Not set'}
-              last
-            />
-          </SettingsCard>
-
-          {/* ── 5. APP ──────────────────────────────────────────────────── */}
-          <SectionHeader title="App" />
-          <SettingsCard>
-            <SettingRow
-              icon="speaker.wave.2.fill"
-              colors={['#0A84FF', '#0056CC']}
-              label="Audio coaching"
-              value={audioEnabled ? 'On' : 'Off'}
-              onPress={() => router.push('/audio-settings')}
-            />
-            <SettingRow
-              icon="bell.fill"
-              colors={['#FF9F0A', '#FF6B00']}
-              label="Notifications"
-              value="Coming soon"
-            />
-            <SettingRow
-              icon="ruler.fill"
-              colors={['#BF5AF2', '#9544C9']}
-              label="Units"
-              value="Imperial"
-              last
-            />
-          </SettingsCard>
-
-          {/* ── 6. ACCOUNT ──────────────────────────────────────────────── */}
-          <SectionHeader title="Account" />
-          <SettingsCard>
-            <SettingRow
-              icon="info.circle.fill"
-              colors={C.repsGrad}
-              label="About FormPal"
-              value="v1.0"
-            />
-            <SettingRow
-              icon="hand.raised.fill"
-              colors={['#48E08A', '#12B59A']}
-              label="Privacy"
-              value="Coming soon"
-            />
-            <SettingRow
-              icon="questionmark.circle.fill"
-              colors={['#d4d7dd', '#9aa0ad']}
-              label="Help & feedback"
-              value="Coming soon"
-              last
-            />
-          </SettingsCard>
-
-          {/* ── ACCOUNT ─────────────────────────────────────────────────── */}
-          <SectionHeader title="Account" />
-          <SettingsCard>
-            <SettingRow
-              icon="arrow.right.square"
-              colors={['#9aa0ad', '#6e7482']}
-              label="Sign Out"
-              onPress={signOut}
-            />
-            <SettingRow
-              icon="trash.fill"
-              colors={['#FF6B6B', '#FF3B30']}
-              label="Delete Account"
-              onPress={deleteAccount}
-              danger
-              last
-            />
-          </SettingsCard>
-
-          {/* ── 7. DEV ──────────────────────────────────────────────────── */}
-          <SectionHeader title="Developer" />
-          <SettingsCard>
-            <SettingRow
-              icon="arrow.counterclockwise"
-              colors={['#FF6B6B', '#FF3B30']}
-              label="Reset Onboarding"
-              onPress={resetOnboarding}
-              danger
-            />
-            <SettingRow
-              icon="camera.metering.matrix"
-              colors={['#5E5CE6', '#3634A3']}
-              label="ARKit Body Experiment (DEV)"
-              onPress={() => router.push('/ar-experiment')}
-            />
-            <SettingRow
-              icon="slider.horizontal.3"
-              colors={['#0AAF8E', '#0A6C63']}
-              label="Calibrate an Exercise (DEV)"
-              onPress={() => router.push('/calibrate')}
-            />
-            <SettingRow
-              icon="trash.fill"
-              colors={['#FF6B6B', '#FF3B30']}
-              label="Clear Calibration Overrides (DEV)"
-              onPress={clearCalibrationOverrides}
-              danger
-              last
-            />
-          </SettingsCard>
-
-          <Text style={s.versionNote}>FormPal · v1.0 · Made for athletes</Text>
-
-        </ScrollView>
-      </ScreenBackground>
-    </>
+      <WebView
+        ref={webRef}
+        source={PROFILE_HTML}
+        originWhitelist={['*']}
+        injectedJavaScriptBeforeContentLoaded={PROFILE_BEFORE}
+        onMessage={(e) => onMessage(e.nativeEvent.data)}
+        style={[styles.web, { opacity: ready ? 1 : 0 }]}
+        scrollEnabled
+        bounces={false}
+        overScrollMode="never"
+        allowFileAccess
+        allowFileAccessFromFileURLs
+        allowUniversalAccessFromFileURLs
+        javaScriptEnabled
+        domStorageEnabled
+        cacheEnabled={false}
+      />
+    </View>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
-const s = StyleSheet.create({
-  scroll: { gap: Sp.lg, paddingHorizontal: 16 },
-
-  // 1. Header
-  header:  { gap: 6, paddingHorizontal: 8 },
-  heading: {
-    fontFamily:    FONT.displayLight,
-    fontSize:      36,
-    lineHeight:    38,
-    letterSpacing: -1,
-    color:         C.text,
-  },
-  sub: { fontSize: 13.5, fontWeight: W.medium, letterSpacing: 0.1, color: C.textSub },
-
-  // 2. Avatar card
-  avatarCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 18,
-    backgroundColor: C.card, borderRadius: 28,
-    borderWidth: 1, borderColor: C.border,
-    padding: 22,
-  },
-  avatar: {
-    width: 68, height: 68, borderRadius: 34,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  avatarLetter: {
-    fontFamily:    FONT.displayLight,
-    fontSize:      30,
-    lineHeight:    34,
-    color:         '#fff',
-    letterSpacing: -1,
-  },
-  avatarInfo:  { flex: 1, gap: 4 },
-  avatarName:  { fontSize: 20, fontWeight: W.bold, letterSpacing: -0.4, color: C.text },
-  avatarSub:   { fontSize: 13, fontWeight: W.medium, color: C.textSub, lineHeight: 18 },
-  rankRow:     { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  avatarChevron: { fontSize: 22, color: C.textDim, lineHeight: 24, marginLeft: 4 },
-
-  // Footer version note
-  versionNote: {
-    textAlign: 'center', fontSize: 12, color: C.textDim,
-    fontWeight: W.medium, paddingBottom: 8,
-  },
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: '#eeeef1' },
+  web:  { flex: 1, backgroundColor: '#eeeef1' },
 });

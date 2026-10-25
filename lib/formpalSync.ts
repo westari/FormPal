@@ -169,6 +169,7 @@ const ALL_LOCAL_KEYS = [
   'formpal_threshold_overrides', 'formpal_video_log', 'formpal_viewed_moves',
   'formpal_gift_offer_shown', 'formpal_last_progress_photo_prompt',
   'formpal_first_workout_done', 'formpal_post_purchase_onboarding_done',
+  'formpal_weight_log', 'formpal_profile_details',
 ];
 
 export async function clearAllLocalData() {
