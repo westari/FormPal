@@ -33,7 +33,7 @@ import {
 import { MYPAL_API_URL } from '../constants/api';
 
 const CUE_HTML = require('../assets/app screens/cue.html');
-const CUE_BUILD = 'cue-4';
+const CUE_BUILD = 'cue-5';
 if (__DEV__) console.log(`[cue] build ${CUE_BUILD}`);
 
 interface Message { role: 'user' | 'assistant'; content: string }
@@ -96,17 +96,47 @@ function cueInject(): string {
     // sized for bottom-safe-area clearance that isn't relevant once a
     // keyboard is actually covering that space).
     var inputBarEl = inputEl.closest('div');
+    // BUG FOUND ("a faint background is visible behind it"): the iOS keyboard
+    // is translucent, so with it open the chat page (chips row, bubbles,
+    // gradient) showed faintly THROUGH the keyboard. While the keyboard is up
+    // this now lays a solid white panel exactly under the keyboard's footprint
+    // (matching the artboard's own gradient) and hides the suggestion chips, so
+    // nothing but the keyboard is ever visible down there. Layout is not
+    // touched (visibility, not display), so nothing else moves.
+    var kbPanel = null;
+    function kbBackdrop(h){
+      var designRoot = inputBarEl && inputBarEl.parentElement && inputBarEl.parentElement.parentElement;
+      if(!designRoot) return;
+      if(!kbPanel){
+        kbPanel = document.createElement('div');
+        kbPanel.id = '__cue_kb_panel';
+        designRoot.appendChild(kbPanel);
+      }
+      // top colour = the artboard's own vertical gradient at that height, so there is no seam
+      var STOPS = [[0,[235,235,239]],[0.26,[244,244,246]],[0.6,[250,250,251]],[1,[255,255,255]]];
+      var f = Math.max(0, Math.min(1, (844 - h) / 844)), c0 = STOPS[0], c1 = STOPS[STOPS.length - 1];
+      for (var si = 0; si < STOPS.length - 1; si++) { if (f >= STOPS[si][0] && f <= STOPS[si + 1][0]) { c0 = STOPS[si]; c1 = STOPS[si + 1]; break; } }
+      var tt = c1[0] === c0[0] ? 0 : (f - c0[0]) / (c1[0] - c0[0]);
+      var top = [0, 1, 2].map(function (k) { return Math.round(c0[1][k] + (c1[1][k] - c0[1][k]) * tt); });
+      kbPanel.style.cssText = 'position:absolute;left:0;right:0;bottom:0;z-index:1;pointer-events:none;'
+        + 'background:linear-gradient(180deg, rgb(' + top.join(',') + ') 0%, #ffffff 100%);'
+        + 'height:' + h + 'px;opacity:' + (h > 0 ? 1 : 0) + ';transition:opacity 160ms ease;';
+      if(chipsRow) chipsRow.style.setProperty('visibility', h > 0 ? 'hidden' : 'visible');
+    }
     window.__cueSetKeyboardHeight = function(nativeH){
       if(!inputBarEl) return;
+      kbBackdrop(nativeH > 0 ? (nativeH / (window.__dcCanvasScale || 1)) + 2 : 0);
       if(nativeH > 0){
         var scale = window.__dcCanvasScale || 1;
         var designOffset = (nativeH / scale) + 10;
+        inputBarEl.style.setProperty('z-index','2','important');
         inputBarEl.style.setProperty('position','absolute','important');
         inputBarEl.style.setProperty('left','14px','important');
         inputBarEl.style.setProperty('right','14px','important');
         inputBarEl.style.setProperty('bottom', designOffset+'px','important');
         inputBarEl.style.setProperty('transition','bottom 220ms ease','important');
       } else {
+        inputBarEl.style.removeProperty('z-index');
         inputBarEl.style.removeProperty('position');
         inputBarEl.style.removeProperty('left');
         inputBarEl.style.removeProperty('right');
