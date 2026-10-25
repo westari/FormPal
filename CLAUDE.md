@@ -1,6 +1,6 @@
 # FormPal — project instructions
 
-FormPal is a camera-based AI form-coach gym app (Expo SDK 54, React Native, TypeScript, Expo Router). The camera/CV is a native Swift module (`modules/athlt-camera`, ATHLTCameraModule) using Apple Vision pose estimation. See the global `~/.claude/CLAUDE.md` for the developer's overall workflow preferences (Windows/PowerShell, full-file replacements, no unapproved pushes, etc.) — this file only adds rules specific to this project.
+FormPal is a camera-based AI form-coach gym app (Expo SDK 54, React Native, TypeScript, Expo Router). The camera/CV is a native Swift module (`modules/athlt-camera`, ATHLTCameraModule) using Apple Vision pose estimation. See the global `~/.claude/CLAUDE.md` for the developer's overall workflow preferences (Windows/PowerShell, full-file replacements, push your branch after every fix, never push to main or master, etc.) — this file only adds rules specific to this project.
 
 ## Exercise definitions: investigate before writing thresholds
 
@@ -18,7 +18,7 @@ This applies to every future request to add or fix an exercise definition/thresh
 
 ## Design files: use as-is, never rebuild
 
-When the user provides exact design files for a screen, use those files as-is. NEVER rebuild, recreate, or redesign those screens, even if asked to fix bugs or performance. Always make the smallest possible change to the existing file. If a fix seems to require rebuilding, stop and ask first.
+When the user provides exact design files for a screen, use those files as-is. NEVER rebuild, recreate, or redesign those screens, even if asked to fix bugs or performance. Always make the smallest possible change to the existing file. If a fix needs a native rebuild, keep going and say so at the END.
 
 ## Never ask the user to close and reopen the app
 
@@ -48,7 +48,11 @@ Before writing or editing ANY injection code against a design file, in order, ev
 ## Testing is YOUR job, not mine
 
 - Never say "fixed" until you have tested it yourself with Playwright: load the real design file, do the exact action (drag the scrub bar, type in Cue, open the card), and take a before-and-after screenshot.
-- If a bug only shows up on a real iPhone, say so and ask for one screenshot. Don't guess.
+- If a bug only shows on-device, ask for one screenshot at the END. Don't guess.
 - Batch your work. Finish everything, then give me ONE short list to test on my phone. Never ask me to check in the middle.
 - **Don't stop until it's actually done.** Once given a task, loop on it yourself — test with Playwright, find what's still broken, fix it, test again — without stopping to report back partway or asking "should I continue?" No excuses, no settling for "this needs more investigation" as a way to end the turn early. Keep going until the task is genuinely finished and verified, not until you've made some progress on it.
-- The ONLY acceptable reasons to stop before the task is done: something that truly requires the user's phone (a bug Playwright can't reproduce, confirmed only on-device) or a real decision only the user can make (ambiguous scope, conflicting requirements). Even then, finish everything else in the batch first, and say exactly what's blocked and why — never use it as cover for stopping early on something you could have kept pushing on.
+- Never stop before the task is done. If something truly requires the user's phone (a bug Playwright can't reproduce, confirmed only on-device) or a decision only the user can make, finish everything else in the batch first, then put the question or request at the END of your final message and say exactly what's blocked and why.
+
+## Never stop to ask
+
+Never stop mid-task to ask me anything. Never ask "should I start?", "should I continue?", or "are you sure?". The answer is always yes, just do it. Only ask a question if it truly changes the result and you can't make a safe choice yourself. Even then, keep working on everything else and put the question at the END of your final message.
