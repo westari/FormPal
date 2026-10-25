@@ -350,6 +350,9 @@ final class ExerciseEngine {
     private var preSettleFrameCount:    Int    = 0
 
     private static let SETTLE_FRAMES: Int = 8   // ~0.27s at 30fps
+    // Absolute floor: a counted rep must swing at least this fraction of the
+    // definition's topAngle→goodROM range, regardless of where it settled.
+    private static let MIN_SWING_FRACTION: Double = 0.30
 
     // ── Settle-anchor floor (per-exercise, opt-in) ────────────────────────────
     // ROOT CAUSE this closes (lat pulldown reading a press-like low start as
@@ -1337,8 +1340,19 @@ final class ExerciseEngine {
                 let movementPastEntry = effectiveEnterThreshold - repMinAngle
                 let requiredPastEntry = max(abs(effectiveEnterThreshold - effectiveROMThreshold) * def.phantomGuardFraction, 0.01)
 
-                guard movement >= required, movementPastEntry >= requiredPastEntry else {
+                // THIRD GUARD (noise counted as a rep — shoulder press log: rep #1
+                // COUNTED with swing=2.6, top=64.7 bottom=62.1, then a real 19° rep).
+                // Both guards above scale from repTopValue, which a low settle anchor
+                // (resync path) can leave barely above the bottom, shrinking `required`
+                // to almost nothing. This floor is anchored to the DEFINITION's own
+                // range (topAngle → ROM threshold), so it can't be eroded by a bad
+                // anchor. Applies to every exercise; uses whichever is larger of the
+                // exercise's phantomGuardFraction and the 30% default.
+                let minSwing = abs(def.topAngle - effectiveROMThreshold) * max(def.phantomGuardFraction, Self.MIN_SWING_FRACTION)
+
+                guard movement >= required, movementPastEntry >= requiredPastEntry, movement >= minSwing else {
                     let msg = "[REP] rejected — movement=\(String(format: "%.4f", movement)) " +
+                              "minSwing=\(String(format: "%.4f", minSwing)) " +
                               "(start=\(String(format: "%.4f", repTopValue)) peak=\(String(format: "%.4f", repMinAngle))) " +
                               "required=\(String(format: "%.4f", required)) " +
                               "movementPastEntry=\(String(format: "%.4f", movementPastEntry)) " +

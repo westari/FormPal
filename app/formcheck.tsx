@@ -683,6 +683,8 @@ export default function FormCheckScreen() {
   function setDemoOpenBoth(open: boolean) {
     demoOpenRef.current = open;
     if (open) {
+      // Paused: drop any cue already on screen so nothing lingers/plays over the pause.
+      setFeedback(null);
       pauseStartRef.current = Date.now();
     } else if (pauseStartRef.current != null) {
       pausedMsRef.current += Date.now() - pauseStartRef.current;
@@ -1188,7 +1190,7 @@ export default function FormCheckScreen() {
         if (prev === target) return prev;
         return prev < target ? prev + 1 : prev - 1;
       });
-    }, 15);
+    }, 45); // was 15ms — 50→100 took 0.75s and read as a jump; now ~2.25s
     return () => clearInterval(id);
   }, []);
 
