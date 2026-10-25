@@ -215,7 +215,7 @@ function repFeedbackInject(opts: {
   var dragging = false;
   var closeWired=false, finishWired=false, cornerSwapped=false;
   var finishBtnEl = null;
-  var built = false, readyPosted = false;
+  var built = false, readyPosted = false, readyScheduled = false;
 
   // BUG FOUND (confirmed from device logs this round): stripping only
   // TEXT-node children left the old demo sentence ("So close! You
@@ -587,7 +587,10 @@ function repFeedbackInject(opts: {
     // before anything is ever shown.
     if(ok && !readyPosted){
       var elapsed = Date.now() - PAGE_START;
-      if(elapsed < 350){ setTimeout(apply, 350 - elapsed); return; }
+      if(elapsed < 350){
+        if(!readyScheduled){ readyScheduled = true; setTimeout(function(){ readyScheduled = false; apply(); }, 350 - elapsed); }
+        return;
+      }
       show(0);
       readyPosted = true;
       console.log('[rep-feedback-page] ready, posting to RN');
@@ -623,7 +626,12 @@ function repFeedbackInject(opts: {
   console.log('[rep-feedback-page] injected JS running, HAS_VIDEO=', HAS_VIDEO, 'reps=', REPS.length);
   if(!apply()) [50,120,250,500,1000,2000,3500].forEach(function(d){ setTimeout(apply,d); });
   var root = document.getElementById('dc-root') || document.body;
-  var mo = new MutationObserver(function(){ wireNav(); });
+  // Late-card fix: the retry schedule above only polls at fixed 50-3500ms marks,
+  // so after the (slow) bundle unpack finishes the card could wait up to a
+  // whole retry interval to be built and revealed. Re-running apply() on every
+  // DOM mutation until ready makes the reveal fire the moment the real
+  // elements exist (apply() itself still holds 'ready' to PAGE_START+350ms).
+  var mo = new MutationObserver(function(){ if(!readyPosted) apply(); wireNav(); });
   mo.observe(root, { childList: true, subtree: true, characterData: true });
 })();
 true;
@@ -942,7 +950,12 @@ const styles = StyleSheet.create({
   // full height), i.e. the card occupies the bottom 36.02% of the screen,
   // not 40%. Using that measured value closes the gap exactly instead of
   // guessing recap's number would also fit here.
-  videoArea: { position: 'absolute', left: 0, right: 0, top: 0, bottom: '36%' },
+  // Black showed on both sides of the card's top edge: the card has 36px rounded
+  // top corners, and the video stopped exactly at the card's top (36%), leaving
+  // the dark root background visible in the corner cut-outs. Video now runs
+  // ~5% further down, behind the card, so the corners reveal video instead;
+  // top moved down slightly (3%) per the ask to nudge the video down.
+  videoArea: { position: 'absolute', left: 0, right: 0, top: '3%', bottom: '31%' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
   msg: { color: '#ffffff', fontSize: 15, textAlign: 'center' },
   backBtn: {

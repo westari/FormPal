@@ -28,14 +28,27 @@ import { View, StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
 
 const RECAP_HTML = require('../assets/app screens/workoutrecap.html');
+// Rep-feedback card has the same late-card cost (its own bundle unpack) —
+// same low-confidence prewarm treatment.
+const REP_FEEDBACK_HTML = require('../assets/app screens/repfeedback.html');
 
 export default function RecapPrewarm() {
   const webRef = useRef<WebView>(null);
+  const repFeedbackRef = useRef<WebView>(null);
   return (
     <View style={styles.hidden} pointerEvents="none">
       <WebView
         ref={webRef}
         source={RECAP_HTML}
+        originWhitelist={['*']}
+        style={styles.hidden}
+        javaScriptEnabled
+        domStorageEnabled
+        cacheEnabled
+      />
+      <WebView
+        ref={repFeedbackRef}
+        source={REP_FEEDBACK_HTML}
         originWhitelist={['*']}
         style={styles.hidden}
         javaScriptEnabled
