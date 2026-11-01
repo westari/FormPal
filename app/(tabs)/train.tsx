@@ -30,7 +30,9 @@ import AppBackground from '../../components/AppBackground';
 import { DC_VIEWPORT_JS } from '../../lib/dcWebviewHelpers';
 import { dcLogicPatchJs, athltSetDataJs } from '../../lib/dcLogicPatch';
 import { loadPlan } from '../../lib/planStorage';
-import { getAllSessions } from '../../lib/sessionLog';
+import { getAllSessions, computeMuscleTiers } from '../../lib/sessionLog';
+import { computeOverallStanding } from '../../components/MuscleTierMap';
+import { tierDataUri } from '../../lib/rankImages';
 import { exerciseMode } from '../../constants/exerciseDefinitions';
 import type { Plan } from '../../types/plan';
 
@@ -152,6 +154,22 @@ const TRAIN_WEB_INJECT = `
       if (m) el.style.setProperty('color', +m[1] >= 85 ? '#0A9D5A' : '#C08A21');
       else if (t === 'New') el.style.setProperty('color', 'rgba(26,26,28,0.5)');
     }
+    // Hero shield: the mockup ships a silver one for everyone — swap in the user's real rank art
+    // (faded when they have no rank yet; hidden rather than wrong if the art couldn't load).
+    var sh = document.querySelector('img[data-shield]');
+    if (sh && D.shield) {
+      if (D.shield.src) {
+        if (sh.__shieldSrc !== D.shield.src) { sh.__shieldSrc = D.shield.src; sh.setAttribute('src', D.shield.src); }
+        sh.setAttribute('alt', D.shield.alt || '');
+        // filter, not opacity: the mockup's own entrance animation owns opacity (fill-mode both) and would override it
+        sh.style.setProperty('filter', D.shield.ranked ? '' : 'opacity(0.4)');
+        sh.style.setProperty('visibility', 'visible');
+      } else {
+        sh.style.setProperty('visibility', 'hidden');
+      }
+    } else if (sh) {
+      sh.style.setProperty('visibility', 'hidden'); // no data yet: never flash the silver demo shield
+    }
     return hit;
   }
 
@@ -197,6 +215,7 @@ function timeAgoLabel(ts: number | null): string {
 interface TrainData {
   map: Record<string, string>;
   workout: { n: string; name: string; sets: string; tag: string; tagColor: string }[];
+  shield: { src: string | null; alt: string; ranked: boolean };
 }
 
 // Real default text confirmed by reading the unpacked file
@@ -205,6 +224,7 @@ interface TrainData {
 function buildTrainData(
   plan: Plan | null,
   sessions: { exerciseId: string; pct: number; ts: number; formChecked?: boolean }[],
+  shield: TrainData['shield'],
 ): TrainData {
   const map: Record<string, string> = {};
   const today = new Date();
@@ -263,7 +283,7 @@ function buildTrainData(
       if (c.demoScore !== 'New') map[c.demoScore] = 'New';
     }
   }
-  return { map, workout };
+  return { map, workout, shield };
 }
 
 export default function TrainScreen() {
@@ -288,8 +308,12 @@ export default function TrainScreen() {
   }, []);
 
   useFocusEffect(useCallback(() => {
-    Promise.all([loadPlan(), getAllSessions()]).then(([plan, sessions]) => {
-      dataJsRef.current = athltSetDataJs(buildTrainData(plan, sessions));
+    Promise.all([loadPlan(), getAllSessions()]).then(async ([plan, sessions]) => {
+      const standing = computeOverallStanding(computeMuscleTiers(sessions));
+      const tier = standing?.tier ?? null;
+      const src = await tierDataUri(tier ?? 'bronze');
+      const label = tier ? tier.charAt(0).toUpperCase() + tier.slice(1) : 'Unranked';
+      dataJsRef.current = athltSetDataJs(buildTrainData(plan, sessions, { src, alt: label, ranked: !!tier }));
       webRef.current?.injectJavaScript(dataJsRef.current);
     }).catch(() => {});
   }, []));
