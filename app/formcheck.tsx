@@ -38,7 +38,8 @@ import type { ExerciseId } from '../constants/exercises';
 import { getCalibration, applyOverride } from '../lib/calibration/store';
 import { handleRepAudio, playReadyCue } from '../lib/audioFeedback';
 import { createCalibSynth } from '../lib/calibLog';
-import { createRepDiagnostic } from '../lib/repDiagnostics';
+import { createRepDiagnostic, STREAM_DEAD_SEC_FLOOR } from '../lib/repDiagnostics';
+import { meterTarget, stepMeter, meterTickMs, trackingIsHigh, NO_PERSON_CUE } from '../lib/liveTracking';
 import { useAudioSettingsStore } from '../store/audioSettingsStore';
 import { useFormTheme, type FormTheme } from '../lib/activeTheme';
 import type { DebugStatsEvent, RepEvent, ExerciseType } from '../modules/athlt-camera/src/index';
@@ -559,6 +560,39 @@ const ri = StyleSheet.create({
   ctaTxt: { fontFamily: F.bold, fontSize: 16.5, color: '#fff', letterSpacing: -0.2 },
 });
 
+// ─── Tracking meter ───────────────────────────────────────────────────────────
+// Counts toward `target` one number at a time (see lib/liveTracking.ts), in its
+// own state so the fast ticks never re-render the whole camera screen. Always
+// mounted (renders nothing when !show) so the "is it high yet" report that
+// gates "Ready. Go!" keeps working.
+function TrackingMeter({ target, show, top, onHighChange }: {
+  target: number; show: boolean; top: number; onHighChange: (high: boolean) => void;
+}) {
+  const [display, setDisplay] = useState(0);
+  const displayRef = useRef(0);
+  const targetRef = useRef(target);
+  targetRef.current = target;
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = () => {
+      const next = stepMeter(displayRef.current, targetRef.current);
+      if (next !== displayRef.current) { displayRef.current = next; setDisplay(next); }
+      timer = setTimeout(tick, meterTickMs(displayRef.current, targetRef.current));
+    };
+    timer = setTimeout(tick, 45);
+    return () => clearTimeout(timer);
+  }, []);
+  const high = trackingIsHigh(display, target);
+  useEffect(() => { onHighChange(high); }, [high, onHighChange]);
+  if (!show) return null;
+  return (
+    <View pointerEvents="none" style={[s.cameraLockWrap, { top }]}>
+      <Text style={s.cameraLockPct}>{display}%</Text>
+      <Text style={s.cameraLockLabel}>TRACKING</Text>
+    </View>
+  );
+}
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function FormCheckScreen() {
   const router = useRouter();
@@ -760,6 +794,10 @@ export default function FormCheckScreen() {
   const trackingActiveRef = useRef(false);
   const hintTimer      = useRef<ReturnType<typeof setTimeout> | null>(null);
   const setupDoneTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Native setup passed, but "Ready. Go!" (shown + spoken) is held until the
+  // TRACKING meter actually reads high — see the readyPending effect below.
+  const [readyPending, setReadyPending] = useState(false);
+  const announceReadyRef = useRef<(() => void) | null>(null);
 
   // Full session log buffer — accumulates EVERY line for post-session review.
   // Not a state value; we never need it to trigger re-renders during the session.
@@ -771,7 +809,7 @@ export default function FormCheckScreen() {
   // "Why aren't reps counting?" — reads the same [METRIC]/[REP]/rejection
   // stream the counter does and turns a silent 0-rep session into one short
   // on-screen instruction. See lib/repDiagnostics.ts.
-  const repDiagRef = useRef(createRepDiagnostic());
+  const repDiagRef = useRef(createRepDiagnostic(isFloor ? STREAM_DEAD_SEC_FLOOR : undefined));
   const [repDiag, setRepDiag] = useState<string | null>(null);
 
   // Pending nav params stored right before switching to 'review' phase, so the
@@ -866,30 +904,35 @@ export default function FormCheckScreen() {
       if (event.passed) {
         if (!isTrackingRef.current) {
           isTrackingRef.current = true;
-          setPhase('setup-done');
-          // Spoken cue right at the settle moment — see playReadyCue's own
-          // comment for why this needs to work for every exercise, not just
-          // back-facing ones (the user can't see this screen change either
-          // way if they're not looking at the phone).
-          playReadyCue();
-          if (setupDoneTimer.current) clearTimeout(setupDoneTimer.current);
-          setupDoneTimer.current = setTimeout(async () => {
-            if (!mounted) return;
-            setStats(null);
-            setReps(0);
-            setGoodReps(0);
-            setLiveMetric(null);
-            sessionLogRef.current = []; // clear buffer at start of each tracking session
-            calibRef.current.reset();
-            repDiagRef.current.reset();
-            setRepDiag(null);
-            startTimestamp.current = Date.now();
-            repEvents.current      = [];
-            setPhase('tracking');
-            trackingActiveRef.current = true;
-            await startTracking();
-            setupDoneTimer.current = null;
-          }, 1500);
+          // "Ready. Go!" used to fire the instant native's setup hold finished,
+          // even while the on-screen TRACKING number was still climbing (or
+          // low). Now it waits for the meter to genuinely read high — see the
+          // readyPending effect. Spoken cue still goes out at that same moment
+          // (see playReadyCue's own comment for why it must work for every
+          // exercise, not just back-facing ones).
+          announceReadyRef.current = () => {
+            setPhase('setup-done');
+            playReadyCue();
+            if (setupDoneTimer.current) clearTimeout(setupDoneTimer.current);
+            setupDoneTimer.current = setTimeout(async () => {
+              if (!mounted) return;
+              setStats(null);
+              setReps(0);
+              setGoodReps(0);
+              setLiveMetric(null);
+              sessionLogRef.current = []; // clear buffer at start of each tracking session
+              calibRef.current.reset();
+              repDiagRef.current.reset();
+              setRepDiag(null);
+              startTimestamp.current = Date.now();
+              repEvents.current      = [];
+              setPhase('tracking');
+              trackingActiveRef.current = true;
+              await startTracking();
+              setupDoneTimer.current = null;
+            }, 1500);
+          };
+          setReadyPending(true);
         } else {
           setPhase('tracking');
           trackingActiveRef.current = true;
@@ -921,6 +964,8 @@ export default function FormCheckScreen() {
           clearTimeout(setupDoneTimer.current);
           setupDoneTimer.current = null;
           isTrackingRef.current = false;
+          announceReadyRef.current = null;
+          setReadyPending(false);
         }
         if (isTrackingRef.current) {
           setPhase('setup');
@@ -1163,36 +1208,48 @@ export default function FormCheckScreen() {
   // cue, exactly the good-result-vs-bad-cue contradiction already fixed for
   // the cue itself. Now reads the SAME repDiag signal the live cue pill
   // uses, so the number and the cue can never disagree.
-  const cameraLockTarget = (() => {
-    if (phase === 'setup') {
-      if (!setupAllVisible) return 25; // can't confirm trackable joints yet
-      return Math.round(60 + setupHoldProgress * 40); // climbs through the hold
-    }
-    if (phase === 'setup-done') return 100;
-    if (isTracking || isStopping) {
-      if (stats?.personDetected === false) return 15;
-      if (repDiag) return 35; // same signal driving the live cue pill
-      if (stats?.trackingCue || stats?.outOfPlaneCue) return 55;
-      return 100;
-    }
-    return 0;
-  })();
+  // The numbers themselves live in lib/liveTracking.ts (pure, tested by
+  // scripts/test-live-tracking.js). Key rule from the latest round: with no
+  // person visible the meter is 0%, never a leftover number.
+  const cameraLockTarget = meterTarget({
+    phase,
+    isActive: isTracking || isStopping,
+    setupAllVisible, setupHoldProgress, setupHint,
+    personDetected: stats?.personDetected,
+    trackingCue: stats?.trackingCue,
+    outOfPlaneCue: stats?.outOfPlaneCue,
+    repDiag,
+  });
   // Steps through every number toward the target instead of jumping —
   // explicit complaint: "it can't just jump from numbers... it needs to
-  // show every number."
-  const cameraLockTargetRef = useRef(cameraLockTarget);
-  cameraLockTargetRef.current = cameraLockTarget;
-  const [cameraLockDisplay, setCameraLockDisplay] = useState(0);
+  // show every number." (Falling is faster, and 0 is immediate: see
+  // stepMeter.)
+  // The counting lives in <TrackingMeter> (its own state, so the 45ms/18ms
+  // ticks don't re-render this whole screen); it only reports back when the
+  // DISPLAYED number crosses into/out of "high".
+  const [meterHigh, setMeterHigh] = useState(false);
+  // Show/speak "Ready. Go!" only once tracking is actually high.
   useEffect(() => {
+    if (!readyPending || !meterHigh) return;
+    setReadyPending(false);
+    const go = announceReadyRef.current;
+    announceReadyRef.current = null;
+    go?.();
+  }, [readyPending, meterHigh]);
+
+  // Re-ask the "can't see you" diagnostic on a fast timer while tracking.
+  // It used to only be re-evaluated on log lines and the ~1/sec debug-stats
+  // tick, which is most of why "Step back into frame" showed seconds late
+  // (a lost pose also stops the log lines, so nothing woke it up).
+  useEffect(() => {
+    if (phase !== 'tracking') return;
     const id = setInterval(() => {
-      setCameraLockDisplay(prev => {
-        const target = cameraLockTargetRef.current;
-        if (prev === target) return prev;
-        return prev < target ? prev + 1 : prev - 1;
-      });
-    }, 45); // was 15ms — 50→100 took 0.75s and read as a jump; now ~2.25s
+      if (demoOpenRef.current) return;
+      const d = repDiagRef.current.message();
+      setRepDiag(prev => (prev === d ? prev : d));
+    }, 200);
     return () => clearInterval(id);
-  }, []);
+  }, [phase]);
 
   // ROOT CAUSE of "pulling the drawer up does nothing": this was a plain
   // template string, recomputed fresh on every render — and this screen
@@ -1389,12 +1446,12 @@ export default function FormCheckScreen() {
           visible in solo form-check (where this was specifically asked
           for) same as in-workout. See cameraLockTarget's own comment for
           what it's built from. */}
-      {stopButtonActive && (
-        <View pointerEvents="none" style={[s.cameraLockWrap, { top: insets.top + 56 }]}>
-          <Text style={s.cameraLockPct}>{cameraLockDisplay}%</Text>
-          <Text style={s.cameraLockLabel}>TRACKING</Text>
-        </View>
-      )}
+      <TrackingMeter
+        target={cameraLockTarget}
+        show={stopButtonActive}
+        top={insets.top + 56}
+        onHighChange={setMeterHigh}
+      />
 
       {/* Error */}
       {error && (
@@ -1450,7 +1507,7 @@ export default function FormCheckScreen() {
           count with zero on-screen explanation. */}
       {isTracking && !stats?.outOfPlaneCue && (() => {
         const cue = repDiag
-          ?? (isFloor ? null : (stats?.trackingCue || null));
+          ?? (isFloor ? null : (stats?.personDetected === false ? NO_PERSON_CUE : (stats?.trackingCue || null)));
         if (!cue) return null;
         // Redesigned from bare floating text to a contained glass pill —
         // explicit complaint: "I don't like the design of the live cues...

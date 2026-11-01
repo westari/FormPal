@@ -28,6 +28,8 @@
  * [SETTLE*], rejection lines).
  */
 
+import { NO_PERSON_CUE } from './liveTracking';
+
 export interface RepDiagnostic {
   feed(line: string): void;
   /** current best on-screen instruction, or null when nothing looks wrong */
@@ -35,11 +37,17 @@ export interface RepDiagnostic {
   reset(): void;
 }
 
-const GRACE_SEC       = 3;   // don't nag before tracking has had a fair shot
+const GRACE_SEC       = 1.5; // don't nag before tracking has had a fair shot
 const STALE_REP_SEC   = 10;  // reps were counting, then stopped for this long
-const STREAM_DEAD_SEC = 2.5; // [METRIC] lines were flowing, then stopped = no pose
+// [METRIC] lines arrive ~3/sec while a pose is found (native throttles them to
+// 0.33s), so 0.9s of silence means two missed lines in a row = person gone.
+// Was 2.5s, which made "step back into frame" show 3+ seconds late.
+const STREAM_DEAD_SEC = 0.9;
+// Floor exercises (sit-up) legitimately lose the whole person at the top of every
+// rep, so they keep the old, patient threshold.
+export const STREAM_DEAD_SEC_FLOOR = 2.5;
 
-export function createRepDiagnostic(): RepDiagnostic {
+export function createRepDiagnostic(streamDeadSec: number = STREAM_DEAD_SEC): RepDiagnostic {
   let startedAt      = 0;
   let lastRepAt      = 0;
   let lastMetricAt   = 0;
@@ -76,12 +84,12 @@ export function createRepDiagnostic(): RepDiagnostic {
     if (!startedAt) { msg = null; return; }
     const elapsed    = (now() - startedAt) / 1000;
     const sinceRep   = lastRepAt ? (now() - lastRepAt) / 1000 : elapsed;
-    const streamDead = lastMetricAt > 0 && (now() - lastMetricAt) / 1000 > STREAM_DEAD_SEC;
+    const streamDead = lastMetricAt > 0 && (now() - lastMetricAt) / 1000 > streamDeadSec;
 
     if (elapsed < GRACE_SEC) { msg = null; return; }
 
     // Pose is GONE — wins over everything.
-    if (streamDead) { msg = 'Get in frame'; return; }
+    if (streamDead) { msg = NO_PERSON_CUE; return; }
 
     // A working set that's keeping pace — don't nag. Rep-quality ambiguity
     // (phantom rejections, shallow attempts) never overrides this any
