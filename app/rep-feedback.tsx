@@ -41,7 +41,7 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, ActivityIndicator, Pressable, useWindowDimensions } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -49,9 +49,12 @@ import { SymbolView } from 'expo-symbols';
 import { WebView } from 'react-native-webview';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import VideoControls from '../components/VideoControls';
+import LiquidGlass from '../components/LiquidGlass';
 import { repFeedbackSignal } from '../lib/repFeedbackSignal';
 
 const REP_FEEDBACK_HTML = require('../assets/app screens/repfeedback.html');
+
+const SPEEDS = [0.5, 1, 1.5, 2];
 
 // Build/bundle confirmation — explicit ask this round: a loud, impossible
 // -to-miss tag to confirm the device is actually running this reload
@@ -98,33 +101,42 @@ function dcScaleFitJs(bg: string): string {
   return `
   (function(){
     var W=390, H=844;
-    var st=document.createElement('style');
+    // IDEMPOTENT + re-run on every DOM mutation: this script is injected
+    // BEFORE the artboard's bundle unpacks, and the bundle then swaps the
+    // whole <html> element, throwing away anything appended to the old
+    // <head>. A one-shot style element would simply vanish.
     // transition:none alongside animation:none — a CSS *transition* (e.g.
     // "opacity 300ms" on mount) is a different mechanism from a @keyframes
     // animation and animation:none alone doesn't touch it; device logs
-    // showed the card's opacity visibly climbing 0 -> ~0.97 over the first
-    // ~300ms even with animation:none already applied.
-    st.textContent='html{background:${bg}!important;overflow:hidden!important;}body{margin:0!important;padding:0!important;background:${bg}!important;overflow:hidden!important;}#dc-root{position:relative!important;margin:0 auto!important;width:'+W+'px!important;transform-origin:top center!important;}#dc-root *{animation:none!important;-webkit-animation:none!important;transition:none!important;-webkit-transition:none!important;}*{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important;}';
-    (document.head||document.documentElement).appendChild(st);
-    var lastS=-1, lastNudge=0;
+    // showed the card's opacity visibly climbing 0 -> ~0.97 over ~300ms.
+    var CSS='html{background:${bg}!important;overflow:hidden!important;}body{margin:0!important;padding:0!important;background:${bg}!important;overflow:hidden!important;}#dc-root{position:relative!important;margin:0 auto!important;width:'+W+'px!important;transform-origin:top center!important;}#dc-root *{animation:none!important;-webkit-animation:none!important;transition:none!important;-webkit-transition:none!important;}*{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important;}';
+    function ensureStyle(){
+      if(document.getElementById('__fpDcStyle')) return;
+      var host=document.head||document.documentElement; if(!host) return;
+      var st=document.createElement('style'); st.id='__fpDcStyle'; st.textContent=CSS;
+      host.appendChild(st);
+    }
+    var lastS=-1, lastNudge=0, nudgePending=false;
     function fit(){
       var root=document.getElementById('dc-root'); if(!root) return;
       var vh=window.innerHeight;
-      // BUG FOUND (device log, confirmed): fit()'s very first call runs
+      // BUG FOUND (device log, confirmed): fit()'s very first call can run
       // before the WebView has laid out, so window.innerHeight reads 0 —
-      // the old "||H" fallback applied a WRONG scale (1.0, i.e. 390px
-      // wide) as if it were real, visibly revealed at that size, then
-      // SNAPPED to the real ~403px scale once the 300ms retry saw the
-      // real height. That snap is exactly "card spawns in, then
-      // everything moves" — skipping until a real height exists means the
-      // first transform ever applied is already correct.
+      // a "||H" fallback applied a WRONG scale that was visibly revealed,
+      // then SNAPPED to the real one. Skipping until a real height exists
+      // means the first transform ever applied is already correct.
       if(!vh) return;
       var S=vh/H;
       if(Math.abs(S-lastS)>=0.002){ lastS=S; }
       root.style.setProperty('transform','translateY('+lastNudge+'px) scale('+S+')','important');
       document.body.style.setProperty('height', vh+'px','important');
       document.documentElement.style.setProperty('height', vh+'px','important');
+      // Reveal gate: the screen only posts 'ready' once the scale is on.
+      window.__fpFitted=true;
+      if(nudgePending) return;
+      nudgePending=true;
       requestAnimationFrame(function(){
+        nudgePending=false;
         var rect=root.getBoundingClientRect();
         var gap=vh-rect.bottom;
         if (gap>0.5 && gap<60) {
@@ -133,9 +145,6 @@ function dcScaleFitJs(bg: string): string {
         }
       });
     }
-    fit();
-    window.addEventListener('resize', fit);
-    [0,300,900,1500].forEach(function(d){ setTimeout(fit,d); });
     function hideStatusBar(){
       var all=document.querySelectorAll('#dc-root div');
       for(var i=0;i<all.length;i++){
@@ -147,7 +156,13 @@ function dcScaleFitJs(bg: string): string {
       }
       return false;
     }
-    if(!hideStatusBar()) [200,500,1000,2000].forEach(function(d){ setTimeout(hideStatusBar,d); });
+    function pass(){ ensureStyle(); fit(); hideStatusBar(); }
+    pass();
+    window.addEventListener('resize', pass);
+    [0,100,300,900,1500].forEach(function(d){ setTimeout(pass,d); });
+    // Observe the DOCUMENT (not body): the bundle's html swap detaches the
+    // old body, so an observer on it would never fire again.
+    try { new MutationObserver(pass).observe(document, { childList:true, subtree:true }); } catch(e){}
   })();
   `;
 }
@@ -179,43 +194,24 @@ function repFeedbackInject(opts: {
   var bgTransparent = false;
   var cardWidened = false;
   var oldControlsWired = false;
-  var SPEEDS = [0.5, 1, 1.5, 2];
-  var speedIdx = 1;
-  var speedBtn = null, speedTextEl = null, speedMenuEl = null;
-  function closeSpeedMenu(){
-    if(speedMenuEl){ speedMenuEl.parentNode.removeChild(speedMenuEl); speedMenuEl = null; }
-  }
+  var speedBtn = null, speedTextEl = null;
+  // The speed menu is a NATIVE Liquid Glass popover (see rep-feedback.tsx's
+  // SpeedMenu) that opens UPWARD — a page-drawn menu can't be real glass (the
+  // video behind the WebView is a separate native layer) and used to open
+  // downward over the card. The page only reports where its button is.
   function openSpeedMenu(){
     if(!speedBtn) return;
-    closeSpeedMenu();
-    var rect = speedBtn.getBoundingClientRect();
-    speedMenuEl = document.createElement('div');
-    speedMenuEl.style.cssText = 'position:fixed; left:'+rect.left+'px; top:'+(rect.bottom+6)+'px; background:rgba(20,20,24,0.94); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); border-radius:14px; padding:6px; z-index:50; box-shadow:0 8px 24px rgba(0,0,0,0.4);';
-    SPEEDS.forEach(function(s, i){
-      var opt = document.createElement('div');
-      opt.textContent = s + 'x';
-      opt.style.cssText = 'padding:9px 18px; color:#ffffff; font-size:14px; font-weight:700; border-radius:9px; cursor:pointer; font-variant-numeric: tabular-nums;' + (i===speedIdx ? ' background:rgba(255,255,255,0.18);' : '');
-      opt.addEventListener('click', function(ev){
-        ev.stopPropagation();
-        speedIdx = i;
-        if(speedTextEl) speedTextEl.textContent = SPEEDS[i] + 'x';
-        post({type:'setSpeed', rate: SPEEDS[i]});
-        closeSpeedMenu();
-      }, true);
-      speedMenuEl.appendChild(opt);
-    });
-    document.body.appendChild(speedMenuEl);
+    var r = speedBtn.getBoundingClientRect();
+    post({type:'openSpeedMenu', rect:{left:r.left, top:r.top, width:r.width, height:r.height}});
   }
-  document.addEventListener('click', function(ev){
-    if(speedMenuEl && ev.target !== speedBtn && !speedBtn.contains(ev.target)){ closeSpeedMenu(); }
-  }, true);
+  window.__fpSetSpeedLabel = function(txt){ if(speedTextEl) speedTextEl.textContent = txt; };
   var tagEl = null, bodyEl = null, exCapsEl = null;
   var trackEl = null, fillEl = null, thumbEl = null;
   var trackDragWired = false;
   var dragging = false;
   var closeWired=false, finishWired=false, cornerSwapped=false;
   var finishBtnEl = null;
-  var built = false, readyPosted = false, readyScheduled = false;
+  var built = false, readyPosted = false;
 
   // BUG FOUND (confirmed from device logs this round): stripping only
   // TEXT-node children left the old demo sentence ("So close! You
@@ -238,14 +234,14 @@ function repFeedbackInject(opts: {
     bodyEl.appendChild(document.createTextNode(text));
   }
   var REAL_DURATION = 0;
+  // The bar always shows REAL playback position (REAL_CURRENT / REAL_DURATION)
+  // and starts at 0% = the very beginning of the video. It used to start at
+  // the first rep's position (or, before the duration was known, at a
+  // rep-index guess — often the middle of the bar).
   function updateTrackPosition(){
-    var pct;
-    if(REAL_DURATION > 0 && REPS[idx]){
-      pct = Math.min(100, Math.max(0, (REPS[idx].timeSec / REAL_DURATION) * 100)).toFixed(1) + '%';
-    } else {
-      // Fallback before the real duration has arrived from RN.
-      pct = ((idx + 0.5) / REPS.length * 100).toFixed(1) + '%';
-    }
+    var pct = (REAL_DURATION > 0)
+      ? Math.min(100, Math.max(0, (REAL_CURRENT / REAL_DURATION) * 100)).toFixed(1) + '%'
+      : '0%';
     if(fillEl) fillEl.style.setProperty('width', pct, 'important');
     if(thumbEl) thumbEl.style.setProperty('left', pct, 'important');
   }
@@ -257,12 +253,7 @@ function repFeedbackInject(opts: {
     updateTrackPosition();
   };
   var REAL_CURRENT = 0;
-  function updateTrackFromCurrentTime(){
-    if(REAL_DURATION <= 0) return;
-    var pct = Math.min(100, Math.max(0, (REAL_CURRENT / REAL_DURATION) * 100)).toFixed(1) + '%';
-    if(fillEl) fillEl.style.setProperty('width', pct, 'important');
-    if(thumbEl) thumbEl.style.setProperty('left', pct, 'important');
-  }
+  function updateTrackFromCurrentTime(){ updateTrackPosition(); }
   // RN calls this continuously (expo-video's timeUpdate event) so the bar
   // actually tracks real playback instead of sitting frozen at whatever
   // rep was last tapped. Ignored mid-drag so it doesn't fight the user's
@@ -271,7 +262,7 @@ function repFeedbackInject(opts: {
     REAL_CURRENT = t;
     if(!dragging) updateTrackFromCurrentTime();
   };
-  function show(i){
+  function show(i, initial){
     if(REPS.length === 0){
       if(tagEl) tagEl.textContent = 'No reps recorded';
       setBodyText('This set didn\\'t capture any rep data.');
@@ -299,8 +290,13 @@ function repFeedbackInject(opts: {
     // over once the player is ready (see setDuration below) — until it
     // arrives, REAL_DURATION stays 0 and position falls back to the old
     // rep-index math rather than dividing by zero.
-    updateTrackPosition();
-    if(REPS[idx]) post({type:'seek', timeSec: REPS[idx].timeSec});
+    // The first show() (page just opened) only fills in rep 1's TEXT — the
+    // video and the bar both start at the beginning. Later taps/Next seek.
+    if(!initial && REPS[idx]){
+      REAL_CURRENT = REPS[idx].timeSec;
+      updateTrackPosition();
+      post({type:'seek', timeSec: REPS[idx].timeSec});
+    }
     // Explicit ask: "say 'next rep' until the final rep, then 'finish
     // review'" — relabeled every time the shown rep changes.
     if(finishBtnEl){ finishBtnEl.textContent = (idx < REPS.length - 1) ? 'Next rep' : 'Finish review'; }
@@ -363,7 +359,7 @@ function repFeedbackInject(opts: {
         speedBtn.__wired = true;
         speedBtn.addEventListener('click', function(ev){
           ev.stopPropagation();
-          if(speedMenuEl){ closeSpeedMenu(); } else { openSpeedMenu(); }
+          openSpeedMenu();
         }, true);
       }
       var fsPath = document.querySelector('#dc-root svg path[d="M8.5 2h3.5v3.5M5.5 12H2V8.5M12 2 8 6M2 12l4-4"]');
@@ -446,6 +442,8 @@ function repFeedbackInject(opts: {
         }
       }
       console.log('[rep-feedback-page] track fillEl found=', !!fillEl, 'thumbEl found=', !!thumbEl);
+      if(fillEl) fillEl.style.setProperty('width', '0%', 'important');
+      if(thumbEl) thumbEl.style.setProperty('left', '0%', 'important');
       for(var tk2=trackKids.length-1; tk2>=0; tk2--){
         if(keep.indexOf(trackKids[tk2]) === -1){ trackEl.removeChild(trackKids[tk2]); }
       }
@@ -574,24 +572,13 @@ function repFeedbackInject(opts: {
     // for the old HTML5 <video>, but visibly stutters a real AVPlayer.
     // show(0) (and the resulting seek) now only ever fires once, the
     // first time apply() actually succeeds.
-    // BUG FOUND (reported again as "spawns immediately but in the wrong
-    // place, then quickly glitches into the right place"): 'ready' used to
-    // fire the INSTANT build()/wireNav() succeeded, which the retry
-    // schedule can do in well under 100ms — long before dcScaleFitJs's own
-    // fit() has settled on the real canvas scale (its own retries run on a
-    // separate [0,300,900,1500]ms schedule). RN reveals the WebView
-    // (opacity 0->1) the moment 'ready' arrives, so it was possible to
-    // reveal at a transient, not-yet-correct scale and visibly correct a
-    // moment later. Holding 'ready' back until PAGE_START + 350ms (past
-    // the 300ms fit() checkpoint) means the scale is already settled
-    // before anything is ever shown.
-    if(ok && !readyPosted){
-      var elapsed = Date.now() - PAGE_START;
-      if(elapsed < 350){
-        if(!readyScheduled){ readyScheduled = true; setTimeout(function(){ readyScheduled = false; apply(); }, 350 - elapsed); }
-        return;
-      }
-      show(0);
+    // Ready = real content built AND canvas at its final scale
+    // (window.__fpFitted, set by dcScaleFitJs only once innerHeight is real).
+    // The old fixed "wait until PAGE_START+350ms" delay is gone — the scale
+    // bug it guarded against is prevented by fit() itself, and 'ready' is
+    // judged from cumulative state so a deferred first apply() can't strand it.
+    if(ok && window.__fpFitted && !readyPosted){
+      show(0, true);
       readyPosted = true;
       console.log('[rep-feedback-page] ready, posting to RN');
       post({type:'ready'});
@@ -624,15 +611,15 @@ function repFeedbackInject(opts: {
     return ok;
   }
   console.log('[rep-feedback-page] injected JS running, HAS_VIDEO=', HAS_VIDEO, 'reps=', REPS.length);
-  if(!apply()) [50,120,250,500,1000,2000,3500].forEach(function(d){ setTimeout(apply,d); });
-  var root = document.getElementById('dc-root') || document.body;
-  // Late-card fix: the retry schedule above only polls at fixed 50-3500ms marks,
-  // so after the (slow) bundle unpack finishes the card could wait up to a
-  // whole retry interval to be built and revealed. Re-running apply() on every
-  // DOM mutation until ready makes the reveal fire the moment the real
-  // elements exist (apply() itself still holds 'ready' to PAGE_START+350ms).
+  apply();
+  [50,120,250,500,1000,2000,3500].forEach(function(d){ setTimeout(apply,d); });
+  // Observe the DOCUMENT, not #dc-root/body: this script runs before the
+  // bundle unpacks and the bundle swaps the whole <html> element, which
+  // detaches whatever an earlier observer was attached to. Reacting to the
+  // first real mutation (not a poll schedule) shows the card the moment the
+  // page has rendered.
   var mo = new MutationObserver(function(){ if(!readyPosted) apply(); wireNav(); });
-  mo.observe(root, { childList: true, subtree: true, characterData: true });
+  mo.observe(document, { childList: true, subtree: true, characterData: true });
 })();
 true;
 `;
@@ -659,6 +646,12 @@ export default function RepFeedbackScreen() {
   // async "waiting on the URL to resolve" gate at all — the player either
   // has a source or it doesn't, synchronously, from the route param.
   const hasVideo = !!videoUri;
+  const { height: windowH } = useWindowDimensions();
+  // Speed popover: the page reports where its speed button is (screen
+  // points — the WebView fills the screen), RN draws the menu as real
+  // Liquid Glass ABOVE that button.
+  const [speedMenu, setSpeedMenu] = useState<{ left: number; top: number; width: number } | null>(null);
+  const [speedIdx, setSpeedIdx] = useState(1);
   const videoPlayer = useVideoPlayer(videoUri ?? null, (p) => { p.loop = true; p.muted = false; p.timeUpdateEventInterval = 0.2; });
   const videoViewRef = useRef<VideoView>(null);
 
@@ -701,7 +694,8 @@ export default function RepFeedbackScreen() {
         // to wait on the page's own JS at all for this), means playback
         // starts in the right place from frame one — the page's own later
         // seek-to-REPS[0] becomes a harmless no-op.
-        if (reps.length > 0) videoPlayer.currentTime = reps[0].timeSec;
+        // (Used to seek to reps[0].timeSec here. The bar and the video now both
+        // start at the very beginning; tapping a rep / Next is what seeks.)
         videoPlayer.play();
         // BUG FOUND ("time bar has to start at the beginning and go with
         // the actual video length"): the page's own scrub-bar thumb/fill
@@ -827,8 +821,10 @@ export default function RepFeedbackScreen() {
         source={REP_FEEDBACK_HTML}
         originWhitelist={['*']}
         style={[styles.web, videoVisuallyReady && { backgroundColor: 'transparent' }, { opacity: ready ? 1 : 0 }]}
-        injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS}
-        injectedJavaScript={injectJs}
+        // The whole inject runs BEFORE the artboard's bundle unpacks and reacts
+        // to the document's own mutations, so the card is built and revealed the
+        // moment the page has rendered instead of after load + a poll schedule.
+        injectedJavaScriptBeforeContentLoaded={`${DC_VIEWPORT_JS} ${injectJs}`}
         onLoadStart={() => { if (__DEV__) console.log('[rep-feedback-debug] WebView onLoadStart'); }}
         onLoadEnd={() => { if (__DEV__) console.log('[rep-feedback-debug] WebView onLoadEnd'); }}
         onError={(e) => { if (__DEV__) console.log('[rep-feedback-debug] WebView onError', e.nativeEvent); }}
@@ -870,6 +866,10 @@ export default function RepFeedbackScreen() {
           else if (msg.type === 'pageConsole') { if (__DEV__) console.log(`[rep-feedback-page:${(msg as any).level}]`, (msg as any).msg); }
           else if (msg.type === 'close') router.back();
           else if (msg.type === 'finishReview') { repFeedbackSignal.finishedReview = true; router.back(); }
+          else if (msg.type === 'openSpeedMenu') {
+            const r = (msg as any).rect as { left: number; top: number; width: number } | undefined;
+            if (r) setSpeedMenu(prev => (prev ? null : { left: r.left, top: r.top, width: r.width }));
+          }
           else if (msg.type === 'setSpeed') {
             const rate = (msg as any).rate ?? 1;
             videoPlayer.playbackRate = rate;
@@ -924,6 +924,38 @@ export default function RepFeedbackScreen() {
       {hasVideo && (
         <VideoControls player={videoPlayer} style={{ position: 'absolute', left: 0, right: 0, top: '11.85%', bottom: '41.35%' }} />
       )}
+      {speedMenu && (
+        <>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setSpeedMenu(null)} />
+          <LiquidGlass
+            radius={20}
+            variant="regular"
+            colorScheme="dark"
+            fallbackColor="rgba(150,152,165,0.62)"
+            style={[
+              styles.speedMenu,
+              // Opens UPWARD: its bottom edge sits just above the button.
+              { left: Math.max(12, speedMenu.left), bottom: windowH - speedMenu.top + 8 },
+            ]}
+          >
+            {SPEEDS.map((rate, i) => (
+              <Pressable
+                key={rate}
+                onPress={() => {
+                  videoPlayer.playbackRate = rate;
+                  setSpeedIdx(i);
+                  webRef.current?.injectJavaScript(`window.__fpSetSpeedLabel && window.__fpSetSpeedLabel(${JSON.stringify(rate + 'x')}); true;`);
+                  setSpeedMenu(null);
+                  if (__DEV__) console.log('[rep-feedback-debug] speed picked', rate);
+                }}
+                style={[styles.speedOpt, i === speedIdx && styles.speedOptOn]}
+              >
+                <Text style={styles.speedOptTxt}>{rate}x</Text>
+              </Pressable>
+            ))}
+          </LiquidGlass>
+        </>
+      )}
       {/* Explicit ask: "move All sets to the top-left corner, remove the
           text in that corner" — the WebView's own "All sets" link is
           ALREADY authored top-left in the artboard (wireNav's allSets
@@ -953,9 +985,14 @@ const styles = StyleSheet.create({
   // Black showed on both sides of the card's top edge: the card has 36px rounded
   // top corners, and the video stopped exactly at the card's top (36%), leaving
   // the dark root background visible in the corner cut-outs. Video now runs
-  // ~5% further down, behind the card, so the corners reveal video instead;
-  // top moved down slightly (3%) per the ask to nudge the video down.
-  videoArea: { position: 'absolute', left: 0, right: 0, top: '3%', bottom: '31%' },
+  // ~5% further down, behind the card, so the corners reveal video instead.
+  // top: 0 — it used to start at 3%, leaving a black band across the top of the
+  // screen; it now fills to the very top edge like the Workout Complete screen.
+  videoArea: { position: 'absolute', left: 0, right: 0, top: 0, bottom: '31%' },
+  speedMenu: { position: 'absolute', padding: 6, minWidth: 104 },
+  speedOpt: { paddingVertical: 10, paddingHorizontal: 18, borderRadius: 14 },
+  speedOptOn: { backgroundColor: 'rgba(255,255,255,0.22)' },
+  speedOptTxt: { color: '#ffffff', fontSize: 15, fontWeight: '700', fontVariant: ['tabular-nums'] },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
   msg: { color: '#ffffff', fontSize: 15, textAlign: 'center' },
   backBtn: {
