@@ -78,6 +78,9 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
           var f = t1 > t0 ? (parseKey(e.d).getTime() - t0) / (t1 - t0) : 0.5;
           return { x: Math.round(4 + 276 * f), y: yOf(e.w) };
         });
+        // A single weigh-in can't draw a trend, so draw it as a level line across the chart ending in
+        // the dot (the same way the design's line ends at the current value) instead of a lone floating dot.
+        if (pts.length === 1) pts = [{ x: 4, y: pts[0].y }, { x: 280, y: pts[0].y }];
         var lp = pts[pts.length - 1];
         if (pts.length >= 2) {
           line = this.mono(pts);
@@ -92,12 +95,14 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
       // One-line summary under the chart (replaces "You're X% of the way to your goal" —
       // there is no goal weight stored locally to compute that from).
       var summary;
+      var dlabel = function (k) { var dt = parseKey(k); return MON[dt.getMonth()] + ' ' + dt.getDate(); };
+      window.__athltChart = all.length === 0 ? 'none' : series.length === 0 ? 'range' : 'ok';
       if (all.length === 0) summary = 'Log your weight to start your chart';
-      else if (all.length === 1) summary = 'Log again to start seeing a trend';
+      else if (all.length === 1) summary = 'Log again to see your trend';
       else {
         var diff = Math.round((all[all.length - 1].w - all[0].w) * 10) / 10;
-        summary = diff === 0 ? 'No change since you started logging'
-          : Math.abs(diff) + ' lb ' + (diff < 0 ? 'down' : 'up') + ' since you started logging';
+        summary = diff === 0 ? 'Same weight as ' + dlabel(all[0].d)
+          : Math.abs(diff) + ' lb ' + (diff < 0 ? 'down' : 'up') + ' since ' + dlabel(all[0].d);
       }
 
       var t = todayParts();
@@ -178,7 +183,30 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
       v.nextRank = R.nextLabel;
       v.topPct = '';
 
-      v.openPhotos = function (e) { if (e && e.preventDefault) e.preventDefault(); post({ type: 'photos' }); };
+      // Photos open the design's own Photos page inside this page - instant, no navigation.
+      v.openPhotos = function (e) { if (e && e.preventDefault) e.preventDefault(); self.go('photos'); };
+      window.__athltApi = { openPhotos: function () { self.go('photos'); }, pose: ['front', 'side', 'back'][s.pose || 0] };
+
+      // ── Progress photos (real, saved on the device) ──
+      var pose = ['front', 'side', 'back'][s.pose || 0];
+      var allPh = d.photos || [];
+      var ofPose = allPh.filter(function (p) { return p.pose === pose; });
+      var nearest = function (list, dateStr, newest) {
+        if (!list.length) return null;
+        if (!dateStr) return newest ? list[0] : list[list.length - 1];
+        var t = new Date(dateStr + 'T12:00:00').getTime(), best = list[0], bd = Infinity;
+        for (var i = 0; i < list.length; i++) { var dd = Math.abs(list[i].ts - t); if (dd < bd) { bd = dd; best = list[i]; } }
+        return best;
+      };
+      var pa = nearest(ofPose, s.cmpA, false), pb = nearest(ofPose, s.cmpB, true);
+      v.cmpALabel = pa ? pa.label : 'No photo'; v.cmpBLabel = pb ? pb.label : 'No photo';
+      v.photoMonths = ofPose.map(function (p) { return p.label; }).concat(['Add photo']);
+      var card3 = allPh.slice(0, 3);
+      for (var ci = 0; ci < 3; ci++) {
+        v['ppDate' + ci] = card3[ci] ? card3[ci].label : 'No photo yet';
+        v['ppDate' + ci + 'Fg'] = card3[ci] ? '#111114' : '#5f5f69';
+      }
+      window.__athltPhotoView = { card: card3, cmpA: pa, cmpB: pb, grid: ofPose };
 
       // ── By Muscle (Muscle Map page) ──
       var ms = d.muscles || [];
@@ -226,18 +254,34 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
         var p = pillStyle(i === ri);
         return { label: label, fg: p.fg, bg: p.bg, shadow: p.shadow, pick: function () { self.setState({ range: i, sel: null }); } };
       });
-      if (series.length) {
-        var pcts = series.map(function (f) { return f.pct; });
+      // Real workouts are noisy (several a day, then gaps), which made the line scribble. Average to one
+      // point per day, fold long histories into at most 12 evenly spaced buckets, and join them with a
+      // monotone curve (never overshoots between points) - the same shape the design's own data has.
+      var byDay = {};
+      series.forEach(function (f) { var k = new Date(f.ts); k.setHours(0, 0, 0, 0); var kk = +k; (byDay[kk] = byDay[kk] || []).push(f.pct); });
+      var mean = function (a) { return a.reduce(function (x, y) { return x + y; }, 0) / a.length; };
+      var dayPts = Object.keys(byDay).map(Number).sort(function (a, b) { return a - b; }).map(function (t) { return { ts: t, pct: mean(byDay[t]) }; });
+      if (dayPts.length > 12) {
+        var d0 = dayPts[0].ts, span = dayPts[dayPts.length - 1].ts - d0 + 1, buckets = [];
+        for (var bi = 0; bi < 12; bi++) buckets.push([]);
+        dayPts.forEach(function (p) { buckets[Math.min(11, Math.floor((p.ts - d0) / span * 12))].push(p); });
+        dayPts = buckets.filter(function (b) { return b.length; }).map(function (b) { return { ts: mean(b.map(function (p) { return p.ts; })), pct: mean(b.map(function (p) { return p.pct; })) }; });
+      }
+      if (dayPts.length) {
+        var pcts = dayPts.map(function (f) { return f.pct; });
         var minV = Math.floor((Math.min.apply(null, pcts) - 4) / 5) * 5, maxV = Math.ceil((Math.max.apply(null, pcts) + 4) / 5) * 5;
         if (maxV <= minV) maxV = minV + 5;
         var yOf = function (p) { return Math.round(170 - ((p - minV) / (maxV - minV)) * 152); };
-        var t0 = series[0].ts, t1 = series[series.length - 1].ts;
-        var pts = series.map(function (f) {
+        var t0 = dayPts[0].ts, t1 = dayPts[dayPts.length - 1].ts;
+        // light 1-2-1 smoothing of where each point sits (the design does the same for its weight line);
+        // the tooltip still shows each point's real score.
+        var pts = dayPts.map(function (f, i) {
           var fr = t1 > t0 ? (f.ts - t0) / (t1 - t0) : 0.5;
-          return { v: f.pct, x: Math.round(8 + 278 * fr), y: yOf(f.pct) };
+          var sm = i === 0 || i === dayPts.length - 1 ? f.pct : (dayPts[i - 1].pct + 2 * f.pct + dayPts[i + 1].pct) / 4;
+          return { v: f.pct, x: Math.round(8 + 278 * fr), y: yOf(sm) };
         });
         var sel = s.sel == null || s.sel >= pts.length ? pts.length - 1 : s.sel;
-        var ln = pts.length >= 2 ? this.smooth(pts) : '';
+        var ln = pts.length >= 2 ? this.curve(pts) : '';
         var mid = Math.round((minV + maxV) / 2), q = (maxV - minV) / 4;
         v.line = ln;
         v.area = ln ? ln + ' L' + pts[pts.length - 1].x + ' 176 L' + pts[0].x + ' 176 Z' : '';
@@ -357,7 +401,7 @@ export const PROGRESS_DOM_JS = String.raw`
       t.id = '__athlt_toast';
       root.appendChild(t);
     }
-    t.style.cssText = 'position:absolute;left:50%;bottom:110px;transform:translateX(-50%);z-index:200;padding:11px 18px;border-radius:999px;background:#111114;color:#fff;'
+    t.style.cssText = 'position:absolute;left:50%;bottom:' + (window.__athltTb || 110) + 'px;transform:translateX(-50%);z-index:200;padding:11px 18px;border-radius:999px;background:#111114;color:#fff;'
       + 'font-size:14px;font-weight:700;white-space:nowrap;box-shadow:0 10px 24px -8px rgba(17,17,20,0.5);pointer-events:none;opacity:1;';
     t.textContent = msg;
     clearTimeout(toastTimer);
@@ -372,6 +416,28 @@ export const PROGRESS_DOM_JS = String.raw`
     var root = document.getElementById('dc-root');
     if (!root || !d) return { okFit: okFit, filled: false };
     var R = d.rank || {};
+
+    // The native tab bar overlays the bottom of this page. Everything that scrolls gets bottom padding
+    // so its last item can be scrolled clear of the bar, and the weigh-in sheet's keypad (a full-screen
+    // overlay) is lifted above it.
+    var S = (window.innerHeight || 844) / 844;
+    var ins = d.insets || { top: 0, bottom: 0 };
+    var tb = (ins.bottom + 49 + 16) / S;
+    window.__athltTb = Math.round(tb + 8);
+    var scrollers = root.querySelectorAll('div[data-scroll]');
+    for (var sc = 0; sc < scrollers.length; sc++) {
+      var scEl = scrollers[sc];
+      if (scEl.style.overflowY === 'auto' && scEl.style.position === 'absolute') {
+        if (scEl.__pb0 === undefined) scEl.__pb0 = parseFloat(scEl.style.paddingBottom) || 0;
+        scEl.style.setProperty('padding-bottom', Math.max(scEl.__pb0, tb + 24).toFixed(1) + 'px', 'important');
+      }
+    }
+    var sheet = root.querySelector('div[style*="z-index: 60"]');
+    if (sheet) sheet.style.setProperty('padding-bottom', tb.toFixed(1) + 'px', 'important');
+    // date pickers: the design caps them at its own mock "today" (Sep 12 2026)
+    var nowD = new Date(), maxStr = nowD.getFullYear() + '-' + String(nowD.getMonth() + 1).padStart(2, '0') + '-' + String(nowD.getDate()).padStart(2, '0');
+    var dateInputs = root.querySelectorAll('input[type="date"]');
+    for (var di = 0; di < dateInputs.length; di++) if (dateInputs[di].getAttribute('max') !== maxStr) dateInputs[di].setAttribute('max', maxStr);
 
     // Body maps — rank card (both sides) + Muscle Map page (selected side)
     var slots = root.querySelectorAll('div[aria-label="Body map space"]');
@@ -449,7 +515,14 @@ export const PROGRESS_DOM_JS = String.raw`
       if (rankDiv) rankDiv.style.setProperty('color', info.tier ? info.ink : '#8e8e96', 'important');
       var barFill = barWrap && barWrap.children[0] && barWrap.children[0].children[0];
       if (barFill) barFill.style.setProperty('background', grad(info.hi, info.lo), 'important');
-      icons[m].style.setProperty('background', info.tier ? 'linear-gradient(160deg, ' + info.hi + ', ' + info.lo + ')' : '#f4f4f6', 'important');
+      if (info.icon && icons[m].__icon !== info.icon) {
+        icons[m].__icon = info.icon;
+        icons[m].style.setProperty('background-image', 'url(' + info.icon + ')', 'important');
+        icons[m].style.setProperty('background-size', '78%', 'important');
+        icons[m].style.setProperty('background-repeat', 'no-repeat', 'important');
+        icons[m].style.setProperty('background-position', 'center', 'important');
+      }
+      icons[m].style.setProperty('opacity', info.tier ? '1' : '0.5');
     }
 
     // Weight card
@@ -459,13 +532,18 @@ export const PROGRESS_DOM_JS = String.raw`
       var wcard = wsvg.closest('div[style*="border-radius: 28px"]');
       var chartBox = wsvg.parentElement; // the position:relative 150px box
       var wn = d.weight ? d.weight.length : 0;
-      setEmpty(chartBox, wn === 0, 'No weigh-ins yet', 'Tap Log weight to add your first one and your chart starts here.', { radius: '16px' });
-      // a single point can't draw a line — keep the dot, hide the empty dashed guide
+      var ch = window.__athltChart || (wn === 0 ? 'none' : 'ok');
+      var latestW = wn ? d.weight[wn - 1] : null;
+      if (ch === 'none') setEmpty(chartBox, true, 'No weigh-ins yet', 'Tap Log weight to add your first one and your chart starts here.', { radius: '16px' });
+      else if (ch === 'range') {
+        var lp2 = latestW.d.split('-');
+        setEmpty(chartBox, true, 'No weigh-ins in this range', 'Your latest is ' + (Math.round(latestW.w * 10) / 10) + ' lb on ' + ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][+lp2[1] - 1] + ' ' + (+lp2[2]) + '. Try a longer range.', { radius: '16px' });
+      } else setEmpty(chartBox, false);
       var tip = chartBox.querySelector('div[style*="translate(-50%, -100%)"]');
-      if (tip) tip.style.setProperty('display', wn === 0 ? 'none' : '');
+      if (tip) tip.style.setProperty('display', ch !== 'ok' ? 'none' : '');
       var gl = wsvg.querySelector('line'), gc = wsvg.querySelector('circle');
-      if (gl) gl.style.setProperty('display', wn === 0 ? 'none' : '');
-      if (gc) gc.style.setProperty('display', wn === 0 ? 'none' : '');
+      if (gl) gl.style.setProperty('display', ch !== 'ok' ? 'none' : '');
+      if (gc) gc.style.setProperty('display', ch !== 'ok' ? 'none' : '');
       if (wcard) {
         var goalEl = wcard.querySelector('div[style*="line-height: 1.35"]');
         if (goalEl) {
@@ -497,19 +575,81 @@ export const PROGRESS_DOM_JS = String.raw`
     var pw = sectionAfter('Past Workouts');
     if (pw && pw.next) setEmpty(pw.next, !d.workouts || d.workouts.length === 0, 'No workouts yet', 'Your finished workouts show up here with a form score.', { inset: '12px 14px 20px', radius: '26px', minH: 190 });
 
-    // Progress Photos — the whole card opens the real photo screen
+    // Progress Photos — the whole home card opens the design's own Photos page (in-page, instant)
     var pp = sectionAfter('Progress Photos');
-    if (pp && pp.next && pp.next.children[0]) pp.next.children[0].setAttribute('data-athlt-photos', '1');
+    var ppCard = pp && pp.next && pp.next.children[0];
+    if (ppCard) ppCard.setAttribute('data-athlt-photos', '1');
+    var pv = window.__athltPhotoView || { card: [], grid: [], cmpA: null, cmpB: null };
+    var setPhoto = function (el, photo) {
+      var sig = photo ? photo.id + '|' + (photo.thumb ? photo.thumb.length : 0) : '';
+      if (el.__phSig === sig) return;
+      el.__phSig = sig;
+      if (photo && photo.thumb) {
+        el.style.setProperty('background', 'url(' + photo.thumb + ') center / cover no-repeat', 'important');
+        el.style.setProperty('border-style', 'solid', 'important');
+        el.style.setProperty('border-color', 'rgba(17,17,20,0.08)', 'important');
+        for (var ci = 0; ci < el.children.length; ci++) el.children[ci].style.setProperty('visibility', 'hidden');
+      } else {
+        el.style.removeProperty('background'); el.style.removeProperty('border-style'); el.style.removeProperty('border-color');
+        for (var cj = 0; cj < el.children.length; cj++) el.children[cj].style.removeProperty('visibility');
+      }
+    };
+    var addPhoto = function () { post({ type: 'addPhoto', pose: window.__athltApi && window.__athltApi.pose }); };
+    // the 3 slots on the home card = the 3 newest photos
+    var cardSlots = ppCard ? ppCard.querySelectorAll('div[style*="aspect-ratio: 3 / 4"]') : [];
+    for (var ps = 0; ps < cardSlots.length; ps++) setPhoto(cardSlots[ps], pv.card[ps] || null);
+    // Photos page: compare slots + All Photos grid
+    var cmpSlots = root.querySelectorAll('div[style*="aspect-ratio: 3 / 4"][style*="border-radius: 20px"]');
+    if (cmpSlots[0]) setPhoto(cmpSlots[0], pv.cmpA);
+    if (cmpSlots[1]) setPhoto(cmpSlots[1], pv.cmpB);
+    var gridTiles = root.querySelectorAll('div[style*="aspect-ratio: 3 / 4"][style*="border-radius: 16px"]');
+    for (var gt = 0; gt < gridTiles.length; gt++) {
+      setPhoto(gridTiles[gt], pv.grid[gt] || null);
+      if (!gridTiles[gt].__addWired) {
+        gridTiles[gt].__addWired = true;
+        gridTiles[gt].addEventListener('click', function (ev) {
+          var list = Array.prototype.slice.call(root.querySelectorAll('div[style*="aspect-ratio: 3 / 4"][style*="border-radius: 16px"]'));
+          if (list.indexOf(ev.currentTarget) >= (window.__athltPhotoView ? window.__athltPhotoView.grid.length : 0)) addPhoto();
+        }, true);
+      }
+    }
+    for (var cs = 0; cs < cmpSlots.length; cs++) {
+      if (!cmpSlots[cs].__addWired) {
+        cmpSlots[cs].__addWired = true;
+        cmpSlots[cs].addEventListener('click', function (ev) { if (!ev.currentTarget.__phSig) addPhoto(); }, true);
+      }
+    }
+    var links2 = root.querySelectorAll('a');
+    for (var l2 = 0; l2 < links2.length; l2++) {
+      if (!links2[l2].__addWired && /^Add today.s photo$/.test((links2[l2].textContent || '').trim())) {
+        links2[l2].__addWired = true;
+        links2[l2].addEventListener('click', function (ev) { ev.preventDefault(); ev.stopPropagation(); addPhoto(); }, true);
+      }
+    }
+
+    // Past Workouts: a real frame from each workout's video instead of the black box
+    var wk = d.workouts || [];
+    var vidBoxes = root.querySelectorAll('div[role="img"][aria-label$=" video"]');
+    var listBoxes = root.querySelectorAll('div[style*="width: 74px"][style*="height: 92px"]');
+    var setThumb = function (el, thumb) {
+      if (!thumb || el.__thumb === thumb) return;
+      el.__thumb = thumb;
+      el.style.setProperty('background-image', 'url(' + thumb + ')', 'important');
+      el.style.setProperty('background-size', 'cover', 'important');
+      el.style.setProperty('background-position', 'center', 'important');
+    };
+    for (var vb = 0; vb < vidBoxes.length; vb++) if (wk[vb]) setThumb(vidBoxes[vb], wk[vb].thumb);
+    for (var lb = 0; lb < listBoxes.length; lb++) if (wk[lb]) setThumb(listBoxes[lb], wk[lb].thumb);
 
     return { okFit: okFit, filled: true };
   }
 
-  // Swallow taps inside the photo card (date inputs etc.) and open the photo screen instead.
+  // Taps anywhere on the home photo card (incl. its date pickers) open the Photos page instead.
   document.addEventListener('click', function (e) {
     var t = e.target && e.target.closest ? e.target.closest('[data-athlt-photos]') : null;
     if (!t) return;
     e.preventDefault(); e.stopPropagation();
-    post({ type: 'photos' });
+    if (window.__athltApi) window.__athltApi.openPhotos();
   }, true);
 
   var reported = false, lastAsk = 0, deb;

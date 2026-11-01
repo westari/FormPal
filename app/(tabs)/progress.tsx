@@ -30,15 +30,26 @@ import { getAllSessions, computeMuscleTiers, TIER_ORDER } from '../../lib/sessio
 import { getWeightLog, logWeight } from '../../lib/weightLog';
 import { buildProgressData, type ProgressData } from '../../lib/progressData';
 import { tierDataUri } from '../../lib/rankImages';
+import { muscleIconUri } from '../../lib/muscleIcons';
+import { getSessionThumbnail } from '../../lib/sessionVideo';
+import { listProgressPhotos, addProgressPhoto, type PhotoPose } from '../../lib/progressPhotos';
+import { uploadProgressPhotoToCloud } from '../../lib/formpalSync';
+import * as ImagePicker from 'expo-image-picker';
+import { File } from 'expo-file-system';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Alert } from 'react-native';
+import type { Muscle } from '../../constants/exercises';
+import type { Tier } from '../../lib/sessionLog';
 
 const PROGRESS_HTML = require('../../assets/app screens/progress.html');
-const PROGRESS_BUILD = 'progress-2';
+const PROGRESS_BUILD = 'progress-3';
 if (__DEV__) console.log(`[progress] build ${PROGRESS_BUILD}`);
 
 const PROGRESS_BEFORE = DC_VIEWPORT_JS + CONSOLE_FORWARD_JS + dcLogicPatchJs(PROGRESS_LOGIC_EXT) + PROGRESS_DOM_JS;
 
 export default function ProgressScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const webRef = useRef<WebView>(null);
   const [ready, setReady] = useState(false);
   const dataRef = useRef<ProgressData | null>(null);
@@ -54,27 +65,57 @@ export default function ProgressScreen() {
   }, []);
 
   const load = useCallback(async () => {
-    const [sessions, weights] = await Promise.all([getAllSessions(), getWeightLog()]);
-    const data = buildProgressData(sessions, computeMuscleTiers(sessions), weights);
-    // Keep any emblem art we already fetched so a refresh never blanks it.
+    const [sessions, weights, photos] = await Promise.all([getAllSessions(), getWeightLog(), listProgressPhotos()]);
+    const tiers = computeMuscleTiers(sessions);
+    const data = buildProgressData(sessions, tiers, weights, Date.now(), { insets: { top: insets.top, bottom: insets.bottom }, photos });
+    // Keep art we already fetched so a refresh never blanks it.
     const prev = dataRef.current;
     if (prev) {
       data.rank.emblem = prev.rank.tier === data.rank.tier ? prev.rank.emblem : null;
       data.ladder.forEach((l, i) => { l.img = prev.ladder[i]?.img ?? null; });
+      data.muscles.forEach((m) => { const pm = prev.muscles.find(x => x.key === m.key); if (pm && pm.tier === m.tier) m.icon = pm.icon; });
+      data.workouts.forEach((w) => { w.thumb = prev.workouts.find(x => x.ts === w.ts)?.thumb ?? null; });
     }
     dataRef.current = data;
     push();
-    // Emblem for the rank card first (small), then the ladder art.
+    // Heavier art arrives in follow-up pushes: rank emblem, muscle icons, ladder, video frames.
     const cur = await tierDataUri(data.rank.tier ?? 'bronze');
     if (dataRef.current === data && cur) { data.rank.emblem = cur; push(); }
+    const icons = await Promise.all(data.muscles.map(m => muscleIconUri(m.key as Muscle, (m.tier ?? 'silver') as Tier)));
+    if (dataRef.current === data) { data.muscles.forEach((m, i) => { m.icon = icons[i]; }); push(); }
     const imgs = await Promise.all(TIER_ORDER.map(t => tierDataUri(t)));
     if (dataRef.current === data) { data.ladder.forEach((l, i) => { l.img = imgs[i]; }); push(); }
-  }, [push]);
+    const frames = await Promise.all(data.workouts.slice(0, 8).map(async (w) => {
+      const uri = (await getSessionThumbnail(w.ts, 1000)) ?? (await getSessionThumbnail(w.ts, 0));
+      if (!uri) return null;
+      try { return `data:image/jpeg;base64,${await new File(uri).base64()}`; } catch { return null; }
+    }));
+    if (dataRef.current === data) { frames.forEach((f, i) => { if (f) data.workouts[i].thumb = f; }); push(); }
+  }, [push, insets.top, insets.bottom]);
+
+  // Take a photo, save it ON THE DEVICE (never fails just because the network or sign-in does),
+  // then try the cloud copy quietly in the background.
+  const addPhoto = useCallback(async (pose: PhotoPose) => {
+    try {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) { Alert.alert('Camera access needed', 'Allow camera access in Settings to take a progress photo.'); return; }
+      const result = await ImagePicker.launchCameraAsync({ quality: 0.8, allowsEditing: false });
+      if (result.canceled || !result.assets?.[0]?.uri) return;
+      const uri = result.assets[0].uri;
+      await addProgressPhoto(uri, pose);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      void uploadProgressPhotoToCloud(uri, 'recurring').catch(() => {});
+      await load();
+      webRef.current?.injectJavaScript(`window.__athltToast && window.__athltToast('Photo saved'); true;`);
+    } catch (e) {
+      Alert.alert("Couldn't save photo", 'Something went wrong saving the photo to your phone. Please try again.');
+    }
+  }, [load]);
 
   useFocusEffect(useCallback(() => { load().catch(() => {}); }, [load]));
 
   const onMessage = useCallback((raw: string) => {
-    let msg: { type?: string; dateKey?: string; weightLb?: number; ts?: number; msg?: string };
+    let msg: { type?: string; dateKey?: string; weightLb?: number; ts?: number; msg?: string; pose?: string };
     try { msg = JSON.parse(raw); } catch { return; }
     switch (msg.type) {
       case 'ready': setReady(true); break;
@@ -92,11 +133,9 @@ export default function ProgressScreen() {
       case 'openWorkout':
         if (msg.ts != null) router.push({ pathname: '/recap', params: { ts: String(msg.ts) } } as any);
         break;
-      case 'photos':
-        router.push({ pathname: '/progress-photo-screen', params: { variant: 'first', dest: '/(tabs)/progress' } } as any);
-        break;
+      case 'addPhoto': void addPhoto((msg.pose as PhotoPose) || 'front'); break;
     }
-  }, [push, load, router]);
+  }, [push, load, router, addPhoto]);
 
   return (
     <View style={styles.root}>

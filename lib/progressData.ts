@@ -12,7 +12,7 @@ import {
   TIER_ORDER, VOLUME_THRESHOLDS, QUALITY_THRESHOLDS, tierIndex, groupIntoWorkouts, calcStreak,
   type SessionEntry, type MuscleTiers, type MuscleTierInfo, type Tier,
 } from './sessionLog';
-import { computeOverallStanding } from '../components/MuscleTierMap';
+import { computeOverallStanding, MUSCLE_DISPLAY_ORDER } from '../components/MuscleTierMap';
 import { bodyMapSvg } from './bodyMapSvg';
 import type { WeightEntry } from './weightLog';
 
@@ -47,16 +47,21 @@ export interface ProgressData {
     has: boolean; tier: Tier | null; label: string; pct: number; nextLabel: string; atTop: boolean;
     streak: number; hi: string; lo: string; ink: string; emblem: string | null;
   };
-  muscles: { name: string; tier: Tier | null; label: string; pct: number; hi: string; lo: string; ink: string }[];
+  muscles: { key: string; icon: string | null; name: string; tier: Tier | null; label: string; pct: number; hi: string; lo: string; ink: string }[];
   weakest: string | null;
   bodyMap: { front: string; back: string };
   ladder: { name: string; tier: Tier; state: 'done' | 'you' | 'locked'; img: string | null }[];
   weight: { d: string; w: number }[];
   form: { ts: number; pct: number }[];
   bests: { name: string; value: string; unit: string; kind: 'streak' | 'form' | 'reps' }[];
-  workouts: { ts: number; name: string; when: string; form: string; formPct: number | null; reps: number; sets: number }[];
+  workouts: { ts: number; name: string; when: string; form: string; formPct: number | null; reps: number; sets: number; thumb: string | null }[];
   hasSessions: boolean;
+  insets: { top: number; bottom: number };
+  photos: PhotoView[];
 }
+
+/** A saved progress photo as the page needs it (thumb is a small data: URI, null if one couldn't be made). */
+export interface PhotoView { id: string; ts: number; pose: 'front' | 'side' | 'back'; thumb: string | null; label: string }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const WD = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -85,6 +90,7 @@ function longestStreak(sessions: SessionEntry[]): number {
 
 export function buildProgressData(
   sessions: SessionEntry[], tiers: MuscleTiers, weights: WeightEntry[], now: number = Date.now(),
+  extras: { insets?: { top: number; bottom: number }; photos?: { id: string; ts: number; pose: 'front' | 'side' | 'back'; thumb: string | null }[] } = {},
 ): ProgressData {
   const standing = computeOverallStanding(tiers);
   const tier = standing?.tier ?? null;
@@ -92,10 +98,13 @@ export function buildProgressData(
   const nextTier = tier ? (idx < TIER_ORDER.length - 1 ? TIER_ORDER[idx + 1] : tier) : 'bronze';
   const meta = TIER_META[tier ?? 'bronze'];
 
-  const muscles = (Object.keys(MUSCLE_LABEL) as Muscle[]).map(m => {
+  // Only muscles that have icon art are listed (the same 11 the native rank grid shows); the
+  // body map above still colours all 14 regions.
+  const muscles = MUSCLE_DISPLAY_ORDER.map(m => {
     const info = tiers[m];
     const mm = TIER_META[info?.tier ?? 'bronze'];
     return {
+      key: m, icon: null as string | null,
       name: MUSCLE_LABEL[m], tier: info ? info.tier : null,
       label: info ? cap(info.tier) : 'Unranked',
       pct: info ? Math.round(tileProgress(info) * 100) : 0,
@@ -118,7 +127,7 @@ export function buildProgressData(
       when: `${dayLabel(g.ts, now)} · ${g.totalReps} reps`,
       form: scored ? `${g.pct}%` : '–',
       formPct: scored ? g.pct : null,
-      reps: g.totalReps, sets: g.entries.length,
+      reps: g.totalReps, sets: g.entries.length, thumb: null as string | null,
     };
   });
 
@@ -148,5 +157,10 @@ export function buildProgressData(
     })),
     weight: weights.map(w => ({ d: w.dateKey, w: w.weightLb })),
     form, bests, workouts, hasSessions: sessions.length > 0,
+    insets: extras.insets ?? { top: 0, bottom: 0 },
+    photos: (extras.photos ?? []).map(ph => {
+      const d = new Date(ph.ts);
+      return { ...ph, label: `${MON[d.getMonth()]} ${d.getDate()}` };
+    }),
   };
 }
