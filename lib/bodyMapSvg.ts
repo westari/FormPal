@@ -31,7 +31,9 @@ function muscleFill(lo: string, ink: string): string {
   return `#${c.map(v => v.toString(16).padStart(2, '0')).join('')}`;
 }
 
-export function bodyMapSvg(tiers: MuscleTiers, side: 'front' | 'back'): string {
+// Inner markup (silhouette + muscle paths) for one side, shared by the single
+// and the side-by-side renderers below.
+function bodyMapParts(tiers: MuscleTiers, side: 'front' | 'back'): string {
   const table = side === 'front' ? MUSCLE_MAP_FRONT_PATHS : MUSCLE_MAP_BACK_PATHS;
   // fragment id -> fill colour, for muscles ranked on THIS side
   const fillById: Record<string, string> = {};
@@ -53,5 +55,32 @@ export function bodyMapSvg(tiers: MuscleTiers, side: 'front' | 'back'): string {
     const fill = fillById[id] ?? NEUTRAL;
     parts.push(`<path d="${table[id]}" fill="${fill}" stroke="#ffffff" stroke-width="0.9" stroke-linejoin="round"/>`);
   }
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${MUSCLE_MAP_VIEWBOX[side]}" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:100%;">${parts.join('')}</svg>`;
+  return parts.join('');
+}
+
+export function bodyMapSvg(tiers: MuscleTiers, side: 'front' | 'back'): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${MUSCLE_MAP_VIEWBOX[side]}" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:100%;">${bodyMapParts(tiers, side)}</svg>`;
+}
+
+const vb = (side: 'front' | 'back') => MUSCLE_MAP_VIEWBOX[side].split(' ').map(Number);
+
+// Front + back figures side by side as ONE image (a data: URI usable as an
+// <img src>), with only the given muscles coloured (bronze — "muscles you just
+// trained") and everything else neutral. Same path data / region table as the
+// Progress tab and the native MuscleTierMap, so it's the app's real body map.
+export function bodyMapPairSvg(worked: Muscle[]): string {
+  const tiers: MuscleTiers = {};
+  for (const m of worked) tiers[m] = { tier: 'bronze', peakTier: 'bronze', volume: 0, goodRatio: 0 };
+  const [, , fw, fh] = vb('front');
+  const [, , bw, bh] = vb('back');
+  const gap = 56;
+  const H = Math.max(fh, bh);
+  const W = fw + gap + bw;
+  const fig = (side: 'front' | 'back', x: number, w: number, h: number) =>
+    `<svg x="${x}" y="${(H - h) / 2}" width="${w}" height="${h}" viewBox="${MUSCLE_MAP_VIEWBOX[side]}">${bodyMapParts(tiers, side)}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${fig('front', 0, fw, fh)}${fig('back', fw + gap, bw, bh)}</svg>`;
+}
+
+export function bodyMapPairDataUri(worked: Muscle[]): string {
+  return 'data:image/svg+xml;utf8,' + encodeURIComponent(bodyMapPairSvg(worked));
 }

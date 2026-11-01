@@ -61,13 +61,16 @@ import { repFeedbackSignal } from '../lib/repFeedbackSignal';
 import { saveStreakToCloud } from '../lib/formpalSync';
 import {
   getAllSessions, appendSessions, groupIntoWorkouts, calcStreak, computeMuscleTiers,
-  TIER_ORDER, type SessionEntry, type RepEventData, type Tier,
+  type SessionEntry, type RepEventData,
 } from '../lib/sessionLog';
 import { findSessionVideoUri } from '../lib/sessionVideo';
 import { EXERCISE_DEFINITIONS } from '../constants/exerciseDefinitions';
-import { getExerciseDef, muscleCreditParts, Muscle, type ExerciseId } from '../constants/exercises';
+import { Muscle, type ExerciseId } from '../constants/exercises';
 import { computeOverallStanding, MUSCLE_LABELS, MUSCLE_ICON_SOURCES } from '../components/MuscleTierMap';
 import { Asset } from 'expo-asset';
+import { buildMuscleRanksPayload, workedMuscles, type MuscleRanksPayload } from '../lib/muscleRanksData';
+import { muscleRanksBeforeJs } from '../lib/muscleRanksInject';
+import { tierDataUri } from '../lib/rankImages';
 import { useWorkoutSessionStore } from '../store/workoutSessionStore';
 import type { WorkoutSummary } from '../store/workoutSessionStore';
 import { usePlanStore } from '../store/planStore';
@@ -408,149 +411,6 @@ true;
 `;
 }
 
-// ─── muscleranks.html — "today's progress" screen, the real destination
-// for the old "See your ranks" celebration moment. stats (Muscles/Lb
-// lifted/New PRs/Day streak) ARE prop-driven but this app doesn't track
-// lbs-lifted or PRs (bodyweight/rep-based, no such data exists) — those 2
-// slots are honestly relabeled to Reps/Moves (real numbers) rather than
-// fabricated. hits (the 2 muscle chips over the body diagram) and the
-// rank-progress bar fill are NOT prop-driven (hardcoded Quads/Glutes
-// demo, no this.props read for them at all) — real top-2 muscle names +
-// rep counts swapped in via DOM text replace (their baked-in icon assets
-// only exist for Quads/Glutes specifically, so the icon image itself is
-// hidden rather than show the wrong muscle's icon); the progress bar's
-// width is a style attribute, set directly rather than text-matched.
-function muscleRanksInject(opts: {
-  rankName: string; nextRank: string; beforePct: number; afterPct: number;
-  streak: number; totalReps: number; moves: number; muscleCount: number;
-  hits: { name: string; reps: number }[]; note: string;
-  // Real per-muscle icon, base64 data: URI, resolved from
-  // MUSCLE_ICON_SOURCES (bronze tier — see the "bronze highlight" note
-  // below), same order as `hits`. null for a muscle with no Flaticon art
-  // yet (Forearms/LowerBack/Calves) — that chip's icon stays hidden, same
-  // as the old behavior, rather than show nothing-shaped wrong art.
-  hitIconUris: (string | null)[];
-}): string {
-  const { rankName, nextRank, beforePct, afterPct, streak, totalReps, moves, muscleCount, hits, note, hitIconUris } = opts;
-  const MAP: Record<string, string> = {
-    'Bronze II': rankName,
-    'Bronze III': nextRank,
-    '4': String(muscleCount),
-    '6.2k': String(totalReps),
-    '2': String(moves),
-    '6': String(streak),
-    'Lb lifted': 'Reps',
-    'New PRs': 'Moves',
-    '72%': `${afterPct}%`,
-    'Quads': hits[0]?.name ?? '',
-    '+6%': hits[0] ? `+${hits[0].reps}` : '',
-    'Glutes': hits[1]?.name ?? '',
-    '+5%': hits[1] ? `+${hits[1].reps}` : '',
-    'Clean, deep squats did most of the work today. Keep that depth next session and Bronze III is about two workouts away.': note,
-  };
-  return dcScaleFitJs('#f2f2f5') + `
-(function(){
-  function post(m){ try{ window.ReactNativeWebView.postMessage(JSON.stringify(m)); }catch(e){} }
-  var MAP = ${JSON.stringify(MAP)};
-  var AFTER_PCT = ${JSON.stringify(afterPct + '%')};
-  var HIT_COUNT = ${hits.length};
-  var HIT_ICON_URIS = ${JSON.stringify(hitIconUris)};
-  var fillSet=false, iconsSet=false, backWired=false, doneWired=false, shareWired=false;
-  function apply(){
-    var hit=0;
-    var all=document.querySelectorAll('#dc-root div,#dc-root span');
-    for(var i=0;i<all.length;i++){
-      var el=all[i]; if(el.children.length) continue;
-      var t=(el.textContent||'').trim();
-      if(MAP[t]!=null && t!==MAP[t]){ el.textContent=MAP[t]; hit++; }
-    }
-    // Rank progress bar fill (inline width style, not text).
-    if(!fillSet){
-      var fillBar=document.querySelector('#dc-root div[style*="transition: width 1100ms"]');
-      if(fillBar){ fillBar.style.setProperty('width', AFTER_PCT, 'important'); fillSet=true; hit++; }
-    }
-    // BUG FOUND (explicit report): this artboard's own baked-in chip icon
-    // art only ever covers Quads/Glutes (its design-time manifest), so for
-    // any other muscle it was showing THAT icon regardless of the real
-    // label — "Shoulders shows legs, Triceps shows the wrong muscle." Real
-    // fix: embed the REAL per-muscle PNG (resolved to a data: URI in
-    // recap.tsx from components/MuscleTierMap.tsx's own verified-correct
-    // MUSCLE_ICON_SOURCES) as a plain <img>, replacing whatever wrong art
-    // the artboard's own <div role="img"> was showing — not hiding it
-    // unless there's genuinely no real art yet for that muscle. Also adds
-    // the bronze highlight (explicit ask: "muscles that were just trained
-    // in this workout get a bronze highlight") — both chips always qualify
-    // since hits is already exactly "top muscles worked THIS session."
-    if(!iconsSet){
-      var chipIcons=document.querySelectorAll('#dc-root div[role="img"]');
-      var idx=0;
-      for(var c=0;c<chipIcons.length;c++){
-        var el=chipIcons[c];
-        var w=el.style && el.style.width;
-        if(w!=='24px') continue;
-        var uri = HIT_ICON_URIS[idx];
-        if(uri){
-          while(el.firstChild) el.removeChild(el.firstChild);
-          var img=document.createElement('img');
-          img.src=uri;
-          img.style.cssText='width:100%;height:100%;object-fit:contain;';
-          el.appendChild(img);
-          el.style.setProperty('background','linear-gradient(135deg,#F0C9A0,#B97A42)','important');
-          el.style.setProperty('border','1.5px solid #7A4A22','important');
-          el.style.setProperty('border-radius','50%','important');
-        } else {
-          el.style.display='none';
-        }
-        idx++;
-        hit++;
-      }
-      iconsSet=true;
-    }
-    // A 2nd chip with nothing real to show (fewer than 2 real muscle
-    // hits this session) — hide its whole row rather than leave "Glutes"-
-    // shaped blank text.
-    if(HIT_COUNT<2){
-      var chips=document.querySelectorAll('#dc-root div');
-      for(var g=0;g<chips.length;g++){
-        if((chips[g].textContent||'').trim()==='' && chips[g].style && chips[g].style.position==='absolute' && chips[g].style.top==='284px'){
-          chips[g].style.display='none';
-        }
-      }
-    }
-    if(!backWired){
-      var backLink=document.querySelector('#dc-root a[href="Workout Recap.dc.html"]');
-      if(backLink){ backLink.addEventListener('click', function(ev){ ev.preventDefault(); post({type:'closeRanks'}); }, true); backWired=true; hit++; }
-    }
-    if(!doneWired){
-      var divs=document.querySelectorAll('#dc-root div');
-      for(var d=0;d<divs.length;d++){
-        var de=divs[d]; if(de.children.length) continue;
-        if((de.textContent||'').trim()==='Done'){
-          de.addEventListener('click', function(ev){ ev.stopPropagation(); post({type:'doneRanks'}); }, true);
-          doneWired=true; hit++; break;
-        }
-      }
-    }
-    if(!shareWired){
-      var shareBtn=document.querySelector('#dc-root div svg path[d^="M8 10V2.5"]');
-      if(shareBtn){
-        var sbtn=shareBtn.closest('div');
-        if(sbtn){ sbtn.addEventListener('click', function(ev){ ev.stopPropagation(); post({type:'shareVideo'}); }, true); }
-        shareWired=true; hit++;
-      }
-    }
-    return hit>=4;
-  }
-  if(!apply()) [200,500,1000,2000,3500,5000].forEach(function(d){ setTimeout(apply,d); });
-  else [1000,2500].forEach(function(d){ setTimeout(apply,d); });
-  var root = document.getElementById('dc-root') || document.body;
-  var mo = new MutationObserver(function(){ apply(); });
-  mo.observe(root, { childList: true, subtree: true, characterData: true });
-})();
-true;
-`;
-}
-
 // ─── workoutrecap.html — the main recap screen ─────────────────────────────
 // Restored EXACTLY as it was before the native rebuild (git history,
 // commit 31d13a0) — explicit instruction: "revert... back to my original
@@ -842,6 +702,31 @@ true;
 }
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
+// Real per-muscle Flaticon art (bronze tier — the page highlights muscles
+// just trained in bronze) as a base64 data: URI the WebView can use. null for
+// a muscle with no art yet (Forearms/LowerBack/Calves). Cached per muscle.
+const muscleIconCache = new Map<Muscle, string | null>();
+async function muscleIconDataUri(m: Muscle): Promise<string | null> {
+  if (muscleIconCache.has(m)) return muscleIconCache.get(m) ?? null;
+  const src = MUSCLE_ICON_SOURCES[m]?.bronze;
+  if (!src) { muscleIconCache.set(m, null); return null; }
+  try {
+    // All MUSCLE_ICON_SOURCES entries are require()'d local PNGs, which always
+    // resolve to a numeric module id — ImageSourcePropType is a broader type
+    // (could also be {uri}) that Asset.fromModule's own signature doesn't
+    // cover, hence the cast.
+    const asset = Asset.fromModule(src as number);
+    await asset.downloadAsync();
+    const uri = asset.localUri || asset.uri;
+    const out = `data:image/png;base64,${await new File(uri).base64()}`;
+    muscleIconCache.set(m, out);
+    return out;
+  } catch (err) {
+    if (__DEV__) console.error('[recap] muscle icon data-uri failed for', m, err);
+    return null;
+  }
+}
+
 export default function RecapScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -990,19 +875,12 @@ export default function RecapScreen() {
     }
   }, [view, isFocused, data?.videoUri, videoPlayer, videoFade]);
 
-  // Reveal-gate for the summary screen only (the one with the reported
-  // "grey -> wrong data at top -> slides into place" bug). Stays hidden
-  // until workoutrecapInject's apply() confirms real data was actually
-  // injected (posts {type:'ready'}), so the WebView never shows the
-  // artboard's own placeholder numbers mid-load. Backstop timeout is a
-  // safety net in case the 'ready' message never arrives. allsets/ranks
-  // are untouched — they don't have this reported bug, so no gating.
+  // Reveal-gate for the summary and muscle-ranks screens. Stays hidden until
+  // the injected JS confirms real data is in AND the page is in its final
+  // layout (posts {type:'ready'}), so the WebView never shows the artboard's
+  // own placeholder content mid-load. The backstop timeout lives below,
+  // next to effectiveView. allsets has no gating.
   const [webReady, setWebReady] = useState(false);
-  useEffect(() => {
-    setWebReady(false);
-    const backstop = setTimeout(() => setWebReady(true), 2500);
-    return () => clearTimeout(backstop);
-  }, [view]);
 
   const repEventsParam = useMemo<RepEventData[]>(() => {
     try { return JSON.parse(events ?? '[]'); }
@@ -1220,99 +1098,66 @@ export default function RecapScreen() {
     });
   }, [data, hasVideo]);
 
-  // "Today's progress" — real standing before vs. after this session
-  // (computeOverallStanding's own "weakest muscle" philosophy, same one
-  // app/muscle-ranks.tsx already uses), real streak, real top-2 muscles
-  // worked THIS session by rep credit. Not computed for history mode —
-  // "today's progress" doesn't mean anything for a past session being
-  // reviewed, and handleBack never routes there in that case anyway.
-  const [rankData, setRankData] = useState<{
-    rankName: string; nextRank: string; beforePct: number; afterPct: number;
-    streak: number; muscleCount: number; hits: { muscle: Muscle; name: string; reps: number }[];
-  } | null>(null);
-  // Real per-muscle icon for each hit chip, resolved once rankData is set
-  // (see the effect right after it) — bronze tier specifically, since both
-  // hits are by definition muscles trained THIS session (explicit ask:
-  // "muscles that were just trained in this workout get a bronze
-  // highlight"). Replaces the old behavior of hiding the chip's icon
-  // entirely whenever the muscle wasn't Quads/Glutes (the only 2 the
-  // artboard's own baked-in icon manifest has art for) — this resolves
-  // the REAL per-muscle PNG (components/MuscleTierMap.tsx's
-  // MUSCLE_ICON_SOURCES, already correct/verified for all but 3 muscles)
-  // to a base64 data: URI and embeds it directly, so every label shows
-  // its own real muscle, not a placeholder or nothing.
-  const [hitIconUris, setHitIconUris] = useState<(string | null)[]>([]);
-  useEffect(() => {
-    if (!rankData || rankData.hits.length === 0) { setHitIconUris([]); return; }
-    let cancelled = false;
-    (async () => {
-      const uris = await Promise.all(rankData.hits.map(async (h) => {
-        const src = MUSCLE_ICON_SOURCES[h.muscle]?.bronze;
-        if (!src) return null; // Forearms/LowerBack/Calves have no Flaticon art yet
-        try {
-          // All MUSCLE_ICON_SOURCES entries are require()'d local PNGs,
-          // which always resolve to a numeric module id — ImageSourcePropType
-          // is a broader type (could also be {uri}) that Asset.fromModule's
-          // own signature doesn't cover, hence the cast.
-          const asset = Asset.fromModule(src as number);
-          await asset.downloadAsync();
-          const uri = asset.localUri || asset.uri;
-          const base64 = await new File(uri).base64();
-          return `data:image/png;base64,${base64}`;
-        } catch (err) {
-          if (__DEV__) console.error('[recap] muscle icon data-uri failed for', h.muscle, err);
-          return null;
-        }
-      }));
-      if (!cancelled) setHitIconUris(uris);
-    })();
-    return () => { cancelled = true; };
-  }, [rankData]);
+  // "Today's progress" (muscleranks.html) — everything on it is real: standing
+  // before vs. after this session (the SAME weakest-link standing the Progress
+  // tab shows), each muscle's own gain, the muscles this workout actually
+  // trained (rows + body map), the tier emblem. Built ahead of time, as soon
+  // as the recap data exists, so by the time the user gets to this page it is
+  // all ready and the page opens already in its final layout. Not computed for
+  // history mode — "today's progress" doesn't mean anything for a past session
+  // being reviewed, and handleBack never routes there in that case anyway.
+  const [ranksPayload, setRanksPayload] = useState<MuscleRanksPayload | null>(null);
   useEffect(() => {
     if (!data || data.isHistory) return;
+    let cancelled = false;
     (async () => {
       await persistRef.current; // this session's own entries must be written first
       const all = await getAllSessions(); // already includes this session's own entries
       const prior = all.filter(s => s.ts < data.ts);
-      const afterStanding = computeOverallStanding(computeMuscleTiers(all));
-      const beforeStanding = computeOverallStanding(computeMuscleTiers(prior));
-      const afterTier: Tier = afterStanding?.tier ?? 'bronze';
-      const idx = TIER_ORDER.indexOf(afterTier);
-      const nextTier = idx >= 0 && idx < TIER_ORDER.length - 1 ? TIER_ORDER[idx + 1] : afterTier;
-      const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
-
-      const tally = new Map<string, number>();
-      for (const e of data.entries) {
-        const def = getExerciseDef(e.exerciseId);
-        if (!def) continue;
-        for (const credit of def.muscles) {
-          const { muscle, weight } = muscleCreditParts(credit);
-          tally.set(muscle, (tally.get(muscle) ?? 0) + e.reps * weight);
-        }
-      }
-      const hits = [...tally.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 2)
-        .map(([m, reps]) => ({ muscle: m as Muscle, name: MUSCLE_LABELS[m as keyof typeof MUSCLE_LABELS], reps: Math.round(reps) }));
-
-      setRankData({
-        rankName: cap(afterTier), nextRank: cap(nextTier),
-        beforePct: Math.round((beforeStanding?.progress ?? 0) * 100),
-        afterPct: Math.round((afterStanding?.progress ?? 0) * 100),
-        streak: calcStreak(all), muscleCount: tally.size, hits,
-      });
-    })();
+      const tiersAfter = computeMuscleTiers(all);
+      const tiersBefore = computeMuscleTiers(prior);
+      const standingAfter = computeOverallStanding(tiersAfter);
+      const standingBefore = computeOverallStanding(tiersBefore);
+      const icons: Partial<Record<Muscle, string | null>> = {};
+      await Promise.all(workedMuscles(data.entries).slice(0, 2).map(async (w) => {
+        icons[w.muscle] = await muscleIconDataUri(w.muscle);
+      }));
+      const emblem = await tierDataUri(standingAfter?.tier ?? 'bronze');
+      if (cancelled) return;
+      setRanksPayload(buildMuscleRanksPayload({
+        entries: data.entries, tiersBefore, tiersAfter, standingBefore, standingAfter,
+        labels: MUSCLE_LABELS,
+        note: generateSummary(data.totalReps, data.totalGoodReps, data.hasFormData),
+        iconFor: (m) => icons[m] ?? null,
+        emblem,
+      }));
+      if (__DEV__) console.log('[recap] muscle page data ready');
+    })().catch((err) => { if (__DEV__) console.warn('[recap] muscle page data failed', err); });
+    return () => { cancelled = true; };
   }, [data]);
 
-  const ranksInjectJs = useMemo(() => {
-    if (!data || !rankData) return null;
-    return muscleRanksInject({
-      ...rankData,
-      totalReps: data.totalReps, moves: data.entries.length,
-      note: generateSummary(data.totalReps, data.totalGoodReps, data.hasFormData),
-      hitIconUris,
-    });
-  }, [data, rankData, hitIconUris]);
+  // Injected BEFORE the page loads, with the real data already inside it.
+  const ranksBeforeJs = useMemo(
+    () => (ranksPayload ? `${DC_VIEWPORT_JS} ${muscleRanksBeforeJs(ranksPayload)}` : null),
+    [ranksPayload],
+  );
+
+  // 'ranks' falls back to 'summary' until its real data has finished
+  // computing (async) — never shows a view with nothing real in it yet.
+  const effectiveView: 'summary' | 'allsets' | 'ranks' =
+    view === 'allsets' && allSetsInjectJs ? 'allsets' :
+    view === 'ranks'   && ranksBeforeJs   ? 'ranks'   :
+    'summary';
+
+  // Reveal gate, reset whenever the WebView that is ACTUALLY mounted changes
+  // (keyed on effectiveView, not view: 'ranks' can be requested before its
+  // data is ready, and the swap to it must start hidden again). Backstop
+  // timeout is only a safety net in case 'ready' never arrives.
+  useEffect(() => {
+    setWebReady(false);
+    const backstop = setTimeout(() => setWebReady(true), 2500);
+    return () => clearTimeout(backstop);
+  }, [effectiveView]);
 
   // ── Failure / loading states ────────────────────────────────────────────────
 
@@ -1336,18 +1181,11 @@ export default function RecapScreen() {
     );
   }
 
-  // 'ranks' falls back to 'summary' until rankData/its inject finish
-  // computing (async) — never shows a view with nothing real injected yet.
-  const effectiveView: 'summary' | 'allsets' | 'ranks' =
-    view === 'allsets' && allSetsInjectJs ? 'allsets' :
-    view === 'ranks'   && ranksInjectJs   ? 'ranks'   :
-    'summary';
-
   const SOURCE_BY_VIEW = {
     summary: RECAP_HTML, allsets: ALL_SETS_HTML, ranks: MUSCLE_RANKS_HTML,
   } as const;
   const INJECT_BY_VIEW = {
-    summary: summaryInjectJs, allsets: allSetsInjectJs, ranks: ranksInjectJs,
+    summary: summaryInjectJs, allsets: allSetsInjectJs, ranks: ranksBeforeJs,
   } as const;
 
   return (
@@ -1387,7 +1225,9 @@ export default function RecapScreen() {
         style={
           effectiveView === 'summary'
             ? [styles.web, videoVisuallyReady && { backgroundColor: 'transparent' }, { opacity: webReady ? 1 : 0 }]
-            : styles.web
+            : effectiveView === 'ranks'
+              ? [styles.web, { opacity: webReady ? 1 : 0 }]
+              : styles.web
         }
         // Summary: the whole inject runs BEFORE the artboard's bundle unpacks
         // (it observes the document itself and styles/wires/reveals the
@@ -1395,9 +1235,11 @@ export default function RecapScreen() {
         // schedule — that wait is what made the card show up late. The
         // other views keep their old after-load injection.
         injectedJavaScriptBeforeContentLoaded={
-          effectiveView === 'summary' ? `${DC_VIEWPORT_JS}\n${summaryInjectJs}` : DC_VIEWPORT_JS
+          effectiveView === 'summary' ? `${DC_VIEWPORT_JS} ${summaryInjectJs}`
+            : effectiveView === 'ranks' ? ranksBeforeJs ?? DC_VIEWPORT_JS
+            : DC_VIEWPORT_JS
         }
-        injectedJavaScript={effectiveView === 'summary' ? undefined : (INJECT_BY_VIEW[effectiveView] ?? undefined)}
+        injectedJavaScript={effectiveView === 'allsets' ? (INJECT_BY_VIEW.allsets ?? undefined) : undefined}
         // DIAGNOSTIC LOGGING — explicit ask ("add console logs on every
         // mount, unmount, and navigation call... reproduce the path, find
         // the real cause"). I can't run a device myself, so this can't be
@@ -1485,7 +1327,7 @@ export default function RecapScreen() {
           as Cue's identical loading delay. A spinner doesn't shorten the
           wait, but stops a plain black/blank screen from reading as
           stuck or broken while it's genuinely still loading. */}
-      {effectiveView === 'summary' && !webReady && (
+      {(effectiveView === 'summary' || effectiveView === 'ranks') && !webReady && (
         <View style={StyleSheet.absoluteFill} pointerEvents="none">
           <ActivityIndicator style={{ flex: 1 }} color="#9a9aa2" />
         </View>
@@ -1512,7 +1354,7 @@ export default function RecapScreen() {
       {/* No native fallback back button any more — explicit ask ("one
           clear back button, not two"). Both non-summary views now have
           their own real, working back button: 'ranks' already did
-          (muscleRanksInject's backWired), and 'allsets' already did too
+          (lib/muscleRanksInject's back wiring), and 'allsets' already did too
           (allSetsInject's recapWired/doneWired) — this native one was
           showing ALONGSIDE allsets' own, the literal duplicate reported.
           Removing it entirely rather than re-scoping it further, since no
