@@ -142,7 +142,7 @@ export default function ProfileScreen() {
       case 'save': if (msg.patch) void save(msg.patch); break;
       case 'applyPlan': void applyPlan(); break;
       case 'nav': {
-        const route = msg.to === 'audio' ? '/audio-settings' : msg.to === 'ar' ? '/ar-experiment' : msg.to === 'calibrate' ? '/calibrate' : null;
+        const route = msg.to === 'audio' ? '/audio-settings' : msg.to === 'ar' ? '/ar-experiment' : msg.to === 'calibrate' ? '/calibrate' : msg.to === 'camera' ? '/exercise-picker' : null;
         if (route) router.push(route as any);
         break;
       }

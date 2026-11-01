@@ -18,7 +18,7 @@
  * it's genuinely ready.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Modal, Pressable, Image } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
@@ -37,7 +37,7 @@ import { uploadProgressPhotoToCloud } from '../../lib/formpalSync';
 import * as ImagePicker from 'expo-image-picker';
 import { File } from 'expo-file-system';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Alert } from 'react-native';
+import { Alert, Share } from 'react-native';
 import type { Muscle } from '../../constants/exercises';
 import type { Tier } from '../../lib/sessionLog';
 
@@ -53,6 +53,8 @@ export default function ProgressScreen() {
   const webRef = useRef<WebView>(null);
   const [ready, setReady] = useState(false);
   const dataRef = useRef<ProgressData | null>(null);
+  const photosRef = useRef<{ id: string; uri: string }[]>([]);
+  const [viewing, setViewing] = useState<string | null>(null); // file uri of the photo shown full screen
 
   const push = useCallback(() => {
     if (dataRef.current) webRef.current?.injectJavaScript(athltSetDataJs(dataRef.current));
@@ -66,6 +68,7 @@ export default function ProgressScreen() {
 
   const load = useCallback(async () => {
     const [sessions, weights, photos] = await Promise.all([getAllSessions(), getWeightLog(), listProgressPhotos()]);
+    photosRef.current = photos.map(p => ({ id: p.id, uri: p.uri }));
     const tiers = computeMuscleTiers(sessions);
     const data = buildProgressData(sessions, tiers, weights, Date.now(), { insets: { top: insets.top, bottom: insets.bottom }, photos });
     // Keep art we already fetched so a refresh never blanks it.
@@ -133,6 +136,15 @@ export default function ProgressScreen() {
       case 'openWorkout':
         if (msg.ts != null) router.push({ pathname: '/recap', params: { ts: String(msg.ts) } } as any);
         break;
+      case 'share': {
+        const r = dataRef.current?.rank;
+        const message = r?.has
+          ? `I'm ${r.label} on FormPal${r.streak > 0 ? ` with a ${r.streak}-day streak` : ''}. Form-checked reps, ranked by muscle.`
+          : "I'm training with FormPal: form-checked reps, ranked by muscle.";
+        Share.share({ message }).catch(() => {});
+        break;
+      }
+      case 'viewPhoto': { const hit = photosRef.current.find(p => p.id === (msg as any).id); if (hit) setViewing(hit.uri); break; }
       case 'addPhoto': void addPhoto((msg.pose as PhotoPose) || 'front'); break;
     }
   }, [push, load, router, addPhoto]);
@@ -157,6 +169,11 @@ export default function ProgressScreen() {
         domStorageEnabled
         cacheEnabled={false}
       />
+      <Modal visible={viewing != null} transparent animationType="fade" onRequestClose={() => setViewing(null)}>
+        <Pressable style={styles.viewer} onPress={() => setViewing(null)}>
+          {viewing ? <Image source={{ uri: viewing }} style={styles.viewerImg} resizeMode="contain" /> : null}
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -164,4 +181,6 @@ export default function ProgressScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#eeeef1' },
   web:  { flex: 1, backgroundColor: '#eeeef1' },
+  viewer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center' },
+  viewerImg: { width: '100%', height: '100%' },
 });

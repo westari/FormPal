@@ -231,6 +231,17 @@ export const PROFILE_DOM_JS = String.raw`
     return { okFit: okFit, filled: !!d };
   }
 
+  // The artboard links to its sibling prototype pages by file name ("Camera Setup.dc.html"). Inside the
+  // app those files don't exist, so following one blanks the WebView — route them to the real screen instead.
+  document.addEventListener('click', function (ev) {
+    var a = ev.target && ev.target.closest ? ev.target.closest('a[href]') : null;
+    if (!a) return;
+    var href = a.getAttribute('href') || '';
+    if (!/\.dc\.html?$/i.test(href)) return;
+    ev.preventDefault(); ev.stopPropagation();
+    if (/Camera Setup/i.test(href)) post({ type: 'nav', to: 'camera' });
+  }, true);
+
   var reported = false, lastAsk = 0, deb;
   function tick() {
     var r = apply();

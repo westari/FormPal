@@ -609,14 +609,18 @@ export const PROGRESS_DOM_JS = String.raw`
         gridTiles[gt].__addWired = true;
         gridTiles[gt].addEventListener('click', function (ev) {
           var list = Array.prototype.slice.call(root.querySelectorAll('div[style*="aspect-ratio: 3 / 4"][style*="border-radius: 16px"]'));
-          if (list.indexOf(ev.currentTarget) >= (window.__athltPhotoView ? window.__athltPhotoView.grid.length : 0)) addPhoto();
+          var gi = list.indexOf(ev.currentTarget), grid = window.__athltPhotoView ? window.__athltPhotoView.grid : [];
+          if (gi >= grid.length) addPhoto(); else post({ type: 'viewPhoto', id: grid[gi].id });
         }, true);
       }
     }
     for (var cs = 0; cs < cmpSlots.length; cs++) {
       if (!cmpSlots[cs].__addWired) {
         cmpSlots[cs].__addWired = true;
-        cmpSlots[cs].addEventListener('click', function (ev) { if (!ev.currentTarget.__phSig) addPhoto(); }, true);
+        cmpSlots[cs].addEventListener('click', function (ev) {
+          var pvw = window.__athltPhotoView || {}, ph = ev.currentTarget === cmpSlots[0] ? pvw.cmpA : pvw.cmpB;
+          if (ph) post({ type: 'viewPhoto', id: ph.id }); else addPhoto();
+        }, true);
       }
     }
     var links2 = root.querySelectorAll('a');
@@ -625,6 +629,13 @@ export const PROGRESS_DOM_JS = String.raw`
         links2[l2].__addWired = true;
         links2[l2].addEventListener('click', function (ev) { ev.preventDefault(); ev.stopPropagation(); addPhoto(); }, true);
       }
+    }
+
+    // Share button (top right): hands off to the native share sheet
+    var shareBtn = root.querySelector('div[aria-label="Share"]');
+    if (shareBtn && !shareBtn.__shareWired) {
+      shareBtn.__shareWired = true;
+      shareBtn.addEventListener('click', function (ev) { ev.stopPropagation(); post({ type: 'share' }); }, true);
     }
 
     // Past Workouts: a real frame from each workout's video instead of the black box
@@ -650,6 +661,13 @@ export const PROGRESS_DOM_JS = String.raw`
     if (!t) return;
     e.preventDefault(); e.stopPropagation();
     if (window.__athltApi) window.__athltApi.openPhotos();
+  }, true);
+
+  // The artboard links to sibling prototype pages by file name ("Rep Feedback.dc.html"); those files don't
+  // exist in the app and following one would blank the WebView, so they are never followed.
+  document.addEventListener('click', function (ev) {
+    var a = ev.target && ev.target.closest ? ev.target.closest('a[href]') : null;
+    if (a && /\.dc\.html?$/i.test(a.getAttribute('href') || '')) { ev.preventDefault(); ev.stopPropagation(); }
   }, true);
 
   var reported = false, lastAsk = 0, deb;
