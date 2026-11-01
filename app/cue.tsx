@@ -31,9 +31,11 @@ import {
   DC_TEXT_REPLACE_HELPER_JS, DC_LINK_INTERCEPT_JS,
 } from '../lib/dcWebviewHelpers';
 import { MYPAL_API_URL } from '../constants/api';
+import { loadPlan } from '../lib/planStorage';
+import { buildCueGreeting, cueGreetingInjectJs } from '../lib/cueGreeting';
 
 const CUE_HTML = require('../assets/app screens/cue.html');
-const CUE_BUILD = 'cue-5';
+const CUE_BUILD = 'cue-6';
 if (__DEV__) console.log(`[cue] build ${CUE_BUILD}`);
 
 interface Message { role: 'user' | 'assistant'; content: string }
@@ -237,6 +239,20 @@ export default function CueScreen() {
   const router = useRouter();
   const webRef = useRef<WebView>(null);
   const [ready, setReady] = useState(false);
+  // The artboard's first bubble is demo text ("Today is Full body, 38 minutes"). The page is only
+  // revealed once the real greeting has been written into it. The page can fire 'ready' several
+  // times while its bundle unpacks, so the greeting is re-applied on each one.
+  const [greeting, setGreeting] = useState<string | null>(null);
+  const [pageReady, setPageReady] = useState(0);
+  useEffect(() => {
+    loadPlan().then(p => setGreeting(buildCueGreeting(p))).catch(() => setGreeting(buildCueGreeting(null)));
+  }, []);
+  useEffect(() => {
+    if (!pageReady || greeting == null) return;
+    webRef.current?.injectJavaScript(cueGreetingInjectJs(greeting));
+    const t = setTimeout(() => setReady(true), 50);
+    return () => clearTimeout(t);
+  }, [pageReady, greeting]);
   const historyRef = useRef<Message[]>([]);
   // Explicit ask: "nothing moves except the input bar — the rest of the
   // screen stays completely still." Earlier this moved the WHOLE WebView
@@ -296,7 +312,7 @@ export default function CueScreen() {
         onMessage={(e) => {
           let msg: { type?: string };
           try { msg = JSON.parse(e.nativeEvent.data); } catch { return; }
-          if (msg.type === 'ready') { setReady(true); return; }
+          if (msg.type === 'ready') { setPageReady(n => n + 1); return; }
           if (msg.type === 'pageConsole') { if (__DEV__) console.log(`[cue-page:${(msg as any).level}]`, (msg as any).msg); return; }
           if (msg.type === 'send') { void handleSend((msg as any).text); return; }
           if (msg.type === 'navigate') {
