@@ -1,22 +1,20 @@
 /**
  * app/(tabs)/train.tsx — Train tab
  *
- * Renders assets/app screens/traintab.html in a WebView. The mockup's own
- * fake chrome (status bar, bottom nav, home indicator, blur-blob backdrop) is
- * hidden by injected CSS; the real AppBackground shows through the
- * transparent WebView, and the real tab bar sits below.
+ * Renders assets/app screens/traintab.html full-bleed in a WebView, exactly as
+ * designed: its own colour blobs, glass panels and white card are kept. Only the
+ * mockup's fake phone chrome is swapped for the real thing — the fake status bar
+ * becomes a spacer the height of the real one, the fake bottom nav is dropped
+ * (the real tab bar overlays the bottom; content gets bottom padding so it
+ * scrolls clear of it), and the 472x1024 frame is scaled to the phone's width.
  *
- * ROBUSTNESS (the "Train tab doesn't work on my phone" fix): the design ships
- * as a self-extracting bundle that REPLACES the whole <html> element some
- * time after the page's `load` event — on a phone that can be several
- * seconds. The old version injected its CSS/scale once at `load` and stopped
- * watching after 2s, so a slow unpack lost the CSS + scale for good (fake
- * status bar, unscaled page, wrong layout). Now everything is installed in
- * injectedJavaScriptBeforeContentLoaded with a observer that never stops
- * (re-applies after the swap, and after every remount), the WebView stays
- * hidden until the page reports it's really ready, and the plan view's
- * exercise list is real data via lib/dcLogicPatch.ts instead of the mockup's
- * hard-coded "Incline press / Cable fly / ..." demo list.
+ * ROBUSTNESS: the design ships as a self-extracting bundle that REPLACES the
+ * whole <html> element some time after the page's `load` event — on a phone
+ * that can be several seconds. Everything is installed in
+ * injectedJavaScriptBeforeContentLoaded with an observer that never stops
+ * (re-applies after the swap and after every remount), the WebView stays hidden
+ * until the page reports it's ready, and the plan view's exercise list is real
+ * data via lib/dcLogicPatch.ts instead of the mockup's demo list.
  */
 
 import React, { useCallback, useRef, useState, useEffect } from 'react';
@@ -26,7 +24,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
 import * as Haptics from 'expo-haptics';
-import AppBackground from '../../components/AppBackground';
 import { DC_VIEWPORT_JS } from '../../lib/dcWebviewHelpers';
 import { dcLogicPatchJs, athltSetDataJs } from '../../lib/dcLogicPatch';
 import { loadPlan } from '../../lib/planStorage';
@@ -95,17 +92,19 @@ const TRAIN_WEB_INJECT = `
 
   var CARD = 'div[style*="width: 472px"][style*="height: 1024px"]';
   var WRAP = 'div[style*="min-height: 100vh"][style*="padding: 40px 24px"]';
+  // The design is a 472x1024 phone-frame mock (same 0.461 aspect as a real iPhone). It is scaled
+  // to the phone's WIDTH, the card is stretched to the real height (--trH), and the mock's own
+  // chrome is swapped for the real thing: the fake status bar becomes an empty spacer the height
+  // of the real one (--trTop), the fake bottom nav is dropped (the real tab bar overlays the
+  // bottom; --trTb of padding keeps content scrollable above it). The design's own colour blobs,
+  // glass panels and white card are kept — that IS the design.
   var CSS = ''
-    + 'html{margin:0!important;padding:0!important;background:transparent!important;overflow:hidden!important;height:100%!important;width:100%!important;}'
-    + 'body{margin:0!important;padding:0!important;background:transparent!important;overflow:hidden!important;}'
-    + WRAP + '{min-height:1024px!important;height:1024px!important;padding:0!important;display:block!important;background:transparent!important;overflow:hidden!important;}'
-    + CARD + '{width:472px!important;height:1024px!important;border-radius:0!important;box-shadow:none!important;margin:0!important;background:transparent!important;}'
-    // fake iOS status bar
-    + 'div[style*="padding: 22px 34px 0"]{display:none!important;}'
-    // fake bottom nav row + home indicator (whole block)
+    + 'html{margin:0!important;padding:0!important;background:#fff!important;overflow:hidden!important;height:100%!important;width:100%!important;}'
+    + 'body{margin:0!important;padding:0!important;background:#fff!important;overflow:hidden!important;}'
+    + WRAP + '{min-height:0!important;height:var(--trH,1024px)!important;padding:0!important;display:block!important;background:#fff!important;overflow:hidden!important;}'
+    + CARD + '{width:472px!important;height:var(--trH,1024px)!important;border-radius:0!important;box-shadow:none!important;margin:0!important;}'
+    + 'div[style*="padding: 22px 34px 0"]{visibility:hidden!important;flex:none!important;height:var(--trTop,0px)!important;min-height:0!important;padding:0!important;overflow:hidden!important;}'
     + 'div[style*="padding: 14px 30px 0"]{display:none!important;}'
-    // the mockup's own animated blur-blob backdrop — AppBackground replaces it
-    + 'div[style*="filter: blur(52px)"]{display:none!important;}'
     + 'svg{will-change:transform;}';
 
   function ensure() {
@@ -121,18 +120,38 @@ const TRAIN_WEB_INJECT = `
     ensure();
     var vw = window.innerWidth, vh = window.innerHeight;
     if (!vw || !vh) return false;
-    var S = Math.min(vw / 472, vh / 1024);
+    var S = vw / 472, H = vh / S;
+    var D = window.__athltData, ins = (D && D.insets) || { top: 0, bottom: 0 };
+    var key = S + '|' + ins.top + '|' + ins.bottom;
     var b = document.body;
     if (!b) return false;
-    if (b.__rnFit !== S) {
-      b.__rnFit = S;
+    if (b.__rnFit !== key) {
+      b.__rnFit = key;
+      var root = document.documentElement.style;
+      root.setProperty('--trH', H.toFixed(2) + 'px');
+      root.setProperty('--trTop', (ins.top / S).toFixed(2) + 'px');
+      root.setProperty('--trTb', ((ins.bottom + 49) / S).toFixed(2) + 'px');
       b.style.setProperty('width', '472px', 'important');
-      b.style.setProperty('height', '1024px', 'important');
+      b.style.setProperty('height', H.toFixed(2) + 'px', 'important');
       b.style.setProperty('position', 'absolute', 'important');
       b.style.setProperty('top', '0', 'important');
-      b.style.setProperty('left', Math.round((vw - 472 * S) / 2) + 'px', 'important');
+      b.style.setProperty('left', '0', 'important');
       b.style.setProperty('transform', 'scale(' + S + ')', 'important');
       b.style.setProperty('transform-origin', 'top left', 'important');
+    }
+    // Keep the last row / the plan CTA scrollable above the real tab bar.
+    var tb = ((ins.bottom + 49) / S).toFixed(2) + 'px';
+    var all = document.querySelectorAll('div');
+    for (var i = 0; i < all.length; i++) {
+      var el = all[i];
+      if (el.style.overflowY === 'auto' && el.__tbPad !== tb) { el.__tbPad = tb; el.style.setProperty('padding-bottom', 'calc(8px + ' + tb + ')', 'important'); }
+    }
+    var cta = document.querySelectorAll('[data-cta]');
+    for (var j = 0; j < cta.length; j++) {
+      if (/Begin first exercise/i.test(cta[j].textContent || '') && cta[j].parentElement && cta[j].parentElement.__tbPad !== tb) {
+        cta[j].parentElement.__tbPad = tb;
+        cta[j].parentElement.style.setProperty('padding-bottom', 'calc(10px + ' + tb + ')', 'important');
+      }
     }
     return true;
   }
@@ -148,11 +167,25 @@ const TRAIN_WEB_INJECT = `
     for (var i = 0; i < all.length; i++) {
       var el = all[i]; if (el.children.length) continue;
       var t = (el.textContent || '').trim();
-      if (Object.prototype.hasOwnProperty.call(MAP, t) && el.textContent !== MAP[t]) { el.textContent = MAP[t]; hit++; t = MAP[t]; }
+      // Always map from the element's ORIGINAL demo text. Otherwise a replaced value that happens to
+      // equal another card's demo text ("Yesterday") gets mapped again on the next pass (a chain).
+      var key = el.__demo !== undefined ? el.__demo : t;
+      if (Object.prototype.hasOwnProperty.call(MAP, key)) {
+        if (el.__demo === undefined) el.__demo = key;
+        if (el.textContent !== MAP[key]) { el.textContent = MAP[key]; hit++; }
+        t = MAP[key];
+      }
       // The score pill's colour is part of the demo too (amber on a card that now says "New", etc).
       var m = /^(\\d+) form$/.exec(t);
       if (m) el.style.setProperty('color', +m[1] >= 85 ? '#0A9D5A' : '#C08A21');
       else if (t === 'New') el.style.setProperty('color', 'rgba(26,26,28,0.5)');
+    }
+    // A plan exercise with no tag leaves the design's empty pill behind (its text lives in a span
+    // the runtime adds) - hide it, and show it again if a tag appears.
+    var spans = document.querySelectorAll('[data-glass="panel"] span.sc-interp');
+    for (var q = 0; q < spans.length; q++) {
+      var pill = spans[q].parentElement;
+      if (pill && pill.style.whiteSpace === 'nowrap') pill.style.setProperty('display', (spans[q].textContent || '').trim() === '' ? 'none' : '');
     }
     // Hero shield: the mockup ships a silver one for everyone — swap in the user's real rank art
     // (faded when they have no rank yet; hidden rather than wrong if the art couldn't load).
@@ -213,6 +246,7 @@ function timeAgoLabel(ts: number | null): string {
 }
 
 interface TrainData {
+  insets: { top: number; bottom: number };
   map: Record<string, string>;
   workout: { n: string; name: string; sets: string; tag: string; tagColor: string }[];
   shield: { src: string | null; alt: string; ranked: boolean };
@@ -225,6 +259,7 @@ function buildTrainData(
   plan: Plan | null,
   sessions: { exerciseId: string; pct: number; ts: number; formChecked?: boolean }[],
   shield: TrainData['shield'],
+  insets: TrainData['insets'] = { top: 0, bottom: 0 },
 ): TrainData {
   const map: Record<string, string> = {};
   const today = new Date();
@@ -283,7 +318,7 @@ function buildTrainData(
       if (c.demoScore !== 'New') map[c.demoScore] = 'New';
     }
   }
-  return { map, workout, shield };
+  return { insets, map, workout, shield };
 }
 
 export default function TrainScreen() {
@@ -313,10 +348,10 @@ export default function TrainScreen() {
       const tier = standing?.tier ?? null;
       const src = await tierDataUri(tier ?? 'bronze');
       const label = tier ? tier.charAt(0).toUpperCase() + tier.slice(1) : 'Unranked';
-      dataJsRef.current = athltSetDataJs(buildTrainData(plan, sessions, { src, alt: label, ranked: !!tier }));
+      dataJsRef.current = athltSetDataJs(buildTrainData(plan, sessions, { src, alt: label, ranked: !!tier }, { top: insets.top, bottom: insets.bottom }));
       webRef.current?.injectJavaScript(dataJsRef.current);
     }).catch(() => {});
-  }, []));
+  }, [insets.top, insets.bottom]));
 
   function onMsg(raw: string) {
     if (raw === '__tap') { Haptics.selectionAsync(); return; }
@@ -334,8 +369,7 @@ export default function TrainScreen() {
   return (
     <View style={s.root}>
       <StatusBar style="dark" />
-      <AppBackground />
-      <Animated.View style={{ flex: 1, marginTop: insets.top, opacity: fade }}>
+      <Animated.View style={{ flex: 1, opacity: fade }}>
         <WebView
           ref={webRef}
           source={TRAIN_HTML as any}
@@ -343,7 +377,6 @@ export default function TrainScreen() {
           injectedJavaScriptBeforeContentLoaded={TRAIN_BEFORE}
           onMessage={(e) => onMsg(e.nativeEvent.data)}
           style={s.web}
-          opaque={false}
           scrollEnabled={false}
           bounces={false}
           overScrollMode="never"
@@ -362,6 +395,6 @@ export default function TrainScreen() {
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#EDF1F8' },
-  web:  { flex: 1, backgroundColor: 'transparent' },
+  root: { flex: 1, backgroundColor: '#ffffff' },
+  web:  { flex: 1, backgroundColor: '#ffffff' },
 });
