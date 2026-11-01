@@ -225,66 +225,56 @@ function dcScaleFitJs(bg: string, bottomFillColor?: string): string {
   return CONSOLE_FORWARD_JS + `
   (function(){
     var W=390, H=844;
-    var st=document.createElement('style');
-    // animation:none added — "card appears at the top with wrong info,
-    // then slides down" was this artboard's own CSS entrance animation
-    // playing against stale default data before the real data gets
-    // injected. Killing it means the card just appears already in its
-    // resting position — no slide — whatever data is in the DOM at reveal
-    // time (which, with the ready-gate below, is always the real data).
-    // transition:none added alongside animation:none — a CSS *transition*
-    // (e.g. a plain "opacity 300ms" rule the artboard uses for its own
-    // mount fade) is a completely different mechanism from a @keyframes
-    // animation and animation:none does nothing to it — device logs showed
-    // the card's own opacity visibly climbing from 0 to ~0.97 over the
-    // first ~300ms even with animation:none already in place, which is
-    // exactly that.
-    st.textContent='html{background:${bg}!important;overflow:hidden!important;}body{margin:0!important;padding:0!important;background:${bg}!important;overflow:hidden!important;}#dc-root{position:relative!important;margin:0 auto!important;width:'+W+'px!important;transform-origin:top center!important;}#dc-root *{animation:none!important;-webkit-animation:none!important;transition:none!important;-webkit-transition:none!important;}*{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important;}';
-    (document.head||document.documentElement).appendChild(st);
+    // Every piece below is IDEMPOTENT and re-run on every DOM mutation (see
+    // the MutationObserver at the bottom). This script is injected BEFORE the
+    // page's own bundle unpacks, and the bundle then swaps the whole
+    // <html> element (document.documentElement.replaceWith) — which silently
+    // throws away anything appended to the old <head>/<body>, including the
+    // style element and the bottom filler. So nothing here can be a
+    // "run once and forget".
+    var CSS='html{background:${bg}!important;overflow:hidden!important;}body{margin:0!important;padding:0!important;background:${bg}!important;overflow:hidden!important;}#dc-root{position:relative!important;margin:0 auto!important;width:'+W+'px!important;transform-origin:top center!important;}#dc-root *{animation:none!important;-webkit-animation:none!important;transition:none!important;-webkit-transition:none!important;}*{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important;}';
+    // animation:none + transition:none — "card appears at the top with wrong
+    // info, then slides down" was the artboard's own entrance animation
+    // playing against stale default data; a CSS *transition* is a different
+    // mechanism from @keyframes and animation:none alone doesn't touch it
+    // (device logs showed the card's opacity climbing 0 -> ~0.97 over ~300ms).
+    function ensureStyle(){
+      if(document.getElementById('__fpDcStyle')) return;
+      var host=document.head||document.documentElement; if(!host) return;
+      var st=document.createElement('style'); st.id='__fpDcStyle'; st.textContent=CSS;
+      host.appendChild(st);
+    }
     var lastS=-1;
     function fit(){
       var root=document.getElementById('dc-root'); if(!root) return;
       var vh=window.innerHeight;
-      // BUG FOUND (device log, confirmed): the very FIRST fit() call runs
-      // synchronously before the WebView has actually laid out, so
-      // window.innerHeight reads 0 — the old "||H" fallback then applied a
-      // scale of exactly 1.0 (390px wide) as if that were real, visibly
-      // revealed at that wrong size, then SNAPPED to the real scale
-      // (~403px) once the 300ms retry finally saw the real height. That
-      // snap IS the "card spawns in, then everything moves" glitch.
-      // Skipping entirely until a real height is available means the
-      // FIRST transform ever applied is already the correct one — nothing
-      // to visibly correct later.
+      // BUG FOUND (device log, confirmed): the very FIRST fit() call can run
+      // before the WebView has laid out, so window.innerHeight reads 0 —
+      // a "||H" fallback applied a WRONG scale that was visibly revealed,
+      // then SNAPPED to the real one on a retry. Skipping until a real
+      // height exists means the first transform ever applied is correct.
       if(!vh) return;
       var S=vh/H;
-      if(Math.abs(S-lastS)>=0.002){ lastS=S; root.style.setProperty('transform','scale('+S+')','important'); }
+      if(Math.abs(S-lastS)>=0.002 || !root.style.transform){ lastS=S; root.style.setProperty('transform','scale('+S+')','important'); }
       document.body.style.setProperty('height', vh+'px','important');
       document.documentElement.style.setProperty('height', vh+'px','important');
+      // Reveal gate: the screen only posts 'ready' once the correct scale is
+      // on, so it never needs a fixed "wait for fit to settle" delay.
+      window.__fpFitted=true;
     }
-    fit();
-    window.addEventListener('resize', fit);
-    [0,300,900,1500].forEach(function(d){ setTimeout(fit,d); });
 
     ${bottomFillColor ? `
-    // BUG FOUND (still showed a gap after the first attempt): this
-    // measured #dc-root's OWN bottom edge against vh — but #dc-root is
-    // deliberately scaled to EXACTLY vh tall (that's the whole point of
-    // fit() above), so that gap is always ~0. It was measuring the wrong
-    // box. The REAL gap the design has is INSIDE #dc-root: the white
-    // card's own layout stops at top 484px + height 352px = 836px of the
-    // artboard's 844px canvas, leaving an 8px dark strip below the card
-    // (scaled along with everything else) — that strip is what reads as
-    // "the gap under the card." Fixed by measuring the CARD's own bottom
-    // edge (the rounded white sheet, border-radius 36px) against the real
-    // viewport bottom instead of #dc-root's.
-    // "Don't move the card — add white padding/background at the bottom
-    // instead." A plain filler rectangle, OUTSIDE #dc-root, pinned to the
-    // true bottom edge, resized to whatever gap is actually measured —
-    // idempotent (always SETS the height fresh, never adds to a running
-    // total), so calling it repeatedly can only converge, never drift.
-    // Never touches the card's own transform/position at all.
+    // The REAL gap the design has is INSIDE #dc-root: the white card's own
+    // layout stops short of the canvas bottom, leaving a strip (scaled along
+    // with everything else) — that strip reads as "the gap under the card."
+    // Measures the CARD's own bottom edge (border-radius 36px) against the
+    // real viewport bottom. A plain filler rectangle OUTSIDE #dc-root, pinned
+    // to the true bottom edge, resized to whatever gap is measured —
+    // idempotent (always SETS the height fresh), never touches the card's
+    // own transform/position. +2px overlap closes the sub-pixel hairline
+    // the scale transform can leave.
     function fillBottomGap(){
-      var vh=window.innerHeight||H;
+      var vh=window.innerHeight; if(!vh) return;
       var card=document.querySelector('#dc-root div[style*="border-radius: 36px"]');
       var ref=card||document.getElementById('dc-root');
       if(!ref) return;
@@ -297,23 +287,13 @@ function dcScaleFitJs(bg: string, bottomFillColor?: string): string {
         filler.style.cssText='position:fixed;left:0;right:0;bottom:0;background:${bottomFillColor};z-index:5;pointer-events:none;';
         document.body.appendChild(filler);
       }
-      // Explicit ask: "the fill is a slightly different white than the
-      // card, make it look like one piece." Both already use the exact
-      // same #ffffff — the visible seam is sub-pixel rounding from the
-      // scale transform leaving a hairline gap, not a real color
-      // difference. +2px of deliberate overlap UNDER the card's own
-      // bottom edge (never past its sides, still pinned bottom/left/right)
-      // closes that hairline rather than butting exactly against it.
       filler.style.height = (gap>0 ? Math.ceil(gap)+2 : 0) + 'px';
     }
     window.__fpFillBottomGap = fillBottomGap;
-    [0,300,900,1500].forEach(function(d){ setTimeout(fillBottomGap,d); });
-    window.addEventListener('resize', function(){ setTimeout(fillBottomGap, 50); });
-    ` : ''}
+    ` : 'function fillBottomGap(){}'}
 
-    // The fake status bar ("9:41" + signal/battery icons) baked into
-    // every one of these exports duplicates/overlaps the REAL device
-    // status bar — hide it everywhere this bootstrap runs.
+    // The fake status bar ("9:41" + signal/battery icons) baked into every
+    // one of these exports duplicates/overlaps the REAL device status bar.
     function hideStatusBar(){
       var all=document.querySelectorAll('#dc-root div');
       for(var i=0;i<all.length;i++){
@@ -325,7 +305,17 @@ function dcScaleFitJs(bg: string, bottomFillColor?: string): string {
       }
       return false;
     }
-    if(!hideStatusBar()) [200,500,1000,2000].forEach(function(d){ setTimeout(hideStatusBar,d); });
+
+    function pass(){ ensureStyle(); fit(); fillBottomGap(); hideStatusBar(); }
+    window.__fpPass=pass;
+    pass();
+    window.addEventListener('resize', function(){ pass(); setTimeout(pass, 50); });
+    [0,100,300,900,1500].forEach(function(d){ setTimeout(pass,d); });
+    // Re-run on every DOM change so the very first frame the page renders is
+    // already styled/scaled — no fixed polling schedule to wait out. Observes
+    // the DOCUMENT (not body): the bundle's html swap detaches the old body,
+    // so an observer on it would never fire again.
+    try { new MutationObserver(pass).observe(document, { childList:true, subtree:true }); } catch(e){}
   })();
   `;
 }
@@ -598,7 +588,13 @@ function workoutrecapInject(opts: {
   var cardWidened = false;
   var backWired=false, feedbackWired=false, shareWired=false, allSetsWired=false;
   var readyPosted=false;
-  var PAGE_START=Date.now();
+  // Which MAP keys have been seen+replaced so far. 'ready' is judged from
+  // this CUMULATIVE state, never from how many things one apply() call
+  // happened to do: the old per-call hit counter meant that if the first
+  // apply() that found the real DOM was deferred, every later call did 0 new
+  // work and 'ready' was never posted at all — the screen then only appeared
+  // when the 2.5s RN backstop fired ("card comes in 3 seconds late").
+  var foundKeys={};
   // "Dragging the card down is laggy" — traced to the artboard's OWN
   // grabStart/grabEnd logic on the grab-handle pill: it only reacts on
   // RELEASE (measures total pointerdown->pointerup distance, then snaps
@@ -675,7 +671,10 @@ function workoutrecapInject(opts: {
     for(var i=0;i<all.length;i++){
       var el=all[i]; if(el.children.length) continue;
       var t=(el.textContent||'').trim();
-      if(MAP[t]!=null && t!==MAP[t]){ el.textContent=MAP[t]; hit++; }
+      if(Object.prototype.hasOwnProperty.call(MAP,t)){
+        foundKeys[t]=true;
+        if(t!==MAP[t]){ el.textContent=MAP[t]; hit++; }
+      }
     }
     // Explicit ask: "make the 'Workout complete' text and the check icon
     // bigger." The title div's own authored style (22px/800 weight) is a
@@ -818,28 +817,25 @@ function workoutrecapInject(opts: {
     // correct even if something shifts the card's layout after the first
     // few hundred ms.
     if(window.__fpFillBottomGap) window.__fpFillBottomGap();
-    var ok = hit>=3;
-    // BUG FOUND (reported again as "spawns immediately but in the wrong
-    // place, then quickly glitches into the right place"): 'ready' used to
-    // fire the instant enough elements were wired, which can happen well
-    // under 300ms — before dcScaleFitJs's own fit() has settled on the
-    // real canvas scale (its retries run on a separate schedule). RN
-    // reveals the WebView the moment 'ready' arrives, so a transient,
-    // not-yet-correct scale could get shown and visibly correct itself a
-    // moment later. Holding 'ready' back until PAGE_START + 350ms means
-    // the scale is already settled before anything is ever shown.
-    if(ok && !readyPosted){
-      var elapsed = Date.now() - PAGE_START;
-      if(elapsed < 350){ setTimeout(apply, 350 - elapsed); return false; }
-      readyPosted=true; post({type:'ready'});
-    }
+    // Ready = the real content is in the DOM AND the canvas is at its final
+    // scale (window.__fpFitted, set by dcScaleFitJs once innerHeight is real).
+    // The old fixed "hold 'ready' until PAGE_START+350ms" delay is gone: the
+    // scale bug it guarded against is already prevented by fit() refusing to
+    // apply a transform before a real height exists.
+    var ok = cardWidened && sizeWired && titleSizeWired
+          && Object.keys(foundKeys).length >= 5 && !!window.__fpFitted;
+    if(ok && !readyPosted){ readyPosted=true; post({type:'ready'}); }
     return ok;
   }
-  if(!apply()) [200,500,1000,2000,3500,5000].forEach(function(d){ setTimeout(apply,d); });
-  else [1000,2500].forEach(function(d){ setTimeout(apply,d); });
-  var root = document.getElementById('dc-root') || document.body;
+  apply();
+  [100,250,500,1000,2000,3500,5000].forEach(function(d){ setTimeout(apply,d); });
+  // Observe the DOCUMENT, not #dc-root/body: this script runs before the
+  // bundle unpacks and the bundle swaps the whole <html> element, which
+  // detaches whatever an earlier observer was attached to. Reacting to the
+  // first real mutation (instead of a poll schedule) is what makes the card
+  // appear the moment the page has rendered.
   var mo = new MutationObserver(function(){ apply(); });
-  mo.observe(root, { childList: true, subtree: true, characterData: true });
+  mo.observe(document, { childList: true, subtree: true, characterData: true });
 })();
 true;
 `;
@@ -1393,8 +1389,15 @@ export default function RecapScreen() {
             ? [styles.web, videoVisuallyReady && { backgroundColor: 'transparent' }, { opacity: webReady ? 1 : 0 }]
             : styles.web
         }
-        injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS}
-        injectedJavaScript={INJECT_BY_VIEW[effectiveView] ?? undefined}
+        // Summary: the whole inject runs BEFORE the artboard's bundle unpacks
+        // (it observes the document itself and styles/wires/reveals the
+        // instant the real DOM exists) instead of after load plus a poll
+        // schedule — that wait is what made the card show up late. The
+        // other views keep their old after-load injection.
+        injectedJavaScriptBeforeContentLoaded={
+          effectiveView === 'summary' ? `${DC_VIEWPORT_JS}\n${summaryInjectJs}` : DC_VIEWPORT_JS
+        }
+        injectedJavaScript={effectiveView === 'summary' ? undefined : (INJECT_BY_VIEW[effectiveView] ?? undefined)}
         // DIAGNOSTIC LOGGING — explicit ask ("add console logs on every
         // mount, unmount, and navigation call... reproduce the path, find
         // the real cause"). I can't run a device myself, so this can't be
