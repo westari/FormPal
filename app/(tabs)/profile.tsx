@@ -9,9 +9,8 @@
  * Everything the old native Profile screen could do is still here: sign out,
  * delete account, audio settings, rank & customization, reset onboarding, and
  * the dev tools (they now live as rows in the artboard's own list style).
- * Rows for features the app doesn't have yet (reminders, Apple Health,
- * membership, referrals, support messaging) say "Coming soon" instead of
- * showing the artboard's demo values.
+ * Features the app doesn't have yet (reminders, Apple Health, membership,
+ * referrals, support messaging) are hidden rather than shown as placeholders.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, Alert } from 'react-native';
@@ -34,10 +33,11 @@ import { useCustomizationStore } from '../../store/customizationStore';
 import { useAudioSettingsStore } from '../../store/audioSettingsStore';
 import { supabase } from '../../constants/supabase';
 import Constants from 'expo-constants';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { PlanProfile } from '../../types/plan';
 
 const PROFILE_HTML = require('../../assets/app screens/profile.html');
-const PROFILE_BUILD = 'profile-1';
+const PROFILE_BUILD = 'profile-2';
 if (__DEV__) console.log(`[profile] build ${PROFILE_BUILD}`);
 
 const ONBOARDING_KEY = 'formpal_onboarding_complete';
@@ -55,6 +55,7 @@ async function patchDetails(patch: ProfileDetails) {
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const webRef = useRef<WebView>(null);
   const [ready, setReady] = useState(false);
   const dataRef = useRef<ProfileData | null>(null);
@@ -86,10 +87,11 @@ export default function ProfileScreen() {
       location, latestWeightLb: weights.length ? weights[weights.length - 1].weightLb : null,
       details,
       audio: { enabled: audio.audioEnabled, voiceFrequency: audio.voiceFrequency },
+      insets: { top: insets.top, bottom: insets.bottom },
       appVersion: `FormPal ${Constants.expoConfig?.version ?? ''}${Constants.expoConfig?.ios?.buildNumber ? ` (${Constants.expoConfig.ios.buildNumber})` : ''}`.trim(),
     });
     push();
-  }, [push]);
+  }, [push, insets.top, insets.bottom]);
 
   useFocusEffect(useCallback(() => { load(true).catch(() => {}); }, [load]));
 

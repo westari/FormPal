@@ -11,10 +11,12 @@
  *    weight (weight log), goal / experience / training location / days
  *    (plan profile), audio summary, units, plus Sign out / Delete account /
  *    developer tools that the old native screen had.
- *  - "Coming soon", non-interactive: workout reminders/time, Apple Health,
- *    membership, referral rewards + codes, support/feature messaging — the app
- *    has no backend or native module for these yet, and the artboard's demo
- *    values for them ("Renews Sep 14, 2027", "$10 per friend") are not true.
+ *  - HIDDEN (no placeholder rows, nothing says "coming soon"): referral banner +
+ *    referral code, workout reminders / workout time, Apple Health, membership,
+ *    and the feature-request / contact-support composers. The app has no backend
+ *    or native module for them yet, and the artboard's demo values for them
+ *    ("Renews Sep 14, 2027", "$10 per friend") are not true. They come back by
+ *    removing their label from HIDDEN_ROWS below once the feature exists.
  *
  * Edits made on the page are persisted by posting {type:'save', patch} to
  * native (debounced); native writes them to their real homes.
@@ -41,11 +43,8 @@ export const PROFILE_LOGIC_EXT = String.raw`function (Orig) {
     r.tap = tap;
     return r;
   }
-  function soon(self, r) {
-    r.isToggle = false; r.isUnits = false; r.isValue = true; r.value = 'Coming soon'; r.sub = ''; r.hasSub = false;
-    r.tap = function () { self.showToast('Coming soon'); };
-    return r;
-  }
+  // Rows for features that don't exist yet are removed, not shown as placeholders.
+  var HIDDEN_ROWS = ['Restore purchases', 'FormPal Annual', 'Workout time', 'Apple Health', 'Workout reminders', 'Request a feature', 'Contact support'];
 
   return class extends Orig {
     setState(u, cb) {
@@ -90,35 +89,19 @@ export const PROFILE_LOGIC_EXT = String.raw`function (Orig) {
       var v = super.renderVals();
       if (!d) return v;
       var s = this.state, kg = s.units === 1;
-      var toast = function (m) { return function (e) { if (e && e.preventDefault) e.preventDefault(); self.showToast(m); }; };
-
-      // Referral program does not exist yet — never imply it does.
-      v.openRewards = toast('Referrals are coming soon');
-      v.openCode = toast('Referral codes are coming soon');
-      v.applyCode = toast('Referral codes are coming soon');
-      v.shareLink = toast('Referrals are coming soon');
-      v.copyLink = function () { self.showToast('Referrals are coming soon'); };
-      // No support inbox / feature backend yet.
-      v.send = function (e) {
-        if (e && e.preventDefault) e.preventDefault();
-        if (!s.draft.trim()) return;
-        self.showToast('Support messaging is not live yet');
-      };
-
       // "Update my plan" really rebuilds the plan natively.
       v.applyPlan = function (e) { if (e && e.preventDefault) e.preventDefault(); post({ type: 'applyPlan' }); self.setState({ dirty: null }); self.showToast('Updating your plan…'); };
 
       var hasWeight = d.weight != null || s.weight !== this.__seedWeight;
       var groups = v.groups.map(function (g) {
-        var rows = g.rows.filter(function (r) { return r.label !== 'Restore purchases'; }).map(function (r) {
+        var rows = g.rows.filter(function (r) { return HIDDEN_ROWS.indexOf(r.label) < 0; }).map(function (r, i) {
           if (r.label === 'Weight') r.value = hasWeight ? (kg ? Math.round(s.weight / 2.2046) + ' kg' : s.weight + ' lb') : 'Not set';
-          else if (r.label === 'Workout time' || r.label === 'Apple Health' || r.label === 'Workout reminders') soon(self, r);
-          else if (r.label === 'FormPal Annual') { r.label = 'Subscription'; soon(self, r); }
           else if (r.label === 'Audio coaching') { r.value = d.audioLabel; r.tap = function () { post({ type: 'nav', to: 'audio' }); }; }
+          r.line = i === 0 ? 'none' : '1px solid rgba(17,17,20,0.07)';
           return r;
         });
         return Object.assign({}, g, { rows: rows });
-      });
+      }).filter(function (g) { return g.rows.length > 0; });
       var line = function (rows) { return rows.map(function (r, i) { r.line = i === 0 ? 'none' : '1px solid rgba(17,17,20,0.07)'; return r; }); };
       var act = function (label, tone, glyph, type, extra) {
         return self.icon(row(self, label, '', function () { post(Object.assign({ type: type }, extra || {})); }), tone, glyph);
@@ -161,7 +144,16 @@ export const PROFILE_DOM_JS = String.raw`
     + '*{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important;}'
     + 'div[style*="right: 88px"][style*="bottom: 22px"][style*="height: 64px"]{display:none!important;}'
     + 'div[style*="right: 14px"][style*="bottom: 22px"][style*="width: 64px"][style*="height: 64px"]{display:none!important;}'
-    + 'input,textarea{font-size:16px!important;}';
+    + 'input,textarea{font-size:16px!important;}'
+    // The blanket "no animation" rule above also froze the design's toast at its pre-animation position
+    // (left:50% with no translate => a clipped box in the top-right corner). The toast, the member-card
+    // sheet's slide-up + backdrop fade, the card's entrance and the tilt easing are real motion the design
+    // relies on — give them back (higher specificity than the blanket rule).
+    + '#dc-root div[style*="pf-toast"]{animation:pf-toast 2200ms cubic-bezier(.22,1,.36,1) both!important;}'
+    + '#dc-root div[style*="pf-sheet"]{animation:pf-sheet 380ms cubic-bezier(.22,1,.36,1) both!important;}'
+    + '#dc-root div[style*="pf-fade"]{animation:pf-fade 220ms ease both!important;}'
+    + '#dc-root div[style*="pf-card"]{animation:pf-card 520ms cubic-bezier(.2,.8,.2,1) 60ms both!important;}'
+    + '#dc-root div[style*="preserve-3d"]{transition:transform 380ms cubic-bezier(.2,.8,.2,1)!important;}';
   function ensureCss() {
     if (document.getElementById('__prof_css')) return;
     var host = document.head || document.documentElement;
@@ -193,15 +185,22 @@ export const PROFILE_DOM_JS = String.raw`
     return null;
   }
 
-  // Static referral banner copy promises a $10 reward that does not exist.
+  // Hide a whole block (its link row + the padded wrapper around it) that has no backend yet.
+  function hideBlockWithText(txt) {
+    var el = leafWithText(txt);
+    var a = el && el.closest('a');
+    var wrap = a && a.parentElement;
+    if (wrap) wrap.style.setProperty('display', 'none', 'important');
+  }
+
   function apply() {
     ensureCss();
     var okFit = fit();
     var d = window.__athltData;
-    var t1 = leafWithText('Refer a friend, get $10');
-    if (t1) t1.textContent = 'Refer a friend';
-    var t2 = leafWithText('Get $10 off for each friend. More rewards inside.');
-    if (t2) t2.textContent = 'Referral rewards are coming soon.';
+    var root = document.getElementById('dc-root');
+    // No referral program exists: hide the "Refer a friend" banner and "Enter referral code" row.
+    hideBlockWithText('Refer a friend, get $10');
+    hideBlockWithText('Enter referral code');
     if (d && d.appVersion) { var ver = leafWithText('FormPal 1.0 (12)'); if (ver) ver.textContent = d.appVersion; }
     // The artboard's own red "Sign out" button has no handler of its own.
     var links = document.querySelectorAll('#dc-root a');
@@ -211,6 +210,23 @@ export const PROFILE_DOM_JS = String.raw`
         a.__signWired = true;
         a.addEventListener('click', function (ev) { ev.preventDefault(); ev.stopPropagation(); post({ type: 'signOut' }); }, true);
       }
+    }
+    if (root && d) {
+      // The native tab bar overlays the bottom of this page: scrollers get bottom padding so their last
+      // item scrolls clear of it, and the member-card sheet's content sits above it.
+      var S = (window.innerHeight || 844) / 844;
+      var ins = d.insets || { top: 0, bottom: 0 };
+      var tb = (ins.bottom + 49 + 16) / S;
+      var scrollers = root.querySelectorAll('div[data-scroll]');
+      for (var sc = 0; sc < scrollers.length; sc++) {
+        var el = scrollers[sc];
+        if (el.style.overflowY === 'auto' && el.style.position === 'absolute') {
+          if (el.__pb0 === undefined) el.__pb0 = parseFloat(el.style.paddingBottom) || 0;
+          el.style.setProperty('padding-bottom', Math.max(el.__pb0, tb + 24).toFixed(1) + 'px', 'important');
+        }
+      }
+      var sheet = root.querySelector('div[style*="pf-sheet"]');
+      if (sheet) sheet.style.setProperty('padding-bottom', (tb + 14).toFixed(1) + 'px', 'important');
     }
     return { okFit: okFit, filled: !!d };
   }
