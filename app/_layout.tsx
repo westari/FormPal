@@ -7,6 +7,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { configureAudioSession } from '../lib/audioFeedback';
 import RecapPrewarm from '../components/RecapPrewarm';
+import { installDevLogger } from '../lib/devLogger';
 import {
   useFonts,
   BricolageGrotesque_300Light,
@@ -21,6 +22,8 @@ import {
   PlusJakartaSans_700Bold,
   PlusJakartaSans_800ExtraBold,
 } from '@expo-google-fonts/plus-jakarta-sans';
+
+installDevLogger();
 
 // Hold splash until fonts are ready — prevents unstyled-text flash.
 SplashScreen.preventAutoHideAsync();
