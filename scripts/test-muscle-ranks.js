@@ -125,6 +125,7 @@ check('rows carry the real Flaticon art', A.hits.every(h => h.icon && h.icon.sta
   const expected = new Set([...regionIds('shoulders'), ...regionIds('triceps')]);
   check('body map colours the worked muscles (shoulders + triceps fragments)', [...expected].every(id => colored.has(id)), `${colored.size}/${expected.size}`);
   check('body map colours NOTHING else (quads/chest/etc stay neutral)', [...colored].every(id => expected.has(id)), [...new Set(base)].join());
+  check('body map has a thin outline around both figures', (svg.match(/stroke="rgba\(40,44,60,0\.5\)" stroke-width="2\.4"/g) || []).length === 2);
   check('body map is front + back side by side', svg.includes('viewBox="78 -9 479 833"') && svg.includes('viewBox="641 -13 483 832"'));
 }
 

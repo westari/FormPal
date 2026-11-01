@@ -41,8 +41,10 @@ const opts = { exerciseName: 'Shoulder Press', hasVideo: true, reps: [
   { timeSec: 11.0, what: 'Test rep two. Fix two.' },
   { timeSec: 16.0, what: 'Test rep three. Fix three.' },
 ] };
+require('./lib/ts-node-loader.js')();
+global.__DEV__ = false;
 const OLD = loadInject(oldSrc)(opts);
-const NEW = loadInject(newSrc)(opts);
+const NEW = require('../lib/repFeedbackInject.ts').repFeedbackInject(opts);
 
 let failed = 0;
 const check = (name, ok, detail) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  -> ' + detail : ''}`); if (!ok) failed++; };

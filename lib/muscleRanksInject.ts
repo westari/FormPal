@@ -107,6 +107,7 @@ export const MUSCLE_RANKS_DOM_JS = String.raw`
     }
     document.body.style.setProperty('height', vh + 'px', 'important');
     document.documentElement.style.setProperty('height', vh + 'px', 'important');
+    window.__fpFitted = true;
     return true;
   }
   function hideStatusBar(root) {
@@ -257,4 +258,9 @@ true;
 export function muscleRanksBeforeJs(payload: MuscleRanksPayload): string {
   return DC_VIEWPORT_JS + CONSOLE_FORWARD_JS + dcLogicPatchJs(MUSCLE_RANKS_LOGIC_EXT)
     + athltSetDataJs(payload) + MUSCLE_RANKS_DOM_JS;
+}
+
+/** Scaffold only (no data yet) — loaded by a warm WebView before the page is needed; the data follows via athltSetDataJs(payload). */
+export function muscleRanksBaseJs(): string {
+  return DC_VIEWPORT_JS + CONSOLE_FORWARD_JS + dcLogicPatchJs(MUSCLE_RANKS_LOGIC_EXT) + MUSCLE_RANKS_DOM_JS;
 }

@@ -21,6 +21,7 @@ import type { MuscleTiers } from './sessionLog';
 const NEUTRAL = '#E3E4EA';
 const SILHOUETTE_FILL = '#F1F2F6';
 const SILHOUETTE_STROKE = '#D5D7DF';
+const OUTLINE_STROKE = 'rgba(40,44,60,0.5)';
 
 // Tier `lo` alone is too pale on the white silhouette for Silver/Platinum/etc, so
 // pull it 30% toward the tier's ink colour — still clearly that tier's hue.
@@ -33,7 +34,7 @@ function muscleFill(lo: string, ink: string): string {
 
 // Inner markup (silhouette + muscle paths) for one side, shared by the single
 // and the side-by-side renderers below.
-function bodyMapParts(tiers: MuscleTiers, side: 'front' | 'back'): string {
+function bodyMapParts(tiers: MuscleTiers, side: 'front' | 'back', outlined = false): string {
   const table = side === 'front' ? MUSCLE_MAP_FRONT_PATHS : MUSCLE_MAP_BACK_PATHS;
   // fragment id -> fill colour, for muscles ranked on THIS side
   const fillById: Record<string, string> = {};
@@ -48,7 +49,11 @@ function bodyMapParts(tiers: MuscleTiers, side: 'front' | 'back'): string {
   const parts: string[] = [];
   const silhouette = table.silhouette;
   if (silhouette) {
-    parts.push(`<path d="${silhouette}" fill="${SILHOUETTE_FILL}" stroke="${SILHOUETTE_STROKE}" stroke-width="1.4" stroke-linejoin="round"/>`);
+    // outlined: a thin, subtle dark outline so the figure reads on the white
+    // card (the default pale stroke nearly disappears there).
+    const stroke = outlined ? OUTLINE_STROKE : SILHOUETTE_STROKE;
+    const sw = outlined ? 2.4 : 1.4;
+    parts.push(`<path d="${silhouette}" fill="${SILHOUETTE_FILL}" stroke="${stroke}" stroke-width="${sw}" stroke-linejoin="round"/>`);
   }
   for (const id of Object.keys(table)) {
     if (id === 'silhouette') continue;
@@ -77,7 +82,7 @@ export function bodyMapPairSvg(worked: Muscle[]): string {
   const H = Math.max(fh, bh);
   const W = fw + gap + bw;
   const fig = (side: 'front' | 'back', x: number, w: number, h: number) =>
-    `<svg x="${x}" y="${(H - h) / 2}" width="${w}" height="${h}" viewBox="${MUSCLE_MAP_VIEWBOX[side]}">${bodyMapParts(tiers, side)}</svg>`;
+    `<svg x="${x}" y="${(H - h) / 2}" width="${w}" height="${h}" viewBox="${MUSCLE_MAP_VIEWBOX[side]}">${bodyMapParts(tiers, side, true)}</svg>`;
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${fig('front', 0, fw, fh)}${fig('back', fw + gap, bw, bh)}</svg>`;
 }
 

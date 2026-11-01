@@ -6,7 +6,7 @@ import * as FileSystem from 'expo-file-system';
 import * as SplashScreen from 'expo-splash-screen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { configureAudioSession } from '../lib/audioFeedback';
-import RecapPrewarm from '../components/RecapPrewarm';
+import WarmSurfaces from '../components/WarmSurfaces';
 import { installDevLogger } from '../lib/devLogger';
 import {
   useFonts,
@@ -77,10 +77,6 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <StatusBar style="light" />
-      {/* See components/RecapPrewarm.tsx's own header comment — a hidden,
-          permanently-mounted attempt at the workout-complete-card delay.
-          Experimental, low confidence, needs a real device test. */}
-      <RecapPrewarm />
       <Stack
         screenOptions={{
           headerShown:  false,
@@ -93,7 +89,15 @@ export default function RootLayout() {
             intentional instead. Scoped to just this one screen; every
             other route keeps the normal push. */}
         <Stack.Screen name="workout/run" options={{ animation: 'fade' }} />
+        {/* The post-workout cards are drawn by the persistent WebViews in
+            <WarmSurfaces /> (above this navigator), which can't slide in with
+            the screen — so these two fade instead of pushing. */}
+        <Stack.Screen name="recap" options={{ animation: 'fade' }} />
+        <Stack.Screen name="rep-feedback" options={{ animation: 'fade' }} />
       </Stack>
+      {/* Persistent, already-loaded artboard WebViews (Workout Complete, rep
+          feedback, muscle page). See that file's header. */}
+      <WarmSurfaces />
     </SafeAreaProvider>
   );
 }
