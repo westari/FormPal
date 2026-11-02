@@ -285,6 +285,9 @@ export interface MuscleTierInfo {
   peakTier:  Tier; // PEAK rank — the highest tier this muscle has EVER reached, permanent, never decays. Display as a "Peak: X" badge alongside the active tier.
   volume:    number; // decayed weighted rep count (absolute, not normalized)
   goodRatio: number; // 0-1 — recency-weighted good/total, same decay applied to both
+  // false = this muscle has NO judged reps (rep-counter exercises only), so goodRatio is a
+  // placeholder 0 and must not gate progress. Omitted = treat as judged (older callers).
+  qualityJudged?: boolean;
 }
 
 // KEYED BY Muscle (individual muscle), not MuscleGroup, this round — a
@@ -386,7 +389,7 @@ export function computeMuscleTiers(sessions: SessionEntry[]): MuscleTiers {
       ? gatedTier(rawVolTier, qualVol > 0 ? goodRatio : null)
       : 'bronze';
 
-    out[m] = { tier: currentTier, peakTier, volume: vol, goodRatio };
+    out[m] = { tier: currentTier, peakTier, volume: vol, goodRatio, qualityJudged: qualVol > 0 };
   }
   return out;
 }

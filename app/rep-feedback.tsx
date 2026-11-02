@@ -40,7 +40,7 @@
  * no <video> element of its own to set .currentTime on any more.
  */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Pressable, useWindowDimensions } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -178,7 +178,9 @@ export default function RepFeedbackScreen() {
   // unpacking. recap.tsx normally has already filled it in with this exact
   // data; this is the fallback if it hasn't.
   const onWebMsg = useRef<(m: any) => void>(() => {});
-  useEffect(() => {
+  // Layout effect: revealed before this screen's first paint, so there is no
+  // black frame between the screen appearing and the card.
+  useLayoutEffect(() => {
     if (!videoUri) return;
     warmPrepare('repfeedback', repFeedbackDataJs({ exerciseName: exerciseName ?? 'Exercise', hasVideo, reps }));
     warmActivate('repfeedback', { onMessage: (m) => onWebMsg.current(m) });
@@ -189,7 +191,7 @@ export default function RepFeedbackScreen() {
 
   // Everything drawn ABOVE the page (video controls, the speed popover) is
   // rendered by the host, since the page now lives above the whole navigator.
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!hasVideo) { warmSetOverlay('repfeedback', null); return; }
     warmSetOverlay('repfeedback', (
       <>

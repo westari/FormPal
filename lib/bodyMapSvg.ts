@@ -21,7 +21,7 @@ import type { MuscleTiers } from './sessionLog';
 const NEUTRAL = '#E3E4EA';
 const SILHOUETTE_FILL = '#F1F2F6';
 const SILHOUETTE_STROKE = '#D5D7DF';
-const OUTLINE_STROKE = 'rgba(40,44,60,0.5)';
+const OUTLINE_STROKE = '#454B5C';
 
 // Tier `lo` alone is too pale on the white silhouette for Silver/Platinum/etc, so
 // pull it 30% toward the tier's ink colour — still clearly that tier's hue.
@@ -49,10 +49,12 @@ function bodyMapParts(tiers: MuscleTiers, side: 'front' | 'back', outlined = fal
   const parts: string[] = [];
   const silhouette = table.silhouette;
   if (silhouette) {
-    // outlined: a thin, subtle dark outline so the figure reads on the white
-    // card (the default pale stroke nearly disappears there).
+    // outlined: a clear dark outline so the figure reads on the white card (the
+    // default pale stroke nearly disappears there). The figure is drawn ~830
+    // units tall into a ~218px box, so 6 units is ~1.6px on screen (the first
+    // try, 2.4 units at 50% alpha, was ~0.6px and still too faint).
     const stroke = outlined ? OUTLINE_STROKE : SILHOUETTE_STROKE;
-    const sw = outlined ? 2.4 : 1.4;
+    const sw = outlined ? 6 : 1.4;
     parts.push(`<path d="${silhouette}" fill="${SILHOUETTE_FILL}" stroke="${stroke}" stroke-width="${sw}" stroke-linejoin="round"/>`);
   }
   for (const id of Object.keys(table)) {

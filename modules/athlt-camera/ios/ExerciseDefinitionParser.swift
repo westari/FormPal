@@ -69,6 +69,15 @@ extension ExerciseDefinition {
         let repReliabilityMaxUnreliableFraction = dict["repReliabilityMaxUnreliableFraction"] as? Double ?? 0.5
         let inactivityRepGapSec = dict["inactivityRepGapSec"] as? Double ?? 8.0
         let edgeGuardEnabled = dict["edgeGuardEnabled"] as? Bool ?? true
+        var startPositionGate: StartPositionGate? = nil
+        if let gd = dict["startPositionGate"] as? [String: Any],
+           let md = gd["metric"] as? [String: Any],
+           let gm = parseMetric(md),
+           let sm = gd["startMin"] as? Double,
+           let pm = gd["peakMax"] as? Double {
+            startPositionGate = StartPositionGate(metric: gm, startMin: sm, peakMax: pm)
+        }
+        let setupExtraJoints = (dict["setupExtraJoints"] as? [String] ?? []).compactMap(Joint.init(string:))
 
         let def = ExerciseDefinition(
             id:                        id,
@@ -92,13 +101,17 @@ extension ExerciseDefinition {
             settleAnchorMinFraction:   settleAnchorMinFraction,
             repReliabilityMaxUnreliableFraction: repReliabilityMaxUnreliableFraction,
             inactivityRepGapSec: inactivityRepGapSec,
-            edgeGuardEnabled: edgeGuardEnabled
+            edgeGuardEnabled: edgeGuardEnabled,
+            startPositionGate: startPositionGate,
+            setupExtraJoints: setupExtraJoints
         )
 
         let metricType = repMetricDict["type"] as? String ?? "?"
         let summary = "repMetric=\(metricType) formChecks=\(formChecks.count) " +
                       "cameraSetup=\(cameraSetup != nil ? "ok" : "nil") " +
-                      "calibration=\(calibration != nil ? "ok" : "nil")"
+                      "calibration=\(calibration != nil ? "ok" : "nil") " +
+                      "startGate=\(startPositionGate != nil ? "yes" : "no") " +
+                      "setupExtraJoints=\(setupExtraJoints.count)"
 
         return (def, summary)
     }

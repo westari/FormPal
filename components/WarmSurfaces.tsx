@@ -121,8 +121,11 @@ export function warmPrepare(k: WarmKind, dataJs: string) {
   set(k, { dataJs } as any);
 }
 
+const activatedAt: Partial<PerKind<number>> = {};
+
 export function warmActivate(k: WarmKind, opts: { bg?: string; onMessage: (msg: any) => void }) {
   handlers[k] = opts.onMessage;
+  activatedAt[k] = Date.now();
   set(k, { active: true, ...(opts.bg ? { bg: opts.bg } : {}) } as any);
 }
 export function warmSetBg(k: WarmKind, bg: string) { if (useWarm.getState().bg[k] !== bg) set(k, { bg } as any); }
@@ -172,6 +175,14 @@ function Surface({ k }: { k: WarmKind }) {
   }, [active, revealed, k, epoch]);
 
   const visible = active && revealed;
+  // Device proof for "never a black flash": when the screen asks for the card
+  // and it was already ready, this prints ~0-30ms. A big number (or a
+  // "waiting for ready" line first) means the card was still loading.
+  useEffect(() => {
+    if (!__DEV__) return;
+    if (active && !revealed) console.log(`[warm:${k}] activated, waiting for ready (card not shown yet)`);
+    if (visible) console.log(`[warm:${k}] VISIBLE ${activatedAt[k] ? Date.now() - (activatedAt[k] as number) : '?'}ms after the screen asked for it`);
+  }, [visible, active, revealed, k]);
   return (
     <View
       pointerEvents={visible ? 'auto' : 'none'}

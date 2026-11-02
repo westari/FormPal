@@ -46,7 +46,7 @@
  * never touches video bytes again.
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { View, StyleSheet, Share, TouchableOpacity, Animated } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -312,7 +312,61 @@ export default function RecapScreen() {
   const abortWorkout        = useWorkoutSessionStore(s => s.abortWorkout);
   const markWorkoutComplete = usePlanStore(s => s.markWorkoutComplete);
 
-  const [data, setData]             = useState<RecapData | null>(null);
+  // Entries to write to the session log once on mount (the writes themselves
+  // stay in the load effect below, in the background).
+  const persistOnMount = useRef<SessionEntry[]>([]);
+  // Workout and solo-live data are fully known RIGHT NOW (store / route
+  // params), so they are built synchronously for the very first render. They
+  // used to be set from an effect, which meant one blank black frame (~0.1s)
+  // before anything — the Workout Complete card included — could be shown.
+  // History mode really does need an async read and is still loaded in the
+  // effect below.
+  const [data, setData] = useState<RecapData | null>(() => {
+    if (isWorkoutMode) {
+      const summary = useWorkoutSessionStore.getState().getSummary() ?? finishWorkout();
+      if (!summary) return null;
+      const entries: SessionEntry[] = summary.results
+        .filter(r => r.completed)
+        .map(r => ({
+          ts: summary.finishedAt, exerciseId: r.exerciseId, displayName: r.displayName,
+          reps: r.reps, goodReps: r.goodReps, pct: r.formScore,
+          formChecked: r.formChecked,
+        }));
+      persistOnMount.current = entries;
+      return {
+        ts: summary.finishedAt, entries,
+        totalReps: summary.totalReps, totalGoodReps: summary.totalGoodReps,
+        pct: summary.overallFormScore, isHistory: false, workoutSummary: summary,
+        durationSec: summary.durationSeconds,
+        hasFormData: summary.results.some(r => r.completed && r.formChecked),
+      };
+    }
+    if (isHistoryMode) return null;
+    const reps        = parseInt(repsStr ?? '0', 10);
+    const goodReps    = parseInt(goodRepsStr ?? '0', 10);
+    const formChecked = mode !== 'repCounter';
+    const pct         = formChecked && reps > 0 ? Math.round((goodReps / reps) * 100) : 0;
+    const soloTs      = Date.now();
+    const exId        = exercise ?? 'unknown';
+    const entry: SessionEntry = {
+      ts: soloTs, exerciseId: exId,
+      displayName: EXERCISE_DEFINITIONS[exId as ExerciseId]?.displayName ?? exId,
+      reps, goodReps, pct, formChecked,
+    };
+    persistOnMount.current = reps > 0 ? [entry] : [];
+    let soloEvents: RepEventData[] = [];
+    try { soloEvents = JSON.parse(events ?? '[]'); } catch { /* none */ }
+    const parsedDuration = durationSecParam != null ? parseInt(durationSecParam, 10) : undefined;
+    return {
+      ts: soloTs, entries: reps > 0 ? [entry] : [],
+      totalReps: reps, totalGoodReps: goodReps, pct, formChecked,
+      hasFormData: formChecked,
+      videoUri: typeof videoUriParam === 'string' && videoUriParam.length > 0 ? videoUriParam : undefined,
+      repEvents: formChecked ? soloEvents : [],
+      isHistory: false,
+      durationSec: parsedDuration != null && !isNaN(parsedDuration) ? parsedDuration : undefined,
+    };
+  });
   const [loadFailed, setLoadFailed] = useState(false);
   const initialized = useRef(false);
   const persistRef = useRef<Promise<unknown>>(Promise.resolve());
@@ -419,32 +473,11 @@ export default function RecapScreen() {
 
     (async () => {
       if (isWorkoutMode) {
-        const existing = useWorkoutSessionStore.getState().getSummary();
-        const summary = existing ?? finishWorkout();
-        if (!summary) { setLoadFailed(true); return; }
-
-        const entries: SessionEntry[] = summary.results
-          .filter(r => r.completed)
-          .map(r => ({
-            ts: summary.finishedAt, exerciseId: r.exerciseId, displayName: r.displayName,
-            reps: r.reps, goodReps: r.goodReps, pct: r.formScore,
-            formChecked: r.formChecked,
-          }));
-        // ROOT CAUSE ("[recap-debug] blocked on loading gate: hasData:false"):
-        // setData used to run only AFTER `await appendSessions` (an
-        // AsyncStorage disk write), so the card's data — which is fully
-        // known synchronously right here — sat behind storage I/O and the
-        // screen rendered blank until it finished. Publish the data first;
+        if (!data) { setLoadFailed(true); return; }
+        // The data was already published synchronously (see useState above);
         // persist in the background. The rank effect awaits persistRef so it
         // still reads sessions that include this one.
-        setData({
-          ts: summary.finishedAt, entries,
-          totalReps: summary.totalReps, totalGoodReps: summary.totalGoodReps,
-          pct: summary.overallFormScore, isHistory: false, workoutSummary: summary,
-          durationSec: summary.durationSeconds,
-          hasFormData: summary.results.some(r => r.completed && r.formChecked),
-        });
-        if (entries.length > 0) persistRef.current = appendSessions(entries).catch(() => {});
+        if (persistOnMount.current.length > 0) persistRef.current = appendSessions(persistOnMount.current).catch(() => {});
       } else if (isHistoryMode) {
         const all    = await getAllSessions();
         const groups = groupIntoWorkouts(all);
@@ -459,30 +492,8 @@ export default function RecapScreen() {
           videoUri: historyVideoUri ?? undefined,
         });
       } else {
-        const reps        = parseInt(repsStr ?? '0', 10);
-        const goodReps     = parseInt(goodRepsStr ?? '0', 10);
-        const formChecked = mode !== 'repCounter';
-        const pct         = formChecked && reps > 0 ? Math.round((goodReps / reps) * 100) : 0;
-        const soloTs      = Date.now();
-        const exId        = exercise ?? 'unknown';
-        const entry: SessionEntry = {
-          ts: soloTs, exerciseId: exId,
-          displayName: EXERCISE_DEFINITIONS[exId as ExerciseId]?.displayName ?? exId,
-          reps, goodReps, pct, formChecked,
-        };
-        // Same fix as workout mode above: data first, persist in background.
-        if (reps > 0) persistRef.current = appendSessions([entry]).catch(() => {});
-        const parsedDuration = durationSecParam != null ? parseInt(durationSecParam, 10) : undefined;
-        const soloVideoUri = typeof videoUriParam === 'string' && videoUriParam.length > 0 ? videoUriParam : undefined;
-        setData({
-          ts: soloTs, entries: reps > 0 ? [entry] : [],
-          totalReps: reps, totalGoodReps: goodReps, pct, formChecked,
-          hasFormData: formChecked,
-          videoUri: soloVideoUri,
-          repEvents: formChecked ? repEventsParam : [],
-          isHistory: false,
-          durationSec: parsedDuration != null && !isNaN(parsedDuration) ? parsedDuration : undefined,
-        });
+        // Solo-live: data was built synchronously above; persist in background.
+        if (persistOnMount.current.length > 0) persistRef.current = appendSessions(persistOnMount.current).catch(() => {});
       }
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -691,20 +702,25 @@ export default function RecapScreen() {
   }, [isHistoryMode]);
   useEffect(() => { if (hasVideo) warmWant('repfeedback', true); }, [hasVideo]);
 
-  useEffect(() => { if (summaryDataJs) warmPrepare('recap', summaryDataJs); }, [summaryDataJs]);
+  // Layout effects (not useEffect): they run before the first paint, so the
+  // card is handed its data and revealed in the SAME frame this screen first
+  // appears — no black frame in between.
+  useLayoutEffect(() => { if (summaryDataJs) warmPrepare('recap', summaryDataJs); }, [summaryDataJs]);
   useEffect(() => { if (ranksDataJs) warmPrepare('ranks', ranksDataJs); }, [ranksDataJs]);
   // Rep feedback's data is known as soon as the recap's is, so its page is
   // filled in before anyone taps "View rep feedback" and opens instantly.
   useEffect(() => {
-    if (!hasVideo || !data) return;
+    if (!hasVideo || !data || !isFocused) return;
+    // isFocused in the deps: rep feedback releases its page when it closes, so
+    // coming back here re-fills the freshly warmed one for the next open.
     warmPrepare('repfeedback', repFeedbackDataJs({
       exerciseName: data.entries[0]?.displayName ?? 'Exercise', hasVideo: true, reps: repEvents,
     }));
-  }, [hasVideo, data, repEvents]);
+  }, [hasVideo, data, repEvents, isFocused]);
 
   const warmKind: 'recap' | 'ranks' | null =
     effectiveView === 'summary' ? 'recap' : effectiveView === 'ranks' ? 'ranks' : null;
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!warmKind || !isFocused) return;
     warmActivate(warmKind, { onMessage: (m) => onWebMsg.current(m) });
     return () => warmDeactivate(warmKind);
@@ -719,7 +735,7 @@ export default function RecapScreen() {
   // navigator, so they're rendered by the host. Zone: below the back-chevron /
   // all-sets strip, above the card (same fixed canvas fractions as before).
   // Gated on isFocused: this screen stays mounted under rep feedback.
-  useEffect(() => {
+  useLayoutEffect(() => {
     warmSetOverlay('recap', hasVideo && isFocused
       ? <VideoControls player={videoPlayer} style={{ position: 'absolute', left: 0, right: 0, top: '11.85%', bottom: '42.65%' }} />
       : null);
