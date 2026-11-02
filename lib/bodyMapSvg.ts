@@ -22,6 +22,7 @@ const NEUTRAL = '#E3E4EA';
 const SILHOUETTE_FILL = '#F1F2F6';
 const SILHOUETTE_STROKE = '#D5D7DF';
 const OUTLINE_STROKE = '#454B5C';
+const OUTLINE_WIDTH = 6; // units; ~1.6px on screen (figure ~830 units tall in a ~218px box)
 
 // Tier `lo` alone is too pale on the white silhouette for Silver/Platinum/etc, so
 // pull it 30% toward the tier's ink colour — still clearly that tier's hue.
@@ -53,14 +54,18 @@ function bodyMapParts(tiers: MuscleTiers, side: 'front' | 'back', outlined = fal
     // default pale stroke nearly disappears there). The figure is drawn ~830
     // units tall into a ~218px box, so 6 units is ~1.6px on screen (the first
     // try, 2.4 units at 50% alpha, was ~0.6px and still too faint).
-    const stroke = outlined ? OUTLINE_STROKE : SILHOUETTE_STROKE;
-    const sw = outlined ? 6 : 1.4;
-    parts.push(`<path d="${silhouette}" fill="${SILHOUETTE_FILL}" stroke="${stroke}" stroke-width="${sw}" stroke-linejoin="round"/>`);
+    // Outlined figures draw the outline AGAIN as the very last layer (below):
+    // the muscle fragments are painted after the silhouette and their white
+    // strokes would otherwise cover the inner half of it along most of the edge.
+    parts.push(`<path d="${silhouette}" fill="${SILHOUETTE_FILL}" stroke="${SILHOUETTE_STROKE}" stroke-width="1.4" stroke-linejoin="round"/>`);
   }
   for (const id of Object.keys(table)) {
     if (id === 'silhouette') continue;
     const fill = fillById[id] ?? NEUTRAL;
     parts.push(`<path d="${table[id]}" fill="${fill}" stroke="#ffffff" stroke-width="0.9" stroke-linejoin="round"/>`);
+  }
+  if (silhouette && outlined) {
+    parts.push(`<path d="${silhouette}" fill="none" stroke="${OUTLINE_STROKE}" stroke-width="${OUTLINE_WIDTH}" stroke-linejoin="round"/>`);
   }
   return parts.join('');
 }

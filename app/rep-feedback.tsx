@@ -58,7 +58,7 @@ const SPEEDS = [0.5, 1, 1.5, 2];
 // Build/bundle confirmation — explicit ask this round: a loud, impossible
 // -to-miss tag to confirm the device is actually running this reload
 // before trusting any other log below it.
-const BUILD_TAG = 'native-video-18';
+const BUILD_TAG = 'warm-3';
 const BUILD_LOADED_AT = new Date().toLocaleTimeString();
 if (__DEV__) {
   console.log(`[rep-feedback] build ${BUILD_TAG}`);
@@ -248,6 +248,7 @@ export default function RepFeedbackScreen() {
       if (__DEV__) console.log('[rep-feedback-debug] seek message received, timeSec=', t, '- videoPlayer.currentTime immediately after =', videoPlayer.currentTime);
     }
     else if (msg.type === 'close') router.back();
+    else if (msg.type === 'openAllSets') { repFeedbackSignal.openAllSets = true; router.back(); }
     else if (msg.type === 'finishReview') { repFeedbackSignal.finishedReview = true; router.back(); }
     else if (msg.type === 'openSpeedMenu') {
       const r = (msg as any).rect as { left: number; top: number; width: number } | undefined;

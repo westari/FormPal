@@ -38,6 +38,7 @@ import type { ExerciseId } from '../constants/exercises';
 import { getCalibration, applyOverride } from '../lib/calibration/store';
 import { handleRepAudio, playReadyCue } from '../lib/audioFeedback';
 import { createCalibSynth } from '../lib/calibLog';
+import { prefetchSoloRecap } from '../lib/recapPrefetch';
 import { createRepDiagnostic, STREAM_DEAD_SEC_FLOOR } from '../lib/repDiagnostics';
 import { meterTarget, stepMeter, meterTickMs, trackingIsHigh, NO_PERSON_CUE } from '../lib/liveTracking';
 import { useAudioSettingsStore } from '../store/audioSettingsStore';
@@ -1072,6 +1073,10 @@ export default function FormCheckScreen() {
     } else {
       const durationSec = startTimestamp.current != null
         ? Math.round((Date.now() - startTimestamp.current) / 1000) : 0;
+      prefetchSoloRecap({
+        reps: navParams.reps, goodReps: navParams.goodReps, repCounter: repCounterOnly,
+        durationSec, hasVideo: !!navParams.videoUri,
+      });
       router.replace({
         pathname: '/recap',
         params: {

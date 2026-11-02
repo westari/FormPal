@@ -21,7 +21,9 @@
  * on top); release() throws the instance away and re-warms a fresh one.
  */
 import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { SymbolView } from 'expo-symbols';
+import { LiquidGlassButton } from './LiquidGlass';
 import { WebView } from 'react-native-webview';
 import { create } from 'zustand';
 import { DC_VIEWPORT_JS, recapBaseJs } from '../lib/recapInject';
@@ -73,7 +75,10 @@ export const BASE_JS: Record<WarmKind, string> = {
 const REVEAL_BACKSTOP_MS = 2500;
 
 type PerKind<T> = Record<WarmKind, T>;
+export interface Rect { l: number; t: number; w: number; h: number }
+export interface Chrome { back: Rect; allSets: Rect }
 interface WarmState {
+  chrome:   PerKind<Chrome | null>; // where the page's own back / All sets sit (reported by the page)
   want:     PerKind<boolean>;
   epoch:    PerKind<number>;       // bump = remount = fresh page
   warm:     PerKind<boolean>;      // scaffold loaded + rendered
@@ -86,6 +91,7 @@ interface WarmState {
 const each = <T,>(v: T): PerKind<T> => ({ recap: v, repfeedback: v, ranks: v });
 
 export const useWarm = create<WarmState>(() => ({
+  chrome:   each<Chrome | null>(null),
   want:     { recap: true, repfeedback: false, ranks: false },
   epoch:    each(0),
   warm:     each(false),
@@ -141,6 +147,7 @@ export function warmRelease(k: WarmKind) {
     warm:     { ...s.warm,     [k]: false },
     dataJs:   { ...s.dataJs,   [k]: null },
     overlay:  { ...s.overlay,  [k]: null },
+    chrome:   { ...s.chrome,   [k]: null },
     epoch:    { ...s.epoch,    [k]: s.epoch[k] + 1 },
   }));
 }
@@ -206,6 +213,7 @@ function Surface({ k }: { k: WarmKind }) {
             set(k, { warm: true } as any);
             return;
           }
+          if (msg.type === 'chrome') { set(k, { chrome: { back: msg.back, allSets: msg.allSets } } as any); return; }
           if (msg.type === 'pageConsole') { if (__DEV__) console.log(`[warm:${k}:page]`, msg.msg); return; }
           if (msg.type === 'ready') {
             if (__DEV__) console.log(`[warm:${k}] ready`);
@@ -244,6 +252,7 @@ export default function WarmSurfaces() {
   const active = useWarm((s) => s.active);
   const revealed = useWarm((s) => s.revealed);
   const overlay = useWarm((s) => s.overlay);
+  const chrome = useWarm((s) => s.chrome);
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       {KINDS.map((k) => (want[k] ? <Surface key={k} k={k} /> : null))}
@@ -252,6 +261,52 @@ export default function WarmSurfaces() {
           <View key={`o-${k}`} style={StyleSheet.absoluteFill} pointerEvents="box-none">{overlay[k]}</View>
         ) : null,
       )}
+      {(['recap', 'repfeedback'] as WarmKind[]).map((k) =>
+        active[k] && revealed[k] && chrome[k] ? <GlassChrome key={`g-${k}`} k={k} c={chrome[k]!} /> : null,
+      )}
+    </View>
+  );
+}
+
+// Real Liquid Glass versions of the page's top-left back chevron and
+// "All sets" pill, drawn at exactly the spot the page reported (the page's own
+// white ones are hidden). Both are enlarged to at least 44pt so they are easy
+// to hit; taps are forwarded to the owning screen as the same messages the
+// page's own buttons used to send.
+const MIN_TAP = 44;
+function GlassChrome({ k, c }: { k: WarmKind; c: Chrome }) {
+  const send = (type: string) => handlers[k]?.({ type });
+  const box = (r: Rect, minW: number) => {
+    const w = Math.max(minW, r.w + 6), h = Math.max(MIN_TAP, r.h + 6);
+    return { position: 'absolute' as const, left: r.l + r.w / 2 - w / 2, top: r.t + r.h / 2 - h / 2, width: w, height: h };
+  };
+  const backBox = box(c.back, MIN_TAP);
+  const allBox = box(c.allSets, 104);
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+      <LiquidGlassButton
+        onPress={() => send(k === 'recap' ? 'back' : 'close')}
+        radius={backBox.height / 2}
+        colorScheme="dark"
+        fallbackColor="rgba(60,62,72,0.55)"
+        containerStyle={backBox}
+        hitSlop={8}
+        style={{ width: backBox.width, height: backBox.height, alignItems: 'center', justifyContent: 'center' }}
+      >
+        <SymbolView name="chevron.left" size={18} tintColor="#ffffff" type="monochrome" style={{ width: 18, height: 18 }} />
+      </LiquidGlassButton>
+      <LiquidGlassButton
+        onPress={() => send(k === 'recap' ? 'viewAllSets' : 'openAllSets')}
+        radius={allBox.height / 2}
+        colorScheme="dark"
+        fallbackColor="rgba(60,62,72,0.55)"
+        containerStyle={allBox}
+        hitSlop={8}
+        style={{ width: allBox.width, height: allBox.height, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 }}
+      >
+        <SymbolView name="square.grid.2x2" size={15} tintColor="#ffffff" type="monochrome" style={{ width: 15, height: 15 }} />
+        <Text style={{ color: '#ffffff', fontSize: 14.5, fontWeight: '700' }}>All sets</Text>
+      </LiquidGlassButton>
     </View>
   );
 }

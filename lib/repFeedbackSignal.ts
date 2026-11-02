@@ -13,4 +13,5 @@
  * right before router.back(); recap.tsx's existing onFocus check (it
  * already runs one, for navigatingToFeedback) reads and clears it.
  */
-export const repFeedbackSignal = { finishedReview: false };
+// openAllSets: "All sets" tapped on rep feedback — recap.tsx opens its All sets page on refocus.
+export const repFeedbackSignal = { finishedReview: false, openAllSets: false };

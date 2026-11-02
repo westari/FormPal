@@ -44,6 +44,7 @@ import type { RepEventData } from '../../lib/sessionLog';
 import { FONT, W, Sp, R, Elev, Col } from '../../constants/theme';
 import { getExerciseDef } from '../../constants/exercises';
 import { getDemoCues } from '../../lib/demoCues';
+import { prefetchWorkoutRecap } from '../../lib/recapPrefetch';
 
 // ── "Don't show this demo again" preference — per exercise id, persisted ───
 // across workouts (a real setting, not a one-session toggle: once you know
@@ -422,6 +423,12 @@ type Phase = 'intro' | 'rest';
 
 export default function WorkoutRunScreen() {
   const router  = useRouter();
+  // Fill the (already loaded) Workout Complete card with this workout's data
+  // BEFORE navigating, so it is on screen in the recap screen's first frame.
+  const goRecap = () => {
+    prefetchWorkoutRecap();
+    router.replace({ pathname: '/recap', params: { mode: 'workout' } } as any);
+  };
   const insets  = useSafeAreaInsets();
   const params  = useLocalSearchParams<{
     exerciseId?: string;
@@ -529,7 +536,7 @@ export default function WorkoutRunScreen() {
   // navigator is always ready.
   useEffect(() => {
     if (redirect === 'noSession') router.replace('/(tabs)/train' as any);
-    else if (redirect === 'done') router.replace({ pathname: '/recap', params: { mode: 'workout' } } as any);
+    else if (redirect === 'done') goRecap();
   }, [redirect, router]);
 
   // ── Animate progress bar ──────────────────────────────────────────────────
@@ -609,7 +616,7 @@ export default function WorkoutRunScreen() {
   function advanceToIntro() {
     const st = useWorkoutSessionStore.getState();
     if (!st.hasMoreExercises()) {
-      router.replace({ pathname: '/recap', params: { mode: 'workout' } } as any);
+      goRecap();
     } else {
       setPhase('intro');
     }
@@ -644,7 +651,7 @@ export default function WorkoutRunScreen() {
 
       const updated = useWorkoutSessionStore.getState();
       if (!updated.hasMoreExercises()) {
-        router.replace({ pathname: '/recap', params: { mode: 'workout' } } as any);
+        goRecap();
         return;
       }
       // No rest screen for now — see the matching comment in the mount
@@ -657,7 +664,7 @@ export default function WorkoutRunScreen() {
     skipCurrent();
     const updated = useWorkoutSessionStore.getState();
     if (!updated.hasMoreExercises()) {
-      router.replace({ pathname: '/recap', params: { mode: 'workout' } } as any);
+      goRecap();
       return;
     }
     setPhase('intro');
@@ -672,7 +679,7 @@ export default function WorkoutRunScreen() {
         {
           text:    'End workout',
           style:   'destructive',
-          onPress: () => router.replace({ pathname: '/recap', params: { mode: 'workout' } } as any),
+          onPress: () => goRecap(),
         },
       ],
     );

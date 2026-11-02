@@ -47,12 +47,15 @@
  */
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { View, StyleSheet, Share, TouchableOpacity, Animated } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Share, TouchableOpacity, Animated } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
+import { SymbolView } from 'expo-symbols';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import { useVideoPlayer, VideoView, type VideoThumbnail } from 'expo-video';
 import * as Sharing from 'expo-sharing';
 import { File } from 'expo-file-system';
 import { repFeedbackText } from '../lib/repFeedbackSentences';
@@ -70,7 +73,8 @@ import { computeOverallStanding, MUSCLE_LABELS, MUSCLE_ICON_SOURCES } from '../c
 import { Asset } from 'expo-asset';
 import { buildMuscleRanksPayload, workedMuscles, type MuscleRanksPayload } from '../lib/muscleRanksData';
 import { tierDataUri } from '../lib/rankImages';
-import { DC_VIEWPORT_JS, dcScaleFitJs, recapDataJs, formatDuration } from '../lib/recapInject';
+import { DC_VIEWPORT_JS, allSetsInject } from '../lib/recapInject';
+import { generateSummary, recapPageData } from '../lib/recapPrefetch';
 import { repFeedbackDataJs } from '../lib/repFeedbackInject';
 import { athltSetDataJs } from '../lib/dcLogicPatch';
 import { warmWant, warmPrepare, warmActivate, warmDeactivate, warmRelease, warmSetBg, warmSetOverlay } from '../components/WarmSurfaces';
@@ -98,7 +102,7 @@ const ALL_SETS_HTML = require('../assets/app screens/allsetsfullworkout.html');
 // round: remove the on-screen stamp — kept as a console log instead so
 // it's still there to confirm a fresh reload if ever needed, just not
 // visible on the card.
-const BUILD_TAG = 'native-video-13';
+const BUILD_TAG = 'warm-3';
 const BUILD_LOADED_AT = new Date().toLocaleTimeString();
 if (__DEV__) {
   console.log(`[recap] build ${BUILD_TAG}`);
@@ -124,16 +128,6 @@ interface RecapData {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function generateSummary(reps: number, goodReps: number, hasFormData = true): string {
-  const pct = reps > 0 ? Math.round((goodReps / reps) * 100) : 0;
-  if (reps === 0)  return 'No reps were detected this session. Try positioning the phone so your full body is visible from the side.';
-  if (!hasFormData) return `${reps} reps counted. Form wasn't scored for this session. These are rep-counter movements, so they build training volume without a form grade.`;
-  if (pct === 100) return `Every one of your ${reps} reps hit good form. That's the kind of consistency that builds real strength over time.`;
-  if (pct >= 80)   return `Solid session. You hit good form on ${goodReps} of ${reps} reps (${pct}%).`;
-  if (pct >= 50)   return `You hit good form on ${goodReps} of ${reps} reps (${pct}%). Slow the rep down and focus on full range of motion.`;
-  return `${reps} reps completed, ${goodReps} in good form (${pct}%). Focus on control over speed next session.`;
-}
-
 type InMsg = {
   type: 'back' | 'seeRanks' | 'share' | 'shareVideo' | 'viewRepFeedback'
       | 'viewAllSets' | 'closeAllSets' | 'closeRanks' | 'doneRanks' | 'ready' | 'videoDebug' | 'pageConsole';
@@ -141,94 +135,6 @@ type InMsg = {
   code?: number;
   level?: string;
 };
-
-// ─── allsetsfullworkout.html — grid of every exercise/set completed. Also
-// 100% hardcoded demo data (fake Squats/Push-ups/Rows/Lunges sets, no
-// props read anywhere) — default tiles are torn out and replaced with one
-// real tile per actual exercise. NO video thumbnails on them: this app has
-// no reliable per-exercise video in workout mode (see this file's own
-// top doc comment), and solo/history mode only ever has ONE entry anyway
-// — a real thumbnail grid isn't something real data exists for here, so
-// plain dark cards with the real name + rep/form stats instead. The
-// filter chips and save/search icons are the artboard's own internal demo
-// state with no real equivalent to drive them — left in place (harmless,
-// just inert) rather than torn out for a cosmetic gap.
-function allSetsInject(opts: {
-  tiles: { title: string; meta: string }[];
-  videoTileIndex: number | null;
-}): string {
-  const { tiles, videoTileIndex } = opts;
-  return dcScaleFitJs('#ffffff') + `
-(function(){
-  function post(m){ try{ window.ReactNativeWebView.postMessage(JSON.stringify(m)); }catch(e){} }
-  var TILES = ${JSON.stringify(tiles)};
-  var VIDEO_IDX = ${JSON.stringify(videoTileIndex)};
-  var built=false, recapWired=false, doneWired=false;
-  function build(){
-    if(built) return true;
-    var grid=document.querySelector('#dc-root div[style*="grid-template-columns: 1fr 1fr"]');
-    if(!grid) return false;
-    while(grid.firstChild) grid.removeChild(grid.firstChild);
-    TILES.forEach(function(t, i){
-      var clickable = (i===VIDEO_IDX);
-      var tile=document.createElement('div');
-      tile.style.cssText='position:relative;height:150px;border-radius:22px;background:linear-gradient(180deg,#2c2c32 0%,#18181c 100%);overflow:hidden;'+(clickable?'cursor:pointer;':'');
-      var label=document.createElement('div');
-      label.style.cssText='position:absolute;left:12px;right:12px;bottom:12px;color:#ffffff;';
-      var titleEl=document.createElement('div');
-      titleEl.style.cssText='font-size:15.5px;font-weight:700;letter-spacing:-0.3px;';
-      titleEl.textContent=t.title;
-      var metaEl=document.createElement('div');
-      metaEl.style.cssText='font-size:11.5px;font-weight:500;color:rgba(255,255,255,0.6);padding-top:4px;';
-      metaEl.textContent=t.meta;
-      label.appendChild(titleEl); label.appendChild(metaEl);
-      tile.appendChild(label);
-      // Explicit ask: "each set's video should show... tapping it should
-      // play/replay properly." A real pixel-accurate thumbnail isn't
-      // straightforward here — expo-video's generateThumbnailsAsync
-      // returns a native shared image ref meant for expo-image, not a
-      // URI/base64 this WebView's own HTML can use, and overlaying a
-      // separate native <Image> precisely on this grid cell would mean
-      // replicating this grid's layout math in RN — flagged as separate,
-      // real scope, not done here. What's achievable now: a clear "this
-      // is a tappable video" play-icon affordance (this tile WAS just a
-      // plain stat box with no visual difference from the others), and
-      // tapping it correctly opens rep-feedback.tsx, which now plays the
-      // real clip with real native controls (today's other changes) —
-      // so the "play/replay properly" part is genuinely fixed.
-      if(clickable){
-        var playBadge=document.createElement('div');
-        playBadge.style.cssText='position:absolute;top:12px;right:12px;width:28px;height:28px;border-radius:14px;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;';
-        playBadge.innerHTML='<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M4 2.5v11l10-5.5-10-5.5z" fill="#ffffff"/></svg>';
-        tile.appendChild(playBadge);
-      }
-      if(clickable){ tile.addEventListener('click', function(ev){ ev.stopPropagation(); post({type:'viewRepFeedback'}); }, true); }
-      grid.appendChild(tile);
-    });
-    built=true;
-    return true;
-  }
-  function apply(){
-    var ok=build();
-    var hit=0;
-    if(!recapWired){
-      var recapLink=document.querySelector('#dc-root a[href="Workout Recap v2.dc.html"]');
-      if(recapLink){ recapLink.addEventListener('click', function(ev){ ev.preventDefault(); post({type:'closeAllSets'}); }, true); recapWired=true; hit++; }
-    }
-    if(!doneWired){
-      var doneLink=document.querySelector('#dc-root a[href="Workout Recap.dc.html"]');
-      if(doneLink){ doneLink.addEventListener('click', function(ev){ ev.preventDefault(); post({type:'closeAllSets'}); }, true); doneWired=true; hit++; }
-    }
-    return ok && hit>=2;
-  }
-  if(!apply()) [200,500,1000,2000,3500,5000].forEach(function(d){ setTimeout(apply,d); });
-  var root = document.getElementById('dc-root') || document.body;
-  var mo = new MutationObserver(function(){ apply(); });
-  mo.observe(root, { childList: true, subtree: true, characterData: true });
-})();
-true;
-`;
-}
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 // Real per-muscle Flaticon art (bronze tier — the page highlights muscles
@@ -281,6 +187,10 @@ export default function RecapScreen() {
       // on to the ranks/bodymap screen, not just return to summary — see
       // lib/repFeedbackSignal.ts for why a module-level flag is the
       // simplest way to signal that across the two screens.
+      if (repFeedbackSignal.openAllSets) {
+        repFeedbackSignal.openAllSets = false;
+        setView('allsets');
+      }
       if (repFeedbackSignal.finishedReview) {
         repFeedbackSignal.finishedReview = false;
         setView('ranks');
@@ -613,11 +523,11 @@ export default function RecapScreen() {
   // (components/WarmSurfaces.tsx), so this just fills it in.
   const summaryDataJs = useMemo(() => {
     if (!data) return null;
-    return recapDataJs({
-      totalReps: data.totalReps, moves: data.entries.length, pct: data.pct,
-      hasFormData: data.hasFormData, durationSec: data.durationSec,
-      overview: generateSummary(data.totalReps, data.totalGoodReps, data.hasFormData),
-      hasVideo,
+    // Same builder lib/recapPrefetch.ts used before navigation, so the string
+    // is identical and the page keeps the data it already has.
+    return recapPageData({
+      totalReps: data.totalReps, totalGoodReps: data.totalGoodReps, moves: data.entries.length,
+      pct: data.pct, hasFormData: data.hasFormData, durationSec: data.durationSec, hasVideo,
     });
   }, [data, hasVideo]);
 
@@ -688,6 +598,27 @@ export default function RecapScreen() {
   // artboard unpacking every time. This screen only hands them their data and
   // says which one is showing.
   const onWebMsg = useRef<(m: InMsg) => void>(() => {});
+
+  // All sets page: the video tile shows a REAL frame from the clip. The page
+  // reports where the tile is; the frame comes from expo-video's native
+  // thumbnail generator (no new native module) and is drawn over that spot.
+  const [tileRect, setTileRect] = useState<{ l: number; t: number; w: number; h: number } | null>(null);
+  const [thumb, setThumb] = useState<VideoThumbnail | null>(null);
+  useEffect(() => {
+    if (view !== 'allsets' || !hasVideo || thumb) return;
+    let cancelled = false;
+    const t0 = Date.now();
+    const at = Math.max(0.3, repEvents[0]?.timeSec ?? 1);
+    (async () => {
+      try {
+        const [frame] = await videoPlayer.generateThumbnailsAsync([at], { maxWidth: 640 });
+        if (cancelled) return;
+        if (__DEV__) console.log(`[recap] all-sets thumbnail OK at ${at}s in ${Date.now() - t0}ms`, frame ? `${(frame as any).width}x${(frame as any).height}` : 'none');
+        if (frame) setThumb(frame);
+      } catch (err) { if (__DEV__) console.warn('[recap] all-sets thumbnail FAILED', err); }
+    })();
+    return () => { cancelled = true; };
+  }, [view, hasVideo, thumb, videoPlayer, repEvents]);
 
   // Start loading the other two now (rep feedback only if there's a video,
   // the muscle page not for a history review), so they are ready by the time
@@ -788,6 +719,7 @@ export default function RecapScreen() {
         },
       } as any);
     }
+    else if ((msg as any).type === 'tileRect') { const m = msg as any; setTileRect({ l: m.l, t: m.t, w: m.w, h: m.h }); }
     else if (msg.type === 'viewAllSets') setView('allsets');
     else if (msg.type === 'closeAllSets') setView('summary');
     else if (msg.type === 'closeRanks') setView('summary');
@@ -852,6 +784,26 @@ export default function RecapScreen() {
           automaticallyAdjustContentInsets={false}
           contentInsetAdjustmentBehavior="never"
         />
+      )}
+      {effectiveView === 'allsets' && hasVideo && tileRect && (
+        <Pressable
+          onPress={() => onWebMsg.current({ type: 'viewRepFeedback' })}
+          style={{ position: 'absolute', left: tileRect.l, top: tileRect.t, width: tileRect.w, height: tileRect.h, borderRadius: 22, overflow: 'hidden', backgroundColor: '#18181c' }}
+        >
+          {thumb && <ExpoImage source={thumb} style={StyleSheet.absoluteFill} contentFit="cover" />}
+          <LinearGradient colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.7)']} locations={[0.35, 1]} style={StyleSheet.absoluteFill} />
+          <View style={{ position: 'absolute', top: 12, right: 12, width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center' }}>
+            <SymbolView name="play.fill" size={12} tintColor="#ffffff" type="monochrome" style={{ width: 12, height: 12 }} />
+          </View>
+          <View style={{ position: 'absolute', left: 12, right: 12, bottom: 12 }}>
+            <Text style={{ color: '#ffffff', fontSize: 15.5, fontWeight: '700', letterSpacing: -0.3 }}>{data.entries[0]?.displayName ?? ''}</Text>
+            <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11.5, fontWeight: '500', paddingTop: 4 }}>
+              {data.entries[0]?.formChecked !== false
+                ? `${data.entries[0]?.reps ?? 0} reps · ${data.entries[0] && data.entries[0].reps > 0 ? Math.round((data.entries[0].goodReps / data.entries[0].reps) * 100) : 0}% form`
+                : `${data.entries[0]?.reps ?? 0} reps`}
+            </Text>
+          </View>
+        </Pressable>
       )}
       {/* No native fallback back button any more — explicit ask ("one
           clear back button, not two"). Both non-summary views now have

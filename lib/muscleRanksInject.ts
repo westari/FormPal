@@ -167,6 +167,7 @@ export const MUSCLE_RANKS_DOM_JS = String.raw`
     if (img) {
       if (img.getAttribute('src') !== d.bodyMap) img.setAttribute('src', d.bodyMap);
       imgOk = img.complete && img.naturalWidth > 0;
+      if (imgOk && !window.__mrLogged) { window.__mrLogged = true; try { console.log('[ranks] body map shown, outline layers=' + (decodeURIComponent(img.getAttribute('src')).match(/fill="none" stroke="#454B5C" stroke-width="6"/g) || []).length + ' natural=' + img.naturalWidth + 'x' + img.naturalHeight + ' drawn=' + Math.round(img.getBoundingClientRect().width) + 'x' + Math.round(img.getBoundingClientRect().height)); } catch (e) {} }
       if (imgOk) img.style.setProperty('visibility', 'visible', 'important');
       else if (!img.__mrLoad) { img.__mrLoad = true; img.addEventListener('load', schedule); }
     }

@@ -1,3 +1,5 @@
+import { CHROME_REPORT_JS } from './recapInject';
+
 /**
  * lib/repFeedbackInject.ts
  *
@@ -127,6 +129,7 @@ export function repFeedbackDataJs(opts: {
   return `
 (function(){
   function post(m){ try{ window.ReactNativeWebView.postMessage(JSON.stringify(m)); }catch(e){} }
+  ${CHROME_REPORT_JS}
   var REPS = ${JSON.stringify(reps)};
   var EX_NAME = ${JSON.stringify(exerciseName.toUpperCase())};
   var HAS_VIDEO = ${JSON.stringify(hasVideo)};
@@ -497,7 +500,7 @@ export function repFeedbackDataJs(opts: {
     // (same as X/close) rather than trying to deep-link into a
     // specific sub-view of a different screen.
     var allSets=document.querySelector('#dc-root a[href="Form Review.dc.html"]');
-    if(allSets && !allSets.__wired){ allSets.__wired=true; allSets.addEventListener('click', function(ev){ ev.preventDefault(); post({type:'close'}); }, true); }
+    if(allSets && !allSets.__wired){ allSets.__wired=true; allSets.addEventListener('click', function(ev){ ev.preventDefault(); post({type:'openAllSets'}); }, true); }
     return hit;
   }
 
@@ -518,7 +521,7 @@ export function repFeedbackDataJs(opts: {
     // The old fixed "wait until PAGE_START+350ms" delay is gone — the scale
     // bug it guarded against is prevented by fit() itself, and 'ready' is
     // judged from cumulative state so a deferred first apply() can't strand it.
-    if(ok && window.__fpFitted && !readyPosted){
+    if(ok && window.__fpFitted && reportChrome() && !readyPosted){
       show(0, true);
       readyPosted = true;
       console.log('[rep-feedback-page] ready, posting to RN');
