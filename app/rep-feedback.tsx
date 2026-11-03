@@ -40,602 +40,29 @@
  * no <video> element of its own to set .currentTime on any more.
  */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, ActivityIndicator } from 'react-native';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Pressable, useWindowDimensions } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { SymbolView } from 'expo-symbols';
-import { WebView } from 'react-native-webview';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import VideoControls from '../components/VideoControls';
+import LiquidGlass from '../components/LiquidGlass';
+import { repFeedbackDataJs } from '../lib/repFeedbackInject';
+import { warmPrepare, warmActivate, warmDeactivate, warmRelease, warmSetBg, warmSetOverlay, warmInject } from '../components/WarmSurfaces';
 import { repFeedbackSignal } from '../lib/repFeedbackSignal';
 
-const REP_FEEDBACK_HTML = require('../assets/app screens/repfeedback.html');
+const SPEEDS = [0.5, 1, 1.5, 2];
 
 // Build/bundle confirmation — explicit ask this round: a loud, impossible
 // -to-miss tag to confirm the device is actually running this reload
 // before trusting any other log below it.
-const BUILD_TAG = 'native-video-18';
+const BUILD_TAG = 'warm-5';
 const BUILD_LOADED_AT = new Date().toLocaleTimeString();
 if (__DEV__) {
   console.log(`[rep-feedback] build ${BUILD_TAG}`);
   console.log(`[rep-feedback-debug] build ${BUILD_TAG} loaded ${BUILD_LOADED_AT}`);
-}
-
-// Same console-forwarding shim as recap.tsx (see its CONSOLE_FORWARD_JS
-// comment) — page-internal console.log only reaches Safari Web Inspector
-// otherwise, not Metro.
-const CONSOLE_FORWARD_JS = `
-(function(){
-  function fwd(level, args){
-    try {
-      var parts = [];
-      for (var i=0;i<args.length;i++){
-        var a = args[i];
-        try { parts.push(typeof a === 'string' ? a : JSON.stringify(a)); } catch(e){ parts.push(String(a)); }
-      }
-      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'pageConsole', level: level, msg: parts.join(' ') }));
-    } catch(e){}
-  }
-  ['log','warn','error'].forEach(function(level){
-    var orig = console[level];
-    console[level] = function(){
-      fwd(level, arguments);
-      orig.apply(console, arguments);
-    };
-  });
-})();
-`;
-
-const DC_VIEWPORT_JS = `(function(){try{
-  var m=document.querySelector('meta[name=viewport]');
-  if(!m){ m=document.createElement('meta'); m.name='viewport'; (document.head||document.documentElement).appendChild(m); }
-  m.setAttribute('content','width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
-}catch(e){}})(); true;`;
-
-function dcScaleFitJs(bg: string): string {
-  return `
-  (function(){
-    var W=390, H=844;
-    var st=document.createElement('style');
-    // transition:none alongside animation:none — a CSS *transition* (e.g.
-    // "opacity 300ms" on mount) is a different mechanism from a @keyframes
-    // animation and animation:none alone doesn't touch it; device logs
-    // showed the card's opacity visibly climbing 0 -> ~0.97 over the first
-    // ~300ms even with animation:none already applied.
-    st.textContent='html{background:${bg}!important;overflow:hidden!important;}body{margin:0!important;padding:0!important;background:${bg}!important;overflow:hidden!important;}#dc-root{position:relative!important;margin:0 auto!important;width:'+W+'px!important;transform-origin:top center!important;}#dc-root *{animation:none!important;-webkit-animation:none!important;transition:none!important;-webkit-transition:none!important;}*{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important;}';
-    (document.head||document.documentElement).appendChild(st);
-    var lastS=-1, lastNudge=0;
-    function fit(){
-      var root=document.getElementById('dc-root'); if(!root) return;
-      var vh=window.innerHeight;
-      // BUG FOUND (device log, confirmed): fit()'s very first call runs
-      // before the WebView has laid out, so window.innerHeight reads 0 —
-      // the old "||H" fallback applied a WRONG scale (1.0, i.e. 390px
-      // wide) as if it were real, visibly revealed at that size, then
-      // SNAPPED to the real ~403px scale once the 300ms retry saw the
-      // real height. That snap is exactly "card spawns in, then
-      // everything moves" — skipping until a real height exists means the
-      // first transform ever applied is already correct.
-      if(!vh) return;
-      var S=vh/H;
-      if(Math.abs(S-lastS)>=0.002){ lastS=S; }
-      root.style.setProperty('transform','translateY('+lastNudge+'px) scale('+S+')','important');
-      document.body.style.setProperty('height', vh+'px','important');
-      document.documentElement.style.setProperty('height', vh+'px','important');
-      requestAnimationFrame(function(){
-        var rect=root.getBoundingClientRect();
-        var gap=vh-rect.bottom;
-        if (gap>0.5 && gap<60) {
-          lastNudge=lastNudge+gap;
-          root.style.setProperty('transform','translateY('+lastNudge+'px) scale('+S+')','important');
-        }
-      });
-    }
-    fit();
-    window.addEventListener('resize', fit);
-    [0,300,900,1500].forEach(function(d){ setTimeout(fit,d); });
-    function hideStatusBar(){
-      var all=document.querySelectorAll('#dc-root div');
-      for(var i=0;i<all.length;i++){
-        var el=all[i]; if(el.children.length) continue;
-        if((el.textContent||'').trim()==='9:41'){
-          var row=el.parentElement;
-          if(row){ row.style.setProperty('display','none','important'); return true; }
-        }
-      }
-      return false;
-    }
-    if(!hideStatusBar()) [200,500,1000,2000].forEach(function(d){ setTimeout(hideStatusBar,d); });
-  })();
-  `;
-}
-
-// Same real-data injection as before (repfeedback.html's dc-script never
-// reads this.props — 100% hardcoded demo data, real data goes in via DOM
-// replacement). Posts {type:'ready'} the FIRST time it successfully
-// builds, so this screen knows when it's safe to reveal the WebView
-// without ever showing the artboard's own fake demo content. No longer
-// creates a <video> element — just hides the artboard's own placeholder
-// slot and neutralizes its background so the native player (rendered
-// behind this WebView, see RepFeedbackScreen below) shows through.
-// Seeking posts {type:'seek', timeSec} instead of setting .currentTime
-// on a (no-longer-existing) local <video>.
-function repFeedbackInject(opts: {
-  exerciseName: string;
-  hasVideo: boolean;
-  reps: { timeSec: number; what: string }[];
-}): string {
-  const { exerciseName, hasVideo, reps } = opts;
-  return CONSOLE_FORWARD_JS + dcScaleFitJs(hasVideo ? 'transparent' : '#0d0d10') + `
-(function(){
-  function post(m){ try{ window.ReactNativeWebView.postMessage(JSON.stringify(m)); }catch(e){} }
-  var REPS = ${JSON.stringify(reps)};
-  var EX_NAME = ${JSON.stringify(exerciseName.toUpperCase())};
-  var HAS_VIDEO = ${JSON.stringify(hasVideo)};
-  var PAGE_START = Date.now();
-  var idx = 0;
-  var bgTransparent = false;
-  var cardWidened = false;
-  var oldControlsWired = false;
-  var SPEEDS = [0.5, 1, 1.5, 2];
-  var speedIdx = 1;
-  var speedBtn = null, speedTextEl = null, speedMenuEl = null;
-  function closeSpeedMenu(){
-    if(speedMenuEl){ speedMenuEl.parentNode.removeChild(speedMenuEl); speedMenuEl = null; }
-  }
-  function openSpeedMenu(){
-    if(!speedBtn) return;
-    closeSpeedMenu();
-    var rect = speedBtn.getBoundingClientRect();
-    speedMenuEl = document.createElement('div');
-    speedMenuEl.style.cssText = 'position:fixed; left:'+rect.left+'px; top:'+(rect.bottom+6)+'px; background:rgba(20,20,24,0.94); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); border-radius:14px; padding:6px; z-index:50; box-shadow:0 8px 24px rgba(0,0,0,0.4);';
-    SPEEDS.forEach(function(s, i){
-      var opt = document.createElement('div');
-      opt.textContent = s + 'x';
-      opt.style.cssText = 'padding:9px 18px; color:#ffffff; font-size:14px; font-weight:700; border-radius:9px; cursor:pointer; font-variant-numeric: tabular-nums;' + (i===speedIdx ? ' background:rgba(255,255,255,0.18);' : '');
-      opt.addEventListener('click', function(ev){
-        ev.stopPropagation();
-        speedIdx = i;
-        if(speedTextEl) speedTextEl.textContent = SPEEDS[i] + 'x';
-        post({type:'setSpeed', rate: SPEEDS[i]});
-        closeSpeedMenu();
-      }, true);
-      speedMenuEl.appendChild(opt);
-    });
-    document.body.appendChild(speedMenuEl);
-  }
-  document.addEventListener('click', function(ev){
-    if(speedMenuEl && ev.target !== speedBtn && !speedBtn.contains(ev.target)){ closeSpeedMenu(); }
-  }, true);
-  var tagEl = null, bodyEl = null, exCapsEl = null;
-  var trackEl = null, fillEl = null, thumbEl = null;
-  var trackDragWired = false;
-  var dragging = false;
-  var closeWired=false, finishWired=false, cornerSwapped=false;
-  var finishBtnEl = null;
-  var built = false, readyPosted = false, readyScheduled = false;
-
-  // BUG FOUND (confirmed from device logs this round): stripping only
-  // TEXT-node children left the old demo sentence ("So close! You
-  // stopped just above parallel...") showing right alongside the real
-  // text — proof that whatever's carrying that old text isn't a plain
-  // text node (the templating engine likely wraps the {{body}}
-  // interpolation in its own element at runtime, invisible in the raw
-  // static export). Fixed more aggressively: remove EVERY child except
-  // the sparkle <svg> icon itself (by tag name, not node type), then
-  // append exactly one new text node — correct regardless of whether the
-  // old content is a text node, a span, or anything else.
-  function setBodyText(text){
-    if(!bodyEl) return;
-    var kids = Array.prototype.slice.call(bodyEl.childNodes);
-    for(var n=0;n<kids.length;n++){
-      var node = kids[n];
-      if(node.nodeType === 1 && node.tagName === 'svg') continue;
-      bodyEl.removeChild(node);
-    }
-    bodyEl.appendChild(document.createTextNode(text));
-  }
-  var REAL_DURATION = 0;
-  function updateTrackPosition(){
-    var pct;
-    if(REAL_DURATION > 0 && REPS[idx]){
-      pct = Math.min(100, Math.max(0, (REPS[idx].timeSec / REAL_DURATION) * 100)).toFixed(1) + '%';
-    } else {
-      // Fallback before the real duration has arrived from RN.
-      pct = ((idx + 0.5) / REPS.length * 100).toFixed(1) + '%';
-    }
-    if(fillEl) fillEl.style.setProperty('width', pct, 'important');
-    if(thumbEl) thumbEl.style.setProperty('left', pct, 'important');
-  }
-  // RN calls this (via injectJavaScript) once videoPlayer.duration is
-  // known — see rep-feedback.tsx's own onDurationKnown effect.
-  window.__fpSetDuration = function(d){
-    REAL_DURATION = d;
-    console.log('[rep-feedback-page] real duration received:', d);
-    updateTrackPosition();
-  };
-  var REAL_CURRENT = 0;
-  function updateTrackFromCurrentTime(){
-    if(REAL_DURATION <= 0) return;
-    var pct = Math.min(100, Math.max(0, (REAL_CURRENT / REAL_DURATION) * 100)).toFixed(1) + '%';
-    if(fillEl) fillEl.style.setProperty('width', pct, 'important');
-    if(thumbEl) thumbEl.style.setProperty('left', pct, 'important');
-  }
-  // RN calls this continuously (expo-video's timeUpdate event) so the bar
-  // actually tracks real playback instead of sitting frozen at whatever
-  // rep was last tapped. Ignored mid-drag so it doesn't fight the user's
-  // own finger.
-  window.__fpSetCurrentTime = function(t){
-    REAL_CURRENT = t;
-    if(!dragging) updateTrackFromCurrentTime();
-  };
-  function show(i){
-    if(REPS.length === 0){
-      if(tagEl) tagEl.textContent = 'No reps recorded';
-      setBodyText('This set didn\\'t capture any rep data.');
-      if(fillEl) fillEl.style.setProperty('width', '0%', 'important');
-      if(thumbEl) thumbEl.style.setProperty('left', '0%', 'important');
-      console.log('[rep-feedback-page] show(): REPS.length===0, nothing to show');
-      return;
-    }
-    idx = Math.max(0, Math.min(REPS.length - 1, i));
-    if(tagEl) tagEl.textContent = 'Rep ' + (idx + 1);
-    setBodyText(REPS[idx].what);
-    // DIAGNOSTIC — explicit ask: "its stored form result/score, which
-    // branch repFeedbackText() picked, and the final text shown" (the
-    // branch itself was picked back in recap.tsx — repEvents[i].what IS
-    // that result, already computed; this confirms what arrived here and
-    // whether it actually landed in the DOM).
-    console.log('[rep-feedback-page] show(' + i + ') -> idx=' + idx, 'rep=', JSON.stringify(REPS[idx]), 'bodyEl found=', !!bodyEl, 'bodyEl.textContent after set=', JSON.stringify(bodyEl ? bodyEl.textContent : null));
-    // BUG FOUND ("time bar... has to start at the beginning and go with
-    // the actual video length"): this used to compute the thumb/fill
-    // position as a fraction of REP INDEX (rep 2 of 4 = 50%), not a
-    // fraction of the REAL video's time — completely different scale
-    // from what dragging computes (real pixel position / real duration),
-    // so tapping a rep and then dragging looked inconsistent. The real
-    // duration only exists on the RN side (videoPlayer.duration), posted
-    // over once the player is ready (see setDuration below) — until it
-    // arrives, REAL_DURATION stays 0 and position falls back to the old
-    // rep-index math rather than dividing by zero.
-    updateTrackPosition();
-    if(REPS[idx]) post({type:'seek', timeSec: REPS[idx].timeSec});
-    // Explicit ask: "say 'next rep' until the final rep, then 'finish
-    // review'" — relabeled every time the shown rep changes.
-    if(finishBtnEl){ finishBtnEl.textContent = (idx < REPS.length - 1) ? 'Next rep' : 'Finish review'; }
-  }
-
-  function build(){
-    if(built) return true;
-    // Video now plays NATIVELY (expo-video — see this file's header
-    // comment) in a real AVPlayer positioned behind this WebView. Just
-    // hide the artboard's own placeholder slot and neutralize the two
-    // backgrounds that would otherwise opaquely cover the native player
-    // (the slot's own wrapper, and the artboard's root content div — both
-    // have their own explicit inline background baked into the design
-    // file, which an html/body-level transparent background alone
-    // doesn't override).
-    if(!bgTransparent && HAS_VIDEO){
-      var slot = document.getElementById('recap-replay');
-      if(slot){
-        slot.style.display = 'none';
-        var wrap = slot.parentElement;
-        if(wrap) wrap.style.setProperty('background','transparent','important');
-        var rootDiv = document.querySelector('[data-screen-label="Rep feedback"]');
-        if(rootDiv) rootDiv.style.setProperty('background','transparent','important');
-        bgTransparent = true;
-      }
-    }
-    // Explicit ask: "the rep feedback card isn't fully attached to the
-    // screen like workout complete is" — same fix as recap.tsx's card,
-    // never applied here. This card is positioned via top+bottom (not
-    // top+height), so closing the gap is just bottom:0 — no fixed-height
-    // math needed like recap.tsx's card required.
-    if(!cardWidened){
-      var rfCard = document.querySelector('#dc-root div[style*="border-radius: 36px"]');
-      if(rfCard){
-        rfCard.style.setProperty('left','0px','important');
-        rfCard.style.setProperty('right','0px','important');
-        rfCard.style.setProperty('bottom','0px','important');
-        rfCard.style.setProperty('border-radius','36px 36px 0 0','important');
-        cardWidened = true;
-      }
-    }
-    // Explicit ask: "I like how the time bar and the speed option were
-    // always shown... have them right above the white card, and the
-    // time adjustment one a clock icon." That's exactly this artboard's
-    // own built-in row (found by reading the raw file — speed pill with
-    // a real clock icon + scrub bar + fullscreen button, baked in right
-    // above the card). It was briefly hidden last round on the theory
-    // that it duplicated a native React control bar; it's un-hidden now
-    // and wired for real, since it's the actual design the user wants —
-    // the native VideoControls component now only covers skip/play/pause,
-    // which this artboard has no equivalent for.
-    if(!oldControlsWired){
-      var clockPath = document.querySelector('#dc-root svg path[d="M8 8l2.6-2.4"]');
-      speedBtn = clockPath ? clockPath.closest('div') : null;
-      speedTextEl = speedBtn ? speedBtn.querySelector('span') : null;
-      // Explicit ask: "when I tap it, let me pick which speed I want, not
-      // just auto-move to the next one." A small picker menu instead of
-      // a cycling tap.
-      if(speedBtn && !speedBtn.__wired){
-        speedBtn.__wired = true;
-        speedBtn.addEventListener('click', function(ev){
-          ev.stopPropagation();
-          if(speedMenuEl){ closeSpeedMenu(); } else { openSpeedMenu(); }
-        }, true);
-      }
-      var fsPath = document.querySelector('#dc-root svg path[d="M8.5 2h3.5v3.5M5.5 12H2V8.5M12 2 8 6M2 12l4-4"]');
-      var fullscreenBtn = fsPath ? fsPath.closest('div') : null;
-      if(fullscreenBtn && !fullscreenBtn.__wired){
-        fullscreenBtn.__wired = true;
-        fullscreenBtn.addEventListener('click', function(ev){ ev.stopPropagation(); post({type:'enterFullscreen'}); }, true);
-      }
-      console.log('[rep-feedback-page] old controls wiring: speedBtn=', !!speedBtn, 'fullscreenBtn=', !!fullscreenBtn);
-      if(speedBtn && fullscreenBtn){ oldControlsWired = true; }
-    }
-
-    var all = document.querySelectorAll('#dc-root div,#dc-root span');
-    for(var i=0;i<all.length;i++){
-      var el=all[i]; if(el.children.length) continue;
-      var t=(el.textContent||'').trim();
-      if(/\\u00b7/.test(t) && t===t.toUpperCase() && t.length<40){ exCapsEl=el; el.textContent=EX_NAME; break; }
-    }
-
-    var tagCands=document.querySelectorAll('#dc-root div[style*="border-radius: 7px"] span, #dc-root span');
-    for(var j=0;j<tagCands.length;j++){
-      var tt=(tagCands[j].textContent||'').trim();
-      if(/^Rep \\d+$/i.test(tt) || /^Set \\d+ of \\d+$/i.test(tt)){ tagEl=tagCands[j]; break; }
-    }
-    // BUG FOUND (confirmed from device logs this round, not guessed): the
-    // style-attribute selector ("padding-top: 12px; font-size: 17px;
-    // line-height: 1.5") NEVER matched at runtime — logged every time as
-    // "tight selector FAILED" — meaning the runtime-rendered inline style
-    // string doesn't match what the raw static export file shows (the
-    // templating engine likely reorders/reformats it). Every real rep
-    // fell through to the loose heuristic instead, which found a
-    // DIFFERENT element. Fixed properly this time: the body div's own
-    // sparkle icon has a unique, stable SVG path ("M9.4 2.6c.3 3.9 2.4
-    // 6..."), found straight from the raw artboard — the exact same
-    // find-by-icon-path pattern already used successfully elsewhere in
-    // this file (prevEl/nextEl/closeEl), not a style string.
-    var sparkle = document.querySelector('#dc-root svg path[d^="M9.4 2.6c.3 3.9 2.4 6"]');
-    bodyEl = sparkle ? sparkle.closest('div') : null;
-    console.log('[rep-feedback-page] bodyEl found via sparkle-icon selector:', !!bodyEl);
-
-    // BUG FOUND (confirmed by loading the real design file in a real
-    // browser and reading the ACTUAL live style values back, not guessing
-    // from the raw source — see scripts/debug-track-element.js): the
-    // source markup says "flex: 1", but the browser NORMALIZES that
-    // shorthand the instant it's parsed, so el.style.flex reads back as
-    // "1 1 0%", never "1". This selector has therefore NEVER matched,
-    // ever, in any round this session — trackEl was always null, so the
-    // ENTIRE scrub bar block below (fill/thumb detection, tick creation,
-    // AND the drag wiring) never ran a single time. Not a timing bug, not
-    // a touch-interception bug — the element was simply never found.
-    // style.flexGrow is NOT normalized the same way and reads back "1"
-    // for the track vs "0" for the round thumb/tick dots (which use
-    // "flex: 0 0 auto") — a reliable way to tell them apart.
-    var tracks=document.querySelectorAll('#dc-root div');
-    for(var m=0;m<tracks.length;m++){
-      var cs=tracks[m].style;
-      if(cs && cs.position==='relative' && cs.flexGrow==='1' && cs.height==='30px'){ trackEl=tracks[m]; break; }
-    }
-    if(trackEl){
-      // BUG FOUND (reviewing this before relying on it again): fillEl/
-      // thumbEl used to be picked by fixed child index (kids[1]/kids[2]),
-      // which assumed the artboard's own sc-for template never renders
-      // real placeholder-tick DOM nodes between the fill and the thumb.
-      // If it does, those indices silently point at the wrong elements.
-      // Selecting by each element's own distinguishing style (thumb is a
-      // 16x16 circle; fill and the track background are both 4px-tall
-      // 999px-radius bars, fill being the second of the two in document
-      // order) is correct regardless of how many ticks the template adds.
-      var trackKids = Array.prototype.slice.call(trackEl.children);
-      var keep = [];
-      var matchedBarOnce = false;
-      for(var tk=0; tk<trackKids.length; tk++){
-        var kEl = trackKids[tk];
-        var kcs = kEl.style;
-        if(kcs && kcs.borderRadius === '50%' && kcs.width === '16px' && kcs.height === '16px'){
-          thumbEl = kEl; keep.push(kEl);
-        } else if(kcs && kcs.borderRadius === '999px' && kcs.height === '4px'){
-          keep.push(kEl);
-          if(!matchedBarOnce){ matchedBarOnce = true; } else { fillEl = kEl; }
-        }
-      }
-      console.log('[rep-feedback-page] track fillEl found=', !!fillEl, 'thumbEl found=', !!thumbEl);
-      for(var tk2=trackKids.length-1; tk2>=0; tk2--){
-        if(keep.indexOf(trackKids[tk2]) === -1){ trackEl.removeChild(trackKids[tk2]); }
-      }
-      REPS.forEach(function(rep, i){
-        var tick=document.createElement('div');
-        var leftPct=((i+0.5)/REPS.length*100).toFixed(2)+'%';
-        tick.style.cssText='position:absolute;left:'+leftPct+';top:0;bottom:0;width:16px;margin-left:-8px;cursor:pointer;';
-        tick.addEventListener('click', function(ii){ return function(ev){ ev.stopPropagation(); show(ii); }; }(i), true);
-        trackEl.appendChild(tick);
-      });
-      // Explicit ask: "dragging/tapping it must seek the video." Wired
-      // directly as the WebView's OWN pointer events this time, not a
-      // native RN PanResponder — there's no native/WebView boundary to
-      // cross here at all, so the whole Pressable-vs-PanResponder touch-
-      // conflict class of bug from the native attempt doesn't apply.
-      if(!trackDragWired){
-        trackDragWired = true;
-        var seekFromClientX = function(clientX){
-          var rect = trackEl.getBoundingClientRect();
-          var frac = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-          var pct = (frac*100).toFixed(2) + '%';
-          if(fillEl) fillEl.style.setProperty('width', pct, 'important');
-          if(thumbEl) thumbEl.style.setProperty('left', pct, 'important');
-          if(REAL_DURATION > 0) REAL_CURRENT = frac * REAL_DURATION;
-          post({type:'scrub', frac: frac});
-        };
-        // BUG FOUND (still reported broken with no logs to confirm why —
-        // reconsidering rather than guessing the same fix twice): Pointer
-        // Events support inside WKWebView has historically been
-        // inconsistent, and react-native-webview's own gesture handling
-        // can swallow touches before they reach page-level pointer
-        // listeners. Adding touchstart/touchmove as well costs nothing
-        // and covers the case where pointer events simply never fire —
-        // logged so next round's Metro output says definitively which
-        // (if either) actually fired.
-        trackEl.addEventListener('pointerdown', function(ev){ console.log('[rep-feedback-page] scrub pointerdown'); dragging = true; seekFromClientX(ev.clientX); }, true);
-        trackEl.addEventListener('pointermove', function(ev){ if(dragging) seekFromClientX(ev.clientX); }, true);
-        window.addEventListener('pointerup', function(){ dragging = false; }, true);
-        window.addEventListener('pointercancel', function(){ dragging = false; }, true);
-        trackEl.addEventListener('touchstart', function(ev){ console.log('[rep-feedback-page] scrub touchstart'); dragging = true; if(ev.touches && ev.touches[0]) seekFromClientX(ev.touches[0].clientX); }, true);
-        trackEl.addEventListener('touchmove', function(ev){ if(dragging && ev.touches && ev.touches[0]){ ev.preventDefault(); seekFromClientX(ev.touches[0].clientX); } }, true);
-        window.addEventListener('touchend', function(){ dragging = false; }, true);
-        window.addEventListener('touchcancel', function(){ dragging = false; }, true);
-      }
-    }
-
-    built = (tagEl||bodyEl||trackEl) ? true : false;
-    return built;
-  }
-
-  function wireNav(){
-    var hit=0;
-    // DIAGNOSTIC — explicit ask: "I can't tell if they work... log each
-    // tap: rep index + seek time." show() already logs the rep/seek on
-    // every call; these two lines confirm the buttons were actually
-    // FOUND and wired at all (a silent selector miss would mean taps do
-    // nothing with no error anywhere).
-    var prevEl=document.querySelector('#dc-root div svg path[d="M10 3 5 8l5 5"]');
-    if(prevEl){ var pbtn=prevEl.closest('div'); if(pbtn && !pbtn.__wired){ pbtn.__wired=true; pbtn.addEventListener('click', function(ev){ ev.stopPropagation(); console.log('[rep-feedback-page] PREV tapped, idx before=', idx); show(idx-1); }, true); hit++; console.log('[rep-feedback-page] prev button found and wired'); } }
-    var nextEl=document.querySelector('#dc-root div svg path[d="M6 3l5 5-5 5"]');
-    if(nextEl){ var nbtn=nextEl.closest('div'); if(nbtn && !nbtn.__wired){ nbtn.__wired=true; nbtn.addEventListener('click', function(ev){ ev.stopPropagation(); console.log('[rep-feedback-page] NEXT tapped, idx before=', idx); show(idx+1); }, true); hit++; console.log('[rep-feedback-page] next button found and wired'); } }
-    if(!prevEl || !nextEl){ console.log('[rep-feedback-page] wireNav: prevEl found=', !!prevEl, 'nextEl found=', !!nextEl); }
-    // BUG FOUND ("pressing the pause button does nothing"): this is the
-    // card's OWN play/pause button, in the Summary/prev/pause/next row —
-    // a completely different element from the video-area skip/play/pause
-    // buttons. It was never wired at all this whole time (wireNav only
-    // ever handled prev/next/close/finish/all-sets). Found via the
-    // pause-bars icon's rect path (the artboard's own default demo state
-    // always shows the pause-bars icon, never the play-triangle one, so
-    // that's the one guaranteed to be in the DOM to select by).
-    var pauseIconEl=document.querySelector('#dc-root svg rect[x="2"][y="1.5"]');
-    if(pauseIconEl){ var cardPlayBtn=pauseIconEl.closest('div'); if(cardPlayBtn && !cardPlayBtn.__wired){ cardPlayBtn.__wired=true; cardPlayBtn.addEventListener('click', function(ev){ ev.stopPropagation(); console.log('[rep-feedback-page] card play/pause tapped'); post({type:'togglePlayPause'}); }, true); hit++; console.log('[rep-feedback-page] card play/pause button found and wired'); } }
-    var closeEl=document.querySelector('#dc-root div svg path[d="M2.5 2.5l9 9M11.5 2.5l-9 9"]');
-    var cbtn = closeEl ? closeEl.closest('div') : null;
-    if(!closeWired){
-      if(cbtn){ cbtn.addEventListener('click', function(ev){ ev.stopPropagation(); post({type:'close'}); }, true); closeWired=true; hit++; } }
-    // Explicit ask (reversing the earlier swap): close button on the
-    // left, All sets on the right — and use a back-chevron instead of an
-    // X glyph. Reuses the exact chevron path already proven to render
-    // correctly elsewhere in this file (prevEl).
-    if(!cornerSwapped){
-      var asLinkForOrder = document.querySelector('#dc-root a[href="Form Review.dc.html"]');
-      if(asLinkForOrder) asLinkForOrder.style.setProperty('order','1','important');
-      if(cbtn) cbtn.style.setProperty('order','0','important');
-      if(closeEl){ closeEl.setAttribute('d','M10 3 5 8l5 5'); }
-      if(asLinkForOrder && cbtn){ cornerSwapped = true; }
-    }
-    if(!finishWired){
-      var all=document.querySelectorAll('#dc-root div');
-      for(var i=0;i<all.length;i++){
-        var el=all[i]; if(el.children.length) continue;
-        if((el.textContent||'').trim()==='Finish review'){
-          // Explicit ask: "say 'next rep' until the final rep, then
-          // 'finish review'." Stored as finishBtnEl so show() (below) can
-          // keep relabeling it; the click handler itself checks idx at
-          // the moment it's tapped, so it always does the right thing
-          // regardless of what it's currently labeled.
-          finishBtnEl = el;
-          el.addEventListener('click', function(ev){
-            ev.stopPropagation();
-            if(idx < REPS.length - 1){ show(idx+1); }
-            else { post({type:'finishReview'}); }
-          }, true);
-          finishWired=true; hit++; break;
-        }
-      }
-    }
-    // "All sets" link — recap.tsx's all-sets view no longer has a sibling
-    // route to jump sideways into from here, so this just closes back
-    // (same as X/close) rather than trying to deep-link into a
-    // specific sub-view of a different screen.
-    var allSets=document.querySelector('#dc-root a[href="Form Review.dc.html"]');
-    if(allSets && !allSets.__wired){ allSets.__wired=true; allSets.addEventListener('click', function(ev){ ev.preventDefault(); post({type:'close'}); }, true); }
-    return hit;
-  }
-
-  function apply(){
-    var ok = build();
-    wireNav();
-    // BUG FOUND (device logs): build() guards against re-running once
-    // built, but apply() itself didn't — so every leftover scheduled
-    // retry (50/120/250/500/1000/2000/3500ms) kept calling show(0) again
-    // even long after the page was already built and 'ready' already
-    // posted. Each call re-sent {type:'seek'} to RN, re-seeking the
-    // native player to the SAME timestamp over and over — harmless no-op
-    // for the old HTML5 <video>, but visibly stutters a real AVPlayer.
-    // show(0) (and the resulting seek) now only ever fires once, the
-    // first time apply() actually succeeds.
-    // BUG FOUND (reported again as "spawns immediately but in the wrong
-    // place, then quickly glitches into the right place"): 'ready' used to
-    // fire the INSTANT build()/wireNav() succeeded, which the retry
-    // schedule can do in well under 100ms — long before dcScaleFitJs's own
-    // fit() has settled on the real canvas scale (its own retries run on a
-    // separate [0,300,900,1500]ms schedule). RN reveals the WebView
-    // (opacity 0->1) the moment 'ready' arrives, so it was possible to
-    // reveal at a transient, not-yet-correct scale and visibly correct a
-    // moment later. Holding 'ready' back until PAGE_START + 350ms (past
-    // the 300ms fit() checkpoint) means the scale is already settled
-    // before anything is ever shown.
-    if(ok && !readyPosted){
-      var elapsed = Date.now() - PAGE_START;
-      if(elapsed < 350){
-        if(!readyScheduled){ readyScheduled = true; setTimeout(function(){ readyScheduled = false; apply(); }, 350 - elapsed); }
-        return;
-      }
-      show(0);
-      readyPosted = true;
-      console.log('[rep-feedback-page] ready, posting to RN');
-      post({type:'ready'});
-      // DIAGNOSTIC — explicit ask: "add a log for the card's visibility
-      // state and its on-screen position/size after the 'ready' message."
-      // Logged immediately AND again at +300ms (RN's own opacity reveal
-      // and the card's own CSS transition may still be settling right at
-      // the instant 'ready' fires) so a second, stable reading is
-      // available too.
-      function logCardRect(tag){
-        var cardEl = document.querySelector('#dc-root div[style*="border-radius: 36px"]');
-        if(!cardEl){ console.log('[rep-feedback-page] card rect ('+tag+'): ELEMENT NOT FOUND via border-radius:36px selector'); return; }
-        var r = cardEl.getBoundingClientRect();
-        var cs = window.getComputedStyle(cardEl);
-        console.log('[rep-feedback-page] card rect ('+tag+'):', JSON.stringify({
-          x: r.x, y: r.y, width: r.width, height: r.height, top: r.top, bottom: r.bottom
-        }), 'display=', cs.display, 'visibility=', cs.visibility, 'opacity=', cs.opacity, 'zIndex=', cs.zIndex, 'transform=', cs.transform);
-        if(bodyEl){
-          var br = bodyEl.getBoundingClientRect();
-          console.log('[rep-feedback-page] bodyEl rect ('+tag+'):', JSON.stringify({
-            x: br.x, y: br.y, width: br.width, height: br.height
-          }), 'text=', JSON.stringify((bodyEl.textContent||'').slice(0,60)));
-        } else {
-          console.log('[rep-feedback-page] bodyEl ('+tag+'): NULL — neither tight selector nor loose fallback matched anything');
-        }
-      }
-      logCardRect('immediate');
-      setTimeout(function(){ logCardRect('+300ms'); }, 300);
-    }
-    return ok;
-  }
-  console.log('[rep-feedback-page] injected JS running, HAS_VIDEO=', HAS_VIDEO, 'reps=', REPS.length);
-  if(!apply()) [50,120,250,500,1000,2000,3500].forEach(function(d){ setTimeout(apply,d); });
-  var root = document.getElementById('dc-root') || document.body;
-  // Late-card fix: the retry schedule above only polls at fixed 50-3500ms marks,
-  // so after the (slow) bundle unpack finishes the card could wait up to a
-  // whole retry interval to be built and revealed. Re-running apply() on every
-  // DOM mutation until ready makes the reveal fire the moment the real
-  // elements exist (apply() itself still holds 'ready' to PAGE_START+350ms).
-  var mo = new MutationObserver(function(){ if(!readyPosted) apply(); wireNav(); });
-  mo.observe(root, { childList: true, subtree: true, characterData: true });
-})();
-true;
-`;
 }
 
 export default function RepFeedbackScreen() {
@@ -659,6 +86,12 @@ export default function RepFeedbackScreen() {
   // async "waiting on the URL to resolve" gate at all — the player either
   // has a source or it doesn't, synchronously, from the route param.
   const hasVideo = !!videoUri;
+  const { height: windowH } = useWindowDimensions();
+  // Speed popover: the page reports where its speed button is (screen
+  // points — the WebView fills the screen), RN draws the menu as real
+  // Liquid Glass ABOVE that button.
+  const [speedMenu, setSpeedMenu] = useState<{ left: number; top: number; width: number } | null>(null);
+  const [speedIdx, setSpeedIdx] = useState(1);
   const videoPlayer = useVideoPlayer(videoUri ?? null, (p) => { p.loop = true; p.muted = false; p.timeUpdateEventInterval = 0.2; });
   const videoViewRef = useRef<VideoView>(null);
 
@@ -673,7 +106,6 @@ export default function RepFeedbackScreen() {
     }
     catch (err) { if (__DEV__) console.log('[rep-feedback-debug] repEvents JSON.parse failed:', err); return []; }
   }, [repEventsParam]);
-  const webRef = useRef<WebView>(null);
   const videoFade = useRef(new Animated.Value(0)).current;
   // See recap.tsx's identical comment for the full reasoning — gates the
   // WebView's transparency on actual visual readiness (playingChange),
@@ -701,7 +133,8 @@ export default function RepFeedbackScreen() {
         // to wait on the page's own JS at all for this), means playback
         // starts in the right place from frame one — the page's own later
         // seek-to-REPS[0] becomes a harmless no-op.
-        if (reps.length > 0) videoPlayer.currentTime = reps[0].timeSec;
+        // (Used to seek to reps[0].timeSec here. The bar and the video now both
+        // start at the very beginning; tapping a rep / Next is what seeks.)
         videoPlayer.play();
         // BUG FOUND ("time bar has to start at the beginning and go with
         // the actual video length"): the page's own scrub-bar thumb/fill
@@ -712,7 +145,7 @@ export default function RepFeedbackScreen() {
         // window.__fpSetDuration in repFeedbackInject).
         const d = videoPlayer.duration;
         if (d > 0) {
-          webRef.current?.injectJavaScript(`window.__fpSetDuration && window.__fpSetDuration(${d}); true;`);
+          warmInject('repfeedback', `window.__fpSetDuration && window.__fpSetDuration(${d}); true;`);
         }
       }
     });
@@ -735,30 +168,108 @@ export default function RepFeedbackScreen() {
     // the page continuously; the page ignores it while a drag is in
     // progress (see trackEl's own `dragging` flag).
     const timeUpdateSub = videoPlayer.addListener('timeUpdate', ({ currentTime }) => {
-      webRef.current?.injectJavaScript(`window.__fpSetCurrentTime && window.__fpSetCurrentTime(${currentTime}); true;`);
+      warmInject('repfeedback', `window.__fpSetCurrentTime && window.__fpSetCurrentTime(${currentTime}); true;`);
     });
     return () => { statusSub.remove(); playingSub.remove(); timeUpdateSub.remove(); };
   }, [videoPlayer, videoUri, videoFade, reps]);
 
-  const [ready, setReady] = useState(false);
+  // The card is drawn by a persistent, already-loaded WebView at the app root
+  // (components/WarmSurfaces.tsx) — mounting one here cost ~1s of artboard
+  // unpacking. recap.tsx normally has already filled it in with this exact
+  // data; this is the fallback if it hasn't.
+  const onWebMsg = useRef<(m: any) => void>(() => {});
+  // Layout effect: revealed before this screen's first paint, so there is no
+  // black frame between the screen appearing and the card.
+  useLayoutEffect(() => {
+    if (!videoUri) return;
+    warmPrepare('repfeedback', repFeedbackDataJs({ exerciseName: exerciseName ?? 'Exercise', hasVideo, reps }));
+    warmActivate('repfeedback', { onMessage: (m) => onWebMsg.current(m) });
+    // Released a beat later so the card can finish sliding out with the screen.
+    return () => { warmDeactivate('repfeedback'); warmRelease('repfeedback', 400); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videoUri]);
+  useEffect(() => { warmSetBg('repfeedback', videoVisuallyReady ? 'transparent' : '#0d0d10'); }, [videoVisuallyReady]);
 
-  // Backstop — if the injected JS's own {type:'ready'} message never
-  // arrives (e.g. the artboard's markup doesn't match what repFeedbackInject
-  // expects), still reveal after a short wait rather than stay blank
-  // forever — explicit ask: "never a grey screen."
-  useEffect(() => {
-    if (ready) return;
-    const t = setTimeout(() => setReady(true), 2500);
-    return () => clearTimeout(t);
-  }, [ready]);
+  // Everything drawn ABOVE the page (video controls, the speed popover) is
+  // rendered by the host, since the page now lives above the whole navigator.
+  useLayoutEffect(() => {
+    if (!hasVideo) { warmSetOverlay('repfeedback', null); return; }
+    warmSetOverlay('repfeedback', (
+      <>
+        {/* Zone stops right at the artboard's own speed/scrub/fullscreen row
+            (844-498=346 -> 41.35% from bottom) so that row is never covered. */}
+        <VideoControls player={videoPlayer} style={{ position: 'absolute', left: 0, right: 0, top: '11.85%', bottom: '41.35%' }} />
+        {speedMenu && (
+          <>
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => setSpeedMenu(null)} />
+            <LiquidGlass
+              radius={20}
+              variant="regular"
+              colorScheme="dark"
+              fallbackColor="rgba(150,152,165,0.62)"
+              style={[
+                styles.speedMenu,
+                // Opens UPWARD: its bottom edge sits just above the button.
+                { left: Math.max(12, speedMenu.left), bottom: windowH - speedMenu.top + 8 },
+              ]}
+            >
+              {SPEEDS.map((rate, i) => (
+                <Pressable
+                  key={rate}
+                  onPress={() => {
+                    videoPlayer.playbackRate = rate;
+                    setSpeedIdx(i);
+                    warmInject('repfeedback', `window.__fpSetSpeedLabel && window.__fpSetSpeedLabel(${JSON.stringify(rate + 'x')}); true;`);
+                    setSpeedMenu(null);
+                    if (__DEV__) console.log('[rep-feedback-debug] speed picked', rate);
+                  }}
+                  style={[styles.speedOpt, i === speedIdx && styles.speedOptOn]}
+                >
+                  <Text style={styles.speedOptTxt}>{rate}x</Text>
+                </Pressable>
+              ))}
+            </LiquidGlass>
+          </>
+        )}
+      </>
+    ));
+  }, [hasVideo, videoPlayer, speedMenu, speedIdx, windowH]);
 
-  const injectJs = useMemo(() => {
-    return repFeedbackInject({
-      exerciseName: exerciseName ?? 'Exercise',
-      hasVideo,
-      reps,
-    });
-  }, [hasVideo, exerciseName, reps]);
+  onWebMsg.current = (msg: { type?: string }) => {
+    if (__DEV__) console.log('[rep-feedback-debug] onMessage:', msg.type);
+    if (msg.type === 'ready') {
+      // Push the real duration again now that 'ready' proves the page's own
+      // functions are defined (the first push can race the data injection).
+      const d = videoPlayer.duration;
+      if (d > 0) warmInject('repfeedback', `window.__fpSetDuration && window.__fpSetDuration(${d}); true;`);
+    }
+    else if (msg.type === 'seek') {
+      const t = (msg as any).timeSec ?? 0;
+      videoPlayer.currentTime = t;
+      if (__DEV__) console.log('[rep-feedback-debug] seek message received, timeSec=', t, '- videoPlayer.currentTime immediately after =', videoPlayer.currentTime);
+    }
+    else if (msg.type === 'close') router.back();
+    else if (msg.type === 'openAllSets') { repFeedbackSignal.openAllSets = true; router.back(); }
+    else if (msg.type === 'finishReview') { repFeedbackSignal.finishedReview = true; router.back(); }
+    else if (msg.type === 'openSpeedMenu') {
+      const r = (msg as any).rect as { left: number; top: number; width: number } | undefined;
+      if (r) setSpeedMenu(prev => (prev ? null : { left: r.left, top: r.top, width: r.width }));
+    }
+    else if (msg.type === 'setSpeed') {
+      const rate = (msg as any).rate ?? 1;
+      videoPlayer.playbackRate = rate;
+    }
+    else if (msg.type === 'scrub') {
+      const frac = (msg as any).frac ?? 0;
+      const d = videoPlayer.duration || 0;
+      if (d > 0) videoPlayer.currentTime = frac * d;
+      if (__DEV__) console.log('[rep-feedback-debug] scrub frac=', frac, 'duration=', d, '- videoPlayer.currentTime after =', videoPlayer.currentTime);
+    }
+    else if (msg.type === 'enterFullscreen') { void videoViewRef.current?.enterFullscreen(); }
+    else if (msg.type === 'togglePlayPause') {
+      if (videoPlayer.playing) videoPlayer.pause(); else videoPlayer.play();
+    }
+  };
 
   // Missing data — simple native message + back button, never a grey
   // screen (explicit ask).
@@ -818,111 +329,9 @@ export default function RepFeedbackScreen() {
             // player events (if any) fire around that moment, instead of
             // guessing at a fix with nothing to go on.
             onFullscreenEnter={() => { if (__DEV__) console.log('[rep-feedback-debug] onFullscreenEnter'); }}
-            onFullscreenExit={() => { if (__DEV__) console.log('[rep-feedback-debug] onFullscreenExit — videoVisuallyReady=', videoVisuallyReady, 'ready=', ready); }}
+            onFullscreenExit={() => { if (__DEV__) console.log('[rep-feedback-debug] onFullscreenExit — videoVisuallyReady=', videoVisuallyReady); }}
           />
         </Animated.View>
-      )}
-      <WebView
-        ref={webRef}
-        source={REP_FEEDBACK_HTML}
-        originWhitelist={['*']}
-        style={[styles.web, videoVisuallyReady && { backgroundColor: 'transparent' }, { opacity: ready ? 1 : 0 }]}
-        injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS}
-        injectedJavaScript={injectJs}
-        onLoadStart={() => { if (__DEV__) console.log('[rep-feedback-debug] WebView onLoadStart'); }}
-        onLoadEnd={() => { if (__DEV__) console.log('[rep-feedback-debug] WebView onLoadEnd'); }}
-        onError={(e) => { if (__DEV__) console.log('[rep-feedback-debug] WebView onError', e.nativeEvent); }}
-        onHttpError={(e) => { if (__DEV__) console.log('[rep-feedback-debug] WebView onHttpError', e.nativeEvent); }}
-        onContentProcessDidTerminate={() => { if (__DEV__) console.log('[rep-feedback-debug] WebView onContentProcessDidTerminate'); }}
-        onMessage={(e) => {
-          let msg: { type?: string };
-          try { msg = JSON.parse(e.nativeEvent.data); } catch {
-            if (__DEV__) console.log('[rep-feedback-debug] onMessage: unparseable data=', e.nativeEvent.data);
-            return;
-          }
-          if (__DEV__) console.log('[rep-feedback-debug] onMessage:', msg.type);
-          if (msg.type === 'ready') {
-            // DIAGNOSTIC — cross-reference against the page's own card
-            // rect log: confirms what RN-side state the WebView actually
-            // reveals under (opacity, transparent background) at the same
-            // moment.
-            if (__DEV__) console.log('[rep-feedback-debug] ready received — videoVisuallyReady=', videoVisuallyReady, 'will set ready=true (opacity -> 1)');
-            setReady(true);
-            // Safety net: the page's own JS might not have finished
-            // running yet the first time duration became known (a real
-            // race, not guessed — the page posts its own console logs
-            // before 'ready', confirming its script can take a moment to
-            // execute), so push it again now that 'ready' proves the
-            // page's own functions are definitely defined.
-            const d = videoPlayer.duration;
-            if (d > 0) {
-              webRef.current?.injectJavaScript(`window.__fpSetDuration && window.__fpSetDuration(${d}); true;`);
-            }
-          }
-          else if (msg.type === 'seek') {
-            const t = (msg as any).timeSec ?? 0;
-            videoPlayer.currentTime = t;
-            // DIAGNOSTIC — the other half of prev/next's "seek the video
-            // to that rep's start time": confirms the RN side actually
-            // received this message and applied it to the real player.
-            if (__DEV__) console.log('[rep-feedback-debug] seek message received, timeSec=', t, '- videoPlayer.currentTime immediately after =', videoPlayer.currentTime);
-          }
-          else if (msg.type === 'pageConsole') { if (__DEV__) console.log(`[rep-feedback-page:${(msg as any).level}]`, (msg as any).msg); }
-          else if (msg.type === 'close') router.back();
-          else if (msg.type === 'finishReview') { repFeedbackSignal.finishedReview = true; router.back(); }
-          else if (msg.type === 'setSpeed') {
-            const rate = (msg as any).rate ?? 1;
-            videoPlayer.playbackRate = rate;
-            if (__DEV__) console.log('[rep-feedback-debug] setSpeed rate=', rate, '- videoPlayer.playbackRate after =', videoPlayer.playbackRate);
-          }
-          else if (msg.type === 'scrub') {
-            const frac = (msg as any).frac ?? 0;
-            const d = videoPlayer.duration || 0;
-            if (d > 0) videoPlayer.currentTime = frac * d;
-            if (__DEV__) console.log('[rep-feedback-debug] scrub frac=', frac, 'duration=', d, '- videoPlayer.currentTime after =', videoPlayer.currentTime);
-          }
-          else if (msg.type === 'enterFullscreen') { void videoViewRef.current?.enterFullscreen(); }
-          else if (msg.type === 'togglePlayPause') {
-            if (videoPlayer.playing) videoPlayer.pause(); else videoPlayer.play();
-          }
-        }}
-        allowFileAccess
-        allowFileAccessFromFileURLs
-        allowUniversalAccessFromFileURLs
-        javaScriptEnabled
-        domStorageEnabled
-        bounces={false}
-        overScrollMode="never"
-        cacheEnabled={false}
-        scrollEnabled={false}
-      />
-      {/* Explicit ask: "shows the full video, no rep feedback card... the
-          video glitches into place, then the white card comes in" — same
-          underlying wait as recap.tsx (this artboard's own bundle has to
-          unpack before 'ready' can fire), not something a JS fix can make
-          faster. Spinner stops it reading as stuck while genuinely still
-          loading. */}
-      {!ready && (
-        <View style={StyleSheet.absoluteFill} pointerEvents="none">
-          <ActivityIndicator style={{ flex: 1 }} color="#9a9aa2" />
-        </View>
-      )}
-      {/* Custom inline controls — same mechanism and same reasoning as
-          recap.tsx: real Apple fullscreen was rejected (took the card off
-          screen) and plain nativeControls never shows anything inline
-          without it, so this sidesteps native controls entirely. Same
-          zone the old tap-to-fullscreen Pressable used. */}
-      {/* BUG FOUND ("time bar/speed/fullscreen do nothing, video controls
-          come up instead"): this zone used to extend all the way down to
-          the card's top edge (36.02% from bottom), which fully
-          overlapped the artboard's own speed/scrub/fullscreen row
-          (baked in at canvas y=498px, well above the card at y=540px).
-          My own Pressable was sitting on top of that row, swallowing
-          every tap meant for it. Shortened to stop right at the row's
-          own top edge (844-498=346, 346/844≈41.35% from bottom) so that
-          row is never covered at all. */}
-      {hasVideo && (
-        <VideoControls player={videoPlayer} style={{ position: 'absolute', left: 0, right: 0, top: '11.85%', bottom: '41.35%' }} />
       )}
       {/* Explicit ask: "move All sets to the top-left corner, remove the
           text in that corner" — the WebView's own "All sets" link is
@@ -953,9 +362,14 @@ const styles = StyleSheet.create({
   // Black showed on both sides of the card's top edge: the card has 36px rounded
   // top corners, and the video stopped exactly at the card's top (36%), leaving
   // the dark root background visible in the corner cut-outs. Video now runs
-  // ~5% further down, behind the card, so the corners reveal video instead;
-  // top moved down slightly (3%) per the ask to nudge the video down.
-  videoArea: { position: 'absolute', left: 0, right: 0, top: '3%', bottom: '31%' },
+  // ~5% further down, behind the card, so the corners reveal video instead.
+  // top: 0 — it used to start at 3%, leaving a black band across the top of the
+  // screen; it now fills to the very top edge like the Workout Complete screen.
+  videoArea: { position: 'absolute', left: 0, right: 0, top: 0, bottom: '31%' },
+  speedMenu: { position: 'absolute', padding: 6, minWidth: 104 },
+  speedOpt: { paddingVertical: 10, paddingHorizontal: 18, borderRadius: 14 },
+  speedOptOn: { backgroundColor: 'rgba(255,255,255,0.22)' },
+  speedOptTxt: { color: '#ffffff', fontSize: 15, fontWeight: '700', fontVariant: ['tabular-nums'] },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
   msg: { color: '#ffffff', fontSize: 15, textAlign: 'center' },
   backBtn: {

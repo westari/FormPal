@@ -143,6 +143,14 @@ export interface ExerciseDefinitionDef {
   // exercise) — only raise this for an exercise with a documented "small
   // movement counts as a real rep" problem.
   phantomGuardFraction?: number;
+  // Return-to-start gate (native, ExerciseEngine .inRep). Omit = the rep
+  // completes when repMetric climbs back above repExitThreshold. When set, a
+  // rep completes only after `metric` has reached <= peakMax during the rep
+  // AND is back at >= startMin. See the shoulder-press block below for why.
+  startPositionGate?: { metric: MetricDef; startMin: number; peakMax: number };
+  // Joints that must ALL be visible and off the frame edge before SETUP passes
+  // (whole-body framing). Omit = setup checks only the repMetric's joints.
+  setupExtraJoints?: string[];
   // Consecutive frames the metric must hold above repExitThreshold before a
   // rep is trusted as complete (CORE double-count fix — see
   // ExerciseEngine.swift's exitConfirmCount doc comment). Default 3 (omit for
@@ -4256,6 +4264,49 @@ export function isRepCounterExercise(id: string): boolean {
 // same as `mode` above. Anything NOT listed (push-up + sit-up families) stays
 // facing-agnostic — floor exercises where those heuristics must not run.
 // NATIVE — the cue itself needs an EAS build; harmless extra JSON until then.
+// ─── Shoulder-press family: count at the START position, and demand the whole
+// body in view before "ready" ─────────────────────────────────────────────────
+// Reported from a real device log (shoulderPress, 2026-11-02): (1) setup said
+// "good" with the person right next to the phone; (2) a rep was counted on the
+// way UP. Cause of (2): repMetric is lineVsVertical(shoulder→elbow), an
+// UNDIRECTED 0-90 angle, so the rack position (elbows below the shoulder,
+// reads ~60) and the arm sweeping up through horizontal (reads ~90) cannot be
+// told apart, and "metric back above repExitThreshold" fired mid-press.
+// Fix (native, ExerciseEngine .inRep): a DIRECTIONAL gate. gate metric =
+// normalizedVerticalGap(shoulder → elbow) = (shoulder.y - elbow.y) / torso:
+// positive = elbow BELOW the shoulder, ~0 = level, negative = above.
+//
+// *** PLACEHOLDERS — not derived from a device log yet. ***
+//   peakMax  0.0  : the elbow must have reached shoulder level or higher
+//                   during the rep (an overhead press puts it well above).
+//   startMin 0.05 : back at the start = elbow at least 5% of a torso below
+//                   the shoulder. A rack position is typically much lower.
+// Deliberately wide. The log lines "[REP-WAIT]" (old rule would have counted,
+// gate said not yet) and "[REP-GATE]" (counted, with the real gate values)
+// print the actual numbers: do 5 reps and send the log, then these get set
+// from your real values.
+// setupExtraJoints: both shoulders, elbows and wrists (+ hips, except the
+// seated machine) must be visible and off the frame edge before SETUP passes.
+// Also placeholders in the sense that the joint list is a judgment call; the
+// "[SETUP] ... NOT ready: ..." log line names exactly what was missing.
+{
+  const SHOULDER_PRESS_GATE_METRIC: MetricDef = {
+    type: 'bestSide',
+    left:  { type: 'normalizedVerticalGap', upper: 'leftShoulder',  lower: 'leftElbow'  },
+    right: { type: 'normalizedVerticalGap', upper: 'rightShoulder', lower: 'rightElbow' },
+    leftJoints:  ['leftShoulder',  'leftElbow'],
+    rightJoints: ['rightShoulder', 'rightElbow'],
+  };
+  const UPPER = ['leftShoulder', 'rightShoulder', 'leftElbow', 'rightElbow', 'leftWrist', 'rightWrist'];
+  const defs = EXERCISE_DEFINITIONS as Record<string, ExerciseDefinitionDef | undefined>;
+  for (const id of ['shoulderPress', 'overheadPress', 'arnoldPress', 'dumbbellShoulderPress', 'machineShoulderPress']) {
+    const d = defs[id];
+    if (!d) continue;
+    d.startPositionGate = { metric: SHOULDER_PRESS_GATE_METRIC, startMin: 0.05, peakMax: 0.0 };
+    d.setupExtraJoints = id === 'machineShoulderPress' ? UPPER : [...UPPER, 'leftHip', 'rightHip'];
+  }
+}
+
 {
   const setFacing = (ids: readonly string[], facing: 'camera' | 'side') =>
     ids.forEach((id) => {

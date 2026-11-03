@@ -6,7 +6,8 @@ import * as FileSystem from 'expo-file-system';
 import * as SplashScreen from 'expo-splash-screen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { configureAudioSession } from '../lib/audioFeedback';
-import RecapPrewarm from '../components/RecapPrewarm';
+import WarmSurfaces from '../components/WarmSurfaces';
+import { installDevLogger } from '../lib/devLogger';
 import {
   useFonts,
   BricolageGrotesque_300Light,
@@ -21,6 +22,8 @@ import {
   PlusJakartaSans_700Bold,
   PlusJakartaSans_800ExtraBold,
 } from '@expo-google-fonts/plus-jakarta-sans';
+
+installDevLogger();
 
 // Hold splash until fonts are ready — prevents unstyled-text flash.
 SplashScreen.preventAutoHideAsync();
@@ -74,10 +77,6 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <StatusBar style="light" />
-      {/* See components/RecapPrewarm.tsx's own header comment — a hidden,
-          permanently-mounted attempt at the workout-complete-card delay.
-          Experimental, low confidence, needs a real device test. */}
-      <RecapPrewarm />
       <Stack
         screenOptions={{
           headerShown:  false,
@@ -90,7 +89,13 @@ export default function RootLayout() {
             intentional instead. Scoped to just this one screen; every
             other route keeps the normal push. */}
         <Stack.Screen name="workout/run" options={{ animation: 'fade' }} />
+        {/* The post-workout cards (<WarmSurfaces />, above this navigator)
+            slide in themselves to match the normal iOS push these two routes
+            use, so the page change is smooth and the card arrives with it. */}
       </Stack>
+      {/* Persistent, already-loaded artboard WebViews (Workout Complete, rep
+          feedback, muscle page). See that file's header. */}
+      <WarmSurfaces />
     </SafeAreaProvider>
   );
 }

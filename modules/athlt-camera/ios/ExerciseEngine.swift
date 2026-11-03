@@ -109,6 +109,11 @@ final class ExerciseEngine {
     // rep (elbow confidence drops below kMinConf), which would otherwise leave repMinAngle
     // equal to repEnterValue and produce movement=0 on every rep.
     private var repTopValue:  Double     = 0
+    // Return-to-start gate (def.startPositionGate): the lowest gate-metric value
+    // (= highest elbow) seen during the current rep, and whether the one-per-rep
+    // "arms not back at the start yet" log line has been written.
+    private var repGateMin:        Double = 999
+    private var repGateWaitLogged: Bool   = false
     // Kept for log only — the metric value at the moment we crossed enterThreshold.
     private var repEnterValue: Double    = 0
 
@@ -184,6 +189,9 @@ final class ExerciseEngine {
     private(set) var activeTrackingCue: String? = nil
     private var trackWeakFrames: Int = 0
     private var trackGoneFrames: Int = 0
+    // One "[TRACK] person lost" line per absence (JS shows "Step back into frame" the
+    // instant it arrives instead of waiting for the ~1/sec debug-stats sample).
+    private var personLostLogged: Bool = false
     private static let LOSING_TRACK_ENTER_FRAMES: Int = 10  // ~1s of weak tracking
 
     // ── Calibration (passive — fed from real completed reps, see completeRep) ──
@@ -571,6 +579,7 @@ final class ExerciseEngine {
         setupHoldBadFrames = 0
         trackWeakFrames   = 0
         trackGoneFrames   = 0
+        personLostLogged  = false
         activeTrackingCue = nil
     }
 
@@ -666,6 +675,10 @@ final class ExerciseEngine {
         // cue immediately; it only comes back if the metric stays unreliable
         // for LOSING_TRACK_ENTER_FRAMES straight (below).
         trackGoneFrames = 0
+        if personLostLogged {
+            personLostLogged = false
+            onDebugLog?("[TRACK] person back")
+        }
         noPoseStreak = 0
         activeTrackingCue = nil
         if isMetricReliable(def.repMetric, pose: pose, minConf: Self.FORM_CHECK_MIN_CONF) {
@@ -728,7 +741,13 @@ final class ExerciseEngine {
 
             if !forgiveFloorLoss {
                 trackGoneFrames = min(trackGoneFrames + 1, 200)
-                if trackGoneFrames >= 6 { activeTrackingCue = "Step back into frame" }
+                if trackGoneFrames >= 6 {
+                    activeTrackingCue = "Step back into frame"
+                    if !personLostLogged {
+                        personLostLogged = true
+                        onDebugLog?("[TRACK] person lost")
+                    }
+                }
             }
 
             if repPhase == .inRep, consecutiveMissingFrames >= def.missingPersonGraceFrames {
@@ -793,11 +812,28 @@ final class ExerciseEngine {
         let edgeClear = !def.edgeGuardEnabled ||
             !isNearFrameEdge(pose: pose, joints: def.repMetric.referencedJoints())
 
-        let allVisible = metricReliable && edgeClear
+        // Whole-body framing (def.setupExtraJoints, e.g. shoulder press: both
+        // shoulders/elbows/wrists + hips): every one must be visible AND off the
+        // frame edge. Standing too close to the phone crops the wrists/hips
+        // while the shoulders and elbows alone still look "trackable", which is
+        // how setup used to say "good" with the person right next to the phone.
+        let extrasMissing: [Joint] = def.setupExtraJoints.filter {
+            (pose[$0]?.confidence ?? 0) < Self.SETUP_JOINT_MIN_CONF
+        }
+        let extrasEdgeClear = def.setupExtraJoints.isEmpty || !def.edgeGuardEnabled ||
+            !isNearFrameEdge(pose: pose, joints: def.setupExtraJoints)
+        let extrasOk = extrasMissing.isEmpty && extrasEdgeClear
+
+        let allVisible = metricReliable && edgeClear && extrasOk
         let missingJoints: [Joint] = allVisible ? [] :
             def.repMetric.referencedJoints().filter {
                 (pose[$0]?.confidence ?? 0) < Self.SETUP_JOINT_MIN_CONF
-            }
+            } + extrasMissing
+        if !extrasOk && metricReliable && edgeClear {
+            onDebugLog?("[SETUP] \(def.id) NOT ready: whole body not in view — " +
+                        (extrasMissing.isEmpty ? "a needed joint is on the frame edge (too close)"
+                                               : "missing \(extrasMissing.map { "\($0)" }.joined(separator: ","))"))
+        }
 
         var holdProgress: Double = 0.0
 
@@ -818,6 +854,12 @@ final class ExerciseEngine {
                     NSLog("[Engine] [%@]   %@: conf=%.2f x=%.2f y=%.2f",
                           def.id, "\(joint)", conf,
                           Double(pose[joint]?.x ?? 0), Double(pose[joint]?.y ?? 0))
+                }
+                if !def.setupExtraJoints.isEmpty {
+                    // Proof for "ready with only my face in frame": every joint the
+                    // whole-body check required, with the confidence it passed at.
+                    onDebugLog?("[SETUP] \(def.id) whole body in view — " +
+                                def.setupExtraJoints.map { "\($0)=\(String(format: "%.2f", pose[$0]?.confidence ?? 0))" }.joined(separator: " "))
                 }
                 setupPhaseState = .holding(startTime: timestamp)
                 holdProgress    = 0.0
@@ -1279,11 +1321,39 @@ final class ExerciseEngine {
                 repMinAngle = angle
                 snapshotAtBottom(pose: pose)
             }
-            guard angle > effectiveExitThreshold else {
-                // Dropped back at/below exit before confirming — still genuinely
-                // mid-rep, not a real return to rest. Reset the confirm count.
-                exitConfirmCount = 0
-                return
+            if let gate = def.startPositionGate {
+                // RETURN-TO-START: a rep finishes only when the arms are back
+                // down at the start position, never on the way up. The repMetric
+                // is an undirected angle, so "angle above exit" alone also fires
+                // while the arm sweeps up through horizontal (log: rep counted
+                // mid-press). The directional gate metric decides instead.
+                guard let gap = gate.metric.measure(pose: pose) else {
+                    exitConfirmCount = 0
+                    return
+                }
+                if gap < repGateMin { repGateMin = gap }
+                let reachedPeak = repGateMin <= gate.peakMax
+                let backAtStart = gap >= gate.startMin
+                guard reachedPeak, backAtStart else {
+                    // The old rule would have counted here (metric back above
+                    // exit) — log it once per rep so the fix is visible in a
+                    // device log: "[REP-WAIT] ... not counted yet".
+                    if angle > effectiveExitThreshold, !repGateWaitLogged {
+                        repGateWaitLogged = true
+                        onDebugLog?("[REP-WAIT] \(def.id) metric=\(String(format: "%.1f", angle)) is above exit but arms are not back at the start " +
+                                    "(gate=\(String(format: "%.3f", gap)) need>=\(String(format: "%.3f", gate.startMin)); " +
+                                    "peakGate=\(String(format: "%.3f", repGateMin)) need<=\(String(format: "%.3f", gate.peakMax))) — not counted yet")
+                    }
+                    exitConfirmCount = 0
+                    return
+                }
+            } else {
+                guard angle > effectiveExitThreshold else {
+                    // Dropped back at/below exit before confirming — still genuinely
+                    // mid-rep, not a real return to rest. Reset the confirm count.
+                    exitConfirmCount = 0
+                    return
+                }
             }
 
             // CORE double-count fix — see exitConfirmCount's doc comment above.
@@ -1436,6 +1506,10 @@ final class ExerciseEngine {
                     onDebugLog?("[GATE] \(check.id)=\(valueStr) — passed")
                 }
 
+                if let gate = def.startPositionGate {
+                    onDebugLog?("[REP-GATE] \(def.id) counted at the start position: gate=\(String(format: "%.3f", gate.metric.measure(pose: pose) ?? -9)) " +
+                                "(need>=\(String(format: "%.3f", gate.startMin))) peakGate=\(String(format: "%.3f", repGateMin)) (need<=\(String(format: "%.3f", gate.peakMax)))")
+                }
                 completeRep(pose: pose, peakAngle: repMinAngle, timestamp: timestamp)
                 repPhase = .atTop
             }
@@ -1679,6 +1753,8 @@ final class ExerciseEngine {
     // ─── Form metric accumulation ─────────────────────────────────────────────
 
     private func resetRepAccumulators() {
+        repGateMin              = 999
+        repGateWaitLogged       = false
         accumMax                = [:]
         accumMin                = [:]
         atBottomVal             = [:]

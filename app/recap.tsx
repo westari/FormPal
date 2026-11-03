@@ -46,13 +46,13 @@
  * never touches video bytes again.
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, StyleSheet, Share, TouchableOpacity, Animated, ActivityIndicator } from 'react-native';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { View, StyleSheet, Share, TouchableOpacity, Animated } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { WebView } from 'react-native-webview';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import { useVideoPlayer, VideoView, type VideoThumbnail } from 'expo-video';
 import * as Sharing from 'expo-sharing';
 import { File } from 'expo-file-system';
 import { repFeedbackText } from '../lib/repFeedbackSentences';
@@ -61,13 +61,20 @@ import { repFeedbackSignal } from '../lib/repFeedbackSignal';
 import { saveStreakToCloud } from '../lib/formpalSync';
 import {
   getAllSessions, appendSessions, groupIntoWorkouts, calcStreak, computeMuscleTiers,
-  TIER_ORDER, type SessionEntry, type RepEventData, type Tier,
+  type SessionEntry, type RepEventData,
 } from '../lib/sessionLog';
 import { findSessionVideoUri } from '../lib/sessionVideo';
 import { EXERCISE_DEFINITIONS } from '../constants/exerciseDefinitions';
-import { getExerciseDef, muscleCreditParts, Muscle, type ExerciseId } from '../constants/exercises';
+import { Muscle, type ExerciseId } from '../constants/exercises';
 import { computeOverallStanding, MUSCLE_LABELS, MUSCLE_ICON_SOURCES } from '../components/MuscleTierMap';
 import { Asset } from 'expo-asset';
+import { buildMuscleRanksPayload, workedMuscles, type MuscleRanksPayload } from '../lib/muscleRanksData';
+import { tierDataUri } from '../lib/rankImages';
+import { allSetsDataJs } from '../lib/allSetsInject';
+import { generateSummary, recapPageData } from '../lib/recapPrefetch';
+import { repFeedbackDataJs } from '../lib/repFeedbackInject';
+import { athltSetDataJs } from '../lib/dcLogicPatch';
+import { warmWant, warmPrepare, warmActivate, warmDeactivate, warmRelease, warmSetBg, warmSetOverlay, warmSetUnderlay } from '../components/WarmSurfaces';
 import { useWorkoutSessionStore } from '../store/workoutSessionStore';
 import type { WorkoutSummary } from '../store/workoutSessionStore';
 import { usePlanStore } from '../store/planStore';
@@ -79,9 +86,6 @@ import { usePlanStore } from '../store/planStore';
 // here. Also 100% hardcoded demo data, no props channel — same DOM-
 // replacement approach as everywhere else (see allSetsInject /
 // muscleRanksInject).
-const RECAP_HTML = require('../assets/app screens/workoutrecap.html');
-const ALL_SETS_HTML = require('../assets/app screens/allsetsfullworkout.html');
-const MUSCLE_RANKS_HTML = require('../assets/app screens/muscleranks.html');
 
 // Build/bundle confirmation stamp — explicit ask ("add a small visible
 // build stamp so I can confirm on device I'm running the new code").
@@ -94,7 +98,7 @@ const MUSCLE_RANKS_HTML = require('../assets/app screens/muscleranks.html');
 // round: remove the on-screen stamp — kept as a console log instead so
 // it's still there to confirm a fresh reload if ever needed, just not
 // visible on the card.
-const BUILD_TAG = 'native-video-13';
+const BUILD_TAG = 'warm-5';
 const BUILD_LOADED_AT = new Date().toLocaleTimeString();
 if (__DEV__) {
   console.log(`[recap] build ${BUILD_TAG}`);
@@ -120,26 +124,6 @@ interface RecapData {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function formatDuration(totalSec: number): string {
-  const m = Math.floor(totalSec / 60);
-  const sec = totalSec % 60;
-  if (m >= 60) {
-    const h = Math.floor(m / 60);
-    return `${h}:${String(m % 60).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
-  }
-  return `${m}:${String(sec).padStart(2, '0')}`;
-}
-
-function generateSummary(reps: number, goodReps: number, hasFormData = true): string {
-  const pct = reps > 0 ? Math.round((goodReps / reps) * 100) : 0;
-  if (reps === 0)  return 'No reps were detected this session. Try positioning the phone so your full body is visible from the side.';
-  if (!hasFormData) return `${reps} reps counted. Form wasn't scored for this session. These are rep-counter movements, so they build training volume without a form grade.`;
-  if (pct === 100) return `Every one of your ${reps} reps hit good form. That's the kind of consistency that builds real strength over time.`;
-  if (pct >= 80)   return `Solid session. You hit good form on ${goodReps} of ${reps} reps (${pct}%).`;
-  if (pct >= 50)   return `You hit good form on ${goodReps} of ${reps} reps (${pct}%). Slow the rep down and focus on full range of motion.`;
-  return `${reps} reps completed, ${goodReps} in good form (${pct}%). Focus on control over speed next session.`;
-}
-
 type InMsg = {
   type: 'back' | 'seeRanks' | 'share' | 'shareVideo' | 'viewRepFeedback'
       | 'viewAllSets' | 'closeAllSets' | 'closeRanks' | 'doneRanks' | 'ready' | 'videoDebug' | 'pageConsole';
@@ -148,708 +132,35 @@ type InMsg = {
   level?: string;
 };
 
-// Both artboards are FIXED 390x844 canvases (raw Claude-Design exports,
-// same as onboarding's DC pages and run.tsx's demo/connect-music screens)
-// — scaled to fit both width and height, centered, same technique as
-// everywhere else in the app this applies.
-// viewport-fit=cover added — explicit retry at the "card not flush to the
-// bottom" bug. The contentInsetAdjustmentBehavior="never" WebView prop
-// tried earlier did NOT fix it. Without viewport-fit=cover, WKWebView's
-// window.innerHeight reports the LAYOUT viewport height with the home-
-// indicator safe area already excluded — shorter than the real screen —
-// so dcScaleFitJs's own "scale #dc-root to exactly vh" math was scaling
-// to a target that was already too short, landing the bottom-anchored
-// card above the true bottom edge every time. viewport-fit=cover makes
-// window.innerHeight report the FULL device height instead.
-const DC_VIEWPORT_JS = `(function(){try{
-  var m=document.querySelector('meta[name=viewport]');
-  if(!m){ m=document.createElement('meta'); m.name='viewport'; (document.head||document.documentElement).appendChild(m); }
-  m.setAttribute('content','width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
-}catch(e){}})(); true;`;
-
-// BUG FOUND (device test, round 1): the original version used
-// position:absolute + left/top 50% + translate(-50%,-50%) on #dc-root,
-// with no explicit body height — body's own box was collapsing toward 0
-// height and swallowing hit-testing. Replaced with position:relative +
-// margin:auto + scale-only transform, body height explicitly set.
-//
-// BUG FOUND (device test, round 2): that fix used "contain" scaling
-// (fit both width and height, Math.min) — read as "the card doesn't
-// reach the edges, gap below and on the sides" on these full-bleed
-// screens. Switched to filling the height EXACTLY (S = vh/H, not
-// clamped to <=1) so the bottom-anchored card always lands flush with
-// the real bottom edge; width is best-effort via overflow:hidden +
-// centered margin — same fix applied in run.tsx's copy of this function.
-// BUG FOUND (git diff against the last known-working commit, explicit
-// ask): the previous round's "measure the gap and nudge" fix had
-// `lastNudge = lastNudge + gap` inside fit()'s own requestAnimationFrame
-// callback — fit() runs at LEAST 5 times in the first 1.5s (immediately,
-// then at 300/900/1500ms, plus on resize), and each call ADDED its
-// measured gap on top of the PREVIOUS nudge instead of recalculating
-// fresh. Any small residual gap on more than one of those passes made the
-// card visibly jump downward in discrete steps — exactly "glitches a lot"
-// right when this screen appears (every finished workout). Reverted the
-// transform back to the original simple scale(S)-only (byte-identical to
-// the last known-good commit, zero drift risk) — the gap is handled
-// completely differently now, see fillBottomGap below.
-// Explicit ask: "console.log forwarded from inside the WebView page."
-// Page-internal console.log/warn/error normally only reach Safari Web
-// Inspector (not Metro) — intercepting them and re-sending through
-// postMessage is the only way they show up in the same terminal as the
-// native-side [recap-debug] logs. Installed FIRST (prepended ahead of
-// every other injected script), so it catches every console call that
-// follows it in the same injected JS, including this file's own.
-const CONSOLE_FORWARD_JS = `
-(function(){
-  function fwd(level, args){
-    try {
-      var parts = [];
-      for (var i=0;i<args.length;i++){
-        var a = args[i];
-        try { parts.push(typeof a === 'string' ? a : JSON.stringify(a)); } catch(e){ parts.push(String(a)); }
-      }
-      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'pageConsole', level: level, msg: parts.join(' ') }));
-    } catch(e){}
-  }
-  ['log','warn','error'].forEach(function(level){
-    var orig = console[level];
-    console[level] = function(){
-      fwd(level, arguments);
-      orig.apply(console, arguments);
-    };
-  });
-})();
-`;
-
-function dcScaleFitJs(bg: string, bottomFillColor?: string): string {
-  return CONSOLE_FORWARD_JS + `
-  (function(){
-    var W=390, H=844;
-    var st=document.createElement('style');
-    // animation:none added — "card appears at the top with wrong info,
-    // then slides down" was this artboard's own CSS entrance animation
-    // playing against stale default data before the real data gets
-    // injected. Killing it means the card just appears already in its
-    // resting position — no slide — whatever data is in the DOM at reveal
-    // time (which, with the ready-gate below, is always the real data).
-    // transition:none added alongside animation:none — a CSS *transition*
-    // (e.g. a plain "opacity 300ms" rule the artboard uses for its own
-    // mount fade) is a completely different mechanism from a @keyframes
-    // animation and animation:none does nothing to it — device logs showed
-    // the card's own opacity visibly climbing from 0 to ~0.97 over the
-    // first ~300ms even with animation:none already in place, which is
-    // exactly that.
-    st.textContent='html{background:${bg}!important;overflow:hidden!important;}body{margin:0!important;padding:0!important;background:${bg}!important;overflow:hidden!important;}#dc-root{position:relative!important;margin:0 auto!important;width:'+W+'px!important;transform-origin:top center!important;}#dc-root *{animation:none!important;-webkit-animation:none!important;transition:none!important;-webkit-transition:none!important;}*{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important;}';
-    (document.head||document.documentElement).appendChild(st);
-    var lastS=-1;
-    function fit(){
-      var root=document.getElementById('dc-root'); if(!root) return;
-      var vh=window.innerHeight;
-      // BUG FOUND (device log, confirmed): the very FIRST fit() call runs
-      // synchronously before the WebView has actually laid out, so
-      // window.innerHeight reads 0 — the old "||H" fallback then applied a
-      // scale of exactly 1.0 (390px wide) as if that were real, visibly
-      // revealed at that wrong size, then SNAPPED to the real scale
-      // (~403px) once the 300ms retry finally saw the real height. That
-      // snap IS the "card spawns in, then everything moves" glitch.
-      // Skipping entirely until a real height is available means the
-      // FIRST transform ever applied is already the correct one — nothing
-      // to visibly correct later.
-      if(!vh) return;
-      var S=vh/H;
-      if(Math.abs(S-lastS)>=0.002){ lastS=S; root.style.setProperty('transform','scale('+S+')','important'); }
-      document.body.style.setProperty('height', vh+'px','important');
-      document.documentElement.style.setProperty('height', vh+'px','important');
-    }
-    fit();
-    window.addEventListener('resize', fit);
-    [0,300,900,1500].forEach(function(d){ setTimeout(fit,d); });
-
-    ${bottomFillColor ? `
-    // BUG FOUND (still showed a gap after the first attempt): this
-    // measured #dc-root's OWN bottom edge against vh — but #dc-root is
-    // deliberately scaled to EXACTLY vh tall (that's the whole point of
-    // fit() above), so that gap is always ~0. It was measuring the wrong
-    // box. The REAL gap the design has is INSIDE #dc-root: the white
-    // card's own layout stops at top 484px + height 352px = 836px of the
-    // artboard's 844px canvas, leaving an 8px dark strip below the card
-    // (scaled along with everything else) — that strip is what reads as
-    // "the gap under the card." Fixed by measuring the CARD's own bottom
-    // edge (the rounded white sheet, border-radius 36px) against the real
-    // viewport bottom instead of #dc-root's.
-    // "Don't move the card — add white padding/background at the bottom
-    // instead." A plain filler rectangle, OUTSIDE #dc-root, pinned to the
-    // true bottom edge, resized to whatever gap is actually measured —
-    // idempotent (always SETS the height fresh, never adds to a running
-    // total), so calling it repeatedly can only converge, never drift.
-    // Never touches the card's own transform/position at all.
-    function fillBottomGap(){
-      var vh=window.innerHeight||H;
-      var card=document.querySelector('#dc-root div[style*="border-radius: 36px"]');
-      var ref=card||document.getElementById('dc-root');
-      if(!ref) return;
-      var rect=ref.getBoundingClientRect();
-      var gap=vh-rect.bottom;
-      var filler=document.getElementById('__formpalBottomFiller');
-      if(!filler){
-        filler=document.createElement('div');
-        filler.id='__formpalBottomFiller';
-        filler.style.cssText='position:fixed;left:0;right:0;bottom:0;background:${bottomFillColor};z-index:5;pointer-events:none;';
-        document.body.appendChild(filler);
-      }
-      // Explicit ask: "the fill is a slightly different white than the
-      // card, make it look like one piece." Both already use the exact
-      // same #ffffff — the visible seam is sub-pixel rounding from the
-      // scale transform leaving a hairline gap, not a real color
-      // difference. +2px of deliberate overlap UNDER the card's own
-      // bottom edge (never past its sides, still pinned bottom/left/right)
-      // closes that hairline rather than butting exactly against it.
-      filler.style.height = (gap>0 ? Math.ceil(gap)+2 : 0) + 'px';
-    }
-    window.__fpFillBottomGap = fillBottomGap;
-    [0,300,900,1500].forEach(function(d){ setTimeout(fillBottomGap,d); });
-    window.addEventListener('resize', function(){ setTimeout(fillBottomGap, 50); });
-    ` : ''}
-
-    // The fake status bar ("9:41" + signal/battery icons) baked into
-    // every one of these exports duplicates/overlaps the REAL device
-    // status bar — hide it everywhere this bootstrap runs.
-    function hideStatusBar(){
-      var all=document.querySelectorAll('#dc-root div');
-      for(var i=0;i<all.length;i++){
-        var el=all[i]; if(el.children.length) continue;
-        if((el.textContent||'').trim()==='9:41'){
-          var row=el.parentElement;
-          if(row){ row.style.setProperty('display','none','important'); return true; }
-        }
-      }
-      return false;
-    }
-    if(!hideStatusBar()) [200,500,1000,2000].forEach(function(d){ setTimeout(hideStatusBar,d); });
-  })();
-  `;
-}
-
-// ─── allsetsfullworkout.html — grid of every exercise/set completed. Also
-// 100% hardcoded demo data (fake Squats/Push-ups/Rows/Lunges sets, no
-// props read anywhere) — default tiles are torn out and replaced with one
-// real tile per actual exercise. NO video thumbnails on them: this app has
-// no reliable per-exercise video in workout mode (see this file's own
-// top doc comment), and solo/history mode only ever has ONE entry anyway
-// — a real thumbnail grid isn't something real data exists for here, so
-// plain dark cards with the real name + rep/form stats instead. The
-// filter chips and save/search icons are the artboard's own internal demo
-// state with no real equivalent to drive them — left in place (harmless,
-// just inert) rather than torn out for a cosmetic gap.
-function allSetsInject(opts: {
-  tiles: { title: string; meta: string }[];
-  videoTileIndex: number | null;
-}): string {
-  const { tiles, videoTileIndex } = opts;
-  return dcScaleFitJs('#ffffff') + `
-(function(){
-  function post(m){ try{ window.ReactNativeWebView.postMessage(JSON.stringify(m)); }catch(e){} }
-  var TILES = ${JSON.stringify(tiles)};
-  var VIDEO_IDX = ${JSON.stringify(videoTileIndex)};
-  var built=false, recapWired=false, doneWired=false;
-  function build(){
-    if(built) return true;
-    var grid=document.querySelector('#dc-root div[style*="grid-template-columns: 1fr 1fr"]');
-    if(!grid) return false;
-    while(grid.firstChild) grid.removeChild(grid.firstChild);
-    TILES.forEach(function(t, i){
-      var clickable = (i===VIDEO_IDX);
-      var tile=document.createElement('div');
-      tile.style.cssText='position:relative;height:150px;border-radius:22px;background:linear-gradient(180deg,#2c2c32 0%,#18181c 100%);overflow:hidden;'+(clickable?'cursor:pointer;':'');
-      var label=document.createElement('div');
-      label.style.cssText='position:absolute;left:12px;right:12px;bottom:12px;color:#ffffff;';
-      var titleEl=document.createElement('div');
-      titleEl.style.cssText='font-size:15.5px;font-weight:700;letter-spacing:-0.3px;';
-      titleEl.textContent=t.title;
-      var metaEl=document.createElement('div');
-      metaEl.style.cssText='font-size:11.5px;font-weight:500;color:rgba(255,255,255,0.6);padding-top:4px;';
-      metaEl.textContent=t.meta;
-      label.appendChild(titleEl); label.appendChild(metaEl);
-      tile.appendChild(label);
-      // Explicit ask: "each set's video should show... tapping it should
-      // play/replay properly." A real pixel-accurate thumbnail isn't
-      // straightforward here — expo-video's generateThumbnailsAsync
-      // returns a native shared image ref meant for expo-image, not a
-      // URI/base64 this WebView's own HTML can use, and overlaying a
-      // separate native <Image> precisely on this grid cell would mean
-      // replicating this grid's layout math in RN — flagged as separate,
-      // real scope, not done here. What's achievable now: a clear "this
-      // is a tappable video" play-icon affordance (this tile WAS just a
-      // plain stat box with no visual difference from the others), and
-      // tapping it correctly opens rep-feedback.tsx, which now plays the
-      // real clip with real native controls (today's other changes) —
-      // so the "play/replay properly" part is genuinely fixed.
-      if(clickable){
-        var playBadge=document.createElement('div');
-        playBadge.style.cssText='position:absolute;top:12px;right:12px;width:28px;height:28px;border-radius:14px;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;';
-        playBadge.innerHTML='<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M4 2.5v11l10-5.5-10-5.5z" fill="#ffffff"/></svg>';
-        tile.appendChild(playBadge);
-      }
-      if(clickable){ tile.addEventListener('click', function(ev){ ev.stopPropagation(); post({type:'viewRepFeedback'}); }, true); }
-      grid.appendChild(tile);
-    });
-    built=true;
-    return true;
-  }
-  function apply(){
-    var ok=build();
-    var hit=0;
-    if(!recapWired){
-      var recapLink=document.querySelector('#dc-root a[href="Workout Recap v2.dc.html"]');
-      if(recapLink){ recapLink.addEventListener('click', function(ev){ ev.preventDefault(); post({type:'closeAllSets'}); }, true); recapWired=true; hit++; }
-    }
-    if(!doneWired){
-      var doneLink=document.querySelector('#dc-root a[href="Workout Recap.dc.html"]');
-      if(doneLink){ doneLink.addEventListener('click', function(ev){ ev.preventDefault(); post({type:'closeAllSets'}); }, true); doneWired=true; hit++; }
-    }
-    return ok && hit>=2;
-  }
-  if(!apply()) [200,500,1000,2000,3500,5000].forEach(function(d){ setTimeout(apply,d); });
-  var root = document.getElementById('dc-root') || document.body;
-  var mo = new MutationObserver(function(){ apply(); });
-  mo.observe(root, { childList: true, subtree: true, characterData: true });
-})();
-true;
-`;
-}
-
-// ─── muscleranks.html — "today's progress" screen, the real destination
-// for the old "See your ranks" celebration moment. stats (Muscles/Lb
-// lifted/New PRs/Day streak) ARE prop-driven but this app doesn't track
-// lbs-lifted or PRs (bodyweight/rep-based, no such data exists) — those 2
-// slots are honestly relabeled to Reps/Moves (real numbers) rather than
-// fabricated. hits (the 2 muscle chips over the body diagram) and the
-// rank-progress bar fill are NOT prop-driven (hardcoded Quads/Glutes
-// demo, no this.props read for them at all) — real top-2 muscle names +
-// rep counts swapped in via DOM text replace (their baked-in icon assets
-// only exist for Quads/Glutes specifically, so the icon image itself is
-// hidden rather than show the wrong muscle's icon); the progress bar's
-// width is a style attribute, set directly rather than text-matched.
-function muscleRanksInject(opts: {
-  rankName: string; nextRank: string; beforePct: number; afterPct: number;
-  streak: number; totalReps: number; moves: number; muscleCount: number;
-  hits: { name: string; reps: number }[]; note: string;
-  // Real per-muscle icon, base64 data: URI, resolved from
-  // MUSCLE_ICON_SOURCES (bronze tier — see the "bronze highlight" note
-  // below), same order as `hits`. null for a muscle with no Flaticon art
-  // yet (Forearms/LowerBack/Calves) — that chip's icon stays hidden, same
-  // as the old behavior, rather than show nothing-shaped wrong art.
-  hitIconUris: (string | null)[];
-}): string {
-  const { rankName, nextRank, beforePct, afterPct, streak, totalReps, moves, muscleCount, hits, note, hitIconUris } = opts;
-  const MAP: Record<string, string> = {
-    'Bronze II': rankName,
-    'Bronze III': nextRank,
-    '4': String(muscleCount),
-    '6.2k': String(totalReps),
-    '2': String(moves),
-    '6': String(streak),
-    'Lb lifted': 'Reps',
-    'New PRs': 'Moves',
-    '72%': `${afterPct}%`,
-    'Quads': hits[0]?.name ?? '',
-    '+6%': hits[0] ? `+${hits[0].reps}` : '',
-    'Glutes': hits[1]?.name ?? '',
-    '+5%': hits[1] ? `+${hits[1].reps}` : '',
-    'Clean, deep squats did most of the work today. Keep that depth next session and Bronze III is about two workouts away.': note,
-  };
-  return dcScaleFitJs('#f2f2f5') + `
-(function(){
-  function post(m){ try{ window.ReactNativeWebView.postMessage(JSON.stringify(m)); }catch(e){} }
-  var MAP = ${JSON.stringify(MAP)};
-  var AFTER_PCT = ${JSON.stringify(afterPct + '%')};
-  var HIT_COUNT = ${hits.length};
-  var HIT_ICON_URIS = ${JSON.stringify(hitIconUris)};
-  var fillSet=false, iconsSet=false, backWired=false, doneWired=false, shareWired=false;
-  function apply(){
-    var hit=0;
-    var all=document.querySelectorAll('#dc-root div,#dc-root span');
-    for(var i=0;i<all.length;i++){
-      var el=all[i]; if(el.children.length) continue;
-      var t=(el.textContent||'').trim();
-      if(MAP[t]!=null && t!==MAP[t]){ el.textContent=MAP[t]; hit++; }
-    }
-    // Rank progress bar fill (inline width style, not text).
-    if(!fillSet){
-      var fillBar=document.querySelector('#dc-root div[style*="transition: width 1100ms"]');
-      if(fillBar){ fillBar.style.setProperty('width', AFTER_PCT, 'important'); fillSet=true; hit++; }
-    }
-    // BUG FOUND (explicit report): this artboard's own baked-in chip icon
-    // art only ever covers Quads/Glutes (its design-time manifest), so for
-    // any other muscle it was showing THAT icon regardless of the real
-    // label — "Shoulders shows legs, Triceps shows the wrong muscle." Real
-    // fix: embed the REAL per-muscle PNG (resolved to a data: URI in
-    // recap.tsx from components/MuscleTierMap.tsx's own verified-correct
-    // MUSCLE_ICON_SOURCES) as a plain <img>, replacing whatever wrong art
-    // the artboard's own <div role="img"> was showing — not hiding it
-    // unless there's genuinely no real art yet for that muscle. Also adds
-    // the bronze highlight (explicit ask: "muscles that were just trained
-    // in this workout get a bronze highlight") — both chips always qualify
-    // since hits is already exactly "top muscles worked THIS session."
-    if(!iconsSet){
-      var chipIcons=document.querySelectorAll('#dc-root div[role="img"]');
-      var idx=0;
-      for(var c=0;c<chipIcons.length;c++){
-        var el=chipIcons[c];
-        var w=el.style && el.style.width;
-        if(w!=='24px') continue;
-        var uri = HIT_ICON_URIS[idx];
-        if(uri){
-          while(el.firstChild) el.removeChild(el.firstChild);
-          var img=document.createElement('img');
-          img.src=uri;
-          img.style.cssText='width:100%;height:100%;object-fit:contain;';
-          el.appendChild(img);
-          el.style.setProperty('background','linear-gradient(135deg,#F0C9A0,#B97A42)','important');
-          el.style.setProperty('border','1.5px solid #7A4A22','important');
-          el.style.setProperty('border-radius','50%','important');
-        } else {
-          el.style.display='none';
-        }
-        idx++;
-        hit++;
-      }
-      iconsSet=true;
-    }
-    // A 2nd chip with nothing real to show (fewer than 2 real muscle
-    // hits this session) — hide its whole row rather than leave "Glutes"-
-    // shaped blank text.
-    if(HIT_COUNT<2){
-      var chips=document.querySelectorAll('#dc-root div');
-      for(var g=0;g<chips.length;g++){
-        if((chips[g].textContent||'').trim()==='' && chips[g].style && chips[g].style.position==='absolute' && chips[g].style.top==='284px'){
-          chips[g].style.display='none';
-        }
-      }
-    }
-    if(!backWired){
-      var backLink=document.querySelector('#dc-root a[href="Workout Recap.dc.html"]');
-      if(backLink){ backLink.addEventListener('click', function(ev){ ev.preventDefault(); post({type:'closeRanks'}); }, true); backWired=true; hit++; }
-    }
-    if(!doneWired){
-      var divs=document.querySelectorAll('#dc-root div');
-      for(var d=0;d<divs.length;d++){
-        var de=divs[d]; if(de.children.length) continue;
-        if((de.textContent||'').trim()==='Done'){
-          de.addEventListener('click', function(ev){ ev.stopPropagation(); post({type:'doneRanks'}); }, true);
-          doneWired=true; hit++; break;
-        }
-      }
-    }
-    if(!shareWired){
-      var shareBtn=document.querySelector('#dc-root div svg path[d^="M8 10V2.5"]');
-      if(shareBtn){
-        var sbtn=shareBtn.closest('div');
-        if(sbtn){ sbtn.addEventListener('click', function(ev){ ev.stopPropagation(); post({type:'shareVideo'}); }, true); }
-        shareWired=true; hit++;
-      }
-    }
-    return hit>=4;
-  }
-  if(!apply()) [200,500,1000,2000,3500,5000].forEach(function(d){ setTimeout(apply,d); });
-  else [1000,2500].forEach(function(d){ setTimeout(apply,d); });
-  var root = document.getElementById('dc-root') || document.body;
-  var mo = new MutationObserver(function(){ apply(); });
-  mo.observe(root, { childList: true, subtree: true, characterData: true });
-})();
-true;
-`;
-}
-
-// ─── workoutrecap.html — the main recap screen ─────────────────────────────
-// Restored EXACTLY as it was before the native rebuild (git history,
-// commit 31d13a0) — explicit instruction: "revert... back to my original
-// design files exactly as they were... do not keep any part of the
-// rebuild." Prop-driven (reps/sets/form/duration/overview/title), defaults
-// matched from its real dc-script. "Sets" is relabeled "Moves" — this app
-// tracks distinct exercises completed, not literal weightlifting sets, and
-// the artboard's 4-cell stat grid has no spare slot for a 5th metric.
-function workoutrecapInject(opts: {
-  totalReps: number; moves: number; pct: number; hasFormData: boolean;
-  durationSec?: number; overview: string; hasVideo: boolean;
-}): string {
-  const { totalReps, moves, pct, hasFormData, durationSec, overview, hasVideo } = opts;
-  const formValue = hasFormData && totalReps > 0 ? `${pct}%` : 'N/A';
-  const formLabel = hasFormData ? 'Form' : 'Form n/a';
-  const durationValue = durationSec != null ? formatDuration(durationSec) : 'N/A';
-  const MAP: Record<string, string> = {
-    '148': String(totalReps),
-    '12': String(moves),
-    '86%': formValue,
-    '38:12': durationValue,
-    'Sets': 'Moves',
-    'Form': formLabel,
-    'Push-up depth improved every set and squats stayed steady. Next time, slow the way down on pull-ups.': overview,
-  };
-  return dcScaleFitJs(hasVideo ? 'transparent' : '#111114', '#ffffff') + `
-(function(){
-  function post(m){ try{ window.ReactNativeWebView.postMessage(JSON.stringify(m)); }catch(e){} }
-  var MAP = ${JSON.stringify(MAP)};
-  var HAS_VIDEO = ${JSON.stringify(hasVideo)};
-  console.log('[recap-page] injected JS running, HAS_VIDEO=', HAS_VIDEO);
-  var bgTransparent = false;
-  var sizeWired = false;
-  var titleSizeWired = false;
-  var cardWidened = false;
-  var backWired=false, feedbackWired=false, shareWired=false, allSetsWired=false;
-  var readyPosted=false;
-  var PAGE_START=Date.now();
-  // "Dragging the card down is laggy" — traced to the artboard's OWN
-  // grabStart/grabEnd logic on the grab-handle pill: it only reacts on
-  // RELEASE (measures total pointerdown->pointerup distance, then snaps
-  // the card to one of two fixed positions over a 480ms CSS transition),
-  // it never follows the finger while held. That release-only snap is
-  // what read as laggy/unresponsive. This adds a SECOND pair of listeners
-  // on the same handle (the artboard's own grabStart/grabEnd still run
-  // too, unchanged) that live-tracks the card's "top" during the hold so
-  // it follows the finger in real time; on release the artboard's own
-  // logic takes over exactly as before (same 30px threshold, same snap
-  // animation) — it just now animates from wherever the finger actually
-  // let go instead of jumping from the original fixed position.
-  var dragWired = false;
-  function wireLiveDrag(){
-    if(dragWired) return;
-    var handle = document.querySelector('#dc-root div[style*="cursor: grab"]');
-    var card = document.querySelector('#dc-root div[style*="border-radius: 36px"]');
-    if(!handle || !card) return;
-    dragWired = true;
-    var TOP_UP=484, TOP_DOWN=814;
-    var dragging=false, startY=0, startTop=TOP_UP;
-    handle.addEventListener('pointerdown', function(e){
-      dragging = true;
-      startY = e.clientY;
-      var t = parseFloat(card.style.top);
-      startTop = isNaN(t) ? TOP_UP : t;
-      card.style.setProperty('transition', 'none', 'important');
-    }, true);
-    handle.addEventListener('pointermove', function(e){
-      if(!dragging) return;
-      var next = startTop + (e.clientY - startY);
-      if(next < TOP_UP) next = TOP_UP;
-      if(next > TOP_DOWN) next = TOP_DOWN;
-      card.style.setProperty('top', next + 'px', 'important');
-    }, true);
-    function endDrag(){
-      dragging = false;
-      // Restore the artboard's OWN authored transition value (not just
-      // remove mine) — can't guarantee whether this listener or the
-      // artboard's own sc-camel-on-pointer-up handler (attached first, at
-      // mount) runs first on the same pointerup event, so setting the
-      // exact value the HTML itself authors is safe either order:
-      // either it runs before the artboard's re-render (restores it in
-      // time for the snap) or after (same value, no-op).
-      card.style.setProperty('transition', 'top 480ms cubic-bezier(.22,.9,.24,1)', 'important');
-    }
-    handle.addEventListener('pointerup', endDrag, true);
-    handle.addEventListener('pointercancel', endDrag, true);
-  }
-  function apply(){
-    var hit=0;
-    // Video now plays NATIVELY (expo-video — see this file's header
-    // comment for why) in a real AVPlayer positioned behind this WebView.
-    // This page never creates a <video> element or touches video bytes at
-    // all any more — just hides the artboard's own placeholder slot and
-    // neutralizes the two backgrounds that would otherwise opaquely cover
-    // the native player sitting behind it (the slot's own wrapper, and
-    // the artboard's root content div — both have their own explicit
-    // inline background color baked into the design file, which an
-    // html/body-level transparent background alone doesn't override).
-    if(!bgTransparent && HAS_VIDEO){
-      var slot = document.getElementById('recap-replay');
-      if(slot){
-        slot.style.display = 'none';
-        var wrap = slot.parentElement;
-        if(wrap) wrap.style.setProperty('background','transparent','important');
-        var rootDiv = document.querySelector('[data-screen-label="Workout recap"]');
-        if(rootDiv) rootDiv.style.setProperty('background','transparent','important');
-        bgTransparent = true;
-        hit++;
-      }
-    }
-    var all=document.querySelectorAll('#dc-root div,#dc-root span');
-    for(var i=0;i<all.length;i++){
-      var el=all[i]; if(el.children.length) continue;
-      var t=(el.textContent||'').trim();
-      if(MAP[t]!=null && t!==MAP[t]){ el.textContent=MAP[t]; hit++; }
-    }
-    // Explicit ask: "make the 'Workout complete' text and the check icon
-    // bigger." The title div's own authored style (22px/800 weight) is a
-    // unique signature; the check-icon circle is its very next sibling.
-    if(!titleSizeWired){
-      var titleEl = document.querySelector('#dc-root div[style*="font-size: 22px; line-height: 1.12; font-weight: 800"]');
-      if(titleEl){
-        titleEl.style.setProperty('font-size','27px','important');
-        var checkIcon = titleEl.nextElementSibling;
-        if(checkIcon){
-          checkIcon.style.setProperty('width','29px','important');
-          checkIcon.style.setProperty('height','29px','important');
-          var checkSvg = checkIcon.querySelector('svg');
-          if(checkSvg){ checkSvg.setAttribute('width','16'); checkSvg.setAttribute('height','16'); }
-        }
-        titleSizeWired = true; hit++;
-      }
-    }
-    // Explicit ask: "the Overview label and the overview text are too
-    // small, make them bigger." Both are static artboard structure (never
-    // text-matched/replaced above), so found by their own authored style
-    // strings rather than content. Asked twice before with a smaller bump
-    // (13->15, 15.5->17) that apparently wasn't "much bigger" — pushing
-    // further this round, and now also sizing the label's own icon (the
-    // little grid svg next to "Overview"), which was never touched.
-    if(!sizeWired){
-      var ovLabel = document.querySelector('#dc-root div[style*="font-size: 13px; font-weight: 700"]');
-      if(ovLabel){
-        ovLabel.style.setProperty('font-size','19px','important');
-        var ovIcon = ovLabel.querySelector('svg');
-        if(ovIcon){ ovIcon.setAttribute('width','17'); ovIcon.setAttribute('height','17'); }
-      }
-      // Explicit ask (new this round): "lines stop after a couple words
-      // and wrap too early — have each line go across the whole card."
-      // 19px on this body paragraph was too aggressive for the card's
-      // width — dialing back to 17px (still clearly bigger than the
-      // original 15.5px) so more words fit per line. The short
-      // "Overview" label above isn't affected by this — it's one word,
-      // wrapping was never a concern there.
-      var ovBody = document.querySelector('#dc-root div[style*="font-size: 15.5px; line-height: 1.48"]');
-      if(ovBody) ovBody.style.setProperty('font-size','17px','important');
-      if(ovLabel || ovBody){
-        sizeWired=true; hit++;
-        console.log('[recap-page] sizeWired applied, ovLabel=', !!ovLabel, 'ovBody=', !!ovBody);
-      }
-    }
-    // Explicit ask: "edges stick out, gaps at left/right... full width,
-    // edge to edge... same for the bottom." Read straight from the
-    // artboard: the card div is authored with an 8px left/right margin
-    // and border-radius: 36px on all four corners. Two fixes: (1)
-    // left/right to 0 removes the side margins. (2) rounding only the
-    // TOP corners (36px 36px 0 0) removes the bottom-corner rounding,
-    // which is what was actually causing the
-    // "bottom still looks different" seam: fillBottomGap's filler strip
-    // below the card is a plain square-cornered rectangle, so the card's
-    // OWN rounded bottom corners were leaving two small gaps at the
-    // bottom-left/right where the dark/video background showed through.
-    if(!cardWidened){
-      var wCard = document.querySelector('#dc-root div[style*="border-radius: 36px"]');
-      if(wCard){
-        wCard.style.setProperty('left','0px','important');
-        wCard.style.setProperty('right','0px','important');
-        wCard.style.setProperty('border-radius','36px 36px 0 0','important');
-        // BUG FOUND ("bottom fill still doesn't match the card's color"):
-        // the card has decorative blurred gradient blobs as absolutely-
-        // positioned children (one pinned with a negative bottom offset,
-        // clipped by the card's own overflow:hidden) that tint the card's real bottom
-        // few pixels slightly off pure white — a flat #ffffff filler can
-        // never match a gradient exactly. The card is authored
-        // top:484px + height:352px, leaving an 8px canvas gap before the
-        // true 844px bottom even by original design (same family as the
-        // 8px side margins already removed above). Closing that gap by
-        // extending the card's OWN height means its bottom edge — blobs
-        // included — reaches the true bottom directly: nothing for a
-        // separate fill color to match in the resting (non-dragged)
-        // position. fillBottomGap right below still runs as a backstop
-        // for the dragged-down case, where a gap reopens below the
-        // (still 360px-tall) card.
-        wCard.style.setProperty('height','360px','important');
-        // BUG FOUND ("card still spawns in the middle, then slides down to
-        // the bottom after a tenth of a second" — reported again after the
-        // original fix below): this used to restore the card's top
-        // transition unconditionally right after locking in the first
-        // frame, reasoning that only the drag-snap (wireLiveDrag) would
-        // ever touch the top property again. Wrong — the artboard's own reactive
-        // framework can re-render this element's top value AGAIN later
-        // (switching from its default/demo render pass to the real
-        // summary-view render pass, even landing on the same 484px), and
-        // by then transition was already restored, so THAT later change is
-        // what was visibly animating — not the first paint at all.
-        // Fix: leave transition permanently 'none' here. wireLiveDrag
-        // below already enables it on its own pointerdown and disables it
-        // again on pointerup, entirely independently of this block, so
-        // real drag-to-dismiss still animates correctly either way.
-        wCard.style.setProperty('transition','none','important');
-        cardWidened=true; hit++;
-      }
-    }
-    // Back chevron (top-left circle, no handler on this fresh export).
-    if(!backWired){
-      var circles=document.querySelectorAll('#dc-root div');
-      for(var c=0;c<circles.length;c++){
-        var cel=circles[c];
-        if(cel.querySelector && cel.querySelector('svg path[d="M10 3 5 8l5 5"]') && cel.offsetWidth<=34){
-          cel.addEventListener('click', function(ev){ ev.stopPropagation(); post({type:'back'}); }, true);
-          backWired=true; hit++; break;
-        }
-      }
-    }
-    // "View rep feedback" -> only a real feature with a real video+reps to
-    // show (solo/history mode) — matches the file's own "only show what's
-    // real" policy. Without a video, hide it rather than let it open a
-    // review screen with nothing real in it.
-    if(!feedbackWired){
-      var link=document.querySelector('#dc-root a[href="Workout Recap v2.dc.html"]');
-      if(link){
-        if(!HAS_VIDEO){ link.style.display='none'; }
-        else { link.addEventListener('click', function(ev){ ev.preventDefault(); post({type:'viewRepFeedback'}); }, true); }
-        feedbackWired=true; hit++;
-      }
-    }
-    // Share icon (the up-arrow-into-tray circle next to "View rep feedback").
-    if(!shareWired){
-      var shareBtn=document.querySelector('#dc-root div svg path[d^="M8 10V2.5"]');
-      if(shareBtn){
-        var btn=shareBtn.closest('div');
-        if(btn){ btn.addEventListener('click', function(ev){ ev.stopPropagation(); post({type:'shareVideo'}); }, true); }
-        shareWired=true; hit++;
-      }
-    }
-    // "All sets" chip (top-right, grid icon + "All sets" text).
-    if(!allSetsWired){
-      var asLink=document.querySelector('#dc-root a[href="Form Review.dc.html"]');
-      if(asLink){ asLink.addEventListener('click', function(ev){ ev.preventDefault(); post({type:'viewAllSets'}); }, true); allSetsWired=true; hit++; }
-    }
-    wireLiveDrag();
-    // Recompute the bottom-fill strip every time real content actually
-    // lands (this fires on the MutationObserver's re-apply calls too, not
-    // just the fixed early timeouts inside dcScaleFitJs) — keeps it
-    // correct even if something shifts the card's layout after the first
-    // few hundred ms.
-    if(window.__fpFillBottomGap) window.__fpFillBottomGap();
-    var ok = hit>=3;
-    // BUG FOUND (reported again as "spawns immediately but in the wrong
-    // place, then quickly glitches into the right place"): 'ready' used to
-    // fire the instant enough elements were wired, which can happen well
-    // under 300ms — before dcScaleFitJs's own fit() has settled on the
-    // real canvas scale (its retries run on a separate schedule). RN
-    // reveals the WebView the moment 'ready' arrives, so a transient,
-    // not-yet-correct scale could get shown and visibly correct itself a
-    // moment later. Holding 'ready' back until PAGE_START + 350ms means
-    // the scale is already settled before anything is ever shown.
-    if(ok && !readyPosted){
-      var elapsed = Date.now() - PAGE_START;
-      if(elapsed < 350){ setTimeout(apply, 350 - elapsed); return false; }
-      readyPosted=true; post({type:'ready'});
-    }
-    return ok;
-  }
-  if(!apply()) [200,500,1000,2000,3500,5000].forEach(function(d){ setTimeout(apply,d); });
-  else [1000,2500].forEach(function(d){ setTimeout(apply,d); });
-  var root = document.getElementById('dc-root') || document.body;
-  var mo = new MutationObserver(function(){ apply(); });
-  mo.observe(root, { childList: true, subtree: true, characterData: true });
-})();
-true;
-`;
-}
-
 // ─── Screen ───────────────────────────────────────────────────────────────────
+// Real per-muscle Flaticon art (bronze tier — the page highlights muscles
+// just trained in bronze) as a base64 data: URI the WebView can use. null for
+// a muscle with no art yet (Forearms/LowerBack/Calves). Cached per muscle.
+const muscleIconCache = new Map<Muscle, string | null>();
+async function muscleIconDataUri(m: Muscle): Promise<string | null> {
+  if (muscleIconCache.has(m)) return muscleIconCache.get(m) ?? null;
+  const src = MUSCLE_ICON_SOURCES[m]?.bronze;
+  if (!src) { muscleIconCache.set(m, null); return null; }
+  try {
+    // All MUSCLE_ICON_SOURCES entries are require()'d local PNGs, which always
+    // resolve to a numeric module id — ImageSourcePropType is a broader type
+    // (could also be {uri}) that Asset.fromModule's own signature doesn't
+    // cover, hence the cast.
+    const asset = Asset.fromModule(src as number);
+    await asset.downloadAsync();
+    const uri = asset.localUri || asset.uri;
+    const out = `data:image/png;base64,${await new File(uri).base64()}`;
+    muscleIconCache.set(m, out);
+    return out;
+  } catch (err) {
+    if (__DEV__) console.error('[recap] muscle icon data-uri failed for', m, err);
+    return null;
+  }
+}
+
 export default function RecapScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const webRef = useRef<WebView>(null);
 
   // BUG FOUND (item 3, "flashes then goes back to a grey screen"): the
   // strongest explanation for content showing then reverting is a SECOND
@@ -871,6 +182,10 @@ export default function RecapScreen() {
       // on to the ranks/bodymap screen, not just return to summary — see
       // lib/repFeedbackSignal.ts for why a module-level flag is the
       // simplest way to signal that across the two screens.
+      if (repFeedbackSignal.openAllSets) {
+        repFeedbackSignal.openAllSets = false;
+        setView('allsets');
+      }
       if (repFeedbackSignal.finishedReview) {
         repFeedbackSignal.finishedReview = false;
         setView('ranks');
@@ -902,7 +217,61 @@ export default function RecapScreen() {
   const abortWorkout        = useWorkoutSessionStore(s => s.abortWorkout);
   const markWorkoutComplete = usePlanStore(s => s.markWorkoutComplete);
 
-  const [data, setData]             = useState<RecapData | null>(null);
+  // Entries to write to the session log once on mount (the writes themselves
+  // stay in the load effect below, in the background).
+  const persistOnMount = useRef<SessionEntry[]>([]);
+  // Workout and solo-live data are fully known RIGHT NOW (store / route
+  // params), so they are built synchronously for the very first render. They
+  // used to be set from an effect, which meant one blank black frame (~0.1s)
+  // before anything — the Workout Complete card included — could be shown.
+  // History mode really does need an async read and is still loaded in the
+  // effect below.
+  const [data, setData] = useState<RecapData | null>(() => {
+    if (isWorkoutMode) {
+      const summary = useWorkoutSessionStore.getState().getSummary() ?? finishWorkout();
+      if (!summary) return null;
+      const entries: SessionEntry[] = summary.results
+        .filter(r => r.completed)
+        .map(r => ({
+          ts: summary.finishedAt, exerciseId: r.exerciseId, displayName: r.displayName,
+          reps: r.reps, goodReps: r.goodReps, pct: r.formScore,
+          formChecked: r.formChecked,
+        }));
+      persistOnMount.current = entries;
+      return {
+        ts: summary.finishedAt, entries,
+        totalReps: summary.totalReps, totalGoodReps: summary.totalGoodReps,
+        pct: summary.overallFormScore, isHistory: false, workoutSummary: summary,
+        durationSec: summary.durationSeconds,
+        hasFormData: summary.results.some(r => r.completed && r.formChecked),
+      };
+    }
+    if (isHistoryMode) return null;
+    const reps        = parseInt(repsStr ?? '0', 10);
+    const goodReps    = parseInt(goodRepsStr ?? '0', 10);
+    const formChecked = mode !== 'repCounter';
+    const pct         = formChecked && reps > 0 ? Math.round((goodReps / reps) * 100) : 0;
+    const soloTs      = Date.now();
+    const exId        = exercise ?? 'unknown';
+    const entry: SessionEntry = {
+      ts: soloTs, exerciseId: exId,
+      displayName: EXERCISE_DEFINITIONS[exId as ExerciseId]?.displayName ?? exId,
+      reps, goodReps, pct, formChecked,
+    };
+    persistOnMount.current = reps > 0 ? [entry] : [];
+    let soloEvents: RepEventData[] = [];
+    try { soloEvents = JSON.parse(events ?? '[]'); } catch { /* none */ }
+    const parsedDuration = durationSecParam != null ? parseInt(durationSecParam, 10) : undefined;
+    return {
+      ts: soloTs, entries: reps > 0 ? [entry] : [],
+      totalReps: reps, totalGoodReps: goodReps, pct, formChecked,
+      hasFormData: formChecked,
+      videoUri: typeof videoUriParam === 'string' && videoUriParam.length > 0 ? videoUriParam : undefined,
+      repEvents: formChecked ? soloEvents : [],
+      isHistory: false,
+      durationSec: parsedDuration != null && !isNaN(parsedDuration) ? parsedDuration : undefined,
+    };
+  });
   const [loadFailed, setLoadFailed] = useState(false);
   const initialized = useRef(false);
   const persistRef = useRef<Promise<unknown>>(Promise.resolve());
@@ -994,19 +363,6 @@ export default function RecapScreen() {
     }
   }, [view, isFocused, data?.videoUri, videoPlayer, videoFade]);
 
-  // Reveal-gate for the summary screen only (the one with the reported
-  // "grey -> wrong data at top -> slides into place" bug). Stays hidden
-  // until workoutrecapInject's apply() confirms real data was actually
-  // injected (posts {type:'ready'}), so the WebView never shows the
-  // artboard's own placeholder numbers mid-load. Backstop timeout is a
-  // safety net in case the 'ready' message never arrives. allsets/ranks
-  // are untouched — they don't have this reported bug, so no gating.
-  const [webReady, setWebReady] = useState(false);
-  useEffect(() => {
-    setWebReady(false);
-    const backstop = setTimeout(() => setWebReady(true), 2500);
-    return () => clearTimeout(backstop);
-  }, [view]);
 
   const repEventsParam = useMemo<RepEventData[]>(() => {
     try { return JSON.parse(events ?? '[]'); }
@@ -1022,32 +378,11 @@ export default function RecapScreen() {
 
     (async () => {
       if (isWorkoutMode) {
-        const existing = useWorkoutSessionStore.getState().getSummary();
-        const summary = existing ?? finishWorkout();
-        if (!summary) { setLoadFailed(true); return; }
-
-        const entries: SessionEntry[] = summary.results
-          .filter(r => r.completed)
-          .map(r => ({
-            ts: summary.finishedAt, exerciseId: r.exerciseId, displayName: r.displayName,
-            reps: r.reps, goodReps: r.goodReps, pct: r.formScore,
-            formChecked: r.formChecked,
-          }));
-        // ROOT CAUSE ("[recap-debug] blocked on loading gate: hasData:false"):
-        // setData used to run only AFTER `await appendSessions` (an
-        // AsyncStorage disk write), so the card's data — which is fully
-        // known synchronously right here — sat behind storage I/O and the
-        // screen rendered blank until it finished. Publish the data first;
+        if (!data) { setLoadFailed(true); return; }
+        // The data was already published synchronously (see useState above);
         // persist in the background. The rank effect awaits persistRef so it
         // still reads sessions that include this one.
-        setData({
-          ts: summary.finishedAt, entries,
-          totalReps: summary.totalReps, totalGoodReps: summary.totalGoodReps,
-          pct: summary.overallFormScore, isHistory: false, workoutSummary: summary,
-          durationSec: summary.durationSeconds,
-          hasFormData: summary.results.some(r => r.completed && r.formChecked),
-        });
-        if (entries.length > 0) persistRef.current = appendSessions(entries).catch(() => {});
+        if (persistOnMount.current.length > 0) persistRef.current = appendSessions(persistOnMount.current).catch(() => {});
       } else if (isHistoryMode) {
         const all    = await getAllSessions();
         const groups = groupIntoWorkouts(all);
@@ -1063,30 +398,8 @@ export default function RecapScreen() {
           videoUri: historyVideoUri ?? undefined,
         });
       } else {
-        const reps        = parseInt(repsStr ?? '0', 10);
-        const goodReps     = parseInt(goodRepsStr ?? '0', 10);
-        const formChecked = mode !== 'repCounter';
-        const pct         = formChecked && reps > 0 ? Math.round((goodReps / reps) * 100) : 0;
-        const soloTs      = Date.now();
-        const exId        = exercise ?? 'unknown';
-        const entry: SessionEntry = {
-          ts: soloTs, exerciseId: exId,
-          displayName: EXERCISE_DEFINITIONS[exId as ExerciseId]?.displayName ?? exId,
-          reps, goodReps, pct, formChecked,
-        };
-        // Same fix as workout mode above: data first, persist in background.
-        if (reps > 0) persistRef.current = appendSessions([entry]).catch(() => {});
-        const parsedDuration = durationSecParam != null ? parseInt(durationSecParam, 10) : undefined;
-        const soloVideoUri = typeof videoUriParam === 'string' && videoUriParam.length > 0 ? videoUriParam : undefined;
-        setData({
-          ts: soloTs, entries: reps > 0 ? [entry] : [],
-          totalReps: reps, totalGoodReps: goodReps, pct, formChecked,
-          hasFormData: formChecked,
-          videoUri: soloVideoUri,
-          repEvents: formChecked ? repEventsParam : [],
-          isHistory: false,
-          durationSec: parsedDuration != null && !isNaN(parsedDuration) ? parsedDuration : undefined,
-        });
+        // Solo-live: data was built synchronously above; persist in background.
+        if (persistOnMount.current.length > 0) persistRef.current = appendSessions(persistOnMount.current).catch(() => {});
       }
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1202,122 +515,184 @@ export default function RecapScreen() {
     return mapped;
   }, [hasVideo, data]);
 
-  const summaryInjectJs = useMemo(() => {
+  // Data half only: the page scaffold is already loaded in the warm WebView
+  // (components/WarmSurfaces.tsx), so this just fills it in.
+  const summaryDataJs = useMemo(() => {
     if (!data) return null;
-    return workoutrecapInject({
-      totalReps: data.totalReps, moves: data.entries.length, pct: data.pct,
-      hasFormData: data.hasFormData, durationSec: data.durationSec,
-      overview: generateSummary(data.totalReps, data.totalGoodReps, data.hasFormData),
-      hasVideo,
+    // Same builder lib/recapPrefetch.ts used before navigation, so the string
+    // is identical and the page keeps the data it already has.
+    return recapPageData({
+      totalReps: data.totalReps, totalGoodReps: data.totalGoodReps, moves: data.entries.length,
+      pct: data.pct, hasFormData: data.hasFormData, durationSec: data.durationSec, hasVideo,
     });
   }, [data, hasVideo]);
 
-  const allSetsInjectJs = useMemo(() => {
+  // Real tiles for the warm All sets page (lib/allSetsInject.ts). Only the first
+  // set has a recorded clip (one video per solo session), so only it can open
+  // rep feedback / show a frame.
+  const allSetsDataJsStr = useMemo(() => {
     if (!data) return null;
-    return allSetsInject({
-      tiles: data.entries.map(e => ({
+    return allSetsDataJs({
+      tiles: data.entries.map((e, i) => ({
         title: e.displayName,
+        ex: e.displayName,
         meta: e.formChecked !== false
           ? `${e.reps} reps · ${e.reps > 0 ? Math.round((e.goodReps / e.reps) * 100) : 0}% form`
           : `${e.reps} reps`,
+        hasVideo: hasVideo && i === 0,
       })),
-      videoTileIndex: hasVideo && data.entries.length > 0 ? 0 : null,
+      videoIdx: hasVideo && data.entries.length > 0 ? 0 : null,
     });
   }, [data, hasVideo]);
 
-  // "Today's progress" — real standing before vs. after this session
-  // (computeOverallStanding's own "weakest muscle" philosophy, same one
-  // app/muscle-ranks.tsx already uses), real streak, real top-2 muscles
-  // worked THIS session by rep credit. Not computed for history mode —
-  // "today's progress" doesn't mean anything for a past session being
-  // reviewed, and handleBack never routes there in that case anyway.
-  const [rankData, setRankData] = useState<{
-    rankName: string; nextRank: string; beforePct: number; afterPct: number;
-    streak: number; muscleCount: number; hits: { muscle: Muscle; name: string; reps: number }[];
-  } | null>(null);
-  // Real per-muscle icon for each hit chip, resolved once rankData is set
-  // (see the effect right after it) — bronze tier specifically, since both
-  // hits are by definition muscles trained THIS session (explicit ask:
-  // "muscles that were just trained in this workout get a bronze
-  // highlight"). Replaces the old behavior of hiding the chip's icon
-  // entirely whenever the muscle wasn't Quads/Glutes (the only 2 the
-  // artboard's own baked-in icon manifest has art for) — this resolves
-  // the REAL per-muscle PNG (components/MuscleTierMap.tsx's
-  // MUSCLE_ICON_SOURCES, already correct/verified for all but 3 muscles)
-  // to a base64 data: URI and embeds it directly, so every label shows
-  // its own real muscle, not a placeholder or nothing.
-  const [hitIconUris, setHitIconUris] = useState<(string | null)[]>([]);
-  useEffect(() => {
-    if (!rankData || rankData.hits.length === 0) { setHitIconUris([]); return; }
-    let cancelled = false;
-    (async () => {
-      const uris = await Promise.all(rankData.hits.map(async (h) => {
-        const src = MUSCLE_ICON_SOURCES[h.muscle]?.bronze;
-        if (!src) return null; // Forearms/LowerBack/Calves have no Flaticon art yet
-        try {
-          // All MUSCLE_ICON_SOURCES entries are require()'d local PNGs,
-          // which always resolve to a numeric module id — ImageSourcePropType
-          // is a broader type (could also be {uri}) that Asset.fromModule's
-          // own signature doesn't cover, hence the cast.
-          const asset = Asset.fromModule(src as number);
-          await asset.downloadAsync();
-          const uri = asset.localUri || asset.uri;
-          const base64 = await new File(uri).base64();
-          return `data:image/png;base64,${base64}`;
-        } catch (err) {
-          if (__DEV__) console.error('[recap] muscle icon data-uri failed for', h.muscle, err);
-          return null;
-        }
-      }));
-      if (!cancelled) setHitIconUris(uris);
-    })();
-    return () => { cancelled = true; };
-  }, [rankData]);
+  // "Today's progress" (muscleranks.html) — everything on it is real: standing
+  // before vs. after this session (the SAME weakest-link standing the Progress
+  // tab shows), each muscle's own gain, the muscles this workout actually
+  // trained (rows + body map), the tier emblem. Built ahead of time, as soon
+  // as the recap data exists, so by the time the user gets to this page it is
+  // all ready and the page opens already in its final layout. Not computed for
+  // history mode — "today's progress" doesn't mean anything for a past session
+  // being reviewed, and handleBack never routes there in that case anyway.
+  const [ranksPayload, setRanksPayload] = useState<MuscleRanksPayload | null>(null);
   useEffect(() => {
     if (!data || data.isHistory) return;
+    let cancelled = false;
     (async () => {
       await persistRef.current; // this session's own entries must be written first
       const all = await getAllSessions(); // already includes this session's own entries
       const prior = all.filter(s => s.ts < data.ts);
-      const afterStanding = computeOverallStanding(computeMuscleTiers(all));
-      const beforeStanding = computeOverallStanding(computeMuscleTiers(prior));
-      const afterTier: Tier = afterStanding?.tier ?? 'bronze';
-      const idx = TIER_ORDER.indexOf(afterTier);
-      const nextTier = idx >= 0 && idx < TIER_ORDER.length - 1 ? TIER_ORDER[idx + 1] : afterTier;
-      const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
-
-      const tally = new Map<string, number>();
-      for (const e of data.entries) {
-        const def = getExerciseDef(e.exerciseId);
-        if (!def) continue;
-        for (const credit of def.muscles) {
-          const { muscle, weight } = muscleCreditParts(credit);
-          tally.set(muscle, (tally.get(muscle) ?? 0) + e.reps * weight);
-        }
-      }
-      const hits = [...tally.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 2)
-        .map(([m, reps]) => ({ muscle: m as Muscle, name: MUSCLE_LABELS[m as keyof typeof MUSCLE_LABELS], reps: Math.round(reps) }));
-
-      setRankData({
-        rankName: cap(afterTier), nextRank: cap(nextTier),
-        beforePct: Math.round((beforeStanding?.progress ?? 0) * 100),
-        afterPct: Math.round((afterStanding?.progress ?? 0) * 100),
-        streak: calcStreak(all), muscleCount: tally.size, hits,
-      });
-    })();
+      const tiersAfter = computeMuscleTiers(all);
+      const tiersBefore = computeMuscleTiers(prior);
+      const standingAfter = computeOverallStanding(tiersAfter);
+      const standingBefore = computeOverallStanding(tiersBefore);
+      const icons: Partial<Record<Muscle, string | null>> = {};
+      await Promise.all(workedMuscles(data.entries).slice(0, 2).map(async (w) => {
+        icons[w.muscle] = await muscleIconDataUri(w.muscle);
+      }));
+      const emblem = await tierDataUri(standingAfter?.tier ?? 'bronze');
+      if (cancelled) return;
+      setRanksPayload(buildMuscleRanksPayload({
+        entries: data.entries, tiersBefore, tiersAfter, standingBefore, standingAfter,
+        labels: MUSCLE_LABELS,
+        note: generateSummary(data.totalReps, data.totalGoodReps, data.hasFormData),
+        iconFor: (m) => icons[m] ?? null,
+        emblem,
+      }));
+      if (__DEV__) console.log('[recap] muscle page data ready');
+    })().catch((err) => { if (__DEV__) console.warn('[recap] muscle page data failed', err); });
+    return () => { cancelled = true; };
   }, [data]);
 
-  const ranksInjectJs = useMemo(() => {
-    if (!data || !rankData) return null;
-    return muscleRanksInject({
-      ...rankData,
-      totalReps: data.totalReps, moves: data.entries.length,
-      note: generateSummary(data.totalReps, data.totalGoodReps, data.hasFormData),
-      hitIconUris,
-    });
-  }, [data, rankData, hitIconUris]);
+  const ranksDataJs = useMemo(() => (ranksPayload ? athltSetDataJs(ranksPayload) : null), [ranksPayload]);
+
+  // 'ranks' falls back to 'summary' until its real data has finished
+  // computing (async) — never shows a view with nothing real in it yet.
+  const effectiveView: 'summary' | 'allsets' | 'ranks' =
+    view === 'allsets' && allSetsDataJsStr ? 'allsets' :
+    view === 'ranks'   && ranksDataJs     ? 'ranks'   :
+    'summary';
+
+  // ── Warm surfaces ───────────────────────────────────────────────────────────
+  // Workout Complete / rep feedback / muscle page are drawn by persistent,
+  // already-loaded WebViews at the app root (components/WarmSurfaces.tsx), not
+  // by a WebView mounted here — mounting one here is what cost ~0.5-1s of
+  // artboard unpacking every time. This screen only hands them their data and
+  // says which one is showing.
+  const onWebMsg = useRef<(m: InMsg) => void>(() => {});
+
+  // All sets page: the video tile shows a REAL frame from the clip. The page
+  // reports where the tile is; the frame comes from expo-video's native
+  // thumbnail generator (no new native module) and is drawn over that spot.
+  const [tileRect, setTileRect] = useState<{ l: number; t: number; w: number; h: number; vt: number; vb: number } | null>(null);
+  const [thumb, setThumb] = useState<VideoThumbnail | null>(null);
+  useEffect(() => {
+    if (!hasVideo || thumb) return;
+    let cancelled = false;
+    const t0 = Date.now();
+    const at = Math.max(0.3, repEvents[0]?.timeSec ?? 1);
+    (async () => {
+      try {
+        const [frame] = await videoPlayer.generateThumbnailsAsync([at], { maxWidth: 640 });
+        if (cancelled) return;
+        if (__DEV__) console.log(`[recap] all-sets thumbnail OK at ${at}s in ${Date.now() - t0}ms`, frame ? `${(frame as any).width}x${(frame as any).height}` : 'none');
+        if (frame) setThumb(frame);
+      } catch (err) { if (__DEV__) console.warn('[recap] all-sets thumbnail FAILED', err); }
+    })();
+    return () => { cancelled = true; };
+  }, [hasVideo, thumb, videoPlayer, repEvents]);
+
+  // Behind the (transparent) All sets page: a white base, and — behind the video
+  // tile — the real frame. The page's own tile is made transparent, so its
+  // bookmark / play button / scrim / text all stay the design's own, drawn over
+  // the frame. Clipped to the grid's scroll area so it never pokes under the header.
+  useLayoutEffect(() => {
+    warmSetUnderlay('allsets', (
+      <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
+        {tileRect && (
+          <View style={{ position: 'absolute', left: 0, right: 0, top: tileRect.vt, height: Math.max(0, tileRect.vb - tileRect.vt), overflow: 'hidden' }}>
+            <View style={{ position: 'absolute', left: tileRect.l, top: tileRect.t - tileRect.vt, width: tileRect.w, height: tileRect.h, borderRadius: 22, overflow: 'hidden', backgroundColor: '#18181c' }}>
+              {thumb && <ExpoImage source={thumb} style={StyleSheet.absoluteFill} contentFit="cover" />}
+            </View>
+          </View>
+        )}
+      </View>
+    ));
+  }, [tileRect, thumb]);
+
+  // Start loading the other two now (rep feedback only if there's a video,
+  // the muscle page not for a history review), so they are ready by the time
+  // they're tapped. Everything is released (and a fresh page re-warmed) when
+  // this screen goes away.
+  useEffect(() => {
+    if (!isHistoryMode) warmWant('ranks', true);
+    const t = setTimeout(() => warmWant('allsets', true), 1200);
+    return () => {
+      clearTimeout(t);
+      warmRelease('recap'); warmRelease('ranks'); warmRelease('repfeedback'); warmRelease('allsets');
+      warmWant('ranks', false); warmWant('repfeedback', false); warmWant('allsets', false);
+    };
+  }, [isHistoryMode]);
+  useEffect(() => { if (hasVideo) warmWant('repfeedback', true); }, [hasVideo]);
+
+  // Layout effects (not useEffect): they run before the first paint, so the
+  // card is handed its data and revealed in the SAME frame this screen first
+  // appears — no black frame in between.
+  useLayoutEffect(() => { if (summaryDataJs) warmPrepare('recap', summaryDataJs); }, [summaryDataJs]);
+  useEffect(() => { if (ranksDataJs) warmPrepare('ranks', ranksDataJs); }, [ranksDataJs]);
+  // Rep feedback's data is known as soon as the recap's is, so its page is
+  // filled in before anyone taps "View rep feedback" and opens instantly.
+  useEffect(() => {
+    if (!hasVideo || !data || !isFocused) return;
+    // isFocused in the deps: rep feedback releases its page when it closes, so
+    // coming back here re-fills the freshly warmed one for the next open.
+    warmPrepare('repfeedback', repFeedbackDataJs({
+      exerciseName: data.entries[0]?.displayName ?? 'Exercise', hasVideo: true, reps: repEvents,
+    }));
+  }, [hasVideo, data, repEvents, isFocused]);
+
+  useEffect(() => { if (allSetsDataJsStr) warmPrepare('allsets', allSetsDataJsStr); }, [allSetsDataJsStr]);
+  const warmKind: 'recap' | 'ranks' | 'allsets' | null =
+    effectiveView === 'summary' ? 'recap' : effectiveView === 'ranks' ? 'ranks' : 'allsets';
+  useLayoutEffect(() => {
+    if (!warmKind || !isFocused) return;
+    warmActivate(warmKind, { onMessage: (m) => onWebMsg.current(m) });
+    return () => warmDeactivate(warmKind);
+  }, [warmKind, isFocused]);
+
+  // Native colour under the page: dark until the native video has a frame,
+  // then transparent so the video shows through where the artboard's own
+  // video slot was.
+  useEffect(() => { warmSetBg('recap', videoVisuallyReady ? 'transparent' : '#111114'); }, [videoVisuallyReady]);
+
+  // Video controls must sit ABOVE the page, which now lives above the whole
+  // navigator, so they're rendered by the host. Zone: below the back-chevron /
+  // all-sets strip, above the card (same fixed canvas fractions as before).
+  // Gated on isFocused: this screen stays mounted under rep feedback.
+  useLayoutEffect(() => {
+    warmSetOverlay('recap', hasVideo && isFocused
+      ? <VideoControls player={videoPlayer} style={{ position: 'absolute', left: 0, right: 0, top: '11.85%', bottom: '42.65%' }} />
+      : null);
+  }, [hasVideo, isFocused, videoPlayer]);
 
   // ── Failure / loading states ────────────────────────────────────────────────
 
@@ -1329,11 +704,11 @@ export default function RecapScreen() {
     );
   }
 
-  if (!data || !summaryInjectJs) {
+  if (!data || !summaryDataJs) {
     // Explicit ask: never gate the card on the video. The card (WebView)
     // shows as soon as its own real data is ready; the native video fades
     // in independently, whenever IT'S ready, via videoFade above.
-    if (__DEV__) console.log('[recap-debug] blocked on loading gate:', { hasData: !!data, hasSummaryInjectJs: !!summaryInjectJs });
+    if (__DEV__) console.log('[recap-debug] blocked on loading gate:', { hasData: !!data, hasSummaryData: !!summaryDataJs });
     return (
       <View style={styles.root}>
         <StatusBar style="light" />
@@ -1341,19 +716,38 @@ export default function RecapScreen() {
     );
   }
 
-  // 'ranks' falls back to 'summary' until rankData/its inject finish
-  // computing (async) — never shows a view with nothing real injected yet.
-  const effectiveView: 'summary' | 'allsets' | 'ranks' =
-    view === 'allsets' && allSetsInjectJs ? 'allsets' :
-    view === 'ranks'   && ranksInjectJs   ? 'ranks'   :
-    'summary';
-
-  const SOURCE_BY_VIEW = {
-    summary: RECAP_HTML, allsets: ALL_SETS_HTML, ranks: MUSCLE_RANKS_HTML,
-  } as const;
-  const INJECT_BY_VIEW = {
-    summary: summaryInjectJs, allsets: allSetsInjectJs, ranks: ranksInjectJs,
-  } as const;
+  onWebMsg.current = (msg: InMsg) => {
+    if (__DEV__) console.log('[recap-debug] onMessage:', msg.type, 'current view=', view, 'effectiveView=', effectiveView);
+    if (msg.type === 'videoDebug') { if (__DEV__) console.log('[recap-debug] video event:', msg.msg, msg.code); }
+    else if (msg.type === 'pageConsole') { if (__DEV__) console.log(`[recap-page:${msg.level}]`, msg.msg); }
+    else if (msg.type === 'back') void handleBack();
+    else if (msg.type === 'share') void handleShare();
+    else if (msg.type === 'shareVideo') void handleShareVideo();
+    else if (msg.type === 'viewRepFeedback') {
+      // Guard against a second push firing before this screen loses
+      // focus (see navigatingToFeedback above) — one tap, one push.
+      if (navigatingToFeedback.current) {
+        if (__DEV__) console.log('[recap-debug] viewRepFeedback ignored — already navigating');
+        return;
+      }
+      navigatingToFeedback.current = true;
+      if (__DEV__) console.log('[recap-debug] router.push(/rep-feedback)');
+      router.push({
+        pathname: '/rep-feedback',
+        params: {
+          exerciseName: data.entries[0]?.displayName ?? 'Exercise',
+          videoUri: data.videoUri ?? '',
+          repEvents: JSON.stringify(repEvents),
+        },
+      } as any);
+    }
+    else if ((msg as any).type === 'tileRect') { const m = msg as any; setTileRect(m.none ? null : { l: m.l, t: m.t, w: m.w, h: m.h, vt: m.vt, vb: m.vb }); }
+    else if ((msg as any).type === 'openSet') onWebMsg.current({ type: 'viewRepFeedback' });
+    else if (msg.type === 'viewAllSets') setView('allsets');
+    else if (msg.type === 'closeAllSets') setView('summary');
+    else if (msg.type === 'closeRanks') setView('summary');
+    else if (msg.type === 'doneRanks') void handleDoneRanks();
+  };
 
   return (
     <View style={styles.root}>
@@ -1384,133 +778,10 @@ export default function RecapScreen() {
           />
         </Animated.View>
       )}
-      <WebView
-        key={effectiveView}
-        ref={webRef}
-        source={SOURCE_BY_VIEW[effectiveView]}
-        originWhitelist={['*']}
-        style={
-          effectiveView === 'summary'
-            ? [styles.web, videoVisuallyReady && { backgroundColor: 'transparent' }, { opacity: webReady ? 1 : 0 }]
-            : styles.web
-        }
-        injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS}
-        injectedJavaScript={INJECT_BY_VIEW[effectiveView] ?? undefined}
-        // DIAGNOSTIC LOGGING — explicit ask ("add console logs on every
-        // mount, unmount, and navigation call... reproduce the path, find
-        // the real cause"). I can't run a device myself, so this can't be
-        // verified blind — rebuild, reproduce the viewRepFeedback flash/
-        // grey/stuck sequence, and paste the Metro console output (every
-        // line below is tagged [recap-debug]) back so the actual sequence
-        // of mounts/messages can be read off it.
-        onLoadStart={() => { if (__DEV__) console.log('[recap-debug] WebView onLoadStart, view=', effectiveView, 'key=', effectiveView); }}
-        onLoadEnd={() => { if (__DEV__) console.log('[recap-debug] WebView onLoadEnd, view=', effectiveView); }}
-        onError={(e) => { if (__DEV__) console.log('[recap-debug] WebView onError, view=', effectiveView, e.nativeEvent); }}
-        onHttpError={(e) => { if (__DEV__) console.log('[recap-debug] WebView onHttpError, view=', effectiveView, e.nativeEvent); }}
-        // Kept as a safety net regardless of how the video loads.
-        onContentProcessDidTerminate={() => {
-          if (__DEV__) console.log('[recap-debug] WebView onContentProcessDidTerminate, view=', effectiveView, '— reloading');
-          webRef.current?.reload();
-        }}
-        onMessage={(e) => {
-          let msg: InMsg;
-          try { msg = JSON.parse(e.nativeEvent.data); } catch {
-            if (__DEV__) console.log('[recap-debug] onMessage: unparseable data=', e.nativeEvent.data);
-            return;
-          }
-          if (__DEV__) console.log('[recap-debug] onMessage:', msg.type, 'current view=', view, 'effectiveView=', effectiveView);
-          if (msg.type === 'ready') setWebReady(true);
-          else if (msg.type === 'videoDebug') { if (__DEV__) console.log('[recap-debug] video event:', msg.msg, msg.code); }
-          else if (msg.type === 'pageConsole') { if (__DEV__) console.log(`[recap-page:${msg.level}]`, msg.msg); }
-          else if (msg.type === 'back') void handleBack();
-          else if (msg.type === 'share') void handleShare();
-          else if (msg.type === 'shareVideo') void handleShareVideo();
-          else if (msg.type === 'viewRepFeedback') {
-            // Guard against a second push firing before this screen loses
-            // focus (see navigatingToFeedback above) — one tap, one push.
-            if (navigatingToFeedback.current) {
-              if (__DEV__) console.log('[recap-debug] viewRepFeedback ignored — already navigating');
-              return;
-            }
-            navigatingToFeedback.current = true;
-            if (__DEV__) console.log('[recap-debug] router.push(/rep-feedback)');
-            router.push({
-              pathname: '/rep-feedback',
-              params: {
-                exerciseName: data.entries[0]?.displayName ?? 'Exercise',
-                videoUri: data.videoUri ?? '',
-                repEvents: JSON.stringify(repEvents),
-              },
-            } as any);
-          }
-          else if (msg.type === 'viewAllSets') setView('allsets');
-          else if (msg.type === 'closeAllSets') setView('summary');
-          else if (msg.type === 'closeRanks') setView('summary');
-          else if (msg.type === 'doneRanks') void handleDoneRanks();
-        }}
-        allowFileAccess
-        allowFileAccessFromFileURLs
-        allowUniversalAccessFromFileURLs
-        // iOS-specific WKWebView video props, both missing before — without
-        // these a <video> tag either won't play inline at all (WebKit's
-        // default forces fullscreen-only playback) or won't start from a
-        // JS-triggered play() call without an explicit user tap first. This
-        // is very likely why the replay never appeared: not a JS bug, a
-        // missing native config prop.
-        allowsInlineMediaPlayback
-        mediaPlaybackRequiresUserAction={false}
-        javaScriptEnabled
-        domStorageEnabled
-        bounces={false}
-        overScrollMode="never"
-        cacheEnabled={false}
-        scrollEnabled={false}
-        // "card isn't flush with the bottom of the screen" — WKWebView's
-        // default content-inset-adjustment inserts extra space at the
-        // bottom to clear the home-indicator safe area, which would throw
-        // off dcScaleFitJs's own "scale to exactly vh" math (the page
-        // itself ends up shorter than the real screen regardless of what
-        // the JS computes window.innerHeight as). Disabling it explicitly
-        // is additive/safe — doesn't change anything else — so this is a
-        // targeted guess at the one remaining bug, not a rebuild.
-        automaticallyAdjustContentInsets={false}
-        contentInsetAdjustmentBehavior="never"
-      />
-      {/* Explicit ask: "instead of the workout card it's just a black
-          page... now has to come in immediately" — the underlying wait
-          (this artboard's own bundle has to unpack before 'ready' can
-          fire) isn't something a JS fix can make faster, same conclusion
-          as Cue's identical loading delay. A spinner doesn't shorten the
-          wait, but stops a plain black/blank screen from reading as
-          stuck or broken while it's genuinely still loading. */}
-      {effectiveView === 'summary' && !webReady && (
-        <View style={StyleSheet.absoluteFill} pointerEvents="none">
-          <ActivityIndicator style={{ flex: 1 }} color="#9a9aa2" />
-        </View>
-      )}
-      {/* Custom inline controls — explicit ask: real Apple fullscreen was
-          rejected in an earlier round (it took the card/page off screen),
-          and plain nativeControls never shows anything inline without it.
-          Plain RN views wired straight to videoPlayer sidesteps the whole
-          problem — no fullscreen, no native controls at all any more.
-          Positioned to the same WebView-swallows-all-touches zone the old
-          tap-to-fullscreen Pressable used (below the back-chevron/all-sets
-          strip, above the card), same fixed canvas fractions as before.
-          BUG FOUND (explains "cluttered, two sets of controls" on the rep-
-          feedback screen): this screen stays mounted underneath rep-
-          feedback.tsx (same reason the video player itself already checks
-          isFocused, above). This render was only gated on effectiveView,
-          which never changes just from pushing a new screen on top — so
-          if these controls had ever been tapped open here, they stayed
-          rendered and visible the whole time rep-feedback.tsx was in
-          front. Added the same isFocused check the player already uses. */}
-      {effectiveView === 'summary' && hasVideo && isFocused && (
-        <VideoControls player={videoPlayer} style={{ position: 'absolute', left: 0, right: 0, top: '11.85%', bottom: '42.65%' }} />
-      )}
       {/* No native fallback back button any more — explicit ask ("one
           clear back button, not two"). Both non-summary views now have
           their own real, working back button: 'ranks' already did
-          (muscleRanksInject's backWired), and 'allsets' already did too
+          (lib/muscleRanksInject's back wiring), and 'allsets' already did too
           (allSetsInject's recapWired/doneWired) — this native one was
           showing ALONGSIDE allsets' own, the literal duplicate reported.
           Removing it entirely rather than re-scoping it further, since no

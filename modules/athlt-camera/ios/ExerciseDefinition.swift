@@ -291,6 +291,27 @@ struct ExerciseDefinition {
     // the "stale data completes a bogus rep" protection is unaffected.
     let edgeGuardEnabled: Bool
 
+    // ── Return-to-start gate (opt-in, shoulder-press family) ────────────────
+    // nil (default) = the rep completes when the repMetric climbs back above
+    // repExitThreshold, exactly as before. For a press the repMetric is an
+    // UNDIRECTED angle from vertical (0-90), so a rack position with the elbows
+    // below the shoulder (~60) and the same arm passing through horizontal
+    // (~90) on the way UP read alike, and a rep was being counted while the
+    // arms were still going up. With a gate, a rep completes only when
+    //   (a) the gate metric reached `peakMax` at some point in the rep
+    //       (the elbows actually came up to shoulder level or higher), AND
+    //   (b) it is now back at `startMin` or beyond (the elbows are back down),
+    // held for exitConfirmFrames. The gate metric is directional
+    // (normalizedVerticalGap shoulder->elbow: + = elbow below shoulder).
+    let startPositionGate: StartPositionGate?
+
+    // ── Extra joints that must be in view before SETUP may pass ─────────────
+    // [] (default) = setup only checks the repMetric's own joints. A set here
+    // makes "ready" mean the whole body the exercise needs is really in frame
+    // (and not on a frame edge): standing too close to the phone crops the
+    // wrists/hips while the shoulders and elbows alone still look fine.
+    let setupExtraJoints: [Joint]
+
     init(id: String, displayName: String,
          repMetric: Metric,
          topAngle: Double, repEnterThreshold: Double, repExitThreshold: Double,
@@ -308,7 +329,9 @@ struct ExerciseDefinition {
          settleAnchorMinFraction: Double? = nil,
          repReliabilityMaxUnreliableFraction: Double = 0.5,
          inactivityRepGapSec: Double = 8.0,
-         edgeGuardEnabled: Bool = true) {
+         edgeGuardEnabled: Bool = true,
+         startPositionGate: StartPositionGate? = nil,
+         setupExtraJoints: [Joint] = []) {
         self.id                        = id
         self.displayName               = displayName
         self.repMetric                 = repMetric
@@ -331,5 +354,13 @@ struct ExerciseDefinition {
         self.repReliabilityMaxUnreliableFraction = repReliabilityMaxUnreliableFraction
         self.inactivityRepGapSec       = inactivityRepGapSec
         self.edgeGuardEnabled          = edgeGuardEnabled
+        self.startPositionGate         = startPositionGate
+        self.setupExtraJoints          = setupExtraJoints
     }
+}
+
+struct StartPositionGate {
+    let metric:   Metric
+    let startMin: Double   // gate metric must be >= this to count as "back at the start"
+    let peakMax:  Double   // gate metric must have been <= this at some point in the rep
 }

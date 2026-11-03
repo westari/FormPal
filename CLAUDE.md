@@ -56,3 +56,8 @@ Before writing or editing ANY injection code against a design file, in order, ev
 ## Never stop to ask
 
 Never stop mid-task to ask me anything. Never ask "should I start?", "should I continue?", or "are you sure?". The answer is always yes, just do it. Only ask a question if it truly changes the result and you can't make a safe choice yourself. Even then, keep working on everything else and put the question at the END of your final message.
+
+
+## Dev logs
+
+My latest test logs are always in C:\Users\arize\gym app\logs\latest.log. When I report a bug, search that file for the related lines. Don't read the whole file.
