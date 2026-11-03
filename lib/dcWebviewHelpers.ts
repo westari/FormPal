@@ -39,6 +39,18 @@ export const CONSOLE_FORWARD_JS = `
 })();
 `;
 
+// "Is the page still moving?" A screen reveals itself only once the viewport size AND the DOM have both been
+// still for a short while, so nothing jumps, snaps or re-lays-out after the first visible frame.
+// window.__dcSettle(ms) -> true when both have been unchanged for at least `ms`.
+export const DC_SETTLE_JS = `(function(){
+  if (window.__dcSettle) return;
+  var cur = function(){ return window.innerWidth + 'x' + window.innerHeight; };
+  var vp = cur(), vpSince = Date.now(), mutSince = Date.now();
+  setInterval(function(){ var c = cur(); if (c !== vp) { vp = c; vpSince = Date.now(); } }, 40);
+  try { new MutationObserver(function(){ mutSince = Date.now(); }).observe(document, { childList: true, subtree: true, characterData: true }); } catch (e) {}
+  window.__dcSettle = function(ms){ var n = Date.now(); return (n - vpSince) >= ms && (n - mutSince) >= ms; };
+})(); true;`;
+
 // injectedJavaScriptBeforeContentLoaded — forces a real mobile viewport
 // before the artboard's own script runs.
 export const DC_VIEWPORT_JS = `(function(){try{
@@ -91,6 +103,16 @@ export function dcScaleFitJs(bg: string): string {
     fit();
     window.addEventListener('resize', fit);
     [0,300,900,1500].forEach(function(d){ setTimeout(fit,d); });
+    // The bundle can unpack AFTER the timers above have run: fit the moment #dc-root exists, and let a
+    // screen force a fit (and ask whether one has happened) before it reveals anything.
+    window.__dcFitNow = fit;
+    try {
+      var fitQueued = false;
+      new MutationObserver(function(){
+        if(fitQueued) return; fitQueued = true;
+        requestAnimationFrame(function(){ fitQueued = false; fit(); });
+      }).observe(document, { childList: true, subtree: true });
+    } catch(e){}
   })();
   `;
 }

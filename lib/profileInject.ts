@@ -182,6 +182,10 @@ export const PROFILE_DOM_JS = String.raw`
     + 'div[style*="right: 88px"][style*="bottom: 22px"][style*="height: 64px"]{display:none!important;}'
     + 'div[style*="right: 14px"][style*="bottom: 22px"][style*="width: 64px"][style*="height: 64px"]{display:none!important;}'
     + 'input,textarea{font-size:16px!important;}'
+    // Nothing is painted until the pass below has seen the page rendered with the user's real data
+    // (the artboard shows its own demo text first); <html data-pready> is set by the pass, and a fresh
+    // document (the bundle replaces <html> while unpacking) starts hidden again.
+    + 'html:not([data-pready]) body{visibility:hidden!important;}'
     // The blanket "no animation" rule above also froze the design's toast at its pre-animation position
     // (left:50% with no translate => a clipped box in the top-right corner). The toast, the member-card
     // sheet's slide-up + backdrop fade, the card's entrance and the tilt easing are real motion the design
@@ -291,15 +295,34 @@ export const PROFILE_DOM_JS = String.raw`
   }, true);
 
   var reported = false, lastAsk = 0, deb;
+  // Real = laid out, the logic has rendered with the user's data (no leftover template text), and the
+  // viewport and page have both stopped changing.
+  function pageIsReal(r) {
+    var root = document.getElementById('dc-root');
+    if (!(r.okFit && r.filled && window.__athltLogicReady && root && leafWithText('Profile'))) return false;
+    if ((root.textContent || '').indexOf('{{') >= 0) return false;
+    return !window.__dcSettle || window.__dcSettle(160);
+  }
+  function setPageReady(on) {
+    var h = document.documentElement;
+    if (!h) return;
+    if (on) { if (!h.hasAttribute('data-pready')) h.setAttribute('data-pready', '1'); }
+    else if (h.hasAttribute('data-pready')) h.removeAttribute('data-pready');
+  }
   function tick() {
     var r = apply();
     if (!window.__athltData && Date.now() - lastAsk > 700) { lastAsk = Date.now(); post({ type: 'needData' }); }
-    if (!reported && r.okFit && r.filled && window.__athltLogicReady && leafWithText('Profile')) {
+    // Once revealed, the page stays revealed (taps and re-renders must never hide it again); the gate only
+    // applies to the first reveal.
+    var ok = reported || pageIsReal(r);
+    setPageReady(ok);
+    if (!reported && ok) {
       reported = true;
       post({ type: 'ready' });
     }
+    if (!ok && r.okFit && r.filled && window.__athltLogicReady) { clearTimeout(deb); deb = setTimeout(tick, 90); }
   }
-  function schedule() { clearTimeout(deb); deb = setTimeout(tick, 50); }
+  function schedule() { ensureCss(); clearTimeout(deb); deb = setTimeout(tick, 50); }
   try { new MutationObserver(schedule).observe(document, { childList: true, subtree: true }); } catch (e) {}
   window.addEventListener('resize', schedule);
   setInterval(tick, 500);

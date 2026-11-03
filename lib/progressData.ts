@@ -107,7 +107,7 @@ function longestStreak(sessions: SessionEntry[]): number {
   return best;
 }
 
-function primaryMuscle(entries: SessionEntry[]): string | null {
+export function primaryMuscle(entries: SessionEntry[]): string | null {
   const tally = new Map<string, number>();
   for (const e of entries) {
     const def = getExerciseDef(e.exerciseId);
