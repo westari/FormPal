@@ -69,17 +69,17 @@ export async function findSessionVideoUri(sessionTs: number): Promise<string | n
 // complexity of a disk cache that would need its own invalidation.
 const thumbCache = new Map<string, string | null>();
 
-export async function getSessionThumbnail(sessionTs: number): Promise<string | null> {
+export async function getSessionThumbnail(sessionTs: number, timeMs: number = 0): Promise<string | null> {
   if (!VideoThumbnails) return null; // native module not in this build — see the require() guard above
 
-  const cacheKey = String(sessionTs);
+  const cacheKey = `${sessionTs}@${timeMs}`;
   if (thumbCache.has(cacheKey)) return thumbCache.get(cacheKey)!;
 
   const videoUri = await findSessionVideoUri(sessionTs);
   if (!videoUri) { thumbCache.set(cacheKey, null); return null; }
 
   try {
-    const { uri } = await VideoThumbnails.getThumbnailAsync(videoUri, { time: 0, quality: 0.5 });
+    const { uri } = await VideoThumbnails.getThumbnailAsync(videoUri, { time: timeMs, quality: 0.5 });
     thumbCache.set(cacheKey, uri);
     return uri;
   } catch {
