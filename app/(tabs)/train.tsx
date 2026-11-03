@@ -1,12 +1,18 @@
 /**
  * app/(tabs)/train.tsx — Train tab
  *
- * Renders assets/app screens/traintab.html full-bleed in a WebView, exactly as
- * designed: its own colour blobs, glass panels and white card are kept. Only the
- * mockup's fake phone chrome is swapped for the real thing — the fake status bar
+ * Renders assets/app screens/traintab.html full-bleed in a WebView over the app's
+ * own soft AppBackground. The design's glass panels are kept; its saturated colour
+ * blobs are hidden (they made the tab look louder than the rest of the app, and the
+ * big blur filters are heavy for WKWebView). The mockup's fake phone chrome is
+ * swapped for the real thing — the fake status bar
  * becomes a spacer the height of the real one, the fake bottom nav is dropped
  * (the real tab bar overlays the bottom; content gets bottom padding so it
  * scrolls clear of it), and the 472x1024 frame is scaled to the phone's width.
+ *
+ * iOS can kill a WKWebView's content process (memory pressure, other web views in the app);
+ * the web view then stays blank white forever. onContentProcessDidTerminate and a
+ * focus-time liveness ping reload it.
  *
  * ROBUSTNESS: the design ships as a self-extracting bundle that REPLACES the
  * whole <html> element some time after the page's `load` event — on a phone
@@ -18,13 +24,14 @@
  */
 
 import React, { useCallback, useRef, useState, useEffect } from 'react';
-import { View, StyleSheet, Animated, Easing } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
 import * as Haptics from 'expo-haptics';
-import { DC_VIEWPORT_JS } from '../../lib/dcWebviewHelpers';
+import AppBackground from '../../components/AppBackground';
+import { DC_VIEWPORT_JS, CONSOLE_FORWARD_JS } from '../../lib/dcWebviewHelpers';
 import { dcLogicPatchJs, athltSetDataJs } from '../../lib/dcLogicPatch';
 import { loadPlan } from '../../lib/planStorage';
 import { getAllSessions, computeMuscleTiers } from '../../lib/sessionLog';
@@ -34,8 +41,12 @@ import { exerciseMode } from '../../constants/exerciseDefinitions';
 import type { Plan } from '../../types/plan';
 
 const TRAIN_HTML = require('../../assets/app screens/traintab.html');
-const TRAIN_BUILD = 'train-2';
+const TRAIN_BUILD = 'train-3';
 if (__DEV__) console.log(`[train] build ${TRAIN_BUILD}`);
+// Every step of the tab's life is logged with the [TRAIN] prefix (dev builds only; the dev log server
+// forwards console.log to logs/latest.log): mounted, data loaded, data pushed, page ready, revealed,
+// load start/end, any error, and a killed web view process.
+const tlog = (...a: unknown[]) => { if (__DEV__) console.log('[TRAIN]', ...a); };
 
 // Practice-card label → CV exercise id.
 const PRACTICE_MAP: Record<string, string> = {
@@ -96,13 +107,14 @@ const TRAIN_WEB_INJECT = `
   // to the phone's WIDTH, the card is stretched to the real height (--trH), and the mock's own
   // chrome is swapped for the real thing: the fake status bar becomes an empty spacer the height
   // of the real one (--trTop), the fake bottom nav is dropped (the real tab bar overlays the
-  // bottom; --trTb of padding keeps content scrollable above it). The design's own colour blobs,
-  // glass panels and white card are kept — that IS the design.
+  // bottom; --trTb of padding keeps content scrollable above it). The page is transparent: the app's
+  // AppBackground shows through, and the mockup's own colour blobs are hidden. Glass panels are kept.
   var CSS = ''
-    + 'html{margin:0!important;padding:0!important;background:#fff!important;overflow:hidden!important;height:100%!important;width:100%!important;}'
-    + 'body{margin:0!important;padding:0!important;background:#fff!important;overflow:hidden!important;}'
-    + WRAP + '{min-height:0!important;height:var(--trH,1024px)!important;padding:0!important;display:block!important;background:#fff!important;overflow:hidden!important;}'
-    + CARD + '{width:472px!important;height:var(--trH,1024px)!important;border-radius:0!important;box-shadow:none!important;margin:0!important;}'
+    + 'html{margin:0!important;padding:0!important;background:transparent!important;overflow:hidden!important;height:100%!important;width:100%!important;}'
+    + 'body{margin:0!important;padding:0!important;background:transparent!important;overflow:hidden!important;}'
+    + WRAP + '{min-height:0!important;height:var(--trH,1024px)!important;padding:0!important;display:block!important;background:transparent!important;overflow:hidden!important;}'
+    + CARD + '{width:472px!important;height:var(--trH,1024px)!important;border-radius:0!important;box-shadow:none!important;margin:0!important;background:transparent!important;}'
+    + 'div[style*="filter: blur(52px)"]{display:none!important;}'
     + 'div[style*="padding: 22px 34px 0"]{visibility:hidden!important;flex:none!important;height:var(--trTop,0px)!important;min-height:0!important;padding:0!important;overflow:hidden!important;}'
     + 'div[style*="padding: 14px 30px 0"]{display:none!important;}'
     + 'svg{will-change:transform;}';
@@ -232,7 +244,7 @@ true;
 
 // The train bridge posts plain strings ('__tap', 'begin', 'practice:x',
 // 'ready'); dcLogicPatch posts JSON status — both arrive in onMsg.
-const TRAIN_BEFORE = DC_VIEWPORT_JS + dcLogicPatchJs(TRAIN_LOGIC_EXT) + TRAIN_WEB_INJECT;
+const TRAIN_BEFORE = DC_VIEWPORT_JS + CONSOLE_FORWARD_JS + dcLogicPatchJs(TRAIN_LOGIC_EXT) + TRAIN_WEB_INJECT;
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -324,40 +336,62 @@ function buildTrainData(
 export default function TrainScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const fade = useRef(new Animated.Value(0)).current;
   const webRef = useRef<WebView>(null);
   const [revealed, setRevealed] = useState(false);
   const dataJsRef = useRef<string | null>(null);
+  const revealTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pongAt = useRef(0);
+  const loads = useRef(0);
 
   // Show only once the page says it's genuinely laid out + wired (or after a
   // 7s safety net so a missing signal can never leave a blank tab).
-  useEffect(() => {
-    if (!revealed) return;
-    const a = Animated.timing(fade, { toValue: 1, duration: 200, easing: Easing.out(Easing.quad), useNativeDriver: true });
-    a.start();
-    return () => a.stop();
-  }, [revealed]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    const t = setTimeout(() => setRevealed(true), 7000);
-    return () => clearTimeout(t);
+  const armReveal = useCallback(() => {
+    if (revealTimer.current) clearTimeout(revealTimer.current);
+    revealTimer.current = setTimeout(() => { tlog('revealed by 7s safety net (page never said ready)'); setRevealed(true); }, 7000);
   }, []);
+  useEffect(() => {
+    tlog('mounted', TRAIN_BUILD);
+    armReveal();
+    return () => { tlog('unmounted'); if (revealTimer.current) clearTimeout(revealTimer.current); };
+  }, [armReveal]);
+
+  const reloadPage = useCallback((why: string) => {
+    tlog('reloading web view:', why);
+    setRevealed(false);
+    armReveal();
+    webRef.current?.reload();
+  }, [armReveal]);
 
   useFocusEffect(useCallback(() => {
+    tlog('focused; insets', insets.top, insets.bottom);
+    let alive = true;
     Promise.all([loadPlan(), getAllSessions()]).then(async ([plan, sessions]) => {
+      tlog('data loaded: plan', plan ? plan.workouts.length + ' workouts' : 'none', '| sessions', sessions.length);
       const standing = computeOverallStanding(computeMuscleTiers(sessions));
       const tier = standing?.tier ?? null;
       const src = await tierDataUri(tier ?? 'bronze');
       const label = tier ? tier.charAt(0).toUpperCase() + tier.slice(1) : 'Unranked';
       dataJsRef.current = athltSetDataJs(buildTrainData(plan, sessions, { src, alt: label, ranked: !!tier }, { top: insets.top, bottom: insets.bottom }));
       webRef.current?.injectJavaScript(dataJsRef.current);
-    }).catch(() => {});
-  }, [insets.top, insets.bottom]));
+      tlog('data pushed to page; rank', tier ?? 'unranked', '| shield art', src ? 'ok' : 'MISSING');
+    }).catch((e) => { tlog('ERROR loading data:', e && (e as Error).message ? (e as Error).message : String(e)); });
+    // Liveness ping: a web view whose content process was killed never answers and stays blank white.
+    const before = pongAt.current;
+    webRef.current?.injectJavaScript("try{window.ReactNativeWebView.postMessage('pong')}catch(e){} true;");
+    const t = setTimeout(() => { if (alive && pongAt.current === before && loads.current > 0) reloadPage('no answer to the focus ping'); }, 1800);
+    return () => { alive = false; clearTimeout(t); };
+  }, [insets.top, insets.bottom, reloadPage]));
 
   function onMsg(raw: string) {
+    if (raw === 'pong') { pongAt.current = Date.now(); return; }
     if (raw === '__tap') { Haptics.selectionAsync(); return; }
-    if (raw === 'ready') { setRevealed(true); return; }
-    if (raw === 'need-data') { if (dataJsRef.current) webRef.current?.injectJavaScript(dataJsRef.current); return; }
-    if (raw.startsWith('{')) return; // lib/dcLogicPatch's own JSON status posts
+    if (raw === 'ready') { tlog('page ready (layout + data + logic all in place)'); setRevealed(true); return; }
+    if (raw === 'need-data') { tlog('page asked for data;', dataJsRef.current ? 'sending' : 'not loaded yet'); if (dataJsRef.current) webRef.current?.injectJavaScript(dataJsRef.current); return; }
+    if (raw.startsWith('{')) {
+      // lib/dcLogicPatch's own JSON status posts + forwarded page console
+      try { const m = JSON.parse(raw); if (m.type === 'pageConsole' && (m.level === 'error' || m.level === 'warn')) tlog('page ' + m.level + ':', m.msg); } catch {}
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (raw === 'begin') { router.push('/workout' as any); return; }
     if (raw.startsWith('practice:')) {
@@ -367,34 +401,39 @@ export default function TrainScreen() {
   }
 
   return (
-    <View style={s.root}>
+    <View style={s.root} onLayout={(e) => tlog('rendered; container', Math.round(e.nativeEvent.layout.width) + 'x' + Math.round(e.nativeEvent.layout.height))}>
       <StatusBar style="dark" />
-      <Animated.View style={{ flex: 1, opacity: fade }}>
-        <WebView
-          ref={webRef}
-          source={TRAIN_HTML as any}
-          originWhitelist={['*']}
-          injectedJavaScriptBeforeContentLoaded={TRAIN_BEFORE}
-          onMessage={(e) => onMsg(e.nativeEvent.data)}
-          style={s.web}
-          scrollEnabled={false}
-          bounces={false}
-          overScrollMode="never"
-          androidLayerType="hardware"
-          setSupportMultipleWindows={false}
-          allowFileAccess
-          allowFileAccessFromFileURLs
-          allowUniversalAccessFromFileURLs
-          javaScriptEnabled
-          domStorageEnabled
-          cacheEnabled
-        />
-      </Animated.View>
+      <AppBackground />
+      <WebView
+        ref={webRef}
+        source={TRAIN_HTML as any}
+        originWhitelist={['*']}
+        injectedJavaScriptBeforeContentLoaded={TRAIN_BEFORE}
+        onMessage={(e) => onMsg(e.nativeEvent.data)}
+        onLoadStart={() => tlog('web view load start')}
+        onLoadEnd={() => { loads.current += 1; tlog('web view load end #' + loads.current); }}
+        onError={(e) => tlog('web view ERROR:', e.nativeEvent.description)}
+        onHttpError={(e) => tlog('web view HTTP ERROR:', e.nativeEvent.statusCode, e.nativeEvent.url)}
+        onContentProcessDidTerminate={() => reloadPage('iOS killed the web view process')}
+        style={[s.web, { opacity: revealed ? 1 : 0 }]}
+        opaque={false}
+        scrollEnabled={false}
+        bounces={false}
+        overScrollMode="never"
+        androidLayerType="hardware"
+        setSupportMultipleWindows={false}
+        allowFileAccess
+        allowFileAccessFromFileURLs
+        allowUniversalAccessFromFileURLs
+        javaScriptEnabled
+        domStorageEnabled
+        cacheEnabled={false}
+      />
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#ffffff' },
-  web:  { flex: 1, backgroundColor: '#ffffff' },
+  root: { flex: 1, backgroundColor: '#EDF1F8' },
+  web:  { flex: 1, backgroundColor: 'transparent' },
 });
