@@ -46,17 +46,20 @@ export function muscleGainPct(before: MuscleTierInfo | undefined, after: MuscleT
   return Math.max(0, absolute(after) - absolute(before));
 }
 
-export interface StandingLike { tier: Tier; progress: number; atTop: boolean }
+export interface StandingLike { tier: Tier; progress: number; atTop: boolean; muscle?: Muscle }
 
 function standingAbs(s: StandingLike | null): number {
   return s ? tierIndex(s.tier) * 100 + s.progress * 100 : 0;
 }
 
-/** "+12%", "+0.4%", "+0%" — one decimal only when it would otherwise round to 0. */
+// Every number on the muscle page is shown to ONE decimal, always, so the
+// arithmetic on screen visibly adds up (6.3% -> 7.0% is +0.7%).
+const r1 = (n: number) => Math.round(n * 10) / 10;
+export const fmt1 = (n: number) => r1(n).toFixed(1);
+
+/** "+12.0%", "+0.7%", "+0.0%". */
 export function formatGain(pct: number): string {
-  if (pct <= 0) return '+0%';
-  if (pct < 1) return `+${(Math.round(pct * 10) / 10).toFixed(1).replace(/\.0$/, '')}%`;
-  return `+${Math.round(pct)}%`;
+  return `+${fmt1(Math.max(0, pct))}%`;
 }
 
 /** Muscles this workout trained, most-worked first (credit-weighted reps, as the rank system counts them). */
@@ -78,21 +81,25 @@ export function workedMuscles(entries: SessionEntry[]): { muscle: Muscle; credit
 
 const BRONZE_MIN_VOLUME = VOLUME_THRESHOLDS.find(([t]) => t === 'bronze')![1];
 
-// One muscle row's "+%": progress made toward its next tier today. A muscle
-// still below Bronze has no tier info at all (see computeMuscleTiers), so its
-// progress toward Bronze is this workout's own credited reps over Bronze's
-// volume bar rather than a misleading "+0%".
-function rowGainPct(m: Muscle, credit: number, before: MuscleTiers, after: MuscleTiers): number {
-  const a = after[m];
-  if (!a) return Math.min(100, (credit / BRONZE_MIN_VOLUME) * 100);
-  return muscleGainPct(before[m], a);
+/**
+ * How far one muscle is toward `target` (the NEXT rank of the overall rank), 0-100:
+ *  - ranked at the overall tier: its own progress toward the next tier
+ *  - already above the overall tier: 100 (it has nothing left to do for this rank)
+ *  - not ranked yet (below Bronze): today's credited reps over Bronze's volume bar
+ *    (only known for muscles trained today)
+ */
+function progressToward(info: MuscleTierInfo | undefined, overallTier: Tier | null, todayCredit: number): number {
+  if (!info) return Math.min(100, (todayCredit / BRONZE_MIN_VOLUME) * 100);
+  if (overallTier && tierIndex(info.tier) > tierIndex(overallTier)) return 100;
+  return muscleProgressPct(info);
 }
 
 export interface MuscleRanksPayload {
   rank: {
     has: boolean; atTop: boolean; tier: Tier | null; label: string; next: string;
-    pct: number;            // progress toward `next`, 0-100
-    gained: string;         // overall gain today, number text without "+"/"%"
+    pct: number;            // overall progress toward `next` AFTER today, 0-100 (one decimal)
+    pctLabel: string;       // header text, e.g. "7.0% → 9.0%" (before > after)
+    gained: string;         // TOTAL gained today = sum of the muscle rows, number text without "+"/"%"
     hi: string; lo: string; ink: string;
     emblem: string | null;
   };
@@ -108,26 +115,67 @@ export function buildMuscleRanksPayload(opts: {
   standingBefore: StandingLike | null;
   standingAfter: StandingLike | null;
   labels: Record<string, string>;
-  note: string;
+  note?: string;
   iconFor: (m: Muscle) => string | null;
   emblem: string | null;
 }): MuscleRanksPayload {
-  const { entries, tiersBefore, tiersAfter, standingBefore, standingAfter, labels, note, iconFor, emblem } = opts;
+  const { entries, tiersBefore, tiersAfter, standingBefore, standingAfter, labels, iconFor, emblem } = opts;
   const worked = workedMuscles(entries);
+  const credit = new Map(worked.map(w => [w.muscle, w.credit]));
+  const name = (m: Muscle) => labels[m] ?? String(m);
 
   const tier = standingAfter?.tier ?? null;
   const idx = tier ? tierIndex(tier) : -1;
   const nextTier: Tier = tier ? (idx < TIER_ORDER.length - 1 ? TIER_ORDER[idx + 1] : tier) : 'bronze';
+  const nextLabel = cap(nextTier);
   const meta = TIER_META[tier ?? 'bronze'];
-  // "+X% today" must match the muscle rows. It used to be the change in the
-  // weakest-link standing, which stays +0% whenever the muscles you trained
-  // aren't the weakest one even though each of them shows +3%. Now it is the
-  // average gain across every muscle this workout trained (two muscles at +3%
-  // each = +3% today), computed with the exact same per-muscle numbers.
-  const gains = worked.map(w => rowGainPct(w.muscle, w.credit, tiersBefore, tiersAfter));
-  const overallGain = gains.length ? gains.reduce((a, b) => a + b, 0) / gains.length : 0;
 
-  const gainText = overallGain <= 0 ? '0' : overallGain < 1 ? (Math.round(overallGain * 10) / 10).toFixed(1) : String(Math.round(overallGain));
+  // ── The three numbers, all from ONE per-muscle progress figure ─────────────
+  // progress(m) = how far muscle m is toward the next rank (0-100).
+  //   MUSCLE ROW gain  = progress(m) after - progress(m) before            (rounded to 0.1)
+  //   TOTAL GAINED     = the SUM of the rows shown (so the page adds up exactly)
+  //   OVERALL RANK %   = the AVERAGE of progress(m) over every muscle you have
+  //                      trained (ranked muscles + today's muscles). It is shown
+  //                      before > after and moves whenever ANY muscle gains.
+  // Rank-up (every muscle reached the next tier) is handled by tier*100 + avg.
+  const tierBefore = standingBefore?.tier ?? tier;
+  const universe = new Set<Muscle>([...(Object.keys(tiersAfter) as Muscle[]), ...worked.map(w => w.muscle)]);
+  const prog = (m: Muscle, t: MuscleTiers, ot: Tier | null, today: number) => progressToward(t[m], ot, today);
+  const progAfter = (m: Muscle) => prog(m, tiersAfter, tier, credit.get(m) ?? 0);
+  // Before today a muscle below Bronze had no progress we can see: 0.
+  const progBefore = (m: Muscle) => (tiersBefore[m] ? prog(m, tiersBefore, tierBefore, 0) : 0);
+  const muscles = [...universe];
+  const avg = (f: (m: Muscle) => number) => (muscles.length ? muscles.reduce((a, m) => a + f(m), 0) / muscles.length : 0);
+  const r1 = (n: number) => Math.round(n * 10) / 10;
+  const afterAvg = r1(avg(progAfter));
+  const beforeAvg = r1(avg(progBefore));
+  const rankedUp = !!standingBefore && !!standingAfter && standingBefore.tier !== standingAfter.tier;
+  const absAfter = (tier ? tierIndex(tier) * 100 : 0) + afterAvg;
+  const absBefore = (tierBefore ? tierIndex(tierBefore) * 100 : 0) + beforeAvg;
+
+  // Rows: the two most-worked muscles.
+  const shown = worked.slice(0, 2);
+  const rowGain = (m: Muscle) => Math.max(0, r1(progAfter(m)) - r1(progBefore(m)));
+  const gains = shown.map(w => r1(rowGain(w.muscle)));
+  const total = r1(gains.reduce((a, b) => a + b, 0));
+
+  const pctLabel = standingAfter?.atTop
+    ? 'Top rank'
+    : rankedUp
+      ? `${fmt1(beforeAvg)}% → ${fmt1(afterAvg)}% to ${nextLabel}`
+      : `${fmt1(beforeAvg)}% → ${fmt1(afterAvg)}%`;
+
+  // Beginner-plain note: the sum, then what the overall number is.
+  const sumText = shown.length
+    ? `${shown.map((w, i) => `${name(w.muscle)} +${fmt1(gains[i])}%`).join(' + ')} = +${fmt1(total)}%`
+    : '';
+  const moreMuscles = worked.length > shown.length;
+  const explain = !standingAfter && !muscles.length
+    ? 'Train a few more reps to start earning ranks.'
+    : standingAfter?.atTop
+      ? "You're at the top rank. Nothing left to climb."
+      : `Total gained today: ${sumText || '+0.0%'}${moreMuscles ? ' (top 2 muscles)' : ''}. `
+        + `Overall ${tier ? cap(tier) : 'rank'} = the average of your ${muscles.length} trained muscle${muscles.length === 1 ? '' : 's'} on the way to ${nextLabel}: ${fmt1(beforeAvg)}% → ${fmt1(afterAvg)}%.`;
 
   return {
     rank: {
@@ -135,18 +183,22 @@ export function buildMuscleRanksPayload(opts: {
       atTop: !!standingAfter?.atTop,
       tier,
       label: tier ? cap(tier) : 'Unranked',
-      next: cap(nextTier),
-      pct: standingAfter ? Math.round(standingAfter.progress * 100) : 0,
-      gained: gainText,
+      next: nextLabel,
+      pct: afterAvg,
+      pctLabel,
+      gained: fmt1(total),
       hi: meta.hi, lo: meta.lo, ink: meta.ink,
       emblem,
     },
-    note,
-    hits: worked.slice(0, 2).map(w => ({
-      name: labels[w.muscle] ?? String(w.muscle),
-      gain: formatGain(rowGainPct(w.muscle, w.credit, tiersBefore, tiersAfter)),
+    note: explain,
+    hits: shown.map((w, i) => ({
+      name: name(w.muscle),
+      gain: formatGain(gains[i]),
       icon: iconFor(w.muscle),
     })),
     bodyMap: bodyMapPairDataUri(worked.map(w => w.muscle)),
   };
 }
+
+// Exposed so the test can check every number independently.
+export const _internals = { progressToward };

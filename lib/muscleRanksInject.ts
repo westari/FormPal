@@ -49,7 +49,7 @@ export const MUSCLE_RANKS_LOGIC_EXT = String.raw`function (Orig) {
       v.rankName = R.label;
       v.nextRank = R.next;
       v.gained = R.gained;
-      v.afterLabel = R.pct + '%';
+      v.afterLabel = R.pctLabel;
       // Final value from the first paint: the design animates this bar from the
       // "before" value after 700ms, which is a visible layout change.
       v.rankFill = R.pct + '%';
@@ -231,8 +231,8 @@ export const MUSCLE_RANKS_DOM_JS = String.raw`
     }
 
     // Final layout = real text in, real image decoded, scaled. Only then reveal.
-    var headerOk = !!leafWithText(root, R.pct + '%') && !!leafWithText(root, R.label);
-    if (!reported && fitted && window.__athltLogicReady && imgOk && headerOk && chips.length === d.hits.length && chipsFit) {
+    var headerOk = !!leafWithText(root, R.pctLabel) && !!leafWithText(root, R.label);
+    if (!reported && fitted && imgOk && headerOk && chips.length === d.hits.length && chipsFit) {
       reported = true;
       post({ type: 'ready' });
     }

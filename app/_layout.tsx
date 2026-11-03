@@ -89,11 +89,9 @@ export default function RootLayout() {
             intentional instead. Scoped to just this one screen; every
             other route keeps the normal push. */}
         <Stack.Screen name="workout/run" options={{ animation: 'fade' }} />
-        {/* The post-workout cards are drawn by the persistent WebViews in
-            <WarmSurfaces /> (above this navigator), which can't slide in with
-            the screen — so these two fade instead of pushing. */}
-        <Stack.Screen name="recap" options={{ animation: 'fade' }} />
-        <Stack.Screen name="rep-feedback" options={{ animation: 'fade' }} />
+        {/* The post-workout cards (<WarmSurfaces />, above this navigator)
+            slide in themselves to match the normal iOS push these two routes
+            use, so the page change is smooth and the card arrives with it. */}
       </Stack>
       {/* Persistent, already-loaded artboard WebViews (Workout Complete, rep
           feedback, muscle page). See that file's header. */}

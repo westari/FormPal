@@ -66,6 +66,7 @@ export function createRepDiagnostic(streamDeadSec: number = STREAM_DEAD_SEC): Re
   let settleActive   = false; // saw "rep counting active"
   let settleWaiting  = 0;     // [SETTLE] rejected / still-waiting lines
   let msg: string | null = null;
+  let personLost     = false; // native said "[TRACK] person lost" (~0.2s after the last pose)
   let waitAt         = 0;     // last [REP-WAIT]
   let rejectedAt     = 0;     // last non-tracking [REP] rejected
   let fullRange      = 0;     // |top - rom| from the latest [METRIC] line (metric units)
@@ -77,6 +78,7 @@ export function createRepDiagnostic(streamDeadSec: number = STREAM_DEAD_SEC): Re
     if (line.startsWith('[METRIC]')) {
       if (!startedAt) startedAt = now();
       lastMetricAt = now();
+      personLost = false; // a metric line means a pose is being measured again
       // Movement bookkeeping for the "you moved but nothing counted" rule.
       const v = /value=([-\d.]+)/.exec(line), t = /top=([-\d.]+)/.exec(line), r = /rom=([-\d.]+)/.exec(line);
       if (v) {
@@ -84,6 +86,12 @@ export function createRepDiagnostic(streamDeadSec: number = STREAM_DEAD_SEC): Re
         while (recent.length && now() - recent[0].at > MOVE_WINDOW_SEC * 1000) recent.shift();
       }
       if (t && r) fullRange = Math.abs(parseFloat(t[1]) - parseFloat(r[1]));
+    } else if (/^\[TRACK\] person lost/.test(line)) {
+      // Native noticed ~6 frames (~0.2s) with no person: show the cue NOW instead
+      // of waiting for the metric stream to look dead.
+      personLost = true;
+    } else if (/^\[TRACK\] person back/.test(line)) {
+      personLost = false;
     } else if (/^\[REP-WAIT\]/.test(line)) {
       // Native: the old rule would have counted, but the arms are not back at
       // the start position yet. Tell the user what finishes the rep.
@@ -114,6 +122,10 @@ export function createRepDiagnostic(streamDeadSec: number = STREAM_DEAD_SEC): Re
     const elapsed    = (now() - startedAt) / 1000;
     const sinceRep   = lastRepAt ? (now() - lastRepAt) / 1000 : elapsed;
     const streamDead = lastMetricAt > 0 && (now() - lastMetricAt) / 1000 > streamDeadSec;
+
+    // Native's own "person lost" signal beats the grace period and the 0.9s
+    // stream-dead wait: someone who walks off should be told at once.
+    if (personLost) { msg = NO_PERSON_CUE; return; }
 
     if (elapsed < GRACE_SEC) { msg = null; return; }
 
@@ -156,6 +168,7 @@ export function createRepDiagnostic(streamDeadSec: number = STREAM_DEAD_SEC): Re
     noPersonHits = unreliable = settleWaiting = 0;
     settleActive = false;
     waitAt = rejectedAt = fullRange = 0;
+    personLost = false;
     recent.length = 0;
     msg = null;
   }

@@ -104,12 +104,12 @@ const restSim = (() => {
 check('no cue while just resting in the start position', restSim === 0, `${restSim} cue frames`);
 check('a native [REP-WAIT] line gives the cue "Lower arms to start"', (() => {
   const d = NEW.createRepDiagnostic(0.9); let clock = 0; const rn = Date.now; Date.now = () => 1e12 + clock;
-  try { d.feed('[METRIC] x value=60 top=84 rom=55'); clock = 2000; d.feed('[REP-WAIT] shoulderPress metric=88.0 is above exit but arms are not back at the start'); return d.message() === 'Lower arms to start'; }
+  try { d.feed('[METRIC] x value=60 top=84 rom=55'); clock = 2000; d.feed('[METRIC] x value=88 top=84 rom=55'); d.feed('[REP-WAIT] shoulderPress metric=88.0 is above exit but arms are not back at the start'); return d.message() === 'Lower arms to start'; }
   finally { Date.now = rn; }
 })());
 check('a native "[REP] rejected" gives the cue "Rep not counted"', (() => {
   const d = NEW.createRepDiagnostic(0.9); let clock = 0; const rn = Date.now; Date.now = () => 1e12 + clock;
-  try { d.feed('[METRIC] x value=60 top=84 rom=55'); clock = 2000; d.feed('[REP] rejected — movement=3 (phantom)'); return d.message() === 'Rep not counted'; }
+  try { d.feed('[METRIC] x value=60 top=84 rom=55'); clock = 2000; d.feed('[METRIC] x value=60 top=84 rom=55'); d.feed('[REP] rejected — movement=3 (phantom)'); return d.message() === 'Rep not counted'; }
   finally { Date.now = rn; }
 })());
 
@@ -137,9 +137,10 @@ function pressRep(opts = {}) {
   const f = [];
   const push = (n, a0, a1, g0, g1) => { for (let i = 0; i < n; i++) { const k = (i + 1) / n; f.push({ angle: a0 + (a1 - a0) * k, gap: g0 + (g1 - g0) * k }); } };
   push(6, 62, 62, 0.3, 0.3);          // rest in rack (angle already below enter)
-  push(3, 62, 90, 0.3, 0.0);          // up to elbows level
-  push(4, 90, 90, 0.0, 0.0);          // pause at horizontal on the way up (>= 3 frames above exit)
-  if (opts.partial) { push(4, 90, 90, 0.02, 0.02); push(4, 90, 62, 0.0, 0.3); push(8, 62, 62, 0.3, 0.3); return f; }
+  const top = opts.partial ? 0.12 : 0.0; // partial: elbows stop BELOW shoulder level (gap stays > peakMax)
+  push(3, 62, 90, 0.3, top);          // up toward elbows level
+  push(4, 90, 90, top, top);          // pause on the way up (>= 3 frames above exit)
+  if (opts.partial) { push(4, 90, 90, 0.12, 0.12); push(4, 90, 62, 0.12, 0.3); push(8, 62, 62, 0.3, 0.3); return f; }
   push(4, 90, 25, 0.0, -0.45);        // overhead
   push(4, 25, 25, -0.45, -0.45);
   push(4, 25, 90, -0.45, 0.0);        // back down through horizontal

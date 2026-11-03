@@ -51,7 +51,27 @@ const { Muscle } = require('../constants/exercises.ts');
   console.log(`outline stroke on screen: ${exp.strokePx.toFixed(2)}px; perimeter ${exp.perimeterPx.toFixed(0)}px`);
   console.log(`outline pixels painted: ${dark} of ~${Math.round(expectedPx)} expected  (${(ratio * 100).toFixed(0)}%)`);
   console.log(`screenshot: ${shot}`);
+  // per-muscle outlines: count muscle-outline-coloured (#69708A) pixels that are NOT part of the body outline
+  const fs = require('fs'); const { PNG } = require('pngjs');
+  const png = PNG.sync.read(fs.readFileSync(shot));
+  let musclepx = 0;
+  for (let i = 0; i < png.data.length; i += 4) {
+    const r = png.data[i], g = png.data[i + 1], b = png.data[i + 2];
+    if (Math.abs(r - 0x69) < 34 && Math.abs(g - 0x70) < 34 && Math.abs(b - 0x8A) < 34 && !(r < 90 && g < 95 && b < 115)) musclepx++;
+  }
+  // zoomed crop (front torso + arm, x3) so the outlines can be inspected
+  const cx = 110, cy = 150, cw = 240, ch = 210, Z = 3;
+  const out = new PNG({ width: cw * Z, height: ch * Z });
+  for (let y = 0; y < ch * Z; y++) for (let x = 0; x < cw * Z; x++) {
+    const si = ((cy + Math.floor(y / Z)) * png.width + (cx + Math.floor(x / Z))) * 4, di = (y * out.width + x) * 4;
+    for (let k = 0; k < 4; k++) out.data[di + k] = png.data[si + k];
+  }
+  fs.writeFileSync(path.join(__dirname, '..', '.scratch', 'body-outline-zoom.png'), PNG.sync.write(out));
+  console.log(`per-muscle outline pixels painted: ${musclepx}`);
+  const muscleOk = musclepx > 4000;
+  console.log(muscleOk ? 'PASS  every muscle has its own visible outline' : 'FAIL  muscle outlines missing');
   await browser.close();
+  if (!muscleOk) process.exit(1);
   const ok = ratio >= 0.8;
   console.log(ok ? 'PASS  outline fully visible' : 'FAIL  outline mostly hidden');
   process.exit(ok ? 0 : 1);

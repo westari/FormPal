@@ -1,6 +1,10 @@
 import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { NativeTabs, Icon, Label } from 'expo-router/unstable-native-tabs';
 
+// Tab icons: every tab uses the same OUTLINE weight when idle (it used to mix filled
+// house/person/plus with the line-only chart and dumbbell figure), and the filled
+// variant only when selected, so stroke weight matches the label weight and the
+// active tab is the only thing that changes.
 // One accent for the active tab, one neutral grey for the rest. Every tab uses the same pair of SF Symbols
 // (outline when idle, filled when selected) at the same weight, and the same label style, so the icons and the
 // labels read as one set. The bar itself is the system's floating glass bar.

@@ -54,22 +54,46 @@ export function meterTarget(i: MeterInputs): number {
   return 0;
 }
 
-// Rises one number at a time (explicit ask: show every number). Falls faster
-// so a person leaving reads as dropping, and a target of 0 (nobody there) is
-// shown as 0 immediately instead of counting down for seconds.
-export function stepMeter(prev: number, target: number): number {
-  if (prev === target) return prev;
-  if (target === 0) return 0;
-  if (prev < target) return prev + 1;
-  return Math.max(target, prev - Math.max(1, Math.ceil((prev - target) / 4)));
+// ── Smooth meter ─────────────────────────────────────────────────────────────
+// The meter used to chase the raw target one number per 45ms and followed every
+// flicker of it (100 -> 55 -> 100 as a cue blinked on and off), so it lagged
+// behind the body and jittered. Now:
+//  * the target is DE-BOUNCED: it may go UP at once, but a LOWER (non-zero)
+//    target must hold for LOWER_HOLD_MS before the meter believes it, so a
+//    one-frame flicker never shows. Zero (nobody there) is always immediate.
+//  * the shown number glides toward the target at a fixed speed (fast up,
+//    faster down), time-based, so it feels the same at any frame rate.
+// Accuracy is unchanged: a real, sustained change is shown within a fraction of
+// a second, and "no person" is shown instantly.
+export const METER_UP_PER_SEC = 140;
+export const METER_DOWN_PER_SEC = 280;
+export const LOWER_HOLD_MS = 350;
+
+export interface MeterSmoother {
+  /** Advance to `nowMs` with the raw `target`; returns the integer to display. */
+  tick(target: number, nowMs: number): number;
+  /** The de-bounced target the display is gliding toward. */
+  readonly effectiveTarget: number;
 }
 
-// How long to wait before the next number. Normal counting is 45ms per number
-// (visible, every integer); when the display is far behind its target it runs
-// faster (still every integer) so the number never lags the real signal by
-// seconds — which is what let "Ready. Go!" appear while it read 46%.
-export function meterTickMs(prev: number, target: number): number {
-  return Math.abs(target - prev) > 8 ? 18 : 45;
+export function createMeterSmoother(): MeterSmoother {
+  let eff = 0, disp = 0, lastMs = -1, lowerSince = 0;
+  return {
+    tick(target, nowMs) {
+      const dt = lastMs < 0 ? 0 : Math.max(0, nowMs - lastMs);
+      lastMs = nowMs;
+      if (target === 0) { eff = 0; disp = 0; lowerSince = 0; return 0; }
+      if (target >= eff) { eff = target; lowerSince = 0; }
+      else {
+        if (!lowerSince) lowerSince = nowMs;
+        if (nowMs - lowerSince >= LOWER_HOLD_MS) { eff = target; lowerSince = 0; }
+      }
+      if (disp < eff) disp = Math.min(eff, disp + (METER_UP_PER_SEC * dt) / 1000);
+      else if (disp > eff) disp = Math.max(eff, disp - (METER_DOWN_PER_SEC * dt) / 1000);
+      return Math.round(disp);
+    },
+    get effectiveTarget() { return eff; },
+  };
 }
 
 export function trackingIsHigh(display: number, target: number): boolean {

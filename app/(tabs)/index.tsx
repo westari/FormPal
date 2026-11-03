@@ -34,10 +34,12 @@ import { primaryMuscle } from '../../lib/progressData';
 import { workoutFrame, workoutFallbackIcon } from '../../lib/workoutThumbs';
 import type { Plan } from '../../types/plan';
 import { DC_VIEWPORT_JS, DC_SETTLE_JS } from '../../lib/dcWebviewHelpers';
+import { MYPAL_API_URL } from '../../constants/api';
+import { homeCleanJs } from '../../lib/homeClean';
 import { askCue } from '../../lib/cueApi';
 
 const HOME_HTML = require('../../assets/app screens/home.html');
-const HOME_BUILD = 'home-5';
+const HOME_BUILD = 'home-6';
 if (__DEV__) console.log(`[home] build ${HOME_BUILD}`);
 
 // BUG FOUND (root cause of "glitches at start / white screen", "white
@@ -54,7 +56,7 @@ if (__DEV__) console.log(`[home] build ${HOME_BUILD}`);
 // wired in for this file. train.tsx already solved this exact problem for
 // its own non-#dc-root 472x1024 canvas; this follows the same approach,
 // adapted for home.html's 390x844 one.
-const HOME_SCALE_FIT_JS = `
+export const HOME_SCALE_FIT_JS = `
 (function(){
   function fit(){
     var root = null;
@@ -264,7 +266,7 @@ const HOME_GUARD_JS = `(function(){
   try { new MutationObserver(function(){ add(); }).observe(document, { childList: true, subtree: true }); } catch (e) {}
 })(); true;`;
 
-function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[], insetTop: number, insetBottom: number, weeklyTarget: number = 4): string {
+export function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[], insetTop: number, insetBottom: number, weeklyTarget: number = 4): string {
   const workoutGroups = groupIntoWorkouts(sessions);
   const streak = calcStreak(sessions);
   const scored = scoredSessions(sessions);
@@ -280,7 +282,11 @@ function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[], insetTop
   map['Sat, 12 September'] = today.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'long' });
   map['3'] = String(streak); // streak chip — scoped below via style, not bare global match
   map['38 min · 4 exercises'] = '';
-  map['2 of 4 workouts'] = `${workoutsThisWeek} of ${target} workouts`;
+  // Weekly goal is the user's target (days per week), and the count is already capped at it,
+  // so the card can't say "8 of 4 workouts".
+  const weekGoal = target;
+  const weekDone = workoutsThisWeek;
+  map['2 of 4 workouts'] = `${weekDone} of ${weekGoal} workouts`;
 
   if (plan && plan.workouts.length > 0) {
     const w = plan.workouts[plan.currentWorkoutIndex] ?? plan.workouts[0];
@@ -517,7 +523,8 @@ function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[], insetTop
       setTimeout(postReadyWhenStable, 60);
     }
     postReadyWhenStable();
-  })();`;
+  })();
+  ${homeCleanJs({ done: weekDone, goal: weekGoal, insetBottom })}`;
 }
 
 export default function HomeScreen() {
