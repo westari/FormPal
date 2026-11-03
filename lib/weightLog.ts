@@ -50,18 +50,27 @@ export async function getWeightLog(): Promise<WeightEntry[]> {
   }
 }
 
+// Writes are queued one after another. Each write reads the whole log, adds one entry and saves it
+// back, so two logged close together used to read the same old list and the second save erased the
+// first (the chart then showed only the newest weight).
+let writeQueue: Promise<void> = Promise.resolve();
+
 /** Logs (or overwrites, if one already exists for that day) a weight entry. */
-export async function logWeight(weightLb: number, forDate: Date = new Date()): Promise<void> {
-  if (!(weightLb > 0)) return;
-  try {
-    const dateKey = dateKeyFor(forDate);
-    const existing = await getWeightLog();
-    const withoutThisDay = existing.filter(e => e.dateKey !== dateKey);
-    const log = [...withoutThisDay, { dateKey, weightLb, loggedAt: Date.now() }]
-      .sort((a, b) => a.dateKey.localeCompare(b.dateKey));
-    if (log.length > MAX_ENTRIES) log.splice(0, log.length - MAX_ENTRIES);
-    await AsyncStorage.setItem(WEIGHT_LOG_KEY, JSON.stringify(log));
-  } catch {}
+export function logWeight(weightLb: number, forDate: Date = new Date()): Promise<void> {
+  if (!(weightLb > 0)) return Promise.resolve();
+  const run = async () => {
+    try {
+      const dateKey = dateKeyFor(forDate);
+      const existing = await getWeightLog();
+      const withoutThisDay = existing.filter(e => e.dateKey !== dateKey);
+      const log = [...withoutThisDay, { dateKey, weightLb, loggedAt: Date.now() }]
+        .sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+      if (log.length > MAX_ENTRIES) log.splice(0, log.length - MAX_ENTRIES);
+      await AsyncStorage.setItem(WEIGHT_LOG_KEY, JSON.stringify(log));
+    } catch {}
+  };
+  writeQueue = writeQueue.then(run, run);
+  return writeQueue;
 }
 
 export type WeightRange = '2m' | '6m' | '1y' | 'all';

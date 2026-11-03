@@ -6,7 +6,7 @@
  * Nothing here invents numbers — an empty log produces empty arrays / null,
  * and the page renders its own empty states for those.
  */
-import { Muscle } from '../constants/exercises';
+import { Muscle, getExerciseDef, muscleCreditParts } from '../constants/exercises';
 import { TIER_META } from '../constants/tierPalette';
 import {
   TIER_ORDER, VOLUME_THRESHOLDS, QUALITY_THRESHOLDS, tierIndex, groupIntoWorkouts, calcStreak,
@@ -27,7 +27,9 @@ export const MUSCLE_LABEL: Record<Muscle, string> = {
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
 const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 
-// Same progress-to-next-tier math as MuscleTierMap's tileProgress (not exported there).
+// Same progress-to-next-tier math as MuscleTierMap's tileProgress (not exported there) and
+// lib/muscleRanksData.ts's muscleProgressPct (Window B's fix): a muscle with NO judged reps
+// (rep-counter exercises only) has no quality signal, so its progress is volume alone.
 function tileProgress(info: MuscleTierInfo): number {
   const idx = tierIndex(info.tier);
   if (idx === TIER_ORDER.length - 1) return 1;
@@ -36,10 +38,27 @@ function tileProgress(info: MuscleTierInfo): number {
   const nextVol = VOLUME_THRESHOLDS.find(([t]) => t === next)![1];
   const curQual = QUALITY_THRESHOLDS.find(([t]) => t === info.tier)![1];
   const nextQual = QUALITY_THRESHOLDS.find(([t]) => t === next)![1];
-  return Math.min(
-    clamp01((info.volume - curVol) / (nextVol - curVol)),
-    clamp01((info.goodRatio - curQual) / (nextQual - curQual)),
-  );
+  const vol = clamp01((info.volume - curVol) / (nextVol - curVol));
+  if (info.qualityJudged === false) return vol;
+  return Math.min(vol, clamp01((info.goodRatio - curQual) / (nextQual - curQual)));
+}
+
+const BRONZE_MIN_VOLUME = VOLUME_THRESHOLDS.find(([t]) => t === 'bronze')![1];
+
+// Credit-weighted reps per muscle across every session (the same credit the rank system counts).
+// A muscle still below Bronze has no tier info at all, so its bar is its reps over Bronze's volume
+// bar (Window B's rowGainPct rule), never a flat 0%.
+function muscleCredit(sessions: SessionEntry[]): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const e of sessions) {
+    const def = getExerciseDef(e.exerciseId);
+    if (!def) continue;
+    for (const c of def.muscles) {
+      const { muscle, weight } = muscleCreditParts(c);
+      out.set(muscle, (out.get(muscle) ?? 0) + e.reps * weight);
+    }
+  }
+  return out;
 }
 
 export interface ProgressData {
@@ -54,7 +73,7 @@ export interface ProgressData {
   weight: { d: string; w: number }[];
   form: { ts: number; pct: number }[];
   bests: { name: string; value: string; unit: string; kind: 'streak' | 'form' | 'reps' }[];
-  workouts: { ts: number; name: string; when: string; form: string; formPct: number | null; reps: number; sets: number; thumb: string | null }[];
+  workouts: { ts: number; name: string; when: string; form: string; formPct: number | null; reps: number; sets: number; thumb: string | null; muscle: string | null; fallback: string | null }[];
   hasSessions: boolean;
   insets: { top: number; bottom: number };
   photos: PhotoView[];
@@ -88,6 +107,21 @@ function longestStreak(sessions: SessionEntry[]): number {
   return best;
 }
 
+function primaryMuscle(entries: SessionEntry[]): string | null {
+  const tally = new Map<string, number>();
+  for (const e of entries) {
+    const def = getExerciseDef(e.exerciseId);
+    if (!def) continue;
+    for (const c of def.muscles) {
+      const { muscle, weight } = muscleCreditParts(c);
+      tally.set(muscle, (tally.get(muscle) ?? 0) + e.reps * weight);
+    }
+  }
+  let best: string | null = null, bestV = 0;
+  for (const [m, v] of tally) if (v > bestV) { best = m; bestV = v; }
+  return best;
+}
+
 export function buildProgressData(
   sessions: SessionEntry[], tiers: MuscleTiers, weights: WeightEntry[], now: number = Date.now(),
   extras: { insets?: { top: number; bottom: number }; photos?: { id: string; ts: number; pose: 'front' | 'side' | 'back'; thumb: string | null }[] } = {},
@@ -100,16 +134,19 @@ export function buildProgressData(
 
   // Only muscles that have icon art are listed (the same 11 the native rank grid shows); the
   // body map above still colours all 14 regions.
+  const credit = muscleCredit(sessions);
   const muscles = MUSCLE_DISPLAY_ORDER.map(m => {
     const info = tiers[m];
     const mm = TIER_META[info?.tier ?? 'bronze'];
+    // below Bronze: progress toward Bronze from the reps done so far (capped at 99, it is not Bronze yet)
+    const toBronze = Math.min(99, Math.round(((credit.get(m) ?? 0) / BRONZE_MIN_VOLUME) * 100));
     return {
       key: m, icon: null as string | null,
       name: MUSCLE_LABEL[m], tier: info ? info.tier : null,
       label: info ? cap(info.tier) : 'Unranked',
-      pct: info ? Math.round(tileProgress(info) * 100) : 0,
+      pct: info ? Math.round(tileProgress(info) * 100) : toBronze,
       hi: mm.hi, lo: mm.lo, ink: mm.ink,
-      _ord: info ? tierIndex(info.tier) * 2 + tileProgress(info) : -1,
+      _ord: info ? tierIndex(info.tier) * 2 + tileProgress(info) : -1 + toBronze / 1000,
     };
   }).sort((a, b) => b._ord - a._ord).map(({ _ord, ...rest }) => rest);
 
@@ -128,6 +165,8 @@ export function buildProgressData(
       form: scored ? `${g.pct}%` : '–',
       formPct: scored ? g.pct : null,
       reps: g.totalReps, sets: g.entries.length, thumb: null as string | null,
+      // the muscle this workout worked most: its icon is the picture when no video frame exists
+      muscle: primaryMuscle(g.entries), fallback: null as string | null,
     };
   });
 

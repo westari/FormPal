@@ -11,8 +11,10 @@
  *    weight (weight log), goal / experience / training location / days
  *    (plan profile), audio summary, units, plus Sign out / Delete account /
  *    developer tools that the old native screen had.
- *  - HIDDEN (no placeholder rows, nothing says "coming soon"): referral banner +
- *    referral code, workout reminders / workout time, Apple Health, membership,
+ *  - REFERRAL: the design's "Refer a friend" banner and "Enter referral code" row are shown as
+ *    designed. Both open the referral page, which shows the user's own code, "0 of 6" friends
+ *    joined (there is no referral backend yet) and shares through the real share sheet.
+ *  - HIDDEN (no placeholder rows, nothing says "coming soon"): workout reminders / workout time, Apple Health, membership,
  *    and the feature-request / contact-support composers. The app has no backend
  *    or native module for them yet, and the artboard's demo values for them
  *    ("Renews Sep 14, 2027", "$10 per friend") are not true. They come back by
@@ -37,6 +39,18 @@ export const PROFILE_LOGIC_EXT = String.raw`function (Orig) {
   function tracked(s) {
     return { name: s.det.name, age: s.det.age, height: s.det.height, sex: s.det.sex, experience: s.det.experience,
       goal: s.goal, place: s.place, days: s.days, weight: s.weight, units: s.units, pinned: s.pinned || [] };
+  }
+  // Copy text from inside the page (no native clipboard module is installed).
+  function copyText(txt) {
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = txt; ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;left:0;top:0;opacity:0;font-size:16px;';
+      document.body.appendChild(ta);
+      ta.focus(); ta.select(); ta.setSelectionRange(0, txt.length);
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    } catch (e) {}
   }
   function row(self, label, value, tap) {
     var r = self.row(label, value, '', null);
@@ -90,6 +104,20 @@ export const PROFILE_LOGIC_EXT = String.raw`function (Orig) {
       if (!d) return v;
       var s = this.state, kg = s.units === 1;
       // "Update my plan" really rebuilds the plan natively.
+      // Referral: both cards open the referral page, which shows MY code; Invite friends opens the real share
+      // sheet (native); Copy copies the code. No friends have joined (no backend yet), so no tier is earned.
+      var refCode = d.referral && d.referral.code ? d.referral.code : '';
+      v.openRewards = function (e) { if (e && e.preventDefault) e.preventDefault(); self.go('rewards'); };
+      v.openCode = v.openRewards;
+      v.shareLink = function (e) { if (e && e.preventDefault) e.preventDefault(); post({ type: 'shareReferral' }); };
+      v.copyLink = function () { copyText(refCode); self.showToast('Code copied'); };
+      if (s.page === 'rewards' && v.pg && v.pg.tiers) {
+        var joined = d.referral ? d.referral.joined : 0;
+        v.pg.tiers = v.pg.tiers.map(function (t, i) {
+          var need = [1, 4, 6][i], got = joined >= need;
+          return Object.assign({}, t, { bg: got ? '#111114' : '#ffffff', fg: got ? '#ffffff' : '#111114', stateColor: got ? '#1f8a4a' : '#8e8e96' });
+        });
+      }
       v.applyPlan = function (e) { if (e && e.preventDefault) e.preventDefault(); post({ type: 'applyPlan' }); self.setState({ dirty: null }); self.showToast('Updating your plan…'); };
 
       var hasWeight = d.weight != null || s.weight !== this.__seedWeight;
@@ -198,9 +226,15 @@ export const PROFILE_DOM_JS = String.raw`
     var okFit = fit();
     var d = window.__athltData;
     var root = document.getElementById('dc-root');
-    // No referral program exists: hide the "Refer a friend" banner and "Enter referral code" row.
-    hideBlockWithText('Refer a friend, get $10');
-    hideBlockWithText('Enter referral code');
+    // Referral page: the design's demo link and "1 of 6" become the user's real code and friend count.
+    if (d && d.referral && d.referral.code) {
+      var refEl = leafWithText('formpal.app/JORDAN10') || document.querySelector('#dc-root [data-ref-code]');
+      if (refEl) { refEl.setAttribute('data-ref-code', '1'); var rt = 'Your code: ' + d.referral.code; if (refEl.textContent !== rt) refEl.textContent = rt; }
+      var cntEl = leafWithText('1 of 6') || document.querySelector('#dc-root [data-ref-count]');
+      if (cntEl) { cntEl.setAttribute('data-ref-count', '1'); var ct = d.referral.joined + ' of 6'; if (cntEl.textContent !== ct) cntEl.textContent = ct; }
+      var fillEl = document.querySelector('#dc-root div[style*="width: 20%"][style*="border-radius: 999px"]') || document.querySelector('#dc-root [data-ref-fill]');
+      if (fillEl) { fillEl.setAttribute('data-ref-fill', '1'); var fw = Math.min(100, d.referral.joined / 6 * 100) + '%'; if (fillEl.style.width !== fw) fillEl.style.setProperty('width', fw, 'important'); }
+    }
     if (d && d.appVersion) { var ver = leafWithText('FormPal 1.0 (12)'); if (ver) ver.textContent = d.appVersion; }
     // The artboard's own red "Sign out" button has no handler of its own.
     var links = document.querySelectorAll('#dc-root a');

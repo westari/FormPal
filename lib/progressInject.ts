@@ -177,6 +177,8 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
       var d = D(), self = this, s = this.state;
       var R = d.rank || { label: 'Unranked', pct: 0, nextLabel: 'Bronze', atTop: false, lo: '#B97A42' };
       window.__athltSide = s.side || 0;
+      // Front/Back must flip in the same render as the tap, not after the next DOM pass.
+      if (window.__athltFlip) window.__athltFlip();
 
       v.rankName = R.label;
       v.rankPct = R.pct + '%';
@@ -198,7 +200,10 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
         for (var i = 0; i < list.length; i++) { var dd = Math.abs(list[i].ts - t); if (dd < bd) { bd = dd; best = list[i]; } }
         return best;
       };
-      var pa = nearest(ofPose, s.cmpA, false), pb = nearest(ofPose, s.cmpB, true);
+      // B = the newer photo (or the one nearest its date). A must be a DIFFERENT photo: with only one photo
+      // of this pose there is nothing to compare against, so A stays empty instead of repeating B.
+      var pb = nearest(ofPose, s.cmpB, true);
+      var pa = nearest(ofPose.filter(function (p) { return !pb || p.id !== pb.id; }), s.cmpA, false);
       v.cmpALabel = pa ? pa.label : 'No photo'; v.cmpBLabel = pb ? pb.label : 'No photo';
       v.photoMonths = ofPose.map(function (p) { return p.label; }).concat(['Add photo']);
       var card3 = allPh.slice(0, 3);
@@ -260,12 +265,13 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
       var byDay = {};
       series.forEach(function (f) { var k = new Date(f.ts); k.setHours(0, 0, 0, 0); var kk = +k; (byDay[kk] = byDay[kk] || []).push(f.pct); });
       var mean = function (a) { return a.reduce(function (x, y) { return x + y; }, 0) / a.length; };
-      var dayPts = Object.keys(byDay).map(Number).sort(function (a, b) { return a - b; }).map(function (t) { return { ts: t, pct: mean(byDay[t]) }; });
+      var dayPts = Object.keys(byDay).map(Number).sort(function (a, b) { return a - b; }).map(function (t) { return { ts: t, pct: mean(byDay[t]), from: t, to: t }; });
+      var realDays = dayPts; // one point per real day: these are what a tap selects (exact date + exact percent)
       if (dayPts.length > 12) {
         var d0 = dayPts[0].ts, span = dayPts[dayPts.length - 1].ts - d0 + 1, buckets = [];
         for (var bi = 0; bi < 12; bi++) buckets.push([]);
         dayPts.forEach(function (p) { buckets[Math.min(11, Math.floor((p.ts - d0) / span * 12))].push(p); });
-        dayPts = buckets.filter(function (b) { return b.length; }).map(function (b) { return { ts: mean(b.map(function (p) { return p.ts; })), pct: mean(b.map(function (p) { return p.pct; })) }; });
+        dayPts = buckets.filter(function (b) { return b.length; }).map(function (b) { return { ts: mean(b.map(function (p) { return p.ts; })), pct: mean(b.map(function (p) { return p.pct; })), from: b[0].from, to: b[b.length - 1].to }; });
       }
       if (dayPts.length) {
         var pcts = dayPts.map(function (f) { return f.pct; });
@@ -278,9 +284,15 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
         var pts = dayPts.map(function (f, i) {
           var fr = t1 > t0 ? (f.ts - t0) / (t1 - t0) : 0.5;
           var sm = i === 0 || i === dayPts.length - 1 ? f.pct : (dayPts[i - 1].pct + 2 * f.pct + dayPts[i + 1].pct) / 4;
-          return { v: f.pct, x: Math.round(8 + 278 * fr), y: yOf(sm) };
+          return { v: f.pct, x: Math.round(8 + 278 * fr), y: yOf(sm), from: f.from, to: f.to };
         });
-        var sel = s.sel == null || s.sel >= pts.length ? pts.length - 1 : s.sel;
+        // Tap targets are the REAL days, not the folded points the line is drawn through.
+        var clampY = function (y) { return Math.max(8, Math.min(176, y)); };
+        var rpts = realDays.map(function (f) {
+          var fr = t1 > t0 ? (f.ts - t0) / (t1 - t0) : 0.5;
+          return { v: f.pct, x: Math.round(8 + 278 * Math.max(0, Math.min(1, fr))), y: clampY(yOf(f.pct)), ts: f.ts };
+        });
+        var sel = s.sel == null || s.sel >= rpts.length ? rpts.length - 1 : s.sel;
         var ln = pts.length >= 2 ? this.curve(pts) : '';
         var mid = Math.round((minV + maxV) / 2), q = (maxV - minV) / 4;
         v.line = ln;
@@ -288,13 +300,16 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
         v.fTicks = [maxV, maxV - q, mid, minV + q, minV].map(function (x) { return Math.round(x); })
           .map(function (x) { return { y: yOf(x), ty: yOf(x) + 4, top: (yOf(x) - 5) + 'px', label: x + '%' }; });
         v.fXs = axisLabels(t0, t1);
-        v.pts = pts.map(function (pt, i) {
-          return { x: pt.x, y: pt.y, hx: pt.x - 140 / pts.length, hw: 280 / pts.length,
+        v.pts = rpts.map(function (pt, i) {
+          return { x: pt.x, y: pt.y, hx: pt.x - 140 / rpts.length, hw: 280 / rpts.length,
             r: i === sel ? 5.5 : 0, guide: i === sel ? 0.5 : 0, pick: function () { self.setState({ sel: i }); } };
         });
-        v.tipX = (12 + (Math.min(pts[sel].x, 264) / 326) * 88).toFixed(1) + '%';
-        v.tipY = (pts[sel].y - 12) + 'px';
-        v.tipText = Math.round(pts[sel].v) + '%';
+        // the exact date of the tapped day and that day's own percent
+        var dl = function (ts) { var dt = new Date(ts); return MON[dt.getMonth()] + ' ' + dt.getDate(); };
+        var sp = rpts[sel], dateTxt = dl(sp.ts);
+        v.tipX = Math.max(24, Math.min(76, 12 + (Math.min(sp.x, 264) / 326) * 88)).toFixed(1) + '%';
+        v.tipY = (sp.y - 12) + 'px';
+        v.tipText = dateTxt + ' · ' + Math.round(sp.v) + '%';
         var diff = Math.round(pcts[pcts.length - 1] - pcts[0]);
         v.change = Math.abs(diff) + '% ' + (diff >= 0 ? 'higher' : 'lower');
       } else {
@@ -350,6 +365,19 @@ export const PROGRESS_DOM_JS = String.raw`
     document.documentElement.style.setProperty('height', vh + 'px', 'important');
     return true;
   }
+
+  // Show the selected side of the big body map (both sides are already in the page).
+  function flipSide() {
+    var root = document.getElementById('dc-root');
+    if (!root) return;
+    var side = window.__athltSide || 0;
+    var els = root.querySelectorAll('div[aria-label="Body map space"][style*="height: 300px"] > [data-side]');
+    for (var i = 0; i < els.length; i++) {
+      var want = +els[i].getAttribute('data-side') === side ? 'flex' : 'none';
+      if (els[i].style.display !== want) els[i].style.display = want;
+    }
+  }
+  window.__athltFlip = flipSide;
 
   // ── helpers ──
   function leafWithText(txt, scope) {
@@ -434,6 +462,25 @@ export const PROGRESS_DOM_JS = String.raw`
     }
     var sheet = root.querySelector('div[style*="z-index: 60"]');
     if (sheet) sheet.style.setProperty('padding-bottom', tb.toFixed(1) + 'px', 'important');
+    // Date picker: the month chips are a horizontally scrolling row whose last chip is cut off.
+    // Make them share the row evenly so every month fits with no scrolling.
+    if (sheet) {
+      var mrows = sheet.querySelectorAll('div[data-scroll][style*="overflow-x"]');
+      for (var mr = 0; mr < mrows.length; mr++) {
+        var mrow = mrows[mr], chips = mrow.children, allMonths = chips.length > 0;
+        for (var mc = 0; mc < chips.length; mc++) if (!/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)$/.test((chips[mc].textContent || '').trim())) allMonths = false;
+        if (!allMonths) continue;
+        if (chips[0].style.flexGrow === '1' && chips[chips.length - 1].style.flexGrow === '1') continue;
+        mrow.style.setProperty('overflow-x', 'visible', 'important');
+        mrow.style.setProperty('gap', '5px', 'important');
+        for (var mc2 = 0; mc2 < chips.length; mc2++) {
+          chips[mc2].style.setProperty('flex', '1 1 0', 'important');
+          chips[mc2].style.setProperty('min-width', '0', 'important');
+          chips[mc2].style.setProperty('padding', '0 2px', 'important');
+          chips[mc2].style.setProperty('justify-content', 'center', 'important');
+        }
+      }
+    }
     // date pickers: the design caps them at its own mock "today" (Sep 12 2026)
     var nowD = new Date(), maxStr = nowD.getFullYear() + '-' + String(nowD.getMonth() + 1).padStart(2, '0') + '-' + String(nowD.getDate()).padStart(2, '0');
     var dateInputs = root.querySelectorAll('input[type="date"]');
@@ -444,14 +491,14 @@ export const PROGRESS_DOM_JS = String.raw`
     for (var i = 0; i < slots.length; i++) {
       var slot = slots[i];
       var big = slot.style.height === '300px';
-      var side = window.__athltSide || 0;
-      var sig = (big ? 'big' + side : 'card') + '|' + VERSION;
-      if (slot.__sig === sig) continue;
+      var sig = (big ? 'big' : 'card') + '|' + VERSION;
+      if (slot.__sig === sig) { if (big) flipSide(); continue; }
       slot.__sig = sig;
       var fig = function (svg, h) { return '<div style="height:' + h + 'px;aspect-ratio:480/833;flex:none;">' + svg + '</div>'; };
       if (big) {
-        slot.innerHTML = '<div style="height:100%;display:flex;align-items:center;justify-content:center;">'
-          + fig(side === 0 ? d.bodyMap.front : d.bodyMap.back, 292) + '</div>';
+        // both sides are built once; Front/Back only toggles which one is displayed (instant)
+        var wrap = function (n, svg) { return '<div data-side="' + n + '" style="height:100%;align-items:center;justify-content:center;display:' + ((window.__athltSide || 0) === n ? 'flex' : 'none') + ';">' + fig(svg, 292) + '</div>'; };
+        slot.innerHTML = wrap(0, d.bodyMap.front) + wrap(1, d.bodyMap.back);
       } else {
         slot.innerHTML = '<div style="height:100%;display:flex;align-items:center;justify-content:center;gap:34px;">'
           + fig(d.bodyMap.front, 206) + fig(d.bodyMap.back, 206) + '</div>';
@@ -642,15 +689,24 @@ export const PROGRESS_DOM_JS = String.raw`
     var wk = d.workouts || [];
     var vidBoxes = root.querySelectorAll('div[role="img"][aria-label$=" video"]');
     var listBoxes = root.querySelectorAll('div[style*="width: 74px"][style*="height: 92px"]');
-    var setThumb = function (el, thumb) {
-      if (!thumb || el.__thumb === thumb) return;
-      el.__thumb = thumb;
-      el.style.setProperty('background-image', 'url(' + thumb + ')', 'important');
-      el.style.setProperty('background-size', 'cover', 'important');
-      el.style.setProperty('background-position', 'center', 'important');
+    var setThumb = function (el, w) {
+      var sig = w.thumb ? 'v' + w.thumb.length : w.fallback ? 'f' + w.fallback.length : '';
+      if (!sig || el.__thumb === sig) return;
+      el.__thumb = sig;
+      if (w.thumb) {
+        el.style.setProperty('background-image', 'url(' + w.thumb + ')', 'important');
+        el.style.setProperty('background-size', 'cover', 'important');
+        el.style.setProperty('background-position', 'center', 'important');
+      } else {
+        // no video frame: the muscle icon on a dark tile (never a black box)
+        el.style.setProperty('background-image', 'url(' + w.fallback + '), linear-gradient(160deg, #3b4156 0%, #15171e 100%)', 'important');
+        el.style.setProperty('background-size', '46%, cover', 'important');
+        el.style.setProperty('background-position', 'center, center', 'important');
+        el.style.setProperty('background-repeat', 'no-repeat, no-repeat', 'important');
+      }
     };
-    for (var vb = 0; vb < vidBoxes.length; vb++) if (wk[vb]) setThumb(vidBoxes[vb], wk[vb].thumb);
-    for (var lb = 0; lb < listBoxes.length; lb++) if (wk[lb]) setThumb(listBoxes[lb], wk[lb].thumb);
+    for (var vb = 0; vb < vidBoxes.length; vb++) if (wk[vb]) setThumb(vidBoxes[vb], wk[vb]);
+    for (var lb = 0; lb < listBoxes.length; lb++) if (wk[lb]) setThumb(listBoxes[lb], wk[lb]);
 
     return { okFit: okFit, filled: true };
   }
