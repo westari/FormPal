@@ -13,7 +13,7 @@
  * referrals, support messaging) are hidden rather than shown as placeholders.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, Alert } from 'react-native';
+import { View, StyleSheet, Alert, Share } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
@@ -25,6 +25,7 @@ import { PROFILE_LOGIC_EXT, PROFILE_DOM_JS } from '../../lib/profileInject';
 import { buildProfileData, GOAL_IDS, PLACE_IDS, type ProfileData, type ProfileDetails } from '../../lib/profileData';
 import { getAllSessions, calcStreak, computeMuscleTiers } from '../../lib/sessionLog';
 import { getWeightLog, logWeight } from '../../lib/weightLog';
+import { getReferral, referralMessage } from '../../lib/referral';
 import { loadPlan, loadProfile, saveProfile, savePlan } from '../../lib/planStorage';
 import { generatePlan } from '../../lib/planGenerator';
 import { clearAllCalibrations } from '../../lib/calibration/store';
@@ -78,7 +79,9 @@ export default function ProfileScreen() {
     ]);
     if (reseed) seedRef.current += 1;
     const audio = useAudioSettingsStore.getState();
+    const referral = await getReferral(useCustomizationStore.getState().displayName);
     dataRef.current = buildProfileData({
+      referral,
       seedVersion: seedRef.current,
       name: useCustomizationStore.getState().displayName,
       email: userRes?.data?.user?.email ?? null,
@@ -141,6 +144,11 @@ export default function ProfileScreen() {
       case 'pageConsole': if (__DEV__) console.log('[profile-page]', msg.msg); break;
       case 'save': if (msg.patch) void save(msg.patch); break;
       case 'applyPlan': void applyPlan(); break;
+      case 'shareReferral': {
+        const code = dataRef.current?.referral.code;
+        if (code) Share.share({ message: referralMessage(code) }).catch(() => {});
+        break;
+      }
       case 'nav': {
         const route = msg.to === 'audio' ? '/audio-settings' : msg.to === 'ar' ? '/ar-experiment' : msg.to === 'calibrate' ? '/calibrate' : msg.to === 'camera' ? '/exercise-picker' : null;
         if (route) router.push(route as any);

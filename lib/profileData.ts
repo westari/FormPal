@@ -48,6 +48,8 @@ export interface ProfileData {
   badgesEarned: boolean[];
   appVersion: string;
   insets: { top: number; bottom: number };
+  /** the user's own referral code; friends joined is 0 until a referral backend exists */
+  referral: { code: string; joined: number };
 }
 
 function dayStart(ts: number): number { const d = new Date(ts); d.setHours(0, 0, 0, 0); return d.getTime(); }
@@ -95,6 +97,7 @@ export function buildProfileData(i: {
   audio: { enabled: boolean; voiceFrequency: 'off' | 'correctionsOnly' | 'correctionsAndCounts' };
   appVersion: string;
   insets?: { top: number; bottom: number };
+  referral?: { code: string; joined: number };
   now?: number;
 }): ProfileData {
   const now = i.now ?? Date.now();
@@ -129,5 +132,6 @@ export function buildProfileData(i: {
     badgesEarned: computeBadges(i.sessions),
     appVersion: i.appVersion,
     insets: i.insets ?? { top: 0, bottom: 0 },
+    referral: i.referral ?? { code: '', joined: 0 },
   };
 }
