@@ -1,12 +1,16 @@
 import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { NativeTabs, Icon, Label } from 'expo-router/unstable-native-tabs';
 
+// Tab icons: every tab uses the same OUTLINE weight when idle (it used to mix filled
+// house/person/plus with the line-only chart and dumbbell figure), and the filled
+// variant only when selected, so stroke weight matches the label weight and the
+// active tab is the only thing that changes.
 export default function TabLayout() {
   return (
     <ThemeProvider value={DarkTheme}>
       <NativeTabs>
         <NativeTabs.Trigger name="index">
-          <Icon sf={'house.fill' as any} />
+          <Icon sf={{ default: 'house', selected: 'house.fill' } as any} />
           <Label>Home</Label>
         </NativeTabs.Trigger>
 
@@ -17,7 +21,7 @@ export default function TabLayout() {
 
         {/* Center action tab — sf prop is the only reliable rendering path; no label */}
         <NativeTabs.Trigger name="plus">
-          <Icon sf={'plus.circle.fill' as any} />
+          <Icon sf={{ default: 'plus.circle', selected: 'plus.circle.fill' } as any} />
           <Label hidden />
         </NativeTabs.Trigger>
 
@@ -27,7 +31,7 @@ export default function TabLayout() {
         </NativeTabs.Trigger>
 
         <NativeTabs.Trigger name="profile">
-          <Icon sf={'person.fill' as any} />
+          <Icon sf={{ default: 'person', selected: 'person.fill' } as any} />
           <Label>Profile</Label>
         </NativeTabs.Trigger>
       </NativeTabs>

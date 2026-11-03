@@ -32,9 +32,10 @@ import { getAllSessions, calcStreak, groupIntoWorkouts, scoredSessions, type Ses
 import type { Plan } from '../../types/plan';
 import { DC_VIEWPORT_JS } from '../../lib/dcWebviewHelpers';
 import { MYPAL_API_URL } from '../../constants/api';
+import { homeCleanJs } from '../../lib/homeClean';
 
 const HOME_HTML = require('../../assets/app screens/home.html');
-const HOME_BUILD = 'home-5';
+const HOME_BUILD = 'home-6';
 if (__DEV__) console.log(`[home] build ${HOME_BUILD}`);
 
 // BUG FOUND (root cause of "glitches at start / white screen", "white
@@ -51,7 +52,7 @@ if (__DEV__) console.log(`[home] build ${HOME_BUILD}`);
 // wired in for this file. train.tsx already solved this exact problem for
 // its own non-#dc-root 472x1024 canvas; this follows the same approach,
 // adapted for home.html's 390x844 one.
-const HOME_SCALE_FIT_JS = `
+export const HOME_SCALE_FIT_JS = `
 (function(){
   function fit(){
     var root = null;
@@ -178,7 +179,7 @@ const HIDE_FAKE_CHROME_CSS = `
   div[style*="right: 14px"][style*="bottom: 22px"][style*="width: 64px"][style*="height: 64px"] { display: none !important; }
 `;
 
-function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[], insetTop: number, insetBottom: number): string {
+export function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[], insetTop: number, insetBottom: number): string {
   const workoutGroups = groupIntoWorkouts(sessions);
   const streak = calcStreak(sessions);
   const scored = scoredSessions(sessions);
@@ -192,7 +193,11 @@ function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[], insetTop
   map['Sat, 12 September'] = today.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'long' });
   map['3'] = String(streak); // streak chip — scoped below via style, not bare global match
   map['38 min · 4 exercises'] = '';
-  map['2 of 4 workouts'] = `${workoutsThisWeek} of 4 workouts`;
+  // Weekly goal comes from the plan (days per week), never a hard-coded 4, and the
+  // count is capped at the goal so the card can't say "8 of 4 workouts".
+  const weekGoal = Math.max(1, plan?.profile?.daysPerWeek ?? 4);
+  const weekDone = Math.min(workoutsThisWeek, weekGoal);
+  map['2 of 4 workouts'] = `${weekDone} of ${weekGoal} workouts`;
 
   if (plan && plan.workouts.length > 0) {
     const w = plan.workouts[plan.currentWorkoutIndex] ?? plan.workouts[0];
@@ -362,7 +367,8 @@ function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[], insetTop
       post({type:'ready'});
     }
     postReadyWhenStable();
-  })();`;
+  })();
+  ${homeCleanJs({ done: weekDone, goal: weekGoal, insetBottom })}`;
 }
 
 export default function HomeScreen() {
@@ -445,6 +451,6 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#eeeef1' },
-  web: { flex: 1, backgroundColor: '#eeeef1' },
+  root: { flex: 1, backgroundColor: '#F2F2F7' },
+  web: { flex: 1, backgroundColor: '#F2F2F7' },
 });
