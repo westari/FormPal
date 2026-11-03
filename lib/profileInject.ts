@@ -11,9 +11,11 @@
  *    weight (weight log), goal / experience / training location / days
  *    (plan profile), audio summary, units, plus Sign out / Delete account /
  *    developer tools that the old native screen had.
- *  - REFERRAL: the design's "Refer a friend" banner and "Enter referral code" row are shown as
- *    designed. Both open the referral page, which shows the user's own code, "0 of 6" friends
- *    joined (there is no referral backend yet) and shares through the real share sheet.
+ *  - REFERRAL: the design's "Refer a friend" banner opens the referral page, which shows the user's own
+ *    code, "0 of 6" friends joined (there is no referral backend yet) and shares through the real share
+ *    sheet. "Enter referral code" opens the design's own small screen where a code is typed and saved.
+ *    The banner's "$10 off" subtitle and the code screen's "free month" line promised rewards that do not
+ *    exist, so those two lines are reworded.
  *  - HIDDEN (no placeholder rows, nothing says "coming soon"): workout reminders / workout time, Apple Health, membership,
  *    and the feature-request / contact-support composers. The app has no backend
  *    or native module for them yet, and the artboard's demo values for them
@@ -108,7 +110,14 @@ export const PROFILE_LOGIC_EXT = String.raw`function (Orig) {
       // sheet (native); Copy copies the code. No friends have joined (no backend yet), so no tier is earned.
       var refCode = d.referral && d.referral.code ? d.referral.code : '';
       v.openRewards = function (e) { if (e && e.preventDefault) e.preventDefault(); self.go('rewards'); };
-      v.openCode = v.openRewards;
+      v.applyCode = function (e) {
+        if (e && e.preventDefault) e.preventDefault();
+        var code = (s.draft || '').trim().toUpperCase();
+        if (!code) return self.showToast('Enter a code first');
+        if (refCode && code === refCode.toUpperCase()) return self.showToast('That is your own code');
+        post({ type: 'applyReferralCode', code: code });
+        self.showToast('Code saved');
+      };
       v.shareLink = function (e) { if (e && e.preventDefault) e.preventDefault(); post({ type: 'shareReferral' }); };
       v.copyLink = function () { copyText(refCode); self.showToast('Code copied'); };
       if (s.page === 'rewards' && v.pg && v.pg.tiers) {
@@ -226,6 +235,11 @@ export const PROFILE_DOM_JS = String.raw`
     var okFit = fit();
     var d = window.__athltData;
     var root = document.getElementById('dc-root');
+    // No reward system exists yet: no "$10 off" / "free month" promises on the banner or the code screen.
+    var sub1 = leafWithText('Get $10 off for each friend. More rewards inside.') || document.querySelector('#dc-root [data-ref-sub]');
+    if (sub1) { sub1.setAttribute('data-ref-sub', '1'); if (sub1.textContent !== 'Invite friends to FormPal') sub1.textContent = 'Invite friends to FormPal'; }
+    var sub2 = leafWithText('Enter it to get a free month.') || document.querySelector('#dc-root [data-ref-sub2]');
+    if (sub2) { sub2.setAttribute('data-ref-sub2', '1'); if (sub2.textContent !== 'Enter it below.') sub2.textContent = 'Enter it below.'; }
     // Referral page: the design's demo link and "1 of 6" become the user's real code and friend count.
     if (d && d.referral && d.referral.code) {
       var refEl = leafWithText('formpal.app/JORDAN10') || document.querySelector('#dc-root [data-ref-code]');
