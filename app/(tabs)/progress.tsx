@@ -77,7 +77,7 @@ export default function ProgressScreen() {
       data.rank.emblem = prev.rank.tier === data.rank.tier ? prev.rank.emblem : null;
       data.ladder.forEach((l, i) => { l.img = prev.ladder[i]?.img ?? null; });
       data.muscles.forEach((m) => { const pm = prev.muscles.find(x => x.key === m.key); if (pm && pm.tier === m.tier) m.icon = pm.icon; });
-      data.workouts.forEach((w) => { w.thumb = prev.workouts.find(x => x.ts === w.ts)?.thumb ?? null; });
+      data.workouts.forEach((w) => { const pw = prev.workouts.find(x => x.ts === w.ts); w.thumb = pw?.thumb ?? null; w.fallback = pw?.fallback ?? null; });
     }
     dataRef.current = data;
     push();
@@ -88,12 +88,22 @@ export default function ProgressScreen() {
     if (dataRef.current === data) { data.muscles.forEach((m, i) => { m.icon = icons[i]; }); push(); }
     const imgs = await Promise.all(TIER_ORDER.map(t => tierDataUri(t)));
     if (dataRef.current === data) { data.ladder.forEach((l, i) => { l.img = imgs[i]; }); push(); }
-    const frames = await Promise.all(data.workouts.slice(0, 8).map(async (w) => {
+    // Every past workout gets a picture. A workout with no saved video (or one whose clip is gone)
+    // falls back to the icon of the muscle it worked most, so no card is ever a black box.
+    const wIcons = await Promise.all(data.workouts.map(w => (w.muscle ? muscleIconUri(w.muscle as Muscle, (tiers[w.muscle as Muscle]?.tier ?? 'silver') as Tier) : Promise.resolve(null))));
+    if (dataRef.current === data) { data.workouts.forEach((w, i) => { if (wIcons[i]) w.fallback = wIcons[i]; }); push(); }
+    const frameOf = async (w: { ts: number }) => {
       const uri = (await getSessionThumbnail(w.ts, 1000)) ?? (await getSessionThumbnail(w.ts, 0));
       if (!uri) return null;
       try { return `data:image/jpeg;base64,${await new File(uri).base64()}`; } catch { return null; }
-    }));
-    if (dataRef.current === data) { frames.forEach((f, i) => { if (f) data.workouts[i].thumb = f; }); push(); }
+    };
+    // the carousel's 8 first, then the rest of the list
+    for (const [from, to] of [[0, 8], [8, data.workouts.length]]) {
+      const frames = await Promise.all(data.workouts.slice(from, to).map(frameOf));
+      if (dataRef.current !== data) break;
+      frames.forEach((f, i) => { if (f) data.workouts[from + i].thumb = f; });
+      push();
+    }
   }, [push, insets.top, insets.bottom]);
 
   // Take a photo, save it ON THE DEVICE (never fails just because the network or sign-in does),
