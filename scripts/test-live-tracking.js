@@ -44,37 +44,69 @@ check('tracking, step-back cue from diagnostic -> 0',
   LT.meterTarget({ ...base, phase: 'tracking', isActive: true, repDiag: LT.NO_PERSON_CUE }) === 0);
 check('tracking, healthy -> 100',
   LT.meterTarget({ ...base, phase: 'tracking', isActive: true, personDetected: true }) === 100);
-let d = 100; d = LT.stepMeter(d, 0);
-check('display goes 100 -> 0 on the very next tick when nobody is there', d === 0, `display=${d}`);
-let r = 0; const seen = [];
-for (let i = 0; i < 5; i++) { r = LT.stepMeter(r, 100); seen.push(r); }
-check('display still climbs one number per tick', seen.join(',') === '1,2,3,4,5', seen.join(','));
+// Smooth meter (lib/liveTracking.ts createMeterSmoother), driven at 33ms like formcheck.tsx
+function run(targetAt, ms) {
+  const m = LT.createMeterSmoother(); const out = [];
+  for (let t = 0; t <= ms; t += 33) out.push({ t, v: m.tick(targetAt(t), t), eff: m.effectiveTarget });
+  return out;
+}
+{
+  const m = LT.createMeterSmoother();
+  for (let t = 0; t < 2000; t += 33) m.tick(100, t);
+  check('display goes 100 -> 0 on the very next tick when nobody is there', m.tick(0, 2033) === 0);
+}
+{
+  const o = run(() => 100, 2000);
+  const t95 = o.find(x => x.v >= 95).t;
+  check('RISE: 0 -> 95 in under 0.8s (was ~2.1s at one number per 45ms)', t95 < 800, `${t95}ms`);
+  const steps = o.slice(1).map((x, i) => x.v - o[i].v).filter(d => d > 0);
+  check('RISE: still counts up smoothly (never jumps more than 6 numbers per frame)', Math.max(...steps) <= 6, `max step ${Math.max(...steps)}`);
+}
+{
+  // JITTER: the raw target flickers 100 <-> 55 every ~100ms for a second (a cue blinking), then settles at 100.
+  const flick = (t) => (t >= 1000 && t < 2000 ? (Math.floor(t / 100) % 2 ? 55 : 100) : 100);
+  const o = run(flick, 3000);
+  const after = o.filter(x => x.t > 800);
+  const dip = Math.min(...after.map(x => x.v));
+  // what the OLD meter did: follow every flicker, one number per 45ms up / faster down
+  let old = 100, oldMin = 100; for (let t = 1000; t < 2000; t += 45) { const tg = flick(t); old = old < tg ? old + 1 : Math.max(tg, old - Math.max(1, Math.ceil((old - tg) / 4))); oldMin = Math.min(oldMin, old); }
+  console.log(`      flickering target 100/55 for 1s: old meter swung down to ${oldMin}, new meter's lowest value ${dip}`);
+  check('JITTER: a flickering target no longer makes the number swing (old meter swung to ' + oldMin + ')', dip >= 95 && oldMin < 80, `lowest ${dip}`);
+}
+{
+  // a REAL, sustained drop is still shown quickly
+  const o = run((t) => (t < 1000 ? 100 : 40), 3000);
+  const t60 = o.find(x => x.t >= 1000 && x.v <= 60);
+  check('ACCURACY: a sustained drop (100 -> 40) shows within 0.8s', t60 && t60.t - 1000 < 800, t60 ? `${t60.t - 1000}ms` : 'never');
+  check('ACCURACY: ...and settles on the true value', o[o.length - 1].v === 40);
+}
 
 // 2. Ready only when tracking is high.
 // Native hold: allVisible from t=0.3s, holdProgress 0->1 over 2s, passed at 2.3s.
-// Display ticks every 45ms (same as formcheck.tsx's interval).
-function simulateReady(gated, adaptive) {
+function simulateReady(gated) {
   let display = 0, readyAt = null, readyDisplay = null, nextTick = 45;
-  let target = 0;
+  const m = LT.createMeterSmoother();
   for (let t = 0; t <= 8000; t++) {
     const sec = t / 1000;
     const visible = sec >= 0.3;
     const hold = visible ? Math.min(1, (sec - 0.3) / 2) : 0;
     const passed = hold >= 1;
-    target = LT.meterTarget({
+    const target = LT.meterTarget({
       ...base, phase: 'setup', setupAllVisible: visible, setupHoldProgress: hold,
       setupHint: visible ? '' : 'Get in frame',
     });
-    if (t >= nextTick) {
-      display = LT.stepMeter(display, target);
-      nextTick = t + (adaptive ? LT.meterTickMs(display, target) : 45);
+    let eff = target;
+    if (gated) { if (t % 33 === 0) { display = m.tick(target, t); } eff = m.effectiveTarget; }
+    else if (t >= nextTick) { // the OLD meter: +1 every 45ms (18ms when far behind)
+      display = display < target ? display + 1 : Math.max(target, display - Math.max(1, Math.ceil((display - target) / 4)));
+      nextTick = t + (Math.abs(target - display) > 8 ? 18 : 45);
     }
-    const fire = gated ? (passed && LT.trackingIsHigh(display, target)) : passed;
+    const fire = gated ? (passed && LT.trackingIsHigh(display, eff)) : passed;
     if (fire && readyAt === null) { readyAt = t; readyDisplay = display; }
   }
   return { readyAt, readyDisplay };
 }
-const oldRun = simulateReady(false, false), gated = simulateReady(true, true);
+const oldRun = simulateReady(false), gated = simulateReady(true);
 console.log(`      old behavior: "Ready. Go!" at ${oldRun.readyAt}ms while the meter showed ${oldRun.readyDisplay}%`);
 console.log(`      new behavior: "Ready. Go!" at ${gated.readyAt}ms while the meter showed ${gated.readyDisplay}%`);
 check('new: Ready announced only with meter >= ' + LT.READY_MIN_PCT, gated.readyDisplay >= LT.READY_MIN_PCT);
@@ -132,6 +164,15 @@ check('no false cue while METRIC lines keep flowing', (() => {
     clock += 400; diag.feed('[TRACK] person back'); diag.feed('[METRIC] shoulderPress value=60 top=84 rom=55');
     check('"[TRACK] person back" clears the cue', diag.message() === null);
   } finally { Date.now = realNow; }
+}
+
+// 5. glass: setup guidance and live cues go through the SAME component
+{
+  const src = fs.readFileSync(path.join(__dirname, '..', 'app', 'formcheck.tsx'), 'utf8');
+  check('glass: setup guidance renders through <CueGlass> (was plain text)', /<CueGlass text=\{setupAllVisible/.test(src) && !/<Text style=\{s\.setupBig\}>/.test(src));
+  check('glass: live cues render through the very same <CueGlass>', /<CueGlass text=\{cue\} \/>/.test(src));
+  check('glass: CueGlass is a GlassPanel pill (the look you like)', /function CueGlass[\s\S]*?<GlassPanel radius=\{999\}/.test(src));
+  check('meter: premium glass pill (GlassPanel + ring + Plus Jakarta), no bare 40px text', /<GlassPanel radius=\{999\} style=\{s\.meterPill\}>/.test(src) && !/cameraLockPct/.test(src));
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nall passed');

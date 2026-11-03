@@ -273,7 +273,7 @@ function Layer({ k }: { k: WarmKind }) {
         ref={ref}
         source={SOURCES[k]}
         originWhitelist={['*']}
-        style={{ flex: 1, backgroundColor: bg }}
+        style={{ flex: 1, backgroundColor: bg, opacity: shown ? 1 : 0 }}
         injectedJavaScriptBeforeContentLoaded={BASE_JS[k]}
         onMessage={(e) => {
           let msg: any;

@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Path, Circle } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { WebView } from 'react-native-webview';
 import { LiquidGlassButton } from '../components/LiquidGlass';
@@ -40,13 +40,13 @@ import { handleRepAudio, playReadyCue } from '../lib/audioFeedback';
 import { createCalibSynth } from '../lib/calibLog';
 import { prefetchSoloRecap } from '../lib/recapPrefetch';
 import { createRepDiagnostic, STREAM_DEAD_SEC_FLOOR } from '../lib/repDiagnostics';
-import { meterTarget, stepMeter, meterTickMs, trackingIsHigh, NO_PERSON_CUE } from '../lib/liveTracking';
+import { meterTarget, createMeterSmoother, trackingIsHigh, NO_PERSON_CUE } from '../lib/liveTracking';
 import { useAudioSettingsStore } from '../store/audioSettingsStore';
 import { useFormTheme, type FormTheme } from '../lib/activeTheme';
 import type { DebugStatsEvent, RepEvent, ExerciseType } from '../modules/athlt-camera/src/index';
 import { getDemoCues } from '../lib/demoCues';
 
-const FORMCHECK_BUILD = 'fc-5';
+const FORMCHECK_BUILD = 'fc-6';
 if (__DEV__) console.log(`[formcheck] build ${FORMCHECK_BUILD}`);
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
@@ -272,6 +272,21 @@ const gp = StyleSheet.create({
   shadow: { shadowColor: '#000', shadowOffset: { width: 0, height: 16 }, shadowOpacity: 0.38, shadowRadius: 34, elevation: 12 },
   clip:   { overflow: 'hidden' },
 });
+
+// ─── Cue pill ───────────────────────────────────────────────────────────────
+// THE glass message pill. Setup guidance ("Perfect. Hold still", "Back up a
+// bit") and live cues ("Rep not counted", "Step back into frame") both render
+// through this one component, so they can never look different from each other.
+function CueGlass({ text }: { text: string }) {
+  return (
+    <GlassPanel radius={999} style={s.trackingCueCard}>
+      <View style={s.trackingCueInner}>
+        <Image source={SPARKLE_DUO} style={s.trackingCueIcon} />
+        <Text style={s.trackingCueText}>{text}</Text>
+      </View>
+    </GlassPanel>
+  );
+}
 
 // ─── Camera-lens corner brackets ────────────────────────────────────────────
 // Four fixed-size corner marks, matching the real design file exactly
@@ -562,34 +577,52 @@ const ri = StyleSheet.create({
 });
 
 // ─── Tracking meter ───────────────────────────────────────────────────────────
-// Counts toward `target` one number at a time (see lib/liveTracking.ts), in its
-// own state so the fast ticks never re-render the whole camera screen. Always
-// mounted (renders nothing when !show) so the "is it high yet" report that
-// gates "Ready. Go!" keeps working.
+// A compact Liquid Glass pill (the same GlassPanel + Plus Jakarta Sans as the
+// cue pills): a ring that fills with the number, the number, and a small
+// TRACKING caption. The number glides toward the (de-bounced) target — see
+// createMeterSmoother in lib/liveTracking.ts — in its own state, so its ticks
+// never re-render the whole camera screen. Always mounted (renders nothing when
+// !show) so the "is it high yet" report that gates "Ready. Go!" keeps working.
+const RING = 34, RING_STROKE = 3.4;
 function TrackingMeter({ target, show, top, onHighChange }: {
   target: number; show: boolean; top: number; onHighChange: (high: boolean) => void;
 }) {
   const [display, setDisplay] = useState(0);
-  const displayRef = useRef(0);
+  const smoother = useRef(createMeterSmoother()).current;
   const targetRef = useRef(target);
   targetRef.current = target;
+  const highRef = useRef(false);
   useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
-    const tick = () => {
-      const next = stepMeter(displayRef.current, targetRef.current);
-      if (next !== displayRef.current) { displayRef.current = next; setDisplay(next); }
-      timer = setTimeout(tick, meterTickMs(displayRef.current, targetRef.current));
-    };
-    timer = setTimeout(tick, 45);
-    return () => clearTimeout(timer);
-  }, []);
-  const high = trackingIsHigh(display, target);
-  useEffect(() => { onHighChange(high); }, [high, onHighChange]);
+    const id = setInterval(() => {
+      const d = smoother.tick(targetRef.current, Date.now());
+      setDisplay((prev) => (prev === d ? prev : d));
+      const high = trackingIsHigh(d, smoother.effectiveTarget);
+      if (high !== highRef.current) { highRef.current = high; onHighChange(high); }
+    }, 33);
+    return () => clearInterval(id);
+  }, [smoother, onHighChange]);
   if (!show) return null;
+  const level = display >= 95 ? C.good : display <= 35 ? C.warn : '#FFFFFF';
+  const r = (RING - RING_STROKE) / 2, circ = 2 * Math.PI * r;
   return (
     <View pointerEvents="none" style={[s.cameraLockWrap, { top }]}>
-      <Text style={s.cameraLockPct}>{display}%</Text>
-      <Text style={s.cameraLockLabel}>TRACKING</Text>
+      <GlassPanel radius={999} style={s.meterPill}>
+        <View style={s.meterInner}>
+          <View style={{ width: RING, height: RING }}>
+            <Svg width={RING} height={RING} style={{ transform: [{ rotate: '-90deg' }] }}>
+              <Circle cx={RING / 2} cy={RING / 2} r={r} stroke="rgba(255,255,255,0.22)" strokeWidth={RING_STROKE} fill="none" />
+              <Circle
+                cx={RING / 2} cy={RING / 2} r={r} stroke={level} strokeWidth={RING_STROKE} fill="none"
+                strokeLinecap="round" strokeDasharray={`${circ} ${circ}`} strokeDashoffset={circ * (1 - display / 100)}
+              />
+            </Svg>
+          </View>
+          <View>
+            <Text style={s.meterNum}>{display}<Text style={s.meterPct}>%</Text></Text>
+            <Text style={s.meterLabel}>TRACKING</Text>
+          </View>
+        </View>
+      </GlassPanel>
     </View>
   );
 }
@@ -1238,13 +1271,11 @@ export default function FormCheckScreen() {
     outOfPlaneCue: stats?.outOfPlaneCue,
     repDiag,
   });
-  // Steps through every number toward the target instead of jumping —
-  // explicit complaint: "it can't just jump from numbers... it needs to
-  // show every number." (Falling is faster, and 0 is immediate: see
-  // stepMeter.)
-  // The counting lives in <TrackingMeter> (its own state, so the 45ms/18ms
-  // ticks don't re-render this whole screen); it only reports back when the
-  // DISPLAYED number crosses into/out of "high".
+  // The number glides to the target (and ignores one-frame flickers of it):
+  // see createMeterSmoother in lib/liveTracking.ts. The counting lives in
+  // <TrackingMeter> (its own state, so its ticks don't re-render this whole
+  // screen); it only reports back when the DISPLAYED number crosses into/out
+  // of "high".
   const [meterHigh, setMeterHigh] = useState(false);
   // Show/speak "Ready. Go!" only once tracking is actually high.
   useEffect(() => {
@@ -1370,12 +1401,11 @@ export default function FormCheckScreen() {
                   anywhere — gating on it being most of the way through (so
                   there's only a brief window left to actually wobble)
                   instead of the very start. */}
-              <Text style={s.setupBig}>
-                {setupAllVisible && setupHoldProgress >= 0.8
-                  ? 'Perfect. Hold still'
-                  : (setupHint || SETUP_INFO[exerciseType].title)}
-                <Image source={SPARKLE_DUO} style={s.cueSparkleImg} />
-              </Text>
+              {/* Same glass pill as the live cues AFTER you're in place (CueGlass),
+                  so a message looks identical before and after setup. */}
+              <CueGlass text={setupAllVisible && setupHoldProgress >= 0.8
+                ? 'Perfect. Hold still'
+                : (setupHint || SETUP_INFO[exerciseType].title)} />
             </View>
           )}
         </PositioningGuide>
@@ -1534,12 +1564,7 @@ export default function FormCheckScreen() {
         // raw drop-shadowed text floating over the camera feed.
         return (
           <Animated.View style={[s.trackingCueHint, { transform: [{ rotate: floorSpin }] }]} pointerEvents="none">
-            <GlassPanel radius={999} style={s.trackingCueCard}>
-              <View style={s.trackingCueInner}>
-                <Image source={SPARKLE_DUO} style={s.trackingCueIcon} />
-                <Text style={s.trackingCueText}>{cue}</Text>
-              </View>
-            </GlassPanel>
+            <CueGlass text={cue} />
           </Animated.View>
         );
       })()}
@@ -1812,14 +1837,11 @@ const s = StyleSheet.create({
   topBar:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 8 },
   title:      { flex: 1, textAlign: 'center', marginHorizontal: 10, fontFamily: F.bold, fontSize: 15, color: C.text, letterSpacing: 0.2 },
   cameraLockWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
-  cameraLockPct: {
-    fontFamily: 'PlusJakartaSans_700Bold', fontSize: 40, lineHeight: 46, color: '#fff',
-    textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 10,
-  },
-  cameraLockLabel: {
-    fontFamily: F.bold, fontSize: 11, color: 'rgba(255,255,255,0.75)', letterSpacing: 1.6, marginTop: 2,
-    textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 10,
-  },
+  meterPill:  { alignSelf: 'center' },
+  meterInner: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingLeft: 12, paddingRight: 20, paddingVertical: 8 },
+  meterNum:   { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 22, lineHeight: 26, color: '#fff', letterSpacing: -0.4, fontVariant: ['tabular-nums'] },
+  meterPct:   { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 13, color: 'rgba(255,255,255,0.7)' },
+  meterLabel: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 9.5, lineHeight: 12, color: 'rgba(255,255,255,0.68)', letterSpacing: 1.5 },
   errorCard:  { position: 'absolute', left: 24, right: 24, top: '38%', backgroundColor: C.glass, borderRadius: 16, padding: 24, borderWidth: 1, borderColor: C.border },
   errorText:  { color: C.warn, fontSize: 14, lineHeight: 22, textAlign: 'center' },
   // No card any more — just text + shadow for legibility over the camera

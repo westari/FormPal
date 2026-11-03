@@ -64,7 +64,7 @@ function build(prior, today) {
     labels: MTM.MUSCLE_LABELS, note: 'Solid session. You hit good form on 28 of 30 reps (93%).',
     iconFor, emblem: emblemFor(standingAfter && standingAfter.tier),
   });
-  return { payload, standingBefore, standingAfter, tiersBefore, tiersAfter };
+  return { payload, standingBefore, standingAfter, tiersBefore, tiersAfter, entries: thisWorkout };
 }
 
 const oneMuscle = EXERCISE_CATALOG.find(e => e.muscles.length === 1);
@@ -89,6 +89,7 @@ const SCENARIOS = {
     { name: 'Rear Delts', gain: '+30.0%', icon: iconFor('shoulders') },
   ];
   sc.synthetic = true; // rows overridden by hand for a layout stress test
+  sc.payload.note = 'Layout stress test.';
   SCENARIOS['longest labels (Hamstrings + Rear Delts)'] = sc;
 }
 if (oneMuscle) SCENARIOS[`single muscle (${oneMuscle.id})`] = build([entry(oneMuscle.id, 20, 18, 5)], [entry(oneMuscle.id, 25, 23, 0)]);
@@ -99,39 +100,49 @@ for (const [name, sc] of Object.entries(SCENARIOS)) {
   const { payload: p, standingAfter } = sc;
   console.log(`  ${name}: rank=${p.rank.label}->${p.rank.next} ${p.rank.pct}% (+${p.rank.gained}% today)  rows=${p.hits.map(h => h.name + ' ' + h.gain).join(' | ') || '(none)'}`);
   check(`${name}: rank label is the real standing`, p.rank.label === (standingAfter ? standingAfter.tier[0].toUpperCase() + standingAfter.tier.slice(1) : 'Unranked'));
-  check(`${name}: progress % is the real standing (one decimal)`, p.rank.pct === (standingAfter ? Math.round(standingAfter.progress * 1000) / 10 : 0));
   {
-    // THE consistency rule: "+X% today" is how far the number at the top moved, and every figure has one decimal
-    const before = sc.standingBefore, after = standingAfter;
+    // ── the page's three numbers, recomputed INDEPENDENTLY from the raw tiers ──
     const r1 = (n) => Math.round(n * 10) / 10;
-    const same = before && after && before.tier === after.tier;
-    const expected = !after ? 0 : Math.max(0, same ? r1(after.progress * 100) - r1(before.progress * 100) : (after.tier === (before && before.tier) ? 0 : (TIERIDX[after.tier] * 100 + after.progress * 100) - (before ? TIERIDX[before.tier] * 100 + before.progress * 100 : 0)));
-    check(`${name}: "+${p.rank.gained}% today" = how far the top number moved (${before ? r1(before.progress * 100) : 0} -> ${p.rank.pct})`, Math.abs(parseFloat(p.rank.gained) - expected) <= 0.11, `expected ${expected.toFixed(1)}`);
-    check(`${name}: every number on the page has exactly one decimal`, /^\d+\.\d$/.test(p.rank.gained) && /\d+\.\d% to |Top rank/.test(p.rank.pctLabel) && p.hits.every(h => /^\+\d+\.\d%$/.test(h.gain)), `${p.rank.pctLabel} | ${p.rank.gained} | ${p.hits.map(h => h.gain).join(',')}`);
-    const wk = after && after.muscle;
-    if (wk && !after.atTop && !sc.synthetic) {
-      const row = p.hits.find(h => h.name === MTM.MUSCLE_LABELS[wk]);
-      if (row) check(`${name}: the weakest muscle (${MTM.MUSCLE_LABELS[wk]}) has a row showing the same +${p.rank.gained}% the top moved`, parseFloat(row.gain.replace(/[+%]/g, '')) === parseFloat(p.rank.gained), row.gain);
-      check(`${name}: the note names the weakest muscle so a beginner can follow it`, p.note.includes(MTM.MUSCLE_LABELS[wk]), p.note);
+    const tier = standingAfter && standingAfter.tier;
+    const beforeTier = sc.standingBefore ? sc.standingBefore.tier : tier;
+    const prog = (info, ot) => !info ? null : (ot && TIERIDX[info.tier] > TIERIDX[ot] ? 100 : data.muscleProgressPct(info));
+    const worked = data.workedMuscles(sc.entries);
+    const credit = Object.fromEntries(worked.map(w => [w.muscle, w.credit]));
+    const universe = [...new Set([...Object.keys(sc.tiersAfter), ...worked.map(w => w.muscle)])];
+    const after = (m) => sc.tiersAfter[m] ? prog(sc.tiersAfter[m], tier) : Math.min(100, (credit[m] || 0) / 50 * 100);
+    const before = (m) => sc.tiersBefore[m] ? prog(sc.tiersBefore[m], beforeTier) : 0;
+    const avgA = r1(universe.reduce((a, m) => a + after(m), 0) / universe.length);
+    const avgB = r1(universe.reduce((a, m) => a + before(m), 0) / universe.length);
+    const nums = (p.rank.pctLabel.match(/\d+\.\d/g) || []).map(Number);
+    check(`${name}: OVERALL shows before -> after = ${avgB} -> ${avgA} (average of ${universe.length} muscles)`, nums.length >= 2 && Math.abs(nums[0] - avgB) <= 0.11 && Math.abs(nums[1] - avgA) <= 0.11 && p.rank.pct === avgA, p.rank.pctLabel);
+    const rowSum = r1(p.hits.reduce((a, h) => a + parseFloat(h.gain.replace(/[+%]/g, '')), 0));
+    if (!sc.synthetic) check(`${name}: TOTAL gained +${p.rank.gained}% = the SUM of the rows (${p.hits.map(h => h.gain).join(' + ') || 'none'} = +${rowSum}%)`, Math.abs(parseFloat(p.rank.gained) - rowSum) < 0.001);
+    const rowsOk = p.hits.every((h, i) => {
+      const m = worked[i].muscle;
+      return Math.abs(parseFloat(h.gain.replace(/[+%]/g, '')) - Math.max(0, r1(after(m)) - r1(before(m)))) <= 0.11;
+    });
+    if (!sc.synthetic) check(`${name}: each ROW = that muscle's progress after - before`, rowsOk);
+    if (rowSum > 0) check(`${name}: the OVERALL number actually moved (${avgB} -> ${avgA}) because muscles gained`, avgA > avgB);
+    if (worked.length <= 2) {
+      const allSum = worked.reduce((a, w) => a + Math.max(0, r1(after(w.muscle)) - r1(before(w.muscle))), 0);
+      check(`${name}: overall change x muscles = total (${r1(avgA - avgB)} x ${universe.length} ~ ${r1(allSum)})`, Math.abs((avgA - avgB) * universe.length - allSum) <= 0.1 * universe.length + 0.15);
     }
+    check(`${name}: every number on the page has exactly one decimal`, /^\d+\.\d$/.test(p.rank.gained) && /\d+\.\d% → \d+\.\d%|Top rank/.test(p.rank.pctLabel) && p.hits.every(h => /^\+\d+\.\d%$/.test(h.gain)), `${p.rank.pctLabel} | ${p.rank.gained} | ${p.hits.map(h => h.gain).join(',')}`);
+    if (!sc.synthetic) check(`${name}: the note spells out the sum and the average in plain words`, /Total gained today/.test(p.note) && /average of your/.test(p.note), p.note);
   }
   check(`${name}: every row has a real muscle name + a +N% gain (no bare "+%")`, p.hits.every(h => h.name && /^\+\d+(\.\d)?%$/.test(h.gain)));
 }
-// ── "Bronze 0%" and "+0% today" while the rows say +3% (device report 2026-11-02) ──
+// ── user's report: Shoulders +2%, Triceps +2%, overall "+2% today", Bronze 7% did not move ──
 {
-  // History: biceps trained ONLY with a rep-counter exercise (no judged reps), plus
-  // shoulders/triceps with form-checked presses. Today: a small shoulder press set.
-  const counterOnly = (id, reps, ago) => ({ ...entry(id, reps, 0, ago), formChecked: false });
-  const prior = [counterOnly('curl', 120, 14), entry('shoulderPress', 70, 64, 10)];
-  const today = [entry('shoulderPress', 6, 6, 0)];
+  const prior = [entry('shoulderPress', 70, 64, 10), entry('curl', 80, 70, 12)];
+  const today = [entry('shoulderPress', 4, 4, 0)];
   const sc = build(prior, today);
   const p = sc.payload;
-  console.log(`  report repro: rank=${p.rank.label} ${p.rank.pct}% (+${p.rank.gained}% today)  rows=${p.hits.map(h => h.name + ' ' + h.gain).join(' | ')}`);
-  const bic = sc.tiersAfter.biceps;
-  check('REPRO: a muscle with only rep-counter reps exists and has no quality signal', bic && bic.qualityJudged === false && bic.goodRatio === 0);
-  check('FIXED: that muscle no longer pins the headline at 0% (progress follows its volume)', p.rank.pct > 0, `${p.rank.pct}%`);
-  const lowest = Math.min(...Object.values(sc.tiersAfter).filter(i => i.tier === sc.standingAfter.tier).map(i => data.muscleProgressPct(i)));
-  check('headline % is the weakest muscle in the tier (lowest progress), not the first one found', Math.abs(p.rank.pct - lowest) <= 0.1, `headline ${p.rank.pct}% lowest ${lowest}%`);
+  console.log(`  user report repro: ${p.rank.label} ${p.rank.pctLabel}  total +${p.rank.gained}%  rows=${p.hits.map(h => h.name + ' ' + h.gain).join(' | ')}`);
+  const sum = p.hits.reduce((a, h) => a + parseFloat(h.gain.replace(/[+%]/g, '')), 0);
+  check('REPORT FIXED: total = the sum of the rows (was +2% with two rows of +2%)', Math.abs(parseFloat(p.rank.gained) - sum) < 0.001 && p.hits.length === 2, `${p.hits.map(h => h.gain).join(' + ')} = ${p.rank.gained}`);
+  const n = (p.rank.pctLabel.match(/\d+\.\d/g) || []).map(Number);
+  check('REPORT FIXED: the overall rank moves when muscles gain (it used to stay at 7%)', n[1] > n[0], p.rank.pctLabel);
 }
 const A = SCENARIOS['shoulders+triceps (bronze)'].payload, B = SCENARIOS['legs (squat+lunge)'].payload;
 check('rows follow the workout: shoulders workout -> Shoulders/Triceps', A.hits.map(h => h.name).sort().join() === 'Shoulders,Triceps', A.hits.map(h => h.name).join());

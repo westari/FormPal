@@ -22,8 +22,8 @@ const NEUTRAL = '#E3E4EA';
 const SILHOUETTE_FILL = '#F1F2F6';
 const SILHOUETTE_STROKE = '#D5D7DF';
 const OUTLINE_STROKE = '#454B5C';
-const MUSCLE_OUTLINE_STROKE = '#7C8398';
-const MUSCLE_OUTLINE_WIDTH = 2.4; // units; ~0.6px on screen, thinner than the 1.6px body outline
+const MUSCLE_OUTLINE_STROKE = '#69708A';
+const MUSCLE_OUTLINE_WIDTH = 3.4; // units; ~0.9px on screen, thinner than the 1.6px body outline
 const OUTLINE_WIDTH = 6; // units; ~1.6px on screen (figure ~830 units tall in a ~218px box)
 
 // Tier `lo` alone is too pale on the white silhouette for Silver/Platinum/etc, so
