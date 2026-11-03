@@ -241,7 +241,7 @@ const TRAIN_WEB_INJECT = `
     // stopped changing (viewport and DOM still for a moment).
     var parts = ok && window.__athltData && window.__athltLogicReady && document.querySelector('[data-glass="hero"]');
     // once revealed it stays revealed; the settle gate only applies to the first reveal
-    var real = reported || (!!parts && (!window.__dcSettle || window.__dcSettle(160)));
+    var real = reported || !!window.__trainForce || (!!parts && (!window.__dcSettle || window.__dcSettle(160)));
     setPageReady(real);
     if (!reported && real) {
       reported = true;
@@ -360,6 +360,7 @@ export default function TrainScreen() {
   const revealTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pongAt = useRef(0);
   const loads = useRef(0);
+  const loading = useRef(false);
 
   // Show only once the page says it's genuinely laid out, filled and still. iOS does not start loading a
   // tab's web view until the tab is first shown (the log showed 65s between mount and load), so the
@@ -367,7 +368,12 @@ export default function TrainScreen() {
   // until it is ready, so even an early reveal can never show a half-built page.
   const armReveal = useCallback(() => {
     if (revealTimer.current) clearTimeout(revealTimer.current);
-    revealTimer.current = setTimeout(() => { tlog('revealed by 12s safety net after load (page never said ready)'); setRevealed(true); }, 12000);
+    revealTimer.current = setTimeout(() => {
+      tlog('revealed by 12s safety net after load (page never said ready)');
+      // the page hides its own content until it is ready, so reveal that too or the tab would stay blank
+      webRef.current?.injectJavaScript("window.__trainForce=1; try{window.__trainTick&&window.__trainTick()}catch(e){} true;");
+      setRevealed(true);
+    }, 12000);
   }, []);
   const fade = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -400,14 +406,18 @@ export default function TrainScreen() {
       tlog('data pushed to page; rank', tier ?? 'unranked', '| shield art', src ? 'ok' : 'MISSING');
     }).catch((e) => { tlog('ERROR loading data:', e && (e as Error).message ? (e as Error).message : String(e)); });
     // Liveness ping: a web view whose content process was killed never answers and stays blank white.
+    // Only pinged when a page has finished loading and none is loading now (a ping sent into a page that is
+    // still loading is lost and used to trigger a pointless reload right after the page was shown). Any
+    // message from the page counts as an answer.
     const before = pongAt.current;
-    webRef.current?.injectJavaScript("try{window.ReactNativeWebView.postMessage('pong')}catch(e){} true;");
-    const t = setTimeout(() => { if (alive && pongAt.current === before && loads.current > 0) reloadPage('no answer to the focus ping'); }, 1800);
+    if (loads.current > 0 && !loading.current) webRef.current?.injectJavaScript("try{window.ReactNativeWebView.postMessage('pong')}catch(e){} true;");
+    const t = setTimeout(() => { if (alive && pongAt.current === before && loads.current > 0 && !loading.current) reloadPage('no answer to the focus ping'); }, 1800);
     return () => { alive = false; clearTimeout(t); };
   }, [insets.top, insets.bottom, reloadPage]));
 
   function onMsg(raw: string) {
-    if (raw === 'pong') { pongAt.current = Date.now(); return; }
+    pongAt.current = Date.now();
+    if (raw === 'pong') return;
     if (raw === '__tap') { Haptics.selectionAsync(); return; }
     if (raw === 'ready') { tlog('page ready (layout + data + logic all in place, page still)'); if (revealTimer.current) clearTimeout(revealTimer.current); setRevealed(true); return; }
     if (raw === 'need-data') { tlog('page asked for data;', dataJsRef.current ? 'sending' : 'not loaded yet'); if (dataJsRef.current) webRef.current?.injectJavaScript(dataJsRef.current); return; }
@@ -435,13 +445,13 @@ export default function TrainScreen() {
         originWhitelist={['*']}
         injectedJavaScriptBeforeContentLoaded={TRAIN_BEFORE}
         onMessage={(e) => onMsg(e.nativeEvent.data)}
-        onLoadStart={() => { tlog('web view load start'); setRevealed(false); }}
-        onLoadEnd={() => { loads.current += 1; tlog('web view load end #' + loads.current); armReveal(); }}
+        onLoadStart={() => { tlog('web view load start'); loading.current = true; setRevealed(false); }}
+        onLoadEnd={() => { loading.current = false; loads.current += 1; tlog('web view load end #' + loads.current); armReveal(); }}
         onError={(e) => tlog('web view ERROR:', e.nativeEvent.description)}
         onHttpError={(e) => tlog('web view HTTP ERROR:', e.nativeEvent.statusCode, e.nativeEvent.url)}
         onContentProcessDidTerminate={() => reloadPage('iOS killed the web view process')}
         style={s.web}
-        opaque={false}
+        {...({ opaque: false } as object)}
         scrollEnabled={false}
         bounces={false}
         overScrollMode="never"

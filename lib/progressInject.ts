@@ -69,33 +69,32 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
       if (series.length) {
         var vals = series.map(function (e) { return e.w; });
         var vmin = Math.min.apply(null, vals), vmax = Math.max.apply(null, vals);
-        var span = vmax - vmin + 6;
-        var tick = span > 24 ? 10 : 5;
-        var lo = Math.floor((vmin - 3) / tick) * tick, hi = Math.ceil((vmax + 3) / tick) * tick;
-        while ((hi - lo) / tick > 4) {
-          hi += tick; lo -= tick;
-          if ((hi - lo) / tick > 4) { var t2 = tick * 2; lo = Math.floor(lo / t2) * t2; hi = Math.ceil(hi / t2) * t2; break; }
+        // Same frame as the Form Score chart: five evenly spaced guide lines (whole-number labels), plot area
+        // y 18..170 with the baseline at 176, points from x 8 to 286.
+        var STEPS = [1, 2, 5, 10, 20, 25, 50, 100, 200], tick = 1, lo = 0, hi = 4;
+        for (var si = 0; si < STEPS.length; si++) {
+          tick = STEPS[si]; lo = Math.floor((vmin - 2) / tick) * tick; hi = lo + 4 * tick;
+          if (hi >= vmax + 2) break;
         }
-        var yOf = function (w) { return Math.round(134 - ((w - lo) / (hi - lo)) * 116); };
+        var yOf = function (w) { return Math.round(170 - ((w - lo) / (hi - lo)) * 152); };
         var t0 = parseKey(series[0].d).getTime(), t1 = parseKey(series[series.length - 1].d).getTime();
         var pts = series.map(function (e, i) {
           var f = t1 > t0 ? (parseKey(e.d).getTime() - t0) / (t1 - t0) : 0.5;
-          return { x: Math.round(4 + 276 * f), y: yOf(e.w) };
+          return { x: Math.round(8 + 278 * f), y: yOf(e.w) };
         });
         // every logged weight gets its own dot on the line (drawn by the DOM pass); the last one is the design's own
         window.__athltWPts = series.length >= 2 ? pts.map(function (q, i) { return { x: q.x, y: q.y, w: series[i].w, d: series[i].d }; }) : [];
         // A single weigh-in can't draw a trend, so draw it as a level line across the chart ending in
         // the dot (the same way the design's line ends at the current value) instead of a lone floating dot.
-        if (pts.length === 1) pts = [{ x: 4, y: pts[0].y }, { x: 280, y: pts[0].y }];
+        if (pts.length === 1) pts = [{ x: 8, y: pts[0].y }, { x: 286, y: pts[0].y }];
         var endPt = pts[pts.length - 1];
         var lp = series.length >= 2 ? pts[selIdx] : endPt; // the point the dot, guide line and label sit on
         if (pts.length >= 2) {
-          line = this.mono(pts);
-          area = line + ' L' + endPt.x + ' 140 L' + pts[0].x + ' 140 Z';
+          line = this.curve(pts);
+          area = line + ' L' + endPt.x + ' 176 L' + pts[0].x + ' 176 Z';
         }
-        var st = (hi - lo) / tick > 4 ? tick * 2 : tick;
-        for (var v = hi; v >= lo; v -= st) ticks.push({ top: (yOf(v) - 6) + 'px', label: String(v) });
-        lastPt = { x: lp.x, y: lp.y, left: ((34 + Math.min(lp.x, 250)) / 326 * 100).toFixed(1) + '%', top: (lp.y - 12) + 'px' };
+        for (var ti = 0; ti < 5; ti++) { var tv = hi - ti * tick; ticks.push({ top: (yOf(tv) - 5) + 'px', label: String(tv) }); }
+        lastPt = { x: lp.x, y: lp.y, left: Math.max(24, Math.min(76, 12 + (Math.min(lp.x, 264) / 326) * 88)).toFixed(1) + '%', top: (lp.y - 12) + 'px' };
         months = axisLabels(t0, t1);
       }
 
@@ -600,7 +599,7 @@ export const PROGRESS_DOM_JS = String.raw`
 
     // Weight card
     var wsvg = null, svgs = root.querySelectorAll('svg');
-    for (var s = 0; s < svgs.length; s++) { if (svgs[s].getAttribute('viewBox') === '0 0 292 150') { wsvg = svgs[s]; break; } }
+    for (var s = 0; s < svgs.length; s++) { if (svgs[s].querySelector('path[fill="url(#pgWt)"]')) { wsvg = svgs[s]; break; } }
     if (wsvg) {
       var wcard = wsvg.closest('div[style*="border-radius: 28px"]');
       var chartBox = wsvg.parentElement; // the position:relative 150px box
@@ -614,36 +613,56 @@ export const PROGRESS_DOM_JS = String.raw`
       } else setEmpty(chartBox, false);
       var tip = chartBox.querySelector('div[style*="translate(-50%, -100%)"]');
       if (tip) tip.style.setProperty('display', ch !== 'ok' ? 'none' : '');
-      var gl = wsvg.querySelector('line'), gc = wsvg.querySelector('circle:not([data-athlt-pt])');
+      // The weight chart is laid out exactly like the Form Score chart: same 190px frame (svg 88% wide, 12% gutter
+      // for the axis labels), 30px label column, 2.8px line, baseline, dashed guide + ring on the tapped point.
+      if (chartBox.style.getPropertyValue('height') !== '190px') chartBox.style.setProperty('height', '190px', 'important');
+      if (chartBox.style.marginTop !== '16px') chartBox.style.setProperty('margin-top', '16px', 'important');
+      var lblCols = chartBox.querySelectorAll('div[style*="width: 26px"], div[style*="width: 30px"]');
+      for (var lc = 0; lc < lblCols.length; lc++) if (lblCols[lc].style.width !== '30px') lblCols[lc].style.setProperty('width', '30px', 'important');
+      if (wsvg.getAttribute('viewBox') !== '0 0 326 190') {
+        wsvg.setAttribute('viewBox', '0 0 326 190'); wsvg.setAttribute('width', '88%'); wsvg.setAttribute('height', '190');
+        wsvg.style.setProperty('position', 'static', 'important'); wsvg.style.setProperty('left', 'auto', 'important');
+        wsvg.style.setProperty('top', 'auto', 'important'); wsvg.style.setProperty('margin-left', '12%', 'important');
+      }
+      var xrow = chartBox.nextElementSibling;
+      if (xrow && xrow.style.paddingLeft !== '12%') xrow.style.setProperty('padding', '8px 0 0 12%', 'important');
+      var wline = wsvg.querySelectorAll('path')[1];
+      if (wline && wline.getAttribute('stroke-width') !== '2.8') wline.setAttribute('stroke-width', '2.8');
+      var base = wsvg.querySelector('line[data-athlt-base]');
+      if (!base) {
+        base = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        base.setAttribute('data-athlt-base', '1');
+        base.setAttribute('x1', '0'); base.setAttribute('y1', '176'); base.setAttribute('x2', '326'); base.setAttribute('y2', '176');
+        base.setAttribute('stroke', 'rgba(17,17,20,0.08)'); base.setAttribute('stroke-width', '1');
+        wsvg.insertBefore(base, wsvg.querySelector('path'));
+      }
+      base.style.setProperty('display', ch !== 'ok' ? 'none' : '');
+      var gl = wsvg.querySelector('line:not([data-athlt-base])'), gc = wsvg.querySelector('circle:not([data-athlt-pt])');
+      if (gl) { if (gl.getAttribute('y2') !== '176') { gl.setAttribute('y2', '176'); gl.setAttribute('stroke-opacity', '0.5'); } }
+      if (gc && gc.getAttribute('r') !== '5.5') { gc.setAttribute('r', '5.5'); gc.setAttribute('stroke-width', '2.8'); }
+      var tipEl1 = chartBox.querySelector('div[style*="translate(-50%, -100%)"]');
+      if (tipEl1 && tipEl1.style.fontVariantNumeric !== 'tabular-nums') tipEl1.style.setProperty('font-variant-numeric', 'tabular-nums');
       if (ch === 'ok') {
         // the tooltip must stay inside the card whatever the label length
-        var tipEl0 = chartBox.querySelector('div[style*="translate(-50%, -100%)"]');
-        if (tipEl0) { var lp0 = parseFloat(tipEl0.style.left); if (isFinite(lp0)) tipEl0.style.setProperty('left', Math.max(24, Math.min(76, lp0)) + '%', 'important'); }
+        if (tipEl1) { var lp0 = parseFloat(tipEl1.style.left); if (isFinite(lp0)) tipEl1.style.setProperty('left', Math.max(24, Math.min(76, lp0)) + '%', 'important'); }
       }
-      // A dot on every logged weight; the tapped one (the newest until something is tapped) is the design's own
-      // bigger end dot with the tooltip. Every weight also has a roomy invisible tap target.
+      // Tapping works like the Form Score chart: every logged weight owns a full-height column (up to the
+      // halfway point to its neighbours); the tapped one gets the ring, guide and tooltip.
       var wp = ch === 'ok' ? (window.__athltWPts || []) : [];
-      if (!(wp.length >= 2 && wp.length <= 40)) wp = [];
+      if (!(wp.length >= 2 && wp.length <= 60)) wp = [];
       var wsel = window.__athltWSel == null ? -1 : window.__athltWSel;
-      var dsig = wsel + '|' + wp.map(function (q) { return q.x + ',' + q.y; }).join(';');
+      var dsig = wp.map(function (q) { return q.x + ',' + q.y; }).join(';');
       if (wsvg.__dotSig !== dsig) {
         wsvg.__dotSig = dsig;
         var oldDots = wsvg.querySelectorAll('[data-athlt-pt]');
         for (var od = 0; od < oldDots.length; od++) oldDots[od].remove();
         var NS = 'http://www.w3.org/2000/svg';
         for (var nd = 0; nd < wp.length; nd++) {
-          if (nd !== wsel) {
-            var c2 = document.createElementNS(NS, 'circle');
-            c2.setAttribute('data-athlt-pt', '1');
-            c2.setAttribute('cx', wp[nd].x); c2.setAttribute('cy', wp[nd].y); c2.setAttribute('r', '3.6');
-            c2.setAttribute('fill', '#ffffff'); c2.setAttribute('stroke', '#111114'); c2.setAttribute('stroke-width', '2');
-            c2.style.pointerEvents = 'none';
-            wsvg.appendChild(c2);
-          }
-          var hit = document.createElementNS(NS, 'circle');
+          var x0 = nd === 0 ? 0 : (wp[nd - 1].x + wp[nd].x) / 2, x1 = nd === wp.length - 1 ? 326 : (wp[nd].x + wp[nd + 1].x) / 2;
+          var hit = document.createElementNS(NS, 'rect');
           hit.setAttribute('data-athlt-pt', 'hit');
-          hit.setAttribute('cx', wp[nd].x); hit.setAttribute('cy', wp[nd].y); hit.setAttribute('r', '15');
-          hit.setAttribute('fill', 'rgba(0,0,0,0)');
+          hit.setAttribute('x', x0); hit.setAttribute('y', '0'); hit.setAttribute('width', Math.max(1, x1 - x0)); hit.setAttribute('height', '190');
+          hit.setAttribute('fill', 'transparent');
           hit.style.pointerEvents = 'all'; hit.style.cursor = 'pointer';
           (function (idx) { hit.addEventListener('click', function (ev) { ev.stopPropagation(); if (window.__athltWPick) window.__athltWPick(idx); }, true); })(nd);
           wsvg.appendChild(hit);

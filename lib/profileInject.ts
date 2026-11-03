@@ -178,6 +178,7 @@ export const PROFILE_DOM_JS = String.raw`
     + 'body{margin:0!important;padding:0!important;background:#eeeef1!important;overflow:hidden!important;}'
     + '#dc-root{position:relative!important;margin:0 auto!important;width:390px!important;transform-origin:top center!important;}'
     + '#dc-root *{animation:none!important;-webkit-animation:none!important;transition:none!important;-webkit-transition:none!important;}'
+    + '*{-webkit-tap-highlight-color:transparent!important;}'
     + '*{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important;}'
     + 'div[style*="right: 88px"][style*="bottom: 22px"][style*="height: 64px"]{display:none!important;}'
     + 'div[style*="right: 14px"][style*="bottom: 22px"][style*="width: 64px"][style*="height: 64px"]{display:none!important;}'
@@ -234,11 +235,11 @@ export const PROFILE_DOM_JS = String.raw`
     if (wrap) wrap.style.setProperty('display', 'none', 'important');
   }
 
-  function apply() {
-    ensureCss();
-    var okFit = fit();
+  // Text swaps for the artboard's demo strings. Runs synchronously from the mutation observer (a microtask,
+  // before the browser paints), so a page the artboard has just opened (the referral screens) is never
+  // painted with its demo text for a frame before the real text lands.
+  function textPass() {
     var d = window.__athltData;
-    var root = document.getElementById('dc-root');
     // No reward system exists yet: no "$10 off" / "free month" promises on the banner or the code screen.
     var sub1 = leafWithText('Get $10 off for each friend. More rewards inside.') || document.querySelector('#dc-root [data-ref-sub]');
     if (sub1) { sub1.setAttribute('data-ref-sub', '1'); if (sub1.textContent !== 'Invite friends to FormPal') sub1.textContent = 'Invite friends to FormPal'; }
@@ -254,6 +255,14 @@ export const PROFILE_DOM_JS = String.raw`
       if (fillEl) { fillEl.setAttribute('data-ref-fill', '1'); var fw = Math.min(100, d.referral.joined / 6 * 100) + '%'; if (fillEl.style.width !== fw) fillEl.style.setProperty('width', fw, 'important'); }
     }
     if (d && d.appVersion) { var ver = leafWithText('FormPal 1.0 (12)'); if (ver) ver.textContent = d.appVersion; }
+  }
+
+  function apply() {
+    ensureCss();
+    var okFit = fit();
+    var d = window.__athltData;
+    var root = document.getElementById('dc-root');
+    textPass();
     // The artboard's own red "Sign out" button has no handler of its own.
     var links = document.querySelectorAll('#dc-root a');
     for (var i = 0; i < links.length; i++) {
@@ -323,7 +332,7 @@ export const PROFILE_DOM_JS = String.raw`
     if (!ok && r.okFit && r.filled && window.__athltLogicReady) { clearTimeout(deb); deb = setTimeout(tick, 90); }
   }
   function schedule() { ensureCss(); clearTimeout(deb); deb = setTimeout(tick, 50); }
-  try { new MutationObserver(schedule).observe(document, { childList: true, subtree: true }); } catch (e) {}
+  try { new MutationObserver(function () { try { textPass(); } catch (e) {} schedule(); }).observe(document, { childList: true, subtree: true }); } catch (e) {}
   window.addEventListener('resize', schedule);
   setInterval(tick, 500);
   tick();
