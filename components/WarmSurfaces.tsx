@@ -30,6 +30,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Animated, Easing, useWindowDimensions } from 'react-native';
 import { SymbolView } from 'expo-symbols';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LiquidGlassButton } from './LiquidGlass';
 import { WebView } from 'react-native-webview';
 import { create } from 'zustand';
@@ -82,6 +83,17 @@ const WARM_PROBE_JS = `
   }
   try{ new MutationObserver(chk).observe(document,{childList:true,subtree:true}); }catch(e){}
   setInterval(chk,100);
+  // Tell the app when the page's own runtime breaks, so the app can put a
+  // native close button over it (a broken page must never trap the user).
+  try{
+    var ce=console.error;
+    console.error=function(){
+      try{ var m=Array.prototype.join.call(arguments,' ');
+        if(/render error|dc-runtime/i.test(m)) window.ReactNativeWebView.postMessage(JSON.stringify({type:'pageError',msg:m.slice(0,200)})); }catch(e){}
+      return ce.apply(console,arguments);
+    };
+    window.addEventListener('error',function(ev){ try{ window.ReactNativeWebView.postMessage(JSON.stringify({type:'pageError',msg:String(ev&&ev.message).slice(0,200)})); }catch(e){} });
+  }catch(e){}
 })();
 true;`;
 
@@ -202,6 +214,11 @@ function Layer({ k }: { k: WarmKind }) {
   const chrome = useWarm((s) => s.chrome[k]);
   // A page stays "shown" (kept in place, not re-slid) while a page above it is
   // showing, so closing the top page just slides it away to reveal this one.
+  const insets = useSafeAreaInsets();
+  // The page's own runtime threw, or it never said 'ready': show a native close
+  // button so the user can always leave (the page's own buttons may be dead).
+  const [pageBroken, setPageBroken] = useState(false);
+  useEffect(() => { setPageBroken(false); }, [epoch]);
   const coveredByHigher = useWarm((s) => KINDS.slice(KINDS.indexOf(k) + 1).some((kk) => s.active[kk] && s.revealed[kk]));
 
   // Inject the data once per fresh page, as soon as both exist.
@@ -284,6 +301,7 @@ function Layer({ k }: { k: WarmKind }) {
             return;
           }
           if (msg.type === 'chrome') { set(k, { chrome: { back: msg.back, allSets: msg.allSets } } as any); return; }
+          if (msg.type === 'pageError') { if (__DEV__) console.log(`[warm:${k}] PAGE ERROR`, msg.msg); setPageBroken(true); return; }
           if (msg.type === 'pageConsole') { if (__DEV__) console.log(`[warm:${k}:page]`, msg.msg); return; }
           if (msg.type === 'ready') {
             if (__DEV__) console.log(`[warm:${k}] ready`);
@@ -314,6 +332,21 @@ function Layer({ k }: { k: WarmKind }) {
         contentInsetAdjustmentBehavior="never"
       />
       {shown && overlay ? <View style={StyleSheet.absoluteFill} pointerEvents="box-none">{overlay}</View> : null}
+      {shown && pageBroken && k !== 'recap' ? (
+        <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+          <LiquidGlassButton
+            onPress={() => handlers[k]?.({ type: k === 'allsets' ? 'closeAllSets' : k === 'ranks' ? 'closeRanks' : 'close' })}
+            radius={22}
+            colorScheme="dark"
+            fallbackColor="rgba(60,62,72,0.55)"
+            containerStyle={{ position: 'absolute', left: 16, top: insets.top + 8, width: 44, height: 44 }}
+            hitSlop={10}
+            style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <SymbolView name="chevron.left" size={18} tintColor="#ffffff" type="monochrome" style={{ width: 18, height: 18 }} />
+          </LiquidGlassButton>
+        </View>
+      ) : null}
       {shown && chrome && (k === 'recap' || k === 'repfeedback') ? <GlassChrome k={k} c={chrome} /> : null}
     </Animated.View>
   );

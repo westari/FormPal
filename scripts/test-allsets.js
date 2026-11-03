@@ -19,6 +19,9 @@ const { chromium } = require('playwright');
 const ROOT = path.join(__dirname, '..');
 const WARM = require('../components/WarmSurfaces.tsx');
 const { allSetsDataJs } = require('../lib/allSetsInject.ts');
+const { execSync } = require('child_process');
+const fs = require('fs');
+const os = require('os');
 
 let failed = 0;
 const check = (name, ok, detail) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  -> ' + detail : ''}`); if (!ok) failed++; };
@@ -50,6 +53,31 @@ const wait = (ms) => new Promise(r => setTimeout(r, ms));
     await browser.close();
   }
 
+  // ── reproduce: the page the phone ran (commit 1ab290c) tore the design's own tiles out of the DOM ──
+  {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oldallsets-'));
+    fs.writeFileSync(path.join(dir, 'oldRecapInject.ts'), execSync('git show 1ab290c:lib/recapInject.ts', { cwd: ROOT, maxBuffer: 64 * 1024 * 1024 }).toString('utf8'));
+    const old = require(path.join(dir, 'oldRecapInject.ts'));
+    const browser = await chromium.launch();
+    const page = await browser.newPage({ viewport: { width: 390, height: 852 } });
+    const errs = [];
+    page.on('console', (m) => { if (/render error/.test(m.text())) errs.push(m.text().slice(0, 120)); });
+    page.on('pageerror', (e) => errs.push('pageerror ' + e.message.slice(0, 100)));
+    await page.exposeFunction('__post', () => {});
+    await page.addInitScript(() => { window.ReactNativeWebView = { postMessage: (d) => window.__post(d) }; });
+    await page.goto(FILE, { waitUntil: 'load' });
+    await page.waitForTimeout(1800);
+    await page.evaluate(old.allSetsInject({ tiles: [{ title: 'Shoulder Press', meta: '6 reps' }], videoTileIndex: 0 }));
+    await page.waitForTimeout(800);
+    const before = errs.length;
+    await page.evaluate(() => [...document.querySelectorAll('#dc-root div')].find(d => /^Squats$/.test(d.innerText.trim()) && d.style.borderRadius === '999px').click());
+    await page.waitForTimeout(600);
+    const blank = await page.evaluate(() => document.getElementById('dc-root').innerText.trim().length);
+    check('REPRODUCED: with the page the phone ran, tapping the Squats chip throws "[dc-runtime] render error in <Root>"', errs.length > before, errs[errs.length - 1] || 'no error');
+    console.log(`      (page text left after the error: ${blank} chars)`);
+    await browser.close();
+  }
+
   // ── fix ──────────────────────────────────────────────────────────────────────
   const payload = {
     tiles: [
@@ -59,6 +87,9 @@ const wait = (ms) => new Promise(r => setTimeout(r, ms));
     videoIdx: 0,
   };
   const { browser, page, ev } = await open([WARM.BASE_JS.allsets]);
+  const renderErrors = [];
+  page.on('console', (m) => { if (/render error|dc-runtime/i.test(m.text()) && m.type() === 'error') renderErrors.push(m.text().slice(0, 120)); });
+  page.on('pageerror', (e) => renderErrors.push('pageerror ' + e.message.slice(0, 100)));
   await page.evaluate(allSetsDataJs(payload));
   await page.waitForTimeout(900);
   const url0 = page.url();
@@ -96,6 +127,10 @@ const wait = (ms) => new Promise(r => setTimeout(r, ms));
   await page.evaluate(() => [...document.querySelectorAll('#dc-root a')].forEach(a => a.click()));
   const closes = ev.filter(e => e.type === 'closeAllSets').length;
   check('Recap and Done both post closeAllSets (back always works)', closes === 2, `${closes}`);
+  check('ZERO render errors through every tap above (the old page threw one on the Squats chip)', renderErrors.length === 0, renderErrors.join(' | '));
+  await page.evaluate(() => console.error('[dc-runtime] render error in <Root>: boom'));
+  await page.waitForTimeout(150);
+  check('a page render error is reported to the app (so it can show its native close button)', ev.some(e => e.type === 'pageError'));
   check('the page never navigated away during any of that', page.url() === url0, page.url().split('/').pop());
   await page.screenshot({ path: path.join(ROOT, '.scratch', 'allsets-fixed.png') });
   await browser.close();

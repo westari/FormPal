@@ -46,7 +46,7 @@ import { useFormTheme, type FormTheme } from '../lib/activeTheme';
 import type { DebugStatsEvent, RepEvent, ExerciseType } from '../modules/athlt-camera/src/index';
 import { getDemoCues } from '../lib/demoCues';
 
-const FORMCHECK_BUILD = 'fc-6';
+const FORMCHECK_BUILD = 'fc-7';
 if (__DEV__) console.log(`[formcheck] build ${FORMCHECK_BUILD}`);
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
@@ -277,11 +277,13 @@ const gp = StyleSheet.create({
 // THE glass message pill. Setup guidance ("Perfect. Hold still", "Back up a
 // bit") and live cues ("Rep not counted", "Step back into frame") both render
 // through this one component, so they can never look different from each other.
-function CueGlass({ text }: { text: string }) {
+function CueGlass({ text, ready }: { text: string; ready?: boolean }) {
   return (
     <GlassPanel radius={999} style={s.trackingCueCard}>
       <View style={s.trackingCueInner}>
-        <Image source={SPARKLE_DUO} style={s.trackingCueIcon} />
+        {ready
+          ? <SymbolView name="checkmark.circle.fill" size={22} tintColor={C.good} type="monochrome" style={{ width: 22, height: 22 }} />
+          : <Image source={SPARKLE_DUO} style={s.trackingCueIcon} />}
         <Text style={s.trackingCueText}>{text}</Text>
       </View>
     </GlassPanel>
@@ -577,13 +579,11 @@ const ri = StyleSheet.create({
 });
 
 // ─── Tracking meter ───────────────────────────────────────────────────────────
-// A compact Liquid Glass pill (the same GlassPanel + Plus Jakarta Sans as the
-// cue pills): a ring that fills with the number, the number, and a small
-// TRACKING caption. The number glides toward the (de-bounced) target — see
+// A small Liquid Glass pill (the same GlassPanel + Plus Jakarta Sans as the
+// cue pills): the percent and a thin bar that fills with it. The number glides toward the (de-bounced) target — see
 // createMeterSmoother in lib/liveTracking.ts — in its own state, so its ticks
 // never re-render the whole camera screen. Always mounted (renders nothing when
 // !show) so the "is it high yet" report that gates "Ready. Go!" keeps working.
-const RING = 34, RING_STROKE = 3.4;
 function TrackingMeter({ target, show, top, onHighChange }: {
   target: number; show: boolean; top: number; onHighChange: (high: boolean) => void;
 }) {
@@ -603,23 +603,13 @@ function TrackingMeter({ target, show, top, onHighChange }: {
   }, [smoother, onHighChange]);
   if (!show) return null;
   const level = display >= 95 ? C.good : display <= 35 ? C.warn : '#FFFFFF';
-  const r = (RING - RING_STROKE) / 2, circ = 2 * Math.PI * r;
   return (
     <View pointerEvents="none" style={[s.cameraLockWrap, { top }]}>
       <GlassPanel radius={999} style={s.meterPill}>
         <View style={s.meterInner}>
-          <View style={{ width: RING, height: RING }}>
-            <Svg width={RING} height={RING} style={{ transform: [{ rotate: '-90deg' }] }}>
-              <Circle cx={RING / 2} cy={RING / 2} r={r} stroke="rgba(255,255,255,0.22)" strokeWidth={RING_STROKE} fill="none" />
-              <Circle
-                cx={RING / 2} cy={RING / 2} r={r} stroke={level} strokeWidth={RING_STROKE} fill="none"
-                strokeLinecap="round" strokeDasharray={`${circ} ${circ}`} strokeDashoffset={circ * (1 - display / 100)}
-              />
-            </Svg>
-          </View>
-          <View>
-            <Text style={s.meterNum}>{display}<Text style={s.meterPct}>%</Text></Text>
-            <Text style={s.meterLabel}>TRACKING</Text>
+          <Text style={s.meterNum}>{display}<Text style={s.meterPct}>%</Text></Text>
+          <View style={s.meterTrack}>
+            <View style={[s.meterFill, { width: `${display}%`, backgroundColor: level }]} />
           </View>
         </View>
       </GlassPanel>
@@ -1433,12 +1423,8 @@ export default function FormCheckScreen() {
       {/* Ready → tracking */}
       {phase === 'setup-done' && (
         <View style={s.setupDoneOverlay} pointerEvents="none">
-          <GlassPanel radius={999} style={s.setupSuccessCard}>
-            <View style={s.setupSuccessInner}>
-              <SymbolView name="checkmark.circle.fill" size={40} tintColor={C.good} type="monochrome" style={{ width: 40, height: 40 }} />
-              <Text style={s.setupSuccessText}>Ready. Go!</Text>
-            </View>
-          </GlassPanel>
+          {/* same glass pill component as every other cue, so it can't look different */}
+          <CueGlass text="Ready. Go!" ready />
         </View>
       )}
 
@@ -1838,10 +1824,11 @@ const s = StyleSheet.create({
   title:      { flex: 1, textAlign: 'center', marginHorizontal: 10, fontFamily: F.bold, fontSize: 15, color: C.text, letterSpacing: 0.2 },
   cameraLockWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   meterPill:  { alignSelf: 'center' },
-  meterInner: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingLeft: 12, paddingRight: 20, paddingVertical: 8 },
-  meterNum:   { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 22, lineHeight: 26, color: '#fff', letterSpacing: -0.4, fontVariant: ['tabular-nums'] },
-  meterPct:   { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 13, color: 'rgba(255,255,255,0.7)' },
-  meterLabel: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 9.5, lineHeight: 12, color: 'rgba(255,255,255,0.68)', letterSpacing: 1.5 },
+  meterInner: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 9 },
+  meterTrack: { width: 52, height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.22)', overflow: 'hidden' },
+  meterFill:  { height: 3, borderRadius: 2 },
+  meterNum:   { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 16, lineHeight: 20, color: '#fff', letterSpacing: -0.2, fontVariant: ['tabular-nums'] },
+  meterPct:   { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 11, color: 'rgba(255,255,255,0.7)' },
   errorCard:  { position: 'absolute', left: 24, right: 24, top: '38%', backgroundColor: C.glass, borderRadius: 16, padding: 24, borderWidth: 1, borderColor: C.border },
   errorText:  { color: C.warn, fontSize: 14, lineHeight: 22, textAlign: 'center' },
   // No card any more — just text + shadow for legibility over the camera
