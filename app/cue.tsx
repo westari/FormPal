@@ -27,10 +27,10 @@ import { ActivityIndicator, Keyboard, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import {
-  CONSOLE_FORWARD_JS, DC_VIEWPORT_JS, dcScaleFitJs,
+  CONSOLE_FORWARD_JS, DC_VIEWPORT_JS, DC_SETTLE_JS, dcScaleFitJs,
   DC_TEXT_REPLACE_HELPER_JS, DC_LINK_INTERCEPT_JS,
 } from '../lib/dcWebviewHelpers';
-import { MYPAL_API_URL } from '../constants/api';
+import { askCue, CUE_HISTORY_MAX } from '../lib/cueApi';
 import { loadPlan } from '../lib/planStorage';
 import { buildCueGreeting, cueGreetingInjectJs } from '../lib/cueGreeting';
 
@@ -41,7 +41,7 @@ if (__DEV__) console.log(`[cue] build ${CUE_BUILD}`);
 interface Message { role: 'user' | 'assistant'; content: string }
 
 function cueInject(): string {
-  return dcScaleFitJs('#eeeef1') + DC_TEXT_REPLACE_HELPER_JS + DC_LINK_INTERCEPT_JS + `
+  return DC_SETTLE_JS + dcScaleFitJs('#eeeef1') + DC_TEXT_REPLACE_HELPER_JS + DC_LINK_INTERCEPT_JS + `
 (function(){
   // BUG FOUND ("white screen for 5 seconds, then it works"): cue.html ships
   // as a self-extracting bundle (base64 fonts/assets unpacked by its own
@@ -68,6 +68,8 @@ function cueInject(): string {
     chipsRow = document.querySelector('#dc-root div[style*="overflow-x: auto"]');
     console.log('[cue-page] listEl=', !!listEl, 'inputEl=', !!inputEl, 'sendBtn=', !!sendBtn, 'chipsRow=', !!chipsRow);
     if(!listEl || !inputEl || !sendBtn) return false;
+    if(window.__dcFitNow) window.__dcFitNow();
+    if(!window.__dcCanvasScale) return false; // not laid out yet: try again, do not wire/reveal half-sized
     wired = true;
     // BUG FOUND ("zooms the whole screen out... less than before, but
     // still zooms"): the real design's input is font-size: 15px (confirmed
@@ -147,7 +149,16 @@ function cueInject(): string {
       }
     };
     wireUp();
-    dcPost({ type: 'ready' });
+    // Never reveal before the canvas has its final scale and the screen has stopped changing size: fit now,
+    // then wait until the viewport and the page have been still for a moment (at most 2s), then say ready.
+    if(window.__dcFitNow) window.__dcFitNow();
+    var readyStart = Date.now();
+    (function waitStill(){
+      if(window.__dcFitNow) window.__dcFitNow();
+      var still = !window.__dcSettle || window.__dcSettle(150);
+      if(still || Date.now() - readyStart > 2000){ dcPost({ type: 'ready' }); return; }
+      setTimeout(waitStill, 50);
+    })();
     return true;
   }
 
@@ -230,7 +241,11 @@ function cueInject(): string {
     }
   };
 
-  if(!build()){ [100,300,700,1500,3000].forEach(function(d){ setTimeout(build,d); }); }
+  if(!build()){
+    [100,300,700,1500,3000].forEach(function(d){ setTimeout(build,d); });
+    // the bundle may unpack later than any fixed timer: keep trying on every DOM change until wired
+    try { var buildQueued = false; new MutationObserver(function(){ if(wired || buildQueued) return; buildQueued = true; setTimeout(function(){ buildQueued = false; build(); }, 40); }).observe(document, { childList: true, subtree: true }); } catch(e){}
+  }
 })();
 `;
 }
@@ -272,22 +287,11 @@ export default function CueScreen() {
   }, []);
 
   const handleSend = useCallback(async (text: string) => {
-    const history = historyRef.current.slice(-20).map(m => ({ role: m.role, content: m.content }));
-    historyRef.current.push({ role: 'user', content: text });
-    try {
-      const res = await fetch(MYPAL_API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, history }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error ?? 'Request failed');
-      historyRef.current.push({ role: 'assistant', content: data.reply });
-      webRef.current?.injectJavaScript(`window.__cueReplyReceived && window.__cueReplyReceived(${JSON.stringify(data.reply)}); true;`);
-    } catch {
-      const msg = "Couldn't reach Cue. Check your connection and try again.";
-      webRef.current?.injectJavaScript(`window.__cueReplyReceived && window.__cueReplyReceived(${JSON.stringify(msg)}); true;`);
-    }
+    const history = historyRef.current.slice(-CUE_HISTORY_MAX).map(m => ({ role: m.role, content: m.content }));
+    const r = await askCue(text, history);
+    // Only real exchanges go into the history; an error bubble is never sent back to the model.
+    if (r.ok) historyRef.current.push({ role: 'user', content: text }, { role: 'assistant', content: r.text });
+    webRef.current?.injectJavaScript(`window.__cueReplyReceived && window.__cueReplyReceived(${JSON.stringify(r.text)}); true;`);
   }, []);
 
   return (

@@ -61,7 +61,11 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
 
       var line = '', area = '', ticks = [], lastPt = { x: 0, y: 0, left: '50%', top: '0px' };
       var months = ['', '', '', ''];
-      var shown = series.length ? series[series.length - 1].w : null;
+      // The tapped weigh-in (like the Form Score chart); the newest one until something is tapped.
+      var selIdx = series.length ? (s.wSel == null || s.wSel >= series.length ? series.length - 1 : s.wSel) : -1;
+      window.__athltWSel = selIdx;
+      window.__athltWPick = function (i) { self.setState({ wSel: i }); };
+      var shown = series.length ? series[selIdx].w : null;
       if (series.length) {
         var vals = series.map(function (e) { return e.w; });
         var vmin = Math.min.apply(null, vals), vmax = Math.max.apply(null, vals);
@@ -83,10 +87,11 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
         // A single weigh-in can't draw a trend, so draw it as a level line across the chart ending in
         // the dot (the same way the design's line ends at the current value) instead of a lone floating dot.
         if (pts.length === 1) pts = [{ x: 4, y: pts[0].y }, { x: 280, y: pts[0].y }];
-        var lp = pts[pts.length - 1];
+        var endPt = pts[pts.length - 1];
+        var lp = series.length >= 2 ? pts[selIdx] : endPt; // the point the dot, guide line and label sit on
         if (pts.length >= 2) {
           line = this.mono(pts);
-          area = line + ' L' + lp.x + ' 140 L' + pts[0].x + ' 140 Z';
+          area = line + ' L' + endPt.x + ' 140 L' + pts[0].x + ' 140 Z';
         }
         var st = (hi - lo) / tick > 4 ? tick * 2 : tick;
         for (var v = hi; v >= lo; v -= st) ticks.push({ top: (yOf(v) - 6) + 'px', label: String(v) });
@@ -118,12 +123,13 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
       for (var k = 5; k >= 0; k--) { var md = new Date(t.y, t.m - k, 1); monthList.push({ y: md.getFullYear(), m: md.getMonth() }); }
 
       var out = {
-        wNow: shown == null ? '–' : fmt(shown),
+        // "Oct 20 · 180" + the design's own " lb"
+        wNow: shown == null ? '–' : dlabel(series[selIdx].d) + ' · ' + fmt(shown),
         wLine: line, wArea: area, wTicks: ticks, wLast: lastPt, wMonths: months,
         wGoalPctLabel: summary,
         wRanges: ['2m', '6m', '1y', 'All'].map(function (label, i) {
           var p = pillStyle(i === ri);
-          return { label: label, fg: p.fg, bg: p.bg, shadow: p.shadow, pick: function () { self.setState({ wRange: i }); } };
+          return { label: label, fg: p.fg, bg: p.bg, shadow: p.shadow, pick: function () { self.setState({ wRange: i, wSel: null }); } };
         }),
         openWeigh: function (e) {
           e.preventDefault();
@@ -410,6 +416,11 @@ export const PROGRESS_DOM_JS = String.raw`
       ov.setAttribute('data-athlt-empty', '1');
       host.appendChild(ov);
     }
+    // Only write when something changed: rewriting identical content every pass is a DOM mutation, which wakes
+    // the observer, which runs the pass again - an endless loop that keeps the page "busy" forever.
+    var osig = [title, sub, (opts && opts.inset) || '', (opts && opts.bg) || '', (opts && opts.radius) || ''].join('|');
+    if (ov.__sig === osig) return;
+    ov.__sig = osig;
     var inset = (opts && opts.inset) || '0';
     ov.style.cssText = 'position:absolute;inset:' + inset + ';z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;padding:0 26px;'
       + 'background:' + ((opts && opts.bg) || '#ffffff') + ';border-radius:' + ((opts && opts.radius) || '22px') + ';box-shadow:0 0 0 1px rgba(17,17,20,0.04),0 14px 34px -16px rgba(40,50,90,0.22);';
@@ -604,20 +615,38 @@ export const PROGRESS_DOM_JS = String.raw`
       var tip = chartBox.querySelector('div[style*="translate(-50%, -100%)"]');
       if (tip) tip.style.setProperty('display', ch !== 'ok' ? 'none' : '');
       var gl = wsvg.querySelector('line'), gc = wsvg.querySelector('circle:not([data-athlt-pt])');
-      // A dot on every logged weight except the newest (the design's own end dot is the newest).
+      if (ch === 'ok') {
+        // the tooltip must stay inside the card whatever the label length
+        var tipEl0 = chartBox.querySelector('div[style*="translate(-50%, -100%)"]');
+        if (tipEl0) { var lp0 = parseFloat(tipEl0.style.left); if (isFinite(lp0)) tipEl0.style.setProperty('left', Math.max(24, Math.min(76, lp0)) + '%', 'important'); }
+      }
+      // A dot on every logged weight; the tapped one (the newest until something is tapped) is the design's own
+      // bigger end dot with the tooltip. Every weight also has a roomy invisible tap target.
       var wp = ch === 'ok' ? (window.__athltWPts || []) : [];
-      var dots = wp.length >= 2 && wp.length <= 40 ? wp.slice(0, wp.length - 1) : [];
-      var dsig = dots.map(function (q) { return q.x + ',' + q.y; }).join(';');
-      if (wsvg.__dotSig !== dsig || wsvg.querySelectorAll('circle[data-athlt-pt]').length !== dots.length) {
+      if (!(wp.length >= 2 && wp.length <= 40)) wp = [];
+      var wsel = window.__athltWSel == null ? -1 : window.__athltWSel;
+      var dsig = wsel + '|' + wp.map(function (q) { return q.x + ',' + q.y; }).join(';');
+      if (wsvg.__dotSig !== dsig) {
         wsvg.__dotSig = dsig;
-        var oldDots = wsvg.querySelectorAll('circle[data-athlt-pt]');
+        var oldDots = wsvg.querySelectorAll('[data-athlt-pt]');
         for (var od = 0; od < oldDots.length; od++) oldDots[od].remove();
-        for (var nd = 0; nd < dots.length; nd++) {
-          var c2 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-          c2.setAttribute('data-athlt-pt', '1');
-          c2.setAttribute('cx', dots[nd].x); c2.setAttribute('cy', dots[nd].y); c2.setAttribute('r', '3.6');
-          c2.setAttribute('fill', '#ffffff'); c2.setAttribute('stroke', '#111114'); c2.setAttribute('stroke-width', '2');
-          wsvg.appendChild(c2);
+        var NS = 'http://www.w3.org/2000/svg';
+        for (var nd = 0; nd < wp.length; nd++) {
+          if (nd !== wsel) {
+            var c2 = document.createElementNS(NS, 'circle');
+            c2.setAttribute('data-athlt-pt', '1');
+            c2.setAttribute('cx', wp[nd].x); c2.setAttribute('cy', wp[nd].y); c2.setAttribute('r', '3.6');
+            c2.setAttribute('fill', '#ffffff'); c2.setAttribute('stroke', '#111114'); c2.setAttribute('stroke-width', '2');
+            c2.style.pointerEvents = 'none';
+            wsvg.appendChild(c2);
+          }
+          var hit = document.createElementNS(NS, 'circle');
+          hit.setAttribute('data-athlt-pt', 'hit');
+          hit.setAttribute('cx', wp[nd].x); hit.setAttribute('cy', wp[nd].y); hit.setAttribute('r', '15');
+          hit.setAttribute('fill', 'rgba(0,0,0,0)');
+          hit.style.pointerEvents = 'all'; hit.style.cursor = 'pointer';
+          (function (idx) { hit.addEventListener('click', function (ev) { ev.stopPropagation(); if (window.__athltWPick) window.__athltWPick(idx); }, true); })(nd);
+          wsvg.appendChild(hit);
         }
       }
       if (gl) gl.style.setProperty('display', ch !== 'ok' ? 'none' : '');
@@ -762,7 +791,9 @@ export const PROGRESS_DOM_JS = String.raw`
   function pageIsReal(r) {
     var root = document.getElementById('dc-root');
     if (!(r.okFit && r.filled && window.__athltLogicReady && root && leafWithText('Progress'))) return false;
-    return (root.textContent || '').indexOf('{{') < 0;
+    if ((root.textContent || '').indexOf('{{') >= 0) return false;
+    // still for a moment: the viewport has stopped changing and the page has stopped re-rendering
+    return !window.__dcSettle || window.__dcSettle(160);
   }
   function setPageReady(on) {
     var h = document.documentElement;
@@ -775,12 +806,16 @@ export const PROGRESS_DOM_JS = String.raw`
   function tick() {
     var r = apply();
     if (!window.__athltData && Date.now() - lastAsk > 700) { lastAsk = Date.now(); post({ type: 'needData' }); }
-    var ok = pageIsReal(r);
+    // Once revealed, the page stays revealed (taps and re-renders must never hide it again); the gate only
+    // applies to the first reveal.
+    var ok = reported || pageIsReal(r);
     setPageReady(ok);
     if (!reported && ok) {
       reported = true;
       post({ type: 'ready' });
     }
+    // data has landed but the page is still settling: look again soon instead of waiting for the interval
+    if (!ok && r.okFit && r.filled && window.__athltLogicReady) { clearTimeout(deb); deb = setTimeout(tick, 90); }
   }
   function schedule() { ensureCss(); clearTimeout(deb); deb = setTimeout(tick, 50); }
   try { new MutationObserver(schedule).observe(document, { childList: true, subtree: true, attributes: false }); } catch (e) {}

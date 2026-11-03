@@ -18,12 +18,13 @@
  * it's genuinely ready.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, Modal, Pressable, Image } from 'react-native';
+import { View, StyleSheet, Modal, Pressable, Image, Animated } from 'react-native';
+import { useRevealFade } from '../../lib/useRevealFade';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
 import * as Haptics from 'expo-haptics';
-import { CONSOLE_FORWARD_JS, DC_VIEWPORT_JS } from '../../lib/dcWebviewHelpers';
+import { CONSOLE_FORWARD_JS, DC_VIEWPORT_JS, DC_SETTLE_JS } from '../../lib/dcWebviewHelpers';
 import { dcLogicPatchJs, athltSetDataJs } from '../../lib/dcLogicPatch';
 import { PROGRESS_LOGIC_EXT, PROGRESS_DOM_JS } from '../../lib/progressInject';
 import { getAllSessions, computeMuscleTiers, TIER_ORDER } from '../../lib/sessionLog';
@@ -31,7 +32,7 @@ import { getWeightLog, logWeight } from '../../lib/weightLog';
 import { buildProgressData, type ProgressData } from '../../lib/progressData';
 import { tierDataUri } from '../../lib/rankImages';
 import { muscleIconUri } from '../../lib/muscleIcons';
-import { getSessionThumbnail } from '../../lib/sessionVideo';
+import { workoutFrame, workoutFallbackIcon } from '../../lib/workoutThumbs';
 import { listProgressPhotos, addProgressPhoto, type PhotoPose } from '../../lib/progressPhotos';
 import { uploadProgressPhotoToCloud } from '../../lib/formpalSync';
 import * as ImagePicker from 'expo-image-picker';
@@ -45,25 +46,19 @@ const PROGRESS_HTML = require('../../assets/app screens/progress.html');
 const PROGRESS_BUILD = 'progress-3';
 if (__DEV__) console.log(`[progress] build ${PROGRESS_BUILD}`);
 
-const PROGRESS_BEFORE = DC_VIEWPORT_JS + CONSOLE_FORWARD_JS + dcLogicPatchJs(PROGRESS_LOGIC_EXT) + PROGRESS_DOM_JS;
+const PROGRESS_BEFORE = DC_VIEWPORT_JS + CONSOLE_FORWARD_JS + DC_SETTLE_JS + dcLogicPatchJs(PROGRESS_LOGIC_EXT) + PROGRESS_DOM_JS;
 
 export default function ProgressScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const webRef = useRef<WebView>(null);
-  const [ready, setReady] = useState(false);
+  const { fade, onReady, onLoadStart, onLoadEnd } = useRevealFade(m => { if (__DEV__) console.log('[PROGRESS]', m); });
   const dataRef = useRef<ProgressData | null>(null);
   const photosRef = useRef<{ id: string; uri: string }[]>([]);
   const [viewing, setViewing] = useState<string | null>(null); // file uri of the photo shown full screen
 
   const push = useCallback(() => {
     if (dataRef.current) webRef.current?.injectJavaScript(athltSetDataJs(dataRef.current));
-  }, []);
-
-  // Safety net so a missing ready signal can never leave a blank tab.
-  useEffect(() => {
-    const t = setTimeout(() => setReady(true), 7000);
-    return () => clearTimeout(t);
   }, []);
 
   const load = useCallback(async () => {
@@ -80,26 +75,27 @@ export default function ProgressScreen() {
       data.workouts.forEach((w) => { const pw = prev.workouts.find(x => x.ts === w.ts); w.thumb = pw?.thumb ?? null; w.fallback = pw?.fallback ?? null; });
     }
     dataRef.current = data;
+    // First open: the rank emblem and muscle icons are part of the first picture, so they are fetched
+    // BEFORE the first push (the page only reveals itself once it has been filled), instead of popping
+    // in a moment after the page is already showing. Refreshes reuse the art fetched earlier.
+    const [cur, icons] = await Promise.all([
+      prev && data.rank.emblem ? Promise.resolve(data.rank.emblem) : tierDataUri(data.rank.tier ?? 'bronze'),
+      Promise.all(data.muscles.map(m => (prev && m.icon ? Promise.resolve(m.icon) : muscleIconUri(m.key as Muscle, (m.tier ?? 'silver') as Tier)))),
+    ]);
+    if (dataRef.current !== data) return;
+    if (cur) data.rank.emblem = cur;
+    data.muscles.forEach((m, i) => { m.icon = icons[i]; });
     push();
-    // Heavier art arrives in follow-up pushes: rank emblem, muscle icons, ladder, video frames.
-    const cur = await tierDataUri(data.rank.tier ?? 'bronze');
-    if (dataRef.current === data && cur) { data.rank.emblem = cur; push(); }
-    const icons = await Promise.all(data.muscles.map(m => muscleIconUri(m.key as Muscle, (m.tier ?? 'silver') as Tier)));
-    if (dataRef.current === data) { data.muscles.forEach((m, i) => { m.icon = icons[i]; }); push(); }
+    // Below-the-fold art arrives afterwards: ladder, video frames.
     const imgs = await Promise.all(TIER_ORDER.map(t => tierDataUri(t)));
     if (dataRef.current === data) { data.ladder.forEach((l, i) => { l.img = imgs[i]; }); push(); }
     // Every past workout gets a picture. A workout with no saved video (or one whose clip is gone)
     // falls back to the icon of the muscle it worked most, so no card is ever a black box.
-    const wIcons = await Promise.all(data.workouts.map(w => (w.muscle ? muscleIconUri(w.muscle as Muscle, (tiers[w.muscle as Muscle]?.tier ?? 'silver') as Tier) : Promise.resolve(null))));
+    const wIcons = await Promise.all(data.workouts.map(w => workoutFallbackIcon(w.muscle, tiers[w.muscle as Muscle]?.tier)));
     if (dataRef.current === data) { data.workouts.forEach((w, i) => { if (wIcons[i]) w.fallback = wIcons[i]; }); push(); }
     // each workout owns the videos logged since the previous (older) workout ended
     const prevTsOf = (w: { ts: number }) => { const i = data.workouts.findIndex(x => x.ts === w.ts); return data.workouts[i + 1]?.ts ?? 0; };
-    const frameOf = async (w: { ts: number }) => {
-      const prev = prevTsOf(w);
-      const uri = (await getSessionThumbnail(w.ts, 1000, prev)) ?? (await getSessionThumbnail(w.ts, 0, prev));
-      if (!uri) return null;
-      try { return `data:image/jpeg;base64,${await new File(uri).base64()}`; } catch { return null; }
-    };
+    const frameOf = (w: { ts: number }) => workoutFrame(w.ts, prevTsOf(w));
     // the carousel's 8 first, then the rest of the list
     for (const [from, to] of [[0, 8], [8, data.workouts.length]]) {
       const frames = await Promise.all(data.workouts.slice(from, to).map(frameOf));
@@ -134,7 +130,7 @@ export default function ProgressScreen() {
     let msg: { type?: string; dateKey?: string; weightLb?: number; ts?: number; msg?: string; pose?: string };
     try { msg = JSON.parse(raw); } catch { return; }
     switch (msg.type) {
-      case 'ready': setReady(true); break;
+      case 'ready': onReady(); break;
       case 'pageConsole': if (__DEV__) console.log('[progress-page]', msg.msg); break;
       case 'needData': push(); break;
       case 'logWeight': {
@@ -165,13 +161,16 @@ export default function ProgressScreen() {
   return (
     <View style={styles.root}>
       <StatusBar style="dark" />
+      <Animated.View style={{ flex: 1, opacity: fade }}>
       <WebView
         ref={webRef}
         source={PROGRESS_HTML}
         originWhitelist={['*']}
         injectedJavaScriptBeforeContentLoaded={PROGRESS_BEFORE}
         onMessage={(e) => onMessage(e.nativeEvent.data)}
-        style={[styles.web, { opacity: ready ? 1 : 0 }]}
+        onLoadStart={onLoadStart}
+        onLoadEnd={onLoadEnd}
+        style={styles.web}
         scrollEnabled
         bounces={false}
         overScrollMode="never"
@@ -182,6 +181,7 @@ export default function ProgressScreen() {
         domStorageEnabled
         cacheEnabled={false}
       />
+      </Animated.View>
       <Modal visible={viewing != null} transparent animationType="fade" onRequestClose={() => setViewing(null)}>
         <Pressable style={styles.viewer} onPress={() => setViewing(null)}>
           {viewing ? <Image source={{ uri: viewing }} style={styles.viewerImg} resizeMode="contain" /> : null}

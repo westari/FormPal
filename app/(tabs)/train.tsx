@@ -24,14 +24,14 @@
  */
 
 import React, { useCallback, useRef, useState, useEffect } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Animated, Easing } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
 import * as Haptics from 'expo-haptics';
 import AppBackground from '../../components/AppBackground';
-import { DC_VIEWPORT_JS, CONSOLE_FORWARD_JS } from '../../lib/dcWebviewHelpers';
+import { DC_VIEWPORT_JS, CONSOLE_FORWARD_JS, DC_SETTLE_JS } from '../../lib/dcWebviewHelpers';
 import { dcLogicPatchJs, athltSetDataJs } from '../../lib/dcLogicPatch';
 import { loadPlan } from '../../lib/planStorage';
 import { getAllSessions, computeMuscleTiers } from '../../lib/sessionLog';
@@ -117,7 +117,13 @@ const TRAIN_WEB_INJECT = `
     + 'div[style*="filter: blur(52px)"]{display:none!important;}'
     + 'div[style*="padding: 22px 34px 0"]{visibility:hidden!important;flex:none!important;height:var(--trTop,0px)!important;min-height:0!important;padding:0!important;overflow:hidden!important;}'
     + 'div[style*="padding: 14px 30px 0"]{display:none!important;}'
-    + 'svg{will-change:transform;}';
+    + 'svg{will-change:transform;}'
+    // The design's one-time entrance animations (cards rising, the shield dropping in) would play while the page is
+    // still hidden and be caught half-way when it is revealed, so they are off. The plan view's own slide-in stays.
+    + '[style*="fadeUp"],[style*="shieldIn"]{animation:none!important;}'
+    // Nothing is painted until the page has its layout, data and logic and has stopped changing
+    // (<html data-pready> is set by tick(); a fresh document starts hidden again).
+    + 'html:not([data-pready]) body{visibility:hidden!important;}';
 
   function ensure() {
     if (document.getElementById('__rn_css')) return;
@@ -219,20 +225,32 @@ const TRAIN_WEB_INJECT = `
   }
 
   var reported = false, lastAsk = 0;
+  function setPageReady(on) {
+    var h = document.documentElement;
+    if (!h) return;
+    if (on) { if (!h.hasAttribute('data-pready')) h.setAttribute('data-pready', '1'); }
+    else if (h.hasAttribute('data-pready')) h.removeAttribute('data-pready');
+  }
   function tick() {
     var ok = fit();
     applyMap();
     // Native's first push can land before this document exists (and be lost) —
     // so the page asks until it has data.
     if (!window.__athltData && Date.now() - lastAsk > 700) { lastAsk = Date.now(); post('need-data'); }
-    // Ready = real layout exists, the logic swap + data landed, and the hero is mounted.
-    if (!reported && ok && window.__athltData && window.__athltLogicReady && document.querySelector('[data-glass="hero"]')) {
+    // Ready = real layout exists, the logic swap + data landed, the hero is mounted, and the page has
+    // stopped changing (viewport and DOM still for a moment).
+    var parts = ok && window.__athltData && window.__athltLogicReady && document.querySelector('[data-glass="hero"]');
+    // once revealed it stays revealed; the settle gate only applies to the first reveal
+    var real = reported || (!!parts && (!window.__dcSettle || window.__dcSettle(160)));
+    setPageReady(real);
+    if (!reported && real) {
       reported = true;
       post('ready');
     }
+    if (parts && !real) { clearTimeout(deb); deb = setTimeout(tick, 90); }
   }
   var deb;
-  function schedule() { clearTimeout(deb); deb = setTimeout(tick, 60); }
+  function schedule() { ensure(); clearTimeout(deb); deb = setTimeout(tick, 60); }
   try { new MutationObserver(schedule).observe(document, { childList: true, subtree: true }); } catch (e) {}
   window.addEventListener('resize', schedule);
   window.__trainTick = tick;
@@ -244,7 +262,7 @@ true;
 
 // The train bridge posts plain strings ('__tap', 'begin', 'practice:x',
 // 'ready'); dcLogicPatch posts JSON status — both arrive in onMsg.
-const TRAIN_BEFORE = DC_VIEWPORT_JS + CONSOLE_FORWARD_JS + dcLogicPatchJs(TRAIN_LOGIC_EXT) + TRAIN_WEB_INJECT;
+const TRAIN_BEFORE = DC_VIEWPORT_JS + CONSOLE_FORWARD_JS + DC_SETTLE_JS + dcLogicPatchJs(TRAIN_LOGIC_EXT) + TRAIN_WEB_INJECT;
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -343,22 +361,28 @@ export default function TrainScreen() {
   const pongAt = useRef(0);
   const loads = useRef(0);
 
-  // Show only once the page says it's genuinely laid out + wired (or after a
-  // 7s safety net so a missing signal can never leave a blank tab).
+  // Show only once the page says it's genuinely laid out, filled and still. iOS does not start loading a
+  // tab's web view until the tab is first shown (the log showed 65s between mount and load), so the
+  // last-resort timer only starts when the page has actually loaded; the page also hides its own content
+  // until it is ready, so even an early reveal can never show a half-built page.
   const armReveal = useCallback(() => {
     if (revealTimer.current) clearTimeout(revealTimer.current);
-    revealTimer.current = setTimeout(() => { tlog('revealed by 7s safety net (page never said ready)'); setRevealed(true); }, 7000);
+    revealTimer.current = setTimeout(() => { tlog('revealed by 12s safety net after load (page never said ready)'); setRevealed(true); }, 12000);
   }, []);
+  const fade = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const a = Animated.timing(fade, { toValue: revealed ? 1 : 0, duration: revealed ? 180 : 0, easing: Easing.out(Easing.quad), useNativeDriver: false });
+    a.start();
+    return () => a.stop();
+  }, [revealed, fade]);
   useEffect(() => {
     tlog('mounted', TRAIN_BUILD);
-    armReveal();
     return () => { tlog('unmounted'); if (revealTimer.current) clearTimeout(revealTimer.current); };
-  }, [armReveal]);
+  }, []);
 
   const reloadPage = useCallback((why: string) => {
     tlog('reloading web view:', why);
     setRevealed(false);
-    armReveal();
     webRef.current?.reload();
   }, [armReveal]);
 
@@ -385,7 +409,7 @@ export default function TrainScreen() {
   function onMsg(raw: string) {
     if (raw === 'pong') { pongAt.current = Date.now(); return; }
     if (raw === '__tap') { Haptics.selectionAsync(); return; }
-    if (raw === 'ready') { tlog('page ready (layout + data + logic all in place)'); setRevealed(true); return; }
+    if (raw === 'ready') { tlog('page ready (layout + data + logic all in place, page still)'); if (revealTimer.current) clearTimeout(revealTimer.current); setRevealed(true); return; }
     if (raw === 'need-data') { tlog('page asked for data;', dataJsRef.current ? 'sending' : 'not loaded yet'); if (dataJsRef.current) webRef.current?.injectJavaScript(dataJsRef.current); return; }
     if (raw.startsWith('{')) {
       // lib/dcLogicPatch's own JSON status posts + forwarded page console
@@ -404,18 +428,19 @@ export default function TrainScreen() {
     <View style={s.root} onLayout={(e) => tlog('rendered; container', Math.round(e.nativeEvent.layout.width) + 'x' + Math.round(e.nativeEvent.layout.height))}>
       <StatusBar style="dark" />
       <AppBackground />
+      <Animated.View style={{ flex: 1, opacity: fade }}>
       <WebView
         ref={webRef}
         source={TRAIN_HTML as any}
         originWhitelist={['*']}
         injectedJavaScriptBeforeContentLoaded={TRAIN_BEFORE}
         onMessage={(e) => onMsg(e.nativeEvent.data)}
-        onLoadStart={() => tlog('web view load start')}
-        onLoadEnd={() => { loads.current += 1; tlog('web view load end #' + loads.current); }}
+        onLoadStart={() => { tlog('web view load start'); setRevealed(false); }}
+        onLoadEnd={() => { loads.current += 1; tlog('web view load end #' + loads.current); armReveal(); }}
         onError={(e) => tlog('web view ERROR:', e.nativeEvent.description)}
         onHttpError={(e) => tlog('web view HTTP ERROR:', e.nativeEvent.statusCode, e.nativeEvent.url)}
         onContentProcessDidTerminate={() => reloadPage('iOS killed the web view process')}
-        style={[s.web, { opacity: revealed ? 1 : 0 }]}
+        style={s.web}
         opaque={false}
         scrollEnabled={false}
         bounces={false}
@@ -429,6 +454,7 @@ export default function TrainScreen() {
         domStorageEnabled
         cacheEnabled={false}
       />
+      </Animated.View>
     </View>
   );
 }
