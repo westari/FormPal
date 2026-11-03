@@ -652,7 +652,12 @@ enum ExerciseRegistry {
         // (requiredPastEntry ≈ 8.45) — comfortably above the shallow
         // cluster (5.5-5.8), comfortably below the genuine cluster
         // (17.6+), using this exercise's own real numbers, not a guess.
-        phantomGuardFraction: 0.65,
+        // NOTE: this argument was a DUPLICATE of the one further down (0.18) and was also
+        // out of Swift's required argument order, which is what broke the iOS build
+        // ("extra argument 'phantomGuardFraction' in call"). The double-count it fixed is
+        // now prevented by startPositionGate (rep only counts back at the start position),
+        // and constants/exerciseDefinitions.ts's shoulderPress (what the app actually
+        // sends native) uses 0.18, so 0.18 below is the single value.
 
         formChecks: [
 
