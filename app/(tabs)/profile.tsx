@@ -9,23 +9,24 @@
  * Everything the old native Profile screen could do is still here: sign out,
  * delete account, audio settings, rank & customization, reset onboarding, and
  * the dev tools (they now live as rows in the artboard's own list style).
- * Rows for features the app doesn't have yet (reminders, Apple Health,
- * membership, referrals, support messaging) say "Coming soon" instead of
- * showing the artboard's demo values.
+ * Features the app doesn't have yet (reminders, Apple Health, membership,
+ * referrals, support messaging) are hidden rather than shown as placeholders.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, Alert } from 'react-native';
+import { View, StyleSheet, Alert, Share, Animated } from 'react-native';
+import { useRevealFade } from '../../lib/useRevealFade';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { CONSOLE_FORWARD_JS, DC_VIEWPORT_JS } from '../../lib/dcWebviewHelpers';
+import { CONSOLE_FORWARD_JS, DC_VIEWPORT_JS, DC_SETTLE_JS } from '../../lib/dcWebviewHelpers';
 import { dcLogicPatchJs, athltSetDataJs } from '../../lib/dcLogicPatch';
 import { PROFILE_LOGIC_EXT, PROFILE_DOM_JS } from '../../lib/profileInject';
 import { buildProfileData, GOAL_IDS, PLACE_IDS, type ProfileData, type ProfileDetails } from '../../lib/profileData';
 import { getAllSessions, calcStreak, computeMuscleTiers } from '../../lib/sessionLog';
 import { getWeightLog, logWeight } from '../../lib/weightLog';
+import { getReferral, referralMessage } from '../../lib/referral';
 import { loadPlan, loadProfile, saveProfile, savePlan } from '../../lib/planStorage';
 import { generatePlan } from '../../lib/planGenerator';
 import { clearAllCalibrations } from '../../lib/calibration/store';
@@ -34,17 +35,18 @@ import { useCustomizationStore } from '../../store/customizationStore';
 import { useAudioSettingsStore } from '../../store/audioSettingsStore';
 import { supabase } from '../../constants/supabase';
 import Constants from 'expo-constants';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { PlanProfile } from '../../types/plan';
 
 const PROFILE_HTML = require('../../assets/app screens/profile.html');
-const PROFILE_BUILD = 'profile-1';
+const PROFILE_BUILD = 'profile-2';
 if (__DEV__) console.log(`[profile] build ${PROFILE_BUILD}`);
 
 const ONBOARDING_KEY = 'formpal_onboarding_complete';
 const LOCATION_KEY   = 'formpal_location';
 const PROFILE_DETAILS_KEY = 'formpal_profile_details';
 
-const PROFILE_BEFORE = DC_VIEWPORT_JS + CONSOLE_FORWARD_JS + dcLogicPatchJs(PROFILE_LOGIC_EXT) + PROFILE_DOM_JS;
+const PROFILE_BEFORE = DC_VIEWPORT_JS + CONSOLE_FORWARD_JS + DC_SETTLE_JS + dcLogicPatchJs(PROFILE_LOGIC_EXT) + PROFILE_DOM_JS;
 
 async function loadDetails(): Promise<ProfileDetails> {
   try { const raw = await AsyncStorage.getItem(PROFILE_DETAILS_KEY); return raw ? JSON.parse(raw) : {}; } catch { return {}; }
@@ -55,19 +57,14 @@ async function patchDetails(patch: ProfileDetails) {
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const webRef = useRef<WebView>(null);
-  const [ready, setReady] = useState(false);
+  const { fade, onReady, onLoadStart, onLoadEnd } = useRevealFade(m => { if (__DEV__) console.log('[PROFILE]', m); });
   const dataRef = useRef<ProfileData | null>(null);
   const seedRef = useRef(0);
 
   const push = useCallback(() => {
     if (dataRef.current) webRef.current?.injectJavaScript(athltSetDataJs(dataRef.current));
-  }, []);
-
-  // Safety net so a missing ready signal can never leave a blank tab.
-  useEffect(() => {
-    const t = setTimeout(() => setReady(true), 7000);
-    return () => clearTimeout(t);
   }, []);
 
   const load = useCallback(async (reseed: boolean) => {
@@ -77,7 +74,9 @@ export default function ProfileScreen() {
     ]);
     if (reseed) seedRef.current += 1;
     const audio = useAudioSettingsStore.getState();
+    const referral = await getReferral(useCustomizationStore.getState().displayName);
     dataRef.current = buildProfileData({
+      referral,
       seedVersion: seedRef.current,
       name: useCustomizationStore.getState().displayName,
       email: userRes?.data?.user?.email ?? null,
@@ -86,10 +85,11 @@ export default function ProfileScreen() {
       location, latestWeightLb: weights.length ? weights[weights.length - 1].weightLb : null,
       details,
       audio: { enabled: audio.audioEnabled, voiceFrequency: audio.voiceFrequency },
+      insets: { top: insets.top, bottom: insets.bottom },
       appVersion: `FormPal ${Constants.expoConfig?.version ?? ''}${Constants.expoConfig?.ios?.buildNumber ? ` (${Constants.expoConfig.ios.buildNumber})` : ''}`.trim(),
     });
     push();
-  }, [push]);
+  }, [push, insets.top, insets.bottom]);
 
   useFocusEffect(useCallback(() => { load(true).catch(() => {}); }, [load]));
 
@@ -134,13 +134,24 @@ export default function ProfileScreen() {
     let msg: { type?: string; to?: string; patch?: Record<string, any>; msg?: string };
     try { msg = JSON.parse(raw); } catch { return; }
     switch (msg.type) {
-      case 'ready': setReady(true); break;
+      case 'ready': onReady(); break;
       case 'needData': push(); break;
       case 'pageConsole': if (__DEV__) console.log('[profile-page]', msg.msg); break;
       case 'save': if (msg.patch) void save(msg.patch); break;
       case 'applyPlan': void applyPlan(); break;
+      case 'applyReferralCode': {
+        // saved on the phone; there is no referral backend to redeem it against yet
+        const entered = (msg as { code?: string }).code;
+        if (entered) void AsyncStorage.setItem('formpal_referral_entered', entered).catch(() => {});
+        break;
+      }
+      case 'shareReferral': {
+        const code = dataRef.current?.referral.code;
+        if (code) Share.share({ message: referralMessage(code) }).catch(() => {});
+        break;
+      }
       case 'nav': {
-        const route = msg.to === 'audio' ? '/audio-settings' : msg.to === 'ar' ? '/ar-experiment' : msg.to === 'calibrate' ? '/calibrate' : null;
+        const route = msg.to === 'audio' ? '/audio-settings' : msg.to === 'ar' ? '/ar-experiment' : msg.to === 'calibrate' ? '/calibrate' : msg.to === 'camera' ? '/exercise-picker' : null;
         if (route) router.push(route as any);
         break;
       }
@@ -178,13 +189,16 @@ export default function ProfileScreen() {
   return (
     <View style={styles.root}>
       <StatusBar style="dark" />
+      <Animated.View style={{ flex: 1, opacity: fade }}>
       <WebView
         ref={webRef}
         source={PROFILE_HTML}
         originWhitelist={['*']}
         injectedJavaScriptBeforeContentLoaded={PROFILE_BEFORE}
         onMessage={(e) => onMessage(e.nativeEvent.data)}
-        style={[styles.web, { opacity: ready ? 1 : 0 }]}
+        onLoadStart={onLoadStart}
+        onLoadEnd={onLoadEnd}
+        style={styles.web}
         scrollEnabled
         bounces={false}
         overScrollMode="never"
@@ -195,6 +209,7 @@ export default function ProfileScreen() {
         domStorageEnabled
         cacheEnabled={false}
       />
+      </Animated.View>
     </View>
   );
 }

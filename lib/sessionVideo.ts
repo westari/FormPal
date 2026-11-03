@@ -33,11 +33,14 @@ try {
 }
 
 const VIDEO_LOG_KEY = 'formpal_video_log';
-// A session's own ts and the videoUri log entry's ts are both stamped at
-// workout-finish time from two separate Date.now() calls a few JS ticks
-// apart — never exactly equal. 5s comfortably covers that gap without
-// risking a false match against an adjacent session.
+// A solo check's own ts and its videoUri log entry's ts are stamped from two
+// separate Date.now() calls a few JS ticks apart — never exactly equal. 5s
+// covers that gap. A WORKOUT is different: each set's video is logged when
+// that set is stopped, but the workout's ts is when the whole workout
+// finished, minutes later. So a workout owns the videos logged after the
+// previous workout ended and up to its own end (never more than 3 hours back).
 const MATCH_TOLERANCE_MS = 5000;
+const MAX_WORKOUT_MS = 3 * 60 * 60 * 1000;
 
 type VideoLogEntry = { uri: string; ts: number };
 
@@ -53,15 +56,20 @@ async function loadVideoLog(): Promise<VideoLogEntry[]> {
   return cachedLog!;
 }
 
-export async function findSessionVideoUri(sessionTs: number): Promise<string | null> {
+/**
+ * The video for a session/workout that finished at `sessionTs`. `prevSessionTs` is when the workout before it
+ * finished (0 if unknown): videos logged before that belong to the earlier workout. Of the videos in the window,
+ * the one closest to the end is used (the last set filmed), so the thumbnail and the replay are the same clip.
+ */
+export async function findSessionVideoUri(sessionTs: number, prevSessionTs: number = 0): Promise<string | null> {
   const log = await loadVideoLog();
+  const lo = Math.max(prevSessionTs + MATCH_TOLERANCE_MS, sessionTs - MAX_WORKOUT_MS);
+  const hi = sessionTs + MATCH_TOLERANCE_MS;
   let best: VideoLogEntry | null = null;
-  let bestDist = Infinity;
   for (const entry of log) {
-    const dist = Math.abs(entry.ts - sessionTs);
-    if (dist < bestDist) { bestDist = dist; best = entry; }
+    if (entry.ts > lo && entry.ts <= hi && (!best || entry.ts > best.ts)) best = entry;
   }
-  return best && bestDist <= MATCH_TOLERANCE_MS ? best.uri : null;
+  return best ? best.uri : null;
 }
 
 // In-memory only (not persisted) — regenerated once per app run per
@@ -69,17 +77,17 @@ export async function findSessionVideoUri(sessionTs: number): Promise<string | n
 // complexity of a disk cache that would need its own invalidation.
 const thumbCache = new Map<string, string | null>();
 
-export async function getSessionThumbnail(sessionTs: number): Promise<string | null> {
+export async function getSessionThumbnail(sessionTs: number, timeMs: number = 0, prevSessionTs: number = 0): Promise<string | null> {
   if (!VideoThumbnails) return null; // native module not in this build — see the require() guard above
 
-  const cacheKey = String(sessionTs);
+  const cacheKey = `${sessionTs}@${timeMs}@${prevSessionTs}`;
   if (thumbCache.has(cacheKey)) return thumbCache.get(cacheKey)!;
 
-  const videoUri = await findSessionVideoUri(sessionTs);
+  const videoUri = await findSessionVideoUri(sessionTs, prevSessionTs);
   if (!videoUri) { thumbCache.set(cacheKey, null); return null; }
 
   try {
-    const { uri } = await VideoThumbnails.getThumbnailAsync(videoUri, { time: 0, quality: 0.5 });
+    const { uri } = await VideoThumbnails.getThumbnailAsync(videoUri, { time: timeMs, quality: 0.5 });
     thumbCache.set(cacheKey, uri);
     return uri;
   } catch {

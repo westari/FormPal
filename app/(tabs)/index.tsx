@@ -22,17 +22,21 @@
  *   masquerading as real.
  */
 import React, { useCallback, useRef, useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Animated } from 'react-native';
+import { useRevealFade } from '../../lib/useRevealFade';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
 import { loadPlan } from '../../lib/planStorage';
-import { getAllSessions, calcStreak, groupIntoWorkouts, scoredSessions, type SessionEntry } from '../../lib/sessionLog';
+import { getAllSessions, calcStreak, groupIntoWorkouts, scoredSessions, computeMuscleTiers, type SessionEntry } from '../../lib/sessionLog';
+import { primaryMuscle } from '../../lib/progressData';
+import { workoutFrame, workoutFallbackIcon } from '../../lib/workoutThumbs';
 import type { Plan } from '../../types/plan';
-import { DC_VIEWPORT_JS } from '../../lib/dcWebviewHelpers';
+import { DC_VIEWPORT_JS, DC_SETTLE_JS } from '../../lib/dcWebviewHelpers';
 import { MYPAL_API_URL } from '../../constants/api';
 import { homeCleanJs } from '../../lib/homeClean';
+import { askCue } from '../../lib/cueApi';
 
 const HOME_HTML = require('../../assets/app screens/home.html');
 const HOME_BUILD = 'home-6';
@@ -177,7 +181,30 @@ true;
 const HIDE_FAKE_CHROME_CSS = `
   div[style*="right: 88px"][style*="bottom: 22px"][style*="height: 64px"] { display: none !important; }
   div[style*="right: 14px"][style*="bottom: 22px"][style*="width: 64px"][style*="height: 64px"] { display: none !important; }
+  /* no grey highlight box around whatever was tapped, no text selection / callout */
+  * { -webkit-tap-highlight-color: rgba(0,0,0,0) !important; -webkit-touch-callout: none !important; -webkit-user-select: none !important; user-select: none !important; }
+  a { outline: none !important; }
+  /* the artboard's one-time entrance animations would play while the page is still hidden and then be caught
+     half-way when it is revealed: they are switched off (the Cue blob's own looping glow is kept) */
+  [style*="hm-rise"], [style*="hm-bar"] { animation: none !important; }
+  /* Cue card: no card behind the glass blob and its text (no white box, no shadow) */
+  div[style*="margin: -26px 8px 0"] { background: none !important; box-shadow: none !important; }
 `;
+
+// Hidden until the page is ready: the artboard shows its own demo content first, and the real data,
+// header offset and canvas scale land a moment later. <html data-pready> is set by the injection below.
+const HOME_GUARD_JS = `(function(){
+  function add(){
+    if (document.getElementById('__home_guard')) return true;
+    var host = document.head || document.documentElement;
+    if (!host) return false;
+    var s = document.createElement('style'); s.id = '__home_guard';
+    s.textContent = 'html:not([data-pready]) body{visibility:hidden!important;}';
+    host.appendChild(s); return true;
+  }
+  add();
+  try { new MutationObserver(function(){ add(); }).observe(document, { childList: true, subtree: true }); } catch (e) {}
+})(); true;`;
 
 export function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[], insetTop: number, insetBottom: number): string {
   const workoutGroups = groupIntoWorkouts(sessions);
@@ -225,14 +252,21 @@ export function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[], i
     function pushHeaderDown(){
       var scale = window.__dcCanvasScale;
       if(!scale) return false;
-      var all = document.querySelectorAll('div');
-      var header = null;
-      for (var i=0;i<all.length;i++){ if (all[i].style.paddingTop === '62px') { header = all[i]; break; } }
-      if(!header) return false;
+      // this injection runs on every focus: the header is remembered after its first offset (its padding
+      // is no longer the design's 62px by then)
+      var header = document.querySelector('[data-home-header]');
+      if(!header){
+        var all = document.querySelectorAll('div');
+        for (var i=0;i<all.length;i++){ if (all[i].style.paddingTop === '62px') { header = all[i]; break; } }
+        if(!header) return false;
+        header.setAttribute('data-home-header', '1');
+      }
       header.style.setProperty('padding-top', (62 + INSET_TOP/scale) + 'px', 'important');
       return true;
     }
-    if(!pushHeaderDown()){ [50,150,300,600,1000].forEach(function(d){ setTimeout(pushHeaderDown, d); }); }
+    var DONE = { header: false, sheet: false, text: false, recent: false };
+    DONE.header = pushHeaderDown();
+    if(!DONE.header){ [50,150,300,600,1000].forEach(function(d){ setTimeout(function(){ if(!DONE.header) DONE.header = pushHeaderDown(); }, d); }); }
 
     // BUG FOUND ("edit sheet gets put behind the tab bar, bottom cut off,
     // Done button covered"): this app's tab bar is a REAL NATIVE one
@@ -267,7 +301,8 @@ export function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[], i
       if(cueSheet) cueSheet.style.setProperty('bottom', (8 + extra) + 'px', 'important');
       return true;
     }
-    if(!pushEditSheetUp()){ [50,150,300,600,1000].forEach(function(d){ setTimeout(pushEditSheetUp, d); }); }
+    DONE.sheet = pushEditSheetUp();
+    if(!DONE.sheet){ [50,150,300,600,1000].forEach(function(d){ setTimeout(function(){ if(!DONE.sheet) DONE.sheet = pushEditSheetUp(); }, d); }); }
     function applyText(){
       var hit = 0;
       var all = document.querySelectorAll('div,span');
@@ -308,7 +343,10 @@ export function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[], i
       }
       return hit;
     }
-    if (!applyText()) { [100,300,700,1500].forEach(function(d){ setTimeout(applyText, d); }); }
+    // (a later focus finds the text already replaced, so "done" is remembered)
+    function textDone(){ if (applyText() > 0) window.__homeTextDone = true; return !!window.__homeTextDone; }
+    DONE.text = textDone();
+    if (!DONE.text) { [100,300,700,1500].forEach(function(d){ setTimeout(function(){ if(!DONE.text) DONE.text = textDone(); }, d); }); }
 
     // Recent Workouts — a real sc-for list (3 placeholder cards by
     // default); populate with real session groups, hide any unused slots.
@@ -323,13 +361,28 @@ export function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[], i
         if (nameEl) nameEl.textContent = r.name;
         var pctEl = a.querySelector('div[style*="font-size: 14px"][style*="font-variant-numeric"]');
         if (pctEl) pctEl.textContent = r.formPct;
-        a.addEventListener('click', function(ev){ ev.preventDefault(); ev.stopPropagation(); post({ type:'recap', ts: r.ts }); }, true);
+        // this injection runs on every focus: keep ONE listener per card and just update which workout it opens
+        a.__recapTs = r.ts;
+        if (!a.__recapWired) {
+          a.__recapWired = true;
+          a.addEventListener('click', function(ev){ ev.preventDefault(); ev.stopPropagation(); post({ type:'recap', ts: a.__recapTs }); }, true);
+        }
       });
       return true;
     }
-    if (!wireRecent()) { [100,300,700,1500].forEach(function(d){ setTimeout(wireRecent, d); }); }
+    DONE.recent = wireRecent();
+    if (!DONE.recent) { [100,300,700,1500].forEach(function(d){ setTimeout(function(){ if(!DONE.recent) DONE.recent = wireRecent(); }, d); }); }
 
+    // The Cue card: tapping ANYWHERE on it (orb, text, empty space) opens the chat, not just the small link.
+    function cueCard(){
+      var link = document.querySelector('a[href="Cue.dc.html"]');
+      return link && link.parentElement && link.parentElement.parentElement && link.parentElement.parentElement.parentElement;
+    }
+    if (!window.__homeClickWired) {
+    window.__homeClickWired = true;
     document.addEventListener('click', function(ev){
+      var cc = cueCard();
+      if (cc && cc.contains(ev.target)) { ev.preventDefault(); ev.stopPropagation(); post({type:'cue'}); return; }
       var el = ev.target;
       for (var i=0; el && i<6; i++, el=el.parentElement){
         if (!el.getAttribute) continue;
@@ -348,10 +401,32 @@ export function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[], i
         if (href === 'Progress.dc.html') { ev.preventDefault(); post({type:'progress'}); return; }
       }
     }, true);
+    }
 
-    var st = document.createElement('style');
+    // Real picture for every recent workout: a frame of its video, or the muscle icon when it has none.
+    window.__homeThumbs = function(list){
+      var boxes = document.querySelectorAll('div[role="img"][aria-label$=" video"]');
+      for (var i = 0; i < boxes.length && i < list.length; i++) {
+        var w = list[i], el = boxes[i];
+        var sig = w.thumb ? 'v' + w.thumb.length : w.fallback ? 'f' + w.fallback.length : '';
+        if (!sig || el.__thumb === sig) continue;
+        el.__thumb = sig;
+        if (w.thumb) {
+          el.style.setProperty('background-image', 'url(' + w.thumb + ')', 'important');
+          el.style.setProperty('background-size', 'cover', 'important');
+          el.style.setProperty('background-position', 'center', 'important');
+        } else {
+          el.style.setProperty('background-image', 'url(' + w.fallback + '), linear-gradient(160deg, #3b4156 0%, #15171e 100%)', 'important');
+          el.style.setProperty('background-size', '46%, cover', 'important');
+          el.style.setProperty('background-position', 'center, center', 'important');
+          el.style.setProperty('background-repeat', 'no-repeat, no-repeat', 'important');
+        }
+      }
+    };
+
+    var st = document.getElementById('__home_css');
+    if (!st) { st = document.createElement('style'); st.id = '__home_css'; document.head.appendChild(st); }
     st.textContent = ${JSON.stringify(HIDE_FAKE_CHROME_CSS)};
-    document.head.appendChild(st);
     // BUG FOUND ("home tab still glitches when first opening the app"):
     // this screen's WebView was never actually opacity-gated on anything
     // at all — unlike every other screen in this app, it was visible from
@@ -360,11 +435,19 @@ export function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[], i
     // script ever got a chance to apply real data. Delaying 'ready' past
     // dcScaleFitJs's own 300ms fit() checkpoint (same fix as recap.tsx/
     // rep-feedback.tsx) and actually using it on the RN side now.
+    // Ready = canvas scaled, header/sheets offset, real text and recent cards in place, and then the page
+    // (viewport + DOM) has been still for a moment. Until then the page keeps itself hidden.
     var SCRIPT_START = Date.now();
+    function markReady(){
+      var h = document.documentElement; if (h) h.setAttribute('data-pready', '1');
+      post({type:'ready'});
+    }
     function postReadyWhenStable(){
       var elapsed = Date.now() - SCRIPT_START;
-      if(elapsed < 350){ setTimeout(postReadyWhenStable, 350 - elapsed); return; }
-      post({type:'ready'});
+      var parts = DONE.header && DONE.sheet && DONE.text && DONE.recent && !!window.__dcCanvasScale;
+      var still = !window.__dcSettle || window.__dcSettle(200);
+      if ((parts && still) || elapsed > 5000) { markReady(); return; }
+      setTimeout(postReadyWhenStable, 60);
     }
     postReadyWhenStable();
   })();
@@ -377,50 +460,55 @@ export default function HomeScreen() {
   const webRef = useRef<WebView>(null);
   const [injectJs, setInjectJs] = useState<string | null>(null);
   const [pageLoaded, setPageLoaded] = useState(false);
-  const [ready, setReady] = useState(false);
+  const { fade, onReady, onLoadStart, onLoadEnd } = useRevealFade(m => { if (__DEV__) console.log('[HOME]', m); });
+  // one picture per recent workout (same code as the Progress tab): a video frame, else its muscle icon
+  const [thumbs, setThumbs] = useState<{ thumb: string | null; fallback: string | null }[]>([]);
 
   useFocusEffect(useCallback(() => {
-    Promise.all([loadPlan(), getAllSessions()]).then(([plan, sessions]) => {
+    let alive = true;
+    Promise.all([loadPlan(), getAllSessions()]).then(async ([plan, sessions]) => {
       setInjectJs(buildHomeInjectJs(plan, sessions, insets.top, insets.bottom));
+      const groups = groupIntoWorkouts(sessions);
+      const tiers = computeMuscleTiers(sessions);
+      const recent = groups.slice(0, 3);
+      const icons = await Promise.all(recent.map(g => { const m = primaryMuscle(g.entries); return workoutFallbackIcon(m, m ? tiers[m as keyof typeof tiers]?.tier : null); }));
+      if (alive) setThumbs(recent.map((_, i) => ({ thumb: null, fallback: icons[i] })));
+      const frames = await Promise.all(recent.map((g, i) => workoutFrame(g.ts, groups[i + 1]?.ts ?? 0)));
+      if (alive) setThumbs(recent.map((_, i) => ({ thumb: frames[i], fallback: icons[i] })));
     }).catch(() => {});
+    return () => { alive = false; };
   }, []));
 
   React.useEffect(() => {
     if (pageLoaded && injectJs) webRef.current?.injectJavaScript(injectJs + '; true;');
   }, [pageLoaded, injectJs]);
+  React.useEffect(() => {
+    if (pageLoaded && injectJs && thumbs.length) webRef.current?.injectJavaScript(`window.__homeThumbs && window.__homeThumbs(${JSON.stringify(thumbs)}); true;`);
+  }, [pageLoaded, injectJs, thumbs]);
 
   // Real backend call for the "Edit with Cue" sheet — see HOME_CUE_REAL_JS's
   // comment. Same request/response contract as app/cue.tsx's handleSend.
   const handleHomeCueSend = useCallback(async (text: string) => {
-    try {
-      const res = await fetch(MYPAL_API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, history: [] }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error ?? 'Request failed');
-      webRef.current?.injectJavaScript(`window.__homeCueReplyReceived && window.__homeCueReplyReceived(${JSON.stringify(data.reply)}); true;`);
-    } catch {
-      const msg = "Couldn't reach Cue. Check your connection and try again.";
-      webRef.current?.injectJavaScript(`window.__homeCueReplyReceived && window.__homeCueReplyReceived(${JSON.stringify(msg)}); true;`);
-    }
+    const r = await askCue(text, []);
+    webRef.current?.injectJavaScript(`window.__homeCueReplyReceived && window.__homeCueReplyReceived(${JSON.stringify(r.text)}); true;`);
   }, []);
 
   return (
     <View style={styles.root}>
       <StatusBar style="dark" />
+      <Animated.View style={{ flex: 1, opacity: fade }}>
       <WebView
         ref={webRef}
         source={HOME_HTML}
         originWhitelist={['*']}
-        injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS}
+        injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS + DC_SETTLE_JS + HOME_GUARD_JS}
         injectedJavaScript={HOME_SCALE_FIT_JS + HOME_CUE_REAL_JS}
-        onLoadEnd={() => setPageLoaded(true)}
+        onLoadStart={() => { setPageLoaded(false); onLoadStart(); }}
+        onLoadEnd={() => { setPageLoaded(true); onLoadEnd(); }}
         onMessage={(e) => {
           let msg: { type?: string; ts?: number; text?: string };
           try { msg = JSON.parse(e.nativeEvent.data); } catch { return; }
-          if (msg.type === 'ready') { setReady(true); return; }
+          if (msg.type === 'ready') { onReady(); return; }
           if (msg.type === 'start') { router.push('/workout' as any); return; }
           if (msg.type === 'cue') { router.push('/cue' as any); return; }
           if (msg.type === 'progress') { router.push('/(tabs)/progress' as any); return; }
@@ -435,7 +523,7 @@ export default function HomeScreen() {
         // status bar like every other full-bleed screen in this app. Fixed
         // properly in buildHomeInjectJs's pushHeaderDown instead — the
         // WebView stays full-screen, only the header's own padding grows.
-        style={[styles.web, { opacity: ready ? 1 : 0 }]}
+        style={styles.web}
         scrollEnabled
         bounces={false}
         overScrollMode="never"
@@ -446,6 +534,7 @@ export default function HomeScreen() {
         domStorageEnabled
         cacheEnabled={false}
       />
+      </Animated.View>
     </View>
   );
 }

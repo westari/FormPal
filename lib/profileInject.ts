@@ -11,10 +11,16 @@
  *    weight (weight log), goal / experience / training location / days
  *    (plan profile), audio summary, units, plus Sign out / Delete account /
  *    developer tools that the old native screen had.
- *  - "Coming soon", non-interactive: workout reminders/time, Apple Health,
- *    membership, referral rewards + codes, support/feature messaging — the app
- *    has no backend or native module for these yet, and the artboard's demo
- *    values for them ("Renews Sep 14, 2027", "$10 per friend") are not true.
+ *  - REFERRAL: the design's "Refer a friend" banner opens the referral page, which shows the user's own
+ *    code, "0 of 6" friends joined (there is no referral backend yet) and shares through the real share
+ *    sheet. "Enter referral code" opens the design's own small screen where a code is typed and saved.
+ *    The banner's "$10 off" subtitle and the code screen's "free month" line promised rewards that do not
+ *    exist, so those two lines are reworded.
+ *  - HIDDEN (no placeholder rows, nothing says "coming soon"): workout reminders / workout time, Apple Health, membership,
+ *    and the feature-request / contact-support composers. The app has no backend
+ *    or native module for them yet, and the artboard's demo values for them
+ *    ("Renews Sep 14, 2027", "$10 per friend") are not true. They come back by
+ *    removing their label from HIDDEN_ROWS below once the feature exists.
  *
  * Edits made on the page are persisted by posting {type:'save', patch} to
  * native (debounced); native writes them to their real homes.
@@ -36,16 +42,25 @@ export const PROFILE_LOGIC_EXT = String.raw`function (Orig) {
     return { name: s.det.name, age: s.det.age, height: s.det.height, sex: s.det.sex, experience: s.det.experience,
       goal: s.goal, place: s.place, days: s.days, weight: s.weight, units: s.units, pinned: s.pinned || [] };
   }
+  // Copy text from inside the page (no native clipboard module is installed).
+  function copyText(txt) {
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = txt; ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;left:0;top:0;opacity:0;font-size:16px;';
+      document.body.appendChild(ta);
+      ta.focus(); ta.select(); ta.setSelectionRange(0, txt.length);
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    } catch (e) {}
+  }
   function row(self, label, value, tap) {
     var r = self.row(label, value, '', null);
     r.tap = tap;
     return r;
   }
-  function soon(self, r) {
-    r.isToggle = false; r.isUnits = false; r.isValue = true; r.value = 'Coming soon'; r.sub = ''; r.hasSub = false;
-    r.tap = function () { self.showToast('Coming soon'); };
-    return r;
-  }
+  // Rows for features that don't exist yet are removed, not shown as placeholders.
+  var HIDDEN_ROWS = ['Restore purchases', 'FormPal Annual', 'Workout time', 'Apple Health', 'Workout reminders', 'Request a feature', 'Contact support'];
 
   return class extends Orig {
     setState(u, cb) {
@@ -90,35 +105,40 @@ export const PROFILE_LOGIC_EXT = String.raw`function (Orig) {
       var v = super.renderVals();
       if (!d) return v;
       var s = this.state, kg = s.units === 1;
-      var toast = function (m) { return function (e) { if (e && e.preventDefault) e.preventDefault(); self.showToast(m); }; };
-
-      // Referral program does not exist yet — never imply it does.
-      v.openRewards = toast('Referrals are coming soon');
-      v.openCode = toast('Referral codes are coming soon');
-      v.applyCode = toast('Referral codes are coming soon');
-      v.shareLink = toast('Referrals are coming soon');
-      v.copyLink = function () { self.showToast('Referrals are coming soon'); };
-      // No support inbox / feature backend yet.
-      v.send = function (e) {
-        if (e && e.preventDefault) e.preventDefault();
-        if (!s.draft.trim()) return;
-        self.showToast('Support messaging is not live yet');
-      };
-
       // "Update my plan" really rebuilds the plan natively.
+      // Referral: both cards open the referral page, which shows MY code; Invite friends opens the real share
+      // sheet (native); Copy copies the code. No friends have joined (no backend yet), so no tier is earned.
+      var refCode = d.referral && d.referral.code ? d.referral.code : '';
+      v.openRewards = function (e) { if (e && e.preventDefault) e.preventDefault(); self.go('rewards'); };
+      v.applyCode = function (e) {
+        if (e && e.preventDefault) e.preventDefault();
+        var code = (s.draft || '').trim().toUpperCase();
+        if (!code) return self.showToast('Enter a code first');
+        if (refCode && code === refCode.toUpperCase()) return self.showToast('That is your own code');
+        post({ type: 'applyReferralCode', code: code });
+        self.showToast('Code saved');
+      };
+      v.shareLink = function (e) { if (e && e.preventDefault) e.preventDefault(); post({ type: 'shareReferral' }); };
+      v.copyLink = function () { copyText(refCode); self.showToast('Code copied'); };
+      if (s.page === 'rewards' && v.pg && v.pg.tiers) {
+        var joined = d.referral ? d.referral.joined : 0;
+        v.pg.tiers = v.pg.tiers.map(function (t, i) {
+          var need = [1, 4, 6][i], got = joined >= need;
+          return Object.assign({}, t, { bg: got ? '#111114' : '#ffffff', fg: got ? '#ffffff' : '#111114', stateColor: got ? '#1f8a4a' : '#8e8e96' });
+        });
+      }
       v.applyPlan = function (e) { if (e && e.preventDefault) e.preventDefault(); post({ type: 'applyPlan' }); self.setState({ dirty: null }); self.showToast('Updating your plan…'); };
 
       var hasWeight = d.weight != null || s.weight !== this.__seedWeight;
       var groups = v.groups.map(function (g) {
-        var rows = g.rows.filter(function (r) { return r.label !== 'Restore purchases'; }).map(function (r) {
+        var rows = g.rows.filter(function (r) { return HIDDEN_ROWS.indexOf(r.label) < 0; }).map(function (r, i) {
           if (r.label === 'Weight') r.value = hasWeight ? (kg ? Math.round(s.weight / 2.2046) + ' kg' : s.weight + ' lb') : 'Not set';
-          else if (r.label === 'Workout time' || r.label === 'Apple Health' || r.label === 'Workout reminders') soon(self, r);
-          else if (r.label === 'FormPal Annual') { r.label = 'Subscription'; soon(self, r); }
           else if (r.label === 'Audio coaching') { r.value = d.audioLabel; r.tap = function () { post({ type: 'nav', to: 'audio' }); }; }
+          r.line = i === 0 ? 'none' : '1px solid rgba(17,17,20,0.07)';
           return r;
         });
         return Object.assign({}, g, { rows: rows });
-      });
+      }).filter(function (g) { return g.rows.length > 0; });
       var line = function (rows) { return rows.map(function (r, i) { r.line = i === 0 ? 'none' : '1px solid rgba(17,17,20,0.07)'; return r; }); };
       var act = function (label, tone, glyph, type, extra) {
         return self.icon(row(self, label, '', function () { post(Object.assign({ type: type }, extra || {})); }), tone, glyph);
@@ -161,7 +181,20 @@ export const PROFILE_DOM_JS = String.raw`
     + '*{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important;}'
     + 'div[style*="right: 88px"][style*="bottom: 22px"][style*="height: 64px"]{display:none!important;}'
     + 'div[style*="right: 14px"][style*="bottom: 22px"][style*="width: 64px"][style*="height: 64px"]{display:none!important;}'
-    + 'input,textarea{font-size:16px!important;}';
+    + 'input,textarea{font-size:16px!important;}'
+    // Nothing is painted until the pass below has seen the page rendered with the user's real data
+    // (the artboard shows its own demo text first); <html data-pready> is set by the pass, and a fresh
+    // document (the bundle replaces <html> while unpacking) starts hidden again.
+    + 'html:not([data-pready]) body{visibility:hidden!important;}'
+    // The blanket "no animation" rule above also froze the design's toast at its pre-animation position
+    // (left:50% with no translate => a clipped box in the top-right corner). The toast, the member-card
+    // sheet's slide-up + backdrop fade, the card's entrance and the tilt easing are real motion the design
+    // relies on — give them back (higher specificity than the blanket rule).
+    + '#dc-root div[style*="pf-toast"]{animation:pf-toast 2200ms cubic-bezier(.22,1,.36,1) both!important;}'
+    + '#dc-root div[style*="pf-sheet"]{animation:pf-sheet 380ms cubic-bezier(.22,1,.36,1) both!important;}'
+    + '#dc-root div[style*="pf-fade"]{animation:pf-fade 220ms ease both!important;}'
+    + '#dc-root div[style*="pf-card"]{animation:pf-card 520ms cubic-bezier(.2,.8,.2,1) 60ms both!important;}'
+    + '#dc-root div[style*="preserve-3d"]{transition:transform 380ms cubic-bezier(.2,.8,.2,1)!important;}';
   function ensureCss() {
     if (document.getElementById('__prof_css')) return;
     var host = document.head || document.documentElement;
@@ -193,15 +226,33 @@ export const PROFILE_DOM_JS = String.raw`
     return null;
   }
 
-  // Static referral banner copy promises a $10 reward that does not exist.
+  // Hide a whole block (its link row + the padded wrapper around it) that has no backend yet.
+  function hideBlockWithText(txt) {
+    var el = leafWithText(txt);
+    var a = el && el.closest('a');
+    var wrap = a && a.parentElement;
+    if (wrap) wrap.style.setProperty('display', 'none', 'important');
+  }
+
   function apply() {
     ensureCss();
     var okFit = fit();
     var d = window.__athltData;
-    var t1 = leafWithText('Refer a friend, get $10');
-    if (t1) t1.textContent = 'Refer a friend';
-    var t2 = leafWithText('Get $10 off for each friend. More rewards inside.');
-    if (t2) t2.textContent = 'Referral rewards are coming soon.';
+    var root = document.getElementById('dc-root');
+    // No reward system exists yet: no "$10 off" / "free month" promises on the banner or the code screen.
+    var sub1 = leafWithText('Get $10 off for each friend. More rewards inside.') || document.querySelector('#dc-root [data-ref-sub]');
+    if (sub1) { sub1.setAttribute('data-ref-sub', '1'); if (sub1.textContent !== 'Invite friends to FormPal') sub1.textContent = 'Invite friends to FormPal'; }
+    var sub2 = leafWithText('Enter it to get a free month.') || document.querySelector('#dc-root [data-ref-sub2]');
+    if (sub2) { sub2.setAttribute('data-ref-sub2', '1'); if (sub2.textContent !== 'Enter it below.') sub2.textContent = 'Enter it below.'; }
+    // Referral page: the design's demo link and "1 of 6" become the user's real code and friend count.
+    if (d && d.referral && d.referral.code) {
+      var refEl = leafWithText('formpal.app/JORDAN10') || document.querySelector('#dc-root [data-ref-code]');
+      if (refEl) { refEl.setAttribute('data-ref-code', '1'); var rt = 'Your code: ' + d.referral.code; if (refEl.textContent !== rt) refEl.textContent = rt; }
+      var cntEl = leafWithText('1 of 6') || document.querySelector('#dc-root [data-ref-count]');
+      if (cntEl) { cntEl.setAttribute('data-ref-count', '1'); var ct = d.referral.joined + ' of 6'; if (cntEl.textContent !== ct) cntEl.textContent = ct; }
+      var fillEl = document.querySelector('#dc-root div[style*="width: 20%"][style*="border-radius: 999px"]') || document.querySelector('#dc-root [data-ref-fill]');
+      if (fillEl) { fillEl.setAttribute('data-ref-fill', '1'); var fw = Math.min(100, d.referral.joined / 6 * 100) + '%'; if (fillEl.style.width !== fw) fillEl.style.setProperty('width', fw, 'important'); }
+    }
     if (d && d.appVersion) { var ver = leafWithText('FormPal 1.0 (12)'); if (ver) ver.textContent = d.appVersion; }
     // The artboard's own red "Sign out" button has no handler of its own.
     var links = document.querySelectorAll('#dc-root a');
@@ -212,19 +263,66 @@ export const PROFILE_DOM_JS = String.raw`
         a.addEventListener('click', function (ev) { ev.preventDefault(); ev.stopPropagation(); post({ type: 'signOut' }); }, true);
       }
     }
+    if (root && d) {
+      // The native tab bar overlays the bottom of this page: scrollers get bottom padding so their last
+      // item scrolls clear of it, and the member-card sheet's content sits above it.
+      var S = (window.innerHeight || 844) / 844;
+      var ins = d.insets || { top: 0, bottom: 0 };
+      var tb = (ins.bottom + 49 + 16) / S;
+      var scrollers = root.querySelectorAll('div[data-scroll]');
+      for (var sc = 0; sc < scrollers.length; sc++) {
+        var el = scrollers[sc];
+        if (el.style.overflowY === 'auto' && el.style.position === 'absolute') {
+          if (el.__pb0 === undefined) el.__pb0 = parseFloat(el.style.paddingBottom) || 0;
+          el.style.setProperty('padding-bottom', Math.max(el.__pb0, tb + 24).toFixed(1) + 'px', 'important');
+        }
+      }
+      var sheet = root.querySelector('div[style*="pf-sheet"]');
+      if (sheet) sheet.style.setProperty('padding-bottom', (tb + 14).toFixed(1) + 'px', 'important');
+    }
     return { okFit: okFit, filled: !!d };
   }
 
+  // The artboard links to its sibling prototype pages by file name ("Camera Setup.dc.html"). Inside the
+  // app those files don't exist, so following one blanks the WebView — route them to the real screen instead.
+  document.addEventListener('click', function (ev) {
+    var a = ev.target && ev.target.closest ? ev.target.closest('a[href]') : null;
+    if (!a) return;
+    var href = a.getAttribute('href') || '';
+    if (!/\.dc\.html?$/i.test(href)) return;
+    ev.preventDefault(); ev.stopPropagation();
+    if (/Camera Setup/i.test(href)) post({ type: 'nav', to: 'camera' });
+  }, true);
+
   var reported = false, lastAsk = 0, deb;
+  // Real = laid out, the logic has rendered with the user's data (no leftover template text), and the
+  // viewport and page have both stopped changing.
+  function pageIsReal(r) {
+    var root = document.getElementById('dc-root');
+    if (!(r.okFit && r.filled && window.__athltLogicReady && root && leafWithText('Profile'))) return false;
+    if ((root.textContent || '').indexOf('{{') >= 0) return false;
+    return !window.__dcSettle || window.__dcSettle(160);
+  }
+  function setPageReady(on) {
+    var h = document.documentElement;
+    if (!h) return;
+    if (on) { if (!h.hasAttribute('data-pready')) h.setAttribute('data-pready', '1'); }
+    else if (h.hasAttribute('data-pready')) h.removeAttribute('data-pready');
+  }
   function tick() {
     var r = apply();
     if (!window.__athltData && Date.now() - lastAsk > 700) { lastAsk = Date.now(); post({ type: 'needData' }); }
-    if (!reported && r.okFit && r.filled && window.__athltLogicReady && leafWithText('Profile')) {
+    // Once revealed, the page stays revealed (taps and re-renders must never hide it again); the gate only
+    // applies to the first reveal.
+    var ok = reported || pageIsReal(r);
+    setPageReady(ok);
+    if (!reported && ok) {
       reported = true;
       post({ type: 'ready' });
     }
+    if (!ok && r.okFit && r.filled && window.__athltLogicReady) { clearTimeout(deb); deb = setTimeout(tick, 90); }
   }
-  function schedule() { clearTimeout(deb); deb = setTimeout(tick, 50); }
+  function schedule() { ensureCss(); clearTimeout(deb); deb = setTimeout(tick, 50); }
   try { new MutationObserver(schedule).observe(document, { childList: true, subtree: true }); } catch (e) {}
   window.addEventListener('resize', schedule);
   setInterval(tick, 500);

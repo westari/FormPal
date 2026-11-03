@@ -1,4 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk';
+import {
+  LIMITS, MODEL, getBearer, verifyToken, defaultStore, checkRate, cleanHistory, cleanContextLine,
+  type Message, type CounterStore,
+} from './_lib/guard';
 
 // Force Node.js runtime — the Anthropic SDK uses Node APIs and cannot run on the Vercel Edge runtime.
 export const config = { runtime: 'nodejs' };
@@ -11,62 +15,87 @@ Rules:
 - Tone: warm, direct, no jargon. Like a knowledgeable friend who wants you to succeed.
 - If asked something outside fitness/health, politely redirect to training topics.`;
 
-type Message = { role: 'user' | 'assistant'; content: string };
+// Test hook: lets the test swap the Anthropic call and the counter store.
+export const deps: { store?: CounterStore; createReply?: (system: string, messages: Message[]) => Promise<string> } = {};
+
+async function anthropicReply(system: string, messages: Message[]): Promise<string> {
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const response = await client.messages.create({ model: MODEL, max_tokens: LIMITS.maxTokens, system, messages });
+  return response.content[0]?.type === 'text' ? response.content[0].text.trim() : '';
+}
 
 export default async function handler(req: any, res: any) {
-  // ── Env guard — catches missing key before any SDK call ────────────────────
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.error('[MyPal] ANTHROPIC_API_KEY is not set');
-    return res.status(500).json({ error: 'API key not configured on server. Set ANTHROPIC_API_KEY in Vercel → Settings → Environment Variables, then redeploy.' });
-  }
-
   // ── Method guard ───────────────────────────────────────────────────────────
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // ── Client created inside handler so a missing key returns a clean error ───
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  // ── Env guard — catches missing key before any SDK call ────────────────────
+  if (!deps.createReply && !process.env.ANTHROPIC_API_KEY) {
+    console.error('[MyPal] ANTHROPIC_API_KEY is not set');
+    return res.status(500).json({ error: 'Cue is not configured on the server.' });
+  }
 
+  // ── Login: a valid Supabase access token is required ───────────────────────
+  const token = getBearer(req);
+  if (!token) return res.status(401).json({ error: 'Sign in to chat with Cue.' });
+
+  let userId: string | null;
+  try {
+    userId = await verifyToken(token);
+  } catch (err: any) {
+    console.error('[MyPal] auth check failed:', err?.message ?? err);
+    return res.status(500).json({ error: 'Cue is unavailable right now.' });
+  }
+  if (!userId) return res.status(401).json({ error: 'Your session expired. Sign in again.' });
+
+  // ── Input caps (cheap checks first, before any counter is touched) ─────────
   const { message, history, userContext } = req.body ?? {};
-
   if (!message || typeof message !== 'string' || message.trim().length === 0) {
     return res.status(400).json({ error: 'Missing message' });
+  }
+  if (message.trim().length > LIMITS.messageChars) {
+    return res.status(400).json({ error: `Keep your message under ${LIMITS.messageChars} characters.` });
+  }
+
+  // ── Per-user rate limit ────────────────────────────────────────────────────
+  try {
+    const rate = await checkRate(userId, deps.store ?? defaultStore());
+    if (!rate.ok) {
+      res.setHeader?.('Retry-After', String(rate.retryAfterSec));
+      return res.status(429).json({
+        error: rate.window === 'day'
+          ? "You've reached today's Cue limit. Try again tomorrow."
+          : "You've sent a lot of messages. Try again in a bit.",
+        retryAfterSec: rate.retryAfterSec,
+      });
+    }
+  } catch (err: any) {
+    // Fail closed: if the counter is down we do not hand out free Anthropic calls.
+    console.error('[MyPal] rate limit store failed:', err?.message ?? err);
+    return res.status(503).json({ error: 'Cue is unavailable right now.' });
   }
 
   // Build system prompt, injecting optional user context
   let system = SYSTEM;
-  if (userContext) {
+  if (userContext && typeof userContext === 'object') {
     const lines: string[] = [];
-    if (userContext.goal)       lines.push(`Goal: ${userContext.goal}`);
-    if (userContext.experience) lines.push(`Experience: ${userContext.experience}`);
-    if (userContext.plan)       lines.push(`Current plan: ${userContext.plan}`);
+    const goal = cleanContextLine(userContext.goal);
+    const experience = cleanContextLine(userContext.experience);
+    const plan = cleanContextLine(userContext.plan);
+    if (goal)       lines.push(`Goal: ${goal}`);
+    if (experience) lines.push(`Experience: ${experience}`);
+    if (plan)       lines.push(`Current plan: ${plan}`);
     if (lines.length > 0) system += `\n\nUser context:\n${lines.join('\n')}`;
   }
 
-  // Sanitise history — cap at last 20 messages to limit cost
-  const safeHistory: Message[] = Array.isArray(history)
-    ? (history as any[])
-        .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
-        .slice(-20)
-    : [];
-
-  const messages: Message[] = [...safeHistory, { role: 'user', content: message.trim() }];
+  const messages: Message[] = [...cleanHistory(history), { role: 'user', content: message.trim() }];
 
   try {
-    const response = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 500,
-      system,
-      messages,
-    });
-
-    const reply = response.content[0]?.type === 'text' ? response.content[0].text.trim() : '';
+    const reply = await (deps.createReply ?? anthropicReply)(system, messages);
     return res.status(200).json({ reply });
   } catch (err: any) {
-    // Expose the real error message so we can diagnose — tighten this up after confirming it works
-    const msg = err?.message ?? String(err);
-    console.error('[MyPal] Anthropic error:', msg);
-    return res.status(500).json({ error: `Cue error: ${msg}` });
+    console.error('[MyPal] Anthropic error:', err?.message ?? String(err));
+    return res.status(500).json({ error: 'Cue could not answer right now. Try again.' });
   }
 }

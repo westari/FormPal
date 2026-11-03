@@ -61,7 +61,11 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
 
       var line = '', area = '', ticks = [], lastPt = { x: 0, y: 0, left: '50%', top: '0px' };
       var months = ['', '', '', ''];
-      var shown = series.length ? series[series.length - 1].w : null;
+      // The tapped weigh-in (like the Form Score chart); the newest one until something is tapped.
+      var selIdx = series.length ? (s.wSel == null || s.wSel >= series.length ? series.length - 1 : s.wSel) : -1;
+      window.__athltWSel = selIdx;
+      window.__athltWPick = function (i) { self.setState({ wSel: i }); };
+      var shown = series.length ? series[selIdx].w : null;
       if (series.length) {
         var vals = series.map(function (e) { return e.w; });
         var vmin = Math.min.apply(null, vals), vmax = Math.max.apply(null, vals);
@@ -78,10 +82,16 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
           var f = t1 > t0 ? (parseKey(e.d).getTime() - t0) / (t1 - t0) : 0.5;
           return { x: Math.round(4 + 276 * f), y: yOf(e.w) };
         });
-        var lp = pts[pts.length - 1];
+        // every logged weight gets its own dot on the line (drawn by the DOM pass); the last one is the design's own
+        window.__athltWPts = series.length >= 2 ? pts.map(function (q, i) { return { x: q.x, y: q.y, w: series[i].w, d: series[i].d }; }) : [];
+        // A single weigh-in can't draw a trend, so draw it as a level line across the chart ending in
+        // the dot (the same way the design's line ends at the current value) instead of a lone floating dot.
+        if (pts.length === 1) pts = [{ x: 4, y: pts[0].y }, { x: 280, y: pts[0].y }];
+        var endPt = pts[pts.length - 1];
+        var lp = series.length >= 2 ? pts[selIdx] : endPt; // the point the dot, guide line and label sit on
         if (pts.length >= 2) {
           line = this.mono(pts);
-          area = line + ' L' + lp.x + ' 140 L' + pts[0].x + ' 140 Z';
+          area = line + ' L' + endPt.x + ' 140 L' + pts[0].x + ' 140 Z';
         }
         var st = (hi - lo) / tick > 4 ? tick * 2 : tick;
         for (var v = hi; v >= lo; v -= st) ticks.push({ top: (yOf(v) - 6) + 'px', label: String(v) });
@@ -92,12 +102,14 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
       // One-line summary under the chart (replaces "You're X% of the way to your goal" —
       // there is no goal weight stored locally to compute that from).
       var summary;
+      var dlabel = function (k) { var dt = parseKey(k); return MON[dt.getMonth()] + ' ' + dt.getDate(); };
+      window.__athltChart = all.length === 0 ? 'none' : series.length === 0 ? 'range' : 'ok';
       if (all.length === 0) summary = 'Log your weight to start your chart';
-      else if (all.length === 1) summary = 'Log again to start seeing a trend';
+      else if (all.length === 1) summary = 'Log again to see your trend';
       else {
         var diff = Math.round((all[all.length - 1].w - all[0].w) * 10) / 10;
-        summary = diff === 0 ? 'No change since you started logging'
-          : Math.abs(diff) + ' lb ' + (diff < 0 ? 'down' : 'up') + ' since you started logging';
+        summary = diff === 0 ? 'Same weight as ' + dlabel(all[0].d)
+          : Math.abs(diff) + ' lb ' + (diff < 0 ? 'down' : 'up') + ' since ' + dlabel(all[0].d);
       }
 
       var t = todayParts();
@@ -111,12 +123,13 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
       for (var k = 5; k >= 0; k--) { var md = new Date(t.y, t.m - k, 1); monthList.push({ y: md.getFullYear(), m: md.getMonth() }); }
 
       var out = {
-        wNow: shown == null ? '–' : fmt(shown),
+        // "Oct 20 · 180" + the design's own " lb"
+        wNow: shown == null ? '–' : dlabel(series[selIdx].d) + ' · ' + fmt(shown),
         wLine: line, wArea: area, wTicks: ticks, wLast: lastPt, wMonths: months,
         wGoalPctLabel: summary,
         wRanges: ['2m', '6m', '1y', 'All'].map(function (label, i) {
           var p = pillStyle(i === ri);
-          return { label: label, fg: p.fg, bg: p.bg, shadow: p.shadow, pick: function () { self.setState({ wRange: i }); } };
+          return { label: label, fg: p.fg, bg: p.bg, shadow: p.shadow, pick: function () { self.setState({ wRange: i, wSel: null }); } };
         }),
         openWeigh: function (e) {
           e.preventDefault();
@@ -172,13 +185,41 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
       var d = D(), self = this, s = this.state;
       var R = d.rank || { label: 'Unranked', pct: 0, nextLabel: 'Bronze', atTop: false, lo: '#B97A42' };
       window.__athltSide = s.side || 0;
+      // Front/Back must flip in the same render as the tap, not after the next DOM pass.
+      if (window.__athltFlip) window.__athltFlip();
 
       v.rankName = R.label;
       v.rankPct = R.pct + '%';
       v.nextRank = R.nextLabel;
       v.topPct = '';
 
-      v.openPhotos = function (e) { if (e && e.preventDefault) e.preventDefault(); post({ type: 'photos' }); };
+      // Photos open the design's own Photos page inside this page - instant, no navigation.
+      v.openPhotos = function (e) { if (e && e.preventDefault) e.preventDefault(); self.go('photos'); };
+      window.__athltApi = { openPhotos: function () { self.go('photos'); }, pose: ['front', 'side', 'back'][s.pose || 0] };
+
+      // ── Progress photos (real, saved on the device) ──
+      var pose = ['front', 'side', 'back'][s.pose || 0];
+      var allPh = d.photos || [];
+      var ofPose = allPh.filter(function (p) { return p.pose === pose; });
+      var nearest = function (list, dateStr, newest) {
+        if (!list.length) return null;
+        if (!dateStr) return newest ? list[0] : list[list.length - 1];
+        var t = new Date(dateStr + 'T12:00:00').getTime(), best = list[0], bd = Infinity;
+        for (var i = 0; i < list.length; i++) { var dd = Math.abs(list[i].ts - t); if (dd < bd) { bd = dd; best = list[i]; } }
+        return best;
+      };
+      // B = the newer photo (or the one nearest its date). A must be a DIFFERENT photo: with only one photo
+      // of this pose there is nothing to compare against, so A stays empty instead of repeating B.
+      var pb = nearest(ofPose, s.cmpB, true);
+      var pa = nearest(ofPose.filter(function (p) { return !pb || p.id !== pb.id; }), s.cmpA, false);
+      v.cmpALabel = pa ? pa.label : 'No photo'; v.cmpBLabel = pb ? pb.label : 'No photo';
+      v.photoMonths = ofPose.map(function (p) { return p.label; }).concat(['Add photo']);
+      var card3 = allPh.slice(0, 3);
+      for (var ci = 0; ci < 3; ci++) {
+        v['ppDate' + ci] = card3[ci] ? card3[ci].label : 'No photo yet';
+        v['ppDate' + ci + 'Fg'] = card3[ci] ? '#111114' : '#5f5f69';
+      }
+      window.__athltPhotoView = { card: card3, cmpA: pa, cmpB: pb, grid: ofPose };
 
       // ── By Muscle (Muscle Map page) ──
       var ms = d.muscles || [];
@@ -226,31 +267,57 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
         var p = pillStyle(i === ri);
         return { label: label, fg: p.fg, bg: p.bg, shadow: p.shadow, pick: function () { self.setState({ range: i, sel: null }); } };
       });
-      if (series.length) {
-        var pcts = series.map(function (f) { return f.pct; });
+      // Real workouts are noisy (several a day, then gaps), which made the line scribble. Average to one
+      // point per day, fold long histories into at most 12 evenly spaced buckets, and join them with a
+      // monotone curve (never overshoots between points) - the same shape the design's own data has.
+      var byDay = {};
+      series.forEach(function (f) { var k = new Date(f.ts); k.setHours(0, 0, 0, 0); var kk = +k; (byDay[kk] = byDay[kk] || []).push(f.pct); });
+      var mean = function (a) { return a.reduce(function (x, y) { return x + y; }, 0) / a.length; };
+      var dayPts = Object.keys(byDay).map(Number).sort(function (a, b) { return a - b; }).map(function (t) { return { ts: t, pct: mean(byDay[t]), from: t, to: t }; });
+      var realDays = dayPts; // one point per real day: these are what a tap selects (exact date + exact percent)
+      if (dayPts.length > 12) {
+        var d0 = dayPts[0].ts, span = dayPts[dayPts.length - 1].ts - d0 + 1, buckets = [];
+        for (var bi = 0; bi < 12; bi++) buckets.push([]);
+        dayPts.forEach(function (p) { buckets[Math.min(11, Math.floor((p.ts - d0) / span * 12))].push(p); });
+        dayPts = buckets.filter(function (b) { return b.length; }).map(function (b) { return { ts: mean(b.map(function (p) { return p.ts; })), pct: mean(b.map(function (p) { return p.pct; })), from: b[0].from, to: b[b.length - 1].to }; });
+      }
+      if (dayPts.length) {
+        var pcts = dayPts.map(function (f) { return f.pct; });
         var minV = Math.floor((Math.min.apply(null, pcts) - 4) / 5) * 5, maxV = Math.ceil((Math.max.apply(null, pcts) + 4) / 5) * 5;
         if (maxV <= minV) maxV = minV + 5;
         var yOf = function (p) { return Math.round(170 - ((p - minV) / (maxV - minV)) * 152); };
-        var t0 = series[0].ts, t1 = series[series.length - 1].ts;
-        var pts = series.map(function (f) {
+        var t0 = dayPts[0].ts, t1 = dayPts[dayPts.length - 1].ts;
+        // light 1-2-1 smoothing of where each point sits (the design does the same for its weight line);
+        // the tooltip still shows each point's real score.
+        var pts = dayPts.map(function (f, i) {
           var fr = t1 > t0 ? (f.ts - t0) / (t1 - t0) : 0.5;
-          return { v: f.pct, x: Math.round(8 + 278 * fr), y: yOf(f.pct) };
+          var sm = i === 0 || i === dayPts.length - 1 ? f.pct : (dayPts[i - 1].pct + 2 * f.pct + dayPts[i + 1].pct) / 4;
+          return { v: f.pct, x: Math.round(8 + 278 * fr), y: yOf(sm), from: f.from, to: f.to };
         });
-        var sel = s.sel == null || s.sel >= pts.length ? pts.length - 1 : s.sel;
-        var ln = pts.length >= 2 ? this.smooth(pts) : '';
+        // Tap targets are the REAL days, not the folded points the line is drawn through.
+        var clampY = function (y) { return Math.max(8, Math.min(176, y)); };
+        var rpts = realDays.map(function (f) {
+          var fr = t1 > t0 ? (f.ts - t0) / (t1 - t0) : 0.5;
+          return { v: f.pct, x: Math.round(8 + 278 * Math.max(0, Math.min(1, fr))), y: clampY(yOf(f.pct)), ts: f.ts };
+        });
+        var sel = s.sel == null || s.sel >= rpts.length ? rpts.length - 1 : s.sel;
+        var ln = pts.length >= 2 ? this.curve(pts) : '';
         var mid = Math.round((minV + maxV) / 2), q = (maxV - minV) / 4;
         v.line = ln;
         v.area = ln ? ln + ' L' + pts[pts.length - 1].x + ' 176 L' + pts[0].x + ' 176 Z' : '';
         v.fTicks = [maxV, maxV - q, mid, minV + q, minV].map(function (x) { return Math.round(x); })
           .map(function (x) { return { y: yOf(x), ty: yOf(x) + 4, top: (yOf(x) - 5) + 'px', label: x + '%' }; });
         v.fXs = axisLabels(t0, t1);
-        v.pts = pts.map(function (pt, i) {
-          return { x: pt.x, y: pt.y, hx: pt.x - 140 / pts.length, hw: 280 / pts.length,
+        v.pts = rpts.map(function (pt, i) {
+          return { x: pt.x, y: pt.y, hx: pt.x - 140 / rpts.length, hw: 280 / rpts.length,
             r: i === sel ? 5.5 : 0, guide: i === sel ? 0.5 : 0, pick: function () { self.setState({ sel: i }); } };
         });
-        v.tipX = (12 + (Math.min(pts[sel].x, 264) / 326) * 88).toFixed(1) + '%';
-        v.tipY = (pts[sel].y - 12) + 'px';
-        v.tipText = Math.round(pts[sel].v) + '%';
+        // the exact date of the tapped day and that day's own percent
+        var dl = function (ts) { var dt = new Date(ts); return MON[dt.getMonth()] + ' ' + dt.getDate(); };
+        var sp = rpts[sel], dateTxt = dl(sp.ts);
+        v.tipX = Math.max(24, Math.min(76, 12 + (Math.min(sp.x, 264) / 326) * 88)).toFixed(1) + '%';
+        v.tipY = (sp.y - 12) + 'px';
+        v.tipText = dateTxt + ' · ' + Math.round(sp.v) + '%';
         var diff = Math.round(pcts[pcts.length - 1] - pcts[0]);
         v.change = Math.abs(diff) + '% ' + (diff >= 0 ? 'higher' : 'lower');
       } else {
@@ -281,7 +348,11 @@ export const PROGRESS_DOM_JS = String.raw`
     + 'div[style*="right: 88px"][style*="bottom: 22px"][style*="height: 64px"]{display:none!important;}'
     + 'div[style*="right: 14px"][style*="bottom: 22px"][style*="width: 64px"][style*="height: 64px"]{display:none!important;}'
     // never zoom on focus inside the date inputs
-    + 'input{font-size:16px!important;}';
+    + 'input{font-size:16px!important;}'
+    // The page's own markup shows raw template text ("{{ rankName }}") until its logic renders. Nothing
+    // is painted until the pass below has seen real content and marks <html data-pready>; the bundle
+    // replaces <html> while unpacking, so every fresh document starts hidden again.
+    + 'html:not([data-pready]) body{visibility:hidden!important;}';
 
   function ensureCss() {
     if (document.getElementById('__prog_css')) return;
@@ -306,6 +377,19 @@ export const PROGRESS_DOM_JS = String.raw`
     document.documentElement.style.setProperty('height', vh + 'px', 'important');
     return true;
   }
+
+  // Show the selected side of the big body map (both sides are already in the page).
+  function flipSide() {
+    var root = document.getElementById('dc-root');
+    if (!root) return;
+    var side = window.__athltSide || 0;
+    var els = root.querySelectorAll('div[aria-label="Body map space"][style*="height: 300px"] > [data-side]');
+    for (var i = 0; i < els.length; i++) {
+      var want = +els[i].getAttribute('data-side') === side ? 'flex' : 'none';
+      if (els[i].style.display !== want) els[i].style.display = want;
+    }
+  }
+  window.__athltFlip = flipSide;
 
   // ── helpers ──
   function leafWithText(txt, scope) {
@@ -332,6 +416,11 @@ export const PROGRESS_DOM_JS = String.raw`
       ov.setAttribute('data-athlt-empty', '1');
       host.appendChild(ov);
     }
+    // Only write when something changed: rewriting identical content every pass is a DOM mutation, which wakes
+    // the observer, which runs the pass again - an endless loop that keeps the page "busy" forever.
+    var osig = [title, sub, (opts && opts.inset) || '', (opts && opts.bg) || '', (opts && opts.radius) || ''].join('|');
+    if (ov.__sig === osig) return;
+    ov.__sig = osig;
     var inset = (opts && opts.inset) || '0';
     ov.style.cssText = 'position:absolute;inset:' + inset + ';z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;padding:0 26px;'
       + 'background:' + ((opts && opts.bg) || '#ffffff') + ';border-radius:' + ((opts && opts.radius) || '22px') + ';box-shadow:0 0 0 1px rgba(17,17,20,0.04),0 14px 34px -16px rgba(40,50,90,0.22);';
@@ -357,7 +446,7 @@ export const PROGRESS_DOM_JS = String.raw`
       t.id = '__athlt_toast';
       root.appendChild(t);
     }
-    t.style.cssText = 'position:absolute;left:50%;bottom:110px;transform:translateX(-50%);z-index:200;padding:11px 18px;border-radius:999px;background:#111114;color:#fff;'
+    t.style.cssText = 'position:absolute;left:50%;bottom:' + (window.__athltTb || 110) + 'px;transform:translateX(-50%);z-index:200;padding:11px 18px;border-radius:999px;background:#111114;color:#fff;'
       + 'font-size:14px;font-weight:700;white-space:nowrap;box-shadow:0 10px 24px -8px rgba(17,17,20,0.5);pointer-events:none;opacity:1;';
     t.textContent = msg;
     clearTimeout(toastTimer);
@@ -373,19 +462,69 @@ export const PROGRESS_DOM_JS = String.raw`
     if (!root || !d) return { okFit: okFit, filled: false };
     var R = d.rank || {};
 
+    // The native tab bar overlays the bottom of this page. Everything that scrolls gets bottom padding
+    // so its last item can be scrolled clear of the bar, and the weigh-in sheet's keypad (a full-screen
+    // overlay) is lifted above it.
+    var S = (window.innerHeight || 844) / 844;
+    var ins = d.insets || { top: 0, bottom: 0 };
+    var tb = (ins.bottom + 49 + 16) / S;
+    window.__athltTb = Math.round(tb + 8);
+    var scrollers = root.querySelectorAll('div[data-scroll]');
+    for (var sc = 0; sc < scrollers.length; sc++) {
+      var scEl = scrollers[sc];
+      if (scEl.style.overflowY === 'auto' && scEl.style.position === 'absolute') {
+        if (scEl.__pb0 === undefined) scEl.__pb0 = parseFloat(scEl.style.paddingBottom) || 0;
+        scEl.style.setProperty('padding-bottom', Math.max(scEl.__pb0, tb + 24).toFixed(1) + 'px', 'important');
+      }
+    }
+    var sheet = root.querySelector('div[style*="z-index: 60"]');
+    if (sheet) {
+      // The keys sit above the tab bar, but the keypad's own grey runs all the way to the bottom edge
+      // (padding goes inside the grey tray, not outside it where the white sheet would show through).
+      sheet.style.setProperty('padding-bottom', '0px', 'important');
+      var tray = sheet.querySelector('div[style*="30px 30px 0"]');
+      if (tray) {
+        if (tray.__pb0 === undefined) tray.__pb0 = parseFloat(tray.style.paddingBottom) || 30;
+        tray.style.setProperty('padding-bottom', (tray.__pb0 + tb).toFixed(1) + 'px', 'important');
+      }
+    }
+    // Date picker: the month chips are a horizontally scrolling row whose last chip is cut off.
+    // Make them share the row evenly so every month fits with no scrolling.
+    if (sheet) {
+      var mrows = sheet.querySelectorAll('div[data-scroll][style*="overflow-x"]');
+      for (var mr = 0; mr < mrows.length; mr++) {
+        var mrow = mrows[mr], chips = mrow.children, allMonths = chips.length > 0;
+        for (var mc = 0; mc < chips.length; mc++) if (!/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)$/.test((chips[mc].textContent || '').trim())) allMonths = false;
+        if (!allMonths) continue;
+        if (chips[0].style.flexGrow === '1' && chips[chips.length - 1].style.flexGrow === '1') continue;
+        mrow.style.setProperty('overflow-x', 'visible', 'important');
+        mrow.style.setProperty('gap', '5px', 'important');
+        for (var mc2 = 0; mc2 < chips.length; mc2++) {
+          chips[mc2].style.setProperty('flex', '1 1 0', 'important');
+          chips[mc2].style.setProperty('min-width', '0', 'important');
+          chips[mc2].style.setProperty('padding', '0 2px', 'important');
+          chips[mc2].style.setProperty('justify-content', 'center', 'important');
+        }
+      }
+    }
+    // date pickers: the design caps them at its own mock "today" (Sep 12 2026)
+    var nowD = new Date(), maxStr = nowD.getFullYear() + '-' + String(nowD.getMonth() + 1).padStart(2, '0') + '-' + String(nowD.getDate()).padStart(2, '0');
+    var dateInputs = root.querySelectorAll('input[type="date"]');
+    for (var di = 0; di < dateInputs.length; di++) if (dateInputs[di].getAttribute('max') !== maxStr) dateInputs[di].setAttribute('max', maxStr);
+
     // Body maps — rank card (both sides) + Muscle Map page (selected side)
     var slots = root.querySelectorAll('div[aria-label="Body map space"]');
     for (var i = 0; i < slots.length; i++) {
       var slot = slots[i];
       var big = slot.style.height === '300px';
-      var side = window.__athltSide || 0;
-      var sig = (big ? 'big' + side : 'card') + '|' + VERSION;
-      if (slot.__sig === sig) continue;
+      var sig = (big ? 'big' : 'card') + '|' + VERSION;
+      if (slot.__sig === sig) { if (big) flipSide(); continue; }
       slot.__sig = sig;
       var fig = function (svg, h) { return '<div style="height:' + h + 'px;aspect-ratio:480/833;flex:none;">' + svg + '</div>'; };
       if (big) {
-        slot.innerHTML = '<div style="height:100%;display:flex;align-items:center;justify-content:center;">'
-          + fig(side === 0 ? d.bodyMap.front : d.bodyMap.back, 292) + '</div>';
+        // both sides are built once; Front/Back only toggles which one is displayed (instant)
+        var wrap = function (n, svg) { return '<div data-side="' + n + '" style="height:100%;align-items:center;justify-content:center;display:' + ((window.__athltSide || 0) === n ? 'flex' : 'none') + ';">' + fig(svg, 292) + '</div>'; };
+        slot.innerHTML = wrap(0, d.bodyMap.front) + wrap(1, d.bodyMap.back);
       } else {
         slot.innerHTML = '<div style="height:100%;display:flex;align-items:center;justify-content:center;gap:34px;">'
           + fig(d.bodyMap.front, 206) + fig(d.bodyMap.back, 206) + '</div>';
@@ -449,7 +588,14 @@ export const PROGRESS_DOM_JS = String.raw`
       if (rankDiv) rankDiv.style.setProperty('color', info.tier ? info.ink : '#8e8e96', 'important');
       var barFill = barWrap && barWrap.children[0] && barWrap.children[0].children[0];
       if (barFill) barFill.style.setProperty('background', grad(info.hi, info.lo), 'important');
-      icons[m].style.setProperty('background', info.tier ? 'linear-gradient(160deg, ' + info.hi + ', ' + info.lo + ')' : '#f4f4f6', 'important');
+      if (info.icon && icons[m].__icon !== info.icon) {
+        icons[m].__icon = info.icon;
+        icons[m].style.setProperty('background-image', 'url(' + info.icon + ')', 'important');
+        icons[m].style.setProperty('background-size', '78%', 'important');
+        icons[m].style.setProperty('background-repeat', 'no-repeat', 'important');
+        icons[m].style.setProperty('background-position', 'center', 'important');
+      }
+      icons[m].style.setProperty('opacity', info.tier ? '1' : '0.5');
     }
 
     // Weight card
@@ -459,13 +605,52 @@ export const PROGRESS_DOM_JS = String.raw`
       var wcard = wsvg.closest('div[style*="border-radius: 28px"]');
       var chartBox = wsvg.parentElement; // the position:relative 150px box
       var wn = d.weight ? d.weight.length : 0;
-      setEmpty(chartBox, wn === 0, 'No weigh-ins yet', 'Tap Log weight to add your first one and your chart starts here.', { radius: '16px' });
-      // a single point can't draw a line — keep the dot, hide the empty dashed guide
+      var ch = window.__athltChart || (wn === 0 ? 'none' : 'ok');
+      var latestW = wn ? d.weight[wn - 1] : null;
+      if (ch === 'none') setEmpty(chartBox, true, 'No weigh-ins yet', 'Tap Log weight to add your first one and your chart starts here.', { radius: '16px' });
+      else if (ch === 'range') {
+        var lp2 = latestW.d.split('-');
+        setEmpty(chartBox, true, 'No weigh-ins in this range', 'Your latest is ' + (Math.round(latestW.w * 10) / 10) + ' lb on ' + ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][+lp2[1] - 1] + ' ' + (+lp2[2]) + '. Try a longer range.', { radius: '16px' });
+      } else setEmpty(chartBox, false);
       var tip = chartBox.querySelector('div[style*="translate(-50%, -100%)"]');
-      if (tip) tip.style.setProperty('display', wn === 0 ? 'none' : '');
-      var gl = wsvg.querySelector('line'), gc = wsvg.querySelector('circle');
-      if (gl) gl.style.setProperty('display', wn === 0 ? 'none' : '');
-      if (gc) gc.style.setProperty('display', wn === 0 ? 'none' : '');
+      if (tip) tip.style.setProperty('display', ch !== 'ok' ? 'none' : '');
+      var gl = wsvg.querySelector('line'), gc = wsvg.querySelector('circle:not([data-athlt-pt])');
+      if (ch === 'ok') {
+        // the tooltip must stay inside the card whatever the label length
+        var tipEl0 = chartBox.querySelector('div[style*="translate(-50%, -100%)"]');
+        if (tipEl0) { var lp0 = parseFloat(tipEl0.style.left); if (isFinite(lp0)) tipEl0.style.setProperty('left', Math.max(24, Math.min(76, lp0)) + '%', 'important'); }
+      }
+      // A dot on every logged weight; the tapped one (the newest until something is tapped) is the design's own
+      // bigger end dot with the tooltip. Every weight also has a roomy invisible tap target.
+      var wp = ch === 'ok' ? (window.__athltWPts || []) : [];
+      if (!(wp.length >= 2 && wp.length <= 40)) wp = [];
+      var wsel = window.__athltWSel == null ? -1 : window.__athltWSel;
+      var dsig = wsel + '|' + wp.map(function (q) { return q.x + ',' + q.y; }).join(';');
+      if (wsvg.__dotSig !== dsig) {
+        wsvg.__dotSig = dsig;
+        var oldDots = wsvg.querySelectorAll('[data-athlt-pt]');
+        for (var od = 0; od < oldDots.length; od++) oldDots[od].remove();
+        var NS = 'http://www.w3.org/2000/svg';
+        for (var nd = 0; nd < wp.length; nd++) {
+          if (nd !== wsel) {
+            var c2 = document.createElementNS(NS, 'circle');
+            c2.setAttribute('data-athlt-pt', '1');
+            c2.setAttribute('cx', wp[nd].x); c2.setAttribute('cy', wp[nd].y); c2.setAttribute('r', '3.6');
+            c2.setAttribute('fill', '#ffffff'); c2.setAttribute('stroke', '#111114'); c2.setAttribute('stroke-width', '2');
+            c2.style.pointerEvents = 'none';
+            wsvg.appendChild(c2);
+          }
+          var hit = document.createElementNS(NS, 'circle');
+          hit.setAttribute('data-athlt-pt', 'hit');
+          hit.setAttribute('cx', wp[nd].x); hit.setAttribute('cy', wp[nd].y); hit.setAttribute('r', '15');
+          hit.setAttribute('fill', 'rgba(0,0,0,0)');
+          hit.style.pointerEvents = 'all'; hit.style.cursor = 'pointer';
+          (function (idx) { hit.addEventListener('click', function (ev) { ev.stopPropagation(); if (window.__athltWPick) window.__athltWPick(idx); }, true); })(nd);
+          wsvg.appendChild(hit);
+        }
+      }
+      if (gl) gl.style.setProperty('display', ch !== 'ok' ? 'none' : '');
+      if (gc) gc.style.setProperty('display', ch !== 'ok' ? 'none' : '');
       if (wcard) {
         var goalEl = wcard.querySelector('div[style*="line-height: 1.35"]');
         if (goalEl) {
@@ -497,31 +682,142 @@ export const PROGRESS_DOM_JS = String.raw`
     var pw = sectionAfter('Past Workouts');
     if (pw && pw.next) setEmpty(pw.next, !d.workouts || d.workouts.length === 0, 'No workouts yet', 'Your finished workouts show up here with a form score.', { inset: '12px 14px 20px', radius: '26px', minH: 190 });
 
-    // Progress Photos — the whole card opens the real photo screen
+    // Progress Photos — the whole home card opens the design's own Photos page (in-page, instant)
     var pp = sectionAfter('Progress Photos');
-    if (pp && pp.next && pp.next.children[0]) pp.next.children[0].setAttribute('data-athlt-photos', '1');
+    var ppCard = pp && pp.next && pp.next.children[0];
+    if (ppCard) ppCard.setAttribute('data-athlt-photos', '1');
+    var pv = window.__athltPhotoView || { card: [], grid: [], cmpA: null, cmpB: null };
+    var setPhoto = function (el, photo) {
+      var sig = photo ? photo.id + '|' + (photo.thumb ? photo.thumb.length : 0) : '';
+      if (el.__phSig === sig) return;
+      el.__phSig = sig;
+      if (photo && photo.thumb) {
+        el.style.setProperty('background', 'url(' + photo.thumb + ') center / cover no-repeat', 'important');
+        el.style.setProperty('border-style', 'solid', 'important');
+        el.style.setProperty('border-color', 'rgba(17,17,20,0.08)', 'important');
+        for (var ci = 0; ci < el.children.length; ci++) el.children[ci].style.setProperty('visibility', 'hidden');
+      } else {
+        el.style.removeProperty('background'); el.style.removeProperty('border-style'); el.style.removeProperty('border-color');
+        for (var cj = 0; cj < el.children.length; cj++) el.children[cj].style.removeProperty('visibility');
+      }
+    };
+    var addPhoto = function () { post({ type: 'addPhoto', pose: window.__athltApi && window.__athltApi.pose }); };
+    // the 3 slots on the home card = the 3 newest photos
+    var cardSlots = ppCard ? ppCard.querySelectorAll('div[style*="aspect-ratio: 3 / 4"]') : [];
+    for (var ps = 0; ps < cardSlots.length; ps++) setPhoto(cardSlots[ps], pv.card[ps] || null);
+    // Photos page: compare slots + All Photos grid
+    var cmpSlots = root.querySelectorAll('div[style*="aspect-ratio: 3 / 4"][style*="border-radius: 20px"]');
+    if (cmpSlots[0]) setPhoto(cmpSlots[0], pv.cmpA);
+    if (cmpSlots[1]) setPhoto(cmpSlots[1], pv.cmpB);
+    var gridTiles = root.querySelectorAll('div[style*="aspect-ratio: 3 / 4"][style*="border-radius: 16px"]');
+    for (var gt = 0; gt < gridTiles.length; gt++) {
+      setPhoto(gridTiles[gt], pv.grid[gt] || null);
+      if (!gridTiles[gt].__addWired) {
+        gridTiles[gt].__addWired = true;
+        gridTiles[gt].addEventListener('click', function (ev) {
+          var list = Array.prototype.slice.call(root.querySelectorAll('div[style*="aspect-ratio: 3 / 4"][style*="border-radius: 16px"]'));
+          var gi = list.indexOf(ev.currentTarget), grid = window.__athltPhotoView ? window.__athltPhotoView.grid : [];
+          if (gi >= grid.length) addPhoto(); else post({ type: 'viewPhoto', id: grid[gi].id });
+        }, true);
+      }
+    }
+    for (var cs = 0; cs < cmpSlots.length; cs++) {
+      if (!cmpSlots[cs].__addWired) {
+        cmpSlots[cs].__addWired = true;
+        cmpSlots[cs].addEventListener('click', function (ev) {
+          var pvw = window.__athltPhotoView || {}, ph = ev.currentTarget === cmpSlots[0] ? pvw.cmpA : pvw.cmpB;
+          if (ph) post({ type: 'viewPhoto', id: ph.id }); else addPhoto();
+        }, true);
+      }
+    }
+    var links2 = root.querySelectorAll('a');
+    for (var l2 = 0; l2 < links2.length; l2++) {
+      if (!links2[l2].__addWired && /^Add today.s photo$/.test((links2[l2].textContent || '').trim())) {
+        links2[l2].__addWired = true;
+        links2[l2].addEventListener('click', function (ev) { ev.preventDefault(); ev.stopPropagation(); addPhoto(); }, true);
+      }
+    }
+
+    // Share button (top right): hands off to the native share sheet
+    var shareBtn = root.querySelector('div[aria-label="Share"]');
+    if (shareBtn && !shareBtn.__shareWired) {
+      shareBtn.__shareWired = true;
+      shareBtn.addEventListener('click', function (ev) { ev.stopPropagation(); post({ type: 'share' }); }, true);
+    }
+
+    // Past Workouts: a real frame from each workout's video instead of the black box
+    var wk = d.workouts || [];
+    var vidBoxes = root.querySelectorAll('div[role="img"][aria-label$=" video"]');
+    var listBoxes = root.querySelectorAll('div[style*="width: 74px"][style*="height: 92px"]');
+    var setThumb = function (el, w) {
+      var sig = w.thumb ? 'v' + w.thumb.length : w.fallback ? 'f' + w.fallback.length : '';
+      if (!sig || el.__thumb === sig) return;
+      el.__thumb = sig;
+      if (w.thumb) {
+        el.style.setProperty('background-image', 'url(' + w.thumb + ')', 'important');
+        el.style.setProperty('background-size', 'cover', 'important');
+        el.style.setProperty('background-position', 'center', 'important');
+      } else {
+        // no video frame: the muscle icon on a dark tile (never a black box)
+        el.style.setProperty('background-image', 'url(' + w.fallback + '), linear-gradient(160deg, #3b4156 0%, #15171e 100%)', 'important');
+        el.style.setProperty('background-size', '46%, cover', 'important');
+        el.style.setProperty('background-position', 'center, center', 'important');
+        el.style.setProperty('background-repeat', 'no-repeat, no-repeat', 'important');
+      }
+    };
+    for (var vb = 0; vb < vidBoxes.length; vb++) if (wk[vb]) setThumb(vidBoxes[vb], wk[vb]);
+    for (var lb = 0; lb < listBoxes.length; lb++) if (wk[lb]) setThumb(listBoxes[lb], wk[lb]);
 
     return { okFit: okFit, filled: true };
   }
 
-  // Swallow taps inside the photo card (date inputs etc.) and open the photo screen instead.
+  // Taps anywhere on the home photo card (incl. its date pickers) open the Photos page instead.
   document.addEventListener('click', function (e) {
     var t = e.target && e.target.closest ? e.target.closest('[data-athlt-photos]') : null;
     if (!t) return;
     e.preventDefault(); e.stopPropagation();
-    post({ type: 'photos' });
+    if (window.__athltApi) window.__athltApi.openPhotos();
+  }, true);
+
+  // The artboard links to sibling prototype pages by file name ("Rep Feedback.dc.html"); those files don't
+  // exist in the app and following one would blank the WebView, so they are never followed.
+  document.addEventListener('click', function (ev) {
+    var a = ev.target && ev.target.closest ? ev.target.closest('a[href]') : null;
+    if (a && /\.dc\.html?$/i.test(a.getAttribute('href') || '')) { ev.preventDefault(); ev.stopPropagation(); }
   }, true);
 
   var reported = false, lastAsk = 0, deb;
+  // Real content = the page's logic has rendered with real data: no leftover template text anywhere.
+  function pageIsReal(r) {
+    var root = document.getElementById('dc-root');
+    if (!(r.okFit && r.filled && window.__athltLogicReady && root && leafWithText('Progress'))) return false;
+    if ((root.textContent || '').indexOf('{{') >= 0) return false;
+    // still for a moment: the viewport has stopped changing and the page has stopped re-rendering
+    return !window.__dcSettle || window.__dcSettle(160);
+  }
+  function setPageReady(on) {
+    var h = document.documentElement;
+    if (!h) return;
+    if (on) { if (!h.hasAttribute('data-pready')) h.setAttribute('data-pready', '1'); }
+    else if (h.hasAttribute('data-pready')) h.removeAttribute('data-pready');
+  }
+  // The native side can ask again at any time (e.g. after a reload) and gets an answer right away.
+  window.__athltCheckReady = function () { var ok = pageIsReal(apply()); setPageReady(ok); if (ok) { reported = true; post({ type: 'ready' }); } return ok; };
   function tick() {
     var r = apply();
     if (!window.__athltData && Date.now() - lastAsk > 700) { lastAsk = Date.now(); post({ type: 'needData' }); }
-    if (!reported && r.okFit && r.filled && window.__athltLogicReady && leafWithText('Progress')) {
+    // Once revealed, the page stays revealed (taps and re-renders must never hide it again); the gate only
+    // applies to the first reveal.
+    var ok = reported || pageIsReal(r);
+    setPageReady(ok);
+    if (!reported && ok) {
       reported = true;
       post({ type: 'ready' });
     }
+    // data has landed but the page is still settling: look again soon instead of waiting for the interval
+    if (!ok && r.okFit && r.filled && window.__athltLogicReady) { clearTimeout(deb); deb = setTimeout(tick, 90); }
   }
-  function schedule() { clearTimeout(deb); deb = setTimeout(tick, 50); }
+  function schedule() { ensureCss(); clearTimeout(deb); deb = setTimeout(tick, 50); }
   try { new MutationObserver(schedule).observe(document, { childList: true, subtree: true, attributes: false }); } catch (e) {}
   window.addEventListener('resize', schedule);
   setInterval(tick, 500);
