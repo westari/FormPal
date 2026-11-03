@@ -22,6 +22,8 @@ const NEUTRAL = '#E3E4EA';
 const SILHOUETTE_FILL = '#F1F2F6';
 const SILHOUETTE_STROKE = '#D5D7DF';
 const OUTLINE_STROKE = '#454B5C';
+const MUSCLE_OUTLINE_STROKE = '#7C8398';
+const MUSCLE_OUTLINE_WIDTH = 2.4; // units; ~0.6px on screen, thinner than the 1.6px body outline
 const OUTLINE_WIDTH = 6; // units; ~1.6px on screen (figure ~830 units tall in a ~218px box)
 
 // Tier `lo` alone is too pale on the white silhouette for Silver/Platinum/etc, so
@@ -62,7 +64,11 @@ function bodyMapParts(tiers: MuscleTiers, side: 'front' | 'back', outlined = fal
   for (const id of Object.keys(table)) {
     if (id === 'silhouette') continue;
     const fill = fillById[id] ?? NEUTRAL;
-    parts.push(`<path d="${table[id]}" fill="${fill}" stroke="#ffffff" stroke-width="0.9" stroke-linejoin="round"/>`);
+    // Outlined figures give every muscle its OWN thin outline too (a soft
+    // blue-grey, thinner than the body outline); plain maps keep the white seam.
+    const mStroke = outlined ? MUSCLE_OUTLINE_STROKE : '#ffffff';
+    const mWidth = outlined ? MUSCLE_OUTLINE_WIDTH : 0.9;
+    parts.push(`<path d="${table[id]}" fill="${fill}" stroke="${mStroke}" stroke-width="${mWidth}" stroke-linejoin="round"/>`);
   }
   if (silhouette && outlined) {
     parts.push(`<path d="${silhouette}" fill="none" stroke="${OUTLINE_STROKE}" stroke-width="${OUTLINE_WIDTH}" stroke-linejoin="round"/>`);

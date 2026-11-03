@@ -784,6 +784,7 @@ export default function FormCheckScreen() {
   const notLinked      = !isNativeModuleLinked();
 
   const startTimestamp = useRef<number | null>(null);
+  const recapDurationRef = useRef<number | null>(null);
   const repEvents      = useRef<{ timeSec: number; good: boolean; reason: string }[]>([]);
   const sessionStopped = useRef(false);
   const isTrackingRef  = useRef(false);
@@ -1071,8 +1072,8 @@ export default function FormCheckScreen() {
         },
       });
     } else {
-      const durationSec = startTimestamp.current != null
-        ? Math.round((Date.now() - startTimestamp.current) / 1000) : 0;
+      const durationSec = recapDurationRef.current ?? (startTimestamp.current != null
+        ? Math.round((Date.now() - startTimestamp.current) / 1000) : 0);
       prefetchSoloRecap({
         reps: navParams.reps, goodReps: navParams.goodReps, repCounter: repCounterOnly,
         durationSec, hasVideo: !!navParams.videoUri,
@@ -1105,6 +1106,18 @@ export default function FormCheckScreen() {
 
     const navParams = { reps: final.reps, goodReps: final.goodReps, videoUri: final.videoUri ?? '' };
 
+    // Fill the (already loaded) Workout Complete card NOW, as soon as the final
+    // numbers exist — not at navigation time, which can be a debug-review screen
+    // later. The same duration is reused at navigation so the string is identical.
+    if (!returnTo) {
+      recapDurationRef.current = startTimestamp.current != null
+        ? Math.round((Date.now() - startTimestamp.current) / 1000) : 0;
+      prefetchSoloRecap({
+        reps: navParams.reps, goodReps: navParams.goodReps, repCounter: repCounterOnly,
+        durationSec: recapDurationRef.current, hasVideo: !!navParams.videoUri,
+      });
+    }
+
     // End-of-set calibration summary + suggested thresholds from the real range.
     for (const l of calibRef.current.flushSummary()) sessionLogRef.current.push(l);
 
@@ -1115,7 +1128,7 @@ export default function FormCheckScreen() {
     } else {
       doNavigate(navParams);
     }
-  }, [doNavigate]);
+  }, [doNavigate, returnTo, repCounterOnly]);
 
   const handleReviewDone = useCallback(() => {
     if (pendingNavRef.current) doNavigate(pendingNavRef.current);

@@ -46,17 +46,20 @@ export function muscleGainPct(before: MuscleTierInfo | undefined, after: MuscleT
   return Math.max(0, absolute(after) - absolute(before));
 }
 
-export interface StandingLike { tier: Tier; progress: number; atTop: boolean }
+export interface StandingLike { tier: Tier; progress: number; atTop: boolean; muscle?: Muscle }
 
 function standingAbs(s: StandingLike | null): number {
   return s ? tierIndex(s.tier) * 100 + s.progress * 100 : 0;
 }
 
-/** "+12%", "+0.4%", "+0%" — one decimal only when it would otherwise round to 0. */
+// Every number on the muscle page is shown to ONE decimal, always, so the
+// arithmetic on screen visibly adds up (6.3% -> 7.0% is +0.7%).
+const r1 = (n: number) => Math.round(n * 10) / 10;
+export const fmt1 = (n: number) => r1(n).toFixed(1);
+
+/** "+12.0%", "+0.7%", "+0.0%". */
 export function formatGain(pct: number): string {
-  if (pct <= 0) return '+0%';
-  if (pct < 1) return `+${(Math.round(pct * 10) / 10).toFixed(1).replace(/\.0$/, '')}%`;
-  return `+${Math.round(pct)}%`;
+  return `+${fmt1(Math.max(0, pct))}%`;
 }
 
 /** Muscles this workout trained, most-worked first (credit-weighted reps, as the rank system counts them). */
@@ -91,8 +94,9 @@ function rowGainPct(m: Muscle, credit: number, before: MuscleTiers, after: Muscl
 export interface MuscleRanksPayload {
   rank: {
     has: boolean; atTop: boolean; tier: Tier | null; label: string; next: string;
-    pct: number;            // progress toward `next`, 0-100
-    gained: string;         // overall gain today, number text without "+"/"%"
+    pct: number;            // progress toward `next`, 0-100 (one decimal)
+    pctLabel: string;       // header text, e.g. "7.0% to Silver"
+    gained: string;         // how much `pct` moved today, number text without "+"/"%"
     hi: string; lo: string; ink: string;
     emblem: string | null;
   };
@@ -119,15 +123,38 @@ export function buildMuscleRanksPayload(opts: {
   const idx = tier ? tierIndex(tier) : -1;
   const nextTier: Tier = tier ? (idx < TIER_ORDER.length - 1 ? TIER_ORDER[idx + 1] : tier) : 'bronze';
   const meta = TIER_META[tier ?? 'bronze'];
-  // "+X% today" must match the muscle rows. It used to be the change in the
-  // weakest-link standing, which stays +0% whenever the muscles you trained
-  // aren't the weakest one even though each of them shows +3%. Now it is the
-  // average gain across every muscle this workout trained (two muscles at +3%
-  // each = +3% today), computed with the exact same per-muscle numbers.
-  const gains = worked.map(w => rowGainPct(w.muscle, w.credit, tiersBefore, tiersAfter));
-  const overallGain = gains.length ? gains.reduce((a, b) => a + b, 0) / gains.length : 0;
+  // The number at the top is the weakest-link standing (the same one the
+  // Progress tab shows). "+X% today" is simply how far THAT number moved today,
+  // from the same two standings, so the page can never disagree with itself.
+  // (Rank-ups count: a move from Bronze 95% to Silver 3% is +8%.)
+  const afterPct = standingAfter ? r1(standingAfter.progress * 100) : 0;
+  const beforePct = standingBefore ? r1(standingBefore.progress * 100) : 0;
+  const sameTier = !!standingBefore && !!standingAfter && standingBefore.tier === standingAfter.tier;
+  const overallGain = standingAfter
+    ? Math.max(0, r1(sameTier ? afterPct - beforePct : standingAbs(standingAfter) - standingAbs(standingBefore)))
+    : 0;
+  const nextLabel = cap(nextTier);
+  const weakestName = standingAfter?.muscle ? (labels[standingAfter.muscle] ?? String(standingAfter.muscle)) : null;
+  const trainedWeakest = !!standingAfter?.muscle && worked.some(w => w.muscle === standingAfter.muscle);
+  const pctLabel = standingAfter?.atTop ? 'Top rank' : `${fmt1(afterPct)}% to ${nextLabel}`;
+  // Beginner-plain explanation of every number above it.
+  const explain = !standingAfter
+    ? 'Keep training: every muscle needs a little more volume before you earn Bronze.'
+    : standingAfter.atTop
+      ? "You're at the top rank. Nothing left to climb."
+      : standingBefore?.muscle && standingBefore.muscle !== standingAfter.muscle && overallGain > 0
+        ? `Your rank follows your weakest muscle. Training ${labels[standingBefore.muscle] ?? 'it'} lifted it, so ${weakestName ?? 'another muscle'} (${fmt1(afterPct)}% of the way to ${nextLabel}) now sets your rank: +${fmt1(overallGain)}% today.`
+      : trainedWeakest && overallGain > 0
+        ? `Your rank follows your weakest muscle${weakestName ? ', ' + weakestName : ''}. It moved ${fmt1(beforePct)}% to ${fmt1(afterPct)}% of the way to ${nextLabel} today (+${fmt1(overallGain)}%).`
+        : `Your rank follows your weakest muscle${weakestName ? ', ' + weakestName : ''}, at ${fmt1(afterPct)}% of the way to ${nextLabel}.${trainedWeakest ? '' : " You didn't train it today, so it stayed put."}`;
 
-  const gainText = overallGain <= 0 ? '0' : overallGain < 1 ? (Math.round(overallGain * 10) / 10).toFixed(1) : String(Math.round(overallGain));
+  // Two rows: the most-worked muscles, but if the weakest muscle (the one that
+  // sets the rank) was trained it always gets a row, so the top number can be
+  // traced to a visible muscle.
+  let shownRows = worked.slice(0, 2);
+  if (trainedWeakest && !shownRows.some(w => w.muscle === standingAfter!.muscle)) {
+    shownRows = [shownRows[0], worked.find(w => w.muscle === standingAfter!.muscle)!].filter(Boolean);
+  }
 
   return {
     rank: {
@@ -135,16 +162,21 @@ export function buildMuscleRanksPayload(opts: {
       atTop: !!standingAfter?.atTop,
       tier,
       label: tier ? cap(tier) : 'Unranked',
-      next: cap(nextTier),
-      pct: standingAfter ? Math.round(standingAfter.progress * 100) : 0,
-      gained: gainText,
+      next: nextLabel,
+      pct: afterPct,
+      pctLabel,
+      gained: fmt1(overallGain),
       hi: meta.hi, lo: meta.lo, ink: meta.ink,
       emblem,
     },
-    note,
-    hits: worked.slice(0, 2).map(w => ({
+    note: explain,
+    hits: shownRows.map(w => ({
       name: labels[w.muscle] ?? String(w.muscle),
-      gain: formatGain(rowGainPct(w.muscle, w.credit, tiersBefore, tiersAfter)),
+      // The weakest muscle's row IS the number at the top, so it shows the very
+      // same figure the header moved by; every other row is its own gain.
+      gain: w.muscle === standingAfter?.muscle && trainedWeakest
+        ? formatGain(overallGain)
+        : formatGain(rowGainPct(w.muscle, w.credit, tiersBefore, tiersAfter)),
       icon: iconFor(w.muscle),
     })),
     bodyMap: bodyMapPairDataUri(worked.map(w => w.muscle)),

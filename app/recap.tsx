@@ -47,14 +47,11 @@
  */
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Share, TouchableOpacity, Animated } from 'react-native';
+import { View, StyleSheet, Share, TouchableOpacity, Animated } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import { LinearGradient } from 'expo-linear-gradient';
-import { SymbolView } from 'expo-symbols';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { WebView } from 'react-native-webview';
 import { useVideoPlayer, VideoView, type VideoThumbnail } from 'expo-video';
 import * as Sharing from 'expo-sharing';
 import { File } from 'expo-file-system';
@@ -73,11 +70,11 @@ import { computeOverallStanding, MUSCLE_LABELS, MUSCLE_ICON_SOURCES } from '../c
 import { Asset } from 'expo-asset';
 import { buildMuscleRanksPayload, workedMuscles, type MuscleRanksPayload } from '../lib/muscleRanksData';
 import { tierDataUri } from '../lib/rankImages';
-import { DC_VIEWPORT_JS, allSetsInject } from '../lib/recapInject';
+import { allSetsDataJs } from '../lib/allSetsInject';
 import { generateSummary, recapPageData } from '../lib/recapPrefetch';
 import { repFeedbackDataJs } from '../lib/repFeedbackInject';
 import { athltSetDataJs } from '../lib/dcLogicPatch';
-import { warmWant, warmPrepare, warmActivate, warmDeactivate, warmRelease, warmSetBg, warmSetOverlay } from '../components/WarmSurfaces';
+import { warmWant, warmPrepare, warmActivate, warmDeactivate, warmRelease, warmSetBg, warmSetOverlay, warmSetUnderlay } from '../components/WarmSurfaces';
 import { useWorkoutSessionStore } from '../store/workoutSessionStore';
 import type { WorkoutSummary } from '../store/workoutSessionStore';
 import { usePlanStore } from '../store/planStore';
@@ -89,7 +86,6 @@ import { usePlanStore } from '../store/planStore';
 // here. Also 100% hardcoded demo data, no props channel — same DOM-
 // replacement approach as everywhere else (see allSetsInject /
 // muscleRanksInject).
-const ALL_SETS_HTML = require('../assets/app screens/allsetsfullworkout.html');
 
 // Build/bundle confirmation stamp — explicit ask ("add a small visible
 // build stamp so I can confirm on device I'm running the new code").
@@ -102,7 +98,7 @@ const ALL_SETS_HTML = require('../assets/app screens/allsetsfullworkout.html');
 // round: remove the on-screen stamp — kept as a console log instead so
 // it's still there to confirm a fresh reload if ever needed, just not
 // visible on the card.
-const BUILD_TAG = 'warm-3';
+const BUILD_TAG = 'warm-4';
 const BUILD_LOADED_AT = new Date().toLocaleTimeString();
 if (__DEV__) {
   console.log(`[recap] build ${BUILD_TAG}`);
@@ -165,7 +161,6 @@ async function muscleIconDataUri(m: Muscle): Promise<string | null> {
 export default function RecapScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const webRef = useRef<WebView>(null);
 
   // BUG FOUND (item 3, "flashes then goes back to a grey screen"): the
   // strongest explanation for content showing then reverting is a SECOND
@@ -531,16 +526,21 @@ export default function RecapScreen() {
     });
   }, [data, hasVideo]);
 
-  const allSetsInjectJs = useMemo(() => {
+  // Real tiles for the warm All sets page (lib/allSetsInject.ts). Only the first
+  // set has a recorded clip (one video per solo session), so only it can open
+  // rep feedback / show a frame.
+  const allSetsDataJsStr = useMemo(() => {
     if (!data) return null;
-    return allSetsInject({
-      tiles: data.entries.map(e => ({
+    return allSetsDataJs({
+      tiles: data.entries.map((e, i) => ({
         title: e.displayName,
+        ex: e.displayName,
         meta: e.formChecked !== false
           ? `${e.reps} reps · ${e.reps > 0 ? Math.round((e.goodReps / e.reps) * 100) : 0}% form`
           : `${e.reps} reps`,
+        hasVideo: hasVideo && i === 0,
       })),
-      videoTileIndex: hasVideo && data.entries.length > 0 ? 0 : null,
+      videoIdx: hasVideo && data.entries.length > 0 ? 0 : null,
     });
   }, [data, hasVideo]);
 
@@ -587,7 +587,7 @@ export default function RecapScreen() {
   // 'ranks' falls back to 'summary' until its real data has finished
   // computing (async) — never shows a view with nothing real in it yet.
   const effectiveView: 'summary' | 'allsets' | 'ranks' =
-    view === 'allsets' && allSetsInjectJs ? 'allsets' :
+    view === 'allsets' && allSetsDataJsStr ? 'allsets' :
     view === 'ranks'   && ranksDataJs     ? 'ranks'   :
     'summary';
 
@@ -602,10 +602,10 @@ export default function RecapScreen() {
   // All sets page: the video tile shows a REAL frame from the clip. The page
   // reports where the tile is; the frame comes from expo-video's native
   // thumbnail generator (no new native module) and is drawn over that spot.
-  const [tileRect, setTileRect] = useState<{ l: number; t: number; w: number; h: number } | null>(null);
+  const [tileRect, setTileRect] = useState<{ l: number; t: number; w: number; h: number; vt: number; vb: number } | null>(null);
   const [thumb, setThumb] = useState<VideoThumbnail | null>(null);
   useEffect(() => {
-    if (view !== 'allsets' || !hasVideo || thumb) return;
+    if (!hasVideo || thumb) return;
     let cancelled = false;
     const t0 = Date.now();
     const at = Math.max(0.3, repEvents[0]?.timeSec ?? 1);
@@ -618,7 +618,25 @@ export default function RecapScreen() {
       } catch (err) { if (__DEV__) console.warn('[recap] all-sets thumbnail FAILED', err); }
     })();
     return () => { cancelled = true; };
-  }, [view, hasVideo, thumb, videoPlayer, repEvents]);
+  }, [hasVideo, thumb, videoPlayer, repEvents]);
+
+  // Behind the (transparent) All sets page: a white base, and — behind the video
+  // tile — the real frame. The page's own tile is made transparent, so its
+  // bookmark / play button / scrim / text all stay the design's own, drawn over
+  // the frame. Clipped to the grid's scroll area so it never pokes under the header.
+  useLayoutEffect(() => {
+    warmSetUnderlay('allsets', (
+      <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
+        {tileRect && (
+          <View style={{ position: 'absolute', left: 0, right: 0, top: tileRect.vt, height: Math.max(0, tileRect.vb - tileRect.vt), overflow: 'hidden' }}>
+            <View style={{ position: 'absolute', left: tileRect.l, top: tileRect.t - tileRect.vt, width: tileRect.w, height: tileRect.h, borderRadius: 22, overflow: 'hidden', backgroundColor: '#18181c' }}>
+              {thumb && <ExpoImage source={thumb} style={StyleSheet.absoluteFill} contentFit="cover" />}
+            </View>
+          </View>
+        )}
+      </View>
+    ));
+  }, [tileRect, thumb]);
 
   // Start loading the other two now (rep feedback only if there's a video,
   // the muscle page not for a history review), so they are ready by the time
@@ -626,9 +644,11 @@ export default function RecapScreen() {
   // this screen goes away.
   useEffect(() => {
     if (!isHistoryMode) warmWant('ranks', true);
+    const t = setTimeout(() => warmWant('allsets', true), 1200);
     return () => {
-      warmRelease('recap'); warmRelease('ranks'); warmRelease('repfeedback');
-      warmWant('ranks', false); warmWant('repfeedback', false);
+      clearTimeout(t);
+      warmRelease('recap'); warmRelease('ranks'); warmRelease('repfeedback'); warmRelease('allsets');
+      warmWant('ranks', false); warmWant('repfeedback', false); warmWant('allsets', false);
     };
   }, [isHistoryMode]);
   useEffect(() => { if (hasVideo) warmWant('repfeedback', true); }, [hasVideo]);
@@ -649,8 +669,9 @@ export default function RecapScreen() {
     }));
   }, [hasVideo, data, repEvents, isFocused]);
 
-  const warmKind: 'recap' | 'ranks' | null =
-    effectiveView === 'summary' ? 'recap' : effectiveView === 'ranks' ? 'ranks' : null;
+  useEffect(() => { if (allSetsDataJsStr) warmPrepare('allsets', allSetsDataJsStr); }, [allSetsDataJsStr]);
+  const warmKind: 'recap' | 'ranks' | 'allsets' | null =
+    effectiveView === 'summary' ? 'recap' : effectiveView === 'ranks' ? 'ranks' : 'allsets';
   useLayoutEffect(() => {
     if (!warmKind || !isFocused) return;
     warmActivate(warmKind, { onMessage: (m) => onWebMsg.current(m) });
@@ -719,7 +740,8 @@ export default function RecapScreen() {
         },
       } as any);
     }
-    else if ((msg as any).type === 'tileRect') { const m = msg as any; setTileRect({ l: m.l, t: m.t, w: m.w, h: m.h }); }
+    else if ((msg as any).type === 'tileRect') { const m = msg as any; setTileRect(m.none ? null : { l: m.l, t: m.t, w: m.w, h: m.h, vt: m.vt, vb: m.vb }); }
+    else if ((msg as any).type === 'openSet') onWebMsg.current({ type: 'viewRepFeedback' });
     else if (msg.type === 'viewAllSets') setView('allsets');
     else if (msg.type === 'closeAllSets') setView('summary');
     else if (msg.type === 'closeRanks') setView('summary');
@@ -754,56 +776,6 @@ export default function RecapScreen() {
             allowsPictureInPicture={false}
           />
         </Animated.View>
-      )}
-      {/* Only the all-sets grid still mounts its own WebView here; the
-          summary and the muscle page are the warm ones (see above). */}
-      {effectiveView === 'allsets' && (
-        <WebView
-          key="allsets"
-          ref={webRef}
-          source={ALL_SETS_HTML}
-          originWhitelist={['*']}
-          style={styles.web}
-          injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS}
-          injectedJavaScript={allSetsInjectJs ?? undefined}
-          onMessage={(e) => {
-            let msg: InMsg;
-            try { msg = JSON.parse(e.nativeEvent.data); } catch { return; }
-            onWebMsg.current(msg);
-          }}
-          onContentProcessDidTerminate={() => { webRef.current?.reload(); }}
-          allowFileAccess
-          allowFileAccessFromFileURLs
-          allowUniversalAccessFromFileURLs
-          javaScriptEnabled
-          domStorageEnabled
-          bounces={false}
-          overScrollMode="never"
-          cacheEnabled={false}
-          scrollEnabled={false}
-          automaticallyAdjustContentInsets={false}
-          contentInsetAdjustmentBehavior="never"
-        />
-      )}
-      {effectiveView === 'allsets' && hasVideo && tileRect && (
-        <Pressable
-          onPress={() => onWebMsg.current({ type: 'viewRepFeedback' })}
-          style={{ position: 'absolute', left: tileRect.l, top: tileRect.t, width: tileRect.w, height: tileRect.h, borderRadius: 22, overflow: 'hidden', backgroundColor: '#18181c' }}
-        >
-          {thumb && <ExpoImage source={thumb} style={StyleSheet.absoluteFill} contentFit="cover" />}
-          <LinearGradient colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.7)']} locations={[0.35, 1]} style={StyleSheet.absoluteFill} />
-          <View style={{ position: 'absolute', top: 12, right: 12, width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center' }}>
-            <SymbolView name="play.fill" size={12} tintColor="#ffffff" type="monochrome" style={{ width: 12, height: 12 }} />
-          </View>
-          <View style={{ position: 'absolute', left: 12, right: 12, bottom: 12 }}>
-            <Text style={{ color: '#ffffff', fontSize: 15.5, fontWeight: '700', letterSpacing: -0.3 }}>{data.entries[0]?.displayName ?? ''}</Text>
-            <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11.5, fontWeight: '500', paddingTop: 4 }}>
-              {data.entries[0]?.formChecked !== false
-                ? `${data.entries[0]?.reps ?? 0} reps · ${data.entries[0] && data.entries[0].reps > 0 ? Math.round((data.entries[0].goodReps / data.entries[0].reps) * 100) : 0}% form`
-                : `${data.entries[0]?.reps ?? 0} reps`}
-            </Text>
-          </View>
-        </Pressable>
       )}
       {/* No native fallback back button any more — explicit ask ("one
           clear back button, not two"). Both non-summary views now have

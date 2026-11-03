@@ -58,7 +58,7 @@ const SPEEDS = [0.5, 1, 1.5, 2];
 // Build/bundle confirmation — explicit ask this round: a loud, impossible
 // -to-miss tag to confirm the device is actually running this reload
 // before trusting any other log below it.
-const BUILD_TAG = 'warm-3';
+const BUILD_TAG = 'warm-4';
 const BUILD_LOADED_AT = new Date().toLocaleTimeString();
 if (__DEV__) {
   console.log(`[rep-feedback] build ${BUILD_TAG}`);
@@ -184,7 +184,8 @@ export default function RepFeedbackScreen() {
     if (!videoUri) return;
     warmPrepare('repfeedback', repFeedbackDataJs({ exerciseName: exerciseName ?? 'Exercise', hasVideo, reps }));
     warmActivate('repfeedback', { onMessage: (m) => onWebMsg.current(m) });
-    return () => { warmDeactivate('repfeedback'); warmRelease('repfeedback'); };
+    // Released a beat later so the card can finish sliding out with the screen.
+    return () => { warmDeactivate('repfeedback'); warmRelease('repfeedback', 400); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoUri]);
   useEffect(() => { warmSetBg('repfeedback', videoVisuallyReady ? 'transparent' : '#0d0d10'); }, [videoVisuallyReady]);

@@ -189,6 +189,9 @@ final class ExerciseEngine {
     private(set) var activeTrackingCue: String? = nil
     private var trackWeakFrames: Int = 0
     private var trackGoneFrames: Int = 0
+    // One "[TRACK] person lost" line per absence (JS shows "Step back into frame" the
+    // instant it arrives instead of waiting for the ~1/sec debug-stats sample).
+    private var personLostLogged: Bool = false
     private static let LOSING_TRACK_ENTER_FRAMES: Int = 10  // ~1s of weak tracking
 
     // ── Calibration (passive — fed from real completed reps, see completeRep) ──
@@ -576,6 +579,7 @@ final class ExerciseEngine {
         setupHoldBadFrames = 0
         trackWeakFrames   = 0
         trackGoneFrames   = 0
+        personLostLogged  = false
         activeTrackingCue = nil
     }
 
@@ -671,6 +675,10 @@ final class ExerciseEngine {
         // cue immediately; it only comes back if the metric stays unreliable
         // for LOSING_TRACK_ENTER_FRAMES straight (below).
         trackGoneFrames = 0
+        if personLostLogged {
+            personLostLogged = false
+            onDebugLog?("[TRACK] person back")
+        }
         noPoseStreak = 0
         activeTrackingCue = nil
         if isMetricReliable(def.repMetric, pose: pose, minConf: Self.FORM_CHECK_MIN_CONF) {
@@ -733,7 +741,13 @@ final class ExerciseEngine {
 
             if !forgiveFloorLoss {
                 trackGoneFrames = min(trackGoneFrames + 1, 200)
-                if trackGoneFrames >= 6 { activeTrackingCue = "Step back into frame" }
+                if trackGoneFrames >= 6 {
+                    activeTrackingCue = "Step back into frame"
+                    if !personLostLogged {
+                        personLostLogged = true
+                        onDebugLog?("[TRACK] person lost")
+                    }
+                }
             }
 
             if repPhase == .inRep, consecutiveMissingFrames >= def.missingPersonGraceFrames {
@@ -840,6 +854,12 @@ final class ExerciseEngine {
                     NSLog("[Engine] [%@]   %@: conf=%.2f x=%.2f y=%.2f",
                           def.id, "\(joint)", conf,
                           Double(pose[joint]?.x ?? 0), Double(pose[joint]?.y ?? 0))
+                }
+                if !def.setupExtraJoints.isEmpty {
+                    // Proof for "ready with only my face in frame": every joint the
+                    // whole-body check required, with the confidence it passed at.
+                    onDebugLog?("[SETUP] \(def.id) whole body in view — " +
+                                def.setupExtraJoints.map { "\($0)=\(String(format: "%.2f", pose[$0]?.confidence ?? 0))" }.joined(separator: " "))
                 }
                 setupPhaseState = .holding(startTime: timestamp)
                 holdProgress    = 0.0

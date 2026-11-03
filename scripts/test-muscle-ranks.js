@@ -33,6 +33,7 @@ let failed = 0;
 const check = (name, ok, detail) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  -> ' + detail : ''}`); if (!ok) failed++; };
 
 const DAY = 24 * 60 * 60 * 1000;
+const TIERIDX = { bronze: 0, silver: 1, gold: 2, platinum: 3, diamond: 4, master: 5, champion: 6 };
 const NOW = Date.now();
 const entry = (id, reps, good, daysAgo, ts) => ({
   ts: ts ?? NOW - daysAgo * DAY, exerciseId: id, displayName: id, reps, goodReps: good, pct: Math.round(100 * good / reps), formChecked: true,
@@ -84,9 +85,10 @@ const SCENARIOS = {
 {
   const sc = build([entry('romanianDeadlift', 60, 55, 10)], [entry('romanianDeadlift', 30, 27, 0)]);
   sc.payload.hits = [
-    { name: 'Hamstrings', gain: '+30%', icon: iconFor('hamstrings') },
-    { name: 'Rear Delts', gain: '+30%', icon: iconFor('shoulders') },
+    { name: 'Hamstrings', gain: '+30.0%', icon: iconFor('hamstrings') },
+    { name: 'Rear Delts', gain: '+30.0%', icon: iconFor('shoulders') },
   ];
+  sc.synthetic = true; // rows overridden by hand for a layout stress test
   SCENARIOS['longest labels (Hamstrings + Rear Delts)'] = sc;
 }
 if (oneMuscle) SCENARIOS[`single muscle (${oneMuscle.id})`] = build([entry(oneMuscle.id, 20, 18, 5)], [entry(oneMuscle.id, 25, 23, 0)]);
@@ -97,7 +99,22 @@ for (const [name, sc] of Object.entries(SCENARIOS)) {
   const { payload: p, standingAfter } = sc;
   console.log(`  ${name}: rank=${p.rank.label}->${p.rank.next} ${p.rank.pct}% (+${p.rank.gained}% today)  rows=${p.hits.map(h => h.name + ' ' + h.gain).join(' | ') || '(none)'}`);
   check(`${name}: rank label is the real standing`, p.rank.label === (standingAfter ? standingAfter.tier[0].toUpperCase() + standingAfter.tier.slice(1) : 'Unranked'));
-  check(`${name}: progress % is the real standing`, p.rank.pct === (standingAfter ? Math.round(standingAfter.progress * 100) : 0));
+  check(`${name}: progress % is the real standing (one decimal)`, p.rank.pct === (standingAfter ? Math.round(standingAfter.progress * 1000) / 10 : 0));
+  {
+    // THE consistency rule: "+X% today" is how far the number at the top moved, and every figure has one decimal
+    const before = sc.standingBefore, after = standingAfter;
+    const r1 = (n) => Math.round(n * 10) / 10;
+    const same = before && after && before.tier === after.tier;
+    const expected = !after ? 0 : Math.max(0, same ? r1(after.progress * 100) - r1(before.progress * 100) : (after.tier === (before && before.tier) ? 0 : (TIERIDX[after.tier] * 100 + after.progress * 100) - (before ? TIERIDX[before.tier] * 100 + before.progress * 100 : 0)));
+    check(`${name}: "+${p.rank.gained}% today" = how far the top number moved (${before ? r1(before.progress * 100) : 0} -> ${p.rank.pct})`, Math.abs(parseFloat(p.rank.gained) - expected) <= 0.11, `expected ${expected.toFixed(1)}`);
+    check(`${name}: every number on the page has exactly one decimal`, /^\d+\.\d$/.test(p.rank.gained) && /\d+\.\d% to |Top rank/.test(p.rank.pctLabel) && p.hits.every(h => /^\+\d+\.\d%$/.test(h.gain)), `${p.rank.pctLabel} | ${p.rank.gained} | ${p.hits.map(h => h.gain).join(',')}`);
+    const wk = after && after.muscle;
+    if (wk && !after.atTop && !sc.synthetic) {
+      const row = p.hits.find(h => h.name === MTM.MUSCLE_LABELS[wk]);
+      if (row) check(`${name}: the weakest muscle (${MTM.MUSCLE_LABELS[wk]}) has a row showing the same +${p.rank.gained}% the top moved`, parseFloat(row.gain.replace(/[+%]/g, '')) === parseFloat(p.rank.gained), row.gain);
+      check(`${name}: the note names the weakest muscle so a beginner can follow it`, p.note.includes(MTM.MUSCLE_LABELS[wk]), p.note);
+    }
+  }
   check(`${name}: every row has a real muscle name + a +N% gain (no bare "+%")`, p.hits.every(h => h.name && /^\+\d+(\.\d)?%$/.test(h.gain)));
 }
 // ── "Bronze 0%" and "+0% today" while the rows say +3% (device report 2026-11-02) ──
@@ -113,11 +130,8 @@ for (const [name, sc] of Object.entries(SCENARIOS)) {
   const bic = sc.tiersAfter.biceps;
   check('REPRO: a muscle with only rep-counter reps exists and has no quality signal', bic && bic.qualityJudged === false && bic.goodRatio === 0);
   check('FIXED: that muscle no longer pins the headline at 0% (progress follows its volume)', p.rank.pct > 0, `${p.rank.pct}%`);
-  const lowest = Math.min(...Object.values(sc.tiersAfter).filter(i => i.tier === sc.standingAfter.tier).map(i => Math.round(data.muscleProgressPct(i))));
-  check('headline % is the weakest muscle in the tier (lowest progress), not the first one found', Math.abs(p.rank.pct - lowest) <= 1, `headline ${p.rank.pct}% lowest ${lowest}%`);
-  const rowGains = p.hits.map(h => parseFloat(h.gain.replace(/[+%]/g, '')));
-  const mean = rowGains.reduce((a, b) => a + b, 0) / rowGains.length;
-  check('"+X% today" matches the muscle rows (average of what each trained muscle gained)', Math.abs(parseFloat(p.rank.gained) - mean) <= 0.6 && parseFloat(p.rank.gained) > 0, `today +${p.rank.gained}% vs rows ${rowGains.join(', ')}`);
+  const lowest = Math.min(...Object.values(sc.tiersAfter).filter(i => i.tier === sc.standingAfter.tier).map(i => data.muscleProgressPct(i)));
+  check('headline % is the weakest muscle in the tier (lowest progress), not the first one found', Math.abs(p.rank.pct - lowest) <= 0.1, `headline ${p.rank.pct}% lowest ${lowest}%`);
 }
 const A = SCENARIOS['shoulders+triceps (bronze)'].payload, B = SCENARIOS['legs (squat+lunge)'].payload;
 check('rows follow the workout: shoulders workout -> Shoulders/Triceps', A.hits.map(h => h.name).sort().join() === 'Shoulders,Triceps', A.hits.map(h => h.name).join());
@@ -191,14 +205,14 @@ check('rows carry the real Flaticon art', A.hits.every(h => h.icon && h.icon.sta
     const later = await snap();
 
     const txt = atReady.text.replace(/\s+/g, ' ');
-    check(`${name}: header shows real rank + %`, txt.includes(p.rank.label) && txt.includes(p.rank.pct + '%'), `${p.rank.label} ${p.rank.pct}%`);
+    check(`${name}: header shows real rank + % + where it is heading`, txt.includes(p.rank.label) && txt.includes(p.rank.pctLabel), `${p.rank.label} ${p.rank.pctLabel}`);
     check(`${name}: "${p.rank.label} -> ${p.rank.next}" row + "+${p.rank.gained}% today"`, txt.includes(p.rank.next) && txt.includes(`+${p.rank.gained}% today`));
     check(`${name}: muscle rows = ${p.hits.map(h => h.name + ' ' + h.gain).join(', ') || 'none'}`,
       p.hits.every(h => txt.includes(h.name) && txt.includes(h.gain)));
     const placeholders = ['Bronze II', 'Bronze III', '+14% today', 'Quads', 'Glutes', '+6%', '+5%', '72%'];
     const bad = placeholders.filter(x => txt.includes(x) && !(p.hits.some(h => h.name === x || h.gain === x) || p.rank.label + p.rank.next + p.rank.pct + '%' === 'x'));
     // 'Quads'/'Glutes' etc may legitimately be a real row; anything else from the design's demo must be gone
-    const realBad = bad.filter(x => !p.hits.some(h => h.name === x || h.gain === x) && x !== `+${p.rank.gained}% today` && x !== p.rank.pct + '%');
+    const realBad = bad.filter(x => !p.hits.some(h => h.name === x || h.gain === x) && x !== `+${p.rank.gained}% today` && x !== p.rank.pct + '%' && x !== p.rank.pctLabel);
     check(`${name}: no design placeholder text left`, realBad.length === 0, realBad.join());
     const chipInfo = await page.evaluate(() => {
       const chips = [...document.querySelectorAll('#dc-root div')].filter(d => d.style.position === 'absolute' && d.style.top === '284px');

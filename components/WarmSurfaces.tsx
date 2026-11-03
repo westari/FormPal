@@ -15,13 +15,20 @@
  * `overlay` and rendered here above the WebView, otherwise the WebView would
  * cover it and swallow its touches.
  *
+ * HIDDEN means HIDDEN: a surface that is not showing is fully transparent,
+ * pushed off-screen, and placed BEHIND the navigator (negative zIndex), so it
+ * can never show through a screen's white space or catch a tap. (It used to sit
+ * above everything at 1% opacity, which leaked a faint ghost of the card onto
+ * every screen.) Only a surface that is showing is raised above the navigator,
+ * and it slides in like a normal iOS push so the page change is not a hard cut.
+ *
  * Lifecycle per surface:  want -> (loads, posts 'warm') -> prepare(data) ->
  * data injected once -> page posts 'ready' -> activate() reveals it.
  * deactivate() hides it but keeps its state (e.g. recap while rep feedback is
  * on top); release() throws the instance away and re-warms a fresh one.
  */
-import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, Animated, Easing, useWindowDimensions } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import { LiquidGlassButton } from './LiquidGlass';
 import { WebView } from 'react-native-webview';
@@ -29,14 +36,28 @@ import { create } from 'zustand';
 import { DC_VIEWPORT_JS, recapBaseJs } from '../lib/recapInject';
 import { repFeedbackBaseJs } from '../lib/repFeedbackInject';
 import { muscleRanksBaseJs } from '../lib/muscleRanksInject';
+import { allSetsBaseJs } from '../lib/allSetsInject';
 
-export type WarmKind = 'recap' | 'repfeedback' | 'ranks';
-const KINDS: WarmKind[] = ['recap', 'ranks', 'repfeedback']; // later = drawn on top
+export type WarmKind = 'recap' | 'repfeedback' | 'ranks' | 'allsets';
+const KINDS: WarmKind[] = ['recap', 'allsets', 'ranks', 'repfeedback']; // later = drawn on top
+
+// Pages that slide back OUT to the right when they close (a pop). The summary
+// never does: it is only ever covered by the others.
+const SLIDES_OUT: PerKindLite<boolean> = { recap: false, allsets: true, ranks: true, repfeedback: true };
+const SLIDE_IN_MS = 320, SLIDE_OUT_MS = 260;
+
+// Layering rules (also what scripts/test-ghost-card.js renders): a layer that is
+// not showing is fully transparent and the whole host sits behind the navigator;
+// while something is showing the host is raised above it.
+export const HOST_Z_HIDDEN = -1;
+export const HOST_Z_RAISED = 1000;
+export const LAYER_OPACITY_HIDDEN = 0;
 
 const SOURCES: Record<WarmKind, any> = {
   recap:       require('../assets/app screens/workoutrecap.html'),
   ranks:       require('../assets/app screens/muscleranks.html'),
   repfeedback: require('../assets/app screens/repfeedback.html'),
+  allsets:     require('../assets/app screens/allsetsfullworkout.html'),
 };
 
 // Posts {type:'warm'} once the artboard has rendered and been scaled to fit.
@@ -68,6 +89,7 @@ export const BASE_JS: Record<WarmKind, string> = {
   recap:       `${DC_VIEWPORT_JS} ${recapBaseJs()} ${WARM_PROBE_JS}`,
   repfeedback: `${DC_VIEWPORT_JS} ${repFeedbackBaseJs()} ${WARM_PROBE_JS}`,
   ranks:       `${muscleRanksBaseJs()} ${WARM_PROBE_JS}`,
+  allsets:     `${DC_VIEWPORT_JS} ${allSetsBaseJs()} ${WARM_PROBE_JS}`,
 };
 
 // Safety net: reveal anyway if the page never says 'ready' (selectors changed,
@@ -75,6 +97,7 @@ export const BASE_JS: Record<WarmKind, string> = {
 const REVEAL_BACKSTOP_MS = 2500;
 
 type PerKind<T> = Record<WarmKind, T>;
+type PerKindLite<T> = Record<'recap' | 'repfeedback' | 'ranks' | 'allsets', T>;
 export interface Rect { l: number; t: number; w: number; h: number }
 export interface Chrome { back: Rect; allSets: Rect }
 interface WarmState {
@@ -87,19 +110,21 @@ interface WarmState {
   bg:       PerKind<string>;
   dataJs:   PerKind<string | null>;
   overlay:  PerKind<React.ReactNode>;
+  underlay: PerKind<React.ReactNode>; // drawn BEHIND the page (e.g. a video frame showing through a transparent tile)
 }
-const each = <T,>(v: T): PerKind<T> => ({ recap: v, repfeedback: v, ranks: v });
+const each = <T,>(v: T): PerKind<T> => ({ recap: v, repfeedback: v, ranks: v, allsets: v });
 
 export const useWarm = create<WarmState>(() => ({
   chrome:   each<Chrome | null>(null),
-  want:     { recap: true, repfeedback: false, ranks: false },
+  want:     { recap: true, repfeedback: false, ranks: false, allsets: false },
   epoch:    each(0),
   warm:     each(false),
   active:   each(false),
   revealed: each(false),
-  bg:       { recap: '#111114', repfeedback: '#0d0d10', ranks: '#f2f2f5' },
+  bg:       { recap: '#111114', repfeedback: '#0d0d10', ranks: '#f2f2f5', allsets: 'transparent' },
   dataJs:   each<string | null>(null),
   overlay:  each<React.ReactNode>(null),
+  underlay: each<React.ReactNode>(null),
 }));
 
 const set = (k: WarmKind, patch: Partial<{ [P in keyof WarmState]: WarmState[P][WarmKind] }>) =>
@@ -136,10 +161,18 @@ export function warmActivate(k: WarmKind, opts: { bg?: string; onMessage: (msg: 
 }
 export function warmSetBg(k: WarmKind, bg: string) { if (useWarm.getState().bg[k] !== bg) set(k, { bg } as any); }
 export function warmSetOverlay(k: WarmKind, node: React.ReactNode) { set(k, { overlay: node } as any); }
+export function warmSetUnderlay(k: WarmKind, node: React.ReactNode) { set(k, { underlay: node } as any); }
 /** Hide it but keep its state (another screen is on top). */
 export function warmDeactivate(k: WarmKind) { set(k, { active: false } as any); }
 /** Done with this page for good: drop it and warm a fresh one for next time. */
-export function warmRelease(k: WarmKind) {
+export function warmRelease(k: WarmKind, delayMs = 0) {
+  if (delayMs > 0) {
+    // Hide now (the layer slides out), throw the page away once that is done.
+    set(k, { active: false } as any);
+    delete handlers[k];
+    setTimeout(() => warmRelease(k, 0), delayMs);
+    return;
+  }
   delete handlers[k];
   useWarm.setState((s) => ({
     active:   { ...s.active,   [k]: false },
@@ -147,21 +180,29 @@ export function warmRelease(k: WarmKind) {
     warm:     { ...s.warm,     [k]: false },
     dataJs:   { ...s.dataJs,   [k]: null },
     overlay:  { ...s.overlay,  [k]: null },
+    underlay: { ...s.underlay, [k]: null },
     chrome:   { ...s.chrome,   [k]: null },
     epoch:    { ...s.epoch,    [k]: s.epoch[k] + 1 },
   }));
 }
 export function warmInject(k: WarmKind, js: string) { refs[k]?.current?.injectJavaScript(js); }
 
-function Surface({ k }: { k: WarmKind }) {
+function Layer({ k }: { k: WarmKind }) {
   const ref = useRef<WebView>(null);
   refs[k] = ref;
+  const { width: screenW } = useWindowDimensions();
   const epoch = useWarm((s) => s.epoch[k]);
   const warm = useWarm((s) => s.warm[k]);
   const active = useWarm((s) => s.active[k]);
   const revealed = useWarm((s) => s.revealed[k]);
   const dataJs = useWarm((s) => s.dataJs[k]);
   const bg = useWarm((s) => s.bg[k]);
+  const overlay = useWarm((s) => s.overlay[k]);
+  const underlay = useWarm((s) => s.underlay[k]);
+  const chrome = useWarm((s) => s.chrome[k]);
+  // A page stays "shown" (kept in place, not re-slid) while a page above it is
+  // showing, so closing the top page just slides it away to reveal this one.
+  const coveredByHigher = useWarm((s) => KINDS.slice(KINDS.indexOf(k) + 1).some((kk) => s.active[kk] && s.revealed[kk]));
 
   // Inject the data once per fresh page, as soon as both exist.
   useEffect(() => {
@@ -190,14 +231,43 @@ function Surface({ k }: { k: WarmKind }) {
     if (active && !revealed) console.log(`[warm:${k}] activated, waiting for ready (card not shown yet)`);
     if (visible) console.log(`[warm:${k}] VISIBLE ${activatedAt[k] ? Date.now() - (activatedAt[k] as number) : '?'}ms after the screen asked for it`);
   }, [visible, active, revealed, k]);
+
+  // ── slide like an iOS push ────────────────────────────────────────────────
+  // tx = screen width means "parked off to the right". A hidden layer is always
+  // parked, fully transparent and behind the navigator.
+  const tx = useRef(new Animated.Value(screenW)).current;
+  const [shown, setShown] = useState(false);
+  const wasShown = useRef(false);
+  const wanted = visible || coveredByHigher;
+  useLayoutEffect(() => {
+    if (wanted) {
+      if (!wasShown.current) {
+        wasShown.current = true;
+        if (__DEV__) console.log(`[warm:${k}] slide IN (${SLIDE_IN_MS}ms), layer raised above navigator`);
+        tx.setValue(screenW);
+        setShown(true);
+        Animated.timing(tx, { toValue: 0, duration: SLIDE_IN_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+      }
+    } else if (wasShown.current) {
+      wasShown.current = false;
+      if (__DEV__) console.log(`[warm:${k}] ${SLIDES_OUT[k] ? 'slide OUT' : 'hidden'} -> parked off-screen, opacity 0, behind navigator`);
+      const park = () => { setShown(false); tx.setValue(screenW); };
+      if (SLIDES_OUT[k]) Animated.timing(tx, { toValue: screenW, duration: SLIDE_OUT_MS, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(({ finished }) => { if (finished || !wasShown.current) park(); });
+      else park();
+    }
+  }, [wanted, tx, screenW, k]);
+
   return (
-    <View
+    <Animated.View
       pointerEvents={visible ? 'auto' : 'none'}
-      // 0.01, not 0: a fully transparent view can be treated as not visible
-      // and have its animation frames throttled, which would stall the page's
-      // own warm-up. Imperceptible over a dark or light screen.
-      style={[StyleSheet.absoluteFill, { opacity: visible ? 1 : 0.01 }]}
+      style={[
+        StyleSheet.absoluteFill,
+        // Not shown = invisible, not hit-testable, and (via the parent's
+        // zIndex) behind everything.
+        { opacity: shown ? 1 : LAYER_OPACITY_HIDDEN, transform: [{ translateX: tx }] },
+      ]}
     >
+      {shown && underlay ? <View style={StyleSheet.absoluteFill} pointerEvents="none">{underlay}</View> : null}
       <WebView
         key={`${k}-${epoch}`}
         ref={ref}
@@ -243,27 +313,28 @@ function Surface({ k }: { k: WarmKind }) {
         automaticallyAdjustContentInsets={false}
         contentInsetAdjustmentBehavior="never"
       />
-    </View>
+      {shown && overlay ? <View style={StyleSheet.absoluteFill} pointerEvents="box-none">{overlay}</View> : null}
+      {shown && chrome && (k === 'recap' || k === 'repfeedback') ? <GlassChrome k={k} c={chrome} /> : null}
+    </Animated.View>
   );
 }
 
 export default function WarmSurfaces() {
   const want = useWarm((s) => s.want);
-  const active = useWarm((s) => s.active);
-  const revealed = useWarm((s) => s.revealed);
-  const overlay = useWarm((s) => s.overlay);
-  const chrome = useWarm((s) => s.chrome);
+  // Raised above the navigator only while some page is actually showing;
+  // otherwise the whole layer sits BEHIND it (negative zIndex) and nothing in
+  // it can show through or take a touch.
+  const anyShown = useWarm((s) => KINDS.some((k) => s.active[k] && s.revealed[k]));
+  const [raised, setRaised] = useState(false);
+  useEffect(() => {
+    if (anyShown) { setRaised(true); return; }
+    // keep it raised while a closing page finishes sliding out
+    const t = setTimeout(() => setRaised(false), SLIDE_OUT_MS + 80);
+    return () => clearTimeout(t);
+  }, [anyShown]);
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-      {KINDS.map((k) => (want[k] ? <Surface key={k} k={k} /> : null))}
-      {KINDS.map((k) =>
-        active[k] && revealed[k] && overlay[k] ? (
-          <View key={`o-${k}`} style={StyleSheet.absoluteFill} pointerEvents="box-none">{overlay[k]}</View>
-        ) : null,
-      )}
-      {(['recap', 'repfeedback'] as WarmKind[]).map((k) =>
-        active[k] && revealed[k] && chrome[k] ? <GlassChrome key={`g-${k}`} k={k} c={chrome[k]!} /> : null,
-      )}
+    <View style={[StyleSheet.absoluteFill, { zIndex: raised ? HOST_Z_RAISED : HOST_Z_HIDDEN }]} pointerEvents={raised ? 'box-none' : 'none'}>
+      {KINDS.map((k) => (want[k] ? <Layer key={k} k={k} /> : null))}
     </View>
   );
 }

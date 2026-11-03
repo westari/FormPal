@@ -117,5 +117,22 @@ check('no false cue while METRIC lines keep flowing', (() => {
   } finally { Date.now = realNow; }
 })());
 
+// 4. native "[TRACK] person lost" line (Swift, ExerciseEngine.notePersonMissing, ~6 frames = ~0.2s)
+{
+  let clock = 7000000; const realNow = Date.now; Date.now = () => clock;
+  try {
+    const diag = RD.createRepDiagnostic(0.9); let last = 0;
+    for (; clock < 7000000 + 6000; clock += 10) if (clock - last >= 330) { diag.feed('[METRIC] shoulderPress value=60 top=84 rom=55'); last = clock; }
+    const leftAt = last;
+    clock = leftAt + 200; // ~0.2s after the last pose: native logs the line
+    check('before the line arrives there is no cue yet', diag.message() === null);
+    diag.feed('[TRACK] person lost');
+    check('"[TRACK] person lost" shows "Step back into frame" immediately (~0.2s, was ~1.0s)', diag.message() === LT.NO_PERSON_CUE, `${clock - leftAt}ms after the last pose`);
+    check('...and the tracking meter target is 0 at once', LT.meterTarget({ phase: 'tracking', isActive: true, setupAllVisible: true, setupHoldProgress: 1, setupHint: '', repDiag: diag.message() }) === 0);
+    clock += 400; diag.feed('[TRACK] person back'); diag.feed('[METRIC] shoulderPress value=60 top=84 rom=55');
+    check('"[TRACK] person back" clears the cue', diag.message() === null);
+  } finally { Date.now = realNow; }
+}
+
 console.log(failed ? `\n${failed} FAILED` : '\nall passed');
 process.exit(failed ? 1 : 0);
