@@ -1,21 +1,32 @@
-import { DarkTheme, ThemeProvider } from '@react-navigation/native';
+import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { NativeTabs, Icon, Label } from 'expo-router/unstable-native-tabs';
 
 // Tab icons: every tab uses the same OUTLINE weight when idle (it used to mix filled
 // house/person/plus with the line-only chart and dumbbell figure), and the filled
 // variant only when selected, so stroke weight matches the label weight and the
 // active tab is the only thing that changes.
+// One accent for the active tab, one neutral grey for the rest. Every tab uses the same pair of SF Symbols
+// (outline when idle, filled when selected) at the same weight, and the same label style, so the icons and the
+// labels read as one set. The bar itself is the system's floating glass bar.
+const ACTIVE = '#2E7DFF';
+const IDLE = '#8E8E93';
+const LABEL = { fontSize: 10, fontWeight: '600' as const };
+
 export default function TabLayout() {
   return (
-    <ThemeProvider value={DarkTheme}>
-      <NativeTabs>
+    <ThemeProvider value={DefaultTheme}>
+      <NativeTabs
+        tintColor={ACTIVE}
+        iconColor={{ default: IDLE, selected: ACTIVE }}
+        labelStyle={{ default: { ...LABEL, color: IDLE }, selected: { ...LABEL, color: ACTIVE } }}
+      >
         <NativeTabs.Trigger name="index">
           <Icon sf={{ default: 'house', selected: 'house.fill' } as any} />
           <Label>Home</Label>
         </NativeTabs.Trigger>
 
         <NativeTabs.Trigger name="train">
-          <Icon sf={'figure.strengthtraining.traditional' as any} />
+          <Icon sf={{ default: 'figure.strengthtraining.traditional', selected: 'figure.strengthtraining.traditional' } as any} />
           <Label>Train</Label>
         </NativeTabs.Trigger>
 
@@ -26,7 +37,7 @@ export default function TabLayout() {
         </NativeTabs.Trigger>
 
         <NativeTabs.Trigger name="progress">
-          <Icon sf={'chart.line.uptrend.xyaxis' as any} />
+          <Icon sf={{ default: 'chart.line.uptrend.xyaxis', selected: 'chart.line.uptrend.xyaxis' } as any} />
           <Label>Progress</Label>
         </NativeTabs.Trigger>
 

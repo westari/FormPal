@@ -28,7 +28,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
-import { loadPlan } from '../../lib/planStorage';
+import { loadPlan, loadProfile } from '../../lib/planStorage';
 import { getAllSessions, calcStreak, groupIntoWorkouts, scoredSessions, computeMuscleTiers, type SessionEntry } from '../../lib/sessionLog';
 import { primaryMuscle } from '../../lib/progressData';
 import { workoutFrame, workoutFallbackIcon } from '../../lib/workoutThumbs';
@@ -187,8 +187,68 @@ const HIDE_FAKE_CHROME_CSS = `
   /* the artboard's one-time entrance animations would play while the page is still hidden and then be caught
      half-way when it is revealed: they are switched off (the Cue blob's own looping glow is kept) */
   [style*="hm-rise"], [style*="hm-bar"] { animation: none !important; }
-  /* Cue card: no card behind the glass blob and its text (no white box, no shadow) */
-  div[style*="margin: -26px 8px 0"] { background: none !important; box-shadow: none !important; }
+  /* ── Home visual system ──────────────────────────────────────────────────────────────────────────
+     Flat white cards on #F2F2F7, a 1px hairline instead of shadows, 16px cards / pill controls, 20px gutters,
+     muted zinc greys for meta text, one accent (#2E7DFF) for active states. Only styling: no logic or markup touched. */
+  html, body { background: #F2F2F7 !important; }
+  div[style*="width: 390px"][style*="height: 844px"] { background: #F2F2F7 !important; }
+  /* gutters + vertical rhythm of the main column (header, pills, Today, hero, Progress, ..., Learn The Moves) */
+  div[data-scroll][style*="overflow-y: auto"] > :nth-child(1) { padding-left: 20px !important; padding-right: 20px !important; }
+  div[data-scroll][style*="overflow-y: auto"] > :nth-child(2) { padding: 14px 20px 0 !important; }
+  div[data-scroll][style*="overflow-y: auto"] > :nth-child(3) { padding: 44px 20px 0 !important; }
+  div[data-scroll][style*="overflow-y: auto"] > :nth-child(4) { padding: 16px 20px 0 !important; }
+  div[data-scroll][style*="overflow-y: auto"] > :nth-child(5) { padding: 56px 20px 0 !important; }
+  div[data-scroll][style*="overflow-y: auto"] > :nth-child(6) { padding: 14px 20px 0 !important; }
+  div[data-scroll][style*="overflow-y: auto"] > :nth-child(7) { padding: 56px 20px 0 !important; }
+  div[data-scroll][style*="overflow-y: auto"] > :nth-child(8) { padding: 16px 20px 20px !important; scroll-padding-left: 20px !important; }
+  div[data-scroll][style*="overflow-y: auto"] > :nth-child(9) { padding: 0 0 56px !important; }
+  div[data-scroll][style*="overflow-y: auto"] > :nth-child(10) { padding: 0 20px !important; }
+  div[data-scroll][style*="overflow-y: auto"] > :nth-child(11) { padding: 14px 20px 24px !important; scroll-padding-left: 20px !important; }
+  /* every card: pure white, hairline border, no shadow */
+  div[style*="background: rgb(255, 255, 255)"][style*="box-shadow"],
+  div[style*="linear-gradient(160deg, rgb(255, 255, 255) 0%, rgb(251, 251, 253) 100%)"],
+  a[style*="linear-gradient(160deg, rgb(255, 255, 255) 0%, rgb(251, 251, 253) 100%)"],
+  div[data-scroll][style*="overflow-y: auto"] > :nth-child(4) > div,
+  div[data-scroll][style*="overflow-y: auto"] > :nth-child(9) > div {
+    background: #ffffff !important; box-shadow: none !important; border: 1px solid rgba(228, 228, 231, 0.6) !important;
+  }
+  /* one radius system: 16px cards, pills stay fully round, 12px for media inside a card */
+  div[data-scroll][style*="overflow-y: auto"] > :nth-child(4) > div,
+  div[data-scroll][style*="overflow-y: auto"] > :nth-child(6) > div:first-child,
+  a[href="Workout Recap v2.dc.html"], a[style*="width: 132px"] { border-radius: 16px !important; }
+  div[role="img"][aria-label$=" video"], a[style*="width: 132px"] > div:first-child { border-radius: 12px !important; box-shadow: none !important; }
+  /* "Today" hero: no gradient wash, hairline under the title block */
+  div[data-scroll][style*="overflow-y: auto"] > :nth-child(4) > div > div:first-child { border-bottom: 1px solid rgba(228, 228, 231, 0.8) !important; }
+  /* stacked preview: three tight flat cards instead of a heavy deck */
+  div[style*="padding: 26px 18px 10px"] { padding: 20px 18px 6px !important; }
+  div[style*="width: 214px"][style*="height: 150px"] { width: 200px !important; height: 112px !important; }
+  div[style*="width: 214px"][style*="height: 150px"] > div:nth-child(1) { left: 10px !important; top: 14px !important; width: 88px !important; height: 96px !important; border-radius: 14px !important; transform: rotate(-5deg) !important; opacity: 0.55 !important; background: #f4f4f5 !important; box-shadow: none !important; border: 1px solid rgba(228, 228, 231, 0.8) !important; }
+  div[style*="width: 214px"][style*="height: 150px"] > div:nth-child(2) { left: 44px !important; top: 9px !important; width: 88px !important; height: 96px !important; border-radius: 14px !important; transform: rotate(-1.5deg) !important; opacity: 0.8 !important; background: #f4f4f5 !important; box-shadow: none !important; border: 1px solid rgba(228, 228, 231, 0.8) !important; }
+  div[style*="width: 214px"][style*="height: 150px"] > div:nth-child(3) { left: 78px !important; top: 4px !important; width: 88px !important; height: 96px !important; border-radius: 14px !important; transform: rotate(3deg) !important; opacity: 1 !important; box-shadow: none !important; border: 1px solid rgba(228, 228, 231, 0.8) !important; }
+  div[style*="width: 214px"][style*="height: 150px"] > div:nth-child(4) { filter: none !important; transform: scale(0.72) !important; transform-origin: right bottom !important; right: 14px !important; bottom: 4px !important; }
+  /* header pills: lighter, smaller, muted; chips grey; streak not orange */
+  div[style*="height: 40px"][style*="border-radius: 999px"] [style*="font-size: 12.5px"] { font-size: 11.5px !important; font-weight: 500 !important; color: #71717a !important; letter-spacing: 0 !important; }
+  div[style*="height: 40px"][style*="border-radius: 999px"] [style*="font-size: 10px"] { font-size: 9.5px !important; color: #a1a1aa !important; }
+  div[style*="height: 40px"][style*="border-radius: 999px"] > div[style*="width: 38px"] { background: #d4d4d8 !important; box-shadow: none !important; }
+  div[style*="height: 40px"] [style*="color: rgb(242, 112, 28)"] { color: #18181b !important; }
+  div[style*="height: 40px"] div[role="img"][style*="rgb(255, 176, 58)"] { background: #3f3f46 !important; }
+  /* meta text: muted zinc-500 / zinc-400; titles stay bold */
+  [style*="color: rgb(95, 95, 105)"] { color: #71717a !important; }
+  [style*="color: rgb(110, 110, 119)"] { color: #71717a !important; }
+  [style*="color: rgb(138, 138, 142)"] { color: #a1a1aa !important; }
+  /* accent: the form bar and the filled week dots; everything else is monochrome */
+  div[style*="169, 148, 255"] { background: #2E7DFF !important; box-shadow: none !important; }
+  div[style*="height: 10px"][style*="flex: 1"] { background: #e4e4e7 !important; box-shadow: none !important; }
+  div[style*="height: 10px"][style*="flex: 1"][data-wk="1"] { background: #2E7DFF !important; }
+  /* primary titles: strong */
+  div[data-scroll][style*="overflow-y: auto"] > :nth-child(3), div[data-scroll][style*="overflow-y: auto"] > :nth-child(5),
+  div[data-scroll][style*="overflow-y: auto"] > :nth-child(7) *, div[data-scroll][style*="overflow-y: auto"] > :nth-child(10) *,
+  div[style*="font-size: 27px"], div[style*="font-size: 25px"], a[style*="width: 132px"] div[style*="font-size: 14.5px"] { font-weight: 700 !important; }
+  /* page dots under Recent Workouts: flat */
+  div[style*="padding: 1.2px"] { display: none !important; }
+  div[data-scroll][style*="overflow-y: auto"] > :nth-child(9) > div { backdrop-filter: none !important; }
+  /* Cue card: no card behind the glass blob and its text (no white box, no shadow, no border) */
+  div[data-scroll] div[style*="margin: -26px 8px 0"] { background: none !important; box-shadow: none !important; border: none !important; }
 `;
 
 // Hidden until the page is ready: the artboard shows its own demo content first, and the real data,
@@ -206,24 +266,26 @@ const HOME_GUARD_JS = `(function(){
   try { new MutationObserver(function(){ add(); }).observe(document, { childList: true, subtree: true }); } catch (e) {}
 })(); true;`;
 
-export function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[], insetTop: number, insetBottom: number): string {
+export function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[], insetTop: number, insetBottom: number, weeklyTarget: number = 4): string {
   const workoutGroups = groupIntoWorkouts(sessions);
   const streak = calcStreak(sessions);
   const scored = scoredSessions(sessions);
   const overallPct = scored.length > 0 ? Math.round(scored.reduce((a, s) => a + s.pct, 0) / scored.length) : 0;
 
   const weekStart = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - d.getDay()); return d.getTime(); })();
-  const workoutsThisWeek = workoutGroups.filter(g => g.ts >= weekStart).length;
+  // "8 of 4" is not a thing: the count is capped at the weekly goal (the user's days per week, 4 if unknown)
+  const target = Math.max(1, Math.min(7, Math.round(weeklyTarget) || 4));
+  const workoutsThisWeek = Math.min(workoutGroups.filter(g => g.ts >= weekStart).length, target);
 
   const map: Record<string, string> = {};
   const today = new Date();
   map['Sat, 12 September'] = today.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'long' });
   map['3'] = String(streak); // streak chip — scoped below via style, not bare global match
   map['38 min · 4 exercises'] = '';
-  // Weekly goal comes from the plan (days per week), never a hard-coded 4, and the
-  // count is capped at the goal so the card can't say "8 of 4 workouts".
-  const weekGoal = Math.max(1, plan?.profile?.daysPerWeek ?? 4);
-  const weekDone = Math.min(workoutsThisWeek, weekGoal);
+  // Weekly goal is the user's target (days per week), and the count is already capped at it,
+  // so the card can't say "8 of 4 workouts".
+  const weekGoal = target;
+  const weekDone = workoutsThisWeek;
   map['2 of 4 workouts'] = `${weekDone} of ${weekGoal} workouts`;
 
   if (plan && plan.workouts.length > 0) {
@@ -348,6 +410,17 @@ export function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[], i
     DONE.text = textDone();
     if (!DONE.text) { [100,300,700,1500].forEach(function(d){ setTimeout(function(){ if(!DONE.text) DONE.text = textDone(); }, d); }); }
 
+    // The four week dots fill in proportion to workouts done / weekly goal (filled = accent, via CSS data-wk).
+    var WEEK_DONE = ${workoutsThisWeek}, WEEK_TARGET = ${target};
+    function paintWeek(){
+      var dots = document.querySelectorAll('div[style*="height: 10px"][style*="flex: 1"]');
+      var filled = Math.round(WEEK_DONE / WEEK_TARGET * 4);
+      for (var i = 0; i < dots.length; i++) { var v = i < filled ? '1' : '0'; if (dots[i].getAttribute('data-wk') !== v) dots[i].setAttribute('data-wk', v); }
+    }
+    paintWeek();
+    if (window.__homeWeekTimer) clearInterval(window.__homeWeekTimer);
+    window.__homeWeekTimer = setInterval(paintWeek, 800);
+
     // Recent Workouts — a real sc-for list (3 placeholder cards by
     // default); populate with real session groups, hide any unused slots.
     function wireRecent(){
@@ -466,8 +539,8 @@ export default function HomeScreen() {
 
   useFocusEffect(useCallback(() => {
     let alive = true;
-    Promise.all([loadPlan(), getAllSessions()]).then(async ([plan, sessions]) => {
-      setInjectJs(buildHomeInjectJs(plan, sessions, insets.top, insets.bottom));
+    Promise.all([loadPlan(), getAllSessions(), loadProfile().catch(() => null)]).then(async ([plan, sessions, profile]) => {
+      setInjectJs(buildHomeInjectJs(plan, sessions, insets.top, insets.bottom, profile?.daysPerWeek ?? 4));
       const groups = groupIntoWorkouts(sessions);
       const tiers = computeMuscleTiers(sessions);
       const recent = groups.slice(0, 3);
