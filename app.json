@@ -39,7 +39,8 @@
       "expo-font",
       "expo-dev-client",
       "expo-audio",
-      "expo-camera"
+      "expo-camera",
+      "./plugins/withoutAppleSignIn"
     ],
     "experiments": {
       "typedRoutes": true
