@@ -21,6 +21,8 @@ import type { MuscleTiers } from './sessionLog';
 const NEUTRAL = '#E3E4EA';
 const SILHOUETTE_FILL = '#F1F2F6';
 const SILHOUETTE_STROKE = '#D5D7DF';
+const OUTLINE_STROKE = '#454B5C';
+const OUTLINE_WIDTH = 6; // units; ~1.6px on screen (figure ~830 units tall in a ~218px box)
 
 // Tier `lo` alone is too pale on the white silhouette for Silver/Platinum/etc, so
 // pull it 30% toward the tier's ink colour — still clearly that tier's hue.
@@ -33,7 +35,7 @@ function muscleFill(lo: string, ink: string): string {
 
 // Inner markup (silhouette + muscle paths) for one side, shared by the single
 // and the side-by-side renderers below.
-function bodyMapParts(tiers: MuscleTiers, side: 'front' | 'back'): string {
+function bodyMapParts(tiers: MuscleTiers, side: 'front' | 'back', outlined = false): string {
   const table = side === 'front' ? MUSCLE_MAP_FRONT_PATHS : MUSCLE_MAP_BACK_PATHS;
   // fragment id -> fill colour, for muscles ranked on THIS side
   const fillById: Record<string, string> = {};
@@ -48,12 +50,22 @@ function bodyMapParts(tiers: MuscleTiers, side: 'front' | 'back'): string {
   const parts: string[] = [];
   const silhouette = table.silhouette;
   if (silhouette) {
+    // outlined: a clear dark outline so the figure reads on the white card (the
+    // default pale stroke nearly disappears there). The figure is drawn ~830
+    // units tall into a ~218px box, so 6 units is ~1.6px on screen (the first
+    // try, 2.4 units at 50% alpha, was ~0.6px and still too faint).
+    // Outlined figures draw the outline AGAIN as the very last layer (below):
+    // the muscle fragments are painted after the silhouette and their white
+    // strokes would otherwise cover the inner half of it along most of the edge.
     parts.push(`<path d="${silhouette}" fill="${SILHOUETTE_FILL}" stroke="${SILHOUETTE_STROKE}" stroke-width="1.4" stroke-linejoin="round"/>`);
   }
   for (const id of Object.keys(table)) {
     if (id === 'silhouette') continue;
     const fill = fillById[id] ?? NEUTRAL;
     parts.push(`<path d="${table[id]}" fill="${fill}" stroke="#ffffff" stroke-width="0.9" stroke-linejoin="round"/>`);
+  }
+  if (silhouette && outlined) {
+    parts.push(`<path d="${silhouette}" fill="none" stroke="${OUTLINE_STROKE}" stroke-width="${OUTLINE_WIDTH}" stroke-linejoin="round"/>`);
   }
   return parts.join('');
 }
@@ -77,7 +89,7 @@ export function bodyMapPairSvg(worked: Muscle[]): string {
   const H = Math.max(fh, bh);
   const W = fw + gap + bw;
   const fig = (side: 'front' | 'back', x: number, w: number, h: number) =>
-    `<svg x="${x}" y="${(H - h) / 2}" width="${w}" height="${h}" viewBox="${MUSCLE_MAP_VIEWBOX[side]}">${bodyMapParts(tiers, side)}</svg>`;
+    `<svg x="${x}" y="${(H - h) / 2}" width="${w}" height="${h}" viewBox="${MUSCLE_MAP_VIEWBOX[side]}">${bodyMapParts(tiers, side, true)}</svg>`;
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${fig('front', 0, fw, fh)}${fig('back', fw + gap, bw, bh)}</svg>`;
 }
 

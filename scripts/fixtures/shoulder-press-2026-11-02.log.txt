@@ -1,0 +1,1158 @@
+2026-11-02T20:00:25.056Z [session] start
+20:00:25.065 [warn] The native view manager for module(ARBodyExperiment_ARBodyExperimentView) ) from NativeViewManagerAdapter isn't exported by expo-modules-core. Views of this type may not render correctly. Exported view managers: [ExpoVideo, SymbolModule_SymbolView, ExpoRouterNativeLinkPreview_NativeLinkPreviewContentView, ExpoRouterNativeLinkPreview, ExpoRouterNativeLinkPreview_NativeLinkPreviewView, ExpoLinearGradient, ExpoBlurView, ExpoImage_ImageView, ExpoImage, ExpoVideo_VideoView, ExpoVideo_VideoAirPlayButtonView, ExpoGlassEffect, ExpoLinearGradient_LinearGradientView, SymbolModule, ExpoGlassEffect_GlassView, ExpoBlurView_BlurView, ATHLTCamera, ATHLTCamera_ATHLTCameraView, ExpoGlassEffect_GlassContainer, ExpoRouterNativeLinkPreview_LinkPreviewNativeActionView].
+20:00:25.067 [log] [cue] build cue-6
+20:00:25.076 [log] [formcheck] build fc-5
+20:00:25.387 [warn] The native view manager for module(ExpoAppleAuthentication) ) from NativeViewManagerAdapter isn't exported by expo-modules-core. Views of this type may not render correctly. Exported view managers: [ExpoVideo, SymbolModule_SymbolView, ExpoRouterNativeLinkPreview_NativeLinkPreviewContentView, ExpoRouterNativeLinkPreview, ExpoRouterNativeLinkPreview_NativeLinkPreviewView, ExpoLinearGradient, ExpoBlurView, ExpoImage_ImageView, ExpoImage, ExpoVideo_VideoView, ExpoVideo_VideoAirPlayButtonView, ExpoGlassEffect, ExpoLinearGradient_LinearGradientView, SymbolModule, ExpoGlassEffect_GlassView, ExpoBlurView_BlurView, ATHLTCamera, ATHLTCamera_ATHLTCameraView, ExpoGlassEffect_GlassContainer, ExpoRouterNativeLinkPreview_LinkPreviewNativeActionView].
+20:00:25.392 [log] [VideoControls] build vc-8
+20:00:25.397 [log] [recap] build native-video-13
+20:00:25.397 [log] [recap-debug] build native-video-13 loaded 3:00:25 PM
+20:00:25.397 [log] [rep-feedback] build native-video-18
+20:00:25.398 [log] [rep-feedback-debug] build native-video-18 loaded 3:00:25 PM
+20:00:25.480 [warn] Method deleteAsync imported from "expo-file-system" is deprecated.
+You can migrate to the new filesystem API using "File" and "Directory" classes or import the legacy API from "expo-file-system/legacy".
+API reference and examples are available in the filesystem docs: https://docs.expo.dev/versions/v54.0.0/sdk/filesystem/
+20:00:25.509 [warn] [Layout children]: No route named "workout/run" exists in nested children: ["analyze-video","ar-experiment","audio-settings","calibrate","create-workout","cue","customize","exercise-picker","feedback-preview","formcheck","index","log-session","muscle-ranks","my-workouts","onboarding-test","onboarding","progress-photo-screen","recap","rep-feedback","session-logged","streak-screen","(tabs)","move/[id]","workout"]
+20:00:56.209 [warn] Unable to get the view config for %s from module &s default view ATHLTCamera_ATHLTCameraView
+20:00:56.610 [log] [DEBUG] [UNIV-DBG] reset() called
+20:00:56.611 [log] [DEBUG] [UNIV] relevant joints: leftElbow, leftShoulder, rightElbow, rightShoulder
+20:00:56.611 [log] [DEF-LOOKUP] id=shoulderPress found=yes overrides=none
+20:00:56.615 [log] [DEBUG] [UNIV] relevant joints: leftElbow, leftShoulder, rightElbow, rightShoulder
+20:00:56.615 [log] [DEBUG] [DEF-LOAD] loaded 'shoulderPress' from JSON: repMetric=bestSide formChecks=4 cameraSetup=ok calibration=ok source=JSON
+20:00:56.615 [log] [DEBUG] [STD-LOAD] received standard for 'shoulderPress': peak=65.0 start=65.0 minRange=0.0 staticChecks=0 reviewed=false
+20:00:56.615 [log] [DEBUG] [STD] ⚠ 'shoulderPress' standard NOT YET HUMAN-REVIEWED — verify numbers on-device
+20:00:56.615 [log] [DEBUG] [STD] standard loaded: peak≤65.0°  start≥65.0°  minRange≥0.0°
+20:01:00.464 [log] [DEBUG] [METRIC] shoulderPress value=22.5487 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+20:01:00.464 [log] [DEBUG] [SETUP] shoulderPress rep metric trackable — starting 2.0s hold at timestamp=1793649660.4640021
+20:01:00.557 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.0927 holdProgress=0.05 start=1793649660.4640021 now=1793649660.5567188
+20:01:00.660 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.1957 holdProgress=0.10 start=1793649660.4640021 now=1793649660.659713
+20:01:00.855 [log] [DEBUG] [METRIC] shoulderPress value=40.5369 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+20:01:00.856 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.3916 holdProgress=0.20 start=1793649660.4640021 now=1793649660.8555589
+20:01:00.951 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.4873 holdProgress=0.24 start=1793649660.4640021 now=1793649660.951336
+20:01:01.050 [log] [DEBUG] [SETUP-TRACE] shoulderPress hold flicker 1/6 — missing [rightShoulder], timer held
+20:01:01.154 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.6903 holdProgress=0.35 start=1793649660.4640021 now=1793649661.154265
+20:01:01.251 [log] [DEBUG] [METRIC] shoulderPress value=74.6487 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+20:01:01.251 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.7871 holdProgress=0.39 start=1793649660.4640021 now=1793649661.251076
+20:01:01.355 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.8914 holdProgress=0.45 start=1793649660.4640021 now=1793649661.355386
+20:01:01.451 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.9875 holdProgress=0.49 start=1793649660.4640021 now=1793649661.451538
+20:01:01.553 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.0883 holdProgress=0.54 start=1793649660.4640021 now=1793649661.5522652
+20:01:01.652 [log] [DEBUG] [METRIC] shoulderPress value=84.7315 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+20:01:01.653 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.1877 holdProgress=0.59 start=1793649660.4640021 now=1793649661.651723
+20:01:01.755 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.2902 holdProgress=0.65 start=1793649660.4640021 now=1793649661.7541552
+20:01:01.855 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.3910 holdProgress=0.70 start=1793649660.4640021 now=1793649661.854964
+20:01:02.156 [log] [DEBUG] [METRIC] shoulderPress value=51.8341 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+20:01:02.157 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.6926 holdProgress=0.85 start=1793649660.4640021 now=1793649662.1565971
+20:01:02.357 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.8936 holdProgress=0.95 start=1793649660.4640021 now=1793649662.357593
+20:01:02.456 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.9923 holdProgress=1.00 start=1793649660.4640021 now=1793649662.456328
+20:01:02.555 [log] [DEBUG] [METRIC] shoulderPress value=73.0090 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+20:01:02.556 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=2.0917 holdProgress=1.00 start=1793649660.4640021 now=1793649662.555666
+20:01:02.556 [log] [DEBUG] [SETUP] shoulderPress PASSED — entering ACTIVE
+20:01:03.159 [log] [DEBUG] [METRIC] shoulderPress value=11.5297 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+20:01:03.159 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=11.5297 settleCandidateTop=11.5297 framesSeen=1
+20:01:03.159 [log] [DEBUG] [SETTLE] rejected — candidate=11.530 required>=63.700 — not a genuine starting position for this exercise, still waiting
+20:01:03.257 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=34.6117 settleCandidateTop=34.6117 framesSeen=2
+20:01:03.358 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=32.0967 settleCandidateTop=34.6117 framesSeen=3
+20:01:03.560 [log] [DEBUG] [METRIC] shoulderPress value=31.4567 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+20:01:03.560 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=31.4567 settleCandidateTop=34.6117 framesSeen=4
+20:01:03.659 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=22.6754 settleCandidateTop=34.6117 framesSeen=5
+20:01:03.744 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=22.1275 settleCandidateTop=34.6117 framesSeen=6
+20:01:03.852 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=22.9864 settleCandidateTop=34.6117 framesSeen=7
+20:01:03.954 [log] [DEBUG] [METRIC] shoulderPress value=22.2858 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+20:01:03.954 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=22.2858 settleCandidateTop=34.6117 framesSeen=8
+20:01:04.057 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=21.5385 settleCandidateTop=34.6117 framesSeen=9
+20:01:04.144 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=22.1209 settleCandidateTop=34.6117 framesSeen=10
+20:01:04.241 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=23.3913 settleCandidateTop=34.6117 framesSeen=11
+20:01:04.242 [log] [DEBUG] [SETTLE] rejected — candidate=34.612 required>=63.700 — not a genuine starting position for this exercise, still waiting
+20:01:04.242 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=30 ts_epoch=1793649664
+20:01:04.342 [log] [DEBUG] [METRIC] shoulderPress value=35.2107 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+20:01:04.343 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=35.2107 settleCandidateTop=35.2107 framesSeen=12
+20:01:04.446 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=41.1285 settleCandidateTop=41.1285 framesSeen=13
+20:01:04.549 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=40.5393 settleCandidateTop=41.1285 framesSeen=14
+20:01:04.654 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=44.3618 settleCandidateTop=44.3618 framesSeen=15
+20:01:04.759 [log] [DEBUG] [METRIC] shoulderPress value=68.0603 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+20:01:04.759 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=68.0603 settleCandidateTop=68.0603 framesSeen=16
+20:01:04.856 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=62.2941 settleCandidateTop=68.0603 framesSeen=17
+20:01:04.856 [log] [DEBUG] [SETTLE] resynced on first real rep attempt (top≈68.060 framesSeen=17) — rep counting active
+20:01:04.955 [log] [DEBUG] [REP-TRACE] shoulderPress angle=54.9180 repMinAngle=62.2941 framesSincePoseGap=17
+20:01:05.064 [log] [DEBUG] [REP-TRACE] shoulderPress angle=40.2947 repMinAngle=54.9180 framesSincePoseGap=17
+20:01:05.164 [log] [DEBUG] [METRIC] shoulderPress value=39.9996 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+20:01:05.164 [log] [DEBUG] [REP-TRACE] shoulderPress angle=39.9996 repMinAngle=40.2947 framesSincePoseGap=18
+20:01:05.231 [log] [DEBUG] [UNIV-DBG] reset() called
+20:01:05.252 [log] [DEBUG] [METRIC] shoulderPress value=39.1735 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=waiting phase=waiting
+20:01:05.358 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=39.8235 settleCandidateTop=39.8235 framesSeen=1
+20:01:05.358 [log] [DEBUG] [SETTLE] rejected — candidate=39.824 required>=63.700 — not a genuine starting position for this exercise, still waiting
+20:01:05.461 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=39.0830 settleCandidateTop=39.8235 framesSeen=2
+20:01:05.554 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=38.4074 settleCandidateTop=39.8235 framesSeen=3
+20:01:05.663 [log] [DEBUG] [METRIC] shoulderPress value=38.0177 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+20:01:05.663 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=38.0177 settleCandidateTop=39.8235 framesSeen=4
+20:01:05.760 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=37.3511 settleCandidateTop=39.8235 framesSeen=5
+20:01:05.860 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=36.9363 settleCandidateTop=39.8235 framesSeen=6
+20:01:05.965 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=36.9110 settleCandidateTop=39.8235 framesSeen=7
+20:01:06.068 [log] [DEBUG] [METRIC] shoulderPress value=44.5267 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+20:01:06.068 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=44.5267 settleCandidateTop=44.5267 framesSeen=8
+20:01:06.160 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=60.7701 settleCandidateTop=60.7701 framesSeen=9
+20:01:06.263 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=75.7582 settleCandidateTop=75.7582 framesSeen=10
+20:01:06.356 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=89.4214 settleCandidateTop=89.4214 framesSeen=11
+20:01:06.457 [log] [DEBUG] [METRIC] shoulderPress value=83.2884 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+20:01:06.458 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=83.2884 settleCandidateTop=89.4214 framesSeen=12
+20:01:06.557 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=86.6803 settleCandidateTop=89.4214 framesSeen=13
+20:01:06.661 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=85.2604 settleCandidateTop=89.4214 framesSeen=14
+20:01:06.760 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=81.1002 settleCandidateTop=89.4214 framesSeen=15
+20:01:06.964 [log] [DEBUG] [METRIC] shoulderPress value=76.5781 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+20:01:06.964 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=76.5781 settleCandidateTop=89.4214 framesSeen=16
+20:01:07.061 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=73.6782 settleCandidateTop=89.4214 framesSeen=17
+20:01:07.061 [log] [DEBUG] [SETTLE] top stable (value=73.678) — rep counting active
+20:01:07.358 [log] [DEBUG] [METRIC] shoulderPress value=79.9680 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+20:01:07.873 [log] [DEBUG] [METRIC] shoulderPress value=48.5345 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+20:01:08.278 [log] [DEBUG] [METRIC] shoulderPress value=35.9535 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+20:01:08.562 [log] [DEBUG] [REP-TRACE] shoulderPress angle=60.8679 repMinAngle=52.9241 framesSincePoseGap=6
+20:01:08.562 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=30 ts_epoch=1793649669
+20:01:08.661 [log] [DEBUG] [METRIC] shoulderPress value=63.6276 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+20:01:08.661 [log] [DEBUG] [REP-TRACE] shoulderPress angle=63.6276 repMinAngle=52.9241 framesSincePoseGap=7
+20:01:08.760 [log] [DEBUG] [REP-TRACE] shoulderPress angle=64.2769 repMinAngle=52.9241 framesSincePoseGap=8
+20:01:08.859 [log] [DEBUG] [REP-TRACE] shoulderPress angle=61.7904 repMinAngle=52.9241 framesSincePoseGap=9
+20:01:08.962 [log] [DEBUG] [REP-TRACE] shoulderPress angle=62.2525 repMinAngle=52.9241 framesSincePoseGap=10
+20:01:09.061 [log] [DEBUG] [METRIC] shoulderPress value=58.5462 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+20:01:09.061 [log] [DEBUG] [REP-TRACE] shoulderPress angle=58.5462 repMinAngle=52.9241 framesSincePoseGap=11
+20:01:09.155 [log] [DEBUG] [REP-TRACE] shoulderPress angle=56.5608 repMinAngle=52.9241 framesSincePoseGap=12
+20:01:09.261 [log] [DEBUG] [REP-TRACE] shoulderPress angle=54.7133 repMinAngle=52.9241 framesSincePoseGap=13
+20:01:09.360 [log] [DEBUG] [REP-TRACE] shoulderPress angle=53.6213 repMinAngle=52.9241 framesSincePoseGap=14
+20:01:09.458 [log] [DEBUG] [METRIC] shoulderPress value=52.8661 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+20:01:09.459 [log] [DEBUG] [REP-TRACE] shoulderPress angle=52.8661 repMinAngle=52.9241 framesSincePoseGap=15
+20:01:09.556 [log] [DEBUG] [REP-TRACE] shoulderPress angle=54.7951 repMinAngle=52.8661 framesSincePoseGap=16
+20:01:09.651 [log] [DEBUG] [REP-TRACE] shoulderPress angle=57.4973 repMinAngle=52.8661 framesSincePoseGap=17
+20:01:09.760 [log] [DEBUG] [REP-TRACE] shoulderPress angle=58.7754 repMinAngle=52.8661 framesSincePoseGap=18
+20:01:09.858 [log] [DEBUG] [METRIC] shoulderPress value=63.4664 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+20:01:09.858 [log] [DEBUG] [REP-TRACE] shoulderPress angle=63.4664 repMinAngle=52.8661 framesSincePoseGap=19
+20:01:09.960 [log] [DEBUG] [REP-TRACE] shoulderPress angle=68.3116 repMinAngle=52.8661 framesSincePoseGap=20
+20:01:10.063 [log] [DEBUG] [REP-TRACE] shoulderPress angle=69.9720 repMinAngle=52.8661 framesSincePoseGap=21
+20:01:10.175 [log] [DEBUG] [REP-TRACE] shoulderPress angle=69.8154 repMinAngle=52.8661 framesSincePoseGap=22
+20:01:10.277 [log] [DEBUG] [METRIC] shoulderPress value=67.6350 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+20:01:10.277 [log] [DEBUG] [REP-TRACE] shoulderPress angle=67.6350 repMinAngle=52.8661 framesSincePoseGap=23
+20:01:10.360 [log] [DEBUG] [REP-TRACE] shoulderPress angle=66.9332 repMinAngle=52.8661 framesSincePoseGap=24
+20:01:10.461 [log] [DEBUG] [REP-TRACE] shoulderPress angle=64.9947 repMinAngle=52.8661 framesSincePoseGap=25
+20:01:10.565 [log] [DEBUG] [REP-TRACE] shoulderPress angle=63.5381 repMinAngle=52.8661 framesSincePoseGap=26
+20:01:10.670 [log] [DEBUG] [METRIC] shoulderPress value=62.4695 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+20:01:10.670 [log] [DEBUG] [REP-TRACE] shoulderPress angle=62.4695 repMinAngle=52.8661 framesSincePoseGap=27
+20:01:10.766 [log] [DEBUG] [REP-TRACE] shoulderPress angle=63.3831 repMinAngle=52.8661 framesSincePoseGap=28
+20:01:10.869 [log] [DEBUG] [REP-TRACE] shoulderPress angle=62.1936 repMinAngle=52.8661 framesSincePoseGap=29
+20:01:10.967 [log] [DEBUG] [REP-TRACE] shoulderPress angle=62.3445 repMinAngle=52.8661 framesSincePoseGap=30
+20:01:11.069 [log] [DEBUG] [METRIC] shoulderPress value=64.3016 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+20:01:11.069 [log] [DEBUG] [REP-TRACE] shoulderPress angle=64.3016 repMinAngle=52.8661 framesSincePoseGap=31
+20:01:11.164 [log] [DEBUG] [REP-TRACE] shoulderPress angle=76.3756 repMinAngle=52.8661 framesSincePoseGap=32
+20:01:11.264 [log] [DEBUG] [REP-TRACE] shoulderPress angle=85.5733 repMinAngle=52.8661 framesSincePoseGap=33
+20:01:11.361 [log] [DEBUG] [REP-TRACE] shoulderPress angle=67.5024 repMinAngle=52.8661 framesSincePoseGap=34
+20:01:11.462 [log] [DEBUG] [METRIC] shoulderPress value=32.2897 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+20:01:11.462 [log] [DEBUG] [REP-TRACE] shoulderPress angle=32.2897 repMinAngle=52.8661 framesSincePoseGap=35
+20:01:11.562 [log] [DEBUG] [REP-TRACE] shoulderPress angle=30.1466 repMinAngle=32.2897 framesSincePoseGap=36
+20:01:11.562 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=60 ts_epoch=1793649672
+20:01:11.663 [log] [DEBUG] [REP-TRACE] shoulderPress angle=43.3649 repMinAngle=30.1466 framesSincePoseGap=37
+20:01:11.766 [log] [DEBUG] [REP-TRACE] shoulderPress angle=68.9726 repMinAngle=30.1466 framesSincePoseGap=38
+20:01:11.875 [log] [DEBUG] [METRIC] shoulderPress value=88.7703 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+20:01:11.875 [log] [DEBUG] [REP-TRACE] shoulderPress angle=88.7703 repMinAngle=30.1466 framesSincePoseGap=39
+20:01:11.964 [log] [DEBUG] [REP-TRACE] shoulderPress angle=78.9023 repMinAngle=30.1466 framesSincePoseGap=40
+20:01:12.065 [log] [DEBUG] [REP-TRACE] shoulderPress angle=66.4823 repMinAngle=30.1466 framesSincePoseGap=41
+20:01:12.168 [log] [DEBUG] [REP-TRACE] shoulderPress angle=64.7012 repMinAngle=30.1466 framesSincePoseGap=42
+20:01:12.268 [log] [DEBUG] [METRIC] shoulderPress value=64.1879 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+20:01:12.268 [log] [DEBUG] [REP-TRACE] shoulderPress angle=64.1879 repMinAngle=30.1466 framesSincePoseGap=43
+20:01:12.361 [log] [DEBUG] [REP-TRACE] shoulderPress angle=64.4821 repMinAngle=30.1466 framesSincePoseGap=44
+20:01:12.463 [log] [DEBUG] [REP-TRACE] shoulderPress angle=62.3516 repMinAngle=30.1466 framesSincePoseGap=45
+20:01:12.561 [log] [DEBUG] [REP-TRACE] shoulderPress angle=64.2132 repMinAngle=30.1466 framesSincePoseGap=46
+20:01:12.664 [log] [DEBUG] [METRIC] shoulderPress value=62.7149 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+20:01:12.665 [log] [DEBUG] [REP-TRACE] shoulderPress angle=62.7149 repMinAngle=30.1466 framesSincePoseGap=47
+20:01:12.762 [log] [DEBUG] [REP-TRACE] shoulderPress angle=63.0300 repMinAngle=30.1466 framesSincePoseGap=48
+20:01:12.864 [log] [DEBUG] [REP-TRACE] shoulderPress angle=67.1594 repMinAngle=30.1466 framesSincePoseGap=49
+20:01:12.966 [log] [DEBUG] [REP-TRACE] shoulderPress angle=65.3392 repMinAngle=30.1466 framesSincePoseGap=50
+20:01:13.074 [log] [DEBUG] [METRIC] shoulderPress value=64.9233 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+20:01:13.074 [log] [DEBUG] [REP-TRACE] shoulderPress angle=64.9233 repMinAngle=30.1466 framesSincePoseGap=51
+20:01:13.164 [log] [DEBUG] [REP-TRACE] shoulderPress angle=62.2125 repMinAngle=30.1466 framesSincePoseGap=52
+20:01:13.265 [log] [DEBUG] [REP-TRACE] shoulderPress angle=62.1457 repMinAngle=30.1466 framesSincePoseGap=53
+20:01:13.364 [log] [DEBUG] [REP-TRACE] shoulderPress angle=61.9393 repMinAngle=30.1466 framesSincePoseGap=54
+20:01:13.465 [log] [DEBUG] [METRIC] shoulderPress value=62.5659 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+20:01:13.465 [log] [DEBUG] [REP-TRACE] shoulderPress angle=62.5659 repMinAngle=30.1466 framesSincePoseGap=55
+20:01:13.562 [log] [DEBUG] [REP-TRACE] shoulderPress angle=62.6648 repMinAngle=30.1466 framesSincePoseGap=56
+20:01:13.665 [log] [DEBUG] [REP-TRACE] shoulderPress angle=69.8669 repMinAngle=30.1466 framesSincePoseGap=57
+20:01:13.767 [log] [DEBUG] [REP-TRACE] shoulderPress angle=64.2000 repMinAngle=30.1466 framesSincePoseGap=58
+20:01:13.878 [log] [DEBUG] [METRIC] shoulderPress value=70.1413 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+20:01:13.878 [log] [DEBUG] [REP-TRACE] shoulderPress angle=70.1413 repMinAngle=30.1466 framesSincePoseGap=59
+20:01:13.961 [log] [DEBUG] [REP-TRACE] shoulderPress angle=63.0682 repMinAngle=30.1466 framesSincePoseGap=60
+20:01:14.065 [log] [DEBUG] [REP-TRACE] shoulderPress angle=62.5888 repMinAngle=30.1466 framesSincePoseGap=61
+20:01:14.177 [log] [DEBUG] [REP-TRACE] shoulderPress angle=60.9981 repMinAngle=30.1466 framesSincePoseGap=62
+20:01:14.281 [log] [DEBUG] [METRIC] shoulderPress value=61.3460 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+20:01:14.282 [log] [DEBUG] [REP-TRACE] shoulderPress angle=61.3460 repMinAngle=30.1466 framesSincePoseGap=63
+20:01:14.363 [log] [DEBUG] [REP-TRACE] shoulderPress angle=61.5832 repMinAngle=30.1466 framesSincePoseGap=64
+20:01:14.464 [log] [DEBUG] [REP-TRACE] shoulderPress angle=60.2954 repMinAngle=30.1466 framesSincePoseGap=65
+20:01:14.567 [log] [DEBUG] [REP-TRACE] shoulderPress angle=54.9718 repMinAngle=30.1466 framesSincePoseGap=66
+20:01:14.567 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=90 ts_epoch=1793649675
+20:01:14.663 [log] [DEBUG] [METRIC] shoulderPress value=44.9079 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+20:01:14.663 [log] [DEBUG] [REP-TRACE] shoulderPress angle=44.9079 repMinAngle=30.1466 framesSincePoseGap=67
+20:01:14.763 [log] [DEBUG] [REP-TRACE] shoulderPress angle=28.5752 repMinAngle=30.1466 framesSincePoseGap=68
+20:01:14.865 [log] [DEBUG] [REP-TRACE] shoulderPress angle=85.4784 repMinAngle=28.5752 framesSincePoseGap=69
+20:01:14.961 [log] [DEBUG] [REP-TRACE] shoulderPress angle=89.9219 repMinAngle=28.5752 framesSincePoseGap=70
+20:01:15.064 [log] [DEBUG] [METRIC] shoulderPress value=87.1279 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+20:01:15.064 [log] [DEBUG] [REP-TRACE] shoulderPress angle=87.1279 repMinAngle=28.5752 framesSincePoseGap=71
+20:01:15.064 [log] [DEBUG] [UNIV-DBG] rep #1: buffer=94 frames windowStart_epoch=1793649667 repEnd_epoch=1793649675 window=76 frames
+20:01:15.070 [log] [DEBUG] [STD] rep #1 ref: peak=28.6° start=88.8°  (standard: peak≤65.0° start≥65.0°)
+20:01:15.070 [log] [DEBUG] [UNIV] rep #1: CALIBRATING (1/3 good)  range=61.347  dur=3.09s  jerk=13011.55459
+20:01:15.070 [log] [DEBUG] [REP] #1 top=86.4 bottom=28.6 thr=55.0 swing=57.8 ROM=ok cue=GOOD
+20:01:15.070 [log] [DEBUG] [CALIB] rep 1  min=28.6 max=86.4 range=57.8 dur=3.09s  → COUNTED (rom=OK, cue=GOOD)  [thr in use: enter=68 exit=72 goodROM=55 top=84]
+20:01:15.078 [log] [DEBUG] [REP #1] GOOD ✓  peak=28.6°
+  (no form checks)
+  planarity=PASS  n/a
+  cue=GOOD
+20:01:15.079 [log] [DEBUG] [COMPARE] shoulderPress rep#1  2D=28.6°  boneGated=28.6°  blazePose3D=168.7°  | lElb(z=-0.28 v=0.42) rElb(z=-0.33 v=0.86) lWri(z=-0.26 v=0.36) rWri(z=-0.30 v=0.75) | AV=11ms BP=28ms
+20:01:15.557 [log] [DEBUG] [METRIC] shoulderPress value=86.5356 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+20:01:15.963 [log] [DEBUG] [METRIC] shoulderPress value=86.7312 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+20:01:16.380 [log] [DEBUG] [METRIC] shoulderPress value=57.7641 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+20:01:16.456 [log] [DEBUG] [REP-TRACE] shoulderPress angle=60.2404 repMinAngle=57.7641 framesSincePoseGap=83
+20:01:16.562 [log] [DEBUG] [REP-TRACE] shoulderPress angle=58.8056 repMinAngle=57.7641 framesSincePoseGap=83
+20:01:16.665 [log] [DEBUG] [REP-TRACE] shoulderPress angle=75.9439 repMinAngle=57.7641 framesSincePoseGap=84
+20:01:16.763 [log] [DEBUG] [METRIC] shoulderPress value=76.9662 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+20:01:16.763 [log] [DEBUG] [REP-TRACE] shoulderPress angle=76.9662 repMinAngle=57.7641 framesSincePoseGap=85
+20:01:16.861 [log] [DEBUG] [REP-TRACE] shoulderPress angle=76.0826 repMinAngle=57.7641 framesSincePoseGap=86
+20:01:16.861 [log] [DEBUG] [REP] #2 top=90.0 bottom=57.8 thr=55.0 swing=32.2 ROM=short cue=PRESS HIGHER
+20:01:16.861 [log] [DEBUG] [CALIB] rep 2  min=57.8 max=90 range=32.2 dur=?  → COUNTED (rom=SHORT, cue=PRESS HIGHER)  [thr in use: enter=68 exit=72 goodROM=55 top=84]
+20:01:16.862 [log] [DEBUG] [REP #2] BAD ✗  peak=57.8°
+  (no form checks)
+  planarity=PASS  n/a
+  cue=PRESS HIGHER
+20:01:16.862 [log] [DEBUG] [COMPARE] shoulderPress rep#2  2D=57.8°  boneGated=57.8°  blazePose3D=122.4°  | lElb(z=-0.20 v=0.95) rElb(z=-0.23 v=0.98) lWri(z=-0.27 v=0.88) rWri(z=-0.32 v=0.94) | AV=10ms BP=22ms
+20:01:17.165 [log] [DEBUG] [METRIC] shoulderPress value=60.7860 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+20:01:17.165 [log] [DEBUG] [REP-TRACE] shoulderPress angle=60.7860 repMinAngle=67.1221 framesSincePoseGap=89
+20:01:17.261 [log] [DEBUG] [REP-TRACE] shoulderPress angle=58.4173 repMinAngle=60.7860 framesSincePoseGap=90
+20:01:17.365 [log] [DEBUG] [REP-TRACE] shoulderPress angle=73.0562 repMinAngle=58.4173 framesSincePoseGap=91
+20:01:17.457 [log] [DEBUG] [REP-TRACE] shoulderPress angle=68.2535 repMinAngle=58.4173 framesSincePoseGap=92
+20:01:17.563 [log] [DEBUG] [METRIC] shoulderPress value=83.2063 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+20:01:17.563 [log] [DEBUG] [REP-TRACE] shoulderPress angle=83.2063 repMinAngle=58.4173 framesSincePoseGap=93
+20:01:17.657 [log] [DEBUG] [REP-TRACE] shoulderPress angle=85.0389 repMinAngle=58.4173 framesSincePoseGap=94
+20:01:17.657 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=120 ts_epoch=1793649678
+20:01:17.763 [log] [DEBUG] [REP-TRACE] shoulderPress angle=69.6512 repMinAngle=58.4173 framesSincePoseGap=95
+20:01:17.861 [log] [DEBUG] [REP-TRACE] shoulderPress angle=49.3818 repMinAngle=58.4173 framesSincePoseGap=96
+20:01:17.961 [log] [DEBUG] [METRIC] shoulderPress value=39.3780 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+20:01:17.961 [log] [DEBUG] [REP-TRACE] shoulderPress angle=39.3780 repMinAngle=49.3818 framesSincePoseGap=97
+20:01:18.059 [log] [DEBUG] [REP-TRACE] shoulderPress angle=55.3333 repMinAngle=39.3780 framesSincePoseGap=98
+20:01:18.164 [log] [DEBUG] [REP-TRACE] shoulderPress angle=72.3782 repMinAngle=39.3780 framesSincePoseGap=99
+20:01:18.266 [log] [DEBUG] [REP-TRACE] shoulderPress angle=89.4565 repMinAngle=39.3780 framesSincePoseGap=100
+20:01:18.366 [log] [DEBUG] [METRIC] shoulderPress value=77.4065 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+20:01:18.366 [log] [DEBUG] [REP-TRACE] shoulderPress angle=77.4065 repMinAngle=39.3780 framesSincePoseGap=101
+20:01:18.367 [log] [DEBUG] [UNIV-DBG] rep #3: buffer=126 frames windowStart_epoch=1793649670 repEnd_epoch=1793649678 window=78 frames
+20:01:18.367 [log] [DEBUG] [STD] rep #3 ref: peak=39.4° start=90.0°  (standard: peak≤65.0° start≥65.0°)
+20:01:18.367 [log] [DEBUG] [UNIV] rep #3: CALIBRATING (2/3 good)  range=50.621  dur=2.21s  jerk=12843.05579
+20:01:18.377 [log] [DEBUG] [REP] #3 top=90.0 bottom=39.4 thr=55.0 swing=50.6 ROM=ok cue=GOOD
+20:01:18.377 [log] [DEBUG] [CALIB] rep 3  min=39.4 max=90 range=50.6 dur=2.21s  → COUNTED (rom=OK, cue=GOOD)  [thr in use: enter=68 exit=72 goodROM=55 top=84]
+20:01:18.377 [log] [DEBUG] [REP #3] GOOD ✓  peak=39.4°
+  (no form checks)
+  planarity=PASS  n/a
+  cue=GOOD
+20:01:18.377 [log] [DEBUG] [COMPARE] shoulderPress rep#3  2D=39.4°  boneGated=39.4°  blazePose3D=66.7°  | lElb(z=-0.26 v=1.00) rElb(z=-0.23 v=1.00) lWri(z=-0.40 v=1.00) rWri(z=-0.34 v=0.99) | AV=11ms BP=27ms
+20:01:18.756 [log] [DEBUG] [METRIC] shoulderPress value=76.4134 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+20:01:19.166 [log] [DEBUG] [METRIC] shoulderPress value=51.5685 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+20:01:19.262 [log] [DEBUG] [REP-TRACE] shoulderPress angle=37.8836 repMinAngle=51.5685 framesSincePoseGap=105
+20:01:19.364 [log] [DEBUG] [REP-TRACE] shoulderPress angle=45.5061 repMinAngle=37.8836 framesSincePoseGap=105
+20:01:19.466 [log] [DEBUG] [REP-TRACE] shoulderPress angle=61.0679 repMinAngle=37.8836 framesSincePoseGap=105
+20:01:19.568 [log] [DEBUG] [METRIC] shoulderPress value=81.3107 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+20:01:19.568 [log] [DEBUG] [REP-TRACE] shoulderPress angle=81.3107 repMinAngle=37.8836 framesSincePoseGap=105
+20:01:19.664 [log] [DEBUG] [REP-TRACE] shoulderPress angle=80.8509 repMinAngle=37.8836 framesSincePoseGap=105
+20:01:19.760 [log] [DEBUG] [REP-TRACE] shoulderPress angle=75.8844 repMinAngle=37.8836 framesSincePoseGap=105
+20:01:19.760 [log] [DEBUG] [UNIV-DBG] rep #4: buffer=140 frames windowStart_epoch=1793649672 repEnd_epoch=1793649680 window=79 frames
+20:01:19.760 [log] [DEBUG] [STD] rep #4 ref: peak=37.9° start=90.0°  (standard: peak≤65.0° start≥65.0°)
+20:01:19.761 [log] [DEBUG] [UNIV] rep #4: CALIBRATING (3/3 good)  range=52.115  dur=3.61s  jerk=13208.15883
+20:01:19.761 [log] [DEBUG] [UNIV] ─── BASELINE SET ───
+20:01:19.761 [log] [DEBUG] [UNIV] range=54.694  dur=2.97s  jerk=13020.92307
+20:01:19.761 [log] [DEBUG] [UNIV] anchors: none
+20:01:19.761 [log] [DEBUG] [STD] ─── BASELINE vs STANDARD ('shoulderPress') ───
+20:01:19.761 [log] [DEBUG] [STD] avg peak=35.3° (standard: ≤65.0°)  avg start=89.6° (standard: ≥65.0°)
+20:01:19.761 [log] [DEBUG] [STD] peak ROM ✓ (35.3° ≤ 65.0°)
+20:01:19.761 [log] [DEBUG] [STD] start position ✓ (89.6° ≥ 65.0°)
+20:01:19.761 [log] [DEBUG] [STD] baseline meets standard ✓ — relative (Layer 1) signals are the active floor
+20:01:19.761 [log] [DEBUG] [STD] ⚠ verify these numbers on-device before trusting cues (reviewed=false)
+20:01:19.761 [log] [DEBUG] [UNIV] flagging begins next rep
+20:01:19.761 [log] [DEBUG] [REP] #4 top=90.0 bottom=37.9 thr=55.0 swing=52.1 ROM=ok cue=GOOD
+20:01:19.761 [log] [DEBUG] [CALIB] rep 4  min=37.9 max=90 range=52.1 dur=3.61s  → COUNTED (rom=OK, cue=GOOD)  [thr in use: enter=68 exit=72 goodROM=55 top=84]
+20:01:19.762 [log] [DEBUG] [REP #4] GOOD ✓  peak=37.9°
+  (no form checks)
+  planarity=PASS  n/a
+  cue=GOOD
+20:01:19.762 [log] [DEBUG] [COMPARE] shoulderPress rep#4  2D=37.9°  boneGated=37.9°  blazePose3D=55.7°  | lElb(z=-0.26 v=0.99) rElb(z=-0.22 v=0.97) lWri(z=-0.38 v=0.98) rWri(z=-0.32 v=0.94) | AV=11ms BP=21ms
+20:01:20.079 [log] [DEBUG] [METRIC] shoulderPress value=70.1886 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+20:01:20.369 [log] [DEBUG] [METRIC] shoulderPress value=80.8106 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+20:01:20.667 [log] [DEBUG] [REP-TRACE] shoulderPress angle=40.8189 repMinAngle=55.9393 framesSincePoseGap=105
+20:01:20.667 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=150 ts_epoch=1793649681
+20:01:20.758 [log] [DEBUG] [METRIC] shoulderPress value=36.3082 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+20:01:20.758 [log] [DEBUG] [REP-TRACE] shoulderPress angle=36.3082 repMinAngle=40.8189 framesSincePoseGap=105
+20:01:20.860 [log] [DEBUG] [REP-TRACE] shoulderPress angle=56.5928 repMinAngle=36.3082 framesSincePoseGap=105
+20:01:20.965 [log] [DEBUG] [REP-TRACE] shoulderPress angle=70.5796 repMinAngle=36.3082 framesSincePoseGap=105
+20:01:21.060 [log] [DEBUG] [REP-TRACE] shoulderPress angle=87.3454 repMinAngle=36.3082 framesSincePoseGap=105
+20:01:21.167 [log] [DEBUG] [METRIC] shoulderPress value=78.4905 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+20:01:21.167 [log] [DEBUG] [REP-TRACE] shoulderPress angle=78.4905 repMinAngle=36.3082 framesSincePoseGap=105
+20:01:21.262 [log] [DEBUG] [REP-TRACE] shoulderPress angle=71.6401 repMinAngle=36.3082 framesSincePoseGap=105
+20:01:21.363 [log] [DEBUG] [REP-TRACE] shoulderPress angle=68.5245 repMinAngle=36.3082 framesSincePoseGap=105
+20:01:21.467 [log] [DEBUG] [REP-TRACE] shoulderPress angle=68.7008 repMinAngle=36.3082 framesSincePoseGap=105
+20:01:21.571 [log] [DEBUG] [METRIC] shoulderPress value=69.1399 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+20:01:21.571 [log] [DEBUG] [REP-TRACE] shoulderPress angle=69.1399 repMinAngle=36.3082 framesSincePoseGap=105
+20:01:21.657 [log] [DEBUG] [REP-TRACE] shoulderPress angle=69.4003 repMinAngle=36.3082 framesSincePoseGap=105
+20:01:21.762 [log] [DEBUG] [REP-TRACE] shoulderPress angle=69.4925 repMinAngle=36.3082 framesSincePoseGap=105
+20:01:21.866 [log] [DEBUG] [REP-TRACE] shoulderPress angle=72.4192 repMinAngle=36.3082 framesSincePoseGap=105
+20:01:21.964 [log] [DEBUG] [METRIC] shoulderPress value=84.4093 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+20:01:21.965 [log] [DEBUG] [REP-TRACE] shoulderPress angle=84.4093 repMinAngle=36.3082 framesSincePoseGap=105
+20:01:22.063 [log] [DEBUG] [REP-TRACE] shoulderPress angle=73.1200 repMinAngle=36.3082 framesSincePoseGap=105
+20:01:22.063 [log] [DEBUG] [UNIV-DBG] rep #5: buffer=163 frames windowStart_epoch=1793649675 repEnd_epoch=1793649682 window=73 frames
+20:01:22.066 [log] [DEBUG] [UNIV] rep #5 | range=53.690 baseline=54.694 ratio=0.98
+20:01:22.066 [log] [DEBUG] [UNIV] rep #5 | dur=5.91s baseline=2.97s ratio=1.99 ← OFF
+20:01:22.066 [log] [DEBUG] [UNIV] rep #5 | jerk=11525.48341 baseline=13020.92307 ratio=0.89
+20:01:22.066 [log] [DEBUG] [UNIV] rep #5 | symmetry L=153.8° R=146.6° diff=5%
+20:01:22.066 [log] [DEBUG] [UNIV] rep #5 | anchors stable
+20:01:22.066 [log] [DEBUG] [UNIV] rep #5 | → SLOWING — rep slower than your baseline
+20:01:22.066 [log] [DEBUG] [REP] #5 top=90.0 bottom=36.3 thr=55.0 swing=53.7 ROM=ok cue=GOOD
+20:01:22.066 [log] [DEBUG] [CALIB] rep 5  min=36.3 max=90 range=53.7 dur=5.91s  → COUNTED (rom=OK, cue=GOOD)  [thr in use: enter=68 exit=72 goodROM=55 top=84]
+20:01:22.067 [log] [DEBUG] [REP #5] GOOD ✓  peak=36.3°
+  (no form checks)
+  planarity=PASS  n/a
+  cue=GOOD
+20:01:22.067 [log] [DEBUG] [COMPARE] shoulderPress rep#5  2D=36.3°  boneGated=36.3°  blazePose3D=99.6°  | lElb(z=-0.35 v=0.99) rElb(z=-0.30 v=0.98) lWri(z=-0.46 v=0.96) rWri(z=-0.34 v=0.83) | AV=11ms BP=24ms
+20:01:22.388 [log] [DEBUG] [REP-TRACE] shoulderPress angle=32.4432 repMinAngle=63.2277 framesSincePoseGap=105
+20:01:22.388 [log] [DEBUG] [METRIC] shoulderPress value=46.1072 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+20:01:22.389 [log] [DEBUG] [REP-TRACE] shoulderPress angle=46.1072 repMinAngle=32.4432 framesSincePoseGap=105
+20:01:22.449 [log] [DEBUG] [REP-TRACE] shoulderPress angle=64.5212 repMinAngle=32.4432 framesSincePoseGap=105
+20:01:22.561 [log] [DEBUG] [REP-TRACE] shoulderPress angle=76.4978 repMinAngle=32.4432 framesSincePoseGap=105
+20:01:22.665 [log] [DEBUG] [REP-TRACE] shoulderPress angle=87.4762 repMinAngle=32.4432 framesSincePoseGap=105
+20:01:22.763 [log] [DEBUG] [METRIC] shoulderPress value=74.0999 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+20:01:22.763 [log] [DEBUG] [REP-TRACE] shoulderPress angle=74.0999 repMinAngle=32.4432 framesSincePoseGap=105
+20:01:22.764 [log] [DEBUG] [UNIV-DBG] rep #6: buffer=170 frames windowStart_epoch=1793649675 repEnd_epoch=1793649683 window=73 frames
+20:01:22.772 [log] [DEBUG] [UNIV] rep #6 | range=57.555 baseline=54.694 ratio=1.05
+20:01:22.773 [log] [DEBUG] [UNIV] rep #6 | dur=6.61s baseline=2.97s ratio=2.23 ← OFF
+20:01:22.773 [log] [DEBUG] [UNIV] rep #6 | jerk=13332.72307 baseline=13020.92307 ratio=1.02
+20:01:22.773 [log] [DEBUG] [UNIV] rep #6 | symmetry L=133.4° R=145.7° diff=8%
+20:01:22.773 [log] [DEBUG] [UNIV] rep #6 | anchors stable
+20:01:22.773 [log] [DEBUG] [UNIV] rep #6 | → SLOWING — rep slower than your baseline
+20:01:22.773 [log] [DEBUG] [REP] #6 top=90.0 bottom=32.4 thr=55.0 swing=57.6 ROM=ok cue=GOOD
+20:01:22.773 [log] [DEBUG] [CALIB] rep 6  min=32.4 max=90 range=57.6 dur=6.61s  → COUNTED (rom=OK, cue=GOOD)  [thr in use: enter=68 exit=72 goodROM=55 top=84]
+20:01:22.773 [log] [DEBUG] [REP #6] GOOD ✓  peak=32.4°
+  (no form checks)
+  planarity=PASS  n/a
+  cue=GOOD
+20:01:22.773 [log] [DEBUG] [COMPARE] shoulderPress rep#6  2D=32.4°  boneGated=32.4°  blazePose3D=72.3°  | lElb(z=-0.31 v=0.99) rElb(z=-0.24 v=0.96) lWri(z=-0.45 v=0.98) rWri(z=-0.33 v=0.91) | AV=11ms BP=24ms
+20:01:23.169 [log] [DEBUG] [METRIC] shoulderPress value=68.8354 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+20:01:23.560 [log] [DEBUG] [METRIC] shoulderPress value=70.2525 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+20:01:23.661 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=180 ts_epoch=1793649684
+20:01:23.969 [log] [DEBUG] [METRIC] shoulderPress value=74.6541 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+20:01:24.268 [log] [DEBUG] [REP-TRACE] shoulderPress angle=62.4312 repMinAngle=67.9115 framesSincePoseGap=105
+20:01:24.368 [log] [DEBUG] [METRIC] shoulderPress value=58.1858 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+20:01:24.368 [log] [DEBUG] [REP-TRACE] shoulderPress angle=58.1858 repMinAngle=62.4312 framesSincePoseGap=105
+20:01:24.461 [log] [DEBUG] [REP-TRACE] shoulderPress angle=52.0093 repMinAngle=58.1858 framesSincePoseGap=105
+20:01:24.560 [log] [DEBUG] [REP-TRACE] shoulderPress angle=69.1371 repMinAngle=52.0093 framesSincePoseGap=105
+20:01:24.865 [log] [DEBUG] [METRIC] shoulderPress value=67.7553 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+20:01:24.865 [log] [DEBUG] [REP-TRACE] shoulderPress angle=67.7553 repMinAngle=52.0093 framesSincePoseGap=105
+20:01:24.965 [log] [DEBUG] [REP-TRACE] shoulderPress angle=68.1346 repMinAngle=52.0093 framesSincePoseGap=105
+20:01:25.067 [log] [DEBUG] [REP-TRACE] shoulderPress angle=71.2828 repMinAngle=52.0093 framesSincePoseGap=105
+20:01:25.167 [log] [DEBUG] [REP-TRACE] shoulderPress angle=72.4133 repMinAngle=52.0093 framesSincePoseGap=105
+20:01:25.267 [log] [DEBUG] [METRIC] shoulderPress value=72.7953 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+20:01:25.267 [log] [DEBUG] [REP-TRACE] shoulderPress angle=72.7953 repMinAngle=52.0093 framesSincePoseGap=105
+20:01:25.563 [log] [DEBUG] [UNIV-DBG] reset() called
+20:02:22.748 [log] [recap-debug] blocked on loading gate: {"hasData":false,"hasSummaryInjectJs":false}
+20:02:22.758 [log] [recap-debug] RecapScreen MOUNTED
+20:02:22.763 [log] [recap-debug] repEvents exerciseId= shoulderPress
+20:02:22.763 [log] [recap-debug] repEvent 0 good= true reason= "GOOD" -> what= "Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."
+20:02:22.763 [log] [recap-debug] repEvent 1 good= false reason= "PRESS HIGHER" -> what= "You stopped pressing before your arms were straight above your head. Push the weight all the way up until your arms are completely straight overhead."
+20:02:22.763 [log] [recap-debug] repEvent 2 good= true reason= "GOOD" -> what= "Same full press again. Keep your body still and press it all the way up like that."
+20:02:22.764 [log] [recap-debug] repEvent 3 good= true reason= "GOOD" -> what= "That's the one. Straight arms overhead, no lean. Stay right there."
+20:02:22.764 [log] [recap-debug] repEvent 4 good= true reason= "GOOD" -> what= "Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."
+20:02:22.764 [log] [recap-debug] repEvent 5 good= true reason= "GOOD" -> what= "Same full press again. Keep your body still and press it all the way up like that."
+20:02:22.794 [log] [recap] muscle page data ready
+20:02:22.858 [log] [recap-debug] videoPlayer statusChange: readyToPlay
+20:02:22.865 [log] [recap-debug] videoPlayer playingChange: true currentTime= 0.0155335 duration= 19.97
+20:02:22.903 [log] [recap-debug] WebView onLoadStart, view= summary key= summary
+20:02:22.924 [log] [recap-debug] onMessage: pageConsole current view= summary effectiveView= summary
+20:02:22.924 [log] [recap-page:log] [recap-page] injected JS running, HAS_VIDEO= true
+20:02:23.027 [log] [recap-debug] WebView onLoadEnd, view= summary
+20:02:23.037 [log] [recap-debug] onMessage: pageConsole current view= summary effectiveView= summary
+20:02:23.037 [log] [recap-page:log] [recap-page] sizeWired applied, ovLabel= true ovBody= true
+20:02:23.038 [log] [recap-debug] onMessage: ready current view= summary effectiveView= summary
+20:02:35.261 [log] [recap-debug] onMessage: viewRepFeedback current view= summary effectiveView= summary
+20:02:35.262 [log] [recap-debug] router.push(/rep-feedback)
+20:02:35.308 [log] [rep-feedback-debug] parsed reps from route param: [{"timeSec":9.859,"good":true,"what":"Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."},{"timeSec":11.643,"good":false,"what":"You stopped pressing before your arms were straight above your head. Push the weight all the way up until your arms are completely straight overhead."},{"timeSec":13.158,"good":true,"what":"Same full press again. Keep your body still and press it all the way up like that."},{"timeSec":14.542,"good":true,"what":"That's the one. Straight arms overhead, no lean. Stay right there."},{"timeSec":16.848,"good":true,"what":"Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."},{"timeSec":17.554,"good":true,"what":"Same full press again. Keep your body still and press it all the way up like that."}]
+20:02:35.319 [log] [rep-feedback-debug] MOUNT, params: {"exerciseName":"Shoulder Press","videoUri":"file:///private/var/mobile/Containers/Data/Application/74C941D6-CEF2-4CE9-9CB6-E8A56150BF92/tmp/athlt_1793649665.mov","repEventsLen":836}
+20:02:35.329 [log] [recap-debug] videoPlayer playingChange: false currentTime= 12.478710917 duration= 19.97
+20:02:35.380 [log] [rep-feedback-debug] videoPlayer statusChange: readyToPlay
+20:02:35.395 [log] [rep-feedback-debug] videoPlayer playingChange: true currentTime= 0.003018917 duration= 19.97
+20:02:35.414 [log] [rep-feedback-debug] WebView onLoadStart
+20:02:35.428 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.428 [log] [rep-feedback-page:log] [rep-feedback-page] injected JS running, HAS_VIDEO= true reps= 6
+20:02:35.429 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.429 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.429 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.429 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.429 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.429 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.430 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.430 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.430 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.430 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.430 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.430 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.430 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.430 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.435 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.435 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.435 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.435 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.435 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.435 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.435 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.435 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.435 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.435 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.435 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.435 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.435 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.435 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.435 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.435 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.439 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.439 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.439 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.439 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.439 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.439 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.439 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.439 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.441 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.441 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.441 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.441 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.441 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.441 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.441 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.441 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.442 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.442 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.442 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.442 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.442 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.442 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.442 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.442 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.444 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.444 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.444 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.444 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.444 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.444 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.444 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.444 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.447 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.447 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.447 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.447 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.447 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.447 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.447 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.447 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.451 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.451 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.451 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.451 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.451 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.451 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.451 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.451 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.453 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.453 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.453 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.453 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.453 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.453 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.454 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.454 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.456 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.456 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.456 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.456 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.456 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.457 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.457 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.457 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.458 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.458 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.458 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.458 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.458 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.458 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.458 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.458 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.460 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.460 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.460 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.460 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.460 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.460 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.460 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.460 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.462 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.462 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.462 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.462 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.462 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.462 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.462 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.462 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.466 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.466 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.466 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.466 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.466 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.466 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.466 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.466 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.466 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.466 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.466 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.466 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.466 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.466 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.467 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.467 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.470 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.470 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.470 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.470 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.470 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.470 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.470 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.470 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.475 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.475 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.475 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.475 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.475 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.475 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.475 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.475 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.477 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.477 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.477 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.477 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.477 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.478 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.478 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.478 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.479 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.479 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.479 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.479 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.479 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.479 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.480 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.480 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.480 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.480 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.480 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.480 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.480 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.480 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.484 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.484 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.484 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.484 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.485 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.485 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.485 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.485 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.485 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.485 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.485 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.485 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.485 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.485 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.485 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.485 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.487 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.487 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.487 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.487 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.487 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.487 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.487 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.487 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.489 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.489 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.489 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.489 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.489 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.489 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.489 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.489 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.493 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.493 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.493 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.493 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.493 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.493 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.493 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.493 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.495 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.495 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.495 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.495 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.495 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.495 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.495 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.495 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.497 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.497 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.497 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.497 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.497 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.497 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.497 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.497 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.497 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.497 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.497 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.497 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.497 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.497 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.497 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.497 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.497 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.498 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.498 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.498 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.498 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.498 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.498 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.498 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.498 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.498 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.498 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.498 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.498 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.498 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.498 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.498 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.499 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.499 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.499 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.499 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.499 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.499 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.499 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.499 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.501 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.501 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.501 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.501 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.501 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.501 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.501 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.501 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.503 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.503 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.503 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.503 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.503 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.503 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.503 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.503 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.508 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.508 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.509 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.509 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.509 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.509 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.509 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.509 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.509 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.509 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.509 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.509 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.509 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.509 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.509 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.509 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.512 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.512 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.512 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.512 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.512 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.512 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.512 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.512 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.521 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.521 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.521 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.521 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.521 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.521 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.521 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.521 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.527 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.527 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.527 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.527 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.527 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.527 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.527 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.528 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.528 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.528 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.528 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.528 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.528 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.528 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.528 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.528 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.534 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.534 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.534 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.534 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.534 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.534 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.535 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.535 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.544 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.544 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:35.544 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.544 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:35.544 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.544 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.544 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.544 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:35.544 [log] [rep-feedback-debug] WebView onLoadEnd
+20:02:35.552 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.552 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= true fullscreenBtn= true
+20:02:35.552 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.552 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: true
+20:02:35.552 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.552 [log] [rep-feedback-page:log] [rep-feedback-page] track fillEl found= true thumbEl found= true
+20:02:35.552 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.552 [log] [rep-feedback-page:log] [rep-feedback-page] prev button found and wired
+20:02:35.552 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.552 [log] [rep-feedback-page:log] [rep-feedback-page] next button found and wired
+20:02:35.552 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.553 [log] [rep-feedback-page:log] [rep-feedback-page] card play/pause button found and wired
+20:02:35.553 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.553 [log] [rep-feedback-page:log] [rep-feedback-page] show(0) -> idx=0 rep= {"timeSec":9.859,"good":true,"what":"Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."} bodyEl found= true bodyEl.textContent after set= "Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."
+20:02:35.553 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.553 [log] [rep-feedback-page:log] [rep-feedback-page] ready, posting to RN
+20:02:35.553 [log] [rep-feedback-debug] onMessage: ready
+20:02:35.553 [log] [rep-feedback-debug] ready received — videoVisuallyReady= true will set ready=true (opacity -> 1)
+20:02:35.556 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.556 [log] [rep-feedback-page:log] [rep-feedback-page] card rect (immediate): {"x":-0.9312795996665955,"y":559.1943359375,"width":403.862548828125,"height":314.8056640625,"top":559.1943359375,"bottom":874} display= block visibility= visible opacity= 1 zIndex= 4 transform= none
+20:02:35.556 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.556 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl rect (immediate): {"x":19.779621124267578,"y":673.104248046875,"width":362.44073486328125,"height":90.0924072265625} text= "Arms fully overhead, steady. You pressed your arms straight "
+20:02:35.556 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.557 [log] [rep-feedback-page:log] [rep-feedback-page] prev button found and wired
+20:02:35.557 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.557 [log] [rep-feedback-page:log] [rep-feedback-page] real duration received: 19.97
+20:02:35.859 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.859 [log] [rep-feedback-page:log] [rep-feedback-page] card rect (+300ms): {"x":-0.9312795996665955,"y":559.1943359375,"width":403.862548828125,"height":314.8056640625,"top":559.1943359375,"bottom":874} display= block visibility= visible opacity= 1 zIndex= 4 transform= none
+20:02:35.859 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:35.859 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl rect (+300ms): {"x":19.779621124267578,"y":673.104248046875,"width":362.44073486328125,"height":90.0924072265625} text= "Arms fully overhead, steady. You pressed your arms straight "
+20:02:39.982 [log] [rep-feedback-debug] onMessage: close
+20:02:39.982 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:39.983 [log] [rep-feedback-page:log] [rep-feedback-page] PREV tapped, idx before= 0
+20:02:39.983 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:39.983 [log] [rep-feedback-page:log] [rep-feedback-page] show(-1) -> idx=0 rep= {"timeSec":9.859,"good":true,"what":"Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."} bodyEl found= true bodyEl.textContent after set= "Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."
+20:02:39.984 [log] [rep-feedback-debug] onMessage: seek
+20:02:39.985 [log] [rep-feedback-debug] seek message received, timeSec= 9.859 - videoPlayer.currentTime immediately after = 4.5923225
+20:02:40.014 [log] [rep-feedback-debug] UNMOUNT
+20:02:40.049 [log] [recap-debug] videoPlayer playingChange: true currentTime= 12.500666917 duration= 19.97
+20:02:41.360 [log] [recap-debug] onMessage: viewRepFeedback current view= summary effectiveView= summary
+20:02:41.360 [log] [recap-debug] router.push(/rep-feedback)
+20:02:41.402 [log] [rep-feedback-debug] parsed reps from route param: [{"timeSec":9.859,"good":true,"what":"Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."},{"timeSec":11.643,"good":false,"what":"You stopped pressing before your arms were straight above your head. Push the weight all the way up until your arms are completely straight overhead."},{"timeSec":13.158,"good":true,"what":"Same full press again. Keep your body still and press it all the way up like that."},{"timeSec":14.542,"good":true,"what":"That's the one. Straight arms overhead, no lean. Stay right there."},{"timeSec":16.848,"good":true,"what":"Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."},{"timeSec":17.554,"good":true,"what":"Same full press again. Keep your body still and press it all the way up like that."}]
+20:02:41.413 [log] [rep-feedback-debug] MOUNT, params: {"exerciseName":"Shoulder Press","videoUri":"file:///private/var/mobile/Containers/Data/Application/74C941D6-CEF2-4CE9-9CB6-E8A56150BF92/tmp/athlt_1793649665.mov","repEventsLen":836}
+20:02:41.421 [log] [recap-debug] videoPlayer playingChange: false currentTime= 13.872234125 duration= 19.97
+20:02:41.447 [log] [rep-feedback-debug] videoPlayer statusChange: readyToPlay
+20:02:41.470 [log] [rep-feedback-debug] videoPlayer playingChange: true currentTime= 0.010777834 duration= 19.97
+20:02:41.492 [log] [rep-feedback-debug] WebView onLoadStart
+20:02:41.508 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.509 [log] [rep-feedback-page:log] [rep-feedback-page] injected JS running, HAS_VIDEO= true reps= 6
+20:02:41.509 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.509 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.509 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.509 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.509 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.509 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.510 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.510 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.510 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.510 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.510 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.510 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.510 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.510 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.520 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.520 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.520 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.520 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.520 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.520 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.520 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.520 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.522 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.522 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.522 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.522 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.522 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.522 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.522 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.522 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.522 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.522 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.522 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.522 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.522 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.522 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.522 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.522 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.524 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.524 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.524 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.524 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.524 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.524 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.524 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.524 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.534 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.534 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.534 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.534 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.534 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.534 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.534 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.534 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.536 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.536 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.536 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.537 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.537 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.537 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.537 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.537 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.537 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.537 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.537 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.537 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.537 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.537 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.537 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.537 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.539 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.539 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.540 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.540 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.540 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.540 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.540 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.540 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.560 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.560 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.560 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.560 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.560 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.560 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.582 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.582 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.582 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.582 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.582 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.582 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.583 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.583 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.585 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.585 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.585 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.585 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.585 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.585 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.585 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.585 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.586 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.587 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.587 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.587 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.587 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.587 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.587 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.587 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.589 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.589 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.589 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.589 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.589 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.589 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.589 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.589 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.592 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.592 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.592 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.592 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.592 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.592 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.593 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.593 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.593 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.593 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.594 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.594 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.594 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.594 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.595 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.595 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.596 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.596 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.596 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.596 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.596 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.596 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.596 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.596 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.600 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.600 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.600 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.600 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.600 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.600 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.600 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.601 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.602 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.602 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.602 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.602 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.602 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.602 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.602 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.602 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.604 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.604 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.604 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.604 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.604 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.604 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.604 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.604 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.607 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.607 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.607 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.607 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.607 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.607 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.607 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.607 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.608 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.608 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.608 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.609 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.609 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.609 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.609 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.609 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.610 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.610 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.610 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.610 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.610 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.611 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.611 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.611 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.614 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.614 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.614 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.614 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.614 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.614 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.614 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.614 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.615 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.615 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.615 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.615 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.615 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.615 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.615 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.615 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.619 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.619 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.619 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.619 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.619 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.619 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.619 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.619 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.619 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.619 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.620 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.620 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.620 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.620 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.620 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.620 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.620 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.620 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.620 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.620 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.620 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.620 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.620 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.620 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.620 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.620 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.620 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.620 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.620 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.620 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.620 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.620 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.622 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.622 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.622 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.622 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.622 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.622 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.622 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.622 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.625 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.625 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.625 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.625 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.625 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.625 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.625 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.625 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.627 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.627 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.627 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.627 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.627 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.627 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.627 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.627 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.629 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.629 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.629 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.629 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.629 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.629 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.630 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.630 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.630 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.630 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.630 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.631 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.631 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.631 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.631 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.631 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.631 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.631 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.631 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.631 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.631 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.631 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.634 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.634 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.634 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.634 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.634 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.635 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.635 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.635 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.643 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.643 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.643 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.643 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.643 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.643 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.643 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.643 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.649 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.650 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.650 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.650 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.650 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.650 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.650 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.650 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.651 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.651 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.651 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.651 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.651 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.651 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.651 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.651 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.654 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.654 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.654 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.654 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.655 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.655 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.655 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.655 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.666 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.666 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= false fullscreenBtn= false
+20:02:41.666 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.666 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: false
+20:02:41.666 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.666 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.666 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.666 [log] [rep-feedback-page:log] [rep-feedback-page] wireNav: prevEl found= false nextEl found= false
+20:02:41.667 [log] [rep-feedback-debug] WebView onLoadEnd
+20:02:41.674 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.674 [log] [rep-feedback-page:log] [rep-feedback-page] old controls wiring: speedBtn= true fullscreenBtn= true
+20:02:41.675 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.675 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl found via sparkle-icon selector: true
+20:02:41.676 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.676 [log] [rep-feedback-page:log] [rep-feedback-page] track fillEl found= true thumbEl found= true
+20:02:41.676 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.676 [log] [rep-feedback-page:log] [rep-feedback-page] prev button found and wired
+20:02:41.676 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.676 [log] [rep-feedback-page:log] [rep-feedback-page] next button found and wired
+20:02:41.676 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.676 [log] [rep-feedback-page:log] [rep-feedback-page] card play/pause button found and wired
+20:02:41.676 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.676 [log] [rep-feedback-page:log] [rep-feedback-page] show(0) -> idx=0 rep= {"timeSec":9.859,"good":true,"what":"Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."} bodyEl found= true bodyEl.textContent after set= "Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."
+20:02:41.676 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.676 [log] [rep-feedback-page:log] [rep-feedback-page] ready, posting to RN
+20:02:41.676 [log] [rep-feedback-debug] onMessage: ready
+20:02:41.676 [log] [rep-feedback-debug] ready received — videoVisuallyReady= true will set ready=true (opacity -> 1)
+20:02:41.681 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.681 [log] [rep-feedback-page:log] [rep-feedback-page] card rect (immediate): {"x":-0.9312795996665955,"y":559.1943359375,"width":403.862548828125,"height":314.8056640625,"top":559.1943359375,"bottom":874} display= block visibility= visible opacity= 1 zIndex= 4 transform= none
+20:02:41.681 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.681 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl rect (immediate): {"x":19.779621124267578,"y":673.104248046875,"width":362.44073486328125,"height":90.0924072265625} text= "Arms fully overhead, steady. You pressed your arms straight "
+20:02:41.681 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.681 [log] [rep-feedback-page:log] [rep-feedback-page] prev button found and wired
+20:02:41.681 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.681 [log] [rep-feedback-page:log] [rep-feedback-page] real duration received: 19.97
+20:02:41.979 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.979 [log] [rep-feedback-page:log] [rep-feedback-page] card rect (+300ms): {"x":-0.9312795996665955,"y":559.1943359375,"width":403.862548828125,"height":314.8056640625,"top":559.1943359375,"bottom":874} display= block visibility= visible opacity= 1 zIndex= 4 transform= none
+20:02:41.979 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:41.979 [log] [rep-feedback-page:log] [rep-feedback-page] bodyEl rect (+300ms): {"x":19.779621124267578,"y":673.104248046875,"width":362.44073486328125,"height":90.0924072265625} text= "Arms fully overhead, steady. You pressed your arms straight "
+20:02:46.662 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:46.662 [log] [rep-feedback-page:log] [rep-feedback-page] show(1) -> idx=1 rep= {"timeSec":11.643,"good":false,"what":"You stopped pressing before your arms were straight above your head. Push the weight all the way up until your arms are completely straight overhead."} bodyEl found= true bodyEl.textContent after set= "You stopped pressing before your arms were straight above your head. Push the weight all the way up until your arms are completely straight overhead."
+20:02:46.662 [log] [rep-feedback-debug] onMessage: seek
+20:02:46.663 [log] [rep-feedback-debug] seek message received, timeSec= 11.643 - videoPlayer.currentTime immediately after = 5.203365334
+20:02:46.688 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:46.688 [log] [rep-feedback-page:log] [rep-feedback-page] show(2) -> idx=2 rep= {"timeSec":13.158,"good":true,"what":"Same full press again. Keep your body still and press it all the way up like that."} bodyEl found= true bodyEl.textContent after set= "Same full press again. Keep your body still and press it all the way up like that."
+20:02:46.688 [log] [rep-feedback-debug] onMessage: seek
+20:02:46.688 [log] [rep-feedback-debug] seek message received, timeSec= 13.158 - videoPlayer.currentTime immediately after = 11.64986525
+20:02:47.275 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:47.275 [log] [rep-feedback-page:log] [rep-feedback-page] show(3) -> idx=3 rep= {"timeSec":14.542,"good":true,"what":"That's the one. Straight arms overhead, no lean. Stay right there."} bodyEl found= true bodyEl.textContent after set= "That's the one. Straight arms overhead, no lean. Stay right there."
+20:02:47.275 [log] [rep-feedback-debug] onMessage: seek
+20:02:47.293 [log] [rep-feedback-debug] seek message received, timeSec= 14.542 - videoPlayer.currentTime immediately after = 13.733781709
+20:02:47.623 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:47.624 [log] [rep-feedback-page:log] [rep-feedback-page] show(4) -> idx=4 rep= {"timeSec":16.848,"good":true,"what":"Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."} bodyEl found= true bodyEl.textContent after set= "Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."
+20:02:47.624 [log] [rep-feedback-debug] onMessage: seek
+20:02:47.624 [log] [rep-feedback-debug] seek message received, timeSec= 16.848 - videoPlayer.currentTime immediately after = 14.869860042
+20:02:48.027 [log] [rep-feedback-debug] onMessage: pageConsole
+20:02:48.027 [log] [rep-feedback-page:log] [rep-feedback-page] show(5) -> idx=5 rep= {"timeSec":17.554,"good":true,"what":"Same full press again. Keep your body still and press it all the way up like that."} bodyEl found= true bodyEl.textContent after set= "Same full press again. Keep your body still and press it all the way up like that."
+20:02:48.028 [log] [rep-feedback-debug] onMessage: seek
+20:02:48.028 [log] [rep-feedback-debug] seek message received, timeSec= 17.554 - videoPlayer.currentTime immediately after = 17.239826833
+20:02:48.441 [log] [rep-feedback-debug] onMessage: finishReview
+20:02:48.452 [log] [rep-feedback-debug] UNMOUNT
+20:02:48.519 [log] [recap-debug] WebView onLoadStart, view= ranks key= ranks
+20:02:48.743 [log] [recap-debug] WebView onLoadEnd, view= ranks
+20:02:48.775 [log] [recap-debug] onMessage: logicReady current view= ranks effectiveView= ranks
+20:02:48.834 [log] [recap-debug] onMessage: ready current view= ranks effectiveView= ranks
+20:03:10.796 [log] [recap-debug] onMessage: doneRanks current view= ranks effectiveView= ranks
+20:03:10.863 [log] [recap-debug] RecapScreen UNMOUNTED

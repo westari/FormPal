@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 
 const PORT = Number(process.env.LOG_PORT || 8765);
-const LOG_FILE = process.env.LOG_FILE || 'C:\Users\arize\gym app\logs\latest.log';
+const LOG_FILE = process.env.LOG_FILE || 'C:/Users/arize/gym app/logs/latest.log';
 
 fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true });
 

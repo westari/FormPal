@@ -100,6 +100,25 @@ for (const [name, sc] of Object.entries(SCENARIOS)) {
   check(`${name}: progress % is the real standing`, p.rank.pct === (standingAfter ? Math.round(standingAfter.progress * 100) : 0));
   check(`${name}: every row has a real muscle name + a +N% gain (no bare "+%")`, p.hits.every(h => h.name && /^\+\d+(\.\d)?%$/.test(h.gain)));
 }
+// ── "Bronze 0%" and "+0% today" while the rows say +3% (device report 2026-11-02) ──
+{
+  // History: biceps trained ONLY with a rep-counter exercise (no judged reps), plus
+  // shoulders/triceps with form-checked presses. Today: a small shoulder press set.
+  const counterOnly = (id, reps, ago) => ({ ...entry(id, reps, 0, ago), formChecked: false });
+  const prior = [counterOnly('curl', 120, 14), entry('shoulderPress', 70, 64, 10)];
+  const today = [entry('shoulderPress', 6, 6, 0)];
+  const sc = build(prior, today);
+  const p = sc.payload;
+  console.log(`  report repro: rank=${p.rank.label} ${p.rank.pct}% (+${p.rank.gained}% today)  rows=${p.hits.map(h => h.name + ' ' + h.gain).join(' | ')}`);
+  const bic = sc.tiersAfter.biceps;
+  check('REPRO: a muscle with only rep-counter reps exists and has no quality signal', bic && bic.qualityJudged === false && bic.goodRatio === 0);
+  check('FIXED: that muscle no longer pins the headline at 0% (progress follows its volume)', p.rank.pct > 0, `${p.rank.pct}%`);
+  const lowest = Math.min(...Object.values(sc.tiersAfter).filter(i => i.tier === sc.standingAfter.tier).map(i => Math.round(data.muscleProgressPct(i))));
+  check('headline % is the weakest muscle in the tier (lowest progress), not the first one found', Math.abs(p.rank.pct - lowest) <= 1, `headline ${p.rank.pct}% lowest ${lowest}%`);
+  const rowGains = p.hits.map(h => parseFloat(h.gain.replace(/[+%]/g, '')));
+  const mean = rowGains.reduce((a, b) => a + b, 0) / rowGains.length;
+  check('"+X% today" matches the muscle rows (average of what each trained muscle gained)', Math.abs(parseFloat(p.rank.gained) - mean) <= 0.6 && parseFloat(p.rank.gained) > 0, `today +${p.rank.gained}% vs rows ${rowGains.join(', ')}`);
+}
 const A = SCENARIOS['shoulders+triceps (bronze)'].payload, B = SCENARIOS['legs (squat+lunge)'].payload;
 check('rows follow the workout: shoulders workout -> Shoulders/Triceps', A.hits.map(h => h.name).sort().join() === 'Shoulders,Triceps', A.hits.map(h => h.name).join());
 check('rows follow the workout: legs workout -> different muscles', !B.hits.some(h => /Shoulders|Triceps/.test(h.name)) && B.hits.length === 2, B.hits.map(h => h.name).join());
@@ -125,6 +144,7 @@ check('rows carry the real Flaticon art', A.hits.every(h => h.icon && h.icon.sta
   const expected = new Set([...regionIds('shoulders'), ...regionIds('triceps')]);
   check('body map colours the worked muscles (shoulders + triceps fragments)', [...expected].every(id => colored.has(id)), `${colored.size}/${expected.size}`);
   check('body map colours NOTHING else (quads/chest/etc stay neutral)', [...colored].every(id => expected.has(id)), [...new Set(base)].join());
+  check('body map has a clear (~1.6px) outline around both figures', (svg.match(/stroke="#454B5C" stroke-width="6"/g) || []).length === 2);
   check('body map is front + back side by side', svg.includes('viewBox="78 -9 479 833"') && svg.includes('viewBox="641 -13 483 832"'));
 }
 

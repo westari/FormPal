@@ -28,10 +28,10 @@ export function muscleProgressPct(info: MuscleTierInfo): number {
   const nextVol = VOLUME_THRESHOLDS.find(([t]) => t === next)![1];
   const curQual = QUALITY_THRESHOLDS.find(([t]) => t === info.tier)![1];
   const nextQual = QUALITY_THRESHOLDS.find(([t]) => t === next)![1];
-  return 100 * Math.min(
-    clamp01((info.volume - curVol) / (nextVol - curVol)),
-    clamp01((info.goodRatio - curQual) / (nextQual - curQual)),
-  );
+  const vol = clamp01((info.volume - curVol) / (nextVol - curVol));
+  // No judged reps (rep-counter exercises only) = no quality signal: volume alone, same as the tier.
+  if (info.qualityJudged === false) return 100 * vol;
+  return 100 * Math.min(vol, clamp01((info.goodRatio - curQual) / (nextQual - curQual)));
 }
 
 // Progress as a single number that keeps rising across tiers, so a rank-up
@@ -119,7 +119,13 @@ export function buildMuscleRanksPayload(opts: {
   const idx = tier ? tierIndex(tier) : -1;
   const nextTier: Tier = tier ? (idx < TIER_ORDER.length - 1 ? TIER_ORDER[idx + 1] : tier) : 'bronze';
   const meta = TIER_META[tier ?? 'bronze'];
-  const overallGain = Math.max(0, standingAbs(standingAfter) - standingAbs(standingBefore));
+  // "+X% today" must match the muscle rows. It used to be the change in the
+  // weakest-link standing, which stays +0% whenever the muscles you trained
+  // aren't the weakest one even though each of them shows +3%. Now it is the
+  // average gain across every muscle this workout trained (two muscles at +3%
+  // each = +3% today), computed with the exact same per-muscle numbers.
+  const gains = worked.map(w => rowGainPct(w.muscle, w.credit, tiersBefore, tiersAfter));
+  const overallGain = gains.length ? gains.reduce((a, b) => a + b, 0) / gains.length : 0;
 
   const gainText = overallGain <= 0 ? '0' : overallGain < 1 ? (Math.round(overallGain * 10) / 10).toFixed(1) : String(Math.round(overallGain));
 

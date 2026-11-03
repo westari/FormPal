@@ -833,26 +833,21 @@ export function computeOverallStanding(tiers: MuscleTiers): OverallStanding | nu
   const entries = Object.entries(tiers) as [Muscle, MuscleTierInfo][];
   if (entries.length === 0) return null;
 
+  // Weakest = lowest tier, and within the SAME tier the one furthest from the
+  // next tier (lowest progress). It used to take whichever same-tier muscle
+  // happened to come first in the object, so the headline progress was an
+  // arbitrary muscle's (e.g. a long-untouched one stuck at 0%).
   let weakest = entries[0];
   for (const e of entries) {
-    if (tierIndex(e[1].tier) < tierIndex(weakest[1].tier)) weakest = e;
+    const ti = tierIndex(e[1].tier), wi = tierIndex(weakest[1].tier);
+    if (ti < wi || (ti === wi && tileProgress(e[1]) < tileProgress(weakest[1]))) weakest = e;
   }
   const [muscle, info] = weakest;
   const idx = tierIndex(info.tier);
   if (idx === TIER_ORDER.length - 1) {
     return { muscle, tier: info.tier, progress: 1, atTop: true };
   }
-
-  const nextTier    = TIER_ORDER[idx + 1];
-  const curVolMin   = VOLUME_THRESHOLDS.find(([t]) => t === info.tier)![1];
-  const nextVolMin  = VOLUME_THRESHOLDS.find(([t]) => t === nextTier)![1];
-  const curQualMin  = QUALITY_THRESHOLDS.find(([t]) => t === info.tier)![1];
-  const nextQualMin = QUALITY_THRESHOLDS.find(([t]) => t === nextTier)![1];
-
-  const volProgress  = clamp01((info.volume - curVolMin) / (nextVolMin - curVolMin));
-  const qualProgress = clamp01((info.goodRatio - curQualMin) / (nextQualMin - curQualMin));
-
-  return { muscle, tier: info.tier, progress: Math.min(volProgress, qualProgress), atTop: false };
+  return { muscle, tier: info.tier, progress: tileProgress(info), atTop: false };
 }
 
 // The highest PEAK tier ever reached, across every tracked muscle — a
@@ -876,6 +871,12 @@ function tileProgress(info: MuscleTierInfo): number {
   const curQualMin  = QUALITY_THRESHOLDS.find(([t]) => t === info.tier)![1];
   const nextQualMin = QUALITY_THRESHOLDS.find(([t]) => t === nextTier)![1];
   const volProgress  = clamp01((info.volume - curVolMin) / (nextVolMin - curVolMin));
+  // A muscle trained ONLY by rep-counter exercises has no judged reps, so its
+  // goodRatio is a placeholder 0 — not "0% good form". Gating its progress on
+  // that pinned it at 0% forever ("Bronze 0%"); with no quality signal the
+  // tier is decided on volume alone (same as computeMuscleTiers does), so the
+  // progress is too.
+  if (info.qualityJudged === false) return volProgress;
   const qualProgress = clamp01((info.goodRatio - curQualMin) / (nextQualMin - curQualMin));
   return Math.min(volProgress, qualProgress);
 }

@@ -22,7 +22,7 @@ function makeStub() {
   return stub;
 }
 
-const STUB_ALLOW = new Set(['typescript', 'fs', 'path', 'os', 'url', 'child_process', 'playwright']);
+const STUB_ALLOW = new Set(['zustand', 'react', 'typescript', 'fs', 'path', 'os', 'url', 'child_process', 'playwright']);
 
 module.exports = function installTsLoader() {
   const origLoad = Module._load;

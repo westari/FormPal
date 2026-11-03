@@ -107,6 +107,7 @@ export const MUSCLE_RANKS_DOM_JS = String.raw`
     }
     document.body.style.setProperty('height', vh + 'px', 'important');
     document.documentElement.style.setProperty('height', vh + 'px', 'important');
+    window.__fpFitted = true;
     return true;
   }
   function hideStatusBar(root) {
@@ -166,6 +167,7 @@ export const MUSCLE_RANKS_DOM_JS = String.raw`
     if (img) {
       if (img.getAttribute('src') !== d.bodyMap) img.setAttribute('src', d.bodyMap);
       imgOk = img.complete && img.naturalWidth > 0;
+      if (imgOk && !window.__mrLogged) { window.__mrLogged = true; try { console.log('[ranks] body map shown, outline layers=' + (decodeURIComponent(img.getAttribute('src')).match(/fill="none" stroke="#454B5C" stroke-width="6"/g) || []).length + ' natural=' + img.naturalWidth + 'x' + img.naturalHeight + ' drawn=' + Math.round(img.getBoundingClientRect().width) + 'x' + Math.round(img.getBoundingClientRect().height)); } catch (e) {} }
       if (imgOk) img.style.setProperty('visibility', 'visible', 'important');
       else if (!img.__mrLoad) { img.__mrLoad = true; img.addEventListener('load', schedule); }
     }
@@ -257,4 +259,9 @@ true;
 export function muscleRanksBeforeJs(payload: MuscleRanksPayload): string {
   return DC_VIEWPORT_JS + CONSOLE_FORWARD_JS + dcLogicPatchJs(MUSCLE_RANKS_LOGIC_EXT)
     + athltSetDataJs(payload) + MUSCLE_RANKS_DOM_JS;
+}
+
+/** Scaffold only (no data yet) — loaded by a warm WebView before the page is needed; the data follows via athltSetDataJs(payload). */
+export function muscleRanksBaseJs(): string {
+  return DC_VIEWPORT_JS + CONSOLE_FORWARD_JS + dcLogicPatchJs(MUSCLE_RANKS_LOGIC_EXT) + MUSCLE_RANKS_DOM_JS;
 }
