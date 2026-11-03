@@ -144,6 +144,12 @@ export default function ProfileScreen() {
       case 'pageConsole': if (__DEV__) console.log('[profile-page]', msg.msg); break;
       case 'save': if (msg.patch) void save(msg.patch); break;
       case 'applyPlan': void applyPlan(); break;
+      case 'applyReferralCode': {
+        // saved on the phone; there is no referral backend to redeem it against yet
+        const entered = (msg as { code?: string }).code;
+        if (entered) void AsyncStorage.setItem('formpal_referral_entered', entered).catch(() => {});
+        break;
+      }
       case 'shareReferral': {
         const code = dataRef.current?.referral.code;
         if (code) Share.share({ message: referralMessage(code) }).catch(() => {});

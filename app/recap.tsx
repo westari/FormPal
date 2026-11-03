@@ -393,7 +393,8 @@ export default function RecapScreen() {
         const groups = groupIntoWorkouts(all);
         const group  = groups.find(g => g.ts === Number(tsParam));
         if (!group) { setLoadFailed(true); return; }
-        const historyVideoUri = await findSessionVideoUri(group.ts);
+        const prevGroup = groups[groups.findIndex(g => g.ts === group.ts) + 1];
+        const historyVideoUri = await findSessionVideoUri(group.ts, prevGroup?.ts ?? 0);
         setData({
           ts: group.ts, entries: group.entries,
           totalReps: group.totalReps, totalGoodReps: group.totalGoodReps,

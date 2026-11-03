@@ -78,6 +78,8 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
           var f = t1 > t0 ? (parseKey(e.d).getTime() - t0) / (t1 - t0) : 0.5;
           return { x: Math.round(4 + 276 * f), y: yOf(e.w) };
         });
+        // every logged weight gets its own dot on the line (drawn by the DOM pass); the last one is the design's own
+        window.__athltWPts = series.length >= 2 ? pts.map(function (q, i) { return { x: q.x, y: q.y, w: series[i].w, d: series[i].d }; }) : [];
         // A single weigh-in can't draw a trend, so draw it as a level line across the chart ending in
         // the dot (the same way the design's line ends at the current value) instead of a lone floating dot.
         if (pts.length === 1) pts = [{ x: 4, y: pts[0].y }, { x: 280, y: pts[0].y }];
@@ -340,7 +342,11 @@ export const PROGRESS_DOM_JS = String.raw`
     + 'div[style*="right: 88px"][style*="bottom: 22px"][style*="height: 64px"]{display:none!important;}'
     + 'div[style*="right: 14px"][style*="bottom: 22px"][style*="width: 64px"][style*="height: 64px"]{display:none!important;}'
     // never zoom on focus inside the date inputs
-    + 'input{font-size:16px!important;}';
+    + 'input{font-size:16px!important;}'
+    // The page's own markup shows raw template text ("{{ rankName }}") until its logic renders. Nothing
+    // is painted until the pass below has seen real content and marks <html data-pready>; the bundle
+    // replaces <html> while unpacking, so every fresh document starts hidden again.
+    + 'html:not([data-pready]) body{visibility:hidden!important;}';
 
   function ensureCss() {
     if (document.getElementById('__prog_css')) return;
@@ -461,7 +467,16 @@ export const PROGRESS_DOM_JS = String.raw`
       }
     }
     var sheet = root.querySelector('div[style*="z-index: 60"]');
-    if (sheet) sheet.style.setProperty('padding-bottom', tb.toFixed(1) + 'px', 'important');
+    if (sheet) {
+      // The keys sit above the tab bar, but the keypad's own grey runs all the way to the bottom edge
+      // (padding goes inside the grey tray, not outside it where the white sheet would show through).
+      sheet.style.setProperty('padding-bottom', '0px', 'important');
+      var tray = sheet.querySelector('div[style*="30px 30px 0"]');
+      if (tray) {
+        if (tray.__pb0 === undefined) tray.__pb0 = parseFloat(tray.style.paddingBottom) || 30;
+        tray.style.setProperty('padding-bottom', (tray.__pb0 + tb).toFixed(1) + 'px', 'important');
+      }
+    }
     // Date picker: the month chips are a horizontally scrolling row whose last chip is cut off.
     // Make them share the row evenly so every month fits with no scrolling.
     if (sheet) {
@@ -588,7 +603,23 @@ export const PROGRESS_DOM_JS = String.raw`
       } else setEmpty(chartBox, false);
       var tip = chartBox.querySelector('div[style*="translate(-50%, -100%)"]');
       if (tip) tip.style.setProperty('display', ch !== 'ok' ? 'none' : '');
-      var gl = wsvg.querySelector('line'), gc = wsvg.querySelector('circle');
+      var gl = wsvg.querySelector('line'), gc = wsvg.querySelector('circle:not([data-athlt-pt])');
+      // A dot on every logged weight except the newest (the design's own end dot is the newest).
+      var wp = ch === 'ok' ? (window.__athltWPts || []) : [];
+      var dots = wp.length >= 2 && wp.length <= 40 ? wp.slice(0, wp.length - 1) : [];
+      var dsig = dots.map(function (q) { return q.x + ',' + q.y; }).join(';');
+      if (wsvg.__dotSig !== dsig || wsvg.querySelectorAll('circle[data-athlt-pt]').length !== dots.length) {
+        wsvg.__dotSig = dsig;
+        var oldDots = wsvg.querySelectorAll('circle[data-athlt-pt]');
+        for (var od = 0; od < oldDots.length; od++) oldDots[od].remove();
+        for (var nd = 0; nd < dots.length; nd++) {
+          var c2 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          c2.setAttribute('data-athlt-pt', '1');
+          c2.setAttribute('cx', dots[nd].x); c2.setAttribute('cy', dots[nd].y); c2.setAttribute('r', '3.6');
+          c2.setAttribute('fill', '#ffffff'); c2.setAttribute('stroke', '#111114'); c2.setAttribute('stroke-width', '2');
+          wsvg.appendChild(c2);
+        }
+      }
       if (gl) gl.style.setProperty('display', ch !== 'ok' ? 'none' : '');
       if (gc) gc.style.setProperty('display', ch !== 'ok' ? 'none' : '');
       if (wcard) {
@@ -727,15 +758,31 @@ export const PROGRESS_DOM_JS = String.raw`
   }, true);
 
   var reported = false, lastAsk = 0, deb;
+  // Real content = the page's logic has rendered with real data: no leftover template text anywhere.
+  function pageIsReal(r) {
+    var root = document.getElementById('dc-root');
+    if (!(r.okFit && r.filled && window.__athltLogicReady && root && leafWithText('Progress'))) return false;
+    return (root.textContent || '').indexOf('{{') < 0;
+  }
+  function setPageReady(on) {
+    var h = document.documentElement;
+    if (!h) return;
+    if (on) { if (!h.hasAttribute('data-pready')) h.setAttribute('data-pready', '1'); }
+    else if (h.hasAttribute('data-pready')) h.removeAttribute('data-pready');
+  }
+  // The native side can ask again at any time (e.g. after a reload) and gets an answer right away.
+  window.__athltCheckReady = function () { var ok = pageIsReal(apply()); setPageReady(ok); if (ok) { reported = true; post({ type: 'ready' }); } return ok; };
   function tick() {
     var r = apply();
     if (!window.__athltData && Date.now() - lastAsk > 700) { lastAsk = Date.now(); post({ type: 'needData' }); }
-    if (!reported && r.okFit && r.filled && window.__athltLogicReady && leafWithText('Progress')) {
+    var ok = pageIsReal(r);
+    setPageReady(ok);
+    if (!reported && ok) {
       reported = true;
       post({ type: 'ready' });
     }
   }
-  function schedule() { clearTimeout(deb); deb = setTimeout(tick, 50); }
+  function schedule() { ensureCss(); clearTimeout(deb); deb = setTimeout(tick, 50); }
   try { new MutationObserver(schedule).observe(document, { childList: true, subtree: true, attributes: false }); } catch (e) {}
   window.addEventListener('resize', schedule);
   setInterval(tick, 500);

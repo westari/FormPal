@@ -92,8 +92,11 @@ export default function ProgressScreen() {
     // falls back to the icon of the muscle it worked most, so no card is ever a black box.
     const wIcons = await Promise.all(data.workouts.map(w => (w.muscle ? muscleIconUri(w.muscle as Muscle, (tiers[w.muscle as Muscle]?.tier ?? 'silver') as Tier) : Promise.resolve(null))));
     if (dataRef.current === data) { data.workouts.forEach((w, i) => { if (wIcons[i]) w.fallback = wIcons[i]; }); push(); }
+    // each workout owns the videos logged since the previous (older) workout ended
+    const prevTsOf = (w: { ts: number }) => { const i = data.workouts.findIndex(x => x.ts === w.ts); return data.workouts[i + 1]?.ts ?? 0; };
     const frameOf = async (w: { ts: number }) => {
-      const uri = (await getSessionThumbnail(w.ts, 1000)) ?? (await getSessionThumbnail(w.ts, 0));
+      const prev = prevTsOf(w);
+      const uri = (await getSessionThumbnail(w.ts, 1000, prev)) ?? (await getSessionThumbnail(w.ts, 0, prev));
       if (!uri) return null;
       try { return `data:image/jpeg;base64,${await new File(uri).base64()}`; } catch { return null; }
     };
