@@ -59,7 +59,9 @@ export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const webRef = useRef<WebView>(null);
-  const { fade, onReady, onLoadStart, onLoadEnd } = useRevealFade(m => { if (__DEV__) console.log('[PROFILE]', m); });
+  const plog = (m: string) => { if (__DEV__) console.log('[PROFILE]', m); };
+  const { fade, onReady, onLoadStart, onLoadEnd } = useRevealFade(plog);
+  const openedAt = useRef(Date.now());
   const dataRef = useRef<ProfileData | null>(null);
   const seedRef = useRef(0);
 
@@ -134,8 +136,8 @@ export default function ProfileScreen() {
     let msg: { type?: string; to?: string; patch?: Record<string, any>; msg?: string };
     try { msg = JSON.parse(raw); } catch { return; }
     switch (msg.type) {
-      case 'ready': onReady(); break;
-      case 'needData': push(); break;
+      case 'ready': plog('page ready +' + (Date.now() - openedAt.current) + 'ms after mount'); onReady(); break;
+      case 'needData': plog('page asked for data;' + (dataRef.current ? ' sending' : ' not loaded yet')); push(); break;
       case 'pageConsole': if (__DEV__) console.log('[profile-page]', msg.msg); break;
       case 'save': if (msg.patch) void save(msg.patch); break;
       case 'applyPlan': void applyPlan(); break;
@@ -196,8 +198,8 @@ export default function ProfileScreen() {
         originWhitelist={['*']}
         injectedJavaScriptBeforeContentLoaded={PROFILE_BEFORE}
         onMessage={(e) => onMessage(e.nativeEvent.data)}
-        onLoadStart={onLoadStart}
-        onLoadEnd={onLoadEnd}
+        onLoadStart={() => { plog('web view load start +' + (Date.now() - openedAt.current) + 'ms after mount'); onLoadStart(); }}
+        onLoadEnd={() => { plog('web view load end'); onLoadEnd(); }}
         style={styles.web}
         scrollEnabled
         bounces={false}

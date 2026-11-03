@@ -401,7 +401,16 @@ export default function TrainScreen() {
       const tier = standing?.tier ?? null;
       const src = await tierDataUri(tier ?? 'bronze');
       const label = tier ? tier.charAt(0).toUpperCase() + tier.slice(1) : 'Unranked';
-      dataJsRef.current = athltSetDataJs(buildTrainData(plan, sessions, { src, alt: label, ranked: !!tier }, { top: insets.top, bottom: insets.bottom }));
+      const shield = { src, alt: label, ranked: !!tier };
+      const ins = { top: insets.top, bottom: insets.bottom };
+      let td: TrainData;
+      try { td = buildTrainData(plan, sessions, shield, ins); }
+      catch (e) {
+        // a stored plan in an unexpected shape must never leave the tab blank: log it and show the empty state
+        tlog('ERROR building train data:', e && (e as Error).stack ? (e as Error).stack : String(e));
+        td = buildTrainData(null, sessions, shield, ins);
+      }
+      dataJsRef.current = athltSetDataJs(td);
       webRef.current?.injectJavaScript(dataJsRef.current);
       tlog('data pushed to page; rank', tier ?? 'unranked', '| shield art', src ? 'ok' : 'MISSING');
     }).catch((e) => { tlog('ERROR loading data:', e && (e as Error).message ? (e as Error).message : String(e)); });

@@ -679,6 +679,9 @@ export const PROGRESS_DOM_JS = String.raw`
           }
           var gsp = goalEl.querySelector('span');
           if (gsp) { gsp.style.setProperty('font-weight', '700'); }
+          // same footer type as the Form Score card: 13.5px / 500 / #3c3c43, 7px from the orb
+          goalEl.style.setProperty('font-size', '13.5px'); goalEl.style.setProperty('font-weight', '500'); goalEl.style.setProperty('color', 'rgb(60, 60, 67)');
+          if (goalEl.parentElement) goalEl.parentElement.style.setProperty('gap', '7px');
         }
       }
     }
