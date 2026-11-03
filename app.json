@@ -39,7 +39,6 @@
       "expo-font",
       "expo-dev-client",
       "expo-audio",
-      "expo-apple-authentication",
       "expo-camera"
     ],
     "experiments": {
