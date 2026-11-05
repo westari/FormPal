@@ -81,6 +81,13 @@ const SCENARIOS = {
     [entry('shoulderPress', 40, 40, 0)]),
   'brand new user, unranked': build([], [entry('curl', 6, 6, 0)]),
 };
+// 3 muscles in one workout (shoulder press = shoulders + triceps, curl = biceps) and a long full-body workout
+SCENARIOS['3 muscles (press + curl)'] = build(
+  [entry('shoulderPress', 40, 36, 10), entry('curl', 30, 27, 10)],
+  [entry('shoulderPress', 30, 28, 0), entry('curl', 20, 18, 0)]);
+SCENARIOS['many muscles (full body)'] = build(
+  [entry('shoulderPress', 40, 36, 10), entry('squat', 40, 36, 10)],
+  [entry('shoulderPress', 30, 28, 0), entry('curl', 20, 18, 0), entry('squat', 30, 27, 0), entry('lunge', 24, 20, 0), entry('romanianDeadlift', 20, 18, 0)]);
 // worst-case widths: the two longest muscle labels side by side
 {
   const sc = build([entry('romanianDeadlift', 60, 55, 10)], [entry('romanianDeadlift', 30, 27, 0)]);
@@ -151,7 +158,7 @@ for (const [name, sc] of Object.entries(SCENARIOS)) {
 }
 const A = SCENARIOS['shoulders+triceps (bronze)'].payload, B = SCENARIOS['legs (squat+lunge)'].payload;
 check('rows follow the workout: shoulders workout -> Shoulders/Triceps', A.hits.map(h => h.name).sort().join() === 'Shoulders,Triceps', A.hits.map(h => h.name).join());
-check('rows follow the workout: legs workout -> different muscles', !B.hits.some(h => /Shoulders|Triceps/.test(h.name)) && B.hits.length === 2, B.hits.map(h => h.name).join());
+check('rows follow the workout: legs workout -> different muscles', !B.hits.some(h => /Shoulders|Triceps/.test(h.name)) && B.hits.length >= 2, B.hits.map(h => h.name).join());
 check('rows carry the real Flaticon art', A.hits.every(h => h.icon && h.icon.startsWith('data:image/png;base64,')));
 {
   // gain really is after - before for that muscle
@@ -231,15 +238,28 @@ check('rows carry the real Flaticon art', A.hits.every(h => h.icon && h.icon.sta
     const realBad = bad.filter(x => !p.hits.some(h => h.name === x || h.gain === x) && x !== `+${p.rank.gained}% today` && x !== p.rank.pct + '%' && x !== p.rank.pctLabel);
     check(`${name}: no design placeholder text left`, realBad.length === 0, realBad.join());
     const chipInfo = await page.evaluate(() => {
-      const chips = [...document.querySelectorAll('#dc-root div')].filter(d => d.style.position === 'absolute' && d.style.top === '284px');
+      const chips = [...document.querySelectorAll('#dc-root div')].filter(d => d.style.position === 'absolute' && (d.style.top === '284px' || d.hasAttribute('data-mr-chip')));
       const card = chips[0] && chips[0].parentElement.getBoundingClientRect();
       return chips.map(c => {
         const r = c.getBoundingClientRect(); const ic = c.children[0]; const cs = getComputedStyle(ic);
-        return { l: r.left, r: r.right, cardL: card.left, cardR: card.right, icon: cs.backgroundImage.slice(0, 12), iw: ic.getBoundingClientRect().width };
+        return { l: r.left, r: r.right, t: r.top, b: r.bottom, cardT: card.top, cardB: card.bottom, cardL: card.left, cardR: card.right, icon: cs.backgroundImage.slice(0, 12), iw: ic.getBoundingClientRect().width };
       });
     });
     check(`${name}: every row shows its Flaticon art`, p.hits.every((h, i) => !h.icon || (chipInfo[i] && chipInfo[i].icon.startsWith('url(')) ), JSON.stringify(chipInfo.map(c => c.icon)));
-    check(`${name}: rows don't overlap each other or leave the card`, chipInfo.every((c, i) => c.l >= c.cardL - 1 && c.r <= c.cardR + 1 && (i === 0 || c.l >= chipInfo[i - 1].r)), chipInfo.map(c => Math.round(c.l) + '-' + Math.round(c.r)).join(' | '));
+    check(`${name}: rows don't overlap each other or leave the card`, chipInfo.every((c, i) => c.l >= c.cardL - 1 && c.r <= c.cardR + 1 && (i === 0 || c.l >= chipInfo[i - 1].r || c.t >= chipInfo[i - 1].b - 1 || chipInfo[i - 1].t >= c.b - 1) && c.t >= c.cardT && c.b <= c.cardB + 1), chipInfo.map(c => Math.round(c.l) + '-' + Math.round(c.r) + '@' + Math.round(c.t)).join(' | '));
+    if (p.hits.length >= 3) {
+      const lay = await page.evaluate(() => {
+        const chips = [...document.querySelectorAll('#dc-root div')].filter(d => d.hasAttribute('data-mr-chip'));
+        const card = chips[0].parentElement, cr = card.getBoundingClientRect(), img = card.querySelector('img').getBoundingClientRect();
+        const boxes = chips.map(c => c.getBoundingClientRect());
+        let overlaps = 0; for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) { const a = boxes[i], b = boxes[j]; if (a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom) overlaps++; }
+        return { cardH: card.clientHeight, cardPx: Math.round(cr.height), n: chips.length, top: Math.round(Math.min(...boxes.map(b => b.top)) - cr.top), bottom: Math.round(Math.max(...boxes.map(b => b.bottom)) - cr.top), imgBottom: Math.round(img.bottom - cr.top), overlaps, rows: new Set(boxes.map(b => Math.round(b.top))).size };
+      });
+      check(`${name}: ${p.hits.length} muscles -> ${lay.n} rows on screen (every muscle that gained), ${lay.rows} compact line(s), no overlaps`, lay.n === p.hits.length && lay.overlaps === 0, JSON.stringify(lay));
+      check(`${name}: the card stays the same size (${lay.cardH}px, design 360) and the rows sit inside it below the body map`, lay.cardH === 360 && lay.bottom <= lay.cardPx && lay.top >= lay.imgBottom - 2, JSON.stringify(lay));
+      const sum = Math.round(p.hits.reduce((a, h) => a + parseFloat(h.gain.replace(/[+%]/g, '')), 0) * 10) / 10;
+      check(`${name}: TOTAL on screen +${p.rank.gained}% = ${p.hits.map(h => h.gain).join(' + ')} = +${sum.toFixed(1)}%`, p.rank.gained === sum.toFixed(1) && txt.includes(`+${p.rank.gained}% today`));
+    }
     check(`${name}: real body map image, decoded, visible`, atReady.imgSrc === p.bodyMap && atReady.imgW > 0 && atReady.imgVis === 'visible');
     check(`${name}: layout identical at reveal and 2.2s later (nothing shifts)`, JSON.stringify(atReady.rects) === JSON.stringify(later.rects) && atReady.transform === later.transform);
     await page.screenshot({ path: path.join(ROOT, '.scratch', `muscle-${name.replace(/[^a-z0-9]+/gi, '-')}.png`) });

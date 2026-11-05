@@ -152,17 +152,21 @@ export function buildMuscleRanksPayload(opts: {
   const beforeAvg = r1(avg(progBefore));
   const rankedUp = !!standingBefore && !!standingAfter && standingBefore.tier !== standingAfter.tier;
 
-  // Rows: the two most-worked muscles.
-  const shown = worked.slice(0, 2);
+  // Rows: EVERY muscle that gained today (most-worked first). If nothing gained (e.g. a rep-counter move that moves no
+  // bar), the two most-worked muscles are shown at +0.0% so the card is never empty.
+  const gainers = worked.filter(w => r1(gainOf(w.muscle)) > 0);
+  const shown = gainers.length ? gainers : worked.slice(0, 2);
   const gains = shown.map(w => r1(gainOf(w.muscle)));
-  // TODAY'S TOTAL = the sum of the gains shown in the rows above it (so +1.4 and +1.4 always read +2.8), never an average.
+  // TODAY'S TOTAL = the sum of the gains shown in the rows (every muscle that gained), so +1.4 +1.4 +0.6 always read +3.4.
   const overallGain = r1(gains.reduce((a, g) => a + g, 0));
 
   // Header: ONLY the newest number (no "old -> new").
   const pctLabel = standingAfter?.atTop ? 'Top rank' : `${fmt1(afterAvg)}%`;
 
   // A short coach note: how the session went (passed in), then one plain line about the rank. No sums, no maths.
-  const joined = shown.map(w => name(w.muscle)).join(' and ');
+  const joined = shown.length <= 2
+    ? shown.map(w => name(w.muscle)).join(' and ')
+    : `${name(shown[0].muscle)}, ${name(shown[1].muscle)} and ${shown.length - 2} more`;
   const rankLine = standingAfter?.atTop
     ? "You're at the top rank. Keep your form clean to stay there."
     : rankedUp

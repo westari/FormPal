@@ -60,8 +60,9 @@ export const MUSCLE_RANKS_LOGIC_EXT = String.raw`function (Orig) {
           name: h.name, gain: h.gain,
           icon: u ? 'url(' + u + ')' : 'none',
           delay: '0ms',
-          chipL: n === 1 ? '90px' : (i === 0 ? '14px' : 'auto'),
-          chipR: n === 1 ? '90px' : (i === 0 ? 'auto' : '14px')
+          // 3 or more rows are placed by the DOM pass (packed into centred rows), so they start at the card's left edge
+          chipL: n >= 3 ? '0px' : n === 1 ? '90px' : (i === 0 ? '14px' : 'auto'),
+          chipR: n >= 3 ? 'auto' : n === 1 ? '90px' : (i === 0 ? 'auto' : '14px')
         };
       });
       return v;
@@ -201,7 +202,7 @@ export const MUSCLE_RANKS_DOM_JS = String.raw`
     var divs = root.querySelectorAll('div');
     for (var c = 0; c < divs.length; c++) {
       var ds = divs[c].style;
-      if (ds.position === 'absolute' && ds.top === '284px') chips.push(divs[c]);
+      if (ds.position === 'absolute' && (ds.top === '284px' || divs[c].hasAttribute('data-mr-chip'))) chips.push(divs[c]);
     }
     if (d.hits.length === 1 && chips[0]) chips[0].style.setProperty('justify-content', 'center', 'important');
     // Two rows with long names ("Hamstrings +30%" + "Rear Delts +30%") are wider
@@ -228,6 +229,44 @@ export const MUSCLE_RANKS_DOM_JS = String.raw`
       compact(0);
       while (overlaps() && level < 3) { level++; compact(level); }
       chipsFit = !overlaps();
+    }
+
+    // Three or more muscles: compact chips packed into centred rows at the bottom of the card, and the body map
+    // shrinks just enough to leave room, so the card never grows. (One or two muscles keep the design's own layout.)
+    if (chips.length >= 3) {
+      var card = chips[0].parentElement, cardW = card.clientWidth || 346, cardH = card.clientHeight || 360;
+      var GAP = 6, PAD = 12;
+      for (var m1 = 0; m1 < chips.length; m1++) {
+        var ch1 = chips[m1];
+        ch1.setAttribute('data-mr-chip', '1');
+        ch1.style.setProperty('right', 'auto', 'important');
+        ch1.style.setProperty('gap', '5px', 'important');
+        ch1.style.setProperty('padding', '3px 10px 3px 6px', 'important');
+        var k1 = ch1.children;
+        k1[0].style.setProperty('width', '18px', 'important'); k1[0].style.setProperty('height', '21px', 'important');
+        for (var q1 = 1; q1 < k1.length; q1++) k1[q1].style.setProperty('font-size', '12px', 'important');
+      }
+      var rows = [[]], rowW = [0];
+      for (var m2 = 0; m2 < chips.length; m2++) {
+        var w2 = chips[m2].offsetWidth, last = rows.length - 1;
+        var need = rows[last].length ? rowW[last] + GAP + w2 : w2;
+        if (rows[last].length && need > cardW - 2 * PAD) { rows.push([]); rowW.push(0); last++; need = w2; }
+        rows[last].push(m2); rowW[last] = need;
+      }
+      var chH = chips[0].offsetHeight, block = rows.length * chH + (rows.length - 1) * GAP;
+      var top0 = cardH - 16 - block;
+      for (var r2 = 0; r2 < rows.length; r2++) {
+        var x = (cardW - rowW[r2]) / 2;
+        for (var c2 = 0; c2 < rows[r2].length; c2++) {
+          var chip = chips[rows[r2][c2]];
+          chip.style.setProperty('left', x.toFixed(1) + 'px', 'important');
+          chip.style.setProperty('top', (top0 + r2 * (chH + GAP)).toFixed(1) + 'px', 'important');
+          x += chip.offsetWidth + GAP;
+        }
+      }
+      // body map: keeps its 40px top, shrinks (never grows past the design's 218px) to end 8px above the first row
+      if (img) img.style.setProperty('height', Math.max(110, Math.min(218, top0 - 8 - 40)) + 'px', 'important');
+      window.__mrRows = rows.length;
     }
 
     // Final layout = real text in, real image decoded, scaled. Only then reveal.
