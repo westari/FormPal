@@ -13,7 +13,7 @@ import {
   type SessionEntry, type MuscleTiers, type MuscleTierInfo, type Tier,
 } from './sessionLog';
 import { computeOverallStanding, MUSCLE_DISPLAY_ORDER } from '../components/MuscleTierMap';
-import { bodyMapSvg } from './bodyMapSvg';
+import { progressBodyMapSvg } from './progressBodyMap';
 import type { WeightEntry } from './weightLog';
 
 export const MUSCLE_LABEL: Record<Muscle, string> = {
@@ -189,7 +189,7 @@ export function buildProgressData(
       streak: calcStreak(sessions), hi: meta.hi, lo: meta.lo, ink: meta.ink, emblem: null,
     },
     muscles, weakest,
-    bodyMap: { front: bodyMapSvg(tiers, 'front'), back: bodyMapSvg(tiers, 'back') },
+    bodyMap: { front: progressBodyMapSvg(tiers, 'front'), back: progressBodyMapSvg(tiers, 'back') },
     ladder: TIER_ORDER.map(t => ({
       name: cap(t), tier: t, img: null,
       state: !tier ? 'locked' : t === tier ? 'you' : tierIndex(t) < tierIndex(tier) ? 'done' : 'locked',

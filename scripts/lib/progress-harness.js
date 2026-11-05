@@ -15,9 +15,9 @@ const DAY = 86400000;
 const noon = (y, m, d) => new Date(y, m, d, 12).getTime();
 
 // Real-looking history around "today": form scores on irregular days, weigh-ins every few days.
-function makeData({ form, weights } = {}) {
+function makeData({ form, weights, tiers } = {}) {
   const now = Date.now();
-  const data = buildProgressData([], {}, [], now, { insets: { top: 62, bottom: 34 } });
+  const data = buildProgressData([], tiers || {}, [], now, { insets: { top: 62, bottom: 34 } });
   data.form = form || [
     [-34, 64], [-30, 71], [-27, 58], [-22, 77], [-19, 69], [-15, 82], [-12, 74], [-8, 88], [-5, 79], [-2, 91],
   ].map(([d, pct]) => ({ ts: now + d * DAY, pct }));
