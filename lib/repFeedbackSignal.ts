@@ -14,4 +14,10 @@
  * already runs one, for navigatingToFeedback) reads and clears it.
  */
 // openAllSets: "All sets" tapped on rep feedback — recap.tsx opens its All sets page on refocus.
-export const repFeedbackSignal = { finishedReview: false, openAllSets: false };
+export const repFeedbackSignal: {
+  finishedReview: boolean;
+  openAllSets: boolean;
+  /** Set by recap.tsx while it is mounted: lets "Finish review" switch it to the muscle page right away,
+   *  while the rep feedback page is still on screen, instead of waiting for the back transition to finish. */
+  onFinishReview: (() => void) | null;
+} = { finishedReview: false, openAllSets: false, onFinishReview: null };

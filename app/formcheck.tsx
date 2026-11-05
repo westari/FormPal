@@ -40,7 +40,9 @@ import { handleRepAudio, playReadyCue } from '../lib/audioFeedback';
 import { createCalibSynth } from '../lib/calibLog';
 import { prefetchSoloRecap } from '../lib/recapPrefetch';
 import { createRepDiagnostic, STREAM_DEAD_SEC_FLOOR } from '../lib/repDiagnostics';
-import { meterTarget, createMeterSmoother, trackingIsHigh, NO_PERSON_CUE } from '../lib/liveTracking';
+import { useKeepAwake } from 'expo-keep-awake';
+import { NO_ZOOM_JS } from '../lib/noZoom';
+import { meterTarget, createMeterSmoother, trackingIsHigh, NO_PERSON_CUE, createSteadyGate, READY_STEADY_MS } from '../lib/liveTracking';
 import { useAudioSettingsStore } from '../store/audioSettingsStore';
 import { useFormTheme, type FormTheme } from '../lib/activeTheme';
 import type { DebugStatsEvent, RepEvent, ExerciseType } from '../modules/athlt-camera/src/index';
@@ -607,6 +609,7 @@ function TrackingMeter({ target, show, top, onHighChange }: {
     <View pointerEvents="none" style={[s.cameraLockWrap, { top }]}>
       <GlassPanel radius={999} style={s.meterPill}>
         <View style={s.meterInner}>
+          <Text style={s.meterLabel}>Form detection</Text>
           <Text style={s.meterNum}>{display}<Text style={s.meterPct}>%</Text></Text>
           <View style={s.meterTrack}>
             <View style={[s.meterFill, { width: `${display}%`, backgroundColor: level }]} />
@@ -620,6 +623,8 @@ function TrackingMeter({ target, show, top, onHighChange }: {
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function FormCheckScreen() {
   const router = useRouter();
+  // The screen must not dim or lock while the camera is on (released when this screen unmounts).
+  useKeepAwake();
   const insets = useSafeAreaInsets();
   // User's unlocked rank colour for the ✓ orb / rep counter / accent glow —
   // resolves to the shipped green/red when "Classic" (or nothing) is selected.
@@ -823,6 +828,8 @@ export default function FormCheckScreen() {
   // TRACKING meter actually reads high — see the readyPending effect below.
   const [readyPending, setReadyPending] = useState(false);
   const announceReadyRef = useRef<(() => void) | null>(null);
+  // Full body tracked without a break (see createSteadyGate in lib/liveTracking.ts); gates "Ready. Go!" together with the meter.
+  const steadyGate = useRef(createSteadyGate()).current;
 
   // Full session log buffer — accumulates EVERY line for post-session review.
   // Not a state value; we never need it to trigger re-renders during the session.
@@ -908,6 +915,11 @@ export default function FormCheckScreen() {
       if (!mounted) return;
       setSetupAllVisible(event.allJointsVisible);
       setSetupHoldProgress(event.holdProgress);
+      if (!trackingActiveRef.current) {
+        const broke = steadyGate.feed(event.allJointsVisible, Date.now(), event.passed);
+        if (broke) console.log('[READY-GATE] steady run broken (body not fully tracked or frames stopped) — counting again from zero');
+        if (event.passed) console.log('[READY-GATE] native setup passed; steady so far ' + steadyGate.steadyMs(Date.now()) + 'ms, need ' + READY_STEADY_MS + 'ms (placeholder)');
+      }
 
       // Live positioning cue. Show a new cue immediately so guidance tracks
       // the user in real time (React de-dupes an identical string); only
@@ -1268,13 +1280,26 @@ export default function FormCheckScreen() {
   // of "high".
   const [meterHigh, setMeterHigh] = useState(false);
   // Show/speak "Ready. Go!" only once tracking is actually high.
+  // ...AND the full body has been tracked steadily for READY_STEADY_MS (placeholder value, logged below).
   useEffect(() => {
     if (!readyPending || !meterHigh) return;
-    setReadyPending(false);
-    const go = announceReadyRef.current;
-    announceReadyRef.current = null;
-    go?.();
-  }, [readyPending, meterHigh]);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const tryGo = () => {
+      const steady = steadyGate.steadyMs(Date.now());
+      if (steady < READY_STEADY_MS) {
+        console.log(`[READY-GATE] waiting: steady ${steady}ms of ${READY_STEADY_MS}ms needed (placeholder), meter high`);
+        timer = setTimeout(tryGo, Math.max(100, Math.min(400, READY_STEADY_MS - steady)));
+        return;
+      }
+      console.log(`[READY-GATE] Ready: steady ${steady}ms >= ${READY_STEADY_MS}ms (placeholder), meter high`);
+      setReadyPending(false);
+      const go = announceReadyRef.current;
+      announceReadyRef.current = null;
+      go?.();
+    };
+    tryGo();
+    return () => { if (timer) clearTimeout(timer); };
+  }, [readyPending, meterHigh, steadyGate]);
 
   // Re-ask the "can't see you" diagnostic on a fast timer while tracking.
   // It used to only be re-evaluated on log lines and the ~1/sec debug-stats
@@ -1304,7 +1329,7 @@ export default function FormCheckScreen() {
   const demoDrawerDataJs = useMemo(() => `window.__FORMPAL_DRAWER = ${JSON.stringify({
     name: EXERCISE_DEFINITIONS[exerciseType]?.displayName ?? exerciseType,
     cues: getDemoCues(exerciseType),
-  })}; window.__formpalRenderDrawer && window.__formpalRenderDrawer(); true;`, [exerciseType]);
+  })}; window.__formpalRenderDrawer && window.__formpalRenderDrawer(); true;` + NO_ZOOM_JS, [exerciseType]);
 
   // Animate the 90° turn in/out as tracking starts/stops (floor only).
   useEffect(() => {
@@ -1827,6 +1852,7 @@ const s = StyleSheet.create({
   meterInner: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 9 },
   meterTrack: { width: 52, height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.22)', overflow: 'hidden' },
   meterFill:  { height: 3, borderRadius: 2 },
+  meterLabel: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12, color: 'rgba(255,255,255,0.8)', letterSpacing: -0.1 },
   meterNum:   { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 16, lineHeight: 20, color: '#fff', letterSpacing: -0.2, fontVariant: ['tabular-nums'] },
   meterPct:   { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 11, color: 'rgba(255,255,255,0.7)' },
   errorCard:  { position: 'absolute', left: 24, right: 24, top: '38%', backgroundColor: C.glass, borderRadius: 16, padding: 24, borderWidth: 1, borderColor: C.border },

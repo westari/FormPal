@@ -38,6 +38,7 @@ import { DC_VIEWPORT_JS, recapBaseJs } from '../lib/recapInject';
 import { repFeedbackBaseJs } from '../lib/repFeedbackInject';
 import { muscleRanksBaseJs } from '../lib/muscleRanksInject';
 import { allSetsBaseJs } from '../lib/allSetsInject';
+import { NO_ZOOM_JS } from '../lib/noZoom';
 
 export type WarmKind = 'recap' | 'repfeedback' | 'ranks' | 'allsets';
 const KINDS: WarmKind[] = ['recap', 'allsets', 'ranks', 'repfeedback']; // later = drawn on top
@@ -53,6 +54,16 @@ const SLIDE_IN_MS = 320, SLIDE_OUT_MS = 260;
 export const HOST_Z_HIDDEN = -1;
 export const HOST_Z_RAISED = 1000;
 export const LAYER_OPACITY_HIDDEN = 0;
+
+/**
+ * Should a layer be on screen? A page that is itself showing, or one that is already on screen and has
+ * another page on top of it (kept in place so closing the top page just slides it away). A layer that was
+ * NOT on screen is never pulled in just because a page above it opened: that is how the muscle page showed
+ * through the transparent rep-feedback page (where the video should be) after "View rep feedback".
+ */
+export function layerShouldShow(visible: boolean, coveredByHigher: boolean, wasShown: boolean): boolean {
+  return visible || (coveredByHigher && wasShown);
+}
 
 const SOURCES: Record<WarmKind, any> = {
   recap:       require('../assets/app screens/workoutrecap.html'),
@@ -98,10 +109,10 @@ const WARM_PROBE_JS = `
 true;`;
 
 export const BASE_JS: Record<WarmKind, string> = {
-  recap:       `${DC_VIEWPORT_JS} ${recapBaseJs()} ${WARM_PROBE_JS}`,
-  repfeedback: `${DC_VIEWPORT_JS} ${repFeedbackBaseJs()} ${WARM_PROBE_JS}`,
-  ranks:       `${muscleRanksBaseJs()} ${WARM_PROBE_JS}`,
-  allsets:     `${DC_VIEWPORT_JS} ${allSetsBaseJs()} ${WARM_PROBE_JS}`,
+  recap:       `${DC_VIEWPORT_JS} ${recapBaseJs()} ${WARM_PROBE_JS} ${NO_ZOOM_JS}`,
+  repfeedback: `${DC_VIEWPORT_JS} ${repFeedbackBaseJs()} ${WARM_PROBE_JS} ${NO_ZOOM_JS}`,
+  ranks:       `${muscleRanksBaseJs()} ${WARM_PROBE_JS} ${NO_ZOOM_JS}`,
+  allsets:     `${DC_VIEWPORT_JS} ${allSetsBaseJs()} ${WARM_PROBE_JS} ${NO_ZOOM_JS}`,
 };
 
 // Safety net: reveal anyway if the page never says 'ready' (selectors changed,
@@ -165,10 +176,17 @@ export function warmPrepare(k: WarmKind, dataJs: string) {
 }
 
 const activatedAt: Partial<PerKind<number>> = {};
+// Page messages that describe a position and are only sent when it changes (the All sets video tile's
+// rect). The page sends it while it is still hidden, before any screen has claimed it, when there is no
+// handler to hear it, so the last one is kept and handed over the moment a screen activates the page.
+const lastTileRect: Partial<PerKind<any>> = {};
+/** Every message a warm page posts goes through here first (before any screen has claimed the page). */
+export function noteWarmMessage(k: WarmKind, msg: any) { if (msg && msg.type === 'tileRect') lastTileRect[k] = msg; }
 
 export function warmActivate(k: WarmKind, opts: { bg?: string; onMessage: (msg: any) => void }) {
   handlers[k] = opts.onMessage;
   activatedAt[k] = Date.now();
+  if (lastTileRect[k]) { const m = lastTileRect[k]; setTimeout(() => handlers[k]?.(m), 0); }
   set(k, { active: true, ...(opts.bg ? { bg: opts.bg } : {}) } as any);
 }
 export function warmSetBg(k: WarmKind, bg: string) { if (useWarm.getState().bg[k] !== bg) set(k, { bg } as any); }
@@ -186,6 +204,7 @@ export function warmRelease(k: WarmKind, delayMs = 0) {
     return;
   }
   delete handlers[k];
+  delete lastTileRect[k];
   useWarm.setState((s) => ({
     active:   { ...s.active,   [k]: false },
     revealed: { ...s.revealed, [k]: false },
@@ -255,15 +274,32 @@ function Layer({ k }: { k: WarmKind }) {
   const tx = useRef(new Animated.Value(screenW)).current;
   const [shown, setShown] = useState(false);
   const wasShown = useRef(false);
-  const wanted = visible || coveredByHigher;
+  const wanted = layerShouldShow(visible, coveredByHigher, wasShown.current);
+  // While a page above it has fully slid in, a page beneath is kept in place (so closing the top one is
+  // instant) but made invisible: the top page can be transparent over a video, and the beneath page's
+  // own card would otherwise poke out above it. It is visible again the moment the top page starts leaving.
+  const [beneathHidden, setBeneathHidden] = useState(false);
+  useEffect(() => {
+    if (!coveredByHigher) { setBeneathHidden(false); return; }
+    const t = setTimeout(() => setBeneathHidden(true), SLIDE_IN_MS + 80);
+    return () => clearTimeout(t);
+  }, [coveredByHigher]);
   useLayoutEffect(() => {
     if (wanted) {
       if (!wasShown.current) {
         wasShown.current = true;
-        if (__DEV__) console.log(`[warm:${k}] slide IN (${SLIDE_IN_MS}ms), layer raised above navigator`);
-        tx.setValue(screenW);
-        setShown(true);
-        Animated.timing(tx, { toValue: 0, duration: SLIDE_IN_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+        if (coveredByHigher) {
+          // Another page is already on top of it (Finish review: the muscle page opens underneath the rep
+          // feedback page while that one slides away): in place at once, no slide of its own.
+          if (__DEV__) console.log(`[warm:${k}] shown in place under the page above (no slide)`);
+          tx.setValue(0);
+          setShown(true);
+        } else {
+          if (__DEV__) console.log(`[warm:${k}] slide IN (${SLIDE_IN_MS}ms), layer raised above navigator`);
+          tx.setValue(screenW);
+          setShown(true);
+          Animated.timing(tx, { toValue: 0, duration: SLIDE_IN_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+        }
       }
     } else if (wasShown.current) {
       wasShown.current = false;
@@ -281,7 +317,7 @@ function Layer({ k }: { k: WarmKind }) {
         StyleSheet.absoluteFill,
         // Not shown = invisible, not hit-testable, and (via the parent's
         // zIndex) behind everything.
-        { opacity: shown ? 1 : LAYER_OPACITY_HIDDEN, transform: [{ translateX: tx }] },
+        { opacity: shown && !beneathHidden ? 1 : LAYER_OPACITY_HIDDEN, transform: [{ translateX: tx }] },
       ]}
     >
       {shown && underlay ? <View style={StyleSheet.absoluteFill} pointerEvents="none">{underlay}</View> : null}
@@ -307,10 +343,12 @@ function Layer({ k }: { k: WarmKind }) {
             if (__DEV__) console.log(`[warm:${k}] ready`);
             set(k, { revealed: true } as any);
           }
+          noteWarmMessage(k, msg);
           handlers[k]?.(msg);
         }}
         onContentProcessDidTerminate={() => {
           if (__DEV__) console.log(`[warm:${k}] content process terminated — re-warming`);
+          delete lastTileRect[k];
           useWarm.setState((s) => ({
             warm:     { ...s.warm,     [k]: false },
             revealed: { ...s.revealed, [k]: false },

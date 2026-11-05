@@ -178,6 +178,7 @@ export default function RecapScreen() {
   useFocusEffect(
     useCallback(() => {
       navigatingToFeedback.current = false;
+      setFinishing(false);
       // Explicit ask: "Finish review" on rep-feedback.tsx should continue
       // on to the ranks/bodymap screen, not just return to summary — see
       // lib/repFeedbackSignal.ts for why a module-level flag is the
@@ -276,6 +277,12 @@ export default function RecapScreen() {
   const initialized = useRef(false);
   const persistRef = useRef<Promise<unknown>>(Promise.resolve());
   const [view, setView] = useState<'summary' | 'allsets' | 'ranks'>('summary');
+  // "Finish review" on rep feedback: show the muscle page at once, while that screen is still on top.
+  const [finishing, setFinishing] = useState(false);
+  useEffect(() => {
+    repFeedbackSignal.onFinishReview = () => { setView('ranks'); setFinishing(true); };
+    return () => { repFeedbackSignal.onFinishReview = null; };
+  }, []);
 
   // VIDEO — real native AVPlayer via expo-video, positioned full-screen
   // behind the WebView (see file header). Source is data.videoUri
@@ -673,11 +680,12 @@ export default function RecapScreen() {
   useEffect(() => { if (allSetsDataJsStr) warmPrepare('allsets', allSetsDataJsStr); }, [allSetsDataJsStr]);
   const warmKind: 'recap' | 'ranks' | 'allsets' | null =
     effectiveView === 'summary' ? 'recap' : effectiveView === 'ranks' ? 'ranks' : 'allsets';
+  const mayShow = isFocused || finishing;
   useLayoutEffect(() => {
-    if (!warmKind || !isFocused) return;
+    if (!warmKind || !mayShow) return;
     warmActivate(warmKind, { onMessage: (m) => onWebMsg.current(m) });
     return () => warmDeactivate(warmKind);
-  }, [warmKind, isFocused]);
+  }, [warmKind, mayShow]);
 
   // Native colour under the page: dark until the native video has a frame,
   // then transparent so the video shows through where the artboard's own

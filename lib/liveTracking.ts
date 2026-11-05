@@ -14,6 +14,42 @@
 export const NO_PERSON_CUE = 'Step back into frame';
 export const READY_MIN_PCT = 95;
 
+// ── Steady-tracking gate for "Ready. Go!" ───────────────────────────────────
+// Native's setup hold (2.0s, joint confidence >= 0.25) says "in frame", but the first reps after it
+// still lagged: real shoulder-press logs show joint confidence 0.43-0.77 and the first reps rejected
+// as "tracking unreliable". So "Ready. Go!" now also needs the FULL body to have been tracked without
+// a single break for a while: every setup frame trackable, and no gap in the frame stream.
+// PLACEHOLDERS (not measured, set from reasoning): do a few starts and send the [READY-GATE] log
+// lines, then the real values get set from those numbers.
+export const READY_STEADY_MS = 3500;   // PLACEHOLDER: native hold is 2000ms, so this adds ~1.5s of steady tracking
+export const READY_MAX_GAP_MS = 400;   // PLACEHOLDER: setup frames arrive every ~100ms; a longer silence counts as a break
+
+export interface SteadyGate {
+  /** One native setup event (they arrive every frame). Returns true if this event broke the steady run. */
+  feed(allVisible: boolean, nowMs: number, passed?: boolean): boolean;
+  /** How long the full body has been tracked without a break (0 if broken). */
+  steadyMs(nowMs: number): number;
+  reset(): void;
+}
+
+export function createSteadyGate(): SteadyGate {
+  let since = 0, last = 0, passedAt = 0;
+  return {
+    feed(allVisible, nowMs, passed) {
+      let broke = false;
+      if (passed && allVisible) { if (!since) since = nowMs; last = nowMs; passedAt = nowMs; return false; }
+      if (!allVisible || (last > 0 && nowMs - last > READY_MAX_GAP_MS)) { broke = since > 0; since = 0; passedAt = 0; }
+      if (allVisible && !since) since = nowMs;
+      last = nowMs;
+      return broke;
+    },
+    // After native's "passed" the setup events stop, so the run keeps counting up with the clock from then on;
+    // before it, the run is measured up to the last event.
+    steadyMs(nowMs) { return since ? ((passedAt ? nowMs : last) - since) : 0; },
+    reset() { since = 0; last = 0; passedAt = 0; },
+  };
+}
+
 // Hints native's setup check emits when Vision found nobody at all (every
 // frame, see ExerciseEngine.notePersonMissing / positionGuidance).
 const SETUP_NO_PERSON_HINTS = ['Get in frame', 'Get back in frame'];
