@@ -1,7 +1,11 @@
 import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { NativeTabs, Icon, Label } from 'expo-router/unstable-native-tabs';
 
+// The tabs, in bar order. Every name must have a file in app/(tabs) (scripts/test-tabs.js checks that).
+export const TAB_NAMES = ['index', 'train', 'plus', 'progress', 'profile'] as const;
+
 export default function TabLayout() {
+  if (__DEV__) console.log('[TABS] layout mounted, tabs:', TAB_NAMES.join(', '));
   return (
     <ThemeProvider value={DarkTheme}>
       <NativeTabs>
