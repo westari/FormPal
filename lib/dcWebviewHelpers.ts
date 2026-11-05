@@ -59,6 +59,37 @@ export const DC_VIEWPORT_JS = `(function(){try{
   m.setAttribute('content','width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
 }catch(e){}})(); true;`;
 
+// No zooming, ever: no pinch, no double-tap zoom. The viewport meta alone is not enough: the artboard bundle
+// replaces <html> while it unpacks (taking the meta with it), and iOS can still zoom a page whose meta limits
+// were lost. So this keeps the meta in place at all times, sets touch-action so the browser itself never starts a
+// pinch / double-tap zoom, and cancels the iOS gesture events and any two-finger touch as a backstop.
+// Scrolling (pan) and ordinary taps are untouched.
+export const DC_NO_ZOOM_JS = `(function(){
+  if (window.__noZoomInstalled) return; window.__noZoomInstalled = true;
+  var VP = 'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover';
+  function apply(){
+    try {
+      var host = document.head || document.documentElement; if (!host) return;
+      var m = document.querySelector('meta[name=viewport]');
+      if (!m) { m = document.createElement('meta'); m.name = 'viewport'; host.appendChild(m); }
+      if (m.getAttribute('content') !== VP) m.setAttribute('content', VP);
+      if (!document.getElementById('__nozoom_css')) {
+        var s = document.createElement('style'); s.id = '__nozoom_css';
+        s.textContent = 'html,body,*{touch-action:pan-x pan-y!important;-webkit-text-size-adjust:100%!important;}';
+        host.appendChild(s);
+      }
+    } catch (e) {}
+  }
+  apply();
+  try { new MutationObserver(apply).observe(document, { childList: true, subtree: true }); } catch (e) {}
+  var stop = function (e) { if (e.cancelable) e.preventDefault(); };
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach(function (t) { document.addEventListener(t, stop, { passive: false, capture: true }); });
+  var multi = function (e) { if (e.touches && e.touches.length > 1) stop(e); };
+  document.addEventListener('touchstart', multi, { passive: false, capture: true });
+  document.addEventListener('touchmove', multi, { passive: false, capture: true });
+  document.addEventListener('dblclick', stop, true);
+})(); true;`;
+
 // Scales the artboard's fixed 390x844 canvas (#dc-root) to fill the real
 // device viewport height exactly, kills the artboard's own entrance
 // animations (which otherwise play against stale placeholder data before

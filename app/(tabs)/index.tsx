@@ -33,7 +33,7 @@ import { getAllSessions, calcStreak, groupIntoWorkouts, scoredSessions, computeM
 import { primaryMuscle } from '../../lib/progressData';
 import { workoutFrame, workoutFallbackIcon } from '../../lib/workoutThumbs';
 import type { Plan } from '../../types/plan';
-import { DC_VIEWPORT_JS, DC_SETTLE_JS } from '../../lib/dcWebviewHelpers';
+import { DC_VIEWPORT_JS, DC_NO_ZOOM_JS, DC_SETTLE_JS } from '../../lib/dcWebviewHelpers';
 import { askCue } from '../../lib/cueApi';
 
 const HOME_HTML = require('../../assets/app screens/home.html');
@@ -494,7 +494,7 @@ export default function HomeScreen() {
         ref={webRef}
         source={HOME_HTML}
         originWhitelist={['*']}
-        injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS + DC_SETTLE_JS + HOME_GUARD_JS}
+        injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS + DC_NO_ZOOM_JS + DC_SETTLE_JS + HOME_GUARD_JS}
         injectedJavaScript={HOME_SCALE_FIT_JS + HOME_CUE_REAL_JS}
         onLoadStart={() => { setPageLoaded(false); onLoadStart(); }}
         onLoadEnd={() => { setPageLoaded(true); onLoadEnd(); }}

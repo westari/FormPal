@@ -20,7 +20,7 @@ import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { CONSOLE_FORWARD_JS, DC_VIEWPORT_JS, DC_SETTLE_JS } from '../../lib/dcWebviewHelpers';
+import { CONSOLE_FORWARD_JS, DC_VIEWPORT_JS, DC_NO_ZOOM_JS, DC_SETTLE_JS } from '../../lib/dcWebviewHelpers';
 import { dcLogicPatchJs, athltSetDataJs } from '../../lib/dcLogicPatch';
 import { PROFILE_LOGIC_EXT, PROFILE_DOM_JS } from '../../lib/profileInject';
 import { buildProfileData, GOAL_IDS, PLACE_IDS, type ProfileData, type ProfileDetails } from '../../lib/profileData';
@@ -46,7 +46,7 @@ const ONBOARDING_KEY = 'formpal_onboarding_complete';
 const LOCATION_KEY   = 'formpal_location';
 const PROFILE_DETAILS_KEY = 'formpal_profile_details';
 
-const PROFILE_BEFORE = DC_VIEWPORT_JS + CONSOLE_FORWARD_JS + DC_SETTLE_JS + dcLogicPatchJs(PROFILE_LOGIC_EXT) + PROFILE_DOM_JS;
+const PROFILE_BEFORE = DC_VIEWPORT_JS + DC_NO_ZOOM_JS + CONSOLE_FORWARD_JS + DC_SETTLE_JS + dcLogicPatchJs(PROFILE_LOGIC_EXT) + PROFILE_DOM_JS;
 
 async function loadDetails(): Promise<ProfileDetails> {
   try { const raw = await AsyncStorage.getItem(PROFILE_DETAILS_KEY); return raw ? JSON.parse(raw) : {}; } catch { return {}; }

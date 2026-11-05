@@ -31,7 +31,7 @@ import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
 import * as Haptics from 'expo-haptics';
 import AppBackground from '../../components/AppBackground';
-import { DC_VIEWPORT_JS, CONSOLE_FORWARD_JS, DC_SETTLE_JS } from '../../lib/dcWebviewHelpers';
+import { DC_VIEWPORT_JS, DC_NO_ZOOM_JS, CONSOLE_FORWARD_JS, DC_SETTLE_JS } from '../../lib/dcWebviewHelpers';
 import { dcLogicPatchJs, athltSetDataJs } from '../../lib/dcLogicPatch';
 import { loadPlan } from '../../lib/planStorage';
 import { getAllSessions, computeMuscleTiers } from '../../lib/sessionLog';
@@ -262,7 +262,7 @@ true;
 
 // The train bridge posts plain strings ('__tap', 'begin', 'practice:x',
 // 'ready'); dcLogicPatch posts JSON status — both arrive in onMsg.
-const TRAIN_BEFORE = DC_VIEWPORT_JS + CONSOLE_FORWARD_JS + DC_SETTLE_JS + dcLogicPatchJs(TRAIN_LOGIC_EXT) + TRAIN_WEB_INJECT;
+const TRAIN_BEFORE = DC_VIEWPORT_JS + DC_NO_ZOOM_JS + CONSOLE_FORWARD_JS + DC_SETTLE_JS + dcLogicPatchJs(TRAIN_LOGIC_EXT) + TRAIN_WEB_INJECT;
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const DAY_MS = 24 * 60 * 60 * 1000;
