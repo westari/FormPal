@@ -263,6 +263,17 @@ export const PROFILE_DOM_JS = String.raw`
     var d = window.__athltData;
     var root = document.getElementById('dc-root');
     textPass();
+    // Top-right badges button: the design's ribbon-medal glyph is swapped for a clean line trophy (same 42px white
+    // circle, same tap target and handler - only the drawing inside it changes).
+    var badgeSvg = document.querySelector('#dc-root div[aria-label="Badges"] svg');
+    if (badgeSvg && badgeSvg.getAttribute('data-icon') !== 'trophy') {
+      badgeSvg.setAttribute('data-icon', 'trophy');
+      badgeSvg.innerHTML = '<g fill="none" stroke="#111114" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'
+        + '<path d="M8 4h8v5.2a4 4 0 0 1-8 0V4z"/>'
+        + '<path d="M8 6.2H5.6a.9.9 0 0 0-.9 1c.2 2 1.6 3.4 3.5 3.7"/>'
+        + '<path d="M16 6.2h2.4a.9.9 0 0 1 .9 1c-.2 2-1.6 3.4-3.5 3.7"/>'
+        + '<path d="M12 13.2v3.3M9.6 16.5h4.8M8.6 20h6.8"/></g>';
+    }
     // The artboard's own red "Sign out" button has no handler of its own.
     var links = document.querySelectorAll('#dc-root a');
     for (var i = 0; i < links.length; i++) {
