@@ -16,12 +16,12 @@ import { useWorkoutSessionStore } from '../store/workoutSessionStore';
 
 export function generateSummary(reps: number, goodReps: number, hasFormData = true): string {
   const pct = reps > 0 ? Math.round((goodReps / reps) * 100) : 0;
-  if (reps === 0)  return 'No reps were detected this session. Try positioning the phone so your full body is visible from the side.';
-  if (!hasFormData) return `${reps} reps counted. Form wasn't scored for this session. These are rep-counter movements, so they build training volume without a form grade.`;
-  if (pct === 100) return `Every one of your ${reps} reps hit good form. That's the kind of consistency that builds real strength over time.`;
-  if (pct >= 80)   return `Solid session. You hit good form on ${goodReps} of ${reps} reps (${pct}%).`;
-  if (pct >= 50)   return `You hit good form on ${goodReps} of ${reps} reps (${pct}%). Slow the rep down and focus on full range of motion.`;
-  return `${reps} reps completed, ${goodReps} in good form (${pct}%). Focus on control over speed next session.`;
+  if (reps === 0)  return 'No reps were detected. Keep your full body in frame next time.';
+  if (!hasFormData) return `${reps} reps counted. These moves are not form-scored.`;
+  if (pct === 100) return `All ${reps} reps hit good form. Great consistency.`;
+  if (pct >= 80)   return `${goodReps} of ${reps} reps hit good form (${pct}%). Solid session.`;
+  if (pct >= 50)   return `${goodReps} of ${reps} reps hit good form (${pct}%). Slow down for full range.`;
+  return `${goodReps} of ${reps} reps hit good form (${pct}%). Focus on control over speed.`;
 }
 
 export interface RecapPageInput {

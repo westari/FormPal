@@ -113,10 +113,10 @@ for (const [name, sc] of Object.entries(SCENARIOS)) {
     const absB = (m) => sc.tiersBefore[m] ? TIERIDX[sc.tiersBefore[m].tier] * 100 + data.muscleProgressPct(sc.tiersBefore[m]) : 0;
     const gain = (m) => Math.max(0, r1(absA(m)) - r1(absB(m)));
     const avgA = r1(universe.reduce((a, m) => a + progA(m), 0) / universe.length);
-    const overallGain = r1(universe.reduce((a, m) => a + gain(m), 0) / universe.length);
+    const overallGain = r1(p.hits.reduce((a, h) => a + parseFloat(h.gain.replace(/[+%]/g, '')), 0)); // the sum of the rows ON SCREEN
     // header: ONLY the newest number
     check(`${name}: the header shows ONLY the newest % (${avgA}%), no "old -> new"`, p.rank.pctLabel === `${avgA.toFixed(1)}%` && !/→/.test(p.rank.pctLabel) && p.rank.pct === avgA, p.rank.pctLabel);
-    check(`${name}: "+x% today" = the average gain over the ${universe.length} trained muscles (${overallGain})`, Math.abs(parseFloat(p.rank.gained) - overallGain) <= 0.11, p.rank.gained);
+    if (!sc.synthetic) check(`${name}: "+x% today" = the SUM of the rows shown (${p.hits.map(h => h.gain).join(' + ')} = +${overallGain.toFixed(1)}%)`, p.rank.gained === overallGain.toFixed(1), p.rank.gained);
     const rowsOk = p.hits.every((h, i) => Math.abs(parseFloat(h.gain.replace(/[+%]/g, '')) - r1(gain(worked[i].muscle))) <= 0.11);
     if (!sc.synthetic) check(`${name}: each ROW = that muscle's own progress after - before`, rowsOk);
     if (!sc.synthetic && sc.entries.some(e => e.reps > 0)) check(`${name}: a workout GIVES a gain (every shown muscle > +0.0%)`, p.hits.length > 0 && p.hits.every(h => parseFloat(h.gain.replace(/[+%]/g, '')) > 0), p.hits.map(h => h.gain).join(','));
@@ -136,6 +136,18 @@ for (const [name, sc] of Object.entries(SCENARIOS)) {
   check('REPORT: the tiers are what the report describes (shoulders already above the overall rank)', sc.tiersAfter.shoulders.tier === 'silver' && sc.standingAfter.tier === 'bronze', `${sc.tiersAfter.shoulders.tier} vs overall ${sc.standingAfter.tier}`);
   check('REPORT FIXED: Shoulders and Triceps show a real gain (they were +0.0%)', p.hits.length === 2 && p.hits.every(h => parseFloat(h.gain.replace(/[+%]/g, '')) > 0), p.hits.map(h => h.gain).join(' '));
   check('REPORT FIXED: "+x% today" is above zero too (it was +0.0%)', parseFloat(p.rank.gained) > 0, p.rank.gained);
+}
+{
+  // the user's report: Shoulders +1.4% and Triceps +1.4% but the total said +0.7%
+  const p = data.buildMuscleRanksPayload({
+    entries: [{ ts: 1, exerciseId: 'shoulderPress', displayName: 'Shoulder Press', reps: 10, goodReps: 9, pct: 90, formChecked: true }],
+    tiersBefore: { shoulders: { tier: 'bronze', peakTier: 'bronze', volume: 100, goodRatio: 0.9 }, triceps: { tier: 'bronze', peakTier: 'bronze', volume: 100, goodRatio: 0.9 }, quads: { tier: 'bronze', peakTier: 'bronze', volume: 60, goodRatio: 0.9 }, chest: { tier: 'bronze', peakTier: 'bronze', volume: 60, goodRatio: 0.9 } },
+    tiersAfter: { shoulders: { tier: 'bronze', peakTier: 'bronze', volume: 100.9, goodRatio: 0.9 }, triceps: { tier: 'bronze', peakTier: 'bronze', volume: 100.9, goodRatio: 0.9 }, quads: { tier: 'bronze', peakTier: 'bronze', volume: 60, goodRatio: 0.9 }, chest: { tier: 'bronze', peakTier: 'bronze', volume: 60, goodRatio: 0.9 } },
+    standingBefore: { tier: 'bronze', progress: 0.5, atTop: false }, standingAfter: { tier: 'bronze', progress: 0.5, atTop: false },
+    labels: { shoulders: 'Shoulders', triceps: 'Triceps' }, iconFor: () => null, emblem: null,
+  });
+  const rows = p.hits.map(h => parseFloat(h.gain.replace(/[+%]/g, '')));
+  check(`REPORT FIXED: rows ${p.hits.map(h => h.gain).join(' + ')} total +${p.rank.gained}% (4 muscles ranked: it used to be the average over all 4)`, rows.length === 2 && p.rank.gained === (Math.round((rows[0] + rows[1]) * 10) / 10).toFixed(1), p.rank.gained);
 }
 const A = SCENARIOS['shoulders+triceps (bronze)'].payload, B = SCENARIOS['legs (squat+lunge)'].payload;
 check('rows follow the workout: shoulders workout -> Shoulders/Triceps', A.hits.map(h => h.name).sort().join() === 'Shoulders,Triceps', A.hits.map(h => h.name).join());

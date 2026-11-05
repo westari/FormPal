@@ -137,7 +137,7 @@ export function buildMuscleRanksPayload(opts: {
   // Bronze could never show a gain: 100 before, 100 after, +0.0% (reported: "Bronze 53.2% -> 53.2%").
   //   MUSCLE ROW gain = that muscle's progress after - before (rank-ups count: tier*100 + progress), 0.1 steps
   //   OVERALL %       = the average own-progress over every muscle you have trained, AFTER today
-  //   GAINED TODAY    = the average gain over those same muscles (so it is the change in OVERALL %)
+  //   GAINED TODAY    = the SUM of the muscle rows' gains (the rows shown on the page add up to it exactly)
   const universe = new Set<Muscle>([...(Object.keys(tiersAfter) as Muscle[]), ...worked.map(w => w.muscle)]);
   // Not ranked yet (below Bronze): today's credited reps over Bronze's volume bar; before today there is nothing to see: 0.
   const progAfter = (m: Muscle) => (tiersAfter[m] ? muscleProgressPct(tiersAfter[m]!) : Math.min(100, ((credit.get(m) ?? 0) / BRONZE_MIN_VOLUME) * 100));
@@ -155,7 +155,8 @@ export function buildMuscleRanksPayload(opts: {
   // Rows: the two most-worked muscles.
   const shown = worked.slice(0, 2);
   const gains = shown.map(w => r1(gainOf(w.muscle)));
-  const overallGain = r1(avg(gainOf));
+  // TODAY'S TOTAL = the sum of the gains shown in the rows above it (so +1.4 and +1.4 always read +2.8), never an average.
+  const overallGain = r1(gains.reduce((a, g) => a + g, 0));
 
   // Header: ONLY the newest number (no "old -> new").
   const pctLabel = standingAfter?.atTop ? 'Top rank' : `${fmt1(afterAvg)}%`;

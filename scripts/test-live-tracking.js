@@ -215,7 +215,8 @@ check('no false cue while METRIC lines keep flowing', (() => {
   const run = fs.readFileSync(path.join(__dirname, '..', 'app', 'workout', 'run.tsx'), 'utf8');
   check('keep awake: the camera screen calls useKeepAwake()', /import \{ useKeepAwake \} from 'expo-keep-awake'/.test(fc) && /export default function FormCheckScreen\(\) \{[\s\S]{0,300}useKeepAwake\(\);/.test(fc));
   check('keep awake: the workout screen calls useKeepAwake()', /import \{ useKeepAwake \} from 'expo-keep-awake'/.test(run) && /export default function WorkoutRunScreen\(\) \{[\s\S]{0,300}useKeepAwake\(\);/.test(run));
-  check('pill: the label "Form detection" sits next to the percent', /<Text style=\{s\.meterLabel\}>Form detection<\/Text>\s*<Text style=\{s\.meterNum\}>/.test(fc));
+  check('pill: the label "Body tracking" sits ABOVE the % and the bar (label first, then one row with both)', /<Text style=\{s\.meterLabel\}>Body tracking<\/Text>\s*<View style=\{s\.meterRow\}>\s*<Text style=\{s\.meterNum\}>[\s\S]*?<View style=\{s\.meterTrack\}>/.test(fc) && !/Form detection/.test(fc));
+  check('pill: stacked layout (column inner, row for % + bar)', /meterInner: \{ alignItems: 'center'/.test(fc) && !/meterInner: \{ flexDirection: 'row'/.test(fc) && /meterRow:   \{ flexDirection: 'row'/.test(fc));
   check('Ready / Go is gated by the steady-tracking gate and logs its values as placeholders', /createSteadyGate/.test(fc) && /\[READY-GATE\] Ready: steady/.test(fc) && /READY_STEADY_MS/.test(fc) && /placeholder/.test(fc));
 }
 

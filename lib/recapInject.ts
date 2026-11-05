@@ -357,7 +357,15 @@ export function recapDataJs(opts: {
       // "Overview" label above isn't affected by this — it's one word,
       // wrapping was never a concern there.
       var ovBody = document.querySelector('#dc-root div[style*="font-size: 15.5px; line-height: 1.48"]');
-      if(ovBody) ovBody.style.setProperty('font-size','17px','important');
+      if(ovBody){
+        ovBody.style.setProperty('font-size','17px','important');
+        // Explicit ask: the summary wrapped early and left empty space on the right. The design pads the text 20px
+        // each side and sets text-wrap: pretty (which shortens lines to avoid a short last line); 14px padding and
+        // plain greedy wrapping let each line run across the card.
+        ovBody.style.setProperty('padding-left','14px','important');
+        ovBody.style.setProperty('padding-right','14px','important');
+        ovBody.style.setProperty('text-wrap','wrap','important');
+      }
       if(ovLabel || ovBody){
         sizeWired=true; hit++;
         console.log('[recap-page] sizeWired applied, ovLabel=', !!ovLabel, 'ovBody=', !!ovBody);
