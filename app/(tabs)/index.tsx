@@ -54,7 +54,7 @@ if (__DEV__) console.log(`[home] build ${HOME_BUILD}`);
 // wired in for this file. train.tsx already solved this exact problem for
 // its own non-#dc-root 472x1024 canvas; this follows the same approach,
 // adapted for home.html's 390x844 one.
-const HOME_SCALE_FIT_JS = `
+export const HOME_SCALE_FIT_JS = `
 (function(){
   function fit(){
     var root = null;
@@ -98,7 +98,7 @@ true;
 // shipping: the sheet is always mounted (shown/hidden via transform, not
 // conditional mount), found via the same style.height==='520px' selector
 // pushEditSheetUp already uses below.
-const HOME_CUE_REAL_JS = `
+export const HOME_CUE_REAL_JS = `
 (function(){
   function findCueSheet(){
     var all = document.querySelectorAll('#dc-root div');
@@ -185,13 +185,18 @@ const HIDE_FAKE_CHROME_CSS = `
   /* the artboard's one-time entrance animations would play while the page is still hidden and then be caught
      half-way when it is revealed: they are switched off (the Cue blob's own looping glow is kept) */
   [style*="hm-rise"], [style*="hm-bar"] { animation: none !important; }
-  /* Cue card: no card behind the glass blob and its text (no white box, no shadow) */
-  div[style*="margin: -26px 8px 0"] { background: none !important; box-shadow: none !important; }
+  /* Cue card: the design's own white card sits behind the "This week" card again (nothing overrides it). Only the
+     orb is cleaned up: its blend-mode texture layer and blurred blobs are full-size square layers that WebKit can
+     paint as a visible square around the orb, so they are switched off - the orb keeps its own gradient, highlight,
+     glow and breathing animation. */
+  div[style*="hm-orb-breathe"] { background: none !important; box-shadow: none !important; border: 0 !important; outline: 0 !important; }
+  div[style*="hm-orb-breathe"] div[style*="mix-blend-mode"] { display: none !important; }
+  div[style*="hm-orb-breathe"] div[style*="filter: blur"] { filter: none !important; }
 `;
 
 // Hidden until the page is ready: the artboard shows its own demo content first, and the real data,
 // header offset and canvas scale land a moment later. <html data-pready> is set by the injection below.
-const HOME_GUARD_JS = `(function(){
+export const HOME_GUARD_JS = `(function(){
   function add(){
     if (document.getElementById('__home_guard')) return true;
     var host = document.head || document.documentElement;
@@ -204,7 +209,7 @@ const HOME_GUARD_JS = `(function(){
   try { new MutationObserver(function(){ add(); }).observe(document, { childList: true, subtree: true }); } catch (e) {}
 })(); true;`;
 
-function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[], insetTop: number, insetBottom: number): string {
+export function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[], insetTop: number, insetBottom: number): string {
   const workoutGroups = groupIntoWorkouts(sessions);
   const streak = calcStreak(sessions);
   const scored = scoredSessions(sessions);
