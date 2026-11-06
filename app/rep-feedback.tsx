@@ -53,6 +53,8 @@ import { repFeedbackDataJs } from '../lib/repFeedbackInject';
 import { warmPrepare, warmActivate, warmDeactivate, warmRelease, warmSetBg, warmSetOverlay, warmInject } from '../components/WarmSurfaces';
 import { repFeedbackSignal } from '../lib/repFeedbackSignal';
 
+import { postLag } from '../lib/postLag';
+
 const SPEEDS = [0.5, 1, 1.5, 2];
 
 // Build/bundle confirmation — explicit ask this round: a loud, impossible
@@ -77,6 +79,7 @@ export default function RepFeedbackScreen() {
   // explicit instruction ("keep the build stamp and logs in for now").
   useEffect(() => {
     if (__DEV__) console.log('[rep-feedback-debug] MOUNT, params:', { exerciseName, videoUri, repEventsLen: repEventsParam?.length });
+    postLag('rep feedback: screen mounted');
     return () => { if (__DEV__) console.log('[rep-feedback-debug] UNMOUNT'); };
   }, []);
 
@@ -251,6 +254,7 @@ export default function RepFeedbackScreen() {
     else if (msg.type === 'close') router.back();
     else if (msg.type === 'openAllSets') { repFeedbackSignal.openAllSets = true; router.back(); }
     else if (msg.type === 'finishReview') {
+      postLag('rep feedback: Finish review tapped');
       // No waiting for the back transition: the muscle page is put on screen underneath right now and this
       // page slides away over it (see recap.tsx's onFinishReview and WarmSurfaces' in-place show).
       repFeedbackSignal.finishedReview = true;

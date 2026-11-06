@@ -38,6 +38,7 @@ import { DC_VIEWPORT_JS, recapBaseJs } from '../lib/recapInject';
 import { repFeedbackBaseJs } from '../lib/repFeedbackInject';
 import { muscleRanksBaseJs } from '../lib/muscleRanksInject';
 import { allSetsBaseJs } from '../lib/allSetsInject';
+import { postLag } from '../lib/postLag';
 import { NO_ZOOM_JS } from '../lib/noZoom';
 
 export type WarmKind = 'recap' | 'repfeedback' | 'ranks' | 'allsets';
@@ -265,7 +266,7 @@ function Layer({ k }: { k: WarmKind }) {
   useEffect(() => {
     if (!__DEV__) return;
     if (active && !revealed) console.log(`[warm:${k}] activated, waiting for ready (card not shown yet)`);
-    if (visible) console.log(`[warm:${k}] VISIBLE ${activatedAt[k] ? Date.now() - (activatedAt[k] as number) : '?'}ms after the screen asked for it`);
+    if (visible) { console.log(`[warm:${k}] VISIBLE ${activatedAt[k] ? Date.now() - (activatedAt[k] as number) : '?'}ms after the screen asked for it`); postLag(`${k} page VISIBLE (${activatedAt[k] ? Date.now() - (activatedAt[k] as number) : '?'}ms after the screen asked)`); }
   }, [visible, active, revealed, k]);
 
   // ── slide like an iOS push ────────────────────────────────────────────────

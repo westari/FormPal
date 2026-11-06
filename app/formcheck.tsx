@@ -39,6 +39,7 @@ import { getCalibration, applyOverride } from '../lib/calibration/store';
 import { handleRepAudio, playReadyCue } from '../lib/audioFeedback';
 import { createCalibSynth } from '../lib/calibLog';
 import { prefetchSoloRecap } from '../lib/recapPrefetch';
+import { postLag, postLagStart } from '../lib/postLag';
 import { createRepDiagnostic, STREAM_DEAD_SEC_FLOOR } from '../lib/repDiagnostics';
 import { useKeepAwake } from 'expo-keep-awake';
 import { NO_ZOOM_JS } from '../lib/noZoom';
@@ -1135,11 +1136,17 @@ export default function FormCheckScreen() {
   // getting logs out has been a recurring blocker. Also present on the
   // review screen and on recap.
   const handleStop = useCallback(async () => {
+    postLagStart('Stop pressed (formcheck)');
     setPhase('stopping');
     isTrackingRef.current = false;
     const final = await stopTracking();
+    postLag('formcheck: native stopTracking returned (recording finished)');
     sessionStopped.current = true;
-    await stopSession();
+    // The camera teardown (captureSession.stopRunning) is slow and nothing after it needs to wait for it: the final
+    // numbers and the video file already exist. It runs on the camera's own serial queue, so a later startSession is
+    // always queued behind it. It used to be awaited here, which delayed the Workout complete card by its duration.
+    const sessionStopped0 = Date.now();
+    void stopSession().then(() => postLag(`formcheck: camera teardown finished in the background (${Date.now() - sessionStopped0}ms, no longer blocks navigation)`)).catch(() => {});
     if (final.videoUri) void logSessionVideo(final.videoUri);
 
     const navParams = { reps: final.reps, goodReps: final.goodReps, videoUri: final.videoUri ?? '' };
@@ -1164,6 +1171,7 @@ export default function FormCheckScreen() {
       pendingNavRef.current = navParams;
       setPhase('review');
     } else {
+      postLag('formcheck: navigating to the next screen');
       doNavigate(navParams);
     }
   }, [doNavigate, returnTo, repCounterOnly]);
