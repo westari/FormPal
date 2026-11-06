@@ -54,21 +54,26 @@ const WORKOUT = ['squat', 'pushup', 'bentOverRow', 'shoulderPress', 'hammerCurl'
     if (stA && !stA.atTop && !(Math.abs(pPage - stA.progress * 100) <= 0.06 && Math.abs(pProg - Math.round(stA.progress * 100)) < 1e-9)) failsOf.pct.push(`${w}: page ${pPage} progress ${pProg} standing ${(stA.progress * 100).toFixed(2)}`);
     // every Progress muscle row == the shared per-muscle progress
     for (const row of prog.muscles) if (tiersAfter[row.key] && row.pct !== Math.round(data.muscleProgressPct(tiersAfter[row.key]))) failsOf.rows.push(`${w}: ${row.key} progress-tab ${row.pct} vs shared ${Math.round(data.muscleProgressPct(tiersAfter[row.key]))}`);
-    // total = sum of the rows on the page
-    const sum = Math.round(payload.hits.reduce((a, h) => a + parseFloat(h.gain.replace(/[+%]/g, '')), 0) * 10) / 10;
-    if (payload.rank.gained !== sum.toFixed(1)) failsOf.total.push(`${w}: total ${payload.rank.gained} vs rows ${sum}`);
+    // header = how far the OVERALL rank % moved (one number), never a sum; rows keep their own % and stay under +100
+    const absOf = (st) => (st ? sessionLog.tierIndex(st.tier) * 100 + st.progress * 100 : 0);
+    const wantGain = Math.round(Math.max(0, absOf(stA) - absOf(stB)) * 10) / 10;
+    if (Math.abs(parseFloat(payload.rank.gained) - wantGain) > 0.11 || parseFloat(payload.rank.gained) >= 100) failsOf.total.push(`${w}: header ${payload.rank.gained} vs overall move ${wantGain}`);
+    if (payload.hits.some(h => parseFloat(h.gain.replace(/[+%]/g, '')) > 99.9)) failsOf.total.push(`${w}: a row is over +99.9%`);
+    // below Bronze: the Progress tab and the shared helper agree (all the training, capped at 99%)
+    const creditAll = sessionLog.muscleCreditTotals(after);
+    for (const row of prog.muscles) if (!tiersAfter[row.key] && row.pct !== Math.round(100 * sessionLog.belowBronzeProgress(creditAll.get(row.key) || 0))) failsOf.rows.push(`${w}: ${row.key} below-bronze progress-tab ${row.pct} vs shared ${Math.round(100 * sessionLog.belowBronzeProgress(creditAll.get(row.key) || 0))}`);
     // never goes backwards (tier, or the overall % inside a tier) because of a workout
     const ti = sessionLog.tierIndex(stA.tier), ov = ti * 100 + stA.progress * 100;
     if (ov + 1e-9 < prevOverall) failsOf.drop.push(`${w}: ${prevOverall.toFixed(2)} -> ${ov.toFixed(2)}`);
     prevOverall = ov; prevTier = ti;
-    if (w === 0 || w === 3 || w === 12 || w === 59) details.push(`workout ${w + 1}: ${stA.tier} ${(stA.progress * 100).toFixed(1)}%  page "${payload.rank.label} ${payload.rank.pctLabel}", progress tab ${prog.rank.label} ${prog.rank.pct}%, rows ${payload.hits.length}, +${payload.rank.gained}% today`);
+    if (w === 0 || w === 3 || w === 12 || w === 59) details.push(`workout ${w + 1}: ${stA.tier} ${(stA.progress * 100).toFixed(1)}%  page "${payload.rank.label} ${payload.rank.pctLabel}", progress tab ${prog.rank.label} ${prog.rank.pct}%, rows ${payload.hits.length}, +${payload.rank.gained}% to ${payload.rank.next}`);
   }
   Date.now = realNow;
   console.log('  ' + details.join('\n  '));
   check(`after ${workouts} saved workouts the tier is identical on the after-workout page, Progress and Train/Home/Profile`, failsOf.tier.length === 0, failsOf.tier.join());
   check('the overall % is identical on the after-workout page (1 decimal) and the Progress tab (whole number)', failsOf.pct.length === 0, failsOf.pct.slice(0, 3).join(' | '));
   check('every muscle row on the Progress tab equals the shared per-muscle progress', failsOf.rows.length === 0, failsOf.rows.slice(0, 3).join(' | '));
-  check('"+x% today" is the sum of the muscle rows, every workout', failsOf.total.length === 0, failsOf.total.slice(0, 3).join(' | '));
+  check('header gain = the move of the OVERALL rank % (one small number, never a sum), rows never over +99.9%, every workout', failsOf.total.length === 0, failsOf.total.slice(0, 3).join(' | '));
   check('a workout never lowers the overall rank or % (a rank-up resets the bar but raises the tier)', failsOf.drop.length === 0, failsOf.drop.slice(0, 3).join(' | '));
   const stored = JSON.parse(mem.get(sessionLog.SESSION_LOG_KEY)).length;
   check(`the log keeps all history: ${stored} entries kept (it used to cut at 200, i.e. only the last ~11 weeks)`, stored === 60 * WORKOUT.length && tuning.MAX_LOG_ENTRIES >= 5000, `${stored} of ${60 * WORKOUT.length}`);

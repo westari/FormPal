@@ -248,6 +248,30 @@ export function tierProgress(info: MuscleTierInfo): number {
   return Math.min(vol, clamp01((info.goodRatio - curQual) / (nextQual - curQual)));
 }
 
+/**
+ * Progress toward Bronze (0-0.99) for a muscle that is not ranked yet, from ALL the credit-weighted reps it has ever
+ * had (no decay, no "only today"). Capped just under 1 so a muscle never shows 100% until it is actually Bronze.
+ * The one implementation every screen uses.
+ */
+export function belowBronzeProgress(totalCredit: number): number {
+  const bronze = VOLUME_THRESHOLDS.find(([t]) => t === 'bronze')![1];
+  return Math.max(0, Math.min(0.99, totalCredit / bronze));
+}
+
+/** Credit-weighted reps per muscle over a set of sessions (every rep, judged or not, no decay). */
+export function muscleCreditTotals(sessions: SessionEntry[]): Map<Muscle, number> {
+  const out = new Map<Muscle, number>();
+  for (const e of sessions) {
+    const def = getExerciseDef(e.exerciseId);
+    if (!def) continue;
+    for (const c of def.muscles) {
+      const { muscle, weight } = muscleCreditParts(c);
+      out.set(muscle, (out.get(muscle) ?? 0) + e.reps * weight);
+    }
+  }
+  return out;
+}
+
 // KEYED BY Muscle (individual muscle), not MuscleGroup, this round — a
 // single "arms" or "legs" bucket can't drive separate biceps/triceps or
 // quads/hamstrings/glutes rank tiles. MuscleGroup/muscleGroupsWorked above

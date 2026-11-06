@@ -208,7 +208,7 @@ export const MUSCLE_RANKS_DOM_JS = String.raw`
     // Two rows with long names ("Hamstrings +30%" + "Rear Delts +30%") are wider
     // than the card: tighten them step by step until they sit side by side.
     var chipsFit = true;
-    if (chips.length === 2) {
+    if (chips.length === 2 && !window.__mrPack) {
       var level = 0;
       var overlaps = function () {
         var a = chips[0].getBoundingClientRect(), b = chips[1].getBoundingClientRect();
@@ -229,11 +229,12 @@ export const MUSCLE_RANKS_DOM_JS = String.raw`
       compact(0);
       while (overlaps() && level < 3) { level++; compact(level); }
       chipsFit = !overlaps();
+      if (!chipsFit) { window.__mrPack = true; chipsFit = true; } // two long rows that cannot share a line even fully compacted: stack them in rows instead
     }
 
     // Three or more muscles: compact chips packed into centred rows at the bottom of the card, and the body map
     // shrinks just enough to leave room, so the card never grows. (One or two muscles keep the design's own layout.)
-    if (chips.length >= 3) {
+    function packChips() {
       var card = chips[0].parentElement, cardW = card.clientWidth || 346, cardH = card.clientHeight || 360;
       var GAP = 6, PAD = 12;
       for (var m1 = 0; m1 < chips.length; m1++) {
@@ -268,9 +269,27 @@ export const MUSCLE_RANKS_DOM_JS = String.raw`
       if (img) img.style.setProperty('height', Math.max(110, Math.min(218, top0 - 8 - 40)) + 'px', 'important');
       window.__mrRows = rows.length;
     }
+    if (chips.length >= 3 || (chips.length === 2 && window.__mrPack)) packChips();
+
+    // The design says "+x% today" (as the text "+", a span holding x, then "% today"). The header number is how far
+    // the OVERALL rank % went up this workout, so the trailing text becomes "% to Gold" (the rank being worked
+    // toward). Only that one text node is changed, so the design's own re-render never loses a node it owns.
+    // A top-ranked user just sees "+x%".
+    var gainSuffix = R.atTop ? '%' : '% to ' + R.next;
+    var gainDone = false, gdivs = root.querySelectorAll('div');
+    for (var g = 0; g < gdivs.length; g++) {
+      var gd = gdivs[g];
+      if (gd.children.length !== 1 || (gd.textContent || '').length > 40) continue;
+      var nodes = gd.childNodes;
+      if (nodes.length !== 3 || nodes[0].nodeType !== 3 || nodes[2].nodeType !== 3 || nodes[0].nodeValue !== '+') continue;
+      if (!/^%( today| to .+)?$/.test(nodes[2].nodeValue)) continue;
+      if (nodes[2].nodeValue !== gainSuffix) nodes[2].nodeValue = gainSuffix;
+      gainDone = (gd.textContent || '') === '+' + R.gained + gainSuffix;
+      break;
+    }
 
     // Final layout = real text in, real image decoded, scaled. Only then reveal.
-    var headerOk = !!leafWithText(root, R.pctLabel) && !!leafWithText(root, R.label);
+    var headerOk = !!leafWithText(root, R.pctLabel) && !!leafWithText(root, R.label) && gainDone;
     if (!reported && fitted && imgOk && headerOk && chips.length === d.hits.length && chipsFit) {
       reported = true;
       post({ type: 'ready' });
