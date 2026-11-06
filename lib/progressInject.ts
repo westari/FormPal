@@ -47,6 +47,44 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
   // 326-wide viewBox shrank the drawing to 0.88 and centred it, which pushed every dot off its own axis label.
   // (An axis row is 13px tall and its guide line runs through its middle, so a row sits at y - 6.5.)
   var VW = 287, GUT = 39.12;
+  // ── Label above its dot, never touching the line ──────────────────────────────────────────────────────────
+  // The tap label (black pill) sits directly above its dot. It is centred on the dot and only slides sideways as far
+  // as needed to stay on the card/screen (the dot is still under it). Its height is then chosen from the REAL drawn
+  // curve: its bottom edge is at least 10px above the highest point of the line anywhere under the label, so the
+  // line can never run through it. Plot top is y=30, so the highest dot still has room for the label above it
+  // (and clear of the range pills).
+  var PILL_PAD = 10, EDGE_L = -8, EDGE_R = 340;
+  function measurePill(text) {
+    var el = document.getElementById('__tipm');
+    if (!el) {
+      el = document.createElement('span'); el.id = '__tipm';
+      el.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;white-space:nowrap;font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums;padding:0 ' + PILL_PAD + 'px;';
+      try { var root = document.getElementById('dc-root'); if (root) el.style.fontFamily = getComputedStyle(root).fontFamily; } catch (e) {}
+      document.body.appendChild(el);
+    }
+    el.textContent = text;
+    return el.offsetWidth || (String(text).length * 7.4 + 2 * PILL_PAD);
+  }
+  function sampleCurve(d) {
+    var NS = 'http://www.w3.org/2000/svg', out = [];
+    try {
+      var sv = document.createElementNS(NS, 'svg'), pa = document.createElementNS(NS, 'path');
+      sv.setAttribute('width', '0'); sv.setAttribute('height', '0'); sv.style.cssText = 'position:absolute;left:-9999px;top:0';
+      pa.setAttribute('d', d); sv.appendChild(pa); document.body.appendChild(sv);
+      var L = pa.getTotalLength();
+      for (var l = 0; l <= L; l += 1) { var q = pa.getPointAtLength(l); out.push([q.x, q.y]); }
+      document.body.removeChild(sv);
+    } catch (e) {}
+    return out;
+  }
+  function placeTip(dotX, dotY, lineD, text) {
+    var w = measurePill(text);
+    var cx = Math.max(EDGE_L + w / 2, Math.min(EDGE_R - w / 2, GUT + dotX));
+    var lo = cx - w / 2 - GUT - 4, hi = cx + w / 2 - GUT + 4, minY = dotY;
+    var smp = lineD ? sampleCurve(lineD) : [];
+    for (var i = 0; i < smp.length; i++) if (smp[i][0] >= lo && smp[i][0] <= hi && smp[i][1] < minY) minY = smp[i][1];
+    return { left: cx.toFixed(1) + 'px', top: Math.min(dotY - 12, minY - 10).toFixed(1) + 'px' };
+  }
   function tipLeft(x) { return Math.max(24, Math.min(76, (GUT + x) / 326 * 100)).toFixed(1) + '%'; }
   function pillStyle(sel) {
     return { fg: sel ? '#111114' : '#6e6e77', bg: sel ? '#ffffff' : 'transparent',
@@ -82,7 +120,7 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
           tick = STEPS[si]; lo = Math.floor((vmin - 2) / tick) * tick; hi = lo + 4 * tick;
           if (hi >= vmax + 2) break;
         }
-        var yOf = function (w) { return 170 - ((w - lo) / (hi - lo)) * 152; };
+        var yOf = function (w) { return 170 - ((w - lo) / (hi - lo)) * 140; };
         var t0 = parseKey(series[0].d).getTime(), t1 = parseKey(series[series.length - 1].d).getTime();
         var pts = series.map(function (e, i) {
           var f = t1 > t0 ? (parseKey(e.d).getTime() - t0) / (t1 - t0) : 0.5;
@@ -100,7 +138,7 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
           area = line + ' L' + endPt.x + ' 176 L' + pts[0].x + ' 176 Z';
         }
         for (var ti = 0; ti < 5; ti++) { var tv = hi - ti * tick; ticks.push({ top: (yOf(tv) - 6.5) + 'px', label: String(tv) }); }
-        lastPt = { x: lp.x, y: lp.y, left: tipLeft(lp.x), top: (lp.y - 12) + 'px' };
+        lastPt = { x: lp.x, y: lp.y, left: tipLeft(lp.x), top: (lp.y - 12) + 'px' }; // (the single pill is hidden on this chart; every weight carries its own label)
         months = axisLabels(t0, t1);
       }
 
@@ -284,11 +322,11 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
         var pcts = realDays.map(function (f) { return f.pct; });
         var minV = Math.floor((Math.min.apply(null, pcts) - 4) / 5) * 5, maxV = Math.ceil((Math.max.apply(null, pcts) + 4) / 5) * 5;
         if (maxV <= minV) maxV = minV + 5;
-        var yOf = function (p) { return Math.round(170 - ((p - minV) / (maxV - minV)) * 152); };
+        var yOf = function (p) { return Math.round(170 - ((p - minV) / (maxV - minV)) * 140); };
         var t0 = realDays[0].ts, t1 = realDays[realDays.length - 1].ts;
         var rpts = realDays.map(function (f) {
           var fr = t1 > t0 ? (f.ts - t0) / (t1 - t0) : 0.5;
-          return { v: f.pct, x: Math.round((8 + (VW - 16) * fr) * 10) / 10, y: 170 - ((f.pct - minV) / (maxV - minV)) * 152, ts: f.ts };
+          return { v: f.pct, x: Math.round((8 + (VW - 16) * fr) * 10) / 10, y: 170 - ((f.pct - minV) / (maxV - minV)) * 140, ts: f.ts };
         });
         var sel = s.sel == null || s.sel >= rpts.length ? rpts.length - 1 : s.sel;
         var ln = rpts.length >= 2 ? this.curve(rpts) : '';
@@ -296,7 +334,7 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
         v.line = ln;
         v.area = ln ? ln + ' L' + rpts[rpts.length - 1].x + ' 176 L' + rpts[0].x + ' 176 Z' : '';
         v.fTicks = [maxV, maxV - q, mid, minV + q, minV].map(function (x) { return Math.round(x); })
-          .map(function (x) { return { y: 170 - ((x - minV) / (maxV - minV)) * 152, ty: yOf(x) + 4, top: ((170 - ((x - minV) / (maxV - minV)) * 152) - 6.5) + 'px', label: x + '%' }; });
+          .map(function (x) { return { y: 170 - ((x - minV) / (maxV - minV)) * 140, ty: yOf(x) + 4, top: ((170 - ((x - minV) / (maxV - minV)) * 140) - 6.5) + 'px', label: x + '%' }; });
         v.fXs = axisLabels(t0, t1);
         // tap columns: each real day owns the stretch up to halfway to its neighbours
         v.pts = rpts.map(function (pt, i) {
@@ -307,9 +345,10 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
         // the exact date of the tapped day and that day's own percent
         var dl = function (ts) { var dt = new Date(ts); return MON[dt.getMonth()] + ' ' + dt.getDate(); };
         var sp = rpts[sel], dateTxt = dl(sp.ts);
-        v.tipX = tipLeft(sp.x);
-        v.tipY = (sp.y - 12) + 'px';
         v.tipText = dateTxt + ' · ' + Math.round(sp.v) + '%';
+        var tp = placeTip(sp.x, sp.y, ln, v.tipText);
+        v.tipX = tp.left;
+        v.tipY = tp.top;
         var diff = Math.round(pcts[pcts.length - 1] - pcts[0]);
         v.change = Math.abs(diff) + '% ' + (diff >= 0 ? 'higher' : 'lower');
       } else {
@@ -640,10 +679,6 @@ export const PROGRESS_DOM_JS = String.raw`
       if (gc && gc.getAttribute('r') !== '5.5') { gc.setAttribute('r', '5.5'); gc.setAttribute('stroke-width', '2.8'); }
       var tipEl1 = chartBox.querySelector('div[style*="translate(-50%, -100%)"]');
       if (tipEl1 && tipEl1.style.fontVariantNumeric !== 'tabular-nums') tipEl1.style.setProperty('font-variant-numeric', 'tabular-nums');
-      if (ch === 'ok') {
-        // the tooltip must stay inside the card whatever the label length
-        if (tipEl1) { var lp0 = parseFloat(tipEl1.style.left); if (isFinite(lp0)) tipEl1.style.setProperty('left', Math.max(24, Math.min(76, lp0)) + '%', 'important'); }
-      }
       // Tapping works like the Form Score chart: every logged weight owns a full-height column (up to the
       // halfway point to its neighbours); the tapped one gets the ring, guide and tooltip.
       var wp = ch === 'ok' ? (window.__athltWPts || []) : [];
@@ -676,30 +711,50 @@ export const PROGRESS_DOM_JS = String.raw`
           dot.setAttribute('data-athlt-pt', 'dot'); dot.style.pointerEvents = 'none';
           wsvg.appendChild(dot);
         }
-        // Every weigh-in shows its date and weight right on the graph, no tap needed. A label goes above its dot; if
-        // that would touch the label next to it, it goes below its dot instead. Only when both rows are taken (a
-        // very long history) is a label left out, so labels never overlap.
+        // Every weigh-in shows its date and weight right on the graph, no tap needed. A label always sits directly
+        // ABOVE its own dot (it only slides sideways as far as needed to stay inside the card, the dot stays under it).
+        // Its height comes from the REAL drawn line: the label's bottom edge is kept above the highest point of the
+        // line anywhere under it, so a label never touches the line. The tapped weigh-in is placed first, then the
+        // newest, then the rest; a label that would touch one already placed is left out, so labels never overlap.
+        wsvg.style.setProperty('overflow', 'visible', 'important');
         var MONS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        var placed = [];
-        var rectOf = function (row, x, y) { return row === 'up' ? [x - 16, y - 27, x + 16, y - 4] : [x - 16, y + 5, x + 16, y + 32]; };
-        var free = function (row, x, y) {
-          var a = rectOf(row, x, y);
-          for (var r = 0; r < placed.length; r++) { var c = placed[r]; if (a[0] < c[2] && c[0] < a[2] && a[1] < c[3] && c[1] < a[3]) return false; }
-          return true;
-        };
-        for (var li = wp.length - 1; li >= 0; li--) { // newest first: the latest weigh-in always gets a label
-          var q = wp[li], isSel = li === wsel;
-          var lx = Math.max(19, Math.min(287 - 19, q.x));
-          var canUp = q.y >= 36, canDown = q.y <= 148;
-          var row = canUp && free('up', lx, q.y) ? 'up' : canDown && free('down', lx, q.y) ? 'down' : null;
-          if (!row) continue;
-          placed.push(rectOf(row, lx, q.y));
+        var smp = [];
+        try {
+          var wl = wsvg.querySelectorAll('path')[1], tl = wl.getTotalLength();
+          for (var sl = 0; sl <= tl; sl += 1) { var sq = wl.getPointAtLength(sl); smp.push([sq.x, sq.y]); }
+        } catch (e) {}
+        if (!smp.length) smp = wp.map(function (q) { return [q.x, q.y]; });
+        var LW = 34, LH = 24, placed = [];
+        var order = [];
+        if (wsel >= 0) order.push(wsel);
+        for (var oi = wp.length - 1; oi >= 0; oi--) if (oi !== wsel) order.push(oi);
+        for (var oj = 0; oj < order.length; oj++) {
+          var li = order[oj], q = wp[li], isSel = li === wsel;
+          // Centred on its dot; if that touches a label already placed, slide it sideways in small steps (the dot
+          // stays under its own label) before giving up on it.
+          // Still crowded: a second row, one label-height higher (still straight above its own dot, further from the line).
+          var rect = null, lx = 0, bottom = 0;
+          var offs = [0, 4, -4, 8, -8, 12, -12];
+          for (var row = 0; row < 2 && !rect; row++) {
+            for (var oi2 = 0; oi2 < offs.length && !rect; oi2++) {
+              var tx = Math.max(LW / 2, Math.min(287 - LW / 2, q.x + offs[oi2]));
+              if (Math.abs(tx - q.x) > LW / 2 - 4) continue;
+              var minY = q.y;
+              for (var si = 0; si < smp.length; si++) if (smp[si][0] >= tx - LW / 2 - 3 && smp[si][0] <= tx + LW / 2 + 3 && smp[si][1] < minY) minY = smp[si][1];
+              var bt = Math.min(q.y - (isSel ? 10 : 8), minY - 6) - row * (LH + 3);
+              if (bt - LH < -8) continue; // would leave the chart's headroom
+              var r2 = [tx - LW / 2, bt - LH, tx + LW / 2, bt], clash = false;
+              for (var pr = 0; pr < placed.length; pr++) { var c = placed[pr]; if (r2[0] < c[2] + 2 && c[0] < r2[2] + 2 && r2[1] < c[3] + 2 && c[1] < r2[3] + 2) { clash = true; break; } }
+              if (!clash) { rect = r2; lx = tx; bottom = bt; }
+            }
+          }
+          if (!rect) continue;
+          placed.push(rect);
           var dp = q.d.split('-'), dtxt = MONS[+dp[1] - 1] + ' ' + (+dp[2]);
-          var wtxt = String(Math.round(q.w * 10) / 10), below = row === 'down';
-          var wy = below ? q.y + 17 : q.y - 17, dy = below ? q.y + 28 : q.y - 7;
-          var t1 = mk('text', { x: lx, y: wy, 'text-anchor': 'middle', 'font-size': 11, 'font-weight': 700, fill: '#111114' });
+          var wtxt = String(Math.round(q.w * 10) / 10);
+          var t1 = mk('text', { x: lx, y: bottom - 13, 'text-anchor': 'middle', 'font-size': 11, 'font-weight': 700, fill: '#111114' });
           t1.textContent = wtxt;
-          var t2 = mk('text', { x: lx, y: dy, 'text-anchor': 'middle', 'font-size': 9, 'font-weight': 600, fill: isSel ? '#111114' : '#8e8e96' });
+          var t2 = mk('text', { x: lx, y: bottom - 2, 'text-anchor': 'middle', 'font-size': 9, 'font-weight': 600, fill: isSel ? '#111114' : '#8e8e96' });
           t2.textContent = dtxt;
           [t1, t2].forEach(function (t) { t.style.pointerEvents = 'none'; t.style.fontVariantNumeric = 'tabular-nums'; wsvg.appendChild(t); });
         }
