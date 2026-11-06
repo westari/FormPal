@@ -11,7 +11,7 @@
 import { getExerciseDef, muscleCreditParts, Muscle } from '../constants/exercises';
 import { TIER_META } from '../constants/tierPalette';
 import {
-  TIER_ORDER, VOLUME_THRESHOLDS, QUALITY_THRESHOLDS, tierIndex,
+  TIER_ORDER, VOLUME_THRESHOLDS, tierIndex, tierProgress,
   type SessionEntry, type MuscleTiers, type MuscleTierInfo, type Tier,
 } from './sessionLog';
 import { bodyMapPairDataUri } from './bodyMapSvg';
@@ -21,17 +21,7 @@ const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 
 /** Same progress-to-next-tier math as the Progress tab's muscle rows (0-100). */
 export function muscleProgressPct(info: MuscleTierInfo): number {
-  const idx = tierIndex(info.tier);
-  if (idx === TIER_ORDER.length - 1) return 100;
-  const next = TIER_ORDER[idx + 1];
-  const curVol = VOLUME_THRESHOLDS.find(([t]) => t === info.tier)![1];
-  const nextVol = VOLUME_THRESHOLDS.find(([t]) => t === next)![1];
-  const curQual = QUALITY_THRESHOLDS.find(([t]) => t === info.tier)![1];
-  const nextQual = QUALITY_THRESHOLDS.find(([t]) => t === next)![1];
-  const vol = clamp01((info.volume - curVol) / (nextVol - curVol));
-  // No judged reps (rep-counter exercises only) = no quality signal: volume alone, same as the tier.
-  if (info.qualityJudged === false) return 100 * vol;
-  return 100 * Math.min(vol, clamp01((info.goodRatio - curQual) / (nextQual - curQual)));
+  return 100 * tierProgress(info); // the one implementation lives in lib/sessionLog.ts
 }
 
 // Progress as a single number that keeps rising across tiers, so a rank-up
@@ -136,7 +126,7 @@ export function buildMuscleRanksPayload(opts: {
   // already above the overall (weakest-link) tier, so training shoulders/triceps that were already past
   // Bronze could never show a gain: 100 before, 100 after, +0.0% (reported: "Bronze 53.2% -> 53.2%").
   //   MUSCLE ROW gain = that muscle's progress after - before (rank-ups count: tier*100 + progress), 0.1 steps
-  //   OVERALL %       = the average own-progress over every muscle you have trained, AFTER today
+  //   OVERALL %       = computeOverallStanding().progress: the average own-progress over every ranked muscle, AFTER today (same on every screen)
   //   GAINED TODAY    = the SUM of the muscle rows' gains (the rows shown on the page add up to it exactly)
   const universe = new Set<Muscle>([...(Object.keys(tiersAfter) as Muscle[]), ...worked.map(w => w.muscle)]);
   // Not ranked yet (below Bronze): today's credited reps over Bronze's volume bar; before today there is nothing to see: 0.
@@ -148,7 +138,9 @@ export function buildMuscleRanksPayload(opts: {
   const r1 = (n: number) => Math.round(n * 10) / 10;
   const avg = (f: (m: Muscle) => number) => (muscles.length ? muscles.reduce((a, m) => a + f(m), 0) / muscles.length : 0);
   const gainOf = (m: Muscle) => Math.max(0, r1(absAfter(m)) - r1(absBefore(m)));
-  const afterAvg = r1(avg(progAfter));
+  // The header % is THE overall rank % every screen shows (computeOverallStanding().progress); only a brand-new user with
+  // no ranked muscle yet falls back to today's partial progress toward Bronze.
+  const afterAvg = standingAfter && !standingAfter.atTop ? r1(standingAfter.progress * 100) : r1(avg(progAfter));
   const beforeAvg = r1(avg(progBefore));
   const rankedUp = !!standingBefore && !!standingAfter && standingBefore.tier !== standingAfter.tier;
 

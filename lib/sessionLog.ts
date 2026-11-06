@@ -15,10 +15,13 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getExerciseDef, MuscleGroup, Muscle, muscleCreditParts } from '../constants/exercises';
+import { DECAY_HALF_LIFE_DAYS, VOLUME_THRESHOLDS, QUALITY_THRESHOLDS, MAX_LOG_ENTRIES } from './rankTuning';
+
+// The tunable numbers live in lib/rankTuning.ts (all placeholders); re-exported so every existing import keeps working.
+export { VOLUME_THRESHOLDS, QUALITY_THRESHOLDS };
 
 export const SESSION_LOG_KEY = 'formpal_session_log';
 const DAY_MS = 24 * 60 * 60 * 1000;
-const MAX_LOG_ENTRIES = 200;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -202,73 +205,7 @@ export const TIER_ORDER: Tier[] = ['bronze', 'silver', 'gold', 'platinum', 'diam
 
 export function tierIndex(t: Tier): number { return TIER_ORDER.indexOf(t); }
 
-// Decay half-life for the ACTIVE/current tier — was 14 days, which meant a
-// single 2-week break cut decayed volume in half. Bumped to 120 days
-// (~8.5x gentler) per explicit ask: "a vacation shouldn't tank someone" —
-// a short break should barely move the active rank, only many weeks/months
-// of real absence should. At H=120: a 2-week gap retains ~92% of value, a
-// 1-month gap ~84%, a 3-month gap ~60%, a 6-month gap ~35%. This does NOT
-// affect goodRatio (see computeMuscleTiers) — numerator and denominator
-// decay identically, so their ratio is already decay-invariant between
-// sessions regardless of half-life.
-const DECAY_HALF_LIFE_DAYS = 120;
-
-// Volume thresholds — decayed weighted rep count, ABSOLUTE (not relative to
-// your own max — see the old comment this replaces for why).
-//
-// RETUNED this round to fix a real, provable bug: the old thresholds hit
-// Platinum in ~1 month of normal training — way too fast for a "serious
-// lifter" tier. Recalculated against the actual finite-time decay curve
-// (V(T) = SS·(1 − 2^(−T/H)), where SS = dailyRate × H/ln2 is the steady-
-// state ceiling a constant rate converges to) for a realistic reference
-// user: one muscle trained 2x/week, ~30 good reps/session ≈ 8.57 reps/day
-// → SS ≈ 1484 at H=120.
-//
-// The math has a real constraint worth being explicit about: at ANY fixed
-// half-life, a CONSTANT training rate converges to its steady state within
-// a few half-lives (~87% there by 3×H) — it can't keep climbing forever.
-// So "Diamond in 8-12 months" isn't the reference rate's decay integral
-// literally still rising at month 10 in isolation; it's calibrated so that
-// EXACTLY the reference rate approaches these values only that slowly
-// (this IS still real math, just closer to the asymptote than to zero —
-// see the exact day-counts below), and reaching Platinum+ in practice means
-// sustaining MORE than the bare reference rate, which is exactly the design
-// goal (higher tiers require more/harder training, not just more calendar
-// time at the same effort).
-//
-// Time-to-tier for the reference rate (8.57 reps/day, H=120 days):
-//   Bronze    ~50    →  ~6 days     (first session or two)
-//   Silver    ~230   →  ~29 days    (~1 month)
-//   Gold      ~520   →  ~75 days    (~2.5 months)
-//   Platinum  ~900   →  ~162 days   (~5.5 months)
-//   Diamond   ~1200  →  ~287 days   (~9.5 months)
-//   Master    ~1350  →  ~416 days   (~14 months)
-//   Champion  ~1450  →  ~655 days   (~22 months, and only at PERFECT
-//                        adherence — any real inconsistency pushes this
-//                        further out or out of reach, matching "only the
-//                        top 1-2% ever get there")
-export const VOLUME_THRESHOLDS: [Tier, number][] = [
-  ['champion', 1450],
-  ['master',   1350],
-  ['diamond',  1200],
-  ['platinum',  900],
-  ['gold',      520],
-  ['silver',    230],
-  ['bronze',     50],
-];
-
-// Good-rep ratio thresholds (0-1). Deliberately demanding at the top —
-// Champion requires 99% good reps — since the whole premise of this feature
-// is that a top rank should mean genuinely clean form, not just showing up.
-export const QUALITY_THRESHOLDS: [Tier, number][] = [
-  ['champion', 0.99],
-  ['master',   0.97],
-  ['diamond',  0.95],
-  ['platinum', 0.85],
-  ['gold',     0.70],
-  ['silver',   0.50],
-  ['bronze',   0],
-];
+// Decay half-life, volume thresholds and quality thresholds: see lib/rankTuning.ts (placeholders, with the reasoning).
 
 function tierFromVolume(v: number): Tier | null {
   for (const [tier, min] of VOLUME_THRESHOLDS) if (v >= min) return tier;
@@ -288,6 +225,27 @@ export interface MuscleTierInfo {
   // false = this muscle has NO judged reps (rep-counter exercises only), so goodRatio is a
   // placeholder 0 and must not gate progress. Omitted = treat as judged (older callers).
   qualityJudged?: boolean;
+}
+
+const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
+
+/**
+ * THE ONE progress-to-the-next-tier number (0-1) for a muscle. Every screen that shows a muscle's % calls this (the
+ * after-workout page, the rank map, the overall standing); do not re-implement it. A muscle's progress is whichever
+ * is further behind: its volume toward the next tier, or its good-form share toward the next tier's bar. A muscle
+ * with no judged reps (rep-counter moves only) has no quality signal, so volume alone decides.
+ */
+export function tierProgress(info: MuscleTierInfo): number {
+  const idx = tierIndex(info.tier);
+  if (idx === TIER_ORDER.length - 1) return 1;
+  const next = TIER_ORDER[idx + 1];
+  const curVol  = VOLUME_THRESHOLDS.find(([t]) => t === info.tier)![1];
+  const nextVol = VOLUME_THRESHOLDS.find(([t]) => t === next)![1];
+  const vol = clamp01((info.volume - curVol) / (nextVol - curVol));
+  if (info.qualityJudged === false) return vol;
+  const curQual  = QUALITY_THRESHOLDS.find(([t]) => t === info.tier)![1];
+  const nextQual = QUALITY_THRESHOLDS.find(([t]) => t === next)![1];
+  return Math.min(vol, clamp01((info.goodRatio - curQual) / (nextQual - curQual)));
 }
 
 // KEYED BY Muscle (individual muscle), not MuscleGroup, this round — a

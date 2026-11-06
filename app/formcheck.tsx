@@ -39,6 +39,7 @@ import { getCalibration, applyOverride } from '../lib/calibration/store';
 import { handleRepAudio, playReadyCue } from '../lib/audioFeedback';
 import { createCalibSynth } from '../lib/calibLog';
 import { prefetchSoloRecap } from '../lib/recapPrefetch';
+import { postLag, postLagStart } from '../lib/postLag';
 import { createRepDiagnostic, STREAM_DEAD_SEC_FLOOR } from '../lib/repDiagnostics';
 import { useKeepAwake } from 'expo-keep-awake';
 import { NO_ZOOM_JS } from '../lib/noZoom';
@@ -607,10 +608,10 @@ function TrackingMeter({ target, show, top, onHighChange }: {
   const level = display >= 95 ? C.good : display <= 35 ? C.warn : '#FFFFFF';
   return (
     <View pointerEvents="none" style={[s.cameraLockWrap, { top }]}>
+      {/* how well the camera sees your whole body: the label sits OUTSIDE the glass, just above it */}
+      <Text style={s.meterLabel}>Camera confidence</Text>
       <GlassPanel radius={999} style={s.meterPill}>
         <View style={s.meterInner}>
-          {/* how well the camera sees your whole body */}
-          <Text style={s.meterLabel}>Body tracking</Text>
           <View style={s.meterRow}>
             <Text style={s.meterNum}>{display}<Text style={s.meterPct}>%</Text></Text>
             <View style={s.meterTrack}>
@@ -1135,11 +1136,17 @@ export default function FormCheckScreen() {
   // getting logs out has been a recurring blocker. Also present on the
   // review screen and on recap.
   const handleStop = useCallback(async () => {
+    postLagStart('Stop pressed (formcheck)');
     setPhase('stopping');
     isTrackingRef.current = false;
     const final = await stopTracking();
+    postLag('formcheck: native stopTracking returned (recording finished)');
     sessionStopped.current = true;
-    await stopSession();
+    // The camera teardown (captureSession.stopRunning) is slow and nothing after it needs to wait for it: the final
+    // numbers and the video file already exist. It runs on the camera's own serial queue, so a later startSession is
+    // always queued behind it. It used to be awaited here, which delayed the Workout complete card by its duration.
+    const sessionStopped0 = Date.now();
+    void stopSession().then(() => postLag(`formcheck: camera teardown finished in the background (${Date.now() - sessionStopped0}ms, no longer blocks navigation)`)).catch(() => {});
     if (final.videoUri) void logSessionVideo(final.videoUri);
 
     const navParams = { reps: final.reps, goodReps: final.goodReps, videoUri: final.videoUri ?? '' };
@@ -1164,6 +1171,7 @@ export default function FormCheckScreen() {
       pendingNavRef.current = navParams;
       setPhase('review');
     } else {
+      postLag('formcheck: navigating to the next screen');
       doNavigate(navParams);
     }
   }, [doNavigate, returnTo, repCounterOnly]);
@@ -1852,13 +1860,13 @@ const s = StyleSheet.create({
   title:      { flex: 1, textAlign: 'center', marginHorizontal: 10, fontFamily: F.bold, fontSize: 15, color: C.text, letterSpacing: 0.2 },
   cameraLockWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   meterPill:  { alignSelf: 'center' },
-  meterInner: { alignItems: 'center', gap: 2, paddingHorizontal: 18, paddingTop: 8, paddingBottom: 9 },
-  meterRow:   { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  meterTrack: { width: 52, height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.22)', overflow: 'hidden' },
-  meterFill:  { height: 3, borderRadius: 2 },
-  meterLabel: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 11, lineHeight: 14, color: 'rgba(255,255,255,0.78)', letterSpacing: 0.1 },
-  meterNum:   { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 16, lineHeight: 20, color: '#fff', letterSpacing: -0.2, fontVariant: ['tabular-nums'] },
-  meterPct:   { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 11, color: 'rgba(255,255,255,0.7)' },
+  meterInner: { alignItems: 'center', paddingHorizontal: 22, paddingVertical: 10 },
+  meterRow:   { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  meterTrack: { width: 110, height: 9, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.22)', overflow: 'hidden' },
+  meterFill:  { height: 9, borderRadius: 5 },
+  meterLabel: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 13, lineHeight: 17, color: '#FFFFFF', letterSpacing: 0.2, marginBottom: 6, textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
+  meterNum:   { fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 38, lineHeight: 44, color: '#fff', letterSpacing: -1, fontVariant: ['tabular-nums'] },
+  meterPct:   { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 20, color: 'rgba(255,255,255,0.75)' },
   errorCard:  { position: 'absolute', left: 24, right: 24, top: '38%', backgroundColor: C.glass, borderRadius: 16, padding: 24, borderWidth: 1, borderColor: C.border },
   errorText:  { color: C.warn, fontSize: 14, lineHeight: 22, textAlign: 'center' },
   // No card any more — just text + shadow for legibility over the camera

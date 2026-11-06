@@ -45,6 +45,7 @@ import { FONT, W, Sp, R, Elev, Col } from '../../constants/theme';
 import { getExerciseDef } from '../../constants/exercises';
 import { getDemoCues } from '../../lib/demoCues';
 import { prefetchWorkoutRecap } from '../../lib/recapPrefetch';
+import { postLag, postLagStart } from '../../lib/postLag';
 import { useKeepAwake } from 'expo-keep-awake';
 import { NO_ZOOM_JS } from '../../lib/noZoom';
 
@@ -430,7 +431,9 @@ export default function WorkoutRunScreen() {
   // Fill the (already loaded) Workout Complete card with this workout's data
   // BEFORE navigating, so it is on screen in the recap screen's first frame.
   const goRecap = () => {
+    postLagStart('workout finished (run.tsx -> recap)');
     prefetchWorkoutRecap();
+    postLag('run: recap card prefetched, navigating');
     router.replace({ pathname: '/recap', params: { mode: 'workout' } } as any);
   };
   const insets  = useSafeAreaInsets();

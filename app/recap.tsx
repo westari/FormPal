@@ -47,7 +47,7 @@
  */
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { View, StyleSheet, Share, TouchableOpacity, Animated } from 'react-native';
+import { View, StyleSheet, Share, TouchableOpacity, Animated, InteractionManager } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -72,6 +72,7 @@ import { buildMuscleRanksPayload, workedMuscles, type MuscleRanksPayload } from 
 import { tierDataUri } from '../lib/rankImages';
 import { allSetsDataJs } from '../lib/allSetsInject';
 import { generateSummary, recapPageData } from '../lib/recapPrefetch';
+import { postLag } from '../lib/postLag';
 import { repFeedbackDataJs } from '../lib/repFeedbackInject';
 import { athltSetDataJs } from '../lib/dcLogicPatch';
 import { warmWant, warmPrepare, warmActivate, warmDeactivate, warmRelease, warmSetBg, warmSetOverlay, warmSetUnderlay } from '../components/WarmSurfaces';
@@ -200,6 +201,7 @@ export default function RecapScreen() {
   // as a second RecapScreen mount instead of just a WebView one).
   useEffect(() => {
     if (__DEV__) console.log('[recap-debug] RecapScreen MOUNTED');
+    postLag('recap: screen mounted (first render done)');
     return () => { if (__DEV__) console.log('[recap-debug] RecapScreen UNMOUNTED'); };
   }, []);
 
@@ -280,7 +282,7 @@ export default function RecapScreen() {
   // "Finish review" on rep feedback: show the muscle page at once, while that screen is still on top.
   const [finishing, setFinishing] = useState(false);
   useEffect(() => {
-    repFeedbackSignal.onFinishReview = () => { setView('ranks'); setFinishing(true); };
+    repFeedbackSignal.onFinishReview = () => { postLag('recap: finish review -> switching to the muscle page'); setView('ranks'); setFinishing(true); };
     return () => { repFeedbackSignal.onFinishReview = null; };
   }, []);
 
@@ -565,18 +567,26 @@ export default function RecapScreen() {
     if (!data || data.isHistory) return;
     let cancelled = false;
     (async () => {
-      await persistRef.current; // this session's own entries must be written first
-      const all = await getAllSessions(); // already includes this session's own entries
-      const prior = all.filter(s => s.ts < data.ts);
+      postLag('recap: rank payload start');
+      // Everything that doesn't depend on anything else starts at once: the stored history is read while this
+      // session's own write is still going (it used to wait for the write, then read the whole log a second time),
+      // and the icon art for EVERY muscle this workout trained loads at the same time (the muscle page lists all of
+      // them now, not just the top two).
+      const iconsP = Promise.all(workedMuscles(data.entries).map(async (w) => [w.muscle, await muscleIconDataUri(w.muscle)] as const));
+      const stored = await getAllSessions();
+      postLag('recap: stored sessions read');
+      // this workout's entries all carry data.ts; whether or not the write has landed yet, history = everything older
+      const prior = stored.filter(s => s.ts < data.ts);
+      const all = [...prior, ...data.entries];
       const tiersAfter = computeMuscleTiers(all);
       const tiersBefore = computeMuscleTiers(prior);
       const standingAfter = computeOverallStanding(tiersAfter);
       const standingBefore = computeOverallStanding(tiersBefore);
+      postLag('recap: tiers + standing computed');
+      const [iconPairs, emblem] = await Promise.all([iconsP, tierDataUri(standingAfter?.tier ?? 'bronze')]);
       const icons: Partial<Record<Muscle, string | null>> = {};
-      await Promise.all(workedMuscles(data.entries).slice(0, 2).map(async (w) => {
-        icons[w.muscle] = await muscleIconDataUri(w.muscle);
-      }));
-      const emblem = await tierDataUri(standingAfter?.tier ?? 'bronze');
+      iconPairs.forEach(([m, u]) => { icons[m] = u; });
+      postLag('recap: icons + emblem ready');
       if (cancelled) return;
       setRanksPayload(buildMuscleRanksPayload({
         entries: data.entries, tiersBefore, tiersAfter, standingBefore, standingAfter,
@@ -586,6 +596,7 @@ export default function RecapScreen() {
         emblem,
       }));
       if (__DEV__) console.log('[recap] muscle page data ready');
+      postLag('recap: muscle page payload built');
     })().catch((err) => { if (__DEV__) console.warn('[recap] muscle page data failed', err); });
     return () => { cancelled = true; };
   }, [data]);
@@ -652,9 +663,11 @@ export default function RecapScreen() {
   // this screen goes away.
   useEffect(() => {
     if (!isHistoryMode) warmWant('ranks', true);
-    const t = setTimeout(() => warmWant('allsets', true), 1200);
+    // The 4th page (All sets) is only needed if the user taps it: mount it once the screen is idle (not at a fixed
+    // 1.2s, which landed in the middle of the Workout complete animation and the rep feedback open).
+    const task = InteractionManager.runAfterInteractions(() => { postLag('recap: mounting the All sets page (idle)'); warmWant('allsets', true); });
     return () => {
-      clearTimeout(t);
+      task.cancel();
       warmRelease('recap'); warmRelease('ranks'); warmRelease('repfeedback'); warmRelease('allsets');
       warmWant('ranks', false); warmWant('repfeedback', false); warmWant('allsets', false);
     };
