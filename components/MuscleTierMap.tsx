@@ -34,7 +34,7 @@ import Svg, { Defs, LinearGradient as SvgLinearGradient, Stop, Path, Circle, Lin
 import { Muscle } from '../constants/exercises';
 import type { Slug } from 'react-native-body-highlighter';
 import type { MuscleTiers, MuscleTierInfo, Tier } from '../lib/sessionLog';
-import { TIER_ORDER, tierIndex, VOLUME_THRESHOLDS, QUALITY_THRESHOLDS } from '../lib/sessionLog';
+import { TIER_ORDER, tierIndex, tierProgress } from '../lib/sessionLog';
 import { FRONT_MUSCLE_PATHS, BACK_MUSCLE_PATHS } from './muscleShapePaths';
 import {
   MUSCLE_MAP_FRONT_PATHS, MUSCLE_MAP_BACK_PATHS, MUSCLE_MAP_REGIONS, MUSCLE_MAP_VIEWBOX,
@@ -821,8 +821,13 @@ const bd = StyleSheet.create({
 // progress and quality progress — whichever stat is further behind is what's
 // actually holding that muscle back.
 export interface OverallStanding {
-  muscle:   Muscle;
+  muscle:   Muscle;   // the weakest-link muscle: it sets the headline TIER
   tier:     Tier;
+  // THE overall rank % (0-1), the same number on every screen. The tier is the weakest link, but the % is the AVERAGE
+  // position of every tracked muscle (tier * 100 + its own progress), measured from the start of the overall tier. So
+  // training ANY muscle moves it, it never goes down because of a workout (the old "average of each muscle's own
+  // progress" dropped whenever one muscle ranked up and its own bar reset to 0), and it only resets when the overall
+  // tier itself goes up. Kept just under 100% until the weakest muscle really crosses.
   progress: number;
   atTop:    boolean;
 }
@@ -834,20 +839,20 @@ export function computeOverallStanding(tiers: MuscleTiers): OverallStanding | nu
   if (entries.length === 0) return null;
 
   // Weakest = lowest tier, and within the SAME tier the one furthest from the
-  // next tier (lowest progress). It used to take whichever same-tier muscle
-  // happened to come first in the object, so the headline progress was an
-  // arbitrary muscle's (e.g. a long-untouched one stuck at 0%).
+  // next tier (lowest progress).
   let weakest = entries[0];
   for (const e of entries) {
     const ti = tierIndex(e[1].tier), wi = tierIndex(weakest[1].tier);
-    if (ti < wi || (ti === wi && tileProgress(e[1]) < tileProgress(weakest[1]))) weakest = e;
+    if (ti < wi || (ti === wi && tierProgress(e[1]) < tierProgress(weakest[1]))) weakest = e;
   }
   const [muscle, info] = weakest;
   const idx = tierIndex(info.tier);
   if (idx === TIER_ORDER.length - 1) {
     return { muscle, tier: info.tier, progress: 1, atTop: true };
   }
-  return { muscle, tier: info.tier, progress: tileProgress(info), atTop: false };
+  const meanAbs = entries.reduce((a, [, i]) => a + tierIndex(i.tier) * 100 + tierProgress(i) * 100, 0) / entries.length;
+  const progress = Math.max(0, Math.min(0.999, (meanAbs - idx * 100) / 100));
+  return { muscle, tier: info.tier, progress, atTop: false };
 }
 
 // The highest PEAK tier ever reached, across every tracked muscle — a
@@ -862,24 +867,8 @@ export function computeOverallPeak(tiers: MuscleTiers): Tier | null {
   return best;
 }
 
-function tileProgress(info: MuscleTierInfo): number {
-  const idx = tierIndex(info.tier);
-  if (idx === TIER_ORDER.length - 1) return 1;
-  const nextTier    = TIER_ORDER[idx + 1];
-  const curVolMin   = VOLUME_THRESHOLDS.find(([t]) => t === info.tier)![1];
-  const nextVolMin  = VOLUME_THRESHOLDS.find(([t]) => t === nextTier)![1];
-  const curQualMin  = QUALITY_THRESHOLDS.find(([t]) => t === info.tier)![1];
-  const nextQualMin = QUALITY_THRESHOLDS.find(([t]) => t === nextTier)![1];
-  const volProgress  = clamp01((info.volume - curVolMin) / (nextVolMin - curVolMin));
-  // A muscle trained ONLY by rep-counter exercises has no judged reps, so its
-  // goodRatio is a placeholder 0 — not "0% good form". Gating its progress on
-  // that pinned it at 0% forever ("Bronze 0%"); with no quality signal the
-  // tier is decided on volume alone (same as computeMuscleTiers does), so the
-  // progress is too.
-  if (info.qualityJudged === false) return volProgress;
-  const qualProgress = clamp01((info.goodRatio - curQualMin) / (nextQualMin - curQualMin));
-  return Math.min(volProgress, qualProgress);
-}
+// One implementation, in lib/sessionLog.ts (tierProgress); this name stays for the tiles below.
+const tileProgress = tierProgress;
 
 // ─── Grid tile ──────────────────────────────────────────────────────────────
 

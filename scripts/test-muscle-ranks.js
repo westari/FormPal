@@ -119,7 +119,12 @@ for (const [name, sc] of Object.entries(SCENARIOS)) {
     const absA = (m) => sc.tiersAfter[m] ? TIERIDX[sc.tiersAfter[m].tier] * 100 + data.muscleProgressPct(sc.tiersAfter[m]) : progA(m);
     const absB = (m) => sc.tiersBefore[m] ? TIERIDX[sc.tiersBefore[m].tier] * 100 + data.muscleProgressPct(sc.tiersBefore[m]) : 0;
     const gain = (m) => Math.max(0, r1(absA(m)) - r1(absB(m)));
-    const avgA = r1(universe.reduce((a, m) => a + progA(m), 0) / universe.length);
+    // the header % is the one overall % every screen shows: the average own-progress over the RANKED muscles
+    // (a brand-new user with nothing ranked yet shows today's partial progress toward Bronze)
+    const ranked = Object.keys(sc.tiersAfter);
+    const avgA = ranked.length && !(sc.standingAfter && sc.standingAfter.atTop)
+      ? r1(Math.max(0, Math.min(99.9, ranked.reduce((a, m) => a + TIERIDX[sc.tiersAfter[m].tier] * 100 + data.muscleProgressPct(sc.tiersAfter[m]), 0) / ranked.length - 100 * Math.min(...ranked.map(m => TIERIDX[sc.tiersAfter[m].tier])))))
+      : r1(universe.reduce((a, m) => a + progA(m), 0) / universe.length);
     const overallGain = r1(p.hits.reduce((a, h) => a + parseFloat(h.gain.replace(/[+%]/g, '')), 0)); // the sum of the rows ON SCREEN
     // header: ONLY the newest number
     check(`${name}: the header shows ONLY the newest % (${avgA}%), no "old -> new"`, p.rank.pctLabel === `${avgA.toFixed(1)}%` && !/→/.test(p.rank.pctLabel) && p.rank.pct === avgA, p.rank.pctLabel);
