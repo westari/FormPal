@@ -37,6 +37,8 @@ import * as Haptics from 'expo-haptics';
 import { DC_VIEWPORT_JS, DC_NO_ZOOM_JS, CONSOLE_FORWARD_JS, DC_SETTLE_JS } from '../../lib/dcWebviewHelpers';
 import { dcLogicPatchJs, athltSetDataJs } from '../../lib/dcLogicPatch';
 import { CUE_ORB_CSS, CUE_ORB_JS } from '../../lib/cueOrb';
+import { EDIT_BRIDGE_JS } from '../../lib/editSheetBridge';
+import { saveWorkoutEdit } from '../../lib/planEditSave';
 import { HOME_CUE_REAL_JS } from './index';
 import { loadPlan } from '../../lib/planStorage';
 import { getAllSessions } from '../../lib/sessionLog';
@@ -59,15 +61,22 @@ export const TRAIN_LOGIC_EXT = `function (Orig) {
   return class extends Orig {
     renderVals() {
       var d = window.__athltData;
-      if (d) { this.DAYS = d.days; this.CAL = d.cal; this.MOVES = d.moves; this.LIB = d.lib; }
+      if (d) { this.DAYS = d.days; this.CAL = d.cal; this.MOVES = d.moves; this.LIB = d.lib; this.EXTRA = d.extra; }
       var v = super.renderVals();
       if (!d) return v;
+      var self = this;
+      if (window.__editBridge) window.__editBridge(this); // an Edit-sheet change is saved to the plan when the sheet closes
       v.streak = String(d.streak);
       v.noWorkouts = d.myWorkouts.length === 0;
       v.hasWorkouts = !v.noWorkouts;
       v.days = v.days.map(function (c, i) {
         var x = d.days[i];
-        if (x) { c.href = x.href; c.restHref = x.restHref; }
+        if (x) {
+          c.href = x.href; c.restHref = x.restHref;
+          // the Edit sheet opens on THIS card's own exercises (two cards can share a name)
+          var open = c.edit;
+          c.edit = function (e) { open(e); self.setState({ editList: x.rows.map(function (r) { return r.slice(); }) }); };
+        }
         return c;
       });
       return v;
@@ -83,6 +92,8 @@ const TRAIN_CSS = `
   * { -webkit-tap-highlight-color: rgba(0,0,0,0) !important; -webkit-touch-callout: none !important; -webkit-user-select: none !important; user-select: none !important; }
   input { -webkit-user-select: text !important; user-select: text !important; font-size: 16px !important; }
   a { outline: none !important; }
+  /* a button with nothing to do (tomorrow's rest card, "Train anyway") is hidden until it has somewhere to go */
+  a[href="tr:none"] { display: none !important; }
   [style*="hm-rise"], [style*="hm-bar"] { animation: none !important; }
   ${CUE_ORB_CSS}
   html:not([data-pready]) body { visibility: hidden !important; }
@@ -223,6 +234,13 @@ export const TRAIN_WEB_INJECT = `
     var el = ev.target;
     for (var i = 0; el && i < 8; i++, el = el.parentElement) {
       if (!el.getAttribute) continue;
+      if (el.getAttribute('aria-label') === 'Edit workout') {
+        // which plan workout this Edit sheet is for (saved to the plan when the sheet closes)
+        var r = rail(), d0 = D(), idx = -1;
+        for (var c = 0; r && c < r.children.length; c++) if (r.children[c].contains(el)) idx = c;
+        window.__editWid = (d0 && idx >= 0 && d0.days[idx]) ? (d0.days[idx].wid || null) : null;
+        return; // the design's own handler opens the sheet
+      }
       if (el.getAttribute('aria-label') === 'Check form') {
         ev.preventDefault(); ev.stopPropagation();
         var id = exerciseIdFor(el);
@@ -285,7 +303,7 @@ export const TRAIN_WEB_INJECT = `
 true;
 `;
 
-export const TRAIN_BEFORE = DC_VIEWPORT_JS + DC_NO_ZOOM_JS + CONSOLE_FORWARD_JS + DC_SETTLE_JS + CUE_ORB_JS
+export const TRAIN_BEFORE = DC_VIEWPORT_JS + DC_NO_ZOOM_JS + CONSOLE_FORWARD_JS + DC_SETTLE_JS + CUE_ORB_JS + EDIT_BRIDGE_JS
   + dcLogicPatchJs(TRAIN_LOGIC_EXT) + TRAIN_WEB_INJECT + HOME_CUE_REAL_JS;
 
 // FNV-1a over the file text: a second, independent fingerprint next to the asset's md5.
@@ -345,39 +363,53 @@ export default function TrainScreen() {
     webRef.current?.reload();
   }, []);
 
+  // Load the real plan + session log and hand the page its data (on focus, and again after an Edit-sheet save).
+  const pushData = useCallback(async () => {
+    const [plan, sessions] = await Promise.all([loadPlan(), getAllSessions()]);
+    tlog('data loaded: plan', plan ? plan.workouts.length + ' workouts' : 'none', '| sessions', sessions.length);
+    const ins = { top: insets.top, bottom: insets.bottom };
+    let td: TrainData;
+    try { td = buildTrainData(plan, sessions, ins); }
+    catch (e) {
+      // a stored plan in an unexpected shape must never leave the tab blank: log it and show the empty state
+      tlog('ERROR building train data:', e && (e as Error).stack ? (e as Error).stack : String(e));
+      td = buildTrainData(null, sessions, ins);
+    }
+    dataJsRef.current = athltSetDataJs(td);
+    webRef.current?.injectJavaScript(dataJsRef.current);
+    tlog('data pushed to page; today =', td.days[5]?.name, '| streak', td.streak, '| my workouts', td.myWorkouts.length);
+  }, [insets.top, insets.bottom]);
+
   useFocusEffect(useCallback(() => {
     tlog('focused; insets', insets.top, insets.bottom);
     let alive = true;
-    Promise.all([loadPlan(), getAllSessions()]).then(([plan, sessions]) => {
-      tlog('data loaded: plan', plan ? plan.workouts.length + ' workouts' : 'none', '| sessions', sessions.length);
-      const ins = { top: insets.top, bottom: insets.bottom };
-      let td: TrainData;
-      try { td = buildTrainData(plan, sessions, ins); }
-      catch (e) {
-        // a stored plan in an unexpected shape must never leave the tab blank: log it and show the empty state
-        tlog('ERROR building train data:', e && (e as Error).stack ? (e as Error).stack : String(e));
-        td = buildTrainData(null, sessions, ins);
-      }
-      dataJsRef.current = athltSetDataJs(td);
-      webRef.current?.injectJavaScript(dataJsRef.current);
-      tlog('data pushed to page; today =', td.days[5]?.name, '| streak', td.streak, '| my workouts', td.myWorkouts.length);
-    }).catch((e) => { tlog('ERROR loading data:', e && (e as Error).message ? (e as Error).message : String(e)); });
+    pushData().catch((e) => { tlog('ERROR loading data:', e && (e as Error).message ? (e as Error).message : String(e)); });
     // Liveness ping: a web view whose content process was killed never answers and stays blank white. Only pinged
     // when a page has finished loading and none is loading now. Any message from the page counts as an answer.
     const before = pongAt.current;
     if (loads.current > 0 && !loading.current) webRef.current?.injectJavaScript("try{window.ReactNativeWebView.postMessage(JSON.stringify({type:'pong'}))}catch(e){} true;");
     const t = setTimeout(() => { if (alive && pongAt.current === before && loads.current > 0 && !loading.current) reloadPage('no answer to the focus ping'); }, 1800);
     return () => { alive = false; clearTimeout(t); };
-  }, [insets.top, insets.bottom, reloadPage]));
+  }, [insets.top, insets.bottom, reloadPage, pushData]));
 
   const handleCueSend = useCallback(async (text: string) => {
     const r = await askCue(text, []);
     webRef.current?.injectJavaScript(`window.__homeCueReplyReceived && window.__homeCueReplyReceived(${JSON.stringify(r.text)}); true;`);
   }, []);
 
+  // An Edit-sheet change (made when the sheet closed): saved to the real plan, then the page gets fresh data, so the
+  // card's minutes / exercise count and every other screen show it.
+  const persistEdit = useCallback(async (wid: string, rows: [string, string][]) => {
+    try {
+      const saved = await saveWorkoutEdit(wid, rows);
+      tlog('Edit sheet closed: workout', wid, '|', rows.length, 'exercises |', saved ? 'saved to the plan' : 'no change to save');
+      if (saved) await pushData();
+    } catch (e) { tlog('ERROR saving the edit:', e && (e as Error).message ? (e as Error).message : String(e)); }
+  }, [pushData]);
+
   function onMsg(raw: string) {
     pongAt.current = Date.now();
-    let m: { type?: string; to?: string; id?: string; fp?: string; text?: string; level?: string; msg?: string };
+    let m: { type?: string; to?: string; id?: string; fp?: string; text?: string; level?: string; msg?: string; wid?: string; rows?: [string, string][] };
     try { m = JSON.parse(raw); } catch { return; }
     switch (m.type) {
       case 'pong': return;
@@ -388,6 +420,9 @@ export default function TrainScreen() {
       case 'logicReady': return;
       case 'pageConsole': if (m.level === 'error' || m.level === 'warn') tlog('page ' + m.level + ':', m.msg); return;
       case 'homeCueSend': if (m.text) void handleCueSend(m.text); return;
+      case 'saveEdit':
+        if (m.wid && m.rows) void persistEdit(m.wid, m.rows);
+        return;
       case 'practice':
         if (m.id) { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push(`/formcheck?exercise=${m.id}` as any); }
         return;

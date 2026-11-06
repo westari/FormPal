@@ -248,6 +248,30 @@ export function tierProgress(info: MuscleTierInfo): number {
   return Math.min(vol, clamp01((info.goodRatio - curQual) / (nextQual - curQual)));
 }
 
+const BRONZE_MIN_VOLUME = VOLUME_THRESHOLDS.find(([t]) => t === 'bronze')![1];
+
+/**
+ * Credit-weighted reps per muscle across EVERY session ever logged, not decayed (the same credit the rank system
+ * counts). A muscle below Bronze has no tier info, so this all-time total is all there is to show its progress from.
+ */
+export function muscleCreditTotals(sessions: SessionEntry[]): Map<Muscle, number> {
+  const out = new Map<Muscle, number>();
+  for (const e of sessions) {
+    const def = getExerciseDef(e.exerciseId);
+    if (!def) continue;
+    for (const c of def.muscles) {
+      const { muscle, weight } = muscleCreditParts(c);
+      out.set(muscle, (out.get(muscle) ?? 0) + e.reps * weight);
+    }
+  }
+  return out;
+}
+
+/** Progress (0-0.99) of a muscle that is still below Bronze: ALL the training it has had, over Bronze's volume bar. */
+export function unrankedProgress(totalCredit: number): number {
+  return Math.min(0.99, Math.max(0, totalCredit) / BRONZE_MIN_VOLUME);
+}
+
 // KEYED BY Muscle (individual muscle), not MuscleGroup, this round — a
 // single "arms" or "legs" bucket can't drive separate biceps/triceps or
 // quads/hamstrings/glutes rank tiles. MuscleGroup/muscleGroupsWorked above

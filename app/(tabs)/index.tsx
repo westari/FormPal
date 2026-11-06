@@ -36,6 +36,11 @@ import type { Plan } from '../../types/plan';
 import { DC_VIEWPORT_JS, DC_NO_ZOOM_JS, DC_SETTLE_JS } from '../../lib/dcWebviewHelpers';
 import { askCue } from '../../lib/cueApi';
 import { CUE_ORB_CSS } from '../../lib/cueOrb';
+import { dcLogicPatchJs, athltSetDataJs } from '../../lib/dcLogicPatch';
+import { EDIT_BRIDGE_JS } from '../../lib/editSheetBridge';
+import { saveWorkoutEdit } from '../../lib/planEditSave';
+import { addableExercises, type EditRow } from '../../lib/planEdit';
+import { plannedMeta } from '../../lib/trainData';
 
 const HOME_HTML = require('../../assets/app screens/home.html');
 const HOME_BUILD = 'home-5';
@@ -464,7 +469,7 @@ export function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[], i
     }
     function postReadyWhenStable(){
       var elapsed = Date.now() - SCRIPT_START;
-      var parts = DONE.header && DONE.sheet && DONE.text && DONE.recent && !!window.__dcCanvasScale;
+      var parts = DONE.header && DONE.sheet && DONE.text && DONE.recent && !!window.__dcCanvasScale && (!window.__athltPatchInstalled || !!window.__athltLogicReady);
       var still = !window.__dcSettle || window.__dcSettle(200);
       if ((parts && still) || elapsed > 5000) { markReady(); return; }
       setTimeout(postReadyWhenStable, 60);
@@ -473,12 +478,43 @@ export function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[], i
   })();`;
 }
 
+// The Edit Workout sheet and the hero card's name / minutes run on REAL data through the design's own logic
+// (lib/dcLogicPatch.ts): the sheet lists today's real exercises, "Add exercise" offers real catalogue exercises, and
+// closing the sheet saves the change to the plan (lib/editSheetBridge.ts -> 'saveEdit' below).
+export const HOME_LOGIC_EXT = `function (Orig) {
+  return class extends Orig {
+    renderVals() {
+      var d = window.__athltData;
+      if (d) { this.MOVES = d.moves; this.EXTRA = d.extra; }
+      var v = super.renderVals();
+      if (!d) return v;
+      if (window.__editBridge) window.__editBridge(this);
+      if (!this.state.adjusted) { v.workoutName = d.workoutName; v.workoutMeta = d.workoutMeta; }
+      return v;
+    }
+  };
+}`;
+
+export interface HomeLogicData { workoutName: string; workoutMeta: string; moves: Record<string, EditRow[]>; extra: EditRow[]; editWid: string | null }
+export function buildHomeLogicData(plan: Plan | null): HomeLogicData {
+  const w = plan && plan.workouts.length > 0 ? (plan.workouts[plan.currentWorkoutIndex] ?? plan.workouts[0]) : null;
+  const rows: EditRow[] = w ? w.exercises.map(e => [e.displayName, `${e.targetSets} × ${e.targetReps}`] as EditRow) : [];
+  return {
+    workoutName: w ? w.splitLabel : 'Full body',
+    workoutMeta: w ? plannedMeta(w) : 'Build a plan to get started',
+    moves: { 'Full body': rows },   // the sheet falls back to "Full body" for any name
+    extra: addableExercises(),
+    editWid: w ? w.id : null,
+  };
+}
+
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const webRef = useRef<WebView>(null);
   const [injectJs, setInjectJs] = useState<string | null>(null);
   const [pageLoaded, setPageLoaded] = useState(false);
+  const [logicJs, setLogicJs] = useState<string | null>(null);
   const { fade, onReady, onLoadStart, onLoadEnd } = useRevealFade(m => { if (__DEV__) console.log('[HOME]', m); });
   // one picture per recent workout (same code as the Progress tab): a video frame, else its muscle icon
   const [thumbs, setThumbs] = useState<{ thumb: string | null; fallback: string | null }[]>([]);
@@ -487,6 +523,8 @@ export default function HomeScreen() {
     let alive = true;
     Promise.all([loadPlan(), getAllSessions()]).then(async ([plan, sessions]) => {
       setInjectJs(buildHomeInjectJs(plan, sessions, insets.top, insets.bottom));
+      const ld = buildHomeLogicData(plan);
+      setLogicJs(athltSetDataJs(ld) + '; window.__editWid = ' + JSON.stringify(ld.editWid) + '; true;');
       const groups = groupIntoWorkouts(sessions);
       const tiers = computeMuscleTiers(sessions);
       const recent = groups.slice(0, 3);
@@ -501,6 +539,9 @@ export default function HomeScreen() {
   React.useEffect(() => {
     if (pageLoaded && injectJs) webRef.current?.injectJavaScript(injectJs + '; true;');
   }, [pageLoaded, injectJs]);
+  React.useEffect(() => {
+    if (pageLoaded && logicJs) webRef.current?.injectJavaScript(logicJs);
+  }, [pageLoaded, logicJs]);
   React.useEffect(() => {
     if (pageLoaded && injectJs && thumbs.length) webRef.current?.injectJavaScript(`window.__homeThumbs && window.__homeThumbs(${JSON.stringify(thumbs)}); true;`);
   }, [pageLoaded, injectJs, thumbs]);
@@ -520,12 +561,12 @@ export default function HomeScreen() {
         ref={webRef}
         source={HOME_HTML}
         originWhitelist={['*']}
-        injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS + DC_NO_ZOOM_JS + DC_SETTLE_JS + HOME_GUARD_JS}
+        injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS + DC_NO_ZOOM_JS + DC_SETTLE_JS + HOME_GUARD_JS + EDIT_BRIDGE_JS + dcLogicPatchJs(HOME_LOGIC_EXT)}
         injectedJavaScript={HOME_SCALE_FIT_JS + HOME_CUE_REAL_JS}
         onLoadStart={() => { setPageLoaded(false); onLoadStart(); }}
         onLoadEnd={() => { setPageLoaded(true); onLoadEnd(); }}
         onMessage={(e) => {
-          let msg: { type?: string; ts?: number; text?: string };
+          let msg: { type?: string; ts?: number; text?: string; wid?: string; rows?: EditRow[] };
           try { msg = JSON.parse(e.nativeEvent.data); } catch { return; }
           if (msg.type === 'ready') { onReady(); return; }
           if (msg.type === 'start') { router.push('/workout' as any); return; }
@@ -533,6 +574,18 @@ export default function HomeScreen() {
           if (msg.type === 'progress') { router.push('/(tabs)/progress' as any); return; }
           if (msg.type === 'recap' && msg.ts != null) { router.push({ pathname: '/recap', params: { ts: String(msg.ts) } } as any); return; }
           if (msg.type === 'homeCueSend' && msg.text) { void handleHomeCueSend(msg.text); return; }
+          if (msg.type === 'saveEdit' && msg.wid && msg.rows) {
+            // the Edit sheet closed with changes: save them to the plan, then refresh what this screen shows
+            void saveWorkoutEdit(msg.wid, msg.rows).then(async (saved) => {
+              if (__DEV__) console.log('[HOME] Edit sheet closed:', msg.rows?.length, 'exercises |', saved ? 'saved to the plan' : 'no change to save');
+              if (!saved) return;
+              const [plan, sessions] = await Promise.all([loadPlan(), getAllSessions()]);
+              const ld = buildHomeLogicData(plan);
+              setLogicJs(athltSetDataJs(ld) + '; window.__editWid = ' + JSON.stringify(ld.editWid) + '; true;');
+              setInjectJs(buildHomeInjectJs(plan, sessions, insets.top, insets.bottom));
+            }).catch(() => {});
+            return;
+          }
         }}
         // BUG FOUND ("clear cutoff, colored background then blank white on
         // top, doesn't match"): an earlier fix added marginTop here to fix

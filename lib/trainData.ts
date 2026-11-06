@@ -11,6 +11,7 @@
  */
 import { EXERCISE_CATALOG } from '../constants/exercises';
 import { groupIntoWorkouts, calcStreak, type SessionEntry, type WorkoutGroup } from './sessionLog';
+import { addableExercises } from './planEdit';
 import type { Plan, Workout } from '../types/plan';
 
 export interface TrainDay {
@@ -21,6 +22,8 @@ export interface TrainDay {
   rest?: boolean;
   href: string;           // what the main button does ("tr:start" | "tr:recap:<ts>" | "tr:myworkouts" | "tr:none")
   restHref: string;       // what a rest card's button does
+  rows: [string, string][]; // what the Edit sheet shows for this card
+  wid?: string;           // the plan workout this card is (so an Edit-sheet change can be saved to it); not set for finished days
 }
 
 export interface TrainData {
@@ -32,6 +35,7 @@ export interface TrainData {
   lib: [string, string][];                       // Practice Exercises: [name, "Quads · Glutes"]
   libIds: Record<string, string>;                // name -> exercise id (what Check form opens)
   myWorkouts: { name: string; meta: string }[];  // the My Workouts rail (up to 3 cards)
+  extra: [string, string][];                     // what the Edit sheet's "Add exercise" offers (real catalogue, real defaults)
 }
 
 const SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -110,23 +114,23 @@ export function buildTrainData(
     if (i <= 5 && g) {
       const name = nameForGroup(g, plan);
       moves[name] = groupRows(g);
-      days.push({ short: SHORT[date.getDay()], name, meta: groupMeta(g), done: true, href: `tr:recap:${g.ts}`, restHref: 'tr:log' });
+      days.push({ short: SHORT[date.getDay()], name, meta: groupMeta(g), done: true, href: `tr:recap:${g.ts}`, restHref: 'tr:log', rows: groupRows(g) });
     } else if (i === 5) {
       if (todayW) {
         moves[todayW.splitLabel] = plannedRows(todayW);
-        days.push({ short: SHORT[date.getDay()], name: todayW.splitLabel, meta: plannedMeta(todayW), href: 'tr:start', restHref: 'tr:start' });
+        days.push({ short: SHORT[date.getDay()], name: todayW.splitLabel, meta: plannedMeta(todayW), href: 'tr:start', restHref: 'tr:start', rows: plannedRows(todayW), wid: todayW.id });
       } else {
-        days.push({ short: SHORT[date.getDay()], name: 'Rest day', meta: cur < 0 ? 'Build a plan to get started' : 'Recover for tomorrow', rest: true, href: 'tr:start', restHref: 'tr:start' });
+        days.push({ short: SHORT[date.getDay()], name: 'Rest day', meta: cur < 0 ? 'Build a plan to get started' : 'Recover for tomorrow', rest: true, href: 'tr:start', restHref: 'tr:start', rows: [] });
       }
     } else if (i === 6) {
       if (tomorrowW) {
         moves[tomorrowW.splitLabel] = moves[tomorrowW.splitLabel] ?? plannedRows(tomorrowW);
-        days.push({ short: SHORT[date.getDay()], name: tomorrowW.splitLabel, meta: plannedMeta(tomorrowW), href: 'tr:myworkouts', restHref: 'tr:none' });
+        days.push({ short: SHORT[date.getDay()], name: tomorrowW.splitLabel, meta: plannedMeta(tomorrowW), href: 'tr:myworkouts', restHref: 'tr:none', rows: plannedRows(tomorrowW), wid: tomorrowW.id });
       } else {
-        days.push({ short: SHORT[date.getDay()], name: 'Rest day', meta: 'Recover for ' + LONG[addDays(date, 1).getDay()], rest: true, href: 'tr:none', restHref: 'tr:none' });
+        days.push({ short: SHORT[date.getDay()], name: 'Rest day', meta: 'Recover for ' + LONG[addDays(date, 1).getDay()], rest: true, href: 'tr:none', restHref: 'tr:none', rows: [] });
       }
     } else {
-      days.push({ short: SHORT[date.getDay()], name: 'Rest day', meta: 'Recover for ' + nextName, rest: true, href: 'tr:none', restHref: 'tr:log' });
+      days.push({ short: SHORT[date.getDay()], name: 'Rest day', meta: 'Recover for ' + nextName, rest: true, href: 'tr:none', restHref: 'tr:log', rows: [] });
     }
   }
   // the Edit sheet looks rows up by the card's name and falls back to "Full body"
@@ -135,6 +139,7 @@ export function buildTrainData(
   const { lib, libIds } = practiceLibrary();
   return {
     insets, streak: calcStreak(sessions), cal, days, moves, lib, libIds,
+    extra: addableExercises(),
     myWorkouts: workouts.slice(0, 3).map(w => ({ name: w.splitLabel, meta: plural(w.exercises.length, 'exercise') })), // short, like the design's "42 min" (a longer line wraps and moves everything below)
   };
 }
