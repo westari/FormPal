@@ -160,6 +160,10 @@ export default function SaveProgressScreen({
             <View style={s.progTrack}><View style={[s.progFill, { width: `${progress * 100}%` }]} /></View>
           </View>
         )}
+        {/* TEMPORARY dev skip: goes past sign-in without an account. Remove before release. */}
+        <Pressable onPress={() => { Haptics.selectionAsync(); onAdvance(); }} hitSlop={12} style={s.skipBtn}>
+          <Text style={s.skipTxt}>Skip</Text>
+        </Pressable>
       </View>
 
       <Text style={s.h1}>Save your progress</Text>
@@ -239,6 +243,8 @@ const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#ffffff' },
 
   headerRow: { paddingTop: 8, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center' },
+  skipBtn: { paddingHorizontal: 14, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(17,17,20,0.07)' },
+  skipTxt: { fontFamily: PJS.bold, fontSize: 14, color: '#111114' },
   progTrack: { height: 4, backgroundColor: 'rgba(17,24,39,0.08)', borderRadius: 2, overflow: 'hidden' },
   progFill:  { height: 4, backgroundColor: '#111114', borderRadius: 2 },
   backBtn: {

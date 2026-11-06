@@ -609,10 +609,13 @@ function TrackingMeter({ target, show, top, onHighChange }: {
     <View pointerEvents="none" style={[s.cameraLockWrap, { top }]}>
       <GlassPanel radius={999} style={s.meterPill}>
         <View style={s.meterInner}>
-          <Text style={s.meterLabel}>Form detection</Text>
-          <Text style={s.meterNum}>{display}<Text style={s.meterPct}>%</Text></Text>
-          <View style={s.meterTrack}>
-            <View style={[s.meterFill, { width: `${display}%`, backgroundColor: level }]} />
+          {/* how well the camera sees your whole body */}
+          <Text style={s.meterLabel}>Body tracking</Text>
+          <View style={s.meterRow}>
+            <Text style={s.meterNum}>{display}<Text style={s.meterPct}>%</Text></Text>
+            <View style={s.meterTrack}>
+              <View style={[s.meterFill, { width: `${display}%`, backgroundColor: level }]} />
+            </View>
           </View>
         </View>
       </GlassPanel>
@@ -1849,10 +1852,11 @@ const s = StyleSheet.create({
   title:      { flex: 1, textAlign: 'center', marginHorizontal: 10, fontFamily: F.bold, fontSize: 15, color: C.text, letterSpacing: 0.2 },
   cameraLockWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   meterPill:  { alignSelf: 'center' },
-  meterInner: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 9 },
+  meterInner: { alignItems: 'center', gap: 2, paddingHorizontal: 18, paddingTop: 8, paddingBottom: 9 },
+  meterRow:   { flexDirection: 'row', alignItems: 'center', gap: 10 },
   meterTrack: { width: 52, height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.22)', overflow: 'hidden' },
   meterFill:  { height: 3, borderRadius: 2 },
-  meterLabel: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12, color: 'rgba(255,255,255,0.8)', letterSpacing: -0.1 },
+  meterLabel: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 11, lineHeight: 14, color: 'rgba(255,255,255,0.78)', letterSpacing: 0.1 },
   meterNum:   { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 16, lineHeight: 20, color: '#fff', letterSpacing: -0.2, fontVariant: ['tabular-nums'] },
   meterPct:   { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 11, color: 'rgba(255,255,255,0.7)' },
   errorCard:  { position: 'absolute', left: 24, right: 24, top: '38%', backgroundColor: C.glass, borderRadius: 16, padding: 24, borderWidth: 1, borderColor: C.border },
