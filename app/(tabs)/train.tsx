@@ -1,26 +1,29 @@
 /**
  * app/(tabs)/train.tsx — Train tab
  *
- * Renders assets/app screens/traintab.html full-bleed in a WebView over the app's
- * own soft AppBackground. The design's glass panels are kept; its saturated colour
- * blobs are hidden (they made the tab look louder than the rest of the app, and the
- * big blur filters are heavy for WKWebView). The mockup's fake phone chrome is
- * swapped for the real thing — the fake status bar
- * becomes a spacer the height of the real one, the fake bottom nav is dropped
- * (the real tab bar overlays the bottom; content gets bottom padding so it
- * scrolls clear of it), and the 472x1024 frame is scaled to the phone's width.
+ * Renders assets/app screens/traintab.html (the new Train design: calendar strip, seven day cards, Quick Start,
+ * My Workouts, Practice Exercises, Edit / Edit-with-Cue sheets) full-bleed in a WebView, exactly as the file looks.
+ * The design file is never edited. What this screen adds on top of it:
  *
- * iOS can kill a WKWebView's content process (memory pressure, other web views in the app);
- * the web view then stays blank white forever. onContentProcessDidTerminate and a
- * focus-time liveness ping reload it.
+ *  - REAL DATA through the design's own logic (lib/dcLogicPatch.ts): the seven day cards, the calendar strip, the
+ *    streak, the Edit sheet's exercise rows and the Practice Exercises list come from the real plan and session
+ *    log (lib/trainData.ts). Today's card is the plan's current workout; finished days show what was done.
+ *  - REAL CHROME instead of the mock's: the design's fake tab bar and "+" button are hidden (the app has a real
+ *    native tab bar and Plus tab); the header is pushed below the real status bar / notch; the two sheets are lifted
+ *    above the real tab bar and are completely hidden while closed.
+ *  - Navigation: every button goes to the real screen (Start workout, View recap, Create workout, Log a session,
+ *    My Workouts, Check form). Nothing on the page can navigate the web view away.
+ *  - The Edit-with-Cue / Summarize-with-Cue chat is wired to the real Cue backend (same code as the Home tab).
+ *  - No zoom, no text selection / tap highlight, the shared Cue orb look.
  *
- * ROBUSTNESS: the design ships as a self-extracting bundle that REPLACES the
- * whole <html> element some time after the page's `load` event — on a phone
- * that can be several seconds. Everything is installed in
- * injectedJavaScriptBeforeContentLoaded with an observer that never stops
- * (re-applies after the swap and after every remount), the WebView stays hidden
- * until the page reports it's ready, and the plan view's exercise list is real
- * data via lib/dcLogicPatch.ts instead of the mockup's demo list.
+ * Kept from before, on purpose: the page stays hidden until it is laid out, filled with real data and still (so
+ * nothing flashes or jumps); the design's one-time entrance animations are switched off (they would be caught
+ * half-way when the page is revealed); iOS can kill a WKWebView's content process, so a killed / unresponsive web
+ * view is reloaded. Removed: everything written for the old design (hiding its colour blobs, the shield swap, the
+ * 472x1024 frame scaling, the status-bar spacer, the plan view and the four practice cards).
+ *
+ * The page fingerprint: this screen logs [TRAIN] lines with the md5 of the HTML file it loaded and what the loaded
+ * page actually contains, so a phone log proves which design file is running.
  */
 
 import React, { useCallback, useRef, useState, useEffect } from 'react';
@@ -29,202 +32,228 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
+import { Asset } from 'expo-asset';
 import * as Haptics from 'expo-haptics';
-import AppBackground from '../../components/AppBackground';
 import { DC_VIEWPORT_JS, DC_NO_ZOOM_JS, CONSOLE_FORWARD_JS, DC_SETTLE_JS } from '../../lib/dcWebviewHelpers';
 import { dcLogicPatchJs, athltSetDataJs } from '../../lib/dcLogicPatch';
+import { CUE_ORB_CSS, CUE_ORB_JS } from '../../lib/cueOrb';
+import { HOME_CUE_REAL_JS } from './index';
 import { loadPlan } from '../../lib/planStorage';
-import { getAllSessions, computeMuscleTiers } from '../../lib/sessionLog';
-import { computeOverallStanding } from '../../components/MuscleTierMap';
-import { tierDataUri } from '../../lib/rankImages';
-import { exerciseMode } from '../../constants/exerciseDefinitions';
-import type { Plan } from '../../types/plan';
+import { getAllSessions } from '../../lib/sessionLog';
+import { askCue } from '../../lib/cueApi';
+import { buildTrainData, type TrainData } from '../../lib/trainData';
 
 const TRAIN_HTML = require('../../assets/app screens/traintab.html');
-const TRAIN_BUILD = 'train-3';
+const TRAIN_BUILD = 'train-4';
 if (__DEV__) console.log(`[train] build ${TRAIN_BUILD}`);
-// Every step of the tab's life is logged with the [TRAIN] prefix (dev builds only; the dev log server
-// forwards console.log to logs/latest.log): mounted, data loaded, data pushed, page ready, revealed,
-// load start/end, any error, and a killed web view process.
+// Every step of the tab's life is logged with the [TRAIN] prefix (dev builds only; the dev log server forwards
+// console.log to logs/latest.log): mounted, which HTML file loaded, data loaded, data pushed, page ready,
+// revealed, load start/end, any error, a killed web view process.
 const tlog = (...a: unknown[]) => { if (__DEV__) console.log('[TRAIN]', ...a); };
 
-// Practice-card label → CV exercise id.
-const PRACTICE_MAP: Record<string, string> = {
-  'push-ups': 'pushup',
-  'squats':   'squat',
-  'pull-ups': 'pullup',
-  'lunges':   'lunge',
-};
-
-// Subclass of the design's own logic: the plan view's exercise list is real.
-// (Verified: `workout` is the only data-driven list in this design — the hero
-// and the 4 practice cards are static markup, handled by the text map below.)
-const TRAIN_LOGIC_EXT = `function (Orig) {
+// ── The design's own logic, fed real data ────────────────────────────────────────────────────────────────────────
+// Written against the NEW file (.scratch/unpacked-designs/traintab.html): `DAYS`, `CAL`, `MOVES` and `LIB` are the
+// class fields its renderVals() reads, `days[i].href / restHref` are the day cards' button targets. The design
+// keeps TODAY in slot 5 (and its own scroll code centres slot 5), so lib/trainData.ts builds a rolling week.
+export const TRAIN_LOGIC_EXT = `function (Orig) {
   return class extends Orig {
     renderVals() {
+      var d = window.__athltData;
+      if (d) { this.DAYS = d.days; this.CAL = d.cal; this.MOVES = d.moves; this.LIB = d.lib; }
       var v = super.renderVals();
-      var D = window.__athltData;
-      if (D && D.workout) v.workout = D.workout;
+      if (!d) return v;
+      v.streak = String(d.streak);
+      v.noWorkouts = d.myWorkouts.length === 0;
+      v.hasWorkouts = !v.noWorkouts;
+      v.days = v.days.map(function (c, i) {
+        var x = d.days[i];
+        if (x) { c.href = x.href; c.restHref = x.restHref; }
+        return c;
+      });
       return v;
     }
   };
 }`;
 
-const TRAIN_WEB_INJECT = `
+// Hides the design's fake tab bar and "+" (the app has the real ones), no tap highlight / selection, the one-time
+// entrance animations off, the shared Cue orb look, and nothing painted until the page says it is ready.
+const TRAIN_CSS = `
+  div[style*="right: 88px"][style*="bottom: 22px"][style*="height: 64px"] { display: none !important; }
+  div[style*="right: 14px"][style*="bottom: 22px"][style*="width: 64px"][style*="height: 64px"] { display: none !important; }
+  * { -webkit-tap-highlight-color: rgba(0,0,0,0) !important; -webkit-touch-callout: none !important; -webkit-user-select: none !important; user-select: none !important; }
+  input { -webkit-user-select: text !important; user-select: text !important; font-size: 16px !important; }
+  a { outline: none !important; }
+  [style*="hm-rise"], [style*="hm-bar"] { animation: none !important; }
+  ${CUE_ORB_CSS}
+  html:not([data-pready]) body { visibility: hidden !important; }
+`;
+
+export const TRAIN_WEB_INJECT = `
 (function () {
   if (window.__trainInstalled) return;
   window.__trainInstalled = true;
-  function post(m) { try { window.ReactNativeWebView.postMessage(m); } catch (e) {} }
-  function btnFor(el) {
-    for (var i = 0; el && i < 7; i++, el = el.parentElement) {
-      if (!el.getAttribute) continue;
-      if (el.getAttribute('role') === 'button' || el.tagName === 'BUTTON') return el;
+  function post(m) { try { window.ReactNativeWebView.postMessage(JSON.stringify(m)); } catch (e) {} }
+  function D() { return window.__athltData || null; }
+  var CSS = ${JSON.stringify(TRAIN_CSS)};
+  function ensureCss() {
+    if (document.getElementById('__train_css')) return;
+    var host = document.head || document.documentElement;
+    if (!host) return;
+    var s = document.createElement('style'); s.id = '__train_css'; s.textContent = CSS; host.appendChild(s);
+  }
+
+  // The design is a fixed 390x844 canvas (no id): scaled to the real screen height, like the Home tab.
+  function canvas() {
+    var all = document.querySelectorAll('div');
+    for (var i = 0; i < all.length; i++) if (all[i].style.width === '390px' && all[i].style.height === '844px') return all[i];
+    return null;
+  }
+  function fit() {
+    var root = canvas(), vh = window.innerHeight;
+    if (!root || !vh) return false;
+    var S = vh / 844;
+    window.__dcCanvasScale = S;
+    root.style.setProperty('position', 'relative', 'important');
+    root.style.setProperty('margin', '0 auto', 'important');
+    root.style.setProperty('transform-origin', 'top center', 'important');
+    root.style.setProperty('transform', 'scale(' + S + ')', 'important');
+    document.documentElement.style.setProperty('margin', '0', 'important');
+    document.documentElement.style.setProperty('overflow', 'hidden', 'important');
+    document.body.style.setProperty('margin', '0', 'important');
+    document.body.style.setProperty('overflow', 'hidden', 'important');
+    document.body.style.setProperty('height', vh + 'px', 'important');
+    return true;
+  }
+
+  // The design's header starts 62px down (its fake status bar). Pushed down by the real top inset so it clears the
+  // notch, exactly as the Home tab does, so the two tabs' titles sit at the same height.
+  function header() {
+    var d = D(), S = window.__dcCanvasScale;
+    if (!d || !S) return false;
+    var h = document.querySelector('[data-train-header]');
+    if (!h) {
+      var all = document.querySelectorAll('div');
+      for (var i = 0; i < all.length; i++) if (all[i].style.paddingTop === '62px') { h = all[i]; break; }
+      if (!h) return false;
+      h.setAttribute('data-train-header', '1');
+    }
+    h.style.setProperty('padding-top', (62 + d.insets.top / S) + 'px', 'important');
+    return true;
+  }
+
+  // The Edit and Edit-with-Cue sheets sit 8px above the canvas bottom, under the real tab bar: lifted above it. A
+  // closed sheet is parked at translateY(110%), which no longer clears the screen once lifted, so a closed sheet is
+  // fully hidden (not visible, no taps) and shown again the moment it starts to open.
+  function hideWhenClosed(el) {
+    if (!el || el.__hideWired) return;
+    el.__hideWired = true;
+    var timer = null;
+    function closed() { var t = el.style.transform || ''; return t.indexOf('translateY(1') === 0 && t.indexOf('%') > 0; }
+    function sync(first) {
+      if (closed()) {
+        if (first) { el.style.setProperty('visibility', 'hidden', 'important'); el.style.setProperty('pointer-events', 'none', 'important'); return; }
+        if (!timer && el.style.visibility !== 'hidden') timer = setTimeout(function () { timer = null; if (closed()) { el.style.setProperty('visibility', 'hidden', 'important'); el.style.setProperty('pointer-events', 'none', 'important'); } }, 520);
+      } else {
+        if (timer) { clearTimeout(timer); timer = null; }
+        el.style.removeProperty('visibility'); el.style.removeProperty('pointer-events');
+      }
+    }
+    sync(true);
+    try { new MutationObserver(function () { sync(false); }).observe(el, { attributes: true, attributeFilter: ['style'] }); } catch (e) {}
+  }
+  function sheets() {
+    var d = D(), S = window.__dcCanvasScale;
+    if (!d || !S) return false;
+    var divs = document.querySelectorAll('div'), edit = null, cue = null;
+    for (var i = 0; i < divs.length; i++) {
+      if (!edit && divs[i].style.maxHeight === '620px') edit = divs[i];
+      if (!cue && divs[i].style.height === '520px' && divs[i].style.position === 'absolute') cue = divs[i];
+    }
+    if (!edit || !cue) return false;
+    var extra = (d.insets.bottom + 49) / S;
+    edit.style.setProperty('bottom', (8 + extra) + 'px', 'important');
+    cue.style.setProperty('bottom', (8 + extra) + 'px', 'important');
+    hideWhenClosed(edit); hideWhenClosed(cue);
+    return true;
+  }
+
+  // The seven day cards (a horizontal rail); the design centres Today (slot 5) itself once they are laid out.
+  function rail() {
+    var all = document.querySelectorAll('div[data-scroll]');
+    for (var i = 0; i < all.length; i++) if (all[i].style.overflowX === 'auto' && all[i].children.length === 7 && all[i].style.scrollSnapType) return all[i];
+    return null;
+  }
+
+  // My Workouts: the design's three example cards show the real first three plan workouts.
+  function myWorkouts() {
+    var d = D();
+    if (!d) return false;
+    var cards = document.querySelectorAll('a[href^="Workout Preview.dc.html"]');
+    for (var i = 0; i < cards.length; i++) {
+      var w = d.myWorkouts[i];
+      if (!w) { cards[i].style.setProperty('display', 'none', 'important'); continue; }
+      cards[i].style.removeProperty('display');
+      var n = cards[i].querySelector('div[style*="font-size: 16px"]'), m = cards[i].querySelector('div[style*="font-size: 13px"]');
+      if (n && n.textContent !== w.name) n.textContent = w.name;
+      if (m && m.textContent !== w.meta) m.textContent = w.meta;
+    }
+    return d.myWorkouts.length === 0 || cards.length > 0;
+  }
+
+  // Every button goes to the real screen; nothing can navigate the web view away.
+  function exerciseIdFor(btn) {
+    var ids = (D() || {}).libIds || {};
+    var el = btn;
+    for (var up = 0; el && up < 6; up++, el = el.parentElement) {
+      var kids = el.querySelectorAll ? el.querySelectorAll('div') : [];
+      for (var k = 0; k < kids.length; k++) {
+        var t = (kids[k].textContent || '').trim(); // (the name is wrapped in a span by the design's runtime)
+        if (ids[t]) return ids[t];
+      }
     }
     return null;
   }
-  document.addEventListener('pointerdown', function (e) { if (btnFor(e.target)) post('__tap'); }, true);
-  document.addEventListener('click', function (e) {
-    var b = btnFor(e.target);
-    if (!b) return;
-    var t = (b.textContent || '').replace(/\\s+/g, ' ').trim();
-    // Plan-view CTA
-    if (/^Begin first exercise/i.test(t)) return post('begin');
-    // A practice card: it carries an exercise name in its text. (The hero
-    // "Start" and the plan back-arrow are the mockup's own view switch — they
-    // match nothing here, so the mockup's handler runs untouched.)
-    if (b.getAttribute('data-glass') === 'panel') {
-      var name = t.toLowerCase();
-      var keys = ['push-ups','pull-ups','squats','lunges'];
-      for (var i = 0; i < keys.length; i++) {
-        if (name.indexOf(keys[i]) >= 0) return post('practice:' + keys[i]);
+  document.addEventListener('pointerdown', function (e) {
+    var el = e.target;
+    for (var i = 0; el && i < 7; i++, el = el.parentElement) {
+      if (el.tagName === 'A' || (el.getAttribute && el.getAttribute('sc-camel-on-click') !== null) || (el.style && el.style.cursor === 'pointer')) { post({ type: 'tap' }); return; }
+    }
+  }, true);
+  document.addEventListener('click', function (ev) {
+    var el = ev.target;
+    for (var i = 0; el && i < 8; i++, el = el.parentElement) {
+      if (!el.getAttribute) continue;
+      if (el.getAttribute('aria-label') === 'Check form') {
+        ev.preventDefault(); ev.stopPropagation();
+        var id = exerciseIdFor(el);
+        if (id) post({ type: 'practice', id: id });
+        return;
+      }
+      if (el.tagName === 'A') {
+        var h = el.getAttribute('href') || '';
+        if (h === '#') return; // the design's own handler (Edit, Edit / Summarize with Cue) runs
+        ev.preventDefault(); ev.stopPropagation();
+        if (h.indexOf('tr:') === 0) post({ type: 'nav', to: h.slice(3) });
+        else if (h.indexOf('Create Workout') === 0) post({ type: 'nav', to: 'create' });
+        else if (h.indexOf('Log Session') === 0) post({ type: 'nav', to: 'log' });
+        else if (h.indexOf('My Workouts') === 0 || h.indexOf('Workout Preview') === 0) post({ type: 'nav', to: 'myworkouts' });
+        return;
       }
     }
   }, true);
 
-  var CARD = 'div[style*="width: 472px"][style*="height: 1024px"]';
-  var WRAP = 'div[style*="min-height: 100vh"][style*="padding: 40px 24px"]';
-  // The design is a 472x1024 phone-frame mock (same 0.461 aspect as a real iPhone). It is scaled
-  // to the phone's WIDTH, the card is stretched to the real height (--trH), and the mock's own
-  // chrome is swapped for the real thing: the fake status bar becomes an empty spacer the height
-  // of the real one (--trTop), the fake bottom nav is dropped (the real tab bar overlays the
-  // bottom; --trTb of padding keeps content scrollable above it). The page is transparent: the app's
-  // AppBackground shows through, and the mockup's own colour blobs are hidden. Glass panels are kept.
-  var CSS = ''
-    + 'html{margin:0!important;padding:0!important;background:transparent!important;overflow:hidden!important;height:100%!important;width:100%!important;}'
-    + 'body{margin:0!important;padding:0!important;background:transparent!important;overflow:hidden!important;}'
-    + WRAP + '{min-height:0!important;height:var(--trH,1024px)!important;padding:0!important;display:block!important;background:transparent!important;overflow:hidden!important;}'
-    + CARD + '{width:472px!important;height:var(--trH,1024px)!important;border-radius:0!important;box-shadow:none!important;margin:0!important;background:transparent!important;}'
-    + 'div[style*="filter: blur(52px)"]{display:none!important;}'
-    + 'div[style*="padding: 22px 34px 0"]{visibility:hidden!important;flex:none!important;height:var(--trTop,0px)!important;min-height:0!important;padding:0!important;overflow:hidden!important;}'
-    + 'div[style*="padding: 14px 30px 0"]{display:none!important;}'
-    + 'svg{will-change:transform;}'
-    // The design's one-time entrance animations (cards rising, the shield dropping in) would play while the page is
-    // still hidden and be caught half-way when it is revealed, so they are off. The plan view's own slide-in stays.
-    + '[style*="fadeUp"],[style*="shieldIn"]{animation:none!important;}'
-    // Nothing is painted until the page has its layout, data and logic and has stopped changing
-    // (<html data-pready> is set by tick(); a fresh document starts hidden again).
-    + 'html:not([data-pready]) body{visibility:hidden!important;}';
-
-  function ensure() {
-    if (document.getElementById('__rn_css')) return;
-    var host = document.head || document.documentElement;
-    if (!host) return; // before-content-loaded: the document may not exist yet
-    var s = document.createElement('style');
-    s.id = '__rn_css';
-    s.textContent = CSS;
-    host.appendChild(s);
-  }
-  function fit() {
-    ensure();
-    var vw = window.innerWidth, vh = window.innerHeight;
-    if (!vw || !vh) return false;
-    var S = vw / 472, H = vh / S;
-    var D = window.__athltData, ins = (D && D.insets) || { top: 0, bottom: 0 };
-    var key = S + '|' + ins.top + '|' + ins.bottom;
-    var b = document.body;
-    if (!b) return false;
-    if (b.__rnFit !== key) {
-      b.__rnFit = key;
-      var root = document.documentElement.style;
-      root.setProperty('--trH', H.toFixed(2) + 'px');
-      root.setProperty('--trTop', (ins.top / S).toFixed(2) + 'px');
-      root.setProperty('--trTb', ((ins.bottom + 49) / S).toFixed(2) + 'px');
-      b.style.setProperty('width', '472px', 'important');
-      b.style.setProperty('height', H.toFixed(2) + 'px', 'important');
-      b.style.setProperty('position', 'absolute', 'important');
-      b.style.setProperty('top', '0', 'important');
-      b.style.setProperty('left', '0', 'important');
-      b.style.setProperty('transform', 'scale(' + S + ')', 'important');
-      b.style.setProperty('transform-origin', 'top left', 'important');
-    }
-    // Keep the last row / the plan CTA scrollable above the real tab bar.
-    var tb = ((ins.bottom + 49) / S).toFixed(2) + 'px';
-    var all = document.querySelectorAll('div');
-    for (var i = 0; i < all.length; i++) {
-      var el = all[i];
-      if (el.style.overflowY === 'auto' && el.__tbPad !== tb) { el.__tbPad = tb; el.style.setProperty('padding-bottom', 'calc(8px + ' + tb + ')', 'important'); }
-    }
-    var cta = document.querySelectorAll('[data-cta]');
-    for (var j = 0; j < cta.length; j++) {
-      if (/Begin first exercise/i.test(cta[j].textContent || '') && cta[j].parentElement && cta[j].parentElement.__tbPad !== tb) {
-        cta[j].parentElement.__tbPad = tb;
-        cta[j].parentElement.style.setProperty('padding-bottom', 'calc(10px + ' + tb + ')', 'important');
-      }
-    }
-    return true;
+  // What this page actually is (logged by the app): proves which design file is on screen.
+  function fingerprint() {
+    var txt = (document.body && document.body.innerText) || '';
+    var r = rail();
+    function has(s) { return txt.indexOf(s) >= 0 ? 1 : 0; }
+    return 'cards=' + (r ? r.children.length : 0)
+      + ' quickStart=' + has('Quick Start') + ' myWorkouts=' + has('My Workouts') + ' practice=' + has('Practice Exercises')
+      + ' oldHero=' + (document.querySelectorAll('[data-glass]').length ? 1 : 0)
+      + ' title=' + ((document.querySelector('[data-train-header] div') || {}).textContent || '').trim();
   }
 
-  // Exact-text replace of the mockup's hard-coded demo strings. Idempotent and
-  // re-run on every DOM change, because a view switch remounts the static
-  // markup with its demo text again.
-  function applyMap() {
-    var D = window.__athltData;
-    if (!D || !D.map) return 0;
-    var MAP = D.map, hit = 0;
-    var all = document.querySelectorAll('div');
-    for (var i = 0; i < all.length; i++) {
-      var el = all[i]; if (el.children.length) continue;
-      var t = (el.textContent || '').trim();
-      // Always map from the element's ORIGINAL demo text. Otherwise a replaced value that happens to
-      // equal another card's demo text ("Yesterday") gets mapped again on the next pass (a chain).
-      var key = el.__demo !== undefined ? el.__demo : t;
-      if (Object.prototype.hasOwnProperty.call(MAP, key)) {
-        if (el.__demo === undefined) el.__demo = key;
-        if (el.textContent !== MAP[key]) { el.textContent = MAP[key]; hit++; }
-        t = MAP[key];
-      }
-      // The score pill's colour is part of the demo too (amber on a card that now says "New", etc).
-      var m = /^(\\d+) form$/.exec(t);
-      if (m) el.style.setProperty('color', +m[1] >= 85 ? '#0A9D5A' : '#C08A21');
-      else if (t === 'New') el.style.setProperty('color', 'rgba(26,26,28,0.5)');
-    }
-    // A plan exercise with no tag leaves the design's empty pill behind (its text lives in a span
-    // the runtime adds) - hide it, and show it again if a tag appears.
-    var spans = document.querySelectorAll('[data-glass="panel"] span.sc-interp');
-    for (var q = 0; q < spans.length; q++) {
-      var pill = spans[q].parentElement;
-      if (pill && pill.style.whiteSpace === 'nowrap') pill.style.setProperty('display', (spans[q].textContent || '').trim() === '' ? 'none' : '');
-    }
-    // Hero shield: the mockup ships a silver one for everyone — swap in the user's real rank art
-    // (faded when they have no rank yet; hidden rather than wrong if the art couldn't load).
-    var sh = document.querySelector('img[data-shield]');
-    if (sh && D.shield) {
-      if (D.shield.src) {
-        if (sh.__shieldSrc !== D.shield.src) { sh.__shieldSrc = D.shield.src; sh.setAttribute('src', D.shield.src); }
-        sh.setAttribute('alt', D.shield.alt || '');
-        // filter, not opacity: the mockup's own entrance animation owns opacity (fill-mode both) and would override it
-        sh.style.setProperty('filter', D.shield.ranked ? '' : 'opacity(0.4)');
-        sh.style.setProperty('visibility', 'visible');
-      } else {
-        sh.style.setProperty('visibility', 'hidden');
-      }
-    } else if (sh) {
-      sh.style.setProperty('visibility', 'hidden'); // no data yet: never flash the silver demo shield
-    }
-    return hit;
-  }
-
-  var reported = false, lastAsk = 0;
+  var reported = false, lastAsk = 0, deb, done = { fit: false, header: false, sheets: false, my: false };
   function setPageReady(on) {
     var h = document.documentElement;
     if (!h) return;
@@ -232,25 +261,21 @@ const TRAIN_WEB_INJECT = `
     else if (h.hasAttribute('data-pready')) h.removeAttribute('data-pready');
   }
   function tick() {
-    var ok = fit();
-    applyMap();
-    // Native's first push can land before this document exists (and be lost) —
-    // so the page asks until it has data.
-    if (!window.__athltData && Date.now() - lastAsk > 700) { lastAsk = Date.now(); post('need-data'); }
-    // Ready = real layout exists, the logic swap + data landed, the hero is mounted, and the page has
-    // stopped changing (viewport and DOM still for a moment).
-    var parts = ok && window.__athltData && window.__athltLogicReady && document.querySelector('[data-glass="hero"]');
-    // once revealed it stays revealed; the settle gate only applies to the first reveal
-    var real = reported || !!window.__trainForce || (!!parts && (!window.__dcSettle || window.__dcSettle(160)));
+    ensureCss();
+    done.fit = fit();
+    done.header = header();
+    done.sheets = sheets();
+    done.my = myWorkouts();
+    // Native's first push can land before this document exists (and be lost): the page asks until it has data.
+    if (!D() && Date.now() - lastAsk > 700) { lastAsk = Date.now(); post({ type: 'needData' }); }
+    var r = rail();
+    var parts = done.fit && done.header && done.sheets && done.my && !!D() && !!window.__athltLogicReady && !!r && r.scrollLeft > 0;
+    var real = reported || !!window.__trainForce || (parts && (!window.__dcSettle || window.__dcSettle(200)));
     setPageReady(real);
-    if (!reported && real) {
-      reported = true;
-      post('ready');
-    }
+    if (!reported && real) { reported = true; post({ type: 'ready' }); post({ type: 'fingerprint', fp: fingerprint() }); }
     if (parts && !real) { clearTimeout(deb); deb = setTimeout(tick, 90); }
   }
-  var deb;
-  function schedule() { ensure(); clearTimeout(deb); deb = setTimeout(tick, 60); }
+  function schedule() { ensureCss(); clearTimeout(deb); deb = setTimeout(tick, 60); }
   try { new MutationObserver(schedule).observe(document, { childList: true, subtree: true }); } catch (e) {}
   window.addEventListener('resize', schedule);
   window.__trainTick = tick;
@@ -260,95 +285,14 @@ const TRAIN_WEB_INJECT = `
 true;
 `;
 
-// The train bridge posts plain strings ('__tap', 'begin', 'practice:x',
-// 'ready'); dcLogicPatch posts JSON status — both arrive in onMsg.
-const TRAIN_BEFORE = DC_VIEWPORT_JS + DC_NO_ZOOM_JS + CONSOLE_FORWARD_JS + DC_SETTLE_JS + dcLogicPatchJs(TRAIN_LOGIC_EXT) + TRAIN_WEB_INJECT;
+export const TRAIN_BEFORE = DC_VIEWPORT_JS + DC_NO_ZOOM_JS + CONSOLE_FORWARD_JS + DC_SETTLE_JS + CUE_ORB_JS
+  + dcLogicPatchJs(TRAIN_LOGIC_EXT) + TRAIN_WEB_INJECT + HOME_CUE_REAL_JS;
 
-const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-function timeAgoLabel(ts: number | null): string {
-  if (ts == null) return 'Never checked';
-  const days = Math.floor((Date.now() - ts) / DAY_MS);
-  if (days <= 0) return 'Today';
-  if (days === 1) return 'Yesterday';
-  return `${days} days ago`;
-}
-
-interface TrainData {
-  insets: { top: number; bottom: number };
-  map: Record<string, string>;
-  workout: { n: string; name: string; sets: string; tag: string; tagColor: string }[];
-  shield: { src: string | null; alt: string; ranked: boolean };
-}
-
-// Real default text confirmed by reading the unpacked file
-// (.scratch/unpacked-designs/traintab.html), never guessed. The 4 "Practice
-// your form" cards are fixed static markup, so real data goes into those 4 slots.
-function buildTrainData(
-  plan: Plan | null,
-  sessions: { exerciseId: string; pct: number; ts: number; formChecked?: boolean }[],
-  shield: TrainData['shield'],
-  insets: TrainData['insets'] = { top: 0, bottom: 0 },
-): TrainData {
-  const map: Record<string, string> = {};
-  const today = new Date();
-  const workout: TrainData['workout'] = [];
-
-  const w = plan && plan.workouts.length > 0 ? (plan.workouts[plan.currentWorkoutIndex] ?? plan.workouts[0]) : null;
-  if (plan && w) {
-    const totalSets = w.exercises.reduce((a, e) => a + e.targetSets, 0);
-    const mins = Math.max(10, Math.round(w.exercises.reduce((a, e) => a + e.targetSets * (e.restSeconds + 40), 0) / 60));
-    map['Sunday · Day 12'] = `${WEEKDAYS[today.getDay()]} · Day ${plan.currentWorkoutIndex + 1}`;
-    map['Session 2 of 3'] = `Session ${plan.currentWorkoutIndex + 1} of ${plan.workouts.length}`;
-    map['Upper body'] = w.splitLabel;
-    map['5 lifts · 18 sets'] = `${w.exercises.length} lift${w.exercises.length === 1 ? '' : 's'} · ${totalSets} sets`;
-    map['Upper body · Push'] = w.splitLabel;
-    map['5 exercises · 18 sets · 32 min'] = `${w.exercises.length} exercise${w.exercises.length === 1 ? '' : 's'} · ${totalSets} sets · ${mins} min`;
-    w.exercises.forEach((e, i) => {
-      const fc = exerciseMode(e.exerciseId) === 'formCheck';
-      workout.push({
-        n: String(i + 1),
-        name: e.displayName,
-        sets: `${e.targetSets} × ${e.targetReps}`,
-        tag: fc ? 'Form check' : '',
-        tagColor: '#007AFF',
-      });
-    });
-  } else {
-    // No plan yet — empty state instead of the mockup's fake "Upper body".
-    map['Sunday · Day 12'] = WEEKDAYS[today.getDay()];
-    map['Session 2 of 3'] = '';
-    map['Upper body'] = 'No plan yet';
-    map['5 lifts · 18 sets'] = 'Build a plan to get started';
-    map['Upper body · Push'] = '';
-    map['5 exercises · 18 sets · 32 min'] = '';
-  }
-
-  const byExercise: Record<string, { pct: number; ts: number }[]> = {};
-  for (const s of sessions) {
-    if (s.formChecked === false) continue;
-    (byExercise[s.exerciseId] ??= []).push({ pct: s.pct, ts: s.ts });
-  }
-  const cards: { demoScore: string; demoWhen: string; exerciseId: string }[] = [
-    { demoScore: '94 form', demoWhen: '2 days ago', exerciseId: 'pushup' },
-    { demoScore: '81 form', demoWhen: 'Yesterday', exerciseId: 'squat' },
-    { demoScore: 'New', demoWhen: 'Never checked', exerciseId: 'pullup' },
-    { demoScore: '88 form', demoWhen: '5 days ago', exerciseId: 'lunge' },
-  ];
-  for (const c of cards) {
-    const hist = byExercise[c.exerciseId];
-    if (hist && hist.length > 0) {
-      hist.sort((a, b) => b.ts - a.ts);
-      const avgPct = Math.round(hist.reduce((a, h) => a + h.pct, 0) / hist.length);
-      map[c.demoScore] = `${avgPct} form`;
-      map[c.demoWhen] = timeAgoLabel(hist[0].ts);
-    } else {
-      map[c.demoWhen] = 'Never checked';
-      if (c.demoScore !== 'New') map[c.demoScore] = 'New';
-    }
-  }
-  return { insets, map, workout, shield };
+// FNV-1a over the file text: a second, independent fingerprint next to the asset's md5.
+function fnv(text: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  return h.toString(16).padStart(8, '0');
 }
 
 export default function TrainScreen() {
@@ -362,15 +306,13 @@ export default function TrainScreen() {
   const loads = useRef(0);
   const loading = useRef(false);
 
-  // Show only once the page says it's genuinely laid out, filled and still. iOS does not start loading a
-  // tab's web view until the tab is first shown (the log showed 65s between mount and load), so the
-  // last-resort timer only starts when the page has actually loaded; the page also hides its own content
-  // until it is ready, so even an early reveal can never show a half-built page.
+  // Show only once the page says it's genuinely laid out, filled and still. iOS does not start loading a tab's web
+  // view until the tab is first shown, so the last-resort timer only starts when the page has actually loaded; the
+  // page also hides its own content until it is ready, so even an early reveal can never show a half-built page.
   const armReveal = useCallback(() => {
     if (revealTimer.current) clearTimeout(revealTimer.current);
     revealTimer.current = setTimeout(() => {
       tlog('revealed by 12s safety net after load (page never said ready)');
-      // the page hides its own content until it is ready, so reveal that too or the tab would stay blank
       webRef.current?.injectJavaScript("window.__trainForce=1; try{window.__trainTick&&window.__trainTick()}catch(e){} true;");
       setRevealed(true);
     }, 12000);
@@ -383,6 +325,17 @@ export default function TrainScreen() {
   }, [revealed, fade]);
   useEffect(() => {
     tlog('mounted', TRAIN_BUILD);
+    // Which HTML file is this build loading? md5 of the bundled file (from the asset registry) + a hash of its text.
+    (async () => {
+      try {
+        const asset = Asset.fromModule(TRAIN_HTML);
+        tlog('html file: name', asset.name + '.' + asset.type, '| md5', asset.hash ? String(asset.hash).slice(0, 8) : 'n/a', '| uri', String(asset.uri).split('/').slice(-2).join('/'));
+        await asset.downloadAsync();
+        const res = await fetch(asset.localUri ?? asset.uri);
+        const text = await res.text();
+        tlog('html file: size', text.length, 'chars | fnv', fnv(text));
+      } catch (e) { tlog('html fingerprint failed:', e && (e as Error).message ? (e as Error).message : String(e)); }
+    })();
     return () => { tlog('unmounted'); if (revealTimer.current) clearTimeout(revealTimer.current); };
   }, []);
 
@@ -390,63 +343,71 @@ export default function TrainScreen() {
     tlog('reloading web view:', why);
     setRevealed(false);
     webRef.current?.reload();
-  }, [armReveal]);
+  }, []);
 
   useFocusEffect(useCallback(() => {
     tlog('focused; insets', insets.top, insets.bottom);
     let alive = true;
-    Promise.all([loadPlan(), getAllSessions()]).then(async ([plan, sessions]) => {
+    Promise.all([loadPlan(), getAllSessions()]).then(([plan, sessions]) => {
       tlog('data loaded: plan', plan ? plan.workouts.length + ' workouts' : 'none', '| sessions', sessions.length);
-      const standing = computeOverallStanding(computeMuscleTiers(sessions));
-      const tier = standing?.tier ?? null;
-      const src = await tierDataUri(tier ?? 'bronze');
-      const label = tier ? tier.charAt(0).toUpperCase() + tier.slice(1) : 'Unranked';
-      const shield = { src, alt: label, ranked: !!tier };
       const ins = { top: insets.top, bottom: insets.bottom };
       let td: TrainData;
-      try { td = buildTrainData(plan, sessions, shield, ins); }
+      try { td = buildTrainData(plan, sessions, ins); }
       catch (e) {
         // a stored plan in an unexpected shape must never leave the tab blank: log it and show the empty state
         tlog('ERROR building train data:', e && (e as Error).stack ? (e as Error).stack : String(e));
-        td = buildTrainData(null, sessions, shield, ins);
+        td = buildTrainData(null, sessions, ins);
       }
       dataJsRef.current = athltSetDataJs(td);
       webRef.current?.injectJavaScript(dataJsRef.current);
-      tlog('data pushed to page; rank', tier ?? 'unranked', '| shield art', src ? 'ok' : 'MISSING');
+      tlog('data pushed to page; today =', td.days[5]?.name, '| streak', td.streak, '| my workouts', td.myWorkouts.length);
     }).catch((e) => { tlog('ERROR loading data:', e && (e as Error).message ? (e as Error).message : String(e)); });
-    // Liveness ping: a web view whose content process was killed never answers and stays blank white.
-    // Only pinged when a page has finished loading and none is loading now (a ping sent into a page that is
-    // still loading is lost and used to trigger a pointless reload right after the page was shown). Any
-    // message from the page counts as an answer.
+    // Liveness ping: a web view whose content process was killed never answers and stays blank white. Only pinged
+    // when a page has finished loading and none is loading now. Any message from the page counts as an answer.
     const before = pongAt.current;
-    if (loads.current > 0 && !loading.current) webRef.current?.injectJavaScript("try{window.ReactNativeWebView.postMessage('pong')}catch(e){} true;");
+    if (loads.current > 0 && !loading.current) webRef.current?.injectJavaScript("try{window.ReactNativeWebView.postMessage(JSON.stringify({type:'pong'}))}catch(e){} true;");
     const t = setTimeout(() => { if (alive && pongAt.current === before && loads.current > 0 && !loading.current) reloadPage('no answer to the focus ping'); }, 1800);
     return () => { alive = false; clearTimeout(t); };
   }, [insets.top, insets.bottom, reloadPage]));
 
+  const handleCueSend = useCallback(async (text: string) => {
+    const r = await askCue(text, []);
+    webRef.current?.injectJavaScript(`window.__homeCueReplyReceived && window.__homeCueReplyReceived(${JSON.stringify(r.text)}); true;`);
+  }, []);
+
   function onMsg(raw: string) {
     pongAt.current = Date.now();
-    if (raw === 'pong') return;
-    if (raw === '__tap') { Haptics.selectionAsync(); return; }
-    if (raw === 'ready') { tlog('page ready (layout + data + logic all in place, page still)'); if (revealTimer.current) clearTimeout(revealTimer.current); setRevealed(true); return; }
-    if (raw === 'need-data') { tlog('page asked for data;', dataJsRef.current ? 'sending' : 'not loaded yet'); if (dataJsRef.current) webRef.current?.injectJavaScript(dataJsRef.current); return; }
-    if (raw.startsWith('{')) {
-      // lib/dcLogicPatch's own JSON status posts + forwarded page console
-      try { const m = JSON.parse(raw); if (m.type === 'pageConsole' && (m.level === 'error' || m.level === 'warn')) tlog('page ' + m.level + ':', m.msg); } catch {}
-      return;
-    }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    if (raw === 'begin') { router.push('/workout' as any); return; }
-    if (raw.startsWith('practice:')) {
-      const id = PRACTICE_MAP[raw.slice('practice:'.length)];
-      if (id) router.push(`/formcheck?exercise=${id}` as any);
+    let m: { type?: string; to?: string; id?: string; fp?: string; text?: string; level?: string; msg?: string };
+    try { m = JSON.parse(raw); } catch { return; }
+    switch (m.type) {
+      case 'pong': return;
+      case 'tap': Haptics.selectionAsync(); return;
+      case 'ready': tlog('page ready (layout + data + logic all in place, page still)'); if (revealTimer.current) clearTimeout(revealTimer.current); setRevealed(true); return;
+      case 'fingerprint': tlog('page fingerprint:', m.fp); return;
+      case 'needData': tlog('page asked for data;', dataJsRef.current ? 'sending' : 'not loaded yet'); if (dataJsRef.current) webRef.current?.injectJavaScript(dataJsRef.current); return;
+      case 'logicReady': return;
+      case 'pageConsole': if (m.level === 'error' || m.level === 'warn') tlog('page ' + m.level + ':', m.msg); return;
+      case 'homeCueSend': if (m.text) void handleCueSend(m.text); return;
+      case 'practice':
+        if (m.id) { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push(`/formcheck?exercise=${m.id}` as any); }
+        return;
+      case 'nav': {
+        const to = m.to ?? '';
+        if (to === 'none') return;
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        if (to === 'start') router.push('/workout' as any);
+        else if (to === 'create') router.push('/create-workout' as any);
+        else if (to === 'log') router.push('/log-session' as any);
+        else if (to === 'myworkouts') router.push('/my-workouts' as any);
+        else if (to.startsWith('recap:')) router.push({ pathname: '/recap', params: { ts: to.slice('recap:'.length) } } as any);
+        return;
+      }
     }
   }
 
   return (
     <View style={s.root} onLayout={(e) => tlog('rendered; container', Math.round(e.nativeEvent.layout.width) + 'x' + Math.round(e.nativeEvent.layout.height))}>
       <StatusBar style="dark" />
-      <AppBackground />
       <Animated.View style={{ flex: 1, opacity: fade }}>
       <WebView
         ref={webRef}
@@ -460,8 +421,7 @@ export default function TrainScreen() {
         onHttpError={(e) => tlog('web view HTTP ERROR:', e.nativeEvent.statusCode, e.nativeEvent.url)}
         onContentProcessDidTerminate={() => reloadPage('iOS killed the web view process')}
         style={s.web}
-        {...({ opaque: false } as object)}
-        scrollEnabled={false}
+        scrollEnabled
         bounces={false}
         overScrollMode="never"
         androidLayerType="hardware"
@@ -479,6 +439,6 @@ export default function TrainScreen() {
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#EDF1F8' },
-  web:  { flex: 1, backgroundColor: 'transparent' },
+  root: { flex: 1, backgroundColor: '#eeeef1' },
+  web:  { flex: 1, backgroundColor: '#eeeef1' },
 });
