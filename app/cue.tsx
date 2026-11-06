@@ -33,6 +33,7 @@ import {
 import { askCue, CUE_HISTORY_MAX } from '../lib/cueApi';
 import { loadPlan } from '../lib/planStorage';
 import { buildCueGreeting, cueGreetingInjectJs } from '../lib/cueGreeting';
+import { CUE_ORB_JS } from '../lib/cueOrb';
 
 const CUE_HTML = require('../assets/app screens/cue.html');
 const CUE_BUILD = 'cue-6';
@@ -311,7 +312,7 @@ export default function CueScreen() {
         source={CUE_HTML}
         originWhitelist={['*']}
         style={[styles.web, { opacity: ready ? 1 : 0 }]}
-        injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS}
+        injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS + CUE_ORB_JS}
         injectedJavaScript={CONSOLE_FORWARD_JS + cueInject()}
         onMessage={(e) => {
           let msg: { type?: string };

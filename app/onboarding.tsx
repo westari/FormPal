@@ -27,6 +27,7 @@ import { FONT, W, Col, Elev } from '../constants/theme';
 import { computeGoalPlan } from '../lib/onboardingGoals';
 import { hasGiftOfferBeenShown, markGiftOfferShown } from '../lib/giftOffer';
 import { loadPlan } from '../lib/planStorage';
+import { CUE_ORB_JS } from '../lib/cueOrb';
 import type { Plan as PlanT } from '../types/plan';
 // BUG FOUND (device crash, confirmed via the real error overlay — "Cannot
 // find native module 'ExpoCamera'", thrown from a top-level `import {
@@ -1722,7 +1723,7 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
           ref={webRef}
           source={htmlOverride != null ? { html: htmlOverride } : (ONB_HTML[htmlKey] as any)}
           originWhitelist={['*']}
-          injectedJavaScriptBeforeContentLoaded={isDcPage ? VIEWPORT_JS + '\n' + (extraJsBeforeLoad ?? '') : undefined}
+          injectedJavaScriptBeforeContentLoaded={isDcPage ? VIEWPORT_JS + '\n' + CUE_ORB_JS + '\n' + (extraJsBeforeLoad ?? '') : undefined}
           injectedJavaScript={extraJs ? baseInject + '\n' + extraJs : baseInject}
           onLoadEnd={() => setWebReady(true)}
           onMessage={(e) => {

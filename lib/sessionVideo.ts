@@ -44,16 +44,21 @@ const MAX_WORKOUT_MS = 3 * 60 * 60 * 1000;
 
 type VideoLogEntry = { uri: string; ts: number };
 
-let cachedLog: VideoLogEntry[] | null = null;
+// BUG FOUND ("my newest workout shows the flat icon, older ones show a frame"): the log used to be read ONCE per
+// app run and kept forever, and a failed lookup was remembered as "no video" forever too. Home/Progress read it at
+// launch, long before the new workout's clip was written, so the newest workout never saw its own clip until the
+// app was restarted. The log is tiny, so it is now read from storage on every lookup (parsed again only when its
+// text changed), and only a thumbnail that was really made is remembered.
+let cachedRaw: string | null | undefined;
+let cachedLog: VideoLogEntry[] = [];
 async function loadVideoLog(): Promise<VideoLogEntry[]> {
-  if (cachedLog) return cachedLog;
   try {
     const raw = await AsyncStorage.getItem(VIDEO_LOG_KEY);
-    cachedLog = raw ? JSON.parse(raw) : [];
+    if (raw !== cachedRaw) { cachedRaw = raw; cachedLog = raw ? JSON.parse(raw) : []; }
   } catch {
-    cachedLog = [];
+    cachedRaw = undefined; cachedLog = [];
   }
-  return cachedLog!;
+  return cachedLog;
 }
 
 /**
@@ -75,23 +80,23 @@ export async function findSessionVideoUri(sessionTs: number, prevSessionTs: numb
 // In-memory only (not persisted) — regenerated once per app run per
 // session, which is cheap (a single decoded frame) and avoids the
 // complexity of a disk cache that would need its own invalidation.
-const thumbCache = new Map<string, string | null>();
+const thumbCache = new Map<string, string>();
 
 export async function getSessionThumbnail(sessionTs: number, timeMs: number = 0, prevSessionTs: number = 0): Promise<string | null> {
   if (!VideoThumbnails) return null; // native module not in this build — see the require() guard above
 
   const cacheKey = `${sessionTs}@${timeMs}@${prevSessionTs}`;
-  if (thumbCache.has(cacheKey)) return thumbCache.get(cacheKey)!;
+  const cached = thumbCache.get(cacheKey);
+  if (cached) return cached;
 
   const videoUri = await findSessionVideoUri(sessionTs, prevSessionTs);
-  if (!videoUri) { thumbCache.set(cacheKey, null); return null; }
+  if (!videoUri) return null; // not remembered: the clip may be logged a moment later
 
   try {
     const { uri } = await VideoThumbnails.getThumbnailAsync(videoUri, { time: timeMs, quality: 0.5 });
     thumbCache.set(cacheKey, uri);
     return uri;
   } catch {
-    thumbCache.set(cacheKey, null);
     return null;
   }
 }

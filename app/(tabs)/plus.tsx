@@ -10,6 +10,7 @@ import { SymbolView } from 'expo-symbols';
 import { StatusBar } from 'expo-status-bar';
 import GlassButton from '../../components/GlassButton';
 import AppBackground from '../../components/AppBackground';
+import CueOrb from '../../components/CueOrb';
 
 const ACTIONS = [
   { id: 'form',    symbol: 'camera.fill',                         label: 'Quick Form Check' },
@@ -21,6 +22,7 @@ const ACTIONS = [
 
 const BTN  = 68;
 const ICON = 28;
+const ORB  = 40; // Cue's own orb (shared look, components/CueOrb.tsx) instead of a symbol
 
 export default function PlusScreen() {
   const router = useRouter();
@@ -53,7 +55,7 @@ export default function PlusScreen() {
   useFocusEffect(useCallback(() => {
     if (didNavigate.current) {
       didNavigate.current = false;
-      router.navigate('/(tabs)/');
+      router.navigate('/(tabs)' as any);
       return;
     }
     setVisible(true);
@@ -70,7 +72,7 @@ export default function PlusScreen() {
   const dismiss = useCallback(() => {
     animOut(() => {
       setVisible(false);
-      router.navigate('/(tabs)/');
+      router.navigate('/(tabs)' as any);
     });
   }, [animOut, router]);
 
@@ -154,13 +156,17 @@ export default function PlusScreen() {
               <View style={s.actRow}>
                 <Text style={s.actLabel}>{action.label}</Text>
                 <GlassButton circular={BTN} onPress={() => handleAction(action.id)}>
-                  <SymbolView
-                    name={action.symbol as any}
-                    size={ICON}
-                    tintColor="rgba(240,240,242,0.95)"
-                    type="monochrome"
-                    style={{ width: ICON, height: ICON }}
-                  />
+                  {action.id === 'mypal' ? (
+                    <CueOrb size={ORB} />
+                  ) : (
+                    <SymbolView
+                      name={action.symbol as any}
+                      size={ICON}
+                      tintColor="rgba(240,240,242,0.95)"
+                      type="monochrome"
+                      style={{ width: ICON, height: ICON }}
+                    />
+                  )}
                 </GlassButton>
               </View>
             </Animated.View>

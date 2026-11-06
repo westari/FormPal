@@ -35,6 +35,7 @@ import { workoutFrame, workoutFallbackIcon } from '../../lib/workoutThumbs';
 import type { Plan } from '../../types/plan';
 import { DC_VIEWPORT_JS, DC_NO_ZOOM_JS, DC_SETTLE_JS } from '../../lib/dcWebviewHelpers';
 import { askCue } from '../../lib/cueApi';
+import { CUE_ORB_CSS } from '../../lib/cueOrb';
 
 const HOME_HTML = require('../../assets/app screens/home.html');
 const HOME_BUILD = 'home-5';
@@ -185,13 +186,9 @@ const HIDE_FAKE_CHROME_CSS = `
   /* the artboard's one-time entrance animations would play while the page is still hidden and then be caught
      half-way when it is revealed: they are switched off (the Cue blob's own looping glow is kept) */
   [style*="hm-rise"], [style*="hm-bar"] { animation: none !important; }
-  /* Cue card: the design's own white card sits behind the "This week" card again (nothing overrides it). Only the
-     orb is cleaned up: its blend-mode texture layer and blurred blobs are full-size square layers that WebKit can
-     paint as a visible square around the orb, so they are switched off - the orb keeps its own gradient, highlight,
-     glow and breathing animation. */
-  div[style*="hm-orb-breathe"] { background: none !important; box-shadow: none !important; border: 0 !important; outline: 0 !important; }
-  div[style*="hm-orb-breathe"] div[style*="mix-blend-mode"] { display: none !important; }
-  div[style*="hm-orb-breathe"] div[style*="filter: blur"] { filter: none !important; }
+  /* Cue card: the design's own white card sits behind the "This week" card (nothing overrides it). The orb is the
+     shared Cue orb look (lib/cueOrb.ts), the same one every screen that shows Cue uses. */
+  ${CUE_ORB_CSS}
 `;
 
 // Hidden until the page is ready: the artboard shows its own demo content first, and the real data,
@@ -298,7 +295,31 @@ export function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[], i
       var extra = (INSET_BOTTOM + TAB_BAR_ESTIMATE) / scale;
       if(editSheet) editSheet.style.setProperty('bottom', (8 + extra) + 'px', 'important');
       if(cueSheet) cueSheet.style.setProperty('bottom', (8 + extra) + 'px', 'important');
+      hideWhenClosed(editSheet); hideWhenClosed(cueSheet);
       return true;
+    }
+    // BUG FOUND ("Edit Workout peeks out under the tab bar at launch"): the sheets are lifted above the real
+    // tab bar by the offset above, but the artboard parks a CLOSED sheet at translateY(110%) of its own
+    // height, which only clears the screen when the sheet sits at bottom: 8px. Lifted ~88px, the closed
+    // sheet's top edge stayed ~60px (Edit) / ~35px (Cue) inside the screen. A closed sheet is now fully
+    // hidden (invisible, no taps, takes no space); it shows again the instant it starts to open and stays
+    // visible while it slides out.
+    function hideWhenClosed(el){
+      if(!el || el.__hideWired) return;
+      el.__hideWired = true;
+      var timer = null;
+      function closed(){ var t = el.style.transform || ''; return t.indexOf('translateY(1') === 0 && t.indexOf('%') > 0; }
+      function sync(first){
+        if (closed()) {
+          if (first) { el.style.setProperty('visibility','hidden','important'); el.style.setProperty('pointer-events','none','important'); return; }
+          if (!timer && el.style.visibility !== 'hidden') timer = setTimeout(function(){ timer = null; if (closed()) { el.style.setProperty('visibility','hidden','important'); el.style.setProperty('pointer-events','none','important'); } }, 520);
+        } else {
+          if (timer) { clearTimeout(timer); timer = null; }
+          el.style.removeProperty('visibility'); el.style.removeProperty('pointer-events');
+        }
+      }
+      sync(true);
+      try { new MutationObserver(function(){ sync(false); }).observe(el, { attributes: true, attributeFilter: ['style'] }); } catch(e) {}
     }
     DONE.sheet = pushEditSheetUp();
     if(!DONE.sheet){ [50,150,300,600,1000].forEach(function(d){ setTimeout(function(){ if(!DONE.sheet) DONE.sheet = pushEditSheetUp(); }, d); }); }
