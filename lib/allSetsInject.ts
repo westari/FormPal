@@ -96,6 +96,13 @@ export const ALLSETS_DOM_JS = String.raw`
     // behind the video tile) underneath
     var screen = root.querySelector('[data-screen-label]');
     if (screen) screen.style.setProperty('background', 'transparent', 'important');
+    // the design's play button on every tile: gone (it sat off-centre over the video frame and looked wrong;
+    // the whole tile is the button)
+    var plays = root.querySelectorAll('svg path[d="M7 4.6v14.8L19 12z"]');
+    for (var pi = 0; pi < plays.length; pi++) {
+      var pc = plays[pi].ownerSVGElement && plays[pi].ownerSVGElement.parentElement;
+      if (pc) pc.style.setProperty('display', 'none', 'important');
+    }
     // search + sort have no real function: hide them (layout kept)
     var svgs = root.querySelectorAll('svg');
     for (var i = 0; i < svgs.length; i++) {

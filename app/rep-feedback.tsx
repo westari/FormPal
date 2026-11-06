@@ -250,7 +250,14 @@ export default function RepFeedbackScreen() {
     }
     else if (msg.type === 'close') router.back();
     else if (msg.type === 'openAllSets') { repFeedbackSignal.openAllSets = true; router.back(); }
-    else if (msg.type === 'finishReview') { repFeedbackSignal.finishedReview = true; router.back(); }
+    else if (msg.type === 'finishReview') {
+      // No waiting for the back transition: the muscle page is put on screen underneath right now and this
+      // page slides away over it (see recap.tsx's onFinishReview and WarmSurfaces' in-place show).
+      repFeedbackSignal.finishedReview = true;
+      repFeedbackSignal.onFinishReview?.();
+      warmDeactivate('repfeedback');
+      router.back();
+    }
     else if (msg.type === 'openSpeedMenu') {
       const r = (msg as any).rect as { left: number; top: number; width: number } | undefined;
       if (r) setSpeedMenu(prev => (prev ? null : { left: r.left, top: r.top, width: r.width }));

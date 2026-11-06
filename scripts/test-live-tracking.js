@@ -110,9 +110,43 @@ const oldRun = simulateReady(false), gated = simulateReady(true);
 console.log(`      old behavior: "Ready. Go!" at ${oldRun.readyAt}ms while the meter showed ${oldRun.readyDisplay}%`);
 console.log(`      new behavior: "Ready. Go!" at ${gated.readyAt}ms while the meter showed ${gated.readyDisplay}%`);
 check('new: Ready announced only with meter >= ' + LT.READY_MIN_PCT, gated.readyDisplay >= LT.READY_MIN_PCT);
-check('new: Ready still fires promptly (< 400ms after native pass)', gated.readyAt - oldRun.readyAt < 400,
+check('the meter alone is high within 400ms of the native pass (so the steady gate below is what decides)', gated.readyAt - oldRun.readyAt < 400,
   `${gated.readyAt - oldRun.readyAt}ms after pass`);
 check('Ready blocked while meter low', !LT.trackingIsHigh(60, 100) && !LT.trackingIsHigh(100, 55));
+
+// 2b. STRICTER START: Ready / Go only after the full body has been tracked without a break for READY_STEADY_MS.
+// Setup events at ~10 fps. PLACEHOLDER values (see lib/liveTracking.ts): READY_STEADY_MS, READY_MAX_GAP_MS.
+function readyTimes({ visibleAt = 300, holdMs = 2000, breaks = [], gaps = [], frameMs = 100 }) {
+  // breaks: [from,to] ms where the body is not fully visible; gaps: [from,to] ms with NO events at all
+  const g = LT.createSteadyGate(); let passedAt = null, ready = null;
+  const inRange = (t, rs) => rs.some(([a, b]) => t >= a && t < b);
+  let holdStart = null; // native: the hold timer starts at the first all-visible frame; short flicker keeps it running
+  for (let t = 0; t <= 12000; t += frameMs) {
+    if (passedAt === null) {
+      if (inRange(t, gaps)) continue;
+      const vis = t >= visibleAt && !inRange(t, breaks);
+      if (vis && holdStart === null) holdStart = t;
+      const passed = vis && holdStart !== null && t - holdStart >= holdMs;
+      g.feed(vis, t, passed);
+      if (passed) passedAt = t;
+    } else if (ready === null && g.steadyMs(t) >= LT.READY_STEADY_MS) ready = t;
+  }
+  return { passedAt, readyAt: ready };
+}
+{
+  const a = readyTimes({});
+  console.log(`      steady person: native passes at ${a.passedAt}ms, Ready at ${a.readyAt}ms (needs ${LT.READY_STEADY_MS}ms steady tracking, placeholder)`);
+  check('steady person: Ready comes later than the native pass (it used to be the same moment)', a.readyAt > a.passedAt, `${a.readyAt - a.passedAt}ms after the pass`);
+  check('steady person: Ready after the steady time counted from the first full-body frame', Math.abs((a.readyAt - 300) - LT.READY_STEADY_MS) <= 100, `${a.readyAt - 300}ms`);
+  const b = readyTimes({ breaks: [[1200, 1500]] }); // 300ms flicker: native keeps its hold running, the steady run restarts
+  console.log(`      flicker at 1.2-1.5s: native passes at ${b.passedAt}ms, Ready at ${b.readyAt}ms`);
+  check('a flicker (body not fully tracked for 0.3s) restarts the steady count', b.readyAt - 1500 >= LT.READY_STEADY_MS - 100 && b.readyAt > a.readyAt, `Ready ${b.readyAt - 1500}ms after the flicker ended`);
+  const c = readyTimes({ gaps: [[1000, 1600]] }); // frames stop for 600ms (> READY_MAX_GAP_MS)
+  check('a gap in the frame stream longer than READY_MAX_GAP_MS also restarts it', c.readyAt > a.readyAt + 300, `Ready at ${c.readyAt}ms`);
+  const d = LT.createSteadyGate(); d.feed(true, 0); d.feed(true, 100);
+  check('a tracking break is reported when it happens (for the [READY-GATE] log)', d.feed(false, 200) === true && d.steadyMs(300) === 0);
+  d.reset(); check('reset clears it', d.steadyMs(5000) === 0);
+}
 
 // 3. "Step back into frame" latency
 function latency(streamDeadSec, pollMs) {
@@ -173,6 +207,16 @@ check('no false cue while METRIC lines keep flowing', (() => {
   check('glass: live cues render through the very same <CueGlass>', /<CueGlass text=\{cue\} \/>/.test(src));
   check('glass: CueGlass is a GlassPanel pill (the look you like)', /function CueGlass[\s\S]*?<GlassPanel radius=\{999\}/.test(src));
   check('meter: premium glass pill (GlassPanel + ring + Plus Jakarta), no bare 40px text', /<GlassPanel radius=\{999\} style=\{s\.meterPill\}>/.test(src) && !/cameraLockPct/.test(src));
+}
+
+// 6. screen stays awake + label + gate wiring
+{
+  const fc = fs.readFileSync(path.join(__dirname, '..', 'app', 'formcheck.tsx'), 'utf8');
+  const run = fs.readFileSync(path.join(__dirname, '..', 'app', 'workout', 'run.tsx'), 'utf8');
+  check('keep awake: the camera screen calls useKeepAwake()', /import \{ useKeepAwake \} from 'expo-keep-awake'/.test(fc) && /export default function FormCheckScreen\(\) \{[\s\S]{0,300}useKeepAwake\(\);/.test(fc));
+  check('keep awake: the workout screen calls useKeepAwake()', /import \{ useKeepAwake \} from 'expo-keep-awake'/.test(run) && /export default function WorkoutRunScreen\(\) \{[\s\S]{0,300}useKeepAwake\(\);/.test(run));
+  check('pill: the label "Form detection" sits next to the percent', /<Text style=\{s\.meterLabel\}>Form detection<\/Text>\s*<Text style=\{s\.meterNum\}>/.test(fc));
+  check('Ready / Go is gated by the steady-tracking gate and logs its values as placeholders', /createSteadyGate/.test(fc) && /\[READY-GATE\] Ready: steady/.test(fc) && /READY_STEADY_MS/.test(fc) && /placeholder/.test(fc));
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nall passed');

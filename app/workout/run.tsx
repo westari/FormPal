@@ -45,6 +45,8 @@ import { FONT, W, Sp, R, Elev, Col } from '../../constants/theme';
 import { getExerciseDef } from '../../constants/exercises';
 import { getDemoCues } from '../../lib/demoCues';
 import { prefetchWorkoutRecap } from '../../lib/recapPrefetch';
+import { useKeepAwake } from 'expo-keep-awake';
+import { NO_ZOOM_JS } from '../../lib/noZoom';
 
 // ── "Don't show this demo again" preference — per exercise id, persisted ───
 // across workouts (a real setting, not a one-session toggle: once you know
@@ -321,7 +323,7 @@ function DemoStepWebView({
       source={DEMO_STEP_HTML}
       originWhitelist={['*']}
       style={{ flex: 1, backgroundColor: '#1b1b1f' }}
-      injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS}
+      injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS + NO_ZOOM_JS}
       injectedJavaScript={initialInject}
       onMessage={(e) => {
         const m = e.nativeEvent.data;
@@ -399,7 +401,7 @@ function ConnectMusicWebView({ onContinue }: { onContinue: (dontShowAgain: boole
       source={CONNECT_MUSIC_HTML}
       originWhitelist={['*']}
       style={{ flex: 1, backgroundColor: '#ffffff' }}
-      injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS}
+      injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS + NO_ZOOM_JS}
       injectedJavaScript={inject}
       onMessage={(e) => {
         const m = e.nativeEvent.data;
@@ -423,6 +425,8 @@ type Phase = 'intro' | 'rest';
 
 export default function WorkoutRunScreen() {
   const router  = useRouter();
+  // No dimming or locking for the whole workout (demo, camera, rest); released when the workout screen unmounts.
+  useKeepAwake();
   // Fill the (already loaded) Workout Complete card with this workout's data
   // BEFORE navigating, so it is on screen in the recap screen's first frame.
   const goRecap = () => {

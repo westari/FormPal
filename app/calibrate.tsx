@@ -53,6 +53,7 @@ import {
   type CalibrationRecord, type CalibratedOverride,
 } from '../lib/calibration/store';
 import { findFamilyMembers, narrowOverrideForTarget } from '../lib/calibration/families';
+import { useKeepAwake } from 'expo-keep-awake';
 
 // ─── Palette (matches formcheck.tsx) ───────────────────────────────────────────
 const C = {
@@ -132,6 +133,7 @@ type SessionSub = 'setup' | 'recording' | 'reviewing';
 
 export default function CalibrateScreen() {
   const router  = useRouter();
+  useKeepAwake(); // camera is on: no dimming or locking
   const insets  = useSafeAreaInsets();
   const params  = useLocalSearchParams<{ exercise?: string }>();
   const notLinked = !isNativeModuleLinked();

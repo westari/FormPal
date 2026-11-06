@@ -100,6 +100,23 @@ const wait = (ms) => new Promise(r => setTimeout(r, ms));
   const bg = await page.evaluate(() => getComputedStyle(document.querySelector('#dc-root [data-screen-label]')).backgroundColor);
   check('page is transparent (white base + video frame are drawn natively underneath)', bg === 'rgba(0, 0, 0, 0)', bg);
 
+  // no play icon on the tiles
+  const plays = await page.evaluate(() => [...document.querySelectorAll('#dc-root svg path[d="M7 4.6v14.8L19 12z"]')].map(p => { const c = p.ownerSVGElement.parentElement; const r = c.getBoundingClientRect(); return getComputedStyle(c).display + ':' + r.width; }));
+  check('the play icon is gone from every tile', plays.length > 0 && plays.every(v => v.startsWith('none')), plays.join());
+  await page.screenshot({ path: path.join(ROOT, '.scratch', 'allsets-noplay.png') });
+
+  // The tile's rect is posted once, while the page is still hidden and no screen has claimed it yet. It used to be
+  // dropped (no handler), so the thumbnail only appeared after a tap changed the layout. Now it is kept and replayed.
+  {
+    const tile = ev.find(e => e.type === 'tileRect' && !e.none);
+    const got = [];
+    WARM.noteWarmMessage('allsets', tile);                 // what the host does when the page posts it
+    WARM.warmActivate('allsets', { onMessage: (m) => got.push(m) }); // the screen opens All sets afterwards
+    await wait(30);
+    check('the video tile rect posted before the screen asked for the page reaches the screen (thumbnail shows at once)', got.some(m => m.type === 'tileRect' && m.w === tile.w), JSON.stringify(got.map(g => g.type)));
+    WARM.warmRelease('allsets');
+  }
+
   // tap everything tappable
   await page.evaluate(() => document.querySelectorAll('#dc-root div[style*="grid-template-columns"] > div')[0].click());
   check('tapping the video tile opens its rep feedback (openSet)', ev.some(e => e.type === 'openSet' && e.index === 0));

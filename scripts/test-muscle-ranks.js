@@ -101,48 +101,41 @@ for (const [name, sc] of Object.entries(SCENARIOS)) {
   console.log(`  ${name}: rank=${p.rank.label}->${p.rank.next} ${p.rank.pct}% (+${p.rank.gained}% today)  rows=${p.hits.map(h => h.name + ' ' + h.gain).join(' | ') || '(none)'}`);
   check(`${name}: rank label is the real standing`, p.rank.label === (standingAfter ? standingAfter.tier[0].toUpperCase() + standingAfter.tier.slice(1) : 'Unranked'));
   {
-    // ── the page's three numbers, recomputed INDEPENDENTLY from the raw tiers ──
+    // ── the page's numbers, recomputed INDEPENDENTLY from the raw tiers ──
+    // every muscle's progress is its OWN progress toward ITS next tier (rank-ups count as tier*100 + progress)
     const r1 = (n) => Math.round(n * 10) / 10;
-    const tier = standingAfter && standingAfter.tier;
-    const beforeTier = sc.standingBefore ? sc.standingBefore.tier : tier;
-    const prog = (info, ot) => !info ? null : (ot && TIERIDX[info.tier] > TIERIDX[ot] ? 100 : data.muscleProgressPct(info));
     const worked = data.workedMuscles(sc.entries);
     const credit = Object.fromEntries(worked.map(w => [w.muscle, w.credit]));
     const universe = [...new Set([...Object.keys(sc.tiersAfter), ...worked.map(w => w.muscle)])];
-    const after = (m) => sc.tiersAfter[m] ? prog(sc.tiersAfter[m], tier) : Math.min(100, (credit[m] || 0) / 50 * 100);
-    const before = (m) => sc.tiersBefore[m] ? prog(sc.tiersBefore[m], beforeTier) : 0;
-    const avgA = r1(universe.reduce((a, m) => a + after(m), 0) / universe.length);
-    const avgB = r1(universe.reduce((a, m) => a + before(m), 0) / universe.length);
-    const nums = (p.rank.pctLabel.match(/\d+\.\d/g) || []).map(Number);
-    check(`${name}: OVERALL shows before -> after = ${avgB} -> ${avgA} (average of ${universe.length} muscles)`, nums.length >= 2 && Math.abs(nums[0] - avgB) <= 0.11 && Math.abs(nums[1] - avgA) <= 0.11 && p.rank.pct === avgA, p.rank.pctLabel);
-    const rowSum = r1(p.hits.reduce((a, h) => a + parseFloat(h.gain.replace(/[+%]/g, '')), 0));
-    if (!sc.synthetic) check(`${name}: TOTAL gained +${p.rank.gained}% = the SUM of the rows (${p.hits.map(h => h.gain).join(' + ') || 'none'} = +${rowSum}%)`, Math.abs(parseFloat(p.rank.gained) - rowSum) < 0.001);
-    const rowsOk = p.hits.every((h, i) => {
-      const m = worked[i].muscle;
-      return Math.abs(parseFloat(h.gain.replace(/[+%]/g, '')) - Math.max(0, r1(after(m)) - r1(before(m)))) <= 0.11;
-    });
-    if (!sc.synthetic) check(`${name}: each ROW = that muscle's progress after - before`, rowsOk);
-    if (rowSum > 0) check(`${name}: the OVERALL number actually moved (${avgB} -> ${avgA}) because muscles gained`, avgA > avgB);
-    if (worked.length <= 2) {
-      const allSum = worked.reduce((a, w) => a + Math.max(0, r1(after(w.muscle)) - r1(before(w.muscle))), 0);
-      check(`${name}: overall change x muscles = total (${r1(avgA - avgB)} x ${universe.length} ~ ${r1(allSum)})`, Math.abs((avgA - avgB) * universe.length - allSum) <= 0.1 * universe.length + 0.15);
-    }
-    check(`${name}: every number on the page has exactly one decimal`, /^\d+\.\d$/.test(p.rank.gained) && /\d+\.\d% → \d+\.\d%|Top rank/.test(p.rank.pctLabel) && p.hits.every(h => /^\+\d+\.\d%$/.test(h.gain)), `${p.rank.pctLabel} | ${p.rank.gained} | ${p.hits.map(h => h.gain).join(',')}`);
-    if (!sc.synthetic) check(`${name}: the note spells out the sum and the average in plain words`, /Total gained today/.test(p.note) && /average of your/.test(p.note), p.note);
+    const progA = (m) => sc.tiersAfter[m] ? data.muscleProgressPct(sc.tiersAfter[m]) : Math.min(100, (credit[m] || 0) / 50 * 100);
+    const progB = (m) => sc.tiersBefore[m] ? data.muscleProgressPct(sc.tiersBefore[m]) : 0;
+    const absA = (m) => sc.tiersAfter[m] ? TIERIDX[sc.tiersAfter[m].tier] * 100 + data.muscleProgressPct(sc.tiersAfter[m]) : progA(m);
+    const absB = (m) => sc.tiersBefore[m] ? TIERIDX[sc.tiersBefore[m].tier] * 100 + data.muscleProgressPct(sc.tiersBefore[m]) : 0;
+    const gain = (m) => Math.max(0, r1(absA(m)) - r1(absB(m)));
+    const avgA = r1(universe.reduce((a, m) => a + progA(m), 0) / universe.length);
+    const overallGain = r1(universe.reduce((a, m) => a + gain(m), 0) / universe.length);
+    // header: ONLY the newest number
+    check(`${name}: the header shows ONLY the newest % (${avgA}%), no "old -> new"`, p.rank.pctLabel === `${avgA.toFixed(1)}%` && !/→/.test(p.rank.pctLabel) && p.rank.pct === avgA, p.rank.pctLabel);
+    check(`${name}: "+x% today" = the average gain over the ${universe.length} trained muscles (${overallGain})`, Math.abs(parseFloat(p.rank.gained) - overallGain) <= 0.11, p.rank.gained);
+    const rowsOk = p.hits.every((h, i) => Math.abs(parseFloat(h.gain.replace(/[+%]/g, '')) - r1(gain(worked[i].muscle))) <= 0.11);
+    if (!sc.synthetic) check(`${name}: each ROW = that muscle's own progress after - before`, rowsOk);
+    if (!sc.synthetic && sc.entries.some(e => e.reps > 0)) check(`${name}: a workout GIVES a gain (every shown muscle > +0.0%)`, p.hits.length > 0 && p.hits.every(h => parseFloat(h.gain.replace(/[+%]/g, '')) > 0), p.hits.map(h => h.gain).join(','));
+    check(`${name}: every number on the page has exactly one decimal`, /^\d+\.\d$/.test(p.rank.gained) && /^\d+\.\d%$|^Top rank$/.test(p.rank.pctLabel) && p.hits.every(h => /^\+\d+\.\d%$/.test(h.gain)), `${p.rank.pctLabel} | ${p.rank.gained} | ${p.hits.map(h => h.gain).join(',')}`);
+    if (!sc.synthetic) check(`${name}: the note is plain coach words (no maths, no arrows, no "total gained")`, !/Total gained|average of|=|→|\+\d/.test(p.note) && p.note.length < 190 && /moved up|Nice work|top rank/.test(p.note), p.note);
   }
   check(`${name}: every row has a real muscle name + a +N% gain (no bare "+%")`, p.hits.every(h => h.name && /^\+\d+(\.\d)?%$/.test(h.gain)));
 }
-// ── user's report: Shoulders +2%, Triceps +2%, overall "+2% today", Bronze 7% did not move ──
+// ── user's report: "Bronze 53.2% -> 53.2%", Shoulders +0.0%, Triceps +0.0% right after a workout ──
+// Shoulders/triceps were already past the overall (weakest-link) tier, so they were capped at 100 before AND after.
 {
-  const prior = [entry('shoulderPress', 70, 64, 10), entry('curl', 80, 70, 12)];
-  const today = [entry('shoulderPress', 4, 4, 0)];
+  const prior = [entry('shoulderPress', 300, 290, 5), entry('squat', 60, 54, 7)];
+  const today = [entry('shoulderPress', 10, 9, 0)];
   const sc = build(prior, today);
   const p = sc.payload;
-  console.log(`  user report repro: ${p.rank.label} ${p.rank.pctLabel}  total +${p.rank.gained}%  rows=${p.hits.map(h => h.name + ' ' + h.gain).join(' | ')}`);
-  const sum = p.hits.reduce((a, h) => a + parseFloat(h.gain.replace(/[+%]/g, '')), 0);
-  check('REPORT FIXED: total = the sum of the rows (was +2% with two rows of +2%)', Math.abs(parseFloat(p.rank.gained) - sum) < 0.001 && p.hits.length === 2, `${p.hits.map(h => h.gain).join(' + ')} = ${p.rank.gained}`);
-  const n = (p.rank.pctLabel.match(/\d+\.\d/g) || []).map(Number);
-  check('REPORT FIXED: the overall rank moves when muscles gain (it used to stay at 7%)', n[1] > n[0], p.rank.pctLabel);
+  console.log(`  user report repro: ${p.rank.label} ${p.rank.pctLabel}  today +${p.rank.gained}%  rows=${p.hits.map(h => h.name + ' ' + h.gain).join(' | ')}`);
+  check('REPORT: the tiers are what the report describes (shoulders already above the overall rank)', sc.tiersAfter.shoulders.tier === 'silver' && sc.standingAfter.tier === 'bronze', `${sc.tiersAfter.shoulders.tier} vs overall ${sc.standingAfter.tier}`);
+  check('REPORT FIXED: Shoulders and Triceps show a real gain (they were +0.0%)', p.hits.length === 2 && p.hits.every(h => parseFloat(h.gain.replace(/[+%]/g, '')) > 0), p.hits.map(h => h.gain).join(' '));
+  check('REPORT FIXED: "+x% today" is above zero too (it was +0.0%)', parseFloat(p.rank.gained) > 0, p.rank.gained);
 }
 const A = SCENARIOS['shoulders+triceps (bronze)'].payload, B = SCENARIOS['legs (squat+lunge)'].payload;
 check('rows follow the workout: shoulders workout -> Shoulders/Triceps', A.hits.map(h => h.name).sort().join() === 'Shoulders,Triceps', A.hits.map(h => h.name).join());

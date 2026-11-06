@@ -98,8 +98,8 @@ export interface MuscleRanksPayload {
   rank: {
     has: boolean; atTop: boolean; tier: Tier | null; label: string; next: string;
     pct: number;            // overall progress toward `next` AFTER today, 0-100 (one decimal)
-    pctLabel: string;       // header text, e.g. "7.0% → 9.0%" (before > after)
-    gained: string;         // TOTAL gained today = sum of the muscle rows, number text without "+"/"%"
+    pctLabel: string;       // header text: only the newest number, e.g. "9.0%"
+    gained: string;         // overall gain today (the change in the overall %), number text without "+"/"%"
     hi: string; lo: string; ink: string;
     emblem: string | null;
   };
@@ -130,52 +130,48 @@ export function buildMuscleRanksPayload(opts: {
   const nextLabel = cap(nextTier);
   const meta = TIER_META[tier ?? 'bronze'];
 
-  // ── The three numbers, all from ONE per-muscle progress figure ─────────────
-  // progress(m) = how far muscle m is toward the next rank (0-100).
-  //   MUSCLE ROW gain  = progress(m) after - progress(m) before            (rounded to 0.1)
-  //   TOTAL GAINED     = the SUM of the rows shown (so the page adds up exactly)
-  //   OVERALL RANK %   = the AVERAGE of progress(m) over every muscle you have
-  //                      trained (ranked muscles + today's muscles). It is shown
-  //                      before > after and moves whenever ANY muscle gains.
-  // Rank-up (every muscle reached the next tier) is handled by tier*100 + avg.
-  const tierBefore = standingBefore?.tier ?? tier;
+  // ── The numbers, all from ONE per-muscle progress figure ───────────────────
+  // Every muscle's progress is its OWN progress toward ITS next tier (0-100, the same math as the Progress
+  // tab's muscle rows). It used to be measured toward the OVERALL next rank and capped at 100 for any muscle
+  // already above the overall (weakest-link) tier, so training shoulders/triceps that were already past
+  // Bronze could never show a gain: 100 before, 100 after, +0.0% (reported: "Bronze 53.2% -> 53.2%").
+  //   MUSCLE ROW gain = that muscle's progress after - before (rank-ups count: tier*100 + progress), 0.1 steps
+  //   OVERALL %       = the average own-progress over every muscle you have trained, AFTER today
+  //   GAINED TODAY    = the average gain over those same muscles (so it is the change in OVERALL %)
   const universe = new Set<Muscle>([...(Object.keys(tiersAfter) as Muscle[]), ...worked.map(w => w.muscle)]);
-  const prog = (m: Muscle, t: MuscleTiers, ot: Tier | null, today: number) => progressToward(t[m], ot, today);
-  const progAfter = (m: Muscle) => prog(m, tiersAfter, tier, credit.get(m) ?? 0);
-  // Before today a muscle below Bronze had no progress we can see: 0.
-  const progBefore = (m: Muscle) => (tiersBefore[m] ? prog(m, tiersBefore, tierBefore, 0) : 0);
+  // Not ranked yet (below Bronze): today's credited reps over Bronze's volume bar; before today there is nothing to see: 0.
+  const progAfter = (m: Muscle) => (tiersAfter[m] ? muscleProgressPct(tiersAfter[m]!) : Math.min(100, ((credit.get(m) ?? 0) / BRONZE_MIN_VOLUME) * 100));
+  const absAfter = (m: Muscle) => (tiersAfter[m] ? absolute(tiersAfter[m]) : progAfter(m));
+  const progBefore = (m: Muscle) => (tiersBefore[m] ? muscleProgressPct(tiersBefore[m]!) : 0);
+  const absBefore = (m: Muscle) => (tiersBefore[m] ? absolute(tiersBefore[m]) : 0);
   const muscles = [...universe];
-  const avg = (f: (m: Muscle) => number) => (muscles.length ? muscles.reduce((a, m) => a + f(m), 0) / muscles.length : 0);
   const r1 = (n: number) => Math.round(n * 10) / 10;
+  const avg = (f: (m: Muscle) => number) => (muscles.length ? muscles.reduce((a, m) => a + f(m), 0) / muscles.length : 0);
+  const gainOf = (m: Muscle) => Math.max(0, r1(absAfter(m)) - r1(absBefore(m)));
   const afterAvg = r1(avg(progAfter));
   const beforeAvg = r1(avg(progBefore));
   const rankedUp = !!standingBefore && !!standingAfter && standingBefore.tier !== standingAfter.tier;
-  const absAfter = (tier ? tierIndex(tier) * 100 : 0) + afterAvg;
-  const absBefore = (tierBefore ? tierIndex(tierBefore) * 100 : 0) + beforeAvg;
 
   // Rows: the two most-worked muscles.
   const shown = worked.slice(0, 2);
-  const rowGain = (m: Muscle) => Math.max(0, r1(progAfter(m)) - r1(progBefore(m)));
-  const gains = shown.map(w => r1(rowGain(w.muscle)));
-  const total = r1(gains.reduce((a, b) => a + b, 0));
+  const gains = shown.map(w => r1(gainOf(w.muscle)));
+  const overallGain = r1(avg(gainOf));
 
-  const pctLabel = standingAfter?.atTop
-    ? 'Top rank'
+  // Header: ONLY the newest number (no "old -> new").
+  const pctLabel = standingAfter?.atTop ? 'Top rank' : `${fmt1(afterAvg)}%`;
+
+  // A short coach note: how the session went (passed in), then one plain line about the rank. No sums, no maths.
+  const joined = shown.map(w => name(w.muscle)).join(' and ');
+  const rankLine = standingAfter?.atTop
+    ? "You're at the top rank. Keep your form clean to stay there."
     : rankedUp
-      ? `${fmt1(beforeAvg)}% → ${fmt1(afterAvg)}% to ${nextLabel}`
-      : `${fmt1(beforeAvg)}% → ${fmt1(afterAvg)}%`;
-
-  // Beginner-plain note: the sum, then what the overall number is.
-  const sumText = shown.length
-    ? `${shown.map((w, i) => `${name(w.muscle)} +${fmt1(gains[i])}%`).join(' + ')} = +${fmt1(total)}%`
-    : '';
-  const moreMuscles = worked.length > shown.length;
+      ? `You reached ${cap(tier ?? 'bronze')}. Nice work.`
+      : gains.some(g => g > 0) && joined
+        ? `${joined} moved up. ${nextLabel} is next.`
+        : '';
   const explain = !standingAfter && !muscles.length
     ? 'Train a few more reps to start earning ranks.'
-    : standingAfter?.atTop
-      ? "You're at the top rank. Nothing left to climb."
-      : `Total gained today: ${sumText || '+0.0%'}${moreMuscles ? ' (top 2 muscles)' : ''}. `
-        + `Overall ${tier ? cap(tier) : 'rank'} = the average of your ${muscles.length} trained muscle${muscles.length === 1 ? '' : 's'} on the way to ${nextLabel}: ${fmt1(beforeAvg)}% → ${fmt1(afterAvg)}%.`;
+    : [opts.note, rankLine].filter(Boolean).join(' ');
 
   return {
     rank: {
@@ -186,7 +182,7 @@ export function buildMuscleRanksPayload(opts: {
       next: nextLabel,
       pct: afterAvg,
       pctLabel,
-      gained: fmt1(total),
+      gained: fmt1(overallGain),
       hi: meta.hi, lo: meta.lo, ink: meta.ink,
       emblem,
     },

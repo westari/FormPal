@@ -10,6 +10,7 @@ import { StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { CONSOLE_FORWARD_JS, DC_VIEWPORT_JS, dcScaleFitJs } from '../lib/dcWebviewHelpers';
+import { NO_ZOOM_JS } from '../lib/noZoom';
 import { decideProgressPhotoVariant } from '../lib/postWorkoutFlow';
 
 const STREAK_HTML = require('../assets/app screens/streak.html');
@@ -70,7 +71,7 @@ export default function StreakScreen() {
         source={STREAK_HTML}
         originWhitelist={['*']}
         style={[styles.web, { opacity: ready ? 1 : 0 }]}
-        injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS}
+        injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS + NO_ZOOM_JS}
         injectedJavaScript={CONSOLE_FORWARD_JS + streakInject(count)}
         onMessage={(e) => {
           const m = e.nativeEvent.data;
