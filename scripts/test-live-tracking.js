@@ -203,7 +203,7 @@ check('no false cue while METRIC lines keep flowing', (() => {
 // 5. glass: setup guidance and live cues go through the SAME component
 {
   const src = fs.readFileSync(path.join(__dirname, '..', 'app', 'formcheck.tsx'), 'utf8');
-  check('glass: setup guidance renders through <CueGlass> (was plain text)', /<CueGlass text=\{setupAllVisible/.test(src) && !/<Text style=\{s\.setupBig\}>/.test(src));
+  check('glass: setup guidance renders through <CueGlass> (was plain text)', /<CueGlass text=\{startPoseWaiting/.test(src) && !/<Text style=\{s\.setupBig\}>/.test(src));
   check('glass: live cues render through the very same <CueGlass>', /<CueGlass text=\{cue\} \/>/.test(src));
   check('glass: CueGlass is a GlassPanel pill (the look you like)', /function CueGlass[\s\S]*?<GlassPanel radius=\{999\}/.test(src));
   check('meter: premium glass pill (GlassPanel + ring + Plus Jakarta), no bare 40px text', /<GlassPanel radius=\{999\} style=\{s\.meterPill\}>/.test(src) && !/cameraLockPct/.test(src));
@@ -219,6 +219,55 @@ check('no false cue while METRIC lines keep flowing', (() => {
   const num = +(fc.match(/meterNum:.*?fontSize: (\d+)/) || [])[1], trackW = +(fc.match(/meterTrack: \{ width: (\d+), height: (\d+)/) || [])[1], trackH = +(fc.match(/meterTrack: \{ width: \d+, height: (\d+)/) || [])[1];
   check(`pill: the % is much bigger (${num}px, was 16), the bar is longer (${trackW}px, was 52) and thicker (${trackH}px, was 3)`, num >= 34 && trackW >= 100 && trackH >= 8);
   check('Ready / Go is gated by the steady-tracking gate and logs its values as placeholders', /createSteadyGate/.test(fc) && /\[READY-GATE\] Ready: steady/.test(fc) && /READY_STEADY_MS/.test(fc) && /placeholder/.test(fc));
+}
+
+// 7. the confidence number reads the same signal the counter works from, replayed on two REAL device logs
+{
+  const LT = require('../lib/liveTracking.ts');
+  const T = (h, m, x) => h * 3600 + m * 60 + x;
+  const events = (file) => fs.readFileSync(path.join(__dirname, 'fixtures', file), 'utf8').split(/\r?\n/).map((l) => {
+    const m = /^(\d\d):(\d\d):(\d\d\.\d+) \[log\] \[DEBUG\] (.*)$/.exec(l);
+    return m ? { t: (+m[1] * 3600 + +m[2] * 60 + parseFloat(m[3])), msg: m[4] } : null;
+  }).filter(Boolean);
+  function replay(file, from, to) {
+    const c = LT.createCounterSignal(), out = [];
+    let next = from;
+    for (const e of events(file)) {
+      if (e.t < from) continue; if (e.t > to) break;
+      while (next < e.t) { out.push({ t: next, score: c.score(next * 1000) }); next += 0.1; }
+      c.feedLog(e.msg, e.t * 1000);
+    }
+    while (next < to) { out.push({ t: next, score: c.score(next * 1000) }); next += 0.1; }
+    return { out, c };
+  }
+  // the 2026-11-08 set: reps counted 0. The old pill said 100 the whole time (a person was visible).
+  const bad = replay('shoulder-press-2026-11-08.log.txt', T(19, 56, 42.3), T(19, 57, 18));
+  const goodShare = (r) => r.out.filter((x) => x.score >= 90).length / r.out.length;
+  const low = bad.out.filter((x) => x.score < 60).length / bad.out.length;
+  console.log(`      11-08 set (0 reps counted): confidence >= 90 for ${(goodShare(bad) * 100).toFixed(0)}% of the time, below 60 for ${(low * 100).toFixed(0)}% (the old pill: 100% the whole time)`);
+  // every time the counter lost the pose (framesSincePoseGap resets in its own trace) the number must dip at once
+  const ev8 = events('shoulder-press-2026-11-08.log.txt').filter((e) => e.t >= T(19, 56, 42.3) && e.t <= T(19, 57, 18));
+  let prevGap = null; const gaps = [];
+  for (const e of ev8) { const g = /REP-TRACE.*framesSincePoseGap=(\d+)/.exec(e.msg); if (g) { const n = +g[1]; if (prevGap !== null && n < prevGap) gaps.push(e.t); prevGap = n; } }
+  const dips = gaps.filter((g) => { const x = bad.out.find((y) => y.t >= g + 0.15); return x && x.score < 60; }).length;
+  check(`every one of the ${gaps.length} pose losses in the 11-08 set makes the number dip below 60 within 0.15s (the old pill stayed at 100)`, gaps.length >= 3 && dips === gaps.length, `${dips} of ${gaps.length}`);
+  check('between losses it climbs back (not stuck low): high for a good part of the set', goodShare(bad) >= 0.3 && low > 0.05, `high ${(goodShare(bad) * 100).toFixed(0)}%, low ${(low * 100).toFixed(0)}%`);
+  // the 2026-11-02 set: 6 reps counted. The counter saw the user for most of it.
+  const ok = replay('shoulder-press-2026-11-02.log.txt', T(20, 1, 4.9), T(20, 1, 24));
+  console.log(`      11-02 set (6 reps counted): confidence >= 90 for ${(goodShare(ok) * 100).toFixed(0)}% of the time`);
+  check('on the set where reps DID count, confidence is high most of the time', goodShare(ok) >= 0.7, `${(goodShare(ok) * 100).toFixed(0)}%`);
+  // Ready / Go replayed on the 11-08 start: Go used to show at 38.28s
+  const start = replay('shoulder-press-2026-11-08.log.txt', T(19, 56, 34.5), T(19, 56, 38.3));
+  const d = require('../constants/exerciseDefinitions.ts').EXERCISE_DEFINITIONS.shoulderPress;
+  const startMin = d.goodROMThreshold + (d.topAngle - d.goodROMThreshold) * d.settleAnchorMinFraction;
+  const goAt = T(19, 56, 38.3) * 1000;
+  check(`Go no longer shows at 38.28s of the 11-08 log: the counter read ${start.c.lastValue().toFixed(0)}, not at the start position (needs >= ${startMin.toFixed(1)})`, !start.c.atStartPosition(startMin, goAt, LT.READY_COUNTER_WINDOW_MS, LT.READY_COUNTER_MIN_SAMPLES) && start.c.healthy(goAt, LT.READY_COUNTER_WINDOW_MS, LT.READY_COUNTER_MIN_SAMPLES));
+  const later = replay('shoulder-press-2026-11-08.log.txt', T(19, 56, 41.9), T(19, 56, 42.4));
+  check('...and Go WOULD show once the hands are at the shoulders (the 63+ readings at 42.2s)', later.c.lastValue() >= startMin - 0.5, `last reading ${later.c.lastValue()}`);
+  const noLogs = LT.createCounterSignal();
+  check('with no debug log at all (release build) nothing waits on the counter (seen() is false, score 100)', noLogs.seen() === false && noLogs.score(1e6) === 100);
+  const mt = (cs) => LT.meterTarget({ phase: 'tracking', isActive: true, setupAllVisible: true, setupHoldProgress: 1, setupHint: '', personDetected: true, repDiag: null, counterScore: cs });
+  check('meterTarget is the minimum of the old rule and the counter score while tracking', mt(45) === 45 && mt(100) === 100);
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nall passed');

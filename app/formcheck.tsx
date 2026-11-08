@@ -43,7 +43,7 @@ import { postLag, postLagStart } from '../lib/postLag';
 import { createRepDiagnostic, STREAM_DEAD_SEC_FLOOR } from '../lib/repDiagnostics';
 import { useKeepAwake } from 'expo-keep-awake';
 import { NO_ZOOM_JS } from '../lib/noZoom';
-import { meterTarget, createMeterSmoother, trackingIsHigh, NO_PERSON_CUE, createSteadyGate, READY_STEADY_MS } from '../lib/liveTracking';
+import { meterTarget, createMeterSmoother, trackingIsHigh, NO_PERSON_CUE, createSteadyGate, READY_STEADY_MS, createCounterSignal, READY_COUNTER_WINDOW_MS, READY_COUNTER_MIN_SAMPLES, type CounterSignal } from '../lib/liveTracking';
 import { useAudioSettingsStore } from '../store/audioSettingsStore';
 import { useFormTheme, type FormTheme } from '../lib/activeTheme';
 import type { DebugStatsEvent, RepEvent, ExerciseType } from '../modules/athlt-camera/src/index';
@@ -587,23 +587,30 @@ const ri = StyleSheet.create({
 // createMeterSmoother in lib/liveTracking.ts — in its own state, so its ticks
 // never re-render the whole camera screen. Always mounted (renders nothing when
 // !show) so the "is it high yet" report that gates "Ready. Go!" keeps working.
-function TrackingMeter({ target, show, top, onHighChange }: {
+function TrackingMeter({ target, show, top, onHighChange, counter, counterActive }: {
   target: number; show: boolean; top: number; onHighChange: (high: boolean) => void;
+  counter: CounterSignal; counterActive: boolean;
 }) {
   const [display, setDisplay] = useState(0);
   const smoother = useRef(createMeterSmoother()).current;
   const targetRef = useRef(target);
   targetRef.current = target;
+  const activeRef = useRef(counterActive);
+  activeRef.current = counterActive;
   const highRef = useRef(false);
   useEffect(() => {
     const id = setInterval(() => {
-      const d = smoother.tick(targetRef.current, Date.now());
+      // While tracking, the number can never be higher than what the rep counter itself can see (same signal it counts from).
+      const now = Date.now();
+      let tgt = targetRef.current;
+      if (activeRef.current && tgt > 0) tgt = Math.min(tgt, counter.score(now));
+      const d = smoother.tick(tgt, now);
       setDisplay((prev) => (prev === d ? prev : d));
       const high = trackingIsHigh(d, smoother.effectiveTarget);
       if (high !== highRef.current) { highRef.current = high; onHighChange(high); }
     }, 33);
     return () => clearInterval(id);
-  }, [smoother, onHighChange]);
+  }, [smoother, onHighChange, counter]);
   if (!show) return null;
   const level = display >= 95 ? C.good : display <= 35 ? C.warn : '#FFFFFF';
   return (
@@ -834,6 +841,11 @@ export default function FormCheckScreen() {
   const announceReadyRef = useRef<(() => void) | null>(null);
   // Full body tracked without a break (see createSteadyGate in lib/liveTracking.ts); gates "Ready. Go!" together with the meter.
   const steadyGate = useRef(createSteadyGate()).current;
+  // What the rep counter itself can see, read from the same native log lines it counts from (drives the confidence
+  // number and part of the Ready/Go gate).
+  const counterRef = useRef(createCounterSignal()).current;
+  // Shown instead of "Perfect. Hold still" while Go waits for the start position (shoulder press: hands at the shoulders).
+  const [startPoseWaiting, setStartPoseWaiting] = useState(false);
 
   // Full session log buffer — accumulates EVERY line for post-session review.
   // Not a state value; we never need it to trigger re-renders during the session.
@@ -865,6 +877,7 @@ export default function FormCheckScreen() {
     if (!DEBUG_LOG_ENABLED || notLinked) return;
     const sub = addDebugLogListener(e => {
       console.log('[DEBUG]', e.message);
+      counterRef.feedLog(e.message, Date.now());
       // Full session buffer: every line, no limit — feeds the post-session review only.
       sessionLogRef.current.push(e.message);
       // Synthesize clean [CALIB] lines alongside the raw stream.
@@ -1302,7 +1315,25 @@ export default function FormCheckScreen() {
         timer = setTimeout(tryGo, Math.max(100, Math.min(400, READY_STEADY_MS - steady)));
         return;
       }
-      console.log(`[READY-GATE] Ready: steady ${steady}ms >= ${READY_STEADY_MS}ms (placeholder), meter high`);
+      // The counter must really see you: metric samples arriving, no pose gap, and (when the exercise has a start
+      // position) the arms IN it. Skipped when no samples exist at all (debug logging off), so it can never deadlock.
+      if (counterRef.seen()) {
+        const now = Date.now();
+        const healthy = counterRef.healthy(now, READY_COUNTER_WINDOW_MS, READY_COUNTER_MIN_SAMPLES);
+        const d = EXERCISE_DEFINITIONS[exerciseType] as any;
+        const frac = d && typeof d.settleAnchorMinFraction === 'number' ? d.settleAnchorMinFraction : null;
+        const startMin = frac !== null ? d.goodROMThreshold + (d.topAngle - d.goodROMThreshold) * frac : null;
+        const inStart = startMin === null || counterRef.atStartPosition(startMin, now, READY_COUNTER_WINDOW_MS, READY_COUNTER_MIN_SAMPLES);
+        if (!healthy || !inStart) {
+          console.log(`[READY-GATE] waiting: counter ${healthy ? 'sees you' : 'cannot see you steadily (pose gap or too few samples)'}; ` +
+            (startMin === null ? 'no start position needed' : `metric ${counterRef.lastValue()?.toFixed(1)} ${inStart ? 'is' : 'is NOT'} at the start position (need >= ${startMin.toFixed(1)}) (placeholder)`));
+          setStartPoseWaiting(healthy && !inStart);
+          timer = setTimeout(tryGo, 250);
+          return;
+        }
+      }
+      setStartPoseWaiting(false);
+      console.log(`[READY-GATE] Ready: steady ${steady}ms >= ${READY_STEADY_MS}ms (placeholder), meter high, counter sees you`);
       setReadyPending(false);
       const go = announceReadyRef.current;
       announceReadyRef.current = null;
@@ -1310,7 +1341,7 @@ export default function FormCheckScreen() {
     };
     tryGo();
     return () => { if (timer) clearTimeout(timer); };
-  }, [readyPending, meterHigh, steadyGate]);
+  }, [readyPending, meterHigh, steadyGate, counterRef, exerciseType]);
 
   // Re-ask the "can't see you" diagnostic on a fast timer while tracking.
   // It used to only be re-evaluated on log lines and the ~1/sec debug-stats
@@ -1429,7 +1460,9 @@ export default function FormCheckScreen() {
                   instead of the very start. */}
               {/* Same glass pill as the live cues AFTER you're in place (CueGlass),
                   so a message looks identical before and after setup. */}
-              <CueGlass text={setupAllVisible && setupHoldProgress >= 0.8
+              <CueGlass text={startPoseWaiting
+                ? 'Hands at your shoulders'
+                : setupAllVisible && setupHoldProgress >= 0.8
                 ? 'Perfect. Hold still'
                 : (setupHint || SETUP_INFO[exerciseType].title)} />
             </View>
@@ -1521,6 +1554,8 @@ export default function FormCheckScreen() {
         show={stopButtonActive}
         top={insets.top + 56}
         onHighChange={setMeterHigh}
+        counter={counterRef}
+        counterActive={isTracking}
       />
 
       {/* Error */}
@@ -1864,7 +1899,7 @@ const s = StyleSheet.create({
   meterRow:   { flexDirection: 'row', alignItems: 'center', gap: 14 },
   meterTrack: { width: 110, height: 9, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.22)', overflow: 'hidden' },
   meterFill:  { height: 9, borderRadius: 5 },
-  meterLabel: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 13, lineHeight: 17, color: '#FFFFFF', letterSpacing: 0.2, marginBottom: 6, textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
+  meterLabel: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 16, lineHeight: 21, color: '#FFFFFF', letterSpacing: 0.2, marginBottom: 6, textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
   meterNum:   { fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 38, lineHeight: 44, color: '#fff', letterSpacing: -1, fontVariant: ['tabular-nums'] },
   meterPct:   { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 20, color: 'rgba(255,255,255,0.75)' },
   errorCard:  { position: 'absolute', left: 24, right: 24, top: '38%', backgroundColor: C.glass, borderRadius: 16, padding: 24, borderWidth: 1, borderColor: C.border },
