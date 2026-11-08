@@ -248,12 +248,17 @@ export function tierProgress(info: MuscleTierInfo): number {
   return Math.min(vol, clamp01((info.goodRatio - curQual) / (nextQual - curQual)));
 }
 
-const BRONZE_MIN_VOLUME = VOLUME_THRESHOLDS.find(([t]) => t === 'bronze')![1];
-
 /**
- * Credit-weighted reps per muscle across EVERY session ever logged, not decayed (the same credit the rank system
- * counts). A muscle below Bronze has no tier info, so this all-time total is all there is to show its progress from.
+ * Progress toward Bronze (0-0.99) for a muscle that is not ranked yet, from ALL the credit-weighted reps it has ever
+ * had (no decay, no "only today"). Capped just under 1 so a muscle never shows 100% until it is actually Bronze.
+ * The one implementation every screen uses.
  */
+export function belowBronzeProgress(totalCredit: number): number {
+  const bronze = VOLUME_THRESHOLDS.find(([t]) => t === 'bronze')![1];
+  return Math.max(0, Math.min(0.99, totalCredit / bronze));
+}
+
+/** Credit-weighted reps per muscle over a set of sessions (every rep, judged or not, no decay). */
 export function muscleCreditTotals(sessions: SessionEntry[]): Map<Muscle, number> {
   const out = new Map<Muscle, number>();
   for (const e of sessions) {
@@ -265,11 +270,6 @@ export function muscleCreditTotals(sessions: SessionEntry[]): Map<Muscle, number
     }
   }
   return out;
-}
-
-/** Progress (0-0.99) of a muscle that is still below Bronze: ALL the training it has had, over Bronze's volume bar. */
-export function unrankedProgress(totalCredit: number): number {
-  return Math.min(0.99, Math.max(0, totalCredit) / BRONZE_MIN_VOLUME);
 }
 
 // KEYED BY Muscle (individual muscle), not MuscleGroup, this round — a

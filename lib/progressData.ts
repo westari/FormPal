@@ -9,7 +9,7 @@
 import { Muscle, getExerciseDef, muscleCreditParts } from '../constants/exercises';
 import { TIER_META } from '../constants/tierPalette';
 import {
-  TIER_ORDER, tierIndex, tierProgress, muscleCreditTotals, unrankedProgress, groupIntoWorkouts, calcStreak,
+  TIER_ORDER, tierIndex, tierProgress, muscleCreditTotals, belowBronzeProgress, groupIntoWorkouts, calcStreak,
   type SessionEntry, type MuscleTiers, type Tier,
 } from './sessionLog';
 import { computeOverallStanding, MUSCLE_DISPLAY_ORDER } from '../components/MuscleTierMap';
@@ -104,7 +104,7 @@ export function buildProgressData(
     const info = tiers[m];
     const mm = TIER_META[info?.tier ?? 'bronze'];
     // below Bronze: ALL the training this muscle has had, over Bronze's bar (shared rule, lib/sessionLog.ts)
-    const toBronzeF = unrankedProgress(credit.get(m) ?? 0);
+    const toBronzeF = belowBronzeProgress(credit.get(m) ?? 0);
     const toBronze = Math.round(toBronzeF * 100);
     return {
       key: m, icon: null as string | null,

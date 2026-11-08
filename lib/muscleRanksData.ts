@@ -11,7 +11,7 @@
 import { getExerciseDef, muscleCreditParts, Muscle } from '../constants/exercises';
 import { TIER_META } from '../constants/tierPalette';
 import {
-  TIER_ORDER, VOLUME_THRESHOLDS, tierIndex, tierProgress,
+  TIER_ORDER, VOLUME_THRESHOLDS, tierIndex, tierProgress, belowBronzeProgress, muscleCreditTotals,
   type SessionEntry, type MuscleTiers, type MuscleTierInfo, type Tier,
 } from './sessionLog';
 import { bodyMapPairDataUri } from './bodyMapSvg';
@@ -69,7 +69,6 @@ export function workedMuscles(entries: SessionEntry[]): { muscle: Muscle; credit
     .map(([muscle, credit]) => ({ muscle, credit }));
 }
 
-const BRONZE_MIN_VOLUME = VOLUME_THRESHOLDS.find(([t]) => t === 'bronze')![1];
 
 /**
  * How far one muscle is toward `target` (the NEXT rank of the overall rank), 0-100:
@@ -79,7 +78,7 @@ const BRONZE_MIN_VOLUME = VOLUME_THRESHOLDS.find(([t]) => t === 'bronze')![1];
  *    (only known for muscles trained today)
  */
 function progressToward(info: MuscleTierInfo | undefined, overallTier: Tier | null, todayCredit: number): number {
-  if (!info) return Math.min(100, (todayCredit / BRONZE_MIN_VOLUME) * 100);
+  if (!info) return 100 * belowBronzeProgress(todayCredit);
   if (overallTier && tierIndex(info.tier) > tierIndex(overallTier)) return 100;
   return muscleProgressPct(info);
 }
@@ -89,7 +88,7 @@ export interface MuscleRanksPayload {
     has: boolean; atTop: boolean; tier: Tier | null; label: string; next: string;
     pct: number;            // overall progress toward `next` AFTER today, 0-100 (one decimal)
     pctLabel: string;       // header text: only the newest number, e.g. "9.0%"
-    gained: string;         // overall gain today (the change in the overall %), number text without "+"/"%"
+    gained: string;         // how much the OVERALL rank % went up this workout, number text without "+"/"%"
     hi: string; lo: string; ink: string;
     emblem: string | null;
   };
@@ -108,6 +107,9 @@ export function buildMuscleRanksPayload(opts: {
   note?: string;
   iconFor: (m: Muscle) => string | null;
   emblem: string | null;
+  /** The whole log INCLUDING this workout. Needed for muscles still below Bronze: their progress counts all the
+   *  training they have ever had, not just today's. Defaults to this workout alone. */
+  history?: SessionEntry[];
 }): MuscleRanksPayload {
   const { entries, tiersBefore, tiersAfter, standingBefore, standingAfter, labels, iconFor, emblem } = opts;
   const worked = workedMuscles(entries);
@@ -127,13 +129,19 @@ export function buildMuscleRanksPayload(opts: {
   // Bronze could never show a gain: 100 before, 100 after, +0.0% (reported: "Bronze 53.2% -> 53.2%").
   //   MUSCLE ROW gain = that muscle's progress after - before (rank-ups count: tier*100 + progress), 0.1 steps
   //   OVERALL %       = computeOverallStanding().progress: the average own-progress over every ranked muscle, AFTER today (same on every screen)
-  //   GAINED TODAY    = the SUM of the muscle rows' gains (the rows shown on the page add up to it exactly)
+  //   HEADER GAIN     = the change in that overall % this workout (one number; the rows keep their own %)
   const universe = new Set<Muscle>([...(Object.keys(tiersAfter) as Muscle[]), ...worked.map(w => w.muscle)]);
-  // Not ranked yet (below Bronze): today's credited reps over Bronze's volume bar; before today there is nothing to see: 0.
-  const progAfter = (m: Muscle) => (tiersAfter[m] ? muscleProgressPct(tiersAfter[m]!) : Math.min(100, ((credit.get(m) ?? 0) / BRONZE_MIN_VOLUME) * 100));
-  const absAfter = (m: Muscle) => (tiersAfter[m] ? absolute(tiersAfter[m]) : progAfter(m));
-  const progBefore = (m: Muscle) => (tiersBefore[m] ? muscleProgressPct(tiersBefore[m]!) : 0);
-  const absBefore = (m: Muscle) => (tiersBefore[m] ? absolute(tiersBefore[m]) : 0);
+  // Below Bronze: progress toward Bronze from ALL the training the muscle has had (shared belowBronzeProgress, capped
+  // at 99%), after today and before today. These sit on a scale just below Bronze's 0 (-100..-1) so a muscle that
+  // reaches Bronze today shows a continuous, positive gain instead of dropping from 99% to ~0%.
+  const creditAfter = muscleCreditTotals(opts.history ?? entries);
+  const creditToday = muscleCreditTotals(entries);
+  const unrankedAfter = (m: Muscle) => 100 * belowBronzeProgress(creditAfter.get(m) ?? 0);
+  const unrankedBefore = (m: Muscle) => 100 * belowBronzeProgress(Math.max(0, (creditAfter.get(m) ?? 0) - (creditToday.get(m) ?? 0)));
+  const progAfter = (m: Muscle) => (tiersAfter[m] ? muscleProgressPct(tiersAfter[m]!) : unrankedAfter(m));
+  const absAfter = (m: Muscle) => (tiersAfter[m] ? absolute(tiersAfter[m]) : unrankedAfter(m) - 100);
+  const progBefore = (m: Muscle) => (tiersBefore[m] ? muscleProgressPct(tiersBefore[m]!) : unrankedBefore(m));
+  const absBefore = (m: Muscle) => (tiersBefore[m] ? absolute(tiersBefore[m]) : unrankedBefore(m) - 100);
   const muscles = [...universe];
   const r1 = (n: number) => Math.round(n * 10) / 10;
   const avg = (f: (m: Muscle) => number) => (muscles.length ? muscles.reduce((a, m) => a + f(m), 0) / muscles.length : 0);
@@ -148,9 +156,13 @@ export function buildMuscleRanksPayload(opts: {
   // bar), the two most-worked muscles are shown at +0.0% so the card is never empty.
   const gainers = worked.filter(w => r1(gainOf(w.muscle)) > 0);
   const shown = gainers.length ? gainers : worked.slice(0, 2);
-  const gains = shown.map(w => r1(gainOf(w.muscle)));
-  // TODAY'S TOTAL = the sum of the gains shown in the rows (every muscle that gained), so +1.4 +1.4 +0.6 always read +3.4.
-  const overallGain = r1(gains.reduce((a, g) => a + g, 0));
+  // A row never reads more than +99.9%: a muscle that goes from nothing to Bronze in one workout has moved more than one
+  // bar, which would look broken next to a 100% bar.
+  const gains = shown.map(w => Math.min(99.9, r1(gainOf(w.muscle))));
+  // HEADER GAIN = how far the OVERALL rank % moved this workout ("+1.2% to Gold"): the change in
+  // computeOverallStanding().progress (rank-ups count as tier*100 + %), one number, never a sum of the rows.
+  const overallAbs = (s: StandingLike | null) => (s ? tierIndex(s.tier) * 100 + s.progress * 100 : 0);
+  const overallGain = r1(Math.max(0, overallAbs(standingAfter) - overallAbs(standingBefore)));
 
   // Header: ONLY the newest number (no "old -> new").
   const pctLabel = standingAfter?.atTop ? 'Top rank' : `${fmt1(afterAvg)}%`;

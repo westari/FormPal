@@ -594,6 +594,7 @@ export default function RecapScreen() {
         note: generateSummary(data.totalReps, data.totalGoodReps, data.hasFormData),
         iconFor: (m) => icons[m] ?? null,
         emblem,
+        history: all,
       }));
       if (__DEV__) console.log('[recap] muscle page data ready');
       postLag('recap: muscle page payload built');
