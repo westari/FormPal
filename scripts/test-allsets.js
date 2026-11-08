@@ -18,7 +18,7 @@ const { pathToFileURL } = require('url');
 const { chromium } = require('playwright');
 const ROOT = path.join(__dirname, '..');
 const WARM = require('../components/WarmSurfaces.tsx');
-const { allSetsDataJs } = require('../lib/allSetsInject.ts');
+const { allSetsDataJs, setTilesFor } = require('../lib/allSetsInject.ts');
 const { execSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
@@ -151,6 +151,22 @@ const wait = (ms) => new Promise(r => setTimeout(r, ms));
   check('the page never navigated away during any of that', page.url() === url0, page.url().split('/').pop());
   await page.screenshot({ path: path.join(ROOT, '.scratch', 'allsets-fixed.png') });
   await browser.close();
+  // A set with ZERO counted reps used to show an empty page (no entry is saved, so there were no tiles). It still shows
+  // that set, with its video.
+  {
+    const payload0 = setTilesFor([], true, 'Shoulder Press');
+    check('zero reps + a recording -> one tile named after the exercise, carrying the video', payload0.tiles.length === 1 && payload0.tiles[0].hasVideo && payload0.tiles[0].meta === '0 reps' && payload0.videoIdx === 0, JSON.stringify(payload0));
+    check('no recording and no reps -> no tiles (nothing to show)', setTilesFor([], false, 'x').tiles.length === 0 && setTilesFor([], false, 'x').videoIdx === null);
+    check('with reps the tiles are unchanged (first one keeps the video)', (() => { const p = setTilesFor([{ displayName: 'A', reps: 10, goodReps: 8 }, { displayName: 'B', reps: 5, goodReps: 5 }], true, 'x'); return p.tiles.length === 2 && p.tiles[0].hasVideo && !p.tiles[1].hasVideo && p.tiles[0].meta === '10 reps · 80% form'; })());
+    const z = await open([WARM.BASE_JS.allsets]);
+    await z.page.evaluate(allSetsDataJs(payload0));
+    await z.page.waitForTimeout(900);
+    const tz = await tileTexts(z.page);
+    check('the real page shows that set (it used to be empty)', tz.length === 1 && /Shoulder Press/.test(tz[0]) && /0 reps/.test(tz[0]), JSON.stringify(tz));
+    check('its video tile reports a rect (so the real frame is drawn) and tapping it opens the rep feedback', z.ev.some(e => e.type === 'tileRect' && !e.none && e.w > 100) && await (async () => { await z.page.evaluate(() => document.querySelectorAll('#dc-root div[style*="grid-template-columns"] > div')[0].click()); return z.ev.some(e => e.type === 'openSet' && e.index === 0); })());
+    await z.page.screenshot({ path: path.join(ROOT, '.scratch', 'allsets-zero-reps.png') });
+    await z.browser.close();
+  }
   console.log(failed ? `\n${failed} FAILED` : '\nall passed');
   process.exit(failed ? 1 : 0);
 })();
