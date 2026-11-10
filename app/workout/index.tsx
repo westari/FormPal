@@ -15,7 +15,7 @@ import {
   Pressable,
   ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 import ScreenBackground from '../../components/ScreenBackground';
@@ -94,9 +94,11 @@ export default function WorkoutOverviewScreen() {
   const router     = useRouter();
   const insets     = useSafeAreaInsets();
   const getNext    = usePlanStore(s => s.getNextWorkout);
+  // My workouts opens a specific workout (?id=...); anywhere else this is the next workout in the plan
+  const { id }     = useLocalSearchParams<{ id?: string }>();
   const createPlan = usePlanStore(s => s.createPlan);
   const startSess  = useWorkoutSessionStore(s => s.startWorkout);
-  const workout    = getNext();
+  const workout    = (id ? usePlanStore.getState().plan?.workouts.find(w => w.id === id) : null) ?? getNext();
   const [creatingTestPlan, setCreatingTestPlan] = useState(false);
 
   // getNextWorkout is read once at mount (see workout's own selector above —
