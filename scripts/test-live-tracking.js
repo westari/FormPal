@@ -60,18 +60,22 @@ function run(targetAt, ms) {
   const t95 = o.find(x => x.v >= 95).t;
   check('RISE: 0 -> 95 in under 0.8s (was ~2.1s at one number per 45ms)', t95 < 800, `${t95}ms`);
   const steps = o.slice(1).map((x, i) => x.v - o[i].v).filter(d => d > 0);
-  check('RISE: still counts up smoothly (never jumps more than 6 numbers per frame)', Math.max(...steps) <= 6, `max step ${Math.max(...steps)}`);
+  check('RISE: still counts up smoothly (exponential glide: never more than 16 numbers per frame, never down)', Math.max(...steps) <= 16 && o.slice(1).every((x, i) => x.v >= o[i].v), `max step ${Math.max(...steps)}`);
 }
 {
-  // JITTER: the raw target flickers 100 <-> 55 every ~100ms for a second (a cue blinking), then settles at 100.
-  const flick = (t) => (t >= 1000 && t < 2000 ? (Math.floor(t / 100) % 2 ? 55 : 100) : 100);
-  const o = run(flick, 3000);
-  const after = o.filter(x => x.t > 800);
-  const dip = Math.min(...after.map(x => x.v));
-  // what the OLD meter did: follow every flicker, one number per 45ms up / faster down
-  let old = 100, oldMin = 100; for (let t = 1000; t < 2000; t += 45) { const tg = flick(t); old = old < tg ? old + 1 : Math.max(tg, old - Math.max(1, Math.ceil((old - tg) / 4))); oldMin = Math.min(oldMin, old); }
-  console.log(`      flickering target 100/55 for 1s: old meter swung down to ${oldMin}, new meter's lowest value ${dip}`);
-  check('JITTER: a flickering target no longer makes the number swing (old meter swung to ' + oldMin + ')', dip >= 95 && oldMin < 80, `lowest ${dip}`);
+  // CONTINUOUS: small changes in the picture are small changes on screen, and nothing steps.
+  // (1) the target slides 100 -> 90 over 2s (after the number has settled at 100): it slides with it, a number or two at a time
+  const o = run((t) => (t < 1500 ? 100 : Math.max(90, 100 - (t - 1500) / 200)), 5000).filter((x) => x.t >= 1500);
+  const d = o.slice(1).map((x, i) => x.v - o[i].v);
+  check('CONTINUOUS: a slow 100 -> 90 slide moves the number by at most 2 per frame, and never up', Math.min(...d) >= -2 && Math.max(...d) <= 0, 'steps ' + [Math.min(...d), Math.max(...d)].join('..'));
+  check('CONTINUOUS: ...and ends at 90', Math.abs(o[o.length - 1].v - 90) <= 1, String(o[o.length - 1].v));
+  // (2) one frame of a bad reading (100 -> 55 -> 100) is a small blip, not a swing
+  const blip = run((t) => (t >= 2000 && t < 2033 ? 55 : 100), 3500).filter((x) => x.t > 1500);
+  const lowest = Math.min(...blip.map((x) => x.v));
+  check('CONTINUOUS: a one-frame bad reading dips the number by only a few points (' + lowest + ')', lowest >= 94, 'lowest ' + lowest);
+  // (3) a tiny change (100 -> 98) shows as a tiny change
+  const tiny = run((t) => (t < 1500 ? 100 : 98), 5000).filter((x) => x.t > 1400);
+  check('CONTINUOUS: 100 -> 98 shows 98 (never goes below it)', tiny[tiny.length - 1].v === 98 && Math.min(...tiny.map((x) => x.v)) >= 98, 'lowest ' + Math.min(...tiny.map((x) => x.v)));
 }
 {
   // a REAL, sustained drop is still shown quickly
@@ -268,6 +272,29 @@ check('no false cue while METRIC lines keep flowing', (() => {
   check('with no debug log at all (release build) nothing waits on the counter (seen() is false, score 100)', noLogs.seen() === false && noLogs.score(1e6) === 100);
   const mt = (cs) => LT.meterTarget({ phase: 'tracking', isActive: true, setupAllVisible: true, setupHoldProgress: 1, setupHint: '', personDetected: true, repDiag: null, counterScore: cs });
   check('meterTarget is the minimum of the old rule and the counter score while tracking', mt(45) === 45 && mt(100) === 100);
+}
+
+// 8. the number is a live, continuous value on the REAL 11-10 session (it used to be just 100 / 55 / 35 / 0)
+{
+  const LT = require('../lib/liveTracking.ts');
+  const rows = fs.readFileSync(path.join(__dirname, 'fixtures', 'shoulder-press-2026-11-10.log.txt'), 'utf8').split(/\r?\n/).map((l) => {
+    const m = /^(\d\d):(\d\d):(\d\d\.\d+) \[log\] \[DEBUG\] (.*)$/.exec(l);
+    return m ? { t: (+m[1] * 3600 + +m[2] * 60 + parseFloat(m[3])) * 1000, msg: m[4] } : null;
+  }).filter(Boolean).filter((e) => e.t >= (22 * 3600 + 28 * 60 + 38) * 1000);
+  const c = LT.createCounterSignal(), sm = LT.createMeterSmoother();
+  const shown = [], steps = []; let ri = 0; let prev = null; let maxStep = 0;
+  const end = rows[rows.length - 1].t;
+  for (let t = rows[0].t; t < end; t += 33) {
+    while (ri < rows.length && rows[ri].t <= t) { c.feedLog(rows[ri].msg, rows[ri].t); ri++; }
+    const v = sm.tick(c.score(t), t); shown.push(v);
+    if (prev !== null && prev > 0 && v > 0 && shown.length > 45) { maxStep = Math.max(maxStep, Math.abs(v - prev)); steps.push(Math.abs(v - prev)); } prev = v; // (the first 1.5s is the number rising from 0)
+  }
+  const distinct = new Set(shown).size;
+  console.log('      11-10 session: ' + shown.length + ' frames, ' + distinct + ' different numbers shown, biggest change between two frames ' + maxStep);
+  check('the number takes many different values (not just 100 / 55 / 35 / 0)', distinct >= 12, String(distinct));
+  const ordered = steps.slice().sort((a, b) => a - b), p99 = ordered[Math.floor(ordered.length * 0.99)];
+  check('it never steps: 99% of frame-to-frame changes are 4 numbers or less (a real pose loss may move it up to ' + maxStep + ')', p99 <= 4 && maxStep <= 12, 'p99 ' + p99 + ', max ' + maxStep);
+  check('it reacts to the real trouble in that session (dips well below 100 at some point, recovers to above 90 later)', Math.min(...shown) <= 70 && Math.max(...shown.slice(Math.floor(shown.length / 2))) >= 90, 'min ' + Math.min(...shown));
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nall passed');

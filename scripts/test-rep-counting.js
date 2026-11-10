@@ -68,5 +68,22 @@ for (const id of ['overheadPress', 'arnoldPress', 'dumbbellShoulderPress', 'mach
 }
 const gate = def.startPositionGate;
 check('the return-to-start gate no longer needs hips (verticalGap, shoulder + elbow only)', gate && JSON.stringify(gate.metric).indexOf('normalized') < 0 && /verticalGap/.test(JSON.stringify(gate.metric)) && !/Hip/.test(JSON.stringify(gate.metric)));
+// ── 2026-11-10: six real presses rejected as "tracking unreliable" while the camera could see the arms ─────────────────────
+{
+  const lines10 = fs.readFileSync(path.join(__dirname, 'fixtures', 'shoulder-press-2026-11-10.log.txt'), 'utf8').split(/\r?\n/);
+  const rej = lines10.map((l) => /\[REP\] rejected \S+ tracking unreliable for (\d+)\/(\d+) frames \((\d+)%\)/.exec(l)).filter(Boolean).map((m) => +m[3] / 100);
+  const counted = lines10.filter((l) => /\[REP\] #\d+/.test(l)).length;
+  const oldCap = 0.5, newCap = EXERCISE_DEFINITIONS.shoulderPress.repReliabilityMaxUnreliableFraction;
+  console.log(`  11-10 log: ${rej.length} presses rejected for tracking (${rej.map((x) => Math.round(x * 100) + '%').join(', ')}), ${counted} counted`);
+  check('REPRODUCED: with the old cap (0.5) every one of those presses is thrown away, as on the device', rej.length >= 6 && rej.every((u) => u > oldCap), `${rej.length}`);
+  check('FIXED: with the shipped cap none of them is thrown away for confidence alone', rej.every((u) => u <= newCap), `cap ${newCap}`);
+  for (const id of ['overheadPress', 'arnoldPress', 'dumbbellShoulderPress', 'machineShoulderPress']) {
+    const d = EXERCISE_DEFINITIONS[id];
+    check(`${id}: same reliability cap and rest threshold`, !d || (d.repReliabilityMaxUnreliableFraction === newCap && d.settleAnchorMinFraction === EXERCISE_DEFINITIONS.shoulderPress.settleAnchorMinFraction));
+  }
+  const rest = EXERCISE_DEFINITIONS.shoulderPress, startMin = rest.goodROMThreshold + (rest.topAngle - rest.goodROMThreshold) * rest.settleAnchorMinFraction;
+  const restReadings = [61.3, 61.2, 59.1, 62.4, 62.9, 63.4, 64.8];
+  check(`the rest position seen in the 11-10 log (59-65) now passes the start check (needs >= ${startMin.toFixed(1)}); it used to need 63.7`, restReadings.filter((v) => v >= startMin).length >= 6, `${restReadings.filter((v) => v >= startMin).length}/${restReadings.length}`);
+}
 console.log(failed ? `\n${failed} FAILED` : '\nall passed');
 process.exit(failed ? 1 : 0);

@@ -287,7 +287,8 @@ function CueGlass({ text, ready }: { text: string; ready?: boolean }) {
         {ready
           ? <SymbolView name="checkmark.circle.fill" size={22} tintColor={C.good} type="monochrome" style={{ width: 22, height: 22 }} />
           : <Image source={SPARKLE_DUO} style={s.trackingCueIcon} />}
-        <Text style={s.trackingCueText}>{text}</Text>
+        {/* one line, never wrapped: a wrapped line hangs under the icon and looks indented. Long messages shrink to fit. */}
+        <Text style={s.trackingCueText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{text}</Text>
       </View>
     </GlassPanel>
   );
@@ -587,9 +588,9 @@ const ri = StyleSheet.create({
 // createMeterSmoother in lib/liveTracking.ts — in its own state, so its ticks
 // never re-render the whole camera screen. Always mounted (renders nothing when
 // !show) so the "is it high yet" report that gates "Ready. Go!" keeps working.
-function TrackingMeter({ target, show, top, onHighChange, counter, counterActive }: {
+function TrackingMeter({ target, show, top, onHighChange, counter, counterActive, flags }: {
   target: number; show: boolean; top: number; onHighChange: (high: boolean) => void;
-  counter: CounterSignal; counterActive: boolean;
+  counter: CounterSignal; counterActive: boolean; flags: { diag: boolean; cue: boolean };
 }) {
   const [display, setDisplay] = useState(0);
   const smoother = useRef(createMeterSmoother()).current;
@@ -597,13 +598,20 @@ function TrackingMeter({ target, show, top, onHighChange, counter, counterActive
   targetRef.current = target;
   const activeRef = useRef(counterActive);
   activeRef.current = counterActive;
+  const flagsRef = useRef(flags);
+  flagsRef.current = flags;
   const highRef = useRef(false);
   useEffect(() => {
     const id = setInterval(() => {
       // While tracking, the number can never be higher than what the rep counter itself can see (same signal it counts from).
       const now = Date.now();
       let tgt = targetRef.current;
-      if (activeRef.current && tgt > 0) tgt = Math.min(tgt, counter.score(now));
+      // While tracking the number IS the counter's continuous score (the soft warnings fade in and out inside it), not the
+      // old 100 / 55 / 35 steps; the steps are only a fallback when no counter signal exists (release build, no debug log).
+      if (activeRef.current && tgt > 0) {
+        counter.setFlags(flagsRef.current);
+        if (counter.seen()) tgt = counter.score(now);
+      }
       const d = smoother.tick(tgt, now);
       setDisplay((prev) => (prev === d ? prev : d));
       const high = trackingIsHigh(d, smoother.effectiveTarget);
@@ -857,7 +865,7 @@ export default function FormCheckScreen() {
   // "Why aren't reps counting?" — reads the same [METRIC]/[REP]/rejection
   // stream the counter does and turns a silent 0-rep session into one short
   // on-screen instruction. See lib/repDiagnostics.ts.
-  const repDiagRef = useRef(createRepDiagnostic(isFloor ? STREAM_DEAD_SEC_FLOOR : undefined));
+  const repDiagRef = useRef(createRepDiagnostic(isFloor ? STREAM_DEAD_SEC_FLOOR : undefined, exerciseType));
   const [repDiag, setRepDiag] = useState<string | null>(null);
 
   // Pending nav params stored right before switching to 'review' phase, so the
@@ -1556,6 +1564,7 @@ export default function FormCheckScreen() {
         onHighChange={setMeterHigh}
         counter={counterRef}
         counterActive={isTracking}
+        flags={{ diag: !!repDiag, cue: !!(stats?.trackingCue || stats?.outOfPlaneCue) }}
       />
 
       {/* Error */}
@@ -1937,7 +1946,7 @@ const s = StyleSheet.create({
   // shadowed text "doesn't feel clean at all." Same GlassPanel surface the
   // setup-success "Ready. Go!" card already uses.
   trackingCueCard:  { alignSelf: 'center', maxWidth: 340 },
-  trackingCueInner: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 26, paddingVertical: 16 },
+  trackingCueInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingHorizontal: 22, paddingVertical: 16 },
   trackingCueIcon:  { width: 22, height: 22 },
   // Messages are now short, framing-only instructions (see
   // lib/repDiagnostics.ts — "Move back", "Hold still", etc.), so a bigger
@@ -1945,7 +1954,7 @@ const s = StyleSheet.create({
   // "the cues need to be a bit bigger".
   trackingCueText: {
     fontFamily: 'PlusJakartaSans_700Bold', fontSize: 24, lineHeight: 28,
-    color: '#fff', letterSpacing: 0.1,
+    color: '#fff', letterSpacing: 0.1, flexShrink: 1, textAlign: 'center',
   },
 
   // Rep count — bare, no frame; own shadow for legibility over the camera.
