@@ -48,7 +48,9 @@ export const MUSCLE_RANKS_LOGIC_EXT = String.raw`function (Orig) {
       v.palNote = d.note;
       v.rankName = R.label;
       v.nextRank = R.next;
-      v.gained = R.gained;
+      // The design's "+{{ gained }}% today" now reads "Overall rank <before>% -> <after>%": its number is the AFTER value
+      // (the text around it is set by the DOM pass below); a top-ranked user has no %.
+      v.gained = R.atTop ? '' : R.pctLabel.replace('%', '');
       v.afterLabel = R.pctLabel;
       // Final value from the first paint: the design animates this bar from the
       // "before" value after 700ms, which is a visible layout change.
@@ -266,7 +268,7 @@ export const MUSCLE_RANKS_DOM_JS = String.raw`
         }
       }
       // body map: keeps its 40px top, shrinks (never grows past the design's 218px) to end 8px above the first row
-      if (img) img.style.setProperty('height', Math.max(110, Math.min(218, top0 - 8 - 40)) + 'px', 'important');
+      if (img) img.style.setProperty('height', Math.max(110, Math.min(218, top0 - 28 - 40)) + 'px', 'important');
       window.__mrRows = rows.length;
     }
     if (chips.length >= 3 || (chips.length === 2 && window.__mrPack)) packChips();
@@ -275,17 +277,42 @@ export const MUSCLE_RANKS_DOM_JS = String.raw`
     // the OVERALL rank % went up this workout, so the trailing text becomes "% to Gold" (the rank being worked
     // toward). Only that one text node is changed, so the design's own re-render never loses a node it owns.
     // A top-ranked user just sees "+x%".
-    var gainSuffix = R.atTop ? '%' : '% to ' + R.next;
+    // The design's right-hand text ("+", a span with the number, "% today") becomes two short lines:
+    //   Overall rank
+    //   51.2% -> 51.6%        (a rank-up reads "Overall rank / Ranked up to Silver 3.1%")
+    // so the overall rank is clearly its own number, separate from each muscle's progress below the body map.
+    var lead = R.atTop ? 'Top rank reached' : R.rankedUp ? 'Overall rank' + String.fromCharCode(10) + 'Ranked up to ' + R.label + ' ' : 'Overall rank' + String.fromCharCode(10) + R.beforePct + '% ' + String.fromCharCode(8594) + ' ';
+    var tail = R.atTop ? '' : '%';
     var gainDone = false, gdivs = root.querySelectorAll('div');
     for (var g = 0; g < gdivs.length; g++) {
       var gd = gdivs[g];
-      if (gd.children.length !== 1 || (gd.textContent || '').length > 40) continue;
+      if (gd.children.length !== 1 || (gd.textContent || '').length > 60) continue;
       var nodes = gd.childNodes;
-      if (nodes.length !== 3 || nodes[0].nodeType !== 3 || nodes[2].nodeType !== 3 || nodes[0].nodeValue !== '+') continue;
-      if (!/^%( today| to .+)?$/.test(nodes[2].nodeValue)) continue;
-      if (nodes[2].nodeValue !== gainSuffix) nodes[2].nodeValue = gainSuffix;
-      gainDone = (gd.textContent || '') === '+' + R.gained + gainSuffix;
+      if (nodes.length !== 3 || nodes[0].nodeType !== 3 || nodes[2].nodeType !== 3) continue;
+      var mine = gd.hasAttribute('data-mr-overall');
+      if (!mine && !(nodes[0].nodeValue === '+' && /^%( today| to .+)?$/.test(nodes[2].nodeValue))) continue;
+      gd.setAttribute('data-mr-overall', '1');
+      if (nodes[0].nodeValue !== lead) nodes[0].nodeValue = lead;
+      if (nodes[2].nodeValue !== tail) nodes[2].nodeValue = tail;
+      gd.style.setProperty('white-space', 'pre-line', 'important');
+      gd.style.setProperty('text-align', 'right', 'important');
+      gd.style.setProperty('line-height', '1.25', 'important');
+      gainDone = (gd.textContent || '') === lead + (R.atTop ? '' : R.pctLabel.replace('%', '')) + tail;
       break;
+    }
+    // A caption above the muscle rows: they are each muscle's OWN progress, not the overall rank.
+    var capHost = chips.length ? chips[0].parentElement : null;
+    if (capHost) {
+      var cap = capHost.querySelector('[data-mr-cap]');
+      if (!cap) {
+        cap = document.createElement('div'); cap.setAttribute('data-mr-cap', '1');
+        cap.style.cssText = 'position:absolute;left:0;right:0;text-align:center;font-size:11px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;color:#8e8e96;pointer-events:none;';
+        cap.textContent = 'Each muscle' + String.fromCharCode(39) + 's own progress';
+        capHost.appendChild(cap);
+      }
+      var firstTop = Infinity;
+      for (var ci = 0; ci < chips.length; ci++) firstTop = Math.min(firstTop, parseFloat(chips[ci].style.top) || 284);
+      cap.style.setProperty('top', (firstTop - 19) + 'px');
     }
 
     // Final layout = real text in, real image decoded, scaled. Only then reveal.
