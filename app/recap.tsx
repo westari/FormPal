@@ -70,7 +70,7 @@ import { computeOverallStanding, MUSCLE_LABELS, MUSCLE_ICON_SOURCES } from '../c
 import { Asset } from 'expo-asset';
 import { buildMuscleRanksPayload, workedMuscles, type MuscleRanksPayload } from '../lib/muscleRanksData';
 import { tierDataUri } from '../lib/rankImages';
-import { allSetsDataJs } from '../lib/allSetsInject';
+import { allSetsDataJs, setTilesFor } from '../lib/allSetsInject';
 import { generateSummary, recapPageData } from '../lib/recapPrefetch';
 import { postLag } from '../lib/postLag';
 import { repFeedbackDataJs } from '../lib/repFeedbackInject';
@@ -541,18 +541,10 @@ export default function RecapScreen() {
   // rep feedback / show a frame.
   const allSetsDataJsStr = useMemo(() => {
     if (!data) return null;
-    return allSetsDataJs({
-      tiles: data.entries.map((e, i) => ({
-        title: e.displayName,
-        ex: e.displayName,
-        meta: e.formChecked !== false
-          ? `${e.reps} reps · ${e.reps > 0 ? Math.round((e.goodReps / e.reps) * 100) : 0}% form`
-          : `${e.reps} reps`,
-        hasVideo: hasVideo && i === 0,
-      })),
-      videoIdx: hasVideo && data.entries.length > 0 ? 0 : null,
-    });
-  }, [data, hasVideo]);
+    // A set with zero counted reps has no saved entry, but it was filmed: setTilesFor still shows it, with its video.
+    const fallbackName = EXERCISE_DEFINITIONS[(exercise ?? '') as ExerciseId]?.displayName ?? 'Your set';
+    return allSetsDataJs(setTilesFor(data.entries, hasVideo, fallbackName));
+  }, [data, hasVideo, exercise]);
 
   // "Today's progress" (muscleranks.html) — everything on it is real: standing
   // before vs. after this session (the SAME weakest-link standing the Progress
@@ -687,7 +679,7 @@ export default function RecapScreen() {
     // isFocused in the deps: rep feedback releases its page when it closes, so
     // coming back here re-fills the freshly warmed one for the next open.
     warmPrepare('repfeedback', repFeedbackDataJs({
-      exerciseName: data.entries[0]?.displayName ?? 'Exercise', hasVideo: true, reps: repEvents,
+      exerciseName: data.entries[0]?.displayName ?? EXERCISE_DEFINITIONS[(exercise ?? '') as ExerciseId]?.displayName ?? 'Exercise', hasVideo: true, reps: repEvents,
     }));
   }, [hasVideo, data, repEvents, isFocused]);
 
@@ -757,7 +749,7 @@ export default function RecapScreen() {
       router.push({
         pathname: '/rep-feedback',
         params: {
-          exerciseName: data.entries[0]?.displayName ?? 'Exercise',
+          exerciseName: data.entries[0]?.displayName ?? EXERCISE_DEFINITIONS[(exercise ?? '') as ExerciseId]?.displayName ?? 'Exercise',
           videoUri: data.videoUri ?? '',
           repEvents: JSON.stringify(repEvents),
         },

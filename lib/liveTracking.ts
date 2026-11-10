@@ -50,6 +50,96 @@ export function createSteadyGate(): SteadyGate {
   };
 }
 
+// ── Counter signal: what the rep counter itself can see ─────────────────────
+// The "Camera confidence" number must agree with whether reps count. Reps are counted from the native rep metric,
+// which needs shoulder + elbow every frame, so the honest confidence is "how well has the counter been seeing those
+// joints lately". Native prints exactly that in its debug log, and this reads the same lines the counter produces:
+//   [METRIC] ... value=V            -> a frame where the rep metric was measurable (~every 0.4s)
+//   [SETTLE-TRACE] / [REP-TRACE]    -> per-frame metric samples (REP-TRACE also carries framesSincePoseGap)
+//   framesSincePoseGap going DOWN   -> the pose was lost for a moment (the counter skips frames after a gap and
+//                                      abandons a rep when the gap is long: the arms leaving the frame at the top of
+//                                      a press, standing too close, a limb hidden)
+//   "[REP] rejected - tracking unreliable"   -> the counter threw a rep away because it could not see you
+//   [TRACK] person lost / back      -> nobody in frame
+// All windows below are PLACEHOLDERS (reasoned, not measured): send a log and they get set from real numbers.
+export const COUNTER_BLIND_MS = 1500;      // no metric sample for this long = the counter is blind
+export const COUNTER_GAP_RECOVER_MS = 4000; // after a pose gap the score climbs back over this long
+export const COUNTER_GAP_FLOOR = 45;        // score right after a pose gap
+export const COUNTER_UNRELIABLE_MS = 6000;
+export const COUNTER_UNRELIABLE_SCORE = 40;
+export const COUNTER_BLIND_SCORE = 20;
+
+// "Ready. Go!" additionally waits until the counter can really see you (PLACEHOLDERS, set from the [READY-GATE] lines):
+// at least READY_COUNTER_MIN_SAMPLES metric samples in the last READY_COUNTER_WINDOW_MS with no pose gap, and - for
+// exercises that need a start position (shoulder press: hands at the shoulders) - every one of them in that position.
+// The real log that motivated this: Go showed at 38.3s while the counter was still rejecting the pose as "not a genuine
+// starting position" (readings 34-58, needs >= 63.7) and the first reps of the set were lost.
+export const READY_COUNTER_WINDOW_MS = 1200;
+export const READY_COUNTER_MIN_SAMPLES = 3;
+
+export interface CounterSignal {
+  /** Feed every native debug-log line. */
+  feedLog(message: string, nowMs: number): void;
+  /** 0-100: how well the counter can see you right now. Before any sample has arrived it returns 100 (nothing is wrong yet). */
+  score(nowMs: number): number;
+  /** True if at least `minSamples` metric samples arrived in the last `windowMs` and none was a pose gap / unreliable report. */
+  healthy(nowMs: number, windowMs: number, minSamples: number): boolean;
+  /** True if the last `minSamples` metric samples (all within `windowMs`) read at or above `minValue` (the user holds the start position). */
+  atStartPosition(minValue: number, nowMs: number, windowMs: number, minSamples: number): boolean;
+  /** Newest metric value, or null. */
+  lastValue(): number | null;
+  /** True once any metric sample has arrived (without debug logging there are none, and nothing may wait on them). */
+  seen(): boolean;
+  reset(): void;
+}
+
+export function createCounterSignal(): CounterSignal {
+  let sampleAt = 0, gapAt = 0, unreliableAt = 0, prevGap: number | null = null, value: number | null = null;
+  let samples: { t: number; v: number }[] = [];
+  const note = (t: number, v: number) => { value = v; sampleAt = t; samples.push({ t, v }); if (samples.length > 40) samples = samples.slice(-40); };
+  return {
+    feedLog(msg, now) {
+      if (msg.startsWith('[METRIC]')) {
+        const m = /value=([-\d.]+)/.exec(msg);
+        if (m) note(now, parseFloat(m[1]));
+      } else if (msg.startsWith('[SETTLE-TRACE]')) {
+        const m = /angle=([-\d.]+)/.exec(msg);
+        if (m) note(now, parseFloat(m[1]));
+      } else if (msg.startsWith('[REP-TRACE]')) {
+        const m = /angle=([-\d.]+)/.exec(msg), g = /framesSincePoseGap=(\d+)/.exec(msg);
+        if (m) note(now, parseFloat(m[1]));
+        if (g) { const n = +g[1]; if (prevGap !== null && n < prevGap) gapAt = now; prevGap = n; }
+      } else if (/^\[REP\] rejected\s+\S+\s+tracking unreliable/.test(msg)) {
+        unreliableAt = now;
+      } else if (msg.startsWith('[TRACK] person lost')) {
+        gapAt = now;
+      }
+    },
+    score(now) {
+      if (!sampleAt) return 100;
+      let sc = 100;
+      if (now - sampleAt > COUNTER_BLIND_MS) sc = COUNTER_BLIND_SCORE;
+      if (gapAt) { const dt = now - gapAt; if (dt < COUNTER_GAP_RECOVER_MS) sc = Math.min(sc, COUNTER_GAP_FLOOR + (dt / COUNTER_GAP_RECOVER_MS) * (100 - COUNTER_GAP_FLOOR)); }
+      if (unreliableAt && now - unreliableAt < COUNTER_UNRELIABLE_MS) sc = Math.min(sc, COUNTER_UNRELIABLE_SCORE);
+      return Math.round(sc);
+    },
+    healthy(now, windowMs, minSamples) {
+      const recent = samples.filter((x) => now - x.t <= windowMs);
+      if (recent.length < minSamples) return false;
+      if (gapAt && now - gapAt <= windowMs) return false;
+      if (unreliableAt && now - unreliableAt <= windowMs) return false;
+      return true;
+    },
+    atStartPosition(minValue, now, windowMs, minSamples) {
+      const recent = samples.filter((x) => now - x.t <= windowMs);
+      return recent.length >= minSamples && recent.every((x) => x.v >= minValue);
+    },
+    lastValue() { return value; },
+    seen() { return sampleAt > 0; },
+    reset() { sampleAt = 0; gapAt = 0; unreliableAt = 0; prevGap = null; value = null; samples = []; },
+  };
+}
+
 // Hints native's setup check emits when Vision found nobody at all (every
 // frame, see ExerciseEngine.notePersonMissing / positionGuidance).
 const SETUP_NO_PERSON_HINTS = ['Get in frame', 'Get back in frame'];
@@ -64,6 +154,8 @@ export interface MeterInputs {
   trackingCue?: string;
   outOfPlaneCue?: string;
   repDiag: string | null;
+  /** 0-100 from createCounterSignal().score(): how well the rep counter itself sees you (tracking only). */
+  counterScore?: number;
 }
 
 export function personLost(i: MeterInputs): boolean {
@@ -83,9 +175,12 @@ export function meterTarget(i: MeterInputs): number {
   if (i.phase === 'setup-done') return 100;
   if (i.isActive) {
     if (personLost(i)) return 0;
-    if (i.repDiag) return 35;
-    if (i.trackingCue || i.outOfPlaneCue) return 55;
-    return 100;
+    let t = 100;
+    if (i.repDiag) t = 35;
+    else if (i.trackingCue || i.outOfPlaneCue) t = 55;
+    // the same signal the counter works from: high only if reps can actually be counted
+    if (i.counterScore !== undefined) t = Math.min(t, i.counterScore);
+    return t;
   }
   return 0;
 }

@@ -154,6 +154,27 @@ export function allSetsBaseJs(): string {
   return dcScaleFitJs('transparent') + dcLogicPatchJs(ALLSETS_LOGIC_EXT) + ALLSETS_DOM_JS;
 }
 
+export interface SetEntryLike { displayName: string; reps: number; goodReps: number; formChecked?: boolean }
+
+/**
+ * The tiles for the page. A set with zero counted reps is not saved to the log (so `entries` is empty), but if it was
+ * filmed it must still appear, with its video: one tile named after the exercise, "0 reps". The recording belongs to the
+ * first tile.
+ */
+export function setTilesFor(entries: SetEntryLike[], hasVideo: boolean, fallbackName: string): AllSetsPayload {
+  const tiles = entries.length > 0
+    ? entries.map((e, i) => ({
+        title: e.displayName,
+        ex: e.displayName,
+        meta: e.formChecked !== false
+          ? `${e.reps} reps · ${e.reps > 0 ? Math.round((e.goodReps / e.reps) * 100) : 0}% form`
+          : `${e.reps} reps`,
+        hasVideo: hasVideo && i === 0,
+      }))
+    : hasVideo ? [{ title: fallbackName, ex: fallbackName, meta: '0 reps', hasVideo: true }] : [];
+  return { tiles, videoIdx: hasVideo && tiles.length > 0 ? 0 : null } as AllSetsPayload;
+}
+
 /** The data half: real tiles, pushed once into the already-rendered page. */
 export function allSetsDataJs(payload: AllSetsPayload): string {
   return athltSetDataJs(payload);
