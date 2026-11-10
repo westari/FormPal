@@ -88,6 +88,11 @@ const anchor = (p, src, act = 'click') => p.evaluate((s) => { const a = [...docu
     check('page posts ready with no errors', msgs.some((m) => m.type === 'ready') && !logs.some((l) => /pageerror|render error/.test(l)), logs.filter((l) => /error/i.test(l)).slice(0, 2).join(' | '));
     let t = await text(page);
     check('starts empty on Today (no demo Squat / Push-up, no "Sep 12")', /Today/.test(t) && !/Squat|Push-up|Sep/.test(t));
+    await type(page, 'input[placeholder="Search exercises"]', 'pu');
+    await page.waitForTimeout(150);
+    const body = await text(page);
+    const iPull = body.indexOf('Pull-up'), iPush = body.indexOf('Push-up'), iCable = body.indexOf('Cable Pull-Through');
+    check('search puts names that START with the text first (like Train)', iPull > 0 && iPush > 0 && iCable > 0 && Math.max(iPull, iPush) < iCable, body.slice(0, 200));
     await type(page, 'input[placeholder="Search exercises"]', 'row');
     await clickText(page, /^Barbell Row$/);
     await page.waitForTimeout(150);

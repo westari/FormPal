@@ -7,6 +7,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { configureAudioSession } from '../lib/audioFeedback';
 import WarmSurfaces from '../components/WarmSurfaces';
+import DesignPrewarm from '../components/DesignPrewarm';
 import { installDevLogger } from '../lib/devLogger';
 import {
   useFonts,
@@ -101,6 +102,8 @@ export default function RootLayout() {
       {/* Persistent, already-loaded artboard WebViews (Workout Complete, rep
           feedback, muscle page). See that file's header. */}
       <WarmSurfaces />
+      {/* Warms the web engine for Create workout / My workouts / Log a session so they open without a blank wait. */}
+      <DesignPrewarm />
     </SafeAreaProvider>
   );
 }

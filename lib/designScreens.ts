@@ -199,6 +199,16 @@ ${CATALOG_PAGE}
       var d = D(), self = this;
       // the design is frozen on a demo date ("Sep 12", Squat / Push-up already logged): real today, nothing logged yet
       if (!this.__dsInit) { this.__dsInit = true; this.state = Object.assign({}, this.state, { picked: {}, sel: d.today.d }); }
+      // search works like Train's Practice Exercises: names that START with what was typed first, then names that merely contain it
+      // (each A-Z), real catalog only. The design filters this.LIB in order, so the order is set here before it renders.
+      var q = ((this.state.query || '') + '').trim().toLowerCase();
+      var names = d.catalog.map(function (c) { return c.name; });
+      if (q) {
+        var starts = names.filter(function (n) { return n.toLowerCase().indexOf(q) === 0; });
+        var has = names.filter(function (n) { return n.toLowerCase().indexOf(q) > 0; });
+        var az = function (x, y) { return x < y ? -1 : x > y ? 1 : 0; };
+        this.LIB = starts.sort(az).concat(has.sort(az)).concat(names.filter(function (n) { return n.toLowerCase().indexOf(q) < 0; }));
+      } else this.LIB = names;
       var v = super.renderVals(), s = this.state, t = d.today;
       var first = new Date(t.y, t.m, 1).getDay(), dim = new Date(t.y, t.m + 1, 0).getDate();
       var dayName = function (n) { return n === t.d ? 'Today' : n === t.d - 1 ? 'Yesterday' : WD[new Date(t.y, t.m, n).getDay()] + ', ' + MON[t.m] + ' ' + n; };

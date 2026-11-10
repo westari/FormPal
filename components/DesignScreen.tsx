@@ -64,7 +64,7 @@ export default function DesignScreen({
           allowUniversalAccessFromFileURLs
           javaScriptEnabled
           domStorageEnabled
-          cacheEnabled={false}
+          cacheEnabled
           automaticallyAdjustContentInsets={false}
           contentInsetAdjustmentBehavior="never"
           keyboardDisplayRequiresUserAction={false}
@@ -75,6 +75,6 @@ export default function DesignScreen({
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#f4f4f6' },
-  web:  { flex: 1, backgroundColor: '#f4f4f6' },
+  root: { flex: 1, backgroundColor: '#eeeef1' },
+  web:  { flex: 1, backgroundColor: '#eeeef1' },
 });
