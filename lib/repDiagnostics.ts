@@ -7,10 +7,10 @@
  * one short on-screen instruction.
  *
  * Explicit rules from direct user feedback:
- * - Never exercise technique ("go deeper", "come all the way back up") —
- *   this screen is only about whether the camera can see the user, never
- *   how to do the exercise (they already watched the demo video). Short —
- *   1-4 words — never a full instructional sentence.
+ * - Every rep that does not count must say WHY, in plain short words: "Go lower", "Arms not fully up",
+ *   "Step back, I can't see your arms". (An earlier rule banned technique words and left only "Rep not counted",
+ *   which told nobody anything; replaced on 2026-11-10.)
+ * - Short, a few words, never a full instructional sentence.
  * - Never fire at the same time a rep result (GOOD/BAD/PRESS HIGHER) is
  *   showing — "there's nothing to fix if it's able to see you." This is
  *   why this file ONLY tracks genuine tracking-loss signals (dead frame
@@ -56,7 +56,18 @@ const MOVE_SILENCE_SEC    = 4.5;
 const MOVE_RANGE_FRACTION = 0.85;
 const CUE_HOLD_SEC        = 3;
 
-export function createRepDiagnostic(streamDeadSec: number = STREAM_DEAD_SEC): RepDiagnostic {
+/** The plain reason a too-small movement was not counted, by kind of exercise. */
+export function shortMovementReason(exerciseId: string | undefined): string {
+  const id = exerciseId ?? '';
+  if (/press|overhead/i.test(id)) return 'Arms not fully up';
+  if (/raise/i.test(id)) return 'Raise your arms higher';
+  if (/squat|lunge|stepup|pushup|dip/i.test(id)) return 'Go lower';
+  if (/curl|row|pull/i.test(id)) return 'Pull all the way up';
+  return 'Bigger movement';
+}
+export const CANT_SEE_REASON = "Step back, I can't see your arms";
+
+export function createRepDiagnostic(streamDeadSec: number = STREAM_DEAD_SEC, exerciseId?: string): RepDiagnostic {
   let startedAt      = 0;
   let lastRepAt      = 0;
   let lastMetricAt   = 0;
@@ -68,7 +79,9 @@ export function createRepDiagnostic(streamDeadSec: number = STREAM_DEAD_SEC): Re
   let msg: string | null = null;
   let personLost     = false; // native said "[TRACK] person lost" (~0.2s after the last pose)
   let waitAt         = 0;     // last [REP-WAIT]
-  let rejectedAt     = 0;     // last non-tracking [REP] rejected
+  let rejectedAt     = 0;     // last [REP] rejected
+  let rejectReason   = '';    // why that rep was rejected, in plain words
+  let unreliableAt   = 0;     // last "tracking unreliable" rejection
   let fullRange      = 0;     // |top - rom| from the latest [METRIC] line (metric units)
   const recent: { at: number; v: number }[] = [];
 
@@ -96,22 +109,26 @@ export function createRepDiagnostic(streamDeadSec: number = STREAM_DEAD_SEC): Re
       // Native: the old rule would have counted, but the arms are not back at
       // the start position yet. Tell the user what finishes the rep.
       waitAt = now();
-    } else if (/^\[REP\] rejected/.test(line) && !/tracking unreliable/i.test(line)) {
-      // A real attempt that native threw out (phantom / gate): never silent.
+    } else if (/^\[REP\] rejected/.test(line) && /tracking unreliable/i.test(line)) {
+      // The camera could not see the arms well enough for this rep: say that, not "not counted".
+      rejectedAt = now(); unreliableAt = now(); rejectReason = CANT_SEE_REASON;
+      unreliable++;
+    } else if (/^\[REP\] rejected/.test(line)) {
+      // A real attempt that native threw out (too small a movement / gate): never silent, and say why.
       rejectedAt = now();
+      rejectReason = shortMovementReason(exerciseId);
     } else if (/rep counting active|entering ACTIVE/i.test(line)) {
       settleActive = true;
     } else if (/\[SETTLE\][^]*?(rejected|still waiting|not a genuine)/i.test(line)) {
       settleWaiting++;
     } else if (/no person detected|person left frame|rep abandoned|returning to SETUP/i.test(line)) {
       noPersonHits++;
-    } else if (/\[REP\] rejected.*tracking unreliable/i.test(line)) {
-      unreliable++;
     } else if (/^\[REP\] #\d+/.test(line)) {
       repCount++;
       lastRepAt = now();
       noPersonHits = 0; unreliable = 0;
       waitAt = rejectedAt = 0;
+      rejectReason = '';
       recent.length = 0;
     }
     recompute();
@@ -140,11 +157,18 @@ export function createRepDiagnostic(streamDeadSec: number = STREAM_DEAD_SEC): Re
     //  3. the user clearly moved through most of the range and nothing counted
     //     or got rejected for a while -> say so.
     if (waitAt && (now() - waitAt) / 1000 < CUE_HOLD_SEC) { msg = 'Lower arms to start'; return; }
-    if (rejectedAt && (now() - rejectedAt) / 1000 < CUE_HOLD_SEC) { msg = 'Rep not counted'; return; }
+    if (rejectedAt && (now() - rejectedAt) / 1000 < CUE_HOLD_SEC) { msg = rejectReason || shortMovementReason(exerciseId); return; }
     if (sinceRep >= MOVE_SILENCE_SEC && fullRange > 0 && recent.length >= 3) {
       let lo = Infinity, hi = -Infinity;
       for (const p of recent) { if (p.v < lo) lo = p.v; if (p.v > hi) hi = p.v; }
-      if (hi - lo >= MOVE_RANGE_FRACTION * fullRange) { msg = 'Rep not counted'; return; }
+      if (hi - lo >= MOVE_RANGE_FRACTION * fullRange) {
+        // moved through the range, nothing counted, nothing rejected: the camera has been struggling, the engine never
+        // saw the start position, or the movement was short
+        msg = unreliableAt && (now() - unreliableAt) / 1000 < 12 ? CANT_SEE_REASON
+          : !settleActive && settleWaiting >= 1 ? 'Hands back at your start position'
+          : shortMovementReason(exerciseId);
+        return;
+      }
     }
 
     // A working set that's keeping pace — don't nag about framing.
@@ -167,7 +191,8 @@ export function createRepDiagnostic(streamDeadSec: number = STREAM_DEAD_SEC): Re
     startedAt = lastRepAt = lastMetricAt = repCount = 0;
     noPersonHits = unreliable = settleWaiting = 0;
     settleActive = false;
-    waitAt = rejectedAt = fullRange = 0;
+    waitAt = rejectedAt = unreliableAt = fullRange = 0;
+    rejectReason = '';
     personLost = false;
     recent.length = 0;
     msg = null;

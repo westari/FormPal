@@ -1,0 +1,605 @@
+19:56:32.492 [log] [DEF-LOOKUP] id=shoulderPress found=yes overrides=none
+19:56:32.493 [log] [DEBUG] [DEF-LOAD] loaded 'shoulderPress' from JSON: repMetric=bestSide formChecks=4 cameraSetup=ok calibration=ok source=JSON
+19:56:34.592 [log] [DEBUG] [METRIC] shoulderPress value=55.9661 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+19:56:34.592 [log] [DEBUG] [SETUP] shoulderPress rep metric trackable — starting 2.0s hold at timestamp=1794167794.5916219
+19:56:34.674 [log] [DEBUG] [SETUP-TRACE] shoulderPress hold flicker 1/6 — missing [rightElbow], timer held
+19:56:34.674 [log] [READY-GATE] steady run broken (body not fully tracked or frames stopped) — counting again from zero
+19:56:34.771 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.1801 holdProgress=0.09 start=1794167794.5916219 now=1794167794.771723
+19:56:34.870 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.2791 holdProgress=0.14 start=1794167794.5916219 now=1794167794.870722
+19:56:34.971 [log] [DEBUG] [METRIC] shoulderPress value=44.4863 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+19:56:34.971 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.3792 holdProgress=0.19 start=1794167794.5916219 now=1794167794.97087
+19:56:35.071 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.4795 holdProgress=0.24 start=1794167794.5916219 now=1794167795.071085
+19:56:35.174 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.5829 holdProgress=0.29 start=1794167794.5916219 now=1794167795.174499
+19:56:35.275 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.6832 holdProgress=0.34 start=1794167794.5916219 now=1794167795.274791
+19:56:35.376 [log] [DEBUG] [METRIC] shoulderPress value=35.2320 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+19:56:35.376 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.7850 holdProgress=0.39 start=1794167794.5916219 now=1794167795.376593
+19:56:35.475 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.8839 holdProgress=0.44 start=1794167794.5916219 now=1794167795.475498
+19:56:35.578 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.9871 holdProgress=0.49 start=1794167794.5916219 now=1794167795.5787191
+19:56:35.676 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.0847 holdProgress=0.54 start=1794167794.5916219 now=1794167795.676328
+19:56:35.780 [log] [DEBUG] [METRIC] shoulderPress value=34.5059 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+19:56:35.780 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.1884 holdProgress=0.59 start=1794167794.5916219 now=1794167795.7800589
+19:56:35.881 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.2894 holdProgress=0.64 start=1794167794.5916219 now=1794167795.881006
+19:56:35.990 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.3987 holdProgress=0.70 start=1794167794.5916219 now=1794167795.990334
+19:56:36.087 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.4952 holdProgress=0.75 start=1794167794.5916219 now=1794167796.0867882
+19:56:36.188 [log] [DEBUG] [METRIC] shoulderPress value=33.5722 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+19:56:36.188 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.5960 holdProgress=0.80 start=1794167794.5916219 now=1794167796.187671
+19:56:36.283 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.6918 holdProgress=0.85 start=1794167794.5916219 now=1794167796.2834082
+19:56:36.384 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.7923 holdProgress=0.90 start=1794167794.5916219 now=1794167796.383965
+19:56:36.481 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.8895 holdProgress=0.94 start=1794167794.5916219 now=1794167796.481168
+19:56:36.586 [log] [DEBUG] [METRIC] shoulderPress value=32.9598 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+19:56:36.586 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.9939 holdProgress=1.00 start=1794167794.5916219 now=1794167796.585475
+19:56:36.688 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=2.0968 holdProgress=1.00 start=1794167794.5916219 now=1794167796.6884542
+19:56:36.689 [log] [DEBUG] [SETUP] shoulderPress PASSED — entering ACTIVE
+19:56:36.689 [log] [READY-GATE] native setup passed; steady so far 1917ms, need 3500ms (placeholder)
+19:56:36.695 [log] [READY-GATE] waiting: steady 1922ms of 3500ms needed (placeholder), meter high
+19:56:36.886 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=34.3740 settleCandidateTop=34.3740 framesSeen=1
+19:56:36.886 [log] [DEBUG] [SETTLE] rejected — candidate=34.374 required>=63.700 — not a genuine starting position for this exercise, still waiting
+19:56:36.988 [log] [DEBUG] [METRIC] shoulderPress value=34.4127 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+19:56:36.988 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=34.4127 settleCandidateTop=34.4127 framesSeen=2
+19:56:37.087 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=34.2435 settleCandidateTop=34.4127 framesSeen=3
+19:56:37.097 [log] [READY-GATE] waiting: steady 2325ms of 3500ms needed (placeholder), meter high
+19:56:37.194 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=34.0127 settleCandidateTop=34.4127 framesSeen=4
+19:56:37.292 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=34.0230 settleCandidateTop=34.4127 framesSeen=5
+19:56:37.395 [log] [DEBUG] [METRIC] shoulderPress value=33.5429 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+19:56:37.396 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=33.5429 settleCandidateTop=34.4127 framesSeen=6
+19:56:37.489 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=33.1331 settleCandidateTop=34.4127 framesSeen=7
+19:56:37.514 [log] [READY-GATE] waiting: steady 2742ms of 3500ms needed (placeholder), meter high
+19:56:37.592 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=32.6771 settleCandidateTop=34.4127 framesSeen=8
+19:56:37.697 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=32.5350 settleCandidateTop=34.4127 framesSeen=9
+19:56:37.793 [log] [DEBUG] [METRIC] shoulderPress value=32.7618 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+19:56:37.793 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=32.7618 settleCandidateTop=34.4127 framesSeen=10
+19:56:37.888 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=33.3950 settleCandidateTop=34.4127 framesSeen=11
+19:56:37.888 [log] [DEBUG] [SETTLE] rejected — candidate=34.413 required>=63.700 — not a genuine starting position for this exercise, still waiting
+19:56:37.931 [log] [READY-GATE] waiting: steady 3159ms of 3500ms needed (placeholder), meter high
+19:56:37.993 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=35.9040 settleCandidateTop=35.9040 framesSeen=12
+19:56:38.092 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=35.9512 settleCandidateTop=35.9512 framesSeen=13
+19:56:38.200 [log] [DEBUG] [METRIC] shoulderPress value=42.0937 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+19:56:38.200 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=42.0937 settleCandidateTop=42.0937 framesSeen=14
+19:56:38.281 [log] [READY-GATE] Ready: steady 3509ms >= 3500ms (placeholder), meter high
+19:56:38.294 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=44.9408 settleCandidateTop=44.9408 framesSeen=15
+19:56:38.371 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=45.3171 settleCandidateTop=45.3171 framesSeen=16
+19:56:38.488 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=45.4347 settleCandidateTop=45.4347 framesSeen=17
+19:56:38.595 [log] [DEBUG] [METRIC] shoulderPress value=58.9419 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+19:56:38.595 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=58.9419 settleCandidateTop=58.9419 framesSeen=18
+19:56:38.688 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=56.1372 settleCandidateTop=58.9419 framesSeen=19
+19:56:38.772 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=54.2129 settleCandidateTop=58.9419 framesSeen=20
+19:56:38.873 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=53.9084 settleCandidateTop=58.9419 framesSeen=21
+19:56:38.971 [log] [DEBUG] [METRIC] shoulderPress value=53.0939 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+19:56:38.971 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=53.0939 settleCandidateTop=58.9419 framesSeen=22
+19:56:38.971 [log] [DEBUG] [SETTLE] rejected — candidate=58.942 required>=63.700 — not a genuine starting position for this exercise, still waiting
+19:56:39.073 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=53.0989 settleCandidateTop=58.9419 framesSeen=23
+19:56:39.184 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=53.5973 settleCandidateTop=58.9419 framesSeen=24
+19:56:39.283 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=53.4765 settleCandidateTop=58.9419 framesSeen=25
+19:56:39.388 [log] [DEBUG] [METRIC] shoulderPress value=53.3350 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+19:56:39.388 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=53.3350 settleCandidateTop=58.9419 framesSeen=26
+19:56:39.485 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=53.2566 settleCandidateTop=58.9419 framesSeen=27
+19:56:39.590 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=52.7881 settleCandidateTop=58.9419 framesSeen=28
+19:56:39.694 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=52.2707 settleCandidateTop=58.9419 framesSeen=29
+19:56:39.795 [log] [DEBUG] [METRIC] shoulderPress value=52.4967 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+19:56:39.795 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=52.4967 settleCandidateTop=58.9419 framesSeen=30
+19:56:39.884 [log] [DEBUG] [METRIC] shoulderPress value=53.6184 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=waiting phase=waiting
+19:56:39.987 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=54.3343 settleCandidateTop=54.3343 framesSeen=1
+19:56:39.987 [log] [DEBUG] [SETTLE] rejected — candidate=54.334 required>=63.700 — not a genuine starting position for this exercise, still waiting
+19:56:40.090 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=55.6405 settleCandidateTop=55.6405 framesSeen=2
+19:56:40.188 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=55.8042 settleCandidateTop=55.8042 framesSeen=3
+19:56:40.290 [log] [DEBUG] [METRIC] shoulderPress value=55.4254 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+19:56:40.290 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=55.4254 settleCandidateTop=55.8042 framesSeen=4
+19:56:40.389 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=54.5653 settleCandidateTop=55.8042 framesSeen=5
+19:56:40.492 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=52.4639 settleCandidateTop=55.8042 framesSeen=6
+19:56:40.595 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=53.2289 settleCandidateTop=55.8042 framesSeen=7
+19:56:40.706 [log] [DEBUG] [METRIC] shoulderPress value=53.6822 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+19:56:40.706 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=53.6822 settleCandidateTop=55.8042 framesSeen=8
+19:56:40.790 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=51.7093 settleCandidateTop=55.8042 framesSeen=9
+19:56:40.886 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=49.2558 settleCandidateTop=55.8042 framesSeen=10
+19:56:40.990 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=47.5429 settleCandidateTop=55.8042 framesSeen=11
+19:56:40.990 [log] [DEBUG] [SETTLE] rejected — candidate=55.804 required>=63.700 — not a genuine starting position for this exercise, still waiting
+19:56:41.078 [log] [DEBUG] [METRIC] shoulderPress value=47.9519 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+19:56:41.078 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=47.9519 settleCandidateTop=55.8042 framesSeen=12
+19:56:41.198 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=49.6736 settleCandidateTop=55.8042 framesSeen=13
+19:56:41.295 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=51.1355 settleCandidateTop=55.8042 framesSeen=14
+19:56:41.393 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=52.9338 settleCandidateTop=55.8042 framesSeen=15
+19:56:41.501 [log] [DEBUG] [METRIC] shoulderPress value=54.1272 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+19:56:41.501 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=54.1272 settleCandidateTop=55.8042 framesSeen=16
+19:56:41.588 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=55.6477 settleCandidateTop=55.8042 framesSeen=17
+19:56:41.692 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=56.8544 settleCandidateTop=56.8544 framesSeen=18
+19:56:41.801 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=57.5870 settleCandidateTop=57.5870 framesSeen=19
+19:56:41.886 [log] [DEBUG] [METRIC] shoulderPress value=58.7494 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+19:56:41.886 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=58.7494 settleCandidateTop=58.7494 framesSeen=20
+19:56:41.988 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=60.2146 settleCandidateTop=60.2146 framesSeen=21
+19:56:42.092 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=60.9760 settleCandidateTop=60.9760 framesSeen=22
+19:56:42.092 [log] [DEBUG] [SETTLE] rejected — candidate=60.976 required>=63.700 — not a genuine starting position for this exercise, still waiting
+19:56:42.199 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=63.2563 settleCandidateTop=63.2563 framesSeen=23
+19:56:42.294 [log] [DEBUG] [METRIC] shoulderPress value=65.3771 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=up phase=top
+19:56:42.294 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=65.3771 settleCandidateTop=65.3771 framesSeen=24
+19:56:42.294 [log] [DEBUG] [SETTLE] resynced on first real rep attempt (top≈65.377 framesSeen=24) — rep counting active
+19:56:42.390 [log] [DEBUG] [REP-TRACE] shoulderPress angle=68.2883 repMinAngle=65.3771 framesSincePoseGap=57
+19:56:42.495 [log] [DEBUG] [REP-TRACE] shoulderPress angle=67.4798 repMinAngle=65.3771 framesSincePoseGap=58
+19:56:42.591 [log] [DEBUG] [REP-TRACE] shoulderPress angle=63.0763 repMinAngle=65.3771 framesSincePoseGap=59
+19:56:42.699 [log] [DEBUG] [METRIC] shoulderPress value=61.5403 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:42.699 [log] [DEBUG] [REP-TRACE] shoulderPress angle=61.5403 repMinAngle=63.0763 framesSincePoseGap=60
+19:56:42.790 [log] [DEBUG] [REP-TRACE] shoulderPress angle=60.5611 repMinAngle=61.5403 framesSincePoseGap=61
+19:56:42.884 [log] [DEBUG] [REP-TRACE] shoulderPress angle=60.1824 repMinAngle=60.5611 framesSincePoseGap=62
+19:56:42.990 [log] [DEBUG] [REP-TRACE] shoulderPress angle=59.2993 repMinAngle=60.1824 framesSincePoseGap=63
+19:56:43.089 [log] [DEBUG] [METRIC] shoulderPress value=56.4224 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:43.089 [log] [DEBUG] [REP-TRACE] shoulderPress angle=56.4224 repMinAngle=59.2993 framesSincePoseGap=64
+19:56:43.188 [log] [DEBUG] [REP-TRACE] shoulderPress angle=57.0816 repMinAngle=56.4224 framesSincePoseGap=65
+19:56:43.293 [log] [DEBUG] [REP-TRACE] shoulderPress angle=58.1740 repMinAngle=56.4224 framesSincePoseGap=66
+19:56:43.397 [log] [DEBUG] [REP-TRACE] shoulderPress angle=58.2923 repMinAngle=56.4224 framesSincePoseGap=67
+19:56:43.495 [log] [DEBUG] [METRIC] shoulderPress value=58.5051 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:43.495 [log] [DEBUG] [REP-TRACE] shoulderPress angle=58.5051 repMinAngle=56.4224 framesSincePoseGap=68
+19:56:43.595 [log] [DEBUG] [REP-TRACE] shoulderPress angle=58.6689 repMinAngle=56.4224 framesSincePoseGap=69
+19:56:43.693 [log] [DEBUG] [REP-TRACE] shoulderPress angle=59.8057 repMinAngle=56.4224 framesSincePoseGap=70
+19:56:43.793 [log] [DEBUG] [REP-TRACE] shoulderPress angle=60.2152 repMinAngle=56.4224 framesSincePoseGap=71
+19:56:43.887 [log] [DEBUG] [METRIC] shoulderPress value=59.3495 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:43.887 [log] [DEBUG] [REP-TRACE] shoulderPress angle=59.3495 repMinAngle=56.4224 framesSincePoseGap=72
+19:56:43.990 [log] [DEBUG] [REP-TRACE] shoulderPress angle=60.0039 repMinAngle=56.4224 framesSincePoseGap=73
+19:56:44.089 [log] [DEBUG] [REP-TRACE] shoulderPress angle=59.7478 repMinAngle=56.4224 framesSincePoseGap=74
+19:56:44.191 [log] [DEBUG] [REP-TRACE] shoulderPress angle=61.6906 repMinAngle=56.4224 framesSincePoseGap=75
+19:56:44.295 [log] [DEBUG] [METRIC] shoulderPress value=63.1459 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:44.295 [log] [DEBUG] [REP-TRACE] shoulderPress angle=63.1459 repMinAngle=56.4224 framesSincePoseGap=76
+19:56:44.388 [log] [DEBUG] [REP-TRACE] shoulderPress angle=63.7809 repMinAngle=56.4224 framesSincePoseGap=77
+19:56:44.494 [log] [DEBUG] [REP-TRACE] shoulderPress angle=63.9015 repMinAngle=56.4224 framesSincePoseGap=78
+19:56:44.603 [log] [DEBUG] [REP-TRACE] shoulderPress angle=63.8496 repMinAngle=56.4224 framesSincePoseGap=79
+19:56:44.691 [log] [DEBUG] [METRIC] shoulderPress value=64.0797 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:44.691 [log] [DEBUG] [REP-TRACE] shoulderPress angle=64.0797 repMinAngle=56.4224 framesSincePoseGap=80
+19:56:44.792 [log] [DEBUG] [REP-TRACE] shoulderPress angle=64.9250 repMinAngle=56.4224 framesSincePoseGap=81
+19:56:44.885 [log] [DEBUG] [REP-TRACE] shoulderPress angle=65.3175 repMinAngle=56.4224 framesSincePoseGap=82
+19:56:44.989 [log] [DEBUG] [REP-TRACE] shoulderPress angle=64.9739 repMinAngle=56.4224 framesSincePoseGap=83
+19:56:45.093 [log] [DEBUG] [METRIC] shoulderPress value=64.6435 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:45.094 [log] [DEBUG] [REP-TRACE] shoulderPress angle=64.6435 repMinAngle=56.4224 framesSincePoseGap=84
+19:56:45.293 [log] [DEBUG] [REP-TRACE] shoulderPress angle=13.2854 repMinAngle=56.4224 framesSincePoseGap=84
+19:56:45.394 [log] [DEBUG] [REP-TRACE] shoulderPress angle=6.7112 repMinAngle=13.2854 framesSincePoseGap=84
+19:56:45.495 [log] [DEBUG] [METRIC] shoulderPress value=12.0665 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:45.496 [log] [DEBUG] [REP-TRACE] shoulderPress angle=12.0665 repMinAngle=6.7112 framesSincePoseGap=0
+19:56:45.585 [log] [DEBUG] [REP-TRACE] shoulderPress angle=19.6915 repMinAngle=6.7112 framesSincePoseGap=0
+19:56:45.691 [log] [DEBUG] [REP-TRACE] shoulderPress angle=18.9068 repMinAngle=6.7112 framesSincePoseGap=1
+19:56:45.795 [log] [DEBUG] [REP-TRACE] shoulderPress angle=13.7332 repMinAngle=6.7112 framesSincePoseGap=2
+19:56:45.889 [log] [DEBUG] [METRIC] shoulderPress value=10.4453 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:45.889 [log] [DEBUG] [REP-TRACE] shoulderPress angle=10.4453 repMinAngle=6.7112 framesSincePoseGap=3
+19:56:45.988 [log] [DEBUG] [REP-TRACE] shoulderPress angle=6.7555 repMinAngle=6.7112 framesSincePoseGap=4
+19:56:46.087 [log] [DEBUG] [REP-TRACE] shoulderPress angle=4.1145 repMinAngle=6.7112 framesSincePoseGap=5
+19:56:46.187 [log] [DEBUG] [REP-TRACE] shoulderPress angle=2.8104 repMinAngle=4.1145 framesSincePoseGap=6
+19:56:46.292 [log] [DEBUG] [METRIC] shoulderPress value=5.6103 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:46.292 [log] [DEBUG] [REP-TRACE] shoulderPress angle=5.6103 repMinAngle=2.8104 framesSincePoseGap=7
+19:56:46.390 [log] [DEBUG] [REP-TRACE] shoulderPress angle=1.1330 repMinAngle=2.8104 framesSincePoseGap=8
+19:56:46.489 [log] [DEBUG] [REP-TRACE] shoulderPress angle=10.4560 repMinAngle=1.1330 framesSincePoseGap=9
+19:56:46.594 [log] [DEBUG] [REP-TRACE] shoulderPress angle=65.8446 repMinAngle=1.1330 framesSincePoseGap=10
+19:56:46.700 [log] [DEBUG] [METRIC] shoulderPress value=65.1372 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:46.700 [log] [DEBUG] [REP-TRACE] shoulderPress angle=65.1372 repMinAngle=1.1330 framesSincePoseGap=11
+19:56:46.795 [log] [DEBUG] [REP-TRACE] shoulderPress angle=65.0407 repMinAngle=1.1330 framesSincePoseGap=12
+19:56:46.888 [log] [DEBUG] [REP-TRACE] shoulderPress angle=64.8242 repMinAngle=1.1330 framesSincePoseGap=13
+19:56:46.997 [log] [DEBUG] [REP-TRACE] shoulderPress angle=64.4451 repMinAngle=1.1330 framesSincePoseGap=14
+19:56:47.093 [log] [DEBUG] [METRIC] shoulderPress value=64.3467 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:47.093 [log] [DEBUG] [REP-TRACE] shoulderPress angle=64.3467 repMinAngle=1.1330 framesSincePoseGap=15
+19:56:47.191 [log] [DEBUG] [REP-TRACE] shoulderPress angle=64.1647 repMinAngle=1.1330 framesSincePoseGap=16
+19:56:47.290 [log] [DEBUG] [REP-TRACE] shoulderPress angle=63.9876 repMinAngle=1.1330 framesSincePoseGap=17
+19:56:47.394 [log] [DEBUG] [REP-TRACE] shoulderPress angle=63.8935 repMinAngle=1.1330 framesSincePoseGap=18
+19:56:47.499 [log] [DEBUG] [METRIC] shoulderPress value=63.5573 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:47.499 [log] [DEBUG] [REP-TRACE] shoulderPress angle=63.5573 repMinAngle=1.1330 framesSincePoseGap=19
+19:56:47.589 [log] [DEBUG] [REP-TRACE] shoulderPress angle=63.6861 repMinAngle=1.1330 framesSincePoseGap=20
+19:56:47.694 [log] [DEBUG] [REP-TRACE] shoulderPress angle=63.7519 repMinAngle=1.1330 framesSincePoseGap=21
+19:56:47.798 [log] [DEBUG] [REP-TRACE] shoulderPress angle=63.7485 repMinAngle=1.1330 framesSincePoseGap=22
+19:56:47.886 [log] [DEBUG] [METRIC] shoulderPress value=63.3745 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:47.886 [log] [DEBUG] [REP-TRACE] shoulderPress angle=63.3745 repMinAngle=1.1330 framesSincePoseGap=23
+19:56:48.093 [log] [DEBUG] [REP-TRACE] shoulderPress angle=14.7064 repMinAngle=1.1330 framesSincePoseGap=24
+19:56:48.197 [log] [DEBUG] [REP-TRACE] shoulderPress angle=22.1151 repMinAngle=1.1330 framesSincePoseGap=25
+19:56:48.290 [log] [DEBUG] [METRIC] shoulderPress value=16.6237 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:48.290 [log] [DEBUG] [REP-TRACE] shoulderPress angle=16.6237 repMinAngle=1.1330 framesSincePoseGap=26
+19:56:48.394 [log] [DEBUG] [REP-TRACE] shoulderPress angle=1.8864 repMinAngle=1.1330 framesSincePoseGap=27
+19:56:48.498 [log] [DEBUG] [REP-TRACE] shoulderPress angle=12.7593 repMinAngle=1.1330 framesSincePoseGap=28
+19:56:48.597 [log] [DEBUG] [REP-TRACE] shoulderPress angle=9.4164 repMinAngle=1.1330 framesSincePoseGap=29
+19:56:48.703 [log] [DEBUG] [METRIC] shoulderPress value=6.7570 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:48.703 [log] [DEBUG] [REP-TRACE] shoulderPress angle=6.7570 repMinAngle=1.1330 framesSincePoseGap=30
+19:56:48.795 [log] [DEBUG] [REP-TRACE] shoulderPress angle=6.8360 repMinAngle=1.1330 framesSincePoseGap=31
+19:56:48.883 [log] [DEBUG] [REP-TRACE] shoulderPress angle=16.4737 repMinAngle=1.1330 framesSincePoseGap=32
+19:56:48.994 [log] [DEBUG] [REP-TRACE] shoulderPress angle=20.4966 repMinAngle=1.1330 framesSincePoseGap=33
+19:56:49.094 [log] [DEBUG] [METRIC] shoulderPress value=25.4867 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:49.094 [log] [DEBUG] [REP-TRACE] shoulderPress angle=25.4867 repMinAngle=1.1330 framesSincePoseGap=34
+19:56:49.189 [log] [DEBUG] [REP-TRACE] shoulderPress angle=29.8793 repMinAngle=1.1330 framesSincePoseGap=35
+19:56:49.296 [log] [DEBUG] [REP-TRACE] shoulderPress angle=30.0102 repMinAngle=1.1330 framesSincePoseGap=36
+19:56:49.391 [log] [DEBUG] [REP-TRACE] shoulderPress angle=27.7300 repMinAngle=1.1330 framesSincePoseGap=37
+19:56:49.492 [log] [DEBUG] [METRIC] shoulderPress value=24.2632 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:49.492 [log] [DEBUG] [REP-TRACE] shoulderPress angle=24.2632 repMinAngle=1.1330 framesSincePoseGap=38
+19:56:49.592 [log] [DEBUG] [REP-TRACE] shoulderPress angle=18.6378 repMinAngle=1.1330 framesSincePoseGap=39
+19:56:49.697 [log] [DEBUG] [REP-TRACE] shoulderPress angle=10.5472 repMinAngle=1.1330 framesSincePoseGap=40
+19:56:49.798 [log] [DEBUG] [REP-TRACE] shoulderPress angle=11.9380 repMinAngle=1.1330 framesSincePoseGap=41
+19:56:49.891 [log] [DEBUG] [METRIC] shoulderPress value=15.9498 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:49.891 [log] [DEBUG] [REP-TRACE] shoulderPress angle=15.9498 repMinAngle=1.1330 framesSincePoseGap=42
+19:56:49.993 [log] [DEBUG] [REP-TRACE] shoulderPress angle=18.5030 repMinAngle=1.1330 framesSincePoseGap=43
+19:56:50.089 [log] [DEBUG] [REP-TRACE] shoulderPress angle=13.8859 repMinAngle=1.1330 framesSincePoseGap=44
+19:56:50.200 [log] [DEBUG] [REP-TRACE] shoulderPress angle=25.7280 repMinAngle=1.1330 framesSincePoseGap=45
+19:56:50.305 [log] [DEBUG] [METRIC] shoulderPress value=25.2811 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:50.305 [log] [DEBUG] [REP-TRACE] shoulderPress angle=25.2811 repMinAngle=1.1330 framesSincePoseGap=46
+19:56:50.390 [log] [DEBUG] [REP-TRACE] shoulderPress angle=26.0368 repMinAngle=1.1330 framesSincePoseGap=47
+19:56:50.495 [log] [DEBUG] [REP-TRACE] shoulderPress angle=25.6249 repMinAngle=1.1330 framesSincePoseGap=48
+19:56:50.598 [log] [DEBUG] [REP-TRACE] shoulderPress angle=23.1378 repMinAngle=1.1330 framesSincePoseGap=49
+19:56:50.704 [log] [DEBUG] [METRIC] shoulderPress value=24.7533 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:50.704 [log] [DEBUG] [REP-TRACE] shoulderPress angle=24.7533 repMinAngle=1.1330 framesSincePoseGap=50
+19:56:50.791 [log] [DEBUG] [REP-TRACE] shoulderPress angle=22.2626 repMinAngle=1.1330 framesSincePoseGap=51
+19:56:50.887 [log] [DEBUG] [REP-TRACE] shoulderPress angle=26.5608 repMinAngle=1.1330 framesSincePoseGap=52
+19:56:50.990 [log] [DEBUG] [REP-TRACE] shoulderPress angle=30.4422 repMinAngle=1.1330 framesSincePoseGap=53
+19:56:51.075 [log] [DEBUG] [METRIC] shoulderPress value=33.2600 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:51.075 [log] [DEBUG] [REP-TRACE] shoulderPress angle=33.2600 repMinAngle=1.1330 framesSincePoseGap=54
+19:56:51.206 [log] [DEBUG] [REP-TRACE] shoulderPress angle=35.1093 repMinAngle=1.1330 framesSincePoseGap=55
+19:56:51.312 [log] [DEBUG] [REP-TRACE] shoulderPress angle=34.1160 repMinAngle=1.1330 framesSincePoseGap=56
+19:56:51.390 [log] [DEBUG] [REP-TRACE] shoulderPress angle=35.7223 repMinAngle=1.1330 framesSincePoseGap=57
+19:56:51.496 [log] [DEBUG] [METRIC] shoulderPress value=35.2384 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:51.496 [log] [DEBUG] [REP-TRACE] shoulderPress angle=35.2384 repMinAngle=1.1330 framesSincePoseGap=58
+19:56:51.592 [log] [DEBUG] [REP-TRACE] shoulderPress angle=24.0474 repMinAngle=1.1330 framesSincePoseGap=59
+19:56:51.697 [log] [DEBUG] [REP-TRACE] shoulderPress angle=15.6715 repMinAngle=1.1330 framesSincePoseGap=60
+19:56:51.796 [log] [DEBUG] [REP-TRACE] shoulderPress angle=15.2697 repMinAngle=1.1330 framesSincePoseGap=61
+19:56:51.903 [log] [DEBUG] [METRIC] shoulderPress value=17.5308 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:51.903 [log] [DEBUG] [REP-TRACE] shoulderPress angle=17.5308 repMinAngle=1.1330 framesSincePoseGap=62
+19:56:51.993 [log] [DEBUG] [REP-TRACE] shoulderPress angle=14.8364 repMinAngle=1.1330 framesSincePoseGap=63
+19:56:52.096 [log] [DEBUG] [REP-TRACE] shoulderPress angle=10.1055 repMinAngle=1.1330 framesSincePoseGap=64
+19:56:52.198 [log] [DEBUG] [REP-TRACE] shoulderPress angle=6.2636 repMinAngle=1.1330 framesSincePoseGap=65
+19:56:52.296 [log] [DEBUG] [METRIC] shoulderPress value=7.1437 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:52.296 [log] [DEBUG] [REP-TRACE] shoulderPress angle=7.1437 repMinAngle=1.1330 framesSincePoseGap=66
+19:56:52.392 [log] [DEBUG] [REP-TRACE] shoulderPress angle=7.1322 repMinAngle=1.1330 framesSincePoseGap=67
+19:56:52.494 [log] [DEBUG] [REP-TRACE] shoulderPress angle=8.2378 repMinAngle=1.1330 framesSincePoseGap=68
+19:56:52.594 [log] [DEBUG] [REP-TRACE] shoulderPress angle=5.8135 repMinAngle=1.1330 framesSincePoseGap=69
+19:56:52.698 [log] [DEBUG] [METRIC] shoulderPress value=0.8430 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:52.698 [log] [DEBUG] [REP-TRACE] shoulderPress angle=0.8430 repMinAngle=1.1330 framesSincePoseGap=70
+19:56:52.782 [log] [DEBUG] [REP-TRACE] shoulderPress angle=1.4930 repMinAngle=0.8430 framesSincePoseGap=71
+19:56:52.881 [log] [DEBUG] [REP-TRACE] shoulderPress angle=4.2442 repMinAngle=0.8430 framesSincePoseGap=72
+19:56:53.004 [log] [DEBUG] [REP-TRACE] shoulderPress angle=2.3317 repMinAngle=0.8430 framesSincePoseGap=73
+19:56:53.099 [log] [DEBUG] [METRIC] shoulderPress value=2.5136 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:53.099 [log] [DEBUG] [REP-TRACE] shoulderPress angle=2.5136 repMinAngle=0.8430 framesSincePoseGap=74
+19:56:53.182 [log] [DEBUG] [REP-TRACE] shoulderPress angle=0.7364 repMinAngle=0.8430 framesSincePoseGap=75
+19:56:53.299 [log] [DEBUG] [REP-TRACE] shoulderPress angle=33.9007 repMinAngle=0.7364 framesSincePoseGap=76
+19:56:53.396 [log] [DEBUG] [REP-TRACE] shoulderPress angle=63.0399 repMinAngle=0.7364 framesSincePoseGap=77
+19:56:53.496 [log] [DEBUG] [METRIC] shoulderPress value=62.1156 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:53.496 [log] [DEBUG] [REP-TRACE] shoulderPress angle=62.1156 repMinAngle=0.7364 framesSincePoseGap=78
+19:56:53.908 [log] [DEBUG] [METRIC] shoulderPress value=41.4641 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:53.908 [log] [DEBUG] [REP-TRACE] shoulderPress angle=41.4641 repMinAngle=0.7364 framesSincePoseGap=1
+19:56:53.991 [log] [DEBUG] [REP-TRACE] shoulderPress angle=34.3548 repMinAngle=0.7364 framesSincePoseGap=2
+19:56:54.094 [log] [DEBUG] [REP-TRACE] shoulderPress angle=28.9991 repMinAngle=0.7364 framesSincePoseGap=3
+19:56:54.303 [log] [DEBUG] [METRIC] shoulderPress value=19.8758 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:54.304 [log] [DEBUG] [REP-TRACE] shoulderPress angle=19.8758 repMinAngle=0.7364 framesSincePoseGap=4
+19:56:54.394 [log] [DEBUG] [REP-TRACE] shoulderPress angle=18.2946 repMinAngle=0.7364 framesSincePoseGap=5
+19:56:54.494 [log] [DEBUG] [REP-TRACE] shoulderPress angle=17.7716 repMinAngle=0.7364 framesSincePoseGap=6
+19:56:54.593 [log] [DEBUG] [REP-TRACE] shoulderPress angle=16.0083 repMinAngle=0.7364 framesSincePoseGap=7
+19:56:54.694 [log] [DEBUG] [METRIC] shoulderPress value=16.0602 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:54.694 [log] [DEBUG] [REP-TRACE] shoulderPress angle=16.0602 repMinAngle=0.7364 framesSincePoseGap=8
+19:56:55.314 [log] [DEBUG] [METRIC] shoulderPress value=18.3190 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:55.314 [log] [DEBUG] [REP-TRACE] shoulderPress angle=18.3190 repMinAngle=0.7364 framesSincePoseGap=1
+19:56:55.395 [log] [DEBUG] [REP-TRACE] shoulderPress angle=18.7574 repMinAngle=0.7364 framesSincePoseGap=2
+19:56:55.577 [log] [DEBUG] [REP-TRACE] shoulderPress angle=16.4577 repMinAngle=0.7364 framesSincePoseGap=3
+19:56:55.681 [log] [DEBUG] [METRIC] shoulderPress value=14.7371 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:55.681 [log] [DEBUG] [REP-TRACE] shoulderPress angle=14.7371 repMinAngle=0.7364 framesSincePoseGap=4
+19:56:55.788 [log] [DEBUG] [REP-TRACE] shoulderPress angle=11.9863 repMinAngle=0.7364 framesSincePoseGap=5
+19:56:55.895 [log] [DEBUG] [REP-TRACE] shoulderPress angle=9.8859 repMinAngle=0.7364 framesSincePoseGap=6
+19:56:55.993 [log] [DEBUG] [REP-TRACE] shoulderPress angle=9.8205 repMinAngle=0.7364 framesSincePoseGap=7
+19:56:56.086 [log] [DEBUG] [METRIC] shoulderPress value=12.4579 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:56.086 [log] [DEBUG] [REP-TRACE] shoulderPress angle=12.4579 repMinAngle=0.7364 framesSincePoseGap=8
+19:56:56.195 [log] [DEBUG] [REP-TRACE] shoulderPress angle=8.0229 repMinAngle=0.7364 framesSincePoseGap=9
+19:56:56.295 [log] [DEBUG] [REP-TRACE] shoulderPress angle=7.9160 repMinAngle=0.7364 framesSincePoseGap=10
+19:56:56.396 [log] [DEBUG] [REP-TRACE] shoulderPress angle=6.1096 repMinAngle=0.7364 framesSincePoseGap=11
+19:56:56.498 [log] [DEBUG] [METRIC] shoulderPress value=4.6191 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:56.498 [log] [DEBUG] [REP-TRACE] shoulderPress angle=4.6191 repMinAngle=0.7364 framesSincePoseGap=12
+19:56:56.596 [log] [DEBUG] [REP-TRACE] shoulderPress angle=0.6284 repMinAngle=0.7364 framesSincePoseGap=13
+19:56:56.699 [log] [DEBUG] [REP-TRACE] shoulderPress angle=0.9734 repMinAngle=0.6284 framesSincePoseGap=14
+19:56:56.800 [log] [DEBUG] [REP-TRACE] shoulderPress angle=2.0847 repMinAngle=0.6284 framesSincePoseGap=15
+19:56:56.909 [log] [DEBUG] [METRIC] shoulderPress value=0.4830 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:56.909 [log] [DEBUG] [REP-TRACE] shoulderPress angle=0.4830 repMinAngle=0.6284 framesSincePoseGap=16
+19:56:56.995 [log] [DEBUG] [REP-TRACE] shoulderPress angle=2.7113 repMinAngle=0.4830 framesSincePoseGap=17
+19:56:57.098 [log] [DEBUG] [REP-TRACE] shoulderPress angle=3.3999 repMinAngle=0.4830 framesSincePoseGap=18
+19:56:57.202 [log] [DEBUG] [REP-TRACE] shoulderPress angle=3.9197 repMinAngle=0.4830 framesSincePoseGap=19
+19:56:57.301 [log] [DEBUG] [METRIC] shoulderPress value=4.1550 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:57.302 [log] [DEBUG] [REP-TRACE] shoulderPress angle=4.1550 repMinAngle=0.4830 framesSincePoseGap=20
+19:56:57.395 [log] [DEBUG] [REP-TRACE] shoulderPress angle=0.3400 repMinAngle=0.4830 framesSincePoseGap=21
+19:56:57.501 [log] [DEBUG] [REP-TRACE] shoulderPress angle=5.4931 repMinAngle=0.3400 framesSincePoseGap=22
+19:56:57.596 [log] [DEBUG] [REP-TRACE] shoulderPress angle=7.8077 repMinAngle=0.3400 framesSincePoseGap=23
+19:56:57.696 [log] [DEBUG] [METRIC] shoulderPress value=11.9799 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:57.696 [log] [DEBUG] [REP-TRACE] shoulderPress angle=11.9799 repMinAngle=0.3400 framesSincePoseGap=24
+19:56:57.796 [log] [DEBUG] [REP-TRACE] shoulderPress angle=14.7384 repMinAngle=0.3400 framesSincePoseGap=25
+19:56:57.910 [log] [DEBUG] [REP-TRACE] shoulderPress angle=9.9626 repMinAngle=0.3400 framesSincePoseGap=26
+19:56:57.996 [log] [DEBUG] [REP-TRACE] shoulderPress angle=11.1456 repMinAngle=0.3400 framesSincePoseGap=27
+19:56:58.202 [log] [DEBUG] [METRIC] shoulderPress value=21.7629 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:58.202 [log] [DEBUG] [REP-TRACE] shoulderPress angle=21.7629 repMinAngle=0.3400 framesSincePoseGap=28
+19:56:58.295 [log] [DEBUG] [REP-TRACE] shoulderPress angle=23.7647 repMinAngle=0.3400 framesSincePoseGap=29
+19:56:58.398 [log] [DEBUG] [REP-TRACE] shoulderPress angle=34.0445 repMinAngle=0.3400 framesSincePoseGap=30
+19:56:58.500 [log] [DEBUG] [REP-TRACE] shoulderPress angle=34.5643 repMinAngle=0.3400 framesSincePoseGap=31
+19:56:58.601 [log] [DEBUG] [METRIC] shoulderPress value=33.6585 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:58.601 [log] [DEBUG] [REP-TRACE] shoulderPress angle=33.6585 repMinAngle=0.3400 framesSincePoseGap=32
+19:56:58.698 [log] [DEBUG] [REP-TRACE] shoulderPress angle=1.4264 repMinAngle=0.3400 framesSincePoseGap=33
+19:56:58.798 [log] [DEBUG] [REP-TRACE] shoulderPress angle=1.6907 repMinAngle=0.3400 framesSincePoseGap=34
+19:56:58.895 [log] [DEBUG] [REP-TRACE] shoulderPress angle=7.1490 repMinAngle=0.3400 framesSincePoseGap=35
+19:56:59.000 [log] [DEBUG] [METRIC] shoulderPress value=9.0347 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:59.001 [log] [DEBUG] [REP-TRACE] shoulderPress angle=9.0347 repMinAngle=0.3400 framesSincePoseGap=36
+19:56:59.095 [log] [DEBUG] [REP-TRACE] shoulderPress angle=11.3540 repMinAngle=0.3400 framesSincePoseGap=37
+19:56:59.196 [log] [DEBUG] [REP-TRACE] shoulderPress angle=12.8662 repMinAngle=0.3400 framesSincePoseGap=38
+19:56:59.415 [log] [DEBUG] [METRIC] shoulderPress value=48.9982 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:59.416 [log] [DEBUG] [REP-TRACE] shoulderPress angle=48.9982 repMinAngle=0.3400 framesSincePoseGap=39
+19:56:59.491 [log] [DEBUG] [REP-TRACE] shoulderPress angle=38.4853 repMinAngle=0.3400 framesSincePoseGap=40
+19:56:59.600 [log] [DEBUG] [REP-TRACE] shoulderPress angle=33.5781 repMinAngle=0.3400 framesSincePoseGap=41
+19:56:59.705 [log] [DEBUG] [REP-TRACE] shoulderPress angle=34.8428 repMinAngle=0.3400 framesSincePoseGap=42
+19:56:59.794 [log] [DEBUG] [METRIC] shoulderPress value=36.8297 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:56:59.794 [log] [DEBUG] [REP-TRACE] shoulderPress angle=36.8297 repMinAngle=0.3400 framesSincePoseGap=43
+19:56:59.894 [log] [DEBUG] [REP-TRACE] shoulderPress angle=32.2587 repMinAngle=0.3400 framesSincePoseGap=44
+19:56:59.997 [log] [DEBUG] [REP-TRACE] shoulderPress angle=28.8763 repMinAngle=0.3400 framesSincePoseGap=45
+19:57:00.099 [log] [DEBUG] [REP-TRACE] shoulderPress angle=21.3075 repMinAngle=0.3400 framesSincePoseGap=46
+19:57:00.204 [log] [DEBUG] [METRIC] shoulderPress value=20.1948 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:00.204 [log] [DEBUG] [REP-TRACE] shoulderPress angle=20.1948 repMinAngle=0.3400 framesSincePoseGap=47
+19:57:00.298 [log] [DEBUG] [REP-TRACE] shoulderPress angle=18.6812 repMinAngle=0.3400 framesSincePoseGap=48
+19:57:00.607 [log] [DEBUG] [METRIC] shoulderPress value=63.0846 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:00.607 [log] [DEBUG] [REP-TRACE] shoulderPress angle=63.0846 repMinAngle=0.3400 framesSincePoseGap=49
+19:57:00.697 [log] [DEBUG] [REP-TRACE] shoulderPress angle=58.0599 repMinAngle=0.3400 framesSincePoseGap=50
+19:57:00.797 [log] [DEBUG] [REP-TRACE] shoulderPress angle=68.9241 repMinAngle=0.3400 framesSincePoseGap=51
+19:57:01.096 [log] [DEBUG] [METRIC] shoulderPress value=20.1418 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:01.096 [log] [DEBUG] [REP-TRACE] shoulderPress angle=20.1418 repMinAngle=0.3400 framesSincePoseGap=52
+19:57:01.195 [log] [DEBUG] [REP-TRACE] shoulderPress angle=21.7856 repMinAngle=0.3400 framesSincePoseGap=53
+19:57:01.294 [log] [DEBUG] [REP-TRACE] shoulderPress angle=37.3851 repMinAngle=0.3400 framesSincePoseGap=54
+19:57:01.403 [log] [DEBUG] [REP-TRACE] shoulderPress angle=54.8007 repMinAngle=0.3400 framesSincePoseGap=55
+19:57:01.505 [log] [DEBUG] [METRIC] shoulderPress value=54.3590 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:01.505 [log] [DEBUG] [REP-TRACE] shoulderPress angle=54.3590 repMinAngle=0.3400 framesSincePoseGap=56
+19:57:01.594 [log] [DEBUG] [REP-TRACE] shoulderPress angle=56.8341 repMinAngle=0.3400 framesSincePoseGap=57
+19:57:01.696 [log] [DEBUG] [REP-TRACE] shoulderPress angle=34.5322 repMinAngle=0.3400 framesSincePoseGap=58
+19:57:01.801 [log] [DEBUG] [REP-TRACE] shoulderPress angle=31.2056 repMinAngle=0.3400 framesSincePoseGap=59
+19:57:01.893 [log] [DEBUG] [METRIC] shoulderPress value=25.3094 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:01.893 [log] [DEBUG] [REP-TRACE] shoulderPress angle=25.3094 repMinAngle=0.3400 framesSincePoseGap=60
+19:57:01.992 [log] [DEBUG] [REP-TRACE] shoulderPress angle=12.6176 repMinAngle=0.3400 framesSincePoseGap=61
+19:57:02.096 [log] [DEBUG] [REP-TRACE] shoulderPress angle=23.2591 repMinAngle=0.3400 framesSincePoseGap=62
+19:57:02.195 [log] [DEBUG] [REP-TRACE] shoulderPress angle=73.5150 repMinAngle=0.3400 framesSincePoseGap=63
+19:57:02.296 [log] [DEBUG] [METRIC] shoulderPress value=73.3043 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:02.297 [log] [DEBUG] [REP-TRACE] shoulderPress angle=73.3043 repMinAngle=0.3400 framesSincePoseGap=64
+19:57:02.396 [log] [DEBUG] [REP-TRACE] shoulderPress angle=4.9561 repMinAngle=0.3400 framesSincePoseGap=65
+19:57:02.495 [log] [DEBUG] [REP-TRACE] shoulderPress angle=33.9182 repMinAngle=0.3400 framesSincePoseGap=66
+19:57:02.599 [log] [DEBUG] [REP-TRACE] shoulderPress angle=0.6280 repMinAngle=0.3400 framesSincePoseGap=67
+19:57:02.708 [log] [DEBUG] [METRIC] shoulderPress value=0.6255 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:02.709 [log] [DEBUG] [REP-TRACE] shoulderPress angle=0.6255 repMinAngle=0.3400 framesSincePoseGap=68
+19:57:02.794 [log] [DEBUG] [REP-TRACE] shoulderPress angle=19.3470 repMinAngle=0.3400 framesSincePoseGap=69
+19:57:02.898 [log] [DEBUG] [REP-TRACE] shoulderPress angle=31.3217 repMinAngle=0.3400 framesSincePoseGap=70
+19:57:02.993 [log] [DEBUG] [REP-TRACE] shoulderPress angle=37.5816 repMinAngle=0.3400 framesSincePoseGap=71
+19:57:03.091 [log] [DEBUG] [METRIC] shoulderPress value=35.2544 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:03.092 [log] [DEBUG] [REP-TRACE] shoulderPress angle=35.2544 repMinAngle=0.3400 framesSincePoseGap=72
+19:57:03.193 [log] [DEBUG] [REP-TRACE] shoulderPress angle=25.6211 repMinAngle=0.3400 framesSincePoseGap=73
+19:57:03.296 [log] [DEBUG] [REP-TRACE] shoulderPress angle=25.5350 repMinAngle=0.3400 framesSincePoseGap=74
+19:57:03.395 [log] [DEBUG] [REP-TRACE] shoulderPress angle=22.6074 repMinAngle=0.3400 framesSincePoseGap=75
+19:57:03.500 [log] [DEBUG] [METRIC] shoulderPress value=22.3545 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:03.500 [log] [DEBUG] [REP-TRACE] shoulderPress angle=22.3545 repMinAngle=0.3400 framesSincePoseGap=76
+19:57:03.596 [log] [DEBUG] [REP-TRACE] shoulderPress angle=23.2709 repMinAngle=0.3400 framesSincePoseGap=77
+19:57:03.695 [log] [DEBUG] [REP-TRACE] shoulderPress angle=20.3715 repMinAngle=0.3400 framesSincePoseGap=78
+19:57:03.807 [log] [DEBUG] [REP-TRACE] shoulderPress angle=10.1507 repMinAngle=0.3400 framesSincePoseGap=79
+19:57:03.913 [log] [DEBUG] [METRIC] shoulderPress value=4.0388 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:03.913 [log] [DEBUG] [REP-TRACE] shoulderPress angle=4.0388 repMinAngle=0.3400 framesSincePoseGap=80
+19:57:03.990 [log] [DEBUG] [REP-TRACE] shoulderPress angle=9.0283 repMinAngle=0.3400 framesSincePoseGap=81
+19:57:04.096 [log] [DEBUG] [REP-TRACE] shoulderPress angle=4.6492 repMinAngle=0.3400 framesSincePoseGap=82
+19:57:04.202 [log] [DEBUG] [REP-TRACE] shoulderPress angle=1.0140 repMinAngle=0.3400 framesSincePoseGap=83
+19:57:04.295 [log] [DEBUG] [METRIC] shoulderPress value=1.6797 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:04.295 [log] [DEBUG] [REP-TRACE] shoulderPress angle=1.6797 repMinAngle=0.3400 framesSincePoseGap=84
+19:57:04.397 [log] [DEBUG] [REP-TRACE] shoulderPress angle=1.7381 repMinAngle=0.3400 framesSincePoseGap=85
+19:57:04.498 [log] [DEBUG] [REP-TRACE] shoulderPress angle=0.0619 repMinAngle=0.3400 framesSincePoseGap=86
+19:57:04.597 [log] [DEBUG] [REP-TRACE] shoulderPress angle=15.9493 repMinAngle=0.0619 framesSincePoseGap=87
+19:57:04.701 [log] [DEBUG] [METRIC] shoulderPress value=13.3597 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:04.701 [log] [DEBUG] [REP-TRACE] shoulderPress angle=13.3597 repMinAngle=0.0619 framesSincePoseGap=88
+19:57:04.796 [log] [DEBUG] [REP-TRACE] shoulderPress angle=9.4118 repMinAngle=0.0619 framesSincePoseGap=89
+19:57:04.894 [log] [DEBUG] [REP-TRACE] shoulderPress angle=3.7477 repMinAngle=0.0619 framesSincePoseGap=90
+19:57:04.990 [log] [DEBUG] [REP-TRACE] shoulderPress angle=2.3586 repMinAngle=0.0619 framesSincePoseGap=91
+19:57:05.094 [log] [DEBUG] [METRIC] shoulderPress value=5.4375 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:05.094 [log] [DEBUG] [REP-TRACE] shoulderPress angle=5.4375 repMinAngle=0.0619 framesSincePoseGap=92
+19:57:05.193 [log] [DEBUG] [REP-TRACE] shoulderPress angle=7.1140 repMinAngle=0.0619 framesSincePoseGap=93
+19:57:05.300 [log] [DEBUG] [REP-TRACE] shoulderPress angle=4.5135 repMinAngle=0.0619 framesSincePoseGap=94
+19:57:05.401 [log] [DEBUG] [REP-TRACE] shoulderPress angle=3.9971 repMinAngle=0.0619 framesSincePoseGap=95
+19:57:05.498 [log] [DEBUG] [METRIC] shoulderPress value=3.5633 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:05.498 [log] [DEBUG] [REP-TRACE] shoulderPress angle=3.5633 repMinAngle=0.0619 framesSincePoseGap=96
+19:57:05.596 [log] [DEBUG] [REP-TRACE] shoulderPress angle=1.4408 repMinAngle=0.0619 framesSincePoseGap=97
+19:57:05.699 [log] [DEBUG] [REP-TRACE] shoulderPress angle=0.1225 repMinAngle=0.0619 framesSincePoseGap=98
+19:57:05.798 [log] [DEBUG] [REP-TRACE] shoulderPress angle=6.2225 repMinAngle=0.0619 framesSincePoseGap=99
+19:57:05.903 [log] [DEBUG] [METRIC] shoulderPress value=8.0638 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:05.904 [log] [DEBUG] [REP-TRACE] shoulderPress angle=8.0638 repMinAngle=0.0619 framesSincePoseGap=100
+19:57:05.996 [log] [DEBUG] [REP-TRACE] shoulderPress angle=5.2720 repMinAngle=0.0619 framesSincePoseGap=101
+19:57:06.093 [log] [DEBUG] [REP-TRACE] shoulderPress angle=0.6017 repMinAngle=0.0619 framesSincePoseGap=102
+19:57:06.201 [log] [DEBUG] [REP-TRACE] shoulderPress angle=2.1949 repMinAngle=0.0619 framesSincePoseGap=103
+19:57:06.304 [log] [DEBUG] [METRIC] shoulderPress value=4.6673 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:06.304 [log] [DEBUG] [REP-TRACE] shoulderPress angle=4.6673 repMinAngle=0.0619 framesSincePoseGap=104
+19:57:06.391 [log] [DEBUG] [REP-TRACE] shoulderPress angle=10.0831 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:06.495 [log] [DEBUG] [REP-TRACE] shoulderPress angle=11.3326 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:06.599 [log] [DEBUG] [REP-TRACE] shoulderPress angle=17.1965 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:06.698 [log] [DEBUG] [METRIC] shoulderPress value=22.7321 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:06.698 [log] [DEBUG] [REP-TRACE] shoulderPress angle=22.7321 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:06.796 [log] [DEBUG] [REP-TRACE] shoulderPress angle=21.9610 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:06.897 [log] [DEBUG] [REP-TRACE] shoulderPress angle=17.8534 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:06.992 [log] [DEBUG] [REP-TRACE] shoulderPress angle=20.2443 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:07.099 [log] [DEBUG] [METRIC] shoulderPress value=22.0850 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:07.099 [log] [DEBUG] [REP-TRACE] shoulderPress angle=22.0850 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:07.196 [log] [DEBUG] [REP-TRACE] shoulderPress angle=29.0157 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:07.295 [log] [DEBUG] [REP-TRACE] shoulderPress angle=25.2607 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:07.400 [log] [DEBUG] [REP-TRACE] shoulderPress angle=22.1562 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:07.505 [log] [DEBUG] [METRIC] shoulderPress value=20.4709 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:07.505 [log] [DEBUG] [REP-TRACE] shoulderPress angle=20.4709 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:07.594 [log] [DEBUG] [REP-TRACE] shoulderPress angle=22.4023 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:07.698 [log] [DEBUG] [REP-TRACE] shoulderPress angle=21.1402 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:07.802 [log] [DEBUG] [REP-TRACE] shoulderPress angle=15.8927 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:07.909 [log] [DEBUG] [METRIC] shoulderPress value=6.5126 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:07.909 [log] [DEBUG] [REP-TRACE] shoulderPress angle=6.5126 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:07.993 [log] [DEBUG] [REP-TRACE] shoulderPress angle=9.7948 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:08.096 [log] [DEBUG] [REP-TRACE] shoulderPress angle=9.8700 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:08.201 [log] [DEBUG] [REP-TRACE] shoulderPress angle=16.0885 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:08.296 [log] [DEBUG] [METRIC] shoulderPress value=17.5250 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:08.296 [log] [DEBUG] [REP-TRACE] shoulderPress angle=17.5250 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:08.393 [log] [DEBUG] [REP-TRACE] shoulderPress angle=17.2361 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:08.492 [log] [DEBUG] [REP-TRACE] shoulderPress angle=18.4911 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:08.596 [log] [DEBUG] [REP-TRACE] shoulderPress angle=18.1583 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:08.695 [log] [DEBUG] [METRIC] shoulderPress value=15.4959 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:08.696 [log] [DEBUG] [REP-TRACE] shoulderPress angle=15.4959 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:08.789 [log] [DEBUG] [REP-TRACE] shoulderPress angle=10.8608 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:08.894 [log] [DEBUG] [REP-TRACE] shoulderPress angle=6.3520 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:08.995 [log] [DEBUG] [REP-TRACE] shoulderPress angle=12.3522 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:09.095 [log] [DEBUG] [METRIC] shoulderPress value=15.9203 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:09.095 [log] [DEBUG] [REP-TRACE] shoulderPress angle=15.9203 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:09.197 [log] [DEBUG] [REP-TRACE] shoulderPress angle=6.8064 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:09.300 [log] [DEBUG] [REP-TRACE] shoulderPress angle=5.8307 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:09.394 [log] [DEBUG] [REP-TRACE] shoulderPress angle=7.6517 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:09.500 [log] [DEBUG] [METRIC] shoulderPress value=9.4314 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:09.501 [log] [DEBUG] [REP-TRACE] shoulderPress angle=9.4314 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:09.597 [log] [DEBUG] [REP-TRACE] shoulderPress angle=11.1392 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:09.700 [log] [DEBUG] [REP-TRACE] shoulderPress angle=11.8853 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:09.804 [log] [DEBUG] [REP-TRACE] shoulderPress angle=8.4458 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:09.907 [log] [DEBUG] [METRIC] shoulderPress value=8.7628 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:09.908 [log] [DEBUG] [REP-TRACE] shoulderPress angle=8.7628 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:09.994 [log] [DEBUG] [REP-TRACE] shoulderPress angle=15.3803 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:10.098 [log] [DEBUG] [REP-TRACE] shoulderPress angle=8.2808 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:10.203 [log] [DEBUG] [REP-TRACE] shoulderPress angle=18.4722 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:10.304 [log] [DEBUG] [METRIC] shoulderPress value=24.2404 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:10.304 [log] [DEBUG] [REP-TRACE] shoulderPress angle=24.2404 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:10.397 [log] [DEBUG] [REP-TRACE] shoulderPress angle=25.6076 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:10.500 [log] [DEBUG] [REP-TRACE] shoulderPress angle=26.8067 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:10.604 [log] [DEBUG] [REP-TRACE] shoulderPress angle=22.1635 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:10.700 [log] [DEBUG] [METRIC] shoulderPress value=29.0129 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:10.701 [log] [DEBUG] [REP-TRACE] shoulderPress angle=29.0129 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:10.798 [log] [DEBUG] [REP-TRACE] shoulderPress angle=2.2890 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:10.900 [log] [DEBUG] [REP-TRACE] shoulderPress angle=7.1581 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:10.995 [log] [DEBUG] [REP-TRACE] shoulderPress angle=7.2440 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:11.100 [log] [DEBUG] [METRIC] shoulderPress value=33.3115 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:11.100 [log] [DEBUG] [REP-TRACE] shoulderPress angle=33.3115 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:11.195 [log] [DEBUG] [REP-TRACE] shoulderPress angle=34.2205 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:11.298 [log] [DEBUG] [REP-TRACE] shoulderPress angle=36.8690 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:11.404 [log] [DEBUG] [REP-TRACE] shoulderPress angle=33.6140 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:11.497 [log] [DEBUG] [METRIC] shoulderPress value=35.9208 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:11.497 [log] [DEBUG] [REP-TRACE] shoulderPress angle=35.9208 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:11.594 [log] [DEBUG] [REP-TRACE] shoulderPress angle=47.1975 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:11.694 [log] [DEBUG] [REP-TRACE] shoulderPress angle=42.9052 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:11.800 [log] [DEBUG] [REP-TRACE] shoulderPress angle=37.9385 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:11.906 [log] [DEBUG] [METRIC] shoulderPress value=39.9084 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:11.906 [log] [DEBUG] [REP-TRACE] shoulderPress angle=39.9084 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:11.990 [log] [DEBUG] [REP-TRACE] shoulderPress angle=23.7393 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:12.098 [log] [DEBUG] [REP-TRACE] shoulderPress angle=15.4079 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:12.200 [log] [DEBUG] [REP-TRACE] shoulderPress angle=6.8691 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:12.302 [log] [DEBUG] [METRIC] shoulderPress value=6.5953 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:12.302 [log] [DEBUG] [REP-TRACE] shoulderPress angle=6.5953 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:12.401 [log] [DEBUG] [REP-TRACE] shoulderPress angle=5.7556 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:12.501 [log] [DEBUG] [REP-TRACE] shoulderPress angle=5.2253 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:12.597 [log] [DEBUG] [REP-TRACE] shoulderPress angle=9.4950 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:12.702 [log] [DEBUG] [METRIC] shoulderPress value=9.2355 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:12.703 [log] [DEBUG] [REP-TRACE] shoulderPress angle=9.2355 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:12.796 [log] [DEBUG] [REP-TRACE] shoulderPress angle=10.5774 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:12.905 [log] [DEBUG] [REP-TRACE] shoulderPress angle=9.4109 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:12.996 [log] [DEBUG] [REP-TRACE] shoulderPress angle=6.1089 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:13.099 [log] [DEBUG] [METRIC] shoulderPress value=2.8537 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:13.099 [log] [DEBUG] [REP-TRACE] shoulderPress angle=2.8537 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:13.196 [log] [DEBUG] [REP-TRACE] shoulderPress angle=2.4467 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:13.301 [log] [DEBUG] [REP-TRACE] shoulderPress angle=4.7944 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:13.402 [log] [DEBUG] [REP-TRACE] shoulderPress angle=46.7593 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:13.501 [log] [DEBUG] [METRIC] shoulderPress value=44.4037 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:13.501 [log] [DEBUG] [REP-TRACE] shoulderPress angle=44.4037 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:13.595 [log] [DEBUG] [REP-TRACE] shoulderPress angle=44.2789 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:13.696 [log] [DEBUG] [REP-TRACE] shoulderPress angle=20.3480 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:13.800 [log] [DEBUG] [REP-TRACE] shoulderPress angle=19.5259 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:13.910 [log] [DEBUG] [METRIC] shoulderPress value=19.2941 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:13.910 [log] [DEBUG] [REP-TRACE] shoulderPress angle=19.2941 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:13.993 [log] [DEBUG] [REP-TRACE] shoulderPress angle=17.3515 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:14.098 [log] [DEBUG] [REP-TRACE] shoulderPress angle=16.4196 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:14.202 [log] [DEBUG] [REP-TRACE] shoulderPress angle=12.2857 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:14.308 [log] [DEBUG] [METRIC] shoulderPress value=9.6310 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:14.309 [log] [DEBUG] [REP-TRACE] shoulderPress angle=9.6310 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:14.398 [log] [DEBUG] [REP-TRACE] shoulderPress angle=5.6571 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:14.502 [log] [DEBUG] [REP-TRACE] shoulderPress angle=5.7351 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:14.604 [log] [DEBUG] [REP-TRACE] shoulderPress angle=2.4720 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:14.697 [log] [DEBUG] [METRIC] shoulderPress value=13.5972 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:14.697 [log] [DEBUG] [REP-TRACE] shoulderPress angle=13.5972 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:14.800 [log] [DEBUG] [REP-TRACE] shoulderPress angle=18.2486 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:14.899 [log] [DEBUG] [REP-TRACE] shoulderPress angle=23.5323 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:14.998 [log] [DEBUG] [REP-TRACE] shoulderPress angle=16.5928 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:15.103 [log] [DEBUG] [METRIC] shoulderPress value=13.3923 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:15.103 [log] [DEBUG] [REP-TRACE] shoulderPress angle=13.3923 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:15.199 [log] [DEBUG] [REP-TRACE] shoulderPress angle=8.3745 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:15.311 [log] [DEBUG] [REP-TRACE] shoulderPress angle=6.2994 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:15.391 [log] [DEBUG] [REP-TRACE] shoulderPress angle=6.5502 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:15.502 [log] [DEBUG] [METRIC] shoulderPress value=6.4528 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:15.502 [log] [DEBUG] [REP-TRACE] shoulderPress angle=6.4528 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:15.586 [log] [DEBUG] [REP-TRACE] shoulderPress angle=10.6013 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:15.711 [log] [DEBUG] [REP-TRACE] shoulderPress angle=18.2494 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:15.788 [log] [DEBUG] [REP-TRACE] shoulderPress angle=20.9114 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:15.882 [log] [DEBUG] [METRIC] shoulderPress value=17.7806 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:15.882 [log] [DEBUG] [REP-TRACE] shoulderPress angle=17.7806 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:15.990 [log] [DEBUG] [REP-TRACE] shoulderPress angle=5.3831 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:16.084 [log] [DEBUG] [REP-TRACE] shoulderPress angle=68.3419 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:16.201 [log] [DEBUG] [REP-TRACE] shoulderPress angle=69.2854 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:16.314 [log] [DEBUG] [METRIC] shoulderPress value=68.2428 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:16.314 [log] [DEBUG] [REP-TRACE] shoulderPress angle=68.2428 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:16.402 [log] [DEBUG] [REP-TRACE] shoulderPress angle=63.0007 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:16.480 [log] [DEBUG] [REP-TRACE] shoulderPress angle=67.3194 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:16.582 [log] [DEBUG] [REP-TRACE] shoulderPress angle=3.9565 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:16.702 [log] [DEBUG] [METRIC] shoulderPress value=13.9059 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:16.702 [log] [DEBUG] [REP-TRACE] shoulderPress angle=13.9059 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:16.797 [log] [DEBUG] [REP-TRACE] shoulderPress angle=26.7727 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:16.894 [log] [DEBUG] [REP-TRACE] shoulderPress angle=0.9867 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:16.998 [log] [DEBUG] [REP-TRACE] shoulderPress angle=5.4624 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:17.102 [log] [DEBUG] [METRIC] shoulderPress value=9.6899 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:17.102 [log] [DEBUG] [REP-TRACE] shoulderPress angle=9.6899 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:17.195 [log] [DEBUG] [REP-TRACE] shoulderPress angle=15.8998 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:17.303 [log] [DEBUG] [REP-TRACE] shoulderPress angle=19.8186 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:17.404 [log] [DEBUG] [REP-TRACE] shoulderPress angle=20.0752 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:17.507 [log] [DEBUG] [METRIC] shoulderPress value=15.7191 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:17.507 [log] [DEBUG] [REP-TRACE] shoulderPress angle=15.7191 repMinAngle=0.0619 framesSincePoseGap=105
+19:57:17.599 [log] [DEBUG] [REP-TRACE] shoulderPress angle=17.7023 repMinAngle=0.0619 framesSincePoseGap=0
+19:57:17.702 [log] [DEBUG] [REP-TRACE] shoulderPress angle=18.2760 repMinAngle=0.0619 framesSincePoseGap=0
+19:57:17.803 [log] [DEBUG] [REP-TRACE] shoulderPress angle=18.0086 repMinAngle=0.0619 framesSincePoseGap=0
+19:57:17.901 [log] [DEBUG] [METRIC] shoulderPress value=18.1139 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:17.901 [log] [DEBUG] [REP-TRACE] shoulderPress angle=18.1139 repMinAngle=0.0619 framesSincePoseGap=0
+19:57:17.997 [log] [DEBUG] [REP-TRACE] shoulderPress angle=19.6995 repMinAngle=0.0619 framesSincePoseGap=0
+19:57:18.100 [log] [DEBUG] [REP-TRACE] shoulderPress angle=73.5780 repMinAngle=0.0619 framesSincePoseGap=1
+19:57:18.199 [log] [DEBUG] [REP-TRACE] shoulderPress angle=23.9561 repMinAngle=0.0619 framesSincePoseGap=1
+19:57:18.305 [log] [DEBUG] [METRIC] shoulderPress value=26.6728 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:18.306 [log] [DEBUG] [REP-TRACE] shoulderPress angle=26.6728 repMinAngle=0.0619 framesSincePoseGap=1
+19:57:18.399 [log] [DEBUG] [REP-TRACE] shoulderPress angle=28.5293 repMinAngle=0.0619 framesSincePoseGap=0
+19:57:18.499 [log] [DEBUG] [REP-TRACE] shoulderPress angle=30.3843 repMinAngle=0.0619 framesSincePoseGap=0
+19:57:18.604 [log] [DEBUG] [REP-TRACE] shoulderPress angle=30.3355 repMinAngle=0.0619 framesSincePoseGap=0
+19:57:18.701 [log] [DEBUG] [METRIC] shoulderPress value=10.8546 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:18.702 [log] [DEBUG] [REP-TRACE] shoulderPress angle=10.8546 repMinAngle=0.0619 framesSincePoseGap=0
+19:57:18.791 [log] [DEBUG] [REP-TRACE] shoulderPress angle=13.4830 repMinAngle=0.0619 framesSincePoseGap=0
+19:57:18.894 [log] [DEBUG] [REP-TRACE] shoulderPress angle=12.9094 repMinAngle=0.0619 framesSincePoseGap=1
+19:57:18.993 [log] [DEBUG] [REP-TRACE] shoulderPress angle=11.6472 repMinAngle=0.0619 framesSincePoseGap=2
+19:57:19.094 [log] [DEBUG] [METRIC] shoulderPress value=10.5599 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:19.095 [log] [DEBUG] [REP-TRACE] shoulderPress angle=10.5599 repMinAngle=0.0619 framesSincePoseGap=3
+19:57:19.197 [log] [DEBUG] [REP-TRACE] shoulderPress angle=12.7065 repMinAngle=0.0619 framesSincePoseGap=4
+19:57:19.300 [log] [DEBUG] [REP-TRACE] shoulderPress angle=12.5903 repMinAngle=0.0619 framesSincePoseGap=5
+19:57:19.401 [log] [DEBUG] [REP-TRACE] shoulderPress angle=14.6856 repMinAngle=0.0619 framesSincePoseGap=6
+19:57:19.505 [log] [DEBUG] [METRIC] shoulderPress value=14.5674 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:19.505 [log] [DEBUG] [REP-TRACE] shoulderPress angle=14.5674 repMinAngle=0.0619 framesSincePoseGap=7
+19:57:19.598 [log] [DEBUG] [REP-TRACE] shoulderPress angle=11.6159 repMinAngle=0.0619 framesSincePoseGap=8
+19:57:19.700 [log] [DEBUG] [REP-TRACE] shoulderPress angle=7.2504 repMinAngle=0.0619 framesSincePoseGap=9
+19:57:19.803 [log] [DEBUG] [REP-TRACE] shoulderPress angle=4.0587 repMinAngle=0.0619 framesSincePoseGap=10
+19:57:19.904 [log] [DEBUG] [METRIC] shoulderPress value=0.3271 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:19.905 [log] [DEBUG] [REP-TRACE] shoulderPress angle=0.3271 repMinAngle=0.0619 framesSincePoseGap=11
+19:57:19.993 [log] [DEBUG] [REP-TRACE] shoulderPress angle=3.7917 repMinAngle=0.0619 framesSincePoseGap=12
+19:57:20.098 [log] [DEBUG] [REP-TRACE] shoulderPress angle=4.0670 repMinAngle=0.0619 framesSincePoseGap=13
+19:57:20.203 [log] [DEBUG] [REP-TRACE] shoulderPress angle=4.3831 repMinAngle=0.0619 framesSincePoseGap=14
+19:57:20.302 [log] [DEBUG] [METRIC] shoulderPress value=11.9760 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:20.302 [log] [DEBUG] [REP-TRACE] shoulderPress angle=11.9760 repMinAngle=0.0619 framesSincePoseGap=15
+19:57:20.399 [log] [DEBUG] [REP-TRACE] shoulderPress angle=12.2491 repMinAngle=0.0619 framesSincePoseGap=16
+19:57:20.503 [log] [DEBUG] [REP-TRACE] shoulderPress angle=14.5496 repMinAngle=0.0619 framesSincePoseGap=17
+19:57:20.603 [log] [DEBUG] [REP-TRACE] shoulderPress angle=18.1620 repMinAngle=0.0619 framesSincePoseGap=18
+19:57:20.701 [log] [DEBUG] [METRIC] shoulderPress value=18.8344 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:20.701 [log] [DEBUG] [REP-TRACE] shoulderPress angle=18.8344 repMinAngle=0.0619 framesSincePoseGap=19
+19:57:20.797 [log] [DEBUG] [REP-TRACE] shoulderPress angle=4.6485 repMinAngle=0.0619 framesSincePoseGap=20
+19:57:20.900 [log] [DEBUG] [REP-TRACE] shoulderPress angle=6.2348 repMinAngle=0.0619 framesSincePoseGap=21
+19:57:20.993 [log] [DEBUG] [REP-TRACE] shoulderPress angle=4.6847 repMinAngle=0.0619 framesSincePoseGap=22
+19:57:21.095 [log] [DEBUG] [METRIC] shoulderPress value=2.9327 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:21.095 [log] [DEBUG] [REP-TRACE] shoulderPress angle=2.9327 repMinAngle=0.0619 framesSincePoseGap=23
+19:57:21.194 [log] [DEBUG] [REP-TRACE] shoulderPress angle=3.5781 repMinAngle=0.0619 framesSincePoseGap=24
+19:57:21.301 [log] [DEBUG] [REP-TRACE] shoulderPress angle=9.4055 repMinAngle=0.0619 framesSincePoseGap=25
+19:57:21.402 [log] [DEBUG] [REP-TRACE] shoulderPress angle=10.6600 repMinAngle=0.0619 framesSincePoseGap=26
+19:57:21.501 [log] [DEBUG] [METRIC] shoulderPress value=12.8648 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:21.501 [log] [DEBUG] [REP-TRACE] shoulderPress angle=12.8648 repMinAngle=0.0619 framesSincePoseGap=27
+19:57:21.598 [log] [DEBUG] [REP-TRACE] shoulderPress angle=15.2526 repMinAngle=0.0619 framesSincePoseGap=28
+19:57:21.701 [log] [DEBUG] [REP-TRACE] shoulderPress angle=18.3557 repMinAngle=0.0619 framesSincePoseGap=29
+19:57:21.804 [log] [DEBUG] [REP-TRACE] shoulderPress angle=22.4888 repMinAngle=0.0619 framesSincePoseGap=30
+19:57:21.902 [log] [DEBUG] [METRIC] shoulderPress value=24.0003 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:21.902 [log] [DEBUG] [REP-TRACE] shoulderPress angle=24.0003 repMinAngle=0.0619 framesSincePoseGap=31
+19:57:21.991 [log] [DEBUG] [REP-TRACE] shoulderPress angle=26.7997 repMinAngle=0.0619 framesSincePoseGap=32
+19:57:22.098 [log] [DEBUG] [REP-TRACE] shoulderPress angle=27.1531 repMinAngle=0.0619 framesSincePoseGap=33
+19:57:22.199 [log] [DEBUG] [REP-TRACE] shoulderPress angle=29.5806 repMinAngle=0.0619 framesSincePoseGap=34
+19:57:22.302 [log] [DEBUG] [METRIC] shoulderPress value=27.7119 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:22.302 [log] [DEBUG] [REP-TRACE] shoulderPress angle=27.7119 repMinAngle=0.0619 framesSincePoseGap=34
+19:57:22.397 [log] [DEBUG] [REP-TRACE] shoulderPress angle=25.9592 repMinAngle=0.0619 framesSincePoseGap=34
+19:57:22.502 [log] [DEBUG] [REP-TRACE] shoulderPress angle=24.9909 repMinAngle=0.0619 framesSincePoseGap=35
+19:57:22.604 [log] [DEBUG] [REP-TRACE] shoulderPress angle=24.2538 repMinAngle=0.0619 framesSincePoseGap=36
+19:57:22.708 [log] [DEBUG] [METRIC] shoulderPress value=19.4251 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:22.708 [log] [DEBUG] [REP-TRACE] shoulderPress angle=19.4251 repMinAngle=0.0619 framesSincePoseGap=37
+19:57:22.801 [log] [DEBUG] [REP-TRACE] shoulderPress angle=20.5904 repMinAngle=0.0619 framesSincePoseGap=38
+19:57:22.899 [log] [DEBUG] [REP-TRACE] shoulderPress angle=20.8791 repMinAngle=0.0619 framesSincePoseGap=39
+19:57:22.995 [log] [DEBUG] [REP-TRACE] shoulderPress angle=20.2680 repMinAngle=0.0619 framesSincePoseGap=39
+19:57:23.099 [log] [DEBUG] [METRIC] shoulderPress value=18.1325 enter=68.0000 exit=72.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:57:23.099 [log] [DEBUG] [REP-TRACE] shoulderPress angle=18.1325 repMinAngle=0.0619 framesSincePoseGap=39

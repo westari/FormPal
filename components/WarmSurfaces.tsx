@@ -48,6 +48,13 @@ const KINDS: WarmKind[] = ['recap', 'allsets', 'ranks', 'repfeedback']; // later
 // never does: it is only ever covered by the others.
 const SLIDES_OUT: PerKindLite<boolean> = { recap: false, allsets: true, ranks: true, repfeedback: true };
 const SLIDE_IN_MS = 320, SLIDE_OUT_MS = 260;
+// How far the page underneath moves left while another slides over it (a third of the screen, like a normal iOS push).
+const PARALLAX = 0.3;
+// The sliding value of every layer, so a page can follow the one covering it.
+const TX: Partial<Record<WarmKind, Animated.Value>> = {};
+const edgeStyles = StyleSheet.create({
+  pushEdge: { shadowColor: '#000', shadowOpacity: 0.28, shadowRadius: 14, shadowOffset: { width: -4, height: 0 } },
+});
 
 // Layering rules (also what scripts/test-ghost-card.js renders): a layer that is
 // not showing is fully transparent and the whole host sits behind the navigator;
@@ -240,6 +247,9 @@ function Layer({ k }: { k: WarmKind }) {
   const [pageBroken, setPageBroken] = useState(false);
   useEffect(() => { setPageBroken(false); }, [epoch]);
   const coveredByHigher = useWarm((s) => KINDS.slice(KINDS.indexOf(k) + 1).some((kk) => s.active[kk] && s.revealed[kk]));
+  // The page that is covering this one (if any): this page moves left by a third of a screen as that one slides in, and
+  // back as it slides out, exactly like a normal iOS push / pop.
+  const coverKind = useWarm((s) => KINDS.slice(KINDS.indexOf(k) + 1).reverse().find((kk) => s.active[kk] && s.revealed[kk]) ?? null);
 
   // Inject the data once per fresh page, as soon as both exist.
   useEffect(() => {
@@ -273,6 +283,11 @@ function Layer({ k }: { k: WarmKind }) {
   // tx = screen width means "parked off to the right". A hidden layer is always
   // parked, fully transparent and behind the navigator.
   const tx = useRef(new Animated.Value(screenW)).current;
+  TX[k] = tx;
+  const noShift = useRef(new Animated.Value(0)).current;
+  const coverTx = coverKind ? TX[coverKind] : undefined;
+  // follows the covering page: 0 while it is parked off to the right, -PARALLAX of a screen once it has fully slid in
+  const underShift = coverTx ? coverTx.interpolate({ inputRange: [0, screenW], outputRange: [-screenW * PARALLAX, 0], extrapolate: 'clamp' }) : noShift;
   const [shown, setShown] = useState(false);
   const wasShown = useRef(false);
   const wanted = layerShouldShow(visible, coveredByHigher, wasShown.current);
@@ -318,7 +333,9 @@ function Layer({ k }: { k: WarmKind }) {
         StyleSheet.absoluteFill,
         // Not shown = invisible, not hit-testable, and (via the parent's
         // zIndex) behind everything.
-        { opacity: shown && !beneathHidden ? 1 : LAYER_OPACITY_HIDDEN, transform: [{ translateX: tx }] },
+        { opacity: shown && !beneathHidden ? 1 : LAYER_OPACITY_HIDDEN, transform: [{ translateX: tx }, { translateX: underShift }] },
+        // a soft edge on the page that slides in, like a normal iOS push
+        shown && !coveredByHigher ? edgeStyles.pushEdge : null,
       ]}
     >
       {shown && underlay ? <View style={StyleSheet.absoluteFill} pointerEvents="none">{underlay}</View> : null}

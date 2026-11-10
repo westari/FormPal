@@ -4290,10 +4290,14 @@ export function isRepCounterExercise(id: string): boolean {
 // Also placeholders in the sense that the joint list is a judgment call; the
 // "[SETUP] ... NOT ready: ..." log line names exactly what was missing.
 {
+  // The gate metric must need ONLY the joints the rep metric already needs (shoulder + elbow). The first version
+  // divided by the torso length, which needs a hip joint on every frame: whenever the hips dropped out of Vision's
+  // view mid-rep the gate returned nothing and the rep silently never completed. verticalGap is the raw
+  // shoulder-minus-elbow height (+ = elbow below the shoulder), so it can never be missing when the rep metric is not.
   const SHOULDER_PRESS_GATE_METRIC: MetricDef = {
     type: 'bestSide',
-    left:  { type: 'normalizedVerticalGap', upper: 'leftShoulder',  lower: 'leftElbow'  },
-    right: { type: 'normalizedVerticalGap', upper: 'rightShoulder', lower: 'rightElbow' },
+    left:  { type: 'verticalGap', upper: 'leftShoulder',  lower: 'leftElbow'  },
+    right: { type: 'verticalGap', upper: 'rightShoulder', lower: 'rightElbow' },
     leftJoints:  ['leftShoulder',  'leftElbow'],
     rightJoints: ['rightShoulder', 'rightElbow'],
   };
@@ -4302,8 +4306,34 @@ export function isRepCounterExercise(id: string): boolean {
   for (const id of ['shoulderPress', 'overheadPress', 'arnoldPress', 'dumbbellShoulderPress', 'machineShoulderPress']) {
     const d = defs[id];
     if (!d) continue;
-    d.startPositionGate = { metric: SHOULDER_PRESS_GATE_METRIC, startMin: 0.05, peakMax: 0.0 };
+    // PLACEHOLDERS: startMin is in raw frame-height units (0.015 = about 5% of a standing torso in a full-body frame).
+    d.startPositionGate = { metric: SHOULDER_PRESS_GATE_METRIC, startMin: 0.015, peakMax: 0.0 };
     d.setupExtraJoints = id === 'machineShoulderPress' ? UPPER : [...UPPER, 'leftHip', 'rightHip'];
+    // REP COUNTING THRESHOLDS, from two real device logs of the same exercise (2026-11-02 and 2026-11-08):
+    //  - the rack (start) position reads 61-67 in BOTH logs, so the old exit of 72 was above the rack: it was only
+    //    ever reached while the arm swept up through horizontal (a ~90 reading), which is not a return. A press whose
+    //    sweep is fast or tucked never reaches 72 for 3 frames and counts ZERO reps (the 2026-11-08 session: no rep
+    //    in a full session, rack 64, peaks never above 73.5).
+    //  - real presses bottom out far below 46 (41, 46, 4.9, 41, 28-39 in the earlier logs, 0-25 in the newest);
+    //    the drift / shallow zone sits at 52-65.
+    // So: enter below 50 (a real press), exit at 58 (just under the lowest rack reading, so coming back to the rack
+    // completes it). Replaying both real logs through a mirror of the engine's rule: the old 68/72 gives 7 reps for the
+    // first log (device counted 6) and 0 for the second (device counted 0); 50/58 gives 7 and 3, and never counts the
+    // 52-53 drift. PLACEHOLDERS until the next logs show the real [REP] lines.
+    d.repEnterThreshold = 50;
+    d.repExitThreshold  = 58;
+    // 2026-11-10 log (same exercise, in frame and lit): SIX real presses in a row were thrown away with "[REP] rejected -
+    // tracking unreliable for 4/4 frames (100%)" (then 100%, 100%, 100%, 93%, 79%). The rule rejects a rep when more than
+    // half of its frames have a shoulder/elbow joint under 0.6 confidence; Vision's confidence for these joints sat at
+    // 0.17-0.71 the whole time (typical indoor light), so a normal press could never pass, and the later presses only
+    // counted when it happened to rise. The camera DID see the arms (the angle moved smoothly through every rep), so
+    // confidence alone no longer throws a rep away (1.0 = never). The other guards (movement, depth) still apply.
+    d.repReliabilityMaxUnreliableFraction = 1.0;
+    // The engine would not start counting until the resting reading was >= 63.7 (settleAnchorMinFraction 0.3), but this
+    // user's rest reads 59-65 in the 11-08 and 11-10 logs (and 62-67 on 11-02), so "Go" came 10+ seconds late and the first
+    // presses were ignored. 0.1 asks for >= 57.9: still above the new enter threshold (50), so a mid-press reading can
+    // never be taken for the rest position. PLACEHOLDER from three logs.
+    d.settleAnchorMinFraction = 0.1;
   }
 }
 

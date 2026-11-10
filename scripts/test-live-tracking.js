@@ -60,18 +60,22 @@ function run(targetAt, ms) {
   const t95 = o.find(x => x.v >= 95).t;
   check('RISE: 0 -> 95 in under 0.8s (was ~2.1s at one number per 45ms)', t95 < 800, `${t95}ms`);
   const steps = o.slice(1).map((x, i) => x.v - o[i].v).filter(d => d > 0);
-  check('RISE: still counts up smoothly (never jumps more than 6 numbers per frame)', Math.max(...steps) <= 6, `max step ${Math.max(...steps)}`);
+  check('RISE: still counts up smoothly (exponential glide: never more than 16 numbers per frame, never down)', Math.max(...steps) <= 16 && o.slice(1).every((x, i) => x.v >= o[i].v), `max step ${Math.max(...steps)}`);
 }
 {
-  // JITTER: the raw target flickers 100 <-> 55 every ~100ms for a second (a cue blinking), then settles at 100.
-  const flick = (t) => (t >= 1000 && t < 2000 ? (Math.floor(t / 100) % 2 ? 55 : 100) : 100);
-  const o = run(flick, 3000);
-  const after = o.filter(x => x.t > 800);
-  const dip = Math.min(...after.map(x => x.v));
-  // what the OLD meter did: follow every flicker, one number per 45ms up / faster down
-  let old = 100, oldMin = 100; for (let t = 1000; t < 2000; t += 45) { const tg = flick(t); old = old < tg ? old + 1 : Math.max(tg, old - Math.max(1, Math.ceil((old - tg) / 4))); oldMin = Math.min(oldMin, old); }
-  console.log(`      flickering target 100/55 for 1s: old meter swung down to ${oldMin}, new meter's lowest value ${dip}`);
-  check('JITTER: a flickering target no longer makes the number swing (old meter swung to ' + oldMin + ')', dip >= 95 && oldMin < 80, `lowest ${dip}`);
+  // CONTINUOUS: small changes in the picture are small changes on screen, and nothing steps.
+  // (1) the target slides 100 -> 90 over 2s (after the number has settled at 100): it slides with it, a number or two at a time
+  const o = run((t) => (t < 1500 ? 100 : Math.max(90, 100 - (t - 1500) / 200)), 5000).filter((x) => x.t >= 1500);
+  const d = o.slice(1).map((x, i) => x.v - o[i].v);
+  check('CONTINUOUS: a slow 100 -> 90 slide moves the number by at most 2 per frame, and never up', Math.min(...d) >= -2 && Math.max(...d) <= 0, 'steps ' + [Math.min(...d), Math.max(...d)].join('..'));
+  check('CONTINUOUS: ...and ends at 90', Math.abs(o[o.length - 1].v - 90) <= 1, String(o[o.length - 1].v));
+  // (2) one frame of a bad reading (100 -> 55 -> 100) is a small blip, not a swing
+  const blip = run((t) => (t >= 2000 && t < 2033 ? 55 : 100), 3500).filter((x) => x.t > 1500);
+  const lowest = Math.min(...blip.map((x) => x.v));
+  check('CONTINUOUS: a one-frame bad reading dips the number by only a few points (' + lowest + ')', lowest >= 94, 'lowest ' + lowest);
+  // (3) a tiny change (100 -> 98) shows as a tiny change
+  const tiny = run((t) => (t < 1500 ? 100 : 98), 5000).filter((x) => x.t > 1400);
+  check('CONTINUOUS: 100 -> 98 shows 98 (never goes below it)', tiny[tiny.length - 1].v === 98 && Math.min(...tiny.map((x) => x.v)) >= 98, 'lowest ' + Math.min(...tiny.map((x) => x.v)));
 }
 {
   // a REAL, sustained drop is still shown quickly
@@ -203,7 +207,7 @@ check('no false cue while METRIC lines keep flowing', (() => {
 // 5. glass: setup guidance and live cues go through the SAME component
 {
   const src = fs.readFileSync(path.join(__dirname, '..', 'app', 'formcheck.tsx'), 'utf8');
-  check('glass: setup guidance renders through <CueGlass> (was plain text)', /<CueGlass text=\{setupAllVisible/.test(src) && !/<Text style=\{s\.setupBig\}>/.test(src));
+  check('glass: setup guidance renders through <CueGlass> (was plain text)', /<CueGlass text=\{startPoseWaiting/.test(src) && !/<Text style=\{s\.setupBig\}>/.test(src));
   check('glass: live cues render through the very same <CueGlass>', /<CueGlass text=\{cue\} \/>/.test(src));
   check('glass: CueGlass is a GlassPanel pill (the look you like)', /function CueGlass[\s\S]*?<GlassPanel radius=\{999\}/.test(src));
   check('meter: premium glass pill (GlassPanel + ring + Plus Jakarta), no bare 40px text', /<GlassPanel radius=\{999\} style=\{s\.meterPill\}>/.test(src) && !/cameraLockPct/.test(src));
@@ -219,6 +223,78 @@ check('no false cue while METRIC lines keep flowing', (() => {
   const num = +(fc.match(/meterNum:.*?fontSize: (\d+)/) || [])[1], trackW = +(fc.match(/meterTrack: \{ width: (\d+), height: (\d+)/) || [])[1], trackH = +(fc.match(/meterTrack: \{ width: \d+, height: (\d+)/) || [])[1];
   check(`pill: the % is much bigger (${num}px, was 16), the bar is longer (${trackW}px, was 52) and thicker (${trackH}px, was 3)`, num >= 34 && trackW >= 100 && trackH >= 8);
   check('Ready / Go is gated by the steady-tracking gate and logs its values as placeholders', /createSteadyGate/.test(fc) && /\[READY-GATE\] Ready: steady/.test(fc) && /READY_STEADY_MS/.test(fc) && /placeholder/.test(fc));
+}
+
+// 7. the confidence number reads the same signal the counter works from, replayed on two REAL device logs
+{
+  const LT = require('../lib/liveTracking.ts');
+  const T = (h, m, x) => h * 3600 + m * 60 + x;
+  const events = (file) => fs.readFileSync(path.join(__dirname, 'fixtures', file), 'utf8').split(/\r?\n/).map((l) => {
+    const m = /^(\d\d):(\d\d):(\d\d\.\d+) \[log\] \[DEBUG\] (.*)$/.exec(l);
+    return m ? { t: (+m[1] * 3600 + +m[2] * 60 + parseFloat(m[3])), msg: m[4] } : null;
+  }).filter(Boolean);
+  function replay(file, from, to) {
+    const c = LT.createCounterSignal(), out = [];
+    let next = from;
+    for (const e of events(file)) {
+      if (e.t < from) continue; if (e.t > to) break;
+      while (next < e.t) { out.push({ t: next, score: c.score(next * 1000) }); next += 0.1; }
+      c.feedLog(e.msg, e.t * 1000);
+    }
+    while (next < to) { out.push({ t: next, score: c.score(next * 1000) }); next += 0.1; }
+    return { out, c };
+  }
+  // the 2026-11-08 set: reps counted 0. The old pill said 100 the whole time (a person was visible).
+  const bad = replay('shoulder-press-2026-11-08.log.txt', T(19, 56, 42.3), T(19, 57, 18));
+  const goodShare = (r) => r.out.filter((x) => x.score >= 90).length / r.out.length;
+  const low = bad.out.filter((x) => x.score < 60).length / bad.out.length;
+  console.log(`      11-08 set (0 reps counted): confidence >= 90 for ${(goodShare(bad) * 100).toFixed(0)}% of the time, below 60 for ${(low * 100).toFixed(0)}% (the old pill: 100% the whole time)`);
+  // every time the counter lost the pose (framesSincePoseGap resets in its own trace) the number must dip at once
+  const ev8 = events('shoulder-press-2026-11-08.log.txt').filter((e) => e.t >= T(19, 56, 42.3) && e.t <= T(19, 57, 18));
+  let prevGap = null; const gaps = [];
+  for (const e of ev8) { const g = /REP-TRACE.*framesSincePoseGap=(\d+)/.exec(e.msg); if (g) { const n = +g[1]; if (prevGap !== null && n < prevGap) gaps.push(e.t); prevGap = n; } }
+  const dips = gaps.filter((g) => { const x = bad.out.find((y) => y.t >= g + 0.15); return x && x.score < 60; }).length;
+  check(`every one of the ${gaps.length} pose losses in the 11-08 set makes the number dip below 60 within 0.15s (the old pill stayed at 100)`, gaps.length >= 3 && dips === gaps.length, `${dips} of ${gaps.length}`);
+  check('between losses it climbs back (not stuck low): high for a good part of the set', goodShare(bad) >= 0.3 && low > 0.05, `high ${(goodShare(bad) * 100).toFixed(0)}%, low ${(low * 100).toFixed(0)}%`);
+  // the 2026-11-02 set: 6 reps counted. The counter saw the user for most of it.
+  const ok = replay('shoulder-press-2026-11-02.log.txt', T(20, 1, 4.9), T(20, 1, 24));
+  console.log(`      11-02 set (6 reps counted): confidence >= 90 for ${(goodShare(ok) * 100).toFixed(0)}% of the time`);
+  check('on the set where reps DID count, confidence is high most of the time', goodShare(ok) >= 0.7, `${(goodShare(ok) * 100).toFixed(0)}%`);
+  // Ready / Go replayed on the 11-08 start: Go used to show at 38.28s
+  const start = replay('shoulder-press-2026-11-08.log.txt', T(19, 56, 34.5), T(19, 56, 38.3));
+  const d = require('../constants/exerciseDefinitions.ts').EXERCISE_DEFINITIONS.shoulderPress;
+  const startMin = d.goodROMThreshold + (d.topAngle - d.goodROMThreshold) * d.settleAnchorMinFraction;
+  const goAt = T(19, 56, 38.3) * 1000;
+  check(`Go no longer shows at 38.28s of the 11-08 log: the counter read ${start.c.lastValue().toFixed(0)}, not at the start position (needs >= ${startMin.toFixed(1)})`, !start.c.atStartPosition(startMin, goAt, LT.READY_COUNTER_WINDOW_MS, LT.READY_COUNTER_MIN_SAMPLES) && start.c.healthy(goAt, LT.READY_COUNTER_WINDOW_MS, LT.READY_COUNTER_MIN_SAMPLES));
+  const later = replay('shoulder-press-2026-11-08.log.txt', T(19, 56, 41.9), T(19, 56, 42.4));
+  check('...and Go WOULD show once the hands are at the shoulders (the 63+ readings at 42.2s)', later.c.lastValue() >= startMin - 0.5, `last reading ${later.c.lastValue()}`);
+  const noLogs = LT.createCounterSignal();
+  check('with no debug log at all (release build) nothing waits on the counter (seen() is false, score 100)', noLogs.seen() === false && noLogs.score(1e6) === 100);
+  const mt = (cs) => LT.meterTarget({ phase: 'tracking', isActive: true, setupAllVisible: true, setupHoldProgress: 1, setupHint: '', personDetected: true, repDiag: null, counterScore: cs });
+  check('meterTarget is the minimum of the old rule and the counter score while tracking', mt(45) === 45 && mt(100) === 100);
+}
+
+// 8. the number is a live, continuous value on the REAL 11-10 session (it used to be just 100 / 55 / 35 / 0)
+{
+  const LT = require('../lib/liveTracking.ts');
+  const rows = fs.readFileSync(path.join(__dirname, 'fixtures', 'shoulder-press-2026-11-10.log.txt'), 'utf8').split(/\r?\n/).map((l) => {
+    const m = /^(\d\d):(\d\d):(\d\d\.\d+) \[log\] \[DEBUG\] (.*)$/.exec(l);
+    return m ? { t: (+m[1] * 3600 + +m[2] * 60 + parseFloat(m[3])) * 1000, msg: m[4] } : null;
+  }).filter(Boolean).filter((e) => e.t >= (22 * 3600 + 28 * 60 + 38) * 1000);
+  const c = LT.createCounterSignal(), sm = LT.createMeterSmoother();
+  const shown = [], steps = []; let ri = 0; let prev = null; let maxStep = 0;
+  const end = rows[rows.length - 1].t;
+  for (let t = rows[0].t; t < end; t += 33) {
+    while (ri < rows.length && rows[ri].t <= t) { c.feedLog(rows[ri].msg, rows[ri].t); ri++; }
+    const v = sm.tick(c.score(t), t); shown.push(v);
+    if (prev !== null && prev > 0 && v > 0 && shown.length > 45) { maxStep = Math.max(maxStep, Math.abs(v - prev)); steps.push(Math.abs(v - prev)); } prev = v; // (the first 1.5s is the number rising from 0)
+  }
+  const distinct = new Set(shown).size;
+  console.log('      11-10 session: ' + shown.length + ' frames, ' + distinct + ' different numbers shown, biggest change between two frames ' + maxStep);
+  check('the number takes many different values (not just 100 / 55 / 35 / 0)', distinct >= 12, String(distinct));
+  const ordered = steps.slice().sort((a, b) => a - b), p99 = ordered[Math.floor(ordered.length * 0.99)];
+  check('it never steps: 99% of frame-to-frame changes are 4 numbers or less (a real pose loss may move it up to ' + maxStep + ')', p99 <= 4 && maxStep <= 12, 'p99 ' + p99 + ', max ' + maxStep);
+  check('it reacts to the real trouble in that session (dips well below 100 at some point, recovers to above 90 later)', Math.min(...shown) <= 70 && Math.max(...shown.slice(Math.floor(shown.length / 2))) >= 90, 'min ' + Math.min(...shown));
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nall passed');

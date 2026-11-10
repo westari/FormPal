@@ -258,13 +258,15 @@ check('rows carry the real Flaticon art', A.hits.every(h => h.icon && h.icon.sta
 
     const txt = atReady.text.replace(/\s+/g, ' ');
     check(`${name}: header shows real rank + % + where it is heading`, txt.includes(p.rank.label) && txt.includes(p.rank.pctLabel), `${p.rank.label} ${p.rank.pctLabel}`);
-    check(`${name}: "${p.rank.label} -> ${p.rank.next}" row + "+${p.rank.gained}% to ${p.rank.next}"`, txt.includes(p.rank.next) && (p.rank.atTop ? txt.includes(`+${p.rank.gained}%`) : txt.includes(`+${p.rank.gained}% to ${p.rank.next}`)));
+    const overallText = p.rank.atTop ? 'Top rank reached' : p.rank.rankedUp ? `Overall rank Ranked up to ${p.rank.label} ${p.rank.pctLabel}` : `Overall rank ${p.rank.beforePct}% → ${p.rank.pctLabel}`;
+    check(`${name}: "${p.rank.label} -> ${p.rank.next}" row + "${overallText}"`, txt.includes(p.rank.next) && txt.includes(overallText), txt.match(/Overall rank[^A-Z]*/)?.[0]);
+    check(`${name}: each muscle's own progress is labelled as such`, /Each muscle's own progress/i.test(txt) || p.hits.length === 0, '');
     check(`${name}: muscle rows = ${p.hits.map(h => h.name + ' ' + h.gain).join(', ') || 'none'}`,
       p.hits.every(h => txt.includes(h.name) && txt.includes(h.gain)));
     const placeholders = ['Bronze II', 'Bronze III', '+14% today', 'Quads', 'Glutes', '+6%', '+5%', '72%'];
     const bad = placeholders.filter(x => txt.includes(x) && !(p.hits.some(h => h.name === x || h.gain === x) || p.rank.label + p.rank.next + p.rank.pct + '%' === 'x'));
     // 'Quads'/'Glutes' etc may legitimately be a real row; anything else from the design's demo must be gone
-    const realBad = bad.filter(x => !p.hits.some(h => h.name === x || h.gain === x) && x !== `+${p.rank.gained}% to ${p.rank.next}` && x !== p.rank.pct + '%' && x !== p.rank.pctLabel);
+    const realBad = bad.filter(x => !p.hits.some(h => h.name === x || h.gain === x) && x !== p.rank.pct + '%' && x !== p.rank.pctLabel);
     check(`${name}: no design placeholder text left`, realBad.length === 0, realBad.join());
     const chipInfo = await page.evaluate(() => {
       const chips = [...document.querySelectorAll('#dc-root div')].filter(d => d.style.position === 'absolute' && (d.style.top === '284px' || d.hasAttribute('data-mr-chip')));
@@ -286,7 +288,7 @@ check('rows carry the real Flaticon art', A.hits.every(h => h.icon && h.icon.sta
       });
       check(`${name}: ${p.hits.length} muscles -> ${lay.n} rows on screen (every muscle that gained), ${lay.rows} compact line(s), no overlaps`, lay.n === p.hits.length && lay.overlaps === 0, JSON.stringify(lay));
       check(`${name}: the card stays the same size (${lay.cardH}px, design 360) and the rows sit inside it below the body map`, lay.cardH === 360 && lay.bottom <= lay.cardPx && lay.top >= lay.imgBottom - 2, JSON.stringify(lay));
-      check(`${name}: the header shows ONE number: +${p.rank.gained}% to ${p.rank.next} (not the ${p.hits.length}-row sum)`, txt.includes(`+${p.rank.gained}% to ${p.rank.next}`) && !/% today/.test(txt), txt.match(/\+[0-9.]+% to \w+/) && txt.match(/\+[0-9.]+% to \w+/)[0]);
+      check(`${name}: the overall rank is ONE line ("Overall rank ${p.rank.beforePct}% → ${p.rank.pctLabel}"), not the ${p.hits.length}-row sum`, txt.includes(`Overall rank ${p.rank.beforePct}% → ${p.rank.pctLabel}`) && !/% today/.test(txt) && /Each muscle's own progress/i.test(txt), txt.match(/Overall rank[^A-Z]*/)?.[0]);
     }
     check(`${name}: real body map image, decoded, visible`, atReady.imgSrc === p.bodyMap && atReady.imgW > 0 && atReady.imgVis === 'visible');
     check(`${name}: layout identical at reveal and 2.2s later (nothing shifts)`, JSON.stringify(atReady.rects) === JSON.stringify(later.rects) && atReady.transform === later.transform);

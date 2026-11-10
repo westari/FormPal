@@ -89,6 +89,8 @@ export interface MuscleRanksPayload {
     pct: number;            // overall progress toward `next` AFTER today, 0-100 (one decimal)
     pctLabel: string;       // header text: only the newest number, e.g. "9.0%"
     gained: string;         // how much the OVERALL rank % went up this workout, number text without "+"/"%"
+    beforePct: string;      // the OVERALL rank % before this workout (one decimal, no "%"); the page shows "before -> after"
+    rankedUp: boolean;      // the overall rank itself went up (the % then starts over in the new rank)
     hi: string; lo: string; ink: string;
     emblem: string | null;
   };
@@ -192,6 +194,8 @@ export function buildMuscleRanksPayload(opts: {
       pct: afterAvg,
       pctLabel,
       gained: fmt1(overallGain),
+      beforePct: fmt1(standingBefore && !standingBefore.atTop ? standingBefore.progress * 100 : 0),
+      rankedUp,
       hi: meta.hi, lo: meta.lo, ink: meta.ink,
       emblem,
     },

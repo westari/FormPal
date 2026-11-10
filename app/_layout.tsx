@@ -7,6 +7,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { configureAudioSession } from '../lib/audioFeedback';
 import WarmSurfaces from '../components/WarmSurfaces';
+import DesignPrewarm from '../components/DesignPrewarm';
 import { installDevLogger } from '../lib/devLogger';
 import {
   useFonts,
@@ -89,6 +90,11 @@ export default function RootLayout() {
             intentional instead. Scoped to just this one screen; every
             other route keeps the normal push. */}
         <Stack.Screen name="workout/run" options={{ animation: 'fade' }} />
+        {/* Workout complete / rep feedback are drawn by <WarmSurfaces /> above this navigator, which does the one normal
+            iOS slide itself (the page slides in from the right, the page under it shifts left a little). The native
+            animation of these two routes is switched off so two animations never stack into a sideways fade. */}
+        <Stack.Screen name="recap" options={{ animation: 'none' }} />
+        <Stack.Screen name="rep-feedback" options={{ animation: 'none' }} />
         {/* The post-workout cards (<WarmSurfaces />, above this navigator)
             slide in themselves to match the normal iOS push these two routes
             use, so the page change is smooth and the card arrives with it. */}
@@ -96,6 +102,8 @@ export default function RootLayout() {
       {/* Persistent, already-loaded artboard WebViews (Workout Complete, rep
           feedback, muscle page). See that file's header. */}
       <WarmSurfaces />
+      {/* Warms the web engine for Create workout / My workouts / Log a session so they open without a blank wait. */}
+      <DesignPrewarm />
     </SafeAreaProvider>
   );
 }

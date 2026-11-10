@@ -48,6 +48,12 @@ check('camera teardown is not awaited before the Workout complete card (runs in 
 const stages = [['formcheck', /postLagStart\('Stop pressed/], ['run.tsx', /postLagStart\('workout finished/], ['recap mount', /postLag\('recap: screen mounted/], ['rank read', /postLag\('recap: stored sessions read/], ['tiers', /postLag\('recap: tiers/], ['icons', /postLag\('recap: icons/], ['payload', /postLag\('recap: muscle page payload built/], ['rep feedback', /postLag\('rep feedback: screen mounted/], ['finish review', /postLag\('rep feedback: Finish review/], ['visible', /postLag\(`\$\{k\} page VISIBLE/]];
 const all = [recap, fc, read('app/workout/run.tsx'), read('app/rep-feedback.tsx'), read('components/WarmSurfaces.tsx')].join('\n');
 check(`[POST-LAG] timing lines exist for every stage (${stages.map(s => s[0]).join(', ')})`, stages.every(([, re]) => re.test(all)), stages.filter(([, re]) => !re.test(all)).map(s => s[0]).join());
+const swift = read('modules/athlt-camera/ios/ATHLTCameraModule.swift');
+const startOnQ = /AsyncFunction\("startSession"\)[^\n]*\n\s*self\.sessionQueue\.async \{ self\.doStartSession/.test(swift);
+const stopOnQ  = /AsyncFunction\("stopSession"\)[^\n]*\n\s*self\.sessionQueue\.async \{/.test(swift);
+const serial   = /private let sessionQueue[^\n]*DispatchQueue\(/.test(swift) && !/sessionQueue[^\n]*concurrent/.test(swift);
+check('the next set camera still starts correctly after a background teardown: startSession and stopSession both run on the SAME serial sessionQueue (a start can never overtake the stop before it)', startOnQ && stopOnQ && serial, `start ${startOnQ} stop ${stopOnQ} serial ${serial}`);
+check('the stop drains the inference queue before it finishes, so the engine is fully reset before the next start (inferenceQueue.sync inside stopSession)', /stopSession[\s\S]{0,1200}self\.inferenceQueue\.sync/.test(swift));
 check('the log helper tags every line "[POST-LAG]" and is dev-only', /\[POST-LAG\]/.test(read('lib/postLag.ts')) && /if \(!__DEV__\) return;/.test(read('lib/postLag.ts')));
 console.log(failed ? `\n${failed} FAILED` : '\nall passed');
 process.exit(failed ? 1 : 0);

@@ -97,14 +97,17 @@ export default function WorkoutOverviewScreen() {
   const getNext    = usePlanStore(s => s.getNextWorkout);
   const plan       = usePlanStore(s => s.plan);
   const loadStore  = usePlanStore(s => s.loadFromStorage);
-  // ?id=<workout id> = a PREVIEW of that exact workout (Train's "Preview workout" on a future day). Without it this is the
-  // usual "today's workout" screen with the Start button.
-  const { id }     = useLocalSearchParams<{ id?: string }>();
-  const preview    = !!id;
-  React.useEffect(() => { if (preview && !plan) void loadStore(); }, [preview, plan, loadStore]);
+  // ONE ?id=<workout id> path: the screen opens that exact workout. Two callers:
+  //  - My workouts: ?id=...            -> that workout, with its Start button (as before)
+  //  - Train's "Preview workout":      -> ?id=...&preview=1, a look at a later day's workout: no Start unless it is today's
+  // Without an id it is the next workout in the plan ("Today's Workout").
+  const { id, preview: previewParam } = useLocalSearchParams<{ id?: string; preview?: string }>();
+  const preview    = previewParam === '1';
+  React.useEffect(() => { if (id && !plan) void loadStore(); }, [id, plan, loadStore]);
   const createPlan = usePlanStore(s => s.createPlan);
   const startSess  = useWorkoutSessionStore(s => s.startWorkout);
-  const workout    = preview ? (plan?.workouts.find(w => w.id === id) ?? null) : getNext();
+  const byId       = id ? (plan?.workouts.find(w => w.id === id) ?? null) : null;
+  const workout    = preview ? byId : (byId ?? getNext());
   const [creatingTestPlan, setCreatingTestPlan] = useState(false);
 
   // getNextWorkout is read once at mount (see workout's own selector above —
@@ -183,7 +186,7 @@ export default function WorkoutOverviewScreen() {
             style={{ width: 18, height: 18 }}
           />
         </Pressable>
-        <Text style={s.topLabel}>{preview ? 'Workout preview' : "Today's Workout"}</Text>
+        <Text style={s.topLabel}>{preview ? 'Workout preview' : id ? 'Workout' : "Today's Workout"}</Text>
         <View style={{ width: 36 }} />
       </View>
 
