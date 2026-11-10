@@ -48,6 +48,10 @@ const KINDS: WarmKind[] = ['recap', 'allsets', 'ranks', 'repfeedback']; // later
 // never does: it is only ever covered by the others.
 const SLIDES_OUT: PerKindLite<boolean> = { recap: false, allsets: true, ranks: true, repfeedback: true };
 const SLIDE_IN_MS = 320, SLIDE_OUT_MS = 260;
+// Workout complete (recap) and All sets open with a plain fade: no sideways motion at all, and the page under it stays put.
+// (Rep feedback and the muscle page keep the normal iOS slide.)
+export const FADES: PerKindLite<boolean> = { recap: true, allsets: true, ranks: false, repfeedback: false };
+export const FADE_IN_MS = 220, FADE_OUT_MS = 160;
 // How far the page underneath moves left while another slides over it (a third of the screen, like a normal iOS push).
 const PARALLAX = 0.3;
 // The sliding value of every layer, so a page can follow the one covering it.
@@ -283,7 +287,8 @@ function Layer({ k }: { k: WarmKind }) {
   // tx = screen width means "parked off to the right". A hidden layer is always
   // parked, fully transparent and behind the navigator.
   const tx = useRef(new Animated.Value(screenW)).current;
-  TX[k] = tx;
+  if (!FADES[k]) TX[k] = tx; // a fading page never moves the page under it
+  const fade = useRef(new Animated.Value(0)).current;
   const noShift = useRef(new Animated.Value(0)).current;
   const coverTx = coverKind ? TX[coverKind] : undefined;
   // follows the covering page: 0 while it is parked off to the right, -PARALLAX of a screen once it has fully slid in
@@ -309,7 +314,14 @@ function Layer({ k }: { k: WarmKind }) {
           // feedback page while that one slides away): in place at once, no slide of its own.
           if (__DEV__) console.log(`[warm:${k}] shown in place under the page above (no slide)`);
           tx.setValue(0);
+          fade.setValue(1);
           setShown(true);
+        } else if (FADES[k]) {
+          if (__DEV__) console.log(`[warm:${k}] fade IN (${FADE_IN_MS}ms, no sideways motion)`);
+          tx.setValue(0);
+          fade.setValue(0);
+          setShown(true);
+          Animated.timing(fade, { toValue: 1, duration: FADE_IN_MS, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
         } else {
           if (__DEV__) console.log(`[warm:${k}] slide IN (${SLIDE_IN_MS}ms), layer raised above navigator`);
           tx.setValue(screenW);
@@ -320,8 +332,9 @@ function Layer({ k }: { k: WarmKind }) {
     } else if (wasShown.current) {
       wasShown.current = false;
       if (__DEV__) console.log(`[warm:${k}] ${SLIDES_OUT[k] ? 'slide OUT' : 'hidden'} -> parked off-screen, opacity 0, behind navigator`);
-      const park = () => { setShown(false); tx.setValue(screenW); };
-      if (SLIDES_OUT[k]) Animated.timing(tx, { toValue: screenW, duration: SLIDE_OUT_MS, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(({ finished }) => { if (finished || !wasShown.current) park(); });
+      const park = () => { setShown(false); tx.setValue(FADES[k] ? 0 : screenW); fade.setValue(0); };
+      if (FADES[k] && SLIDES_OUT[k]) Animated.timing(fade, { toValue: 0, duration: FADE_OUT_MS, easing: Easing.in(Easing.quad), useNativeDriver: true }).start(({ finished }) => { if (finished || !wasShown.current) park(); });
+      else if (SLIDES_OUT[k]) Animated.timing(tx, { toValue: screenW, duration: SLIDE_OUT_MS, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(({ finished }) => { if (finished || !wasShown.current) park(); });
       else park();
     }
   }, [wanted, tx, screenW, k]);
@@ -333,9 +346,9 @@ function Layer({ k }: { k: WarmKind }) {
         StyleSheet.absoluteFill,
         // Not shown = invisible, not hit-testable, and (via the parent's
         // zIndex) behind everything.
-        { opacity: shown && !beneathHidden ? 1 : LAYER_OPACITY_HIDDEN, transform: [{ translateX: tx }, { translateX: underShift }] },
+        { opacity: shown && !beneathHidden ? (FADES[k] ? fade : 1) : LAYER_OPACITY_HIDDEN, transform: [{ translateX: tx }, { translateX: underShift }] },
         // a soft edge on the page that slides in, like a normal iOS push
-        shown && !coveredByHigher ? edgeStyles.pushEdge : null,
+        shown && !coveredByHigher && !FADES[k] ? edgeStyles.pushEdge : null,
       ]}
     >
       {shown && underlay ? <View style={StyleSheet.absoluteFill} pointerEvents="none">{underlay}</View> : null}

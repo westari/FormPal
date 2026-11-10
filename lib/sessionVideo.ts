@@ -14,6 +14,7 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { resolveVideoUri } from './videoStore';
 
 // require() inside try/catch on purpose — same pattern as
 // components/LiquidGlass.tsx's native module guard. expo-video-thumbnails
@@ -70,11 +71,14 @@ export async function findSessionVideoUri(sessionTs: number, prevSessionTs: numb
   const log = await loadVideoLog();
   const lo = Math.max(prevSessionTs + MATCH_TOLERANCE_MS, sessionTs - MAX_WORKOUT_MS);
   const hi = sessionTs + MATCH_TOLERANCE_MS;
-  let best: VideoLogEntry | null = null;
-  for (const entry of log) {
-    if (entry.ts > lo && entry.ts <= hi && (!best || entry.ts > best.ts)) best = entry;
+  // newest clip first; one whose file is gone (iOS empties the temp folder, a reinstall changes the app folder) is skipped
+  // instead of being handed to the player, which showed a black screen
+  const inWindow = log.filter((e) => e.ts > lo && e.ts <= hi).sort((x, y) => y.ts - x.ts);
+  for (const entry of inWindow) {
+    const ok = resolveVideoUri(entry.uri);
+    if (ok) return ok;
   }
-  return best ? best.uri : null;
+  return null;
 }
 
 // In-memory only (not persisted) — regenerated once per app run per

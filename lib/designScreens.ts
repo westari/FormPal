@@ -19,6 +19,7 @@
 import { CONSOLE_FORWARD_JS, DC_VIEWPORT_JS, DC_SETTLE_JS } from './dcWebviewHelpers';
 import { dcLogicPatchJs, athltSetDataJs } from './dcLogicPatch';
 import { NO_ZOOM_JS } from './noZoom';
+import { EXERCISE_SEARCH_PAGE_JS } from './exerciseSearch';
 
 // ─── shared page-side base ──────────────────────────────────────────────────────
 // Hooks: a screen pushes functions into window.__dsHooks; each runs on every DOM change (idempotent) and may return false
@@ -117,6 +118,11 @@ const CATALOG_PAGE = String.raw`
     }
     return true;
   }
+  // the ONE search rule (lib/exerciseSearch.ts): starts with first, then a later word starts with it, never mid-word
+  function libFor(self, names) {
+    var q = String((self.state && self.state.query) || '').trim();
+    return q ? dsSearch(names, q) : names;
+  }
   function defaultsFor(self, n) {
     var c = (self.__dsDef || {})[n] || { sets: 3, reps: 10 };
     return self.BODYWEIGHT[n] ? { sets: c.sets, reps: c.reps } : { sets: c.sets, reps: c.reps, load: 45 };
@@ -147,6 +153,7 @@ const CATALOG_PAGE = String.raw`
     });
     return out;
   }
+${EXERCISE_SEARCH_PAGE_JS}
 `;
 
 // ─── Create workout ─────────────────────────────────────────────────────────────
@@ -166,9 +173,13 @@ ${CATALOG_PAGE}
     }
     renderVals() {
       if (!useCatalog(this)) return super.renderVals();
+      var d0 = D();
       // the design starts with a demo "Squat / Push-up" workout: a new workout starts empty
       if (!this.__dsInit) { this.__dsInit = true; this.state = Object.assign({}, this.state, { order: [], data: {}, name: '' }); }
+      var allNames = d0.catalog.map(function (c) { return c.name; });
+      this.LIB = libFor(this, allNames);
       var v = super.renderVals(), s = this.state;
+      this.LIB = allNames;
       window.__athltCurrent = { name: s.name || '', items: s.order.map(function (n) { var x = s.data[n]; return { n: n, sets: x.sets, reps: x.reps, load: x.load == null ? null : x.load }; }) };
       return v;
     }
@@ -182,6 +193,28 @@ export const CREATE_WORKOUT_DOM_JS = String.raw`
       if (/^save workout$/i.test(l.text)) { var c = window.__athltCurrent; if (c && c.name.trim() && c.items.length) window.__dsPost({ type: 'save', name: c.name.trim(), items: c.items }); return; }
       if (/Train\.dc\.html/.test(l.href)) window.__dsPost({ type: 'back' });
     };
+    // The empty card said "Search above to add your first one" but had no button, only the search bar. A clear "Add exercise"
+    // button now sits in it and opens the search (focuses the box, so the keyboard comes up). Text nodes and one appended child
+    // only: the design's own nodes are never removed.
+    var leaves = root.querySelectorAll('div');
+    for (var i = 0; i < leaves.length; i++) {
+      var d = leaves[i];
+      if (d.children.length !== 0 || (d.textContent || '').trim() !== 'No exercises yet') continue;
+      var card = d.parentElement; if (!card) break;
+      var help = d.nextElementSibling;
+      if (help && help.firstChild && help.firstChild.nodeType === 3 && help.firstChild.nodeValue !== 'Tap Add exercise to search for your first one.') help.firstChild.nodeValue = 'Tap Add exercise to search for your first one.';
+      if (!card.querySelector('[data-ds-add]')) {
+        var b = document.createElement('div'); b.setAttribute('data-ds-add', '1'); b.setAttribute('role', 'button');
+        b.style.cssText = 'margin:16px auto 0;height:46px;padding:0 22px;border-radius:999px;display:inline-flex;align-items:center;gap:8px;cursor:pointer;background:#111114;color:#ffffff;font-size:15px;font-weight:700;letter-spacing:-0.2px;box-shadow:0 10px 22px -10px rgba(17,17,20,0.55);';
+        b.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1.5v11M1.5 7h11" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round"/></svg><span>Add exercise</span>';
+        b.addEventListener('click', function () {
+          var inp = document.querySelector('input[placeholder="Search to add an exercise"]');
+          if (inp) { try { inp.scrollIntoView({ block: 'center' }); } catch (e) {} inp.focus(); }
+        });
+        card.appendChild(b);
+      }
+      break;
+    }
     return !!root.querySelector('input[placeholder="Name your workout"]');
   });
 })();
@@ -199,17 +232,19 @@ ${CATALOG_PAGE}
       var d = D(), self = this;
       // the design is frozen on a demo date ("Sep 12", Squat / Push-up already logged): real today, nothing logged yet
       if (!this.__dsInit) { this.__dsInit = true; this.state = Object.assign({}, this.state, { picked: {}, sel: d.today.d }); }
-      // search works like Train's Practice Exercises: names that START with what was typed first, then names that merely contain it
-      // (each A-Z), real catalog only. The design filters this.LIB in order, so the order is set here before it renders.
-      var q = ((this.state.query || '') + '').trim().toLowerCase();
-      var names = d.catalog.map(function (c) { return c.name; });
-      if (q) {
-        var starts = names.filter(function (n) { return n.toLowerCase().indexOf(q) === 0; });
-        var has = names.filter(function (n) { return n.toLowerCase().indexOf(q) > 0; });
-        var az = function (x, y) { return x < y ? -1 : x > y ? 1 : 0; };
-        this.LIB = starts.sort(az).concat(has.sort(az)).concat(names.filter(function (n) { return n.toLowerCase().indexOf(q) < 0; }));
-      } else this.LIB = names;
+      // search = the shared rule (starts with first, then a later word starts with it, never mid-word). The design filters this.LIB
+      // with its own "contains", so LIB is set to the matching names (best first) for this one render, then put back.
+      var allNames = d.catalog.map(function (c) { return c.name; });
+      this.LIB = libFor(this, allNames);
+      window.__athltSearching = !!String((this.state && this.state.query) || '').trim();
       var v = super.renderVals(), s = this.state, t = d.today;
+      this.LIB = allNames;
+      // the recent / popular chips (DOM pass) pick through this
+      window.__athltPick = function (n) { self.setState(function (st) {
+        var p = Object.assign({}, st.picked);
+        if (p[n]) delete p[n]; else p[n] = defaultsFor(self, n);
+        return { picked: p, query: '' };
+      }); };
       var first = new Date(t.y, t.m, 1).getDay(), dim = new Date(t.y, t.m + 1, 0).getDate();
       var dayName = function (n) { return n === t.d ? 'Today' : n === t.d - 1 ? 'Yesterday' : WD[new Date(t.y, t.m, n).getDay()] + ', ' + MON[t.m] + ' ' + n; };
       v.day = dayName(s.sel);
@@ -243,7 +278,62 @@ export const LOG_SESSION_DOM_JS = String.raw`
       if (/^save session$/i.test(l.text)) { var c = window.__athltCurrent; if (c && c.items.length) window.__dsPost({ type: 'save', dayNum: c.dayNum, year: c.year, month: c.month, items: c.items }); return; }
       if (/Train\.dc\.html/.test(l.href)) window.__dsPost({ type: 'back' });
     };
-    return !!root.querySelector('input[placeholder="Search exercises"]');
+    var D = window.__athltData;
+    var inp = root.querySelector('input[placeholder="Search exercises"]');
+    if (D && inp) {
+      // 1. a clear title and helper line (it was just "What Did You Do?" over a search bar)
+      var divs = root.querySelectorAll('div'), title = null;
+      for (var i = 0; i < divs.length; i++) {
+        if (divs[i].children.length === 0 && /^(What Did You Do\?|Log an exercise)$/i.test((divs[i].textContent || '').trim())) { title = divs[i]; break; }
+      }
+      if (title && title.firstChild && title.firstChild.nodeType === 3 && title.firstChild.nodeValue !== 'Log an exercise') title.firstChild.nodeValue = 'Log an exercise';
+      var row = title ? title.parentElement : null;
+      if (row && !document.getElementById('__ds_help')) {
+        var h = document.createElement('div'); h.id = '__ds_help';
+        h.style.cssText = 'padding:6px 22px 0;font-size:14px;font-weight:500;line-height:1.35;color:#5f5f69;';
+        h.textContent = 'Pick an exercise you did, then set the sets and reps. It counts toward your muscle ranks.';
+        row.parentNode.insertBefore(h, row.nextSibling);
+      }
+      // 2. tappable recent + popular exercises under the search box (hidden while searching)
+      var wrap = inp.parentElement && inp.parentElement.parentElement;
+      if (wrap) {
+        var cur = window.__athltCurrent, picked = {};
+        ((cur && cur.items) || []).forEach(function (x) { picked[x.n] = 1; });
+        var recent = (D.recent || []).slice(0, 6);
+        var popular = (D.popular || []).filter(function (n) { return recent.indexOf(n) < 0; }).slice(0, 8);
+        var sig = recent.join('|') + '#' + popular.join('|') + '#' + Object.keys(picked).sort().join('|');
+        var box = document.getElementById('__ds_chips');
+        if (!box) {
+          box = document.createElement('div'); box.id = '__ds_chips'; box.style.cssText = 'padding:16px 14px 0;';
+          wrap.parentNode.insertBefore(box, wrap.nextSibling);
+        }
+        box.style.display = window.__athltSearching ? 'none' : 'block';
+        if (box.getAttribute('data-sig') !== sig) {
+          box.setAttribute('data-sig', sig);
+          box.textContent = '';
+          var section = function (label, names) {
+            if (!names.length) return;
+            var l = document.createElement('div');
+            l.style.cssText = 'padding:0 8px 8px;font-size:12px;font-weight:700;letter-spacing:0.7px;text-transform:uppercase;color:#8e8e96;';
+            l.textContent = label; box.appendChild(l);
+            var r = document.createElement('div'); r.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;padding:0 4px 16px;';
+            names.forEach(function (n) {
+              var on = !!picked[n], c = document.createElement('div');
+              c.setAttribute('data-ds-chip', n); c.setAttribute('role', 'button');
+              c.style.cssText = 'height:38px;padding:0 15px;border-radius:999px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:600;letter-spacing:-0.2px;'
+                + (on ? 'background:#111114;color:#ffffff;box-shadow:0 6px 14px -8px rgba(17,17,20,0.6);' : 'background:#ffffff;color:#111114;box-shadow:inset 0 1px 0 rgba(255,255,255,1),0 6px 14px -8px rgba(40,50,90,0.3),0 1px 2px -1px rgba(40,50,90,0.1);');
+              c.textContent = (on ? '\u2713 ' : '+ ') + n;
+              c.addEventListener('click', function () { if (window.__athltPick) window.__athltPick(n); });
+              r.appendChild(c);
+            });
+            box.appendChild(r);
+          };
+          section('Recent', recent);
+          section('Popular', popular);
+        }
+      }
+    }
+    return !!inp;
   });
   // after a successful save the app plays the design's own result: the page shows a short "Saved" toast, then native moves on
   window.__dsSaved = function () {
@@ -371,7 +461,24 @@ export function myWorkoutsData(
   };
 }
 
-export function logSessionData(catalog: CatalogItem[], now: Date) {
-  return { catalog, today: { y: now.getFullYear(), m: now.getMonth(), d: now.getDate() } };
+/** Exercises most people start with; the Log a session screen shows them under the search box (names from the catalog). */
+export const POPULAR_IDS = ['squat', 'pushup', 'pullup', 'shoulderPress', 'deadlift', 'lunge', 'curl', 'barbellRow', 'chestPress', 'lateralRaise'];
+
+/** Catalog names of the exercises most recently logged (newest first, no repeats). */
+export function recentNames(sessions: { exerciseId: string; ts: number }[], catalog: CatalogItem[], limit = 6): string[] {
+  const byId = new Map(catalog.map(c => [c.id, c.name]));
+  const out: string[] = [];
+  for (const e of [...sessions].sort((a, b) => b.ts - a.ts)) {
+    const n = byId.get(e.exerciseId);
+    if (n && !out.includes(n)) out.push(n);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+export function logSessionData(catalog: CatalogItem[], now: Date, recent: string[] = []) {
+  const names = new Set(catalog.map(c => c.name));
+  const popular = POPULAR_IDS.map(id => catalog.find(c => c.id === id)?.name).filter((n): n is string => !!n && names.has(n));
+  return { catalog, today: { y: now.getFullYear(), m: now.getMonth(), d: now.getDate() }, recent, popular };
 }
 export function createWorkoutData(catalog: CatalogItem[]) { return { catalog }; }

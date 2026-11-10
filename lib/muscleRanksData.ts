@@ -88,7 +88,7 @@ export interface MuscleRanksPayload {
     has: boolean; atTop: boolean; tier: Tier | null; label: string; next: string;
     pct: number;            // overall progress toward `next` AFTER today, 0-100 (one decimal)
     pctLabel: string;       // header text: only the newest number, e.g. "9.0%"
-    gained: string;         // how much the OVERALL rank % went up this workout, number text without "+"/"%"
+    gained: string;         // the OVERALL gain: the exact sum of the muscle row percentages, number text without "+"/"%"
     beforePct: string;      // the OVERALL rank % before this workout (one decimal, no "%"); the page shows "before -> after"
     rankedUp: boolean;      // the overall rank itself went up (the % then starts over in the new rank)
     hi: string; lo: string; ink: string;
@@ -156,15 +156,17 @@ export function buildMuscleRanksPayload(opts: {
 
   // Rows: EVERY muscle that gained today (most-worked first). If nothing gained (e.g. a rep-counter move that moves no
   // bar), the two most-worked muscles are shown at +0.0% so the card is never empty.
-  const gainers = worked.filter(w => r1(gainOf(w.muscle)) > 0);
-  const shown = gainers.length ? gainers : worked.slice(0, 2);
+  // A muscle with no art (forearms / lower back / calves are tracked but not surfaced in the app yet) gets no row.
+  const hasArt = (m: Muscle) => iconFor(m) !== null;
+  const gainers = worked.filter(w => r1(gainOf(w.muscle)) > 0 && hasArt(w.muscle));
+  const withArt = worked.filter(w => hasArt(w.muscle));
+  const shown = gainers.length ? gainers : (withArt.length ? withArt : worked).slice(0, 2);
   // A row never reads more than +99.9%: a muscle that goes from nothing to Bronze in one workout has moved more than one
   // bar, which would look broken next to a 100% bar.
   const gains = shown.map(w => Math.min(99.9, r1(gainOf(w.muscle))));
-  // HEADER GAIN = how far the OVERALL rank % moved this workout ("+1.2% to Gold"): the change in
-  // computeOverallStanding().progress (rank-ups count as tier*100 + %), one number, never a sum of the rows.
-  const overallAbs = (s: StandingLike | null) => (s ? tierIndex(s.tier) * 100 + s.progress * 100 : 0);
-  const overallGain = r1(Math.max(0, overallAbs(standingAfter) - overallAbs(standingBefore)));
+  // The overall gain shown under "Bronze -> Silver" is the SUM of the muscle rows on this page (each row is a 0.1 step, so the
+  // sum is done in whole tenths and can never drift from what the rows add up to).
+  const rowsSumTenths = gains.reduce((a, g) => a + Math.round(g * 10), 0);
 
   // Header: ONLY the newest number (no "old -> new").
   const pctLabel = standingAfter?.atTop ? 'Top rank' : `${fmt1(afterAvg)}%`;
@@ -193,7 +195,7 @@ export function buildMuscleRanksPayload(opts: {
       next: nextLabel,
       pct: afterAvg,
       pctLabel,
-      gained: fmt1(overallGain),
+      gained: fmt1(rowsSumTenths / 10), // = the sum of the rows below, exactly
       beforePct: fmt1(standingBefore && !standingBefore.atTop ? standingBefore.progress * 100 : 0),
       rankedUp,
       hi: meta.hi, lo: meta.lo, ink: meta.ink,

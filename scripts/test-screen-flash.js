@@ -36,7 +36,7 @@ const check = (name, ok, detail) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${na
 
   // 3. the screen wires it correctly
   const fc = fs.readFileSync(path.join(__dirname, '..', 'app', 'formcheck.tsx'), 'utf8');
-  check('the flash button is only rendered for the FRONT camera', /\{camPosition === 'front' && \(\s*<LiquidGlassButton\s+onPress=\{\(\) => setFlashOn/.test(fc));
+  check('the flash button is ALWAYS on screen (it was hidden unless the front camera was detected); on the back camera a tap flips to the front camera and turns the light on', /onPress=\{handleFlash\}/.test(fc) && !/camPosition === 'front' && \(\s*<LiquidGlassButton\s+onPress=\{\(\) => setFlashOn/.test(fc) && /const handleFlash = useCallback\(\(\) => \{\s*if \(camPosition === 'front'\) \{ setFlashOn\(v => !v\); return; \}\s*setFlashOn\(true\);\s*void flipCamera\(\)/.test(fc));
   check('the white frame shows only while flashOn AND the front camera is on, under every control', /const flashActive = flashOn && camPosition === 'front'/.test(fc) && /\{flashActive && \(\s*<View pointerEvents="none"/.test(fc) && fc.indexOf('{flashActive && (') < fc.indexOf('style={[s.topBar'));
   check('the camera position comes from the native camera state event', /if \(mounted && e\.position\) setCamPosition\(e\.position\)/.test(fc));
   check('brightness is restored when the flash goes off and when the screen closes', /useEffect\(\(\) => \{ void setFlashBrightness\(flashActive\); \}, \[flashActive\]\)/.test(fc) && /useEffect\(\(\) => \(\) => \{ void setFlashBrightness\(false\); \}, \[\]\)/.test(fc));

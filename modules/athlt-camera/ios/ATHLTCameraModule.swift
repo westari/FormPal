@@ -147,6 +147,7 @@ public class ATHLTCameraModule: Module {
                 if let mov = self.movieOutput, mov.isRecording { mov.stopRecording() }
 
                 self.videoOutput?.setSampleBufferDelegate(nil, queue: nil)
+                DispatchQueue.main.async { UIApplication.shared.isIdleTimerDisabled = false }
                 self.captureSession?.stopRunning()
                 self.captureSession  = nil
                 self.videoOutput     = nil
@@ -763,6 +764,8 @@ public class ATHLTCameraModule: Module {
 
         NSLog("[GymCamera] session configured (%@), running: %@",
               position == .front ? "front" : "back", session.isRunning ? "YES" : "NO")
+        // the screen must never dim or lock while the camera is open (the JS keep-awake alone was not enough)
+        DispatchQueue.main.async { UIApplication.shared.isIdleTimerDisabled = true }
         sendEvent("onCameraState", ["running": session.isRunning,
                                     "position": position == .front ? "front" : "back"])
         promise.resolve(["success": session.isRunning])

@@ -25,7 +25,7 @@ const history = [e('shoulderPress', 40, 36, NOW - 9 * DAY), e('squat', 40, 36, N
 const today = [e('shoulderPress', 30, 28, NOW), e('curl', 20, 18, NOW), e('lunge', 24, 20, NOW)];
 const build = (all, prior) => {
   const tiersAfter = sessionLog.computeMuscleTiers(all), tiersBefore = sessionLog.computeMuscleTiers(prior);
-  return data.buildMuscleRanksPayload({ entries: today, tiersBefore, tiersAfter, standingBefore: MTM.computeOverallStanding(tiersBefore), standingAfter: MTM.computeOverallStanding(tiersAfter), labels: MTM.MUSCLE_LABELS, iconFor: () => null, emblem: null });
+  return data.buildMuscleRanksPayload({ entries: today, tiersBefore, tiersAfter, standingBefore: MTM.computeOverallStanding(tiersBefore), standingAfter: MTM.computeOverallStanding(tiersAfter), labels: MTM.MUSCLE_LABELS, iconFor: () => 'data:image/png;base64,AA==', emblem: null });
 };
 // OLD: stored log already contains today's write, prior = older than today
 const stored = [...history, ...today];

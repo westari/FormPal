@@ -6,7 +6,7 @@
  * Manually logged exercises are saved to the session log (no camera, no form judged); every one of them counts toward
  * muscle ranks because the catalog is the same one lib/sessionLog.computeMuscleTiers reads.
  */
-import React, { useCallback, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import type { WebView } from 'react-native-webview';
 import { EXERCISE_CATALOG } from '../constants/exercises';
@@ -14,7 +14,7 @@ import { getAllSessions, appendSessions, computeMuscleTiers } from '../lib/sessi
 import { computeOverallStanding } from '../components/MuscleTierMap';
 import DesignScreen, { type DesignMessage } from '../components/DesignScreen';
 import {
-  buildCatalog, logSessionBeforeJs, logSessionData, athltSetDataJs, entriesFromPage,
+  buildCatalog, logSessionBeforeJs, logSessionData, athltSetDataJs, entriesFromPage, recentNames,
 } from '../lib/designScreens';
 
 const SOURCE = require('../assets/app screens/logsessionv2.html');
@@ -25,7 +25,10 @@ export default function LogSessionScreen() {
   const webRef = useRef<WebView>(null);
   const saving = useRef(false);
   const catalog = useMemo(() => buildCatalog(EXERCISE_CATALOG as any), []);
-  const dataJs = useMemo(() => athltSetDataJs(logSessionData(catalog, new Date())), [catalog]);
+  // the exercises logged most recently, shown as tappable chips under the search box (loaded once, pushed to the page)
+  const [recent, setRecent] = useState<string[]>([]);
+  useEffect(() => { void getAllSessions().then(all => setRecent(recentNames(all, catalog))).catch(() => {}); }, [catalog]);
+  const dataJs = useMemo(() => athltSetDataJs(logSessionData(catalog, new Date(), recent)), [catalog, recent]);
 
   const save = useCallback(async (msg: DesignMessage) => {
     if (saving.current) return; // one tap, one save

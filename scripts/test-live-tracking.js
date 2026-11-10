@@ -217,7 +217,10 @@ check('no false cue while METRIC lines keep flowing', (() => {
 {
   const fc = fs.readFileSync(path.join(__dirname, '..', 'app', 'formcheck.tsx'), 'utf8');
   const run = fs.readFileSync(path.join(__dirname, '..', 'app', 'workout', 'run.tsx'), 'utf8');
-  check('keep awake: the camera screen calls useKeepAwake()', /import \{ useKeepAwake \} from 'expo-keep-awake'/.test(fc) && /export default function FormCheckScreen\(\) \{[\s\S]{0,300}useKeepAwake\(\);/.test(fc));
+  const swift = fs.readFileSync(path.join(__dirname, '..', 'modules', 'athlt-camera', 'ios', 'ATHLTCameraModule.swift'), 'utf8');
+  const pkg = fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8');
+  check('keep awake: the camera screen calls useKeepAwake() and re-asserts the lock (mount, every 15s, on foreground)', fc.includes("useKeepAwake('formcheck')") && fc.includes('activateKeepAwakeAsync') && fc.includes('}, 15000)') && fc.includes("AppState.addEventListener('change'") && fc.includes('[AWAKE]'));
+  check('keep awake: the native camera also sets isIdleTimerDisabled (on start, off on stop) and expo-keep-awake is a declared dependency', swift.includes('isIdleTimerDisabled = true') && swift.includes('isIdleTimerDisabled = false') && pkg.includes('"expo-keep-awake"'));
   check('keep awake: the workout screen calls useKeepAwake()', /import \{ useKeepAwake \} from 'expo-keep-awake'/.test(run) && /export default function WorkoutRunScreen\(\) \{[\s\S]{0,300}useKeepAwake\(\);/.test(run));
   check('pill: label "Camera confidence" is OUTSIDE the glass, just above it (before the <GlassPanel>)', /<Text style=\{s\.meterLabel\}>Camera confidence<\/Text>\s*<GlassPanel radius=\{999\} style=\{s\.meterPill\}>/.test(fc) && !/Body tracking|Form detection/.test(fc));
   const num = +(fc.match(/meterNum:.*?fontSize: (\d+)/) || [])[1], trackW = +(fc.match(/meterTrack: \{ width: (\d+), height: (\d+)/) || [])[1], trackH = +(fc.match(/meterTrack: \{ width: \d+, height: (\d+)/) || [])[1];
@@ -297,5 +300,23 @@ check('no false cue while METRIC lines keep flowing', (() => {
   check('it reacts to the real trouble in that session (dips well below 100 at some point, recovers to above 90 later)', Math.min(...shown) <= 70 && Math.max(...shown.slice(Math.floor(shown.length / 2))) >= 90, 'min ' + Math.min(...shown));
 }
 
+// ── A frame hint and a check / X are never on screen together ────────────────────────────────────────────────
+{
+  const { isFrameHint, showVerdict, showFrameHint, JUDGED_QUIET_MS, NO_PERSON_CUE } = LT;
+  check('the frame hints are recognised', ['Step into frame', 'Move back', "Can't see arms", NO_PERSON_CUE].every(isFrameHint) && !isFrameHint('Press higher') && !isFrameHint('Too much swing') && !isFrameHint(null));
+  check('a counted rep gets NO check / X while a frame hint is up, or while no person is detected', !showVerdict('Step into frame', true) && !showVerdict(null, false) && !showVerdict("Can't see arms", true));
+  check('a counted rep gets its check / X when the camera sees the person (reasons like "Press higher" are not frame hints)', showVerdict(null, true) && showVerdict('Press higher', true) && showVerdict(null, undefined));
+  check('right after a judged rep the frame hint is hidden; later it can show again; other cues are never hidden', showFrameHint('Step into frame', 500) === null && showFrameHint('Step into frame', JUDGED_QUIET_MS + 1) === 'Step into frame' && showFrameHint('Press higher', 100) === 'Press higher');
+  // replay of a set: check shown whenever the frame hint is not, in every moment
+  let both = 0;
+  for (let t = 0; t < 20000; t += 100) {
+    const judgedAt = (Math.floor(t / 2500)) * 2500;                   // a rep is judged every 2.5s
+    const hint = (t % 7000) > 5500 ? 'Step into frame' : null;        // the person steps out of frame for 1.5s every 7s
+    const frame = showFrameHint(hint, t - judgedAt);
+    const verdict = showVerdict(hint, !hint);
+    if (frame && verdict) both++;
+  }
+  check('replay over 20s: the frame hint and a verdict are never both allowed at the same time', both === 0, String(both));
+}
 console.log(failed ? `\n${failed} FAILED` : '\nall passed');
 process.exit(failed ? 1 : 0);

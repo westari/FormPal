@@ -4327,7 +4327,10 @@ export function isRepCounterExercise(id: string): boolean {
     // half of its frames have a shoulder/elbow joint under 0.6 confidence; Vision's confidence for these joints sat at
     // 0.17-0.71 the whole time (typical indoor light), so a normal press could never pass, and the later presses only
     // counted when it happened to rise. The camera DID see the arms (the angle moved smoothly through every rep), so
-    // confidence alone no longer throws a rep away (1.0 = never). The other guards (movement, depth) still apply.
+    // confidence alone no longer throws a rep away (1.0 = never). A middle value was tried against the real logs and it
+    // cannot separate the two cases: the six real presses in the 11-10 log had 100/100/100/93/79% low-confidence frames,
+    // so ANY cap under 1.0 throws real presses away again. The next device log will print a [REP-QUALITY] line for every rep
+    // (entry-to-exit seconds, share of low-confidence frames) so a real cap / stray-rep rule can be set from numbers.
     d.repReliabilityMaxUnreliableFraction = 1.0;
     // The engine would not start counting until the resting reading was >= 63.7 (settleAnchorMinFraction 0.3), but this
     // user's rest reads 59-65 in the 11-08 and 11-10 logs (and 62-67 on 11-02), so "Go" came 10+ seconds late and the first

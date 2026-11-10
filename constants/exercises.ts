@@ -15,6 +15,7 @@
  * _exerciseIdsRegisteredWithNativeBridge check near EXERCISE_CATALOG below.
  */
 
+import { creditsFor } from './muscleWeights';
 import type { ExerciseType } from '../modules/athlt-camera/src/index';
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
@@ -1117,6 +1118,13 @@ export const EXERCISE_CATALOG = [
 // silent-squat-fallback discovered by accident. See the ExerciseType check
 // right below for the native-bridge half of this.
 export type ExerciseId = (typeof EXERCISE_CATALOG)[number]['id'];
+
+// Per-exercise muscle weights (constants/muscleWeights.ts, PLACEHOLDER numbers): main muscle 1.0, helpers lower. Applied once, here, so
+// every reader of `muscles` (the rank maths, the after-workout page, the Progress muscle map) sees the same weights.
+for (const def of EXERCISE_CATALOG as unknown as { id: string; muscles: unknown[] }[]) {
+  const credits = creditsFor(def.id);
+  if (credits) def.muscles = credits;
+}
 
 // Compile-time proof every catalog exercise is also registered with the
 // native camera bridge's ExerciseType union (modules/athlt-camera/src/

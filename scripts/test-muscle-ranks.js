@@ -136,8 +136,8 @@ for (const [name, sc] of Object.entries(SCENARIOS)) {
     const overallGain = r1(Math.max(0, ovAbs(sc.tiersAfter) - ovAbs(sc.tiersBefore))); // how far the OVERALL rank % moved this workout
     // header: ONLY the newest number
     check(`${name}: the header shows ONLY the newest % (${avgA}%), no "old -> new"`, p.rank.pctLabel === `${avgA.toFixed(1)}%` && !/→/.test(p.rank.pctLabel) && p.rank.pct === avgA, p.rank.pctLabel);
-    if (!sc.synthetic) check(`${name}: header gain = how far the OVERALL rank % moved this workout (+${overallGain.toFixed(1)}% to ${p.rank.next}), NOT a sum of the rows (${p.hits.map(h => h.gain).join(' + ')})`, Math.abs(parseFloat(p.rank.gained) - overallGain) <= 0.11, `${p.rank.gained} vs ${overallGain}`);
-    if (!sc.synthetic) check(`${name}: the header gain is a plain small number (< 100), never a +653% sum`, parseFloat(p.rank.gained) < 100, p.rank.gained);
+    if (!sc.synthetic) check(`${name}: "Overall +X%" is EXACTLY the sum of the muscle rows (${p.hits.map(h => h.gain).join(' + ')} = +${p.rank.gained}%)`, Math.round(parseFloat(p.rank.gained) * 10) === (p.hits.reduce((a, h) => a + Math.round(parseFloat(h.gain.replace(/[+%]/g, '')) * 10), 0)), `${p.rank.gained}`);
+    check(`${name}: the overall gain is never negative and has one decimal`, parseFloat(p.rank.gained) >= 0 && /^\d+\.\d$/.test(p.rank.gained), p.rank.gained);
     const rowsOk = p.hits.every((h, i) => Math.abs(parseFloat(h.gain.replace(/[+%]/g, '')) - r1(gain(worked[i].muscle))) <= 0.11);
     if (!sc.synthetic) check(`${name}: each ROW = that muscle's own progress after - before`, rowsOk);
     if (!sc.synthetic && sc.entries.some(e => e.reps > 0)) check(`${name}: a workout GIVES a gain (every shown muscle > +0.0%)`, p.hits.length > 0 && p.hits.every(h => parseFloat(h.gain.replace(/[+%]/g, '')) > 0), p.hits.map(h => h.gain).join(','));
@@ -155,8 +155,9 @@ for (const [name, sc] of Object.entries(SCENARIOS)) {
   const p = sc.payload;
   console.log(`  user report repro: ${p.rank.label} ${p.rank.pctLabel}  today +${p.rank.gained}%  rows=${p.hits.map(h => h.name + ' ' + h.gain).join(' | ')}`);
   check('REPORT: the tiers are what the report describes (shoulders already above the overall rank)', sc.tiersAfter.shoulders.tier === 'silver' && sc.standingAfter.tier === 'bronze', `${sc.tiersAfter.shoulders.tier} vs overall ${sc.standingAfter.tier}`);
-  check('REPORT FIXED: Shoulders and Triceps show a real gain (they were +0.0%)', p.hits.length === 2 && p.hits.every(h => parseFloat(h.gain.replace(/[+%]/g, '')) > 0), p.hits.map(h => h.gain).join(' '));
-  check('REPORT FIXED: the header gain is above zero too (it was +0.0%)', parseFloat(p.rank.gained) > 0, p.rank.gained);
+  { const g = (n) => { const h = p.hits.find(x => x.name === n); return h ? parseFloat(h.gain.replace(/[+%]/g, '')) : null; };
+    check('REPORT FIXED: Shoulders and Triceps both show a real gain', g('Shoulders') > 0 && g('Triceps') > 0, p.hits.map(h => h.name + ' ' + h.gain).join(' ')); }
+  check('REPORT FIXED: the overall gain is above zero and equals the sum of the rows', parseFloat(p.rank.gained) > 0 && Math.round(parseFloat(p.rank.gained) * 10) === (p.hits.reduce((a, h) => a + Math.round(parseFloat(h.gain.replace(/[+%]/g, '')) * 10), 0)), p.rank.gained);
 }
 {
   // the user's rule: ONE header number = how far the OVERALL rank % went up (not a sum of the rows)
@@ -167,7 +168,7 @@ for (const [name, sc] of Object.entries(SCENARIOS)) {
     standingBefore: { tier: 'bronze', progress: 0.5, atTop: false }, standingAfter: { tier: 'bronze', progress: 0.512, atTop: false },
     labels: { shoulders: 'Shoulders', triceps: 'Triceps' }, iconFor: () => null, emblem: null,
   });
-  check(`HEADER: overall rank went 50.0% -> 51.2%, so it reads +${p.rank.gained}% to ${p.rank.next} (rows ${p.hits.map(h => h.gain).join(' and ')} keep their own %)`, p.rank.gained === '1.2' && p.rank.next === 'Silver' && p.hits.length === 2, p.rank.gained);
+  check(`HEADER: "Overall +${p.rank.gained}%" is the sum of the rows (${p.hits.map(h => h.gain).join(' + ')}), not the % the overall bar moved`, Math.round(parseFloat(p.rank.gained) * 10) === (p.hits.reduce((a, h) => a + Math.round(parseFloat(h.gain.replace(/[+%]/g, '')) * 10), 0)) && p.rank.next === 'Silver' && p.hits.length === 2, p.rank.gained);
 }
 {
   // below Bronze counts ALL the training, capped at 99% until Bronze is real
@@ -184,8 +185,32 @@ for (const [name, sc] of Object.entries(SCENARIOS)) {
   const bic3 = cross.payload.hits.find(h => h.name === 'Biceps');
   check('crossing Bronze today gives a positive gain (not a drop from 99% to ~0) and never reads over +99.9%', !!cross.tiersAfter.biceps && bic3 && parseFloat(bic3.gain) > 0 && parseFloat(bic3.gain) <= 99.9, bic3 && bic3.gain);
 }
+// ── Per-exercise muscle weights (PLACEHOLDERS, constants/muscleWeights.ts): main muscle most, helpers much less ─────────
+{
+  const W = require('../constants/muscleWeights.ts');
+  const ids = EXERCISE_CATALOG.map((e) => e.id);
+  check('every exercise in the catalogue has a weight table (' + ids.length + ' exercises)', ids.every((id) => W.MUSCLE_WEIGHTS[id]), ids.filter((id) => !W.MUSCLE_WEIGHTS[id]).join());
+  check('each table has its main muscle at 1.0 and every helper strictly lower, all above 0', ids.every((id) => { const v = Object.values(W.MUSCLE_WEIGHTS[id]); return v.filter((x) => x === 1).length >= 1 && v.every((x) => x > 0 && x <= 1); }));
+  check('the catalogue really uses the table (what the rank maths reads)', ids.every((id) => { const def = EXERCISE_CATALOG.find((e) => e.id === id); const got = {}; for (const c of def.muscles) { const p = require('../constants/exercises.ts').muscleCreditParts(c); got[p.muscle] = p.weight; } return JSON.stringify(Object.keys(got).sort()) === JSON.stringify(Object.keys(W.MUSCLE_WEIGHTS[id]).sort()) && Object.keys(got).every((k) => got[k] === W.MUSCLE_WEIGHTS[id][k]); }));
+  check('the weights are labelled as placeholders', W.MUSCLE_WEIGHTS_ARE_PLACEHOLDERS === true && /PLACEHOLDER/.test(fs.readFileSync(path.join(ROOT, 'constants', 'muscleWeights.ts'), 'utf8')));
+  const credit = (id, mu) => { const def = EXERCISE_CATALOG.find((e) => e.id === id); const c = def.muscles.map((x) => require('../constants/exercises.ts').muscleCreditParts(x)).find((x) => x.muscle === mu); return c ? c.weight : 0; };
+  check('push-up: chest highest, triceps less, shoulders less, biceps none', credit('pushup', 'chest') === 1 && credit('pushup', 'triceps') < 1 && credit('pushup', 'shoulders') < 1 && credit('pushup', 'triceps') > 0 && credit('pushup', 'biceps') === 0, ['chest', 'triceps', 'shoulders', 'biceps'].map((m) => m + ' ' + credit('pushup', m)).join(', '));
+  // through the real rank maths: a push-up workout, a fresh user (all bronze, so the rows are comparable)
+  const pu = build([], [entry('pushup', 20, 18, 0)]);
+  const g = (n) => { const h = pu.payload.hits.find((x) => x.name === n); return h ? parseFloat(h.gain.replace(/[+%]/g, '')) : 0; };
+  console.log('      push-up x20 through the rank maths: ' + pu.payload.hits.map((h) => h.name + ' ' + h.gain).join(' | ') + '   Overall +' + pu.payload.rank.gained + '%');
+  check('push-up workout: Chest gains the most, then Triceps, then Shoulders; Biceps has no row', g('Chest') > g('Triceps') && g('Triceps') > g('Shoulders') && g('Shoulders') > 0 && !pu.payload.hits.some((h) => h.name === 'Biceps'), pu.payload.hits.map((h) => h.name + ' ' + h.gain).join(' '));
+  check('the rows no longer all show the same number', new Set(pu.payload.hits.map((h) => h.gain)).size === pu.payload.hits.length, pu.payload.hits.map((h) => h.gain).join(' '));
+  const sp = build([], [entry('shoulderPress', 30, 28, 0)]);
+  const gs = (n) => { const h = sp.payload.hits.find((x) => x.name === n); return h ? parseFloat(h.gain.replace(/[+%]/g, '')) : 0; };
+  check('shoulder press: Shoulders gain clearly more than Triceps (placeholder weights 1.0 vs 0.4)', gs('Shoulders') > gs('Triceps') && gs('Triceps') > 0, sp.payload.hits.map((h) => h.name + ' ' + h.gain).join(' '));
+  for (const [nm, sc] of Object.entries({ 'push-up': pu, 'shoulder press': sp })) {
+    const sum = sc.payload.hits.reduce((a, h) => a + Math.round(parseFloat(h.gain.replace(/[+%]/g, '')) * 10), 0);
+    check(nm + ': Overall +X% is exactly the sum of the rows', Math.round(parseFloat(sc.payload.rank.gained) * 10) === sum, sc.payload.hits.map((h) => h.gain).join(' + ') + ' = ' + sc.payload.rank.gained);
+  }
+}
 const A = SCENARIOS['shoulders+triceps (bronze)'].payload, B = SCENARIOS['legs (squat+lunge)'].payload;
-check('rows follow the workout: shoulders workout -> Shoulders/Triceps', A.hits.map(h => h.name).sort().join() === 'Shoulders,Triceps', A.hits.map(h => h.name).join());
+check('rows follow the workout: shoulders workout -> Shoulders/Triceps (traps has no art, so no row)', A.hits.map(h => h.name).sort().join() === 'Shoulders,Triceps', A.hits.map(h => h.name).join());
 check('rows follow the workout: legs workout -> different muscles', !B.hits.some(h => /Shoulders|Triceps/.test(h.name)) && B.hits.length >= 2, B.hits.map(h => h.name).join());
 check('rows carry the real Flaticon art', A.hits.every(h => h.icon && h.icon.startsWith('data:image/png;base64,')));
 {
@@ -207,7 +232,7 @@ check('rows carry the real Flaticon art', A.hits.every(h => h.icon && h.icon.sta
   }
   const base = [...colored].map(id => id.replace(/-\d+$/, ''));
   const regionIds = (mu) => paths.MUSCLE_MAP_REGIONS[mu].ids;
-  const expected = new Set([...regionIds('shoulders'), ...regionIds('triceps')]);
+  const expected = new Set([...regionIds('shoulders'), ...regionIds('triceps'), ...regionIds('traps')]); // traps are a helper muscle of the press (placeholder weight 0.15), so they are worked too
   check('body map colours the worked muscles (shoulders + triceps fragments)', [...expected].every(id => colored.has(id)), `${colored.size}/${expected.size}`);
   check('body map colours NOTHING else (quads/chest/etc stay neutral)', [...colored].every(id => expected.has(id)), [...new Set(base)].join());
   check('body map has a clear (~1.6px) outline around both figures', (svg.match(/stroke="#454B5C" stroke-width="6"/g) || []).length === 2);
@@ -258,9 +283,9 @@ check('rows carry the real Flaticon art', A.hits.every(h => h.icon && h.icon.sta
 
     const txt = atReady.text.replace(/\s+/g, ' ');
     check(`${name}: header shows real rank + % + where it is heading`, txt.includes(p.rank.label) && txt.includes(p.rank.pctLabel), `${p.rank.label} ${p.rank.pctLabel}`);
-    const overallText = p.rank.atTop ? 'Top rank reached' : p.rank.rankedUp ? `Overall rank Ranked up to ${p.rank.label} ${p.rank.pctLabel}` : `Overall rank ${p.rank.beforePct}% → ${p.rank.pctLabel}`;
-    check(`${name}: "${p.rank.label} -> ${p.rank.next}" row + "${overallText}"`, txt.includes(p.rank.next) && txt.includes(overallText), txt.match(/Overall rank[^A-Z]*/)?.[0]);
-    check(`${name}: each muscle's own progress is labelled as such`, /Each muscle's own progress/i.test(txt) || p.hits.length === 0, '');
+    const overallText = p.rank.atTop ? 'Top rank reached' : `Overall +${p.rank.gained}%`;
+    check(`${name}: "${p.rank.label} -> ${p.rank.next}" row + "${overallText}"`, txt.includes(p.rank.next) && txt.includes(overallText), txt.match(/Overall[^A-Z]*/)?.[0]);
+    check(`${name}: the "Each muscle's own progress" text and the old "Overall rank x% → y%" line are GONE`, !/own progress/i.test(txt) && !/Overall rank/i.test(txt) && !/→ ?\d/.test(txt.replace(p.rank.label + ' → ' + p.rank.next, '')), txt.match(/Overall[^A-Z]*/)?.[0]);
     check(`${name}: muscle rows = ${p.hits.map(h => h.name + ' ' + h.gain).join(', ') || 'none'}`,
       p.hits.every(h => txt.includes(h.name) && txt.includes(h.gain)));
     const placeholders = ['Bronze II', 'Bronze III', '+14% today', 'Quads', 'Glutes', '+6%', '+5%', '72%'];
@@ -288,7 +313,7 @@ check('rows carry the real Flaticon art', A.hits.every(h => h.icon && h.icon.sta
       });
       check(`${name}: ${p.hits.length} muscles -> ${lay.n} rows on screen (every muscle that gained), ${lay.rows} compact line(s), no overlaps`, lay.n === p.hits.length && lay.overlaps === 0, JSON.stringify(lay));
       check(`${name}: the card stays the same size (${lay.cardH}px, design 360) and the rows sit inside it below the body map`, lay.cardH === 360 && lay.bottom <= lay.cardPx && lay.top >= lay.imgBottom - 2, JSON.stringify(lay));
-      check(`${name}: the overall rank is ONE line ("Overall rank ${p.rank.beforePct}% → ${p.rank.pctLabel}"), not the ${p.hits.length}-row sum`, txt.includes(`Overall rank ${p.rank.beforePct}% → ${p.rank.pctLabel}`) && !/% today/.test(txt) && /Each muscle's own progress/i.test(txt), txt.match(/Overall rank[^A-Z]*/)?.[0]);
+      check(`${name}: the overall is ONE line ("Overall +${p.rank.gained}%") and nothing else sums the rows`, txt.includes(`Overall +${p.rank.gained}%`) && !/% today/.test(txt) && !/own progress/i.test(txt), txt.match(/Overall[^A-Z]*/)?.[0]);
     }
     check(`${name}: real body map image, decoded, visible`, atReady.imgSrc === p.bodyMap && atReady.imgW > 0 && atReady.imgVis === 'visible');
     check(`${name}: layout identical at reveal and 2.2s later (nothing shifts)`, JSON.stringify(atReady.rects) === JSON.stringify(later.rects) && atReady.transform === later.transform);

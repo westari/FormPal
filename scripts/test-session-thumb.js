@@ -22,10 +22,16 @@ const check = (n, ok, d) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${d ? ' 
 let store = {};
 const AS = { __esModule: true, default: { getItem: async (k) => (k in store ? store[k] : null), setItem: async (k, v) => { store[k] = v; } } };
 const THUMBS = { getThumbnailAsync: async (uri) => ({ uri: 'thumb-of:' + uri }) };
+// every remembered clip file exists in this scenario; a path in GONE_FILES does not
+const GONE_FILES = new Set();
+class FakeFile { constructor(a, b) { this.uri = b ? String(a.uri || a) + '/' + b : String(a); } get exists() { return !GONE_FILES.has(this.uri) && !this.uri.startsWith('file:///doc/'); } copy() {} }
+class FakeDir { constructor(a, b) { this.uri = String(a) + '/' + b; } get exists() { return true; } create() {} }
+const FS = { File: FakeFile, Directory: FakeDir, Paths: { document: 'file:///doc' } };
 const orig = Module._load;
 Module._load = function (req) {
   if (req === '@react-native-async-storage/async-storage') return AS;
   if (req === 'expo-video-thumbnails') return THUMBS;
+  if (req === 'expo-file-system') return FS;
   return orig.apply(this, arguments);
 };
 const load = (file) => { delete require.cache[require.resolve(file)]; return require(file); };
@@ -63,5 +69,15 @@ async function scenario(label, mod) {
   store['formpal_video_log'] = JSON.stringify([{ uri: 'file:///late.mp4', ts: t - 1000 }]);
   const b = await mod.getSessionThumbnail(t, 1000, 0);
   check('a clip that is logged a moment AFTER the first lookup is found by the next one', a === null && b === 'thumb-of:file:///late.mp4', `${a} then ${b}`);
+  // a clip whose file is gone (temp folder emptied / reinstall) must give NO video, never a path the player turns black on
+  store = {};
+  const tg = Date.now();
+  store['formpal_video_log'] = JSON.stringify([{ uri: 'file:///gone.mov', ts: tg - 1000 }, { uri: 'file:///ok.mov', ts: tg - 3000 }]);
+  GONE_FILES.add('file:///gone.mov');
+  const sv = require(path.join(ROOT, 'lib', 'sessionVideo.ts'));
+  const skip = await sv.findSessionVideoUri(tg, 0);
+  GONE_FILES.add('file:///ok.mov');
+  const none = await sv.findSessionVideoUri(tg, 0);
+  check('a missing clip file is skipped (next clip used), and null when every clip is gone', skip === 'file:///ok.mov' && none === null, `${skip} / ${none}`);
   console.log(failed ? `${failed} FAILED` : 'ALL PASSED'); process.exit(failed ? 1 : 0);
 })();
