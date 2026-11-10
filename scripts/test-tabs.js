@@ -55,10 +55,19 @@ for (const f of [['app', '(tabs)', 'index.tsx'], ['app', '(tabs)', 'train.tsx'],
 const menu = read('components', 'PlusMenu.tsx');
 check('opening the + blurs the page behind (BlurView over the page), with NO background colour layer added', /<BlurView /.test(menu) && !/backgroundColor: 'rgba\(255/.test(menu.slice(0, menu.indexOf('const s = StyleSheet'))));
 const actions = [...menu.matchAll(/\{ id: '(\w+)',\s+label: '([^']+)',\s+symbol: ('[^']+'|null)/g)].map(m => `${m[1]}:${m[3] === 'null' ? 'orb' : 'glass'}`);
-check('actions: form check, analyze, start workout, log, and Cue', actions.join() === 'form:glass,analyze:glass,workout:glass,log:glass,cue:orb', actions.join());
+check('actions top to bottom: Cue, form check, log, start workout (Cue is not stuck at the bottom)', actions.join() === 'cue:orb,form:glass,log:glass,workout:glass', actions.join());
+check('"Analyze a Video" is gone from the menu', !/analyze/i.test(menu));
+const labels = [...menu.matchAll(/label: '([^']+)'/g)].map(m => m[1]);
+check('short clear names (no "Quick form check")', labels.join() === 'Ask Cue,Form check,Log session,Start workout' && labels.every(l => l.length <= 14), labels.join());
+check('menu labels are regular weight in the system font (no fontFamily, weight 400)', /label: \{[^}]*fontWeight: '400'/.test(menu) && !/label: \{[^}]*fontFamily/.test(menu));
+check('tapping outside fades the menu out smoothly (blur + actions animate back to 0 and are removed only when finished)', /else if \(mounted\)/.test(menu) && /toValue: 0, duration: CLOSE_MS/.test(menu) && /if \(finished\) setMounted\(false\)/.test(menu) && /onPress=\{onClose\}/.test(menu));
+const orb = read('components', 'CueOrb.tsx');
+check('the Cue orb in the menu animates like the other orbs (drifting glow + core, wobble, breathing, native driven)', (orb.match(/useDrift\(/g) || []).length >= 3 && /useNativeDriver: true/.test(orb) && !/useNativeDriver: false/.test(orb) && /CUE_ORB_ANIMATED_LAYERS/.test(orb) && require('../components/CueOrb.tsx').CUE_ORB_ANIMATED_LAYERS.length >= 4, String(require('../components/CueOrb.tsx').CUE_ORB_ANIMATED_LAYERS));
+check('tab labels use the Apple system font (no fontFamily) at the tab bar size 10pt medium', /label:\s+\{ fontSize: 10, fontWeight: '500', letterSpacing: 0\.12 \}/.test(bar) && !/\n  label:[^\n]*fontFamily/.test(bar));
+check('switching tabs cross-fades instead of cutting (animation fade, 220ms timing)', /animation: 'fade'/.test(layout) && /transitionSpec: \{ animation: 'timing', config: \{ duration: 220 \} \}/.test(layout));
 check('every action button is real Liquid Glass (LiquidGlassButton)', /<LiquidGlassButton[\s\S]*?onPress=\{\(\) => go\(a\.route\)\}/.test(menu));
 check('Cue is only its moving orb: no glass, no border, no background around it', /<CueOrb size=\{ORB\} \/>/.test(menu) && !/borderWidth|borderColor/.test(menu) && /orb:\s+\{ width: BTN, height: BTN, alignItems: 'center', justifyContent: 'center', overflow: 'visible' \}/.test(menu));
-check('the menu opens the same screens as before (exercise-picker, analyze-video, workout, log-session, cue)', ['/exercise-picker', '/analyze-video', '/workout', '/log-session', '/cue'].every(r => menu.includes(`route: '${r}'`)));
+check('the menu opens the real screens (exercise-picker, workout, log-session, cue)', ['/exercise-picker', '/workout', '/log-session', '/cue'].every(r => menu.includes(`route: '${r}'`)));
 check('the + turns into an x while the menu is open (rotates 45 degrees)', /outputRange: \['0deg', '45deg'\]/.test(bar));
 
 console.log(failed ? `\n${failed} FAILED` : '\nall passed');

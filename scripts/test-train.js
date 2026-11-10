@@ -191,8 +191,7 @@ async function openTab(browser, { width = 402, height = 874, insets = INS, datas
   check('View recap (yesterday) -> that workout\'s recap, by its timestamp', recap && recap.to === 'recap:' + at(1), JSON.stringify(recap));
   clear(); await tapEl(linkIn, { i: 3, re: 'Log a session' });
   check('Log a session (rest day) -> the real log screen', take().some(m => m.to === 'log'));
-  clear(); await tapEl(linkIn, { i: 6, re: 'Preview workout' });
-  check('Preview workout (tomorrow) -> a preview of THAT workout (its own id), not My Workouts', take().some(m => m.to === 'preview:w2'));
+  check('Tomorrow card has no Preview button (no preview design yet)', await p.evaluate(() => { const c = [...document.querySelectorAll('div[data-scroll]')].find(x => x.style.overflowX === 'auto' && x.children.length === 7).children[6]; return ![...c.querySelectorAll('a')].some(a => /Preview/i.test(a.innerText) && getComputedStyle(a).display !== 'none' && a.getBoundingClientRect().width > 0); }));
   const byText = (re) => [...document.querySelectorAll('a')].find(a => new RegExp(re).test(a.innerText));
   clear(); await tapEl(byText, '^Create workout');
   check('Create workout -> the real create screen', take().some(m => m.to === 'create'));

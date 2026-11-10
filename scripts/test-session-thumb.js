@@ -10,6 +10,7 @@
  *   REPRODUCES with the old file (git HEAD version), then proves the fix.
  */
 require('./lib/ts-node-loader.js')();
+global.__DEV__ = false;
 const Module = require('module');
 const path = require('path');
 const fs = require('fs');
@@ -21,21 +22,29 @@ const check = (n, ok, d) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${d ? ' 
 
 let store = {};
 const AS = { __esModule: true, default: { getItem: async (k) => (k in store ? store[k] : null), setItem: async (k, v) => { store[k] = v; } } };
-const THUMBS = { getThumbnailAsync: async (uri) => ({ uri: 'thumb-of:' + uri }) };
+const THUMBS = { getThumbnailAsync: async (uri) => { fsx.add('thumb-of:' + uri); return { uri: 'thumb-of:' + uri }; } };
+// the phone's files: every clip the log names exists; a copy makes the new path exist
+const fsx = new Set(['file:///old.mp4', 'file:///new.mp4', 'file:///late.mp4']);
+const joinP = (...p) => p.map(x => (typeof x === 'string' ? x : x.uri)).join('/').replace(/\/+/g, '/');
+class FileX { constructor(...p) { this.uri = p.length === 1 ? p[0] : joinP(...p); } get exists() { return fsx.has(this.uri); } copy(d) { fsx.add(d.uri); } }
+class DirX { constructor(...p) { this.uri = joinP(...p); } get exists() { return fsx.has(this.uri); } create() { fsx.add(this.uri); } }
 const orig = Module._load;
 Module._load = function (req) {
+  if (req === 'expo-file-system') return { File: FileX, Directory: DirX, Paths: { document: { uri: '/doc' } } };
   if (req === '@react-native-async-storage/async-storage') return AS;
   if (req === 'expo-video-thumbnails') return THUMBS;
   return orig.apply(this, arguments);
 };
 const load = (file) => { delete require.cache[require.resolve(file)]; return require(file); };
 
-async function scenario(label, mod) {
+// the old code returns the picture of the clip itself; the new one returns the saved picture in the permanent folder
+const isFrame = (v, name, isNew) => isNew ? new RegExp('formpal_videos/\\d+_1000\\.jpg$').test(String(v)) : v === 'thumb-of:file:///' + name + '.mp4';
+async function scenario(label, mod, isNew) {
   store = {};
   const t0 = Date.now() - 600000;                // an older workout, with its clip
   store['formpal_video_log'] = JSON.stringify([{ uri: 'file:///old.mp4', ts: t0 - 5000 }]);
   const old = await mod.getSessionThumbnail(t0, 1000, 0);   // Home opens at launch: the log is read now
-  check(`${label}: the older workout gets its frame`, old === 'thumb-of:file:///old.mp4', old);
+  check(`${label}: the older workout gets its frame`, isFrame(old, 'old', isNew), old);
   // the user does a workout: the set's clip is logged, then the workout finishes
   const tNew = Date.now();
   const log = JSON.parse(store['formpal_video_log']); log.push({ uri: 'file:///new.mp4', ts: tNew - 2000 });
@@ -50,18 +59,18 @@ async function scenario(label, mod) {
   fs.writeFileSync(path.join(dir, 'sessionVideo.ts'), execSync('git show f9b0e6c:lib/sessionVideo.ts', { cwd: ROOT, maxBuffer: 1 << 26 }).toString('utf8'));
   const oldMod = load(path.join(dir, 'sessionVideo.ts'));
   // the HEAD file may already be the fixed one if this ran after committing: detect by behaviour
-  const oldRes = await scenario('OLD', oldMod);
+  const oldRes = await scenario('OLD', oldMod, false);
   console.log(`      old code, newest workout thumbnail: ${oldRes}`);
   const mod = load(path.join(ROOT, 'lib', 'sessionVideo.ts'));
-  const res = await scenario('NEW', mod);
+  const res = await scenario('NEW', mod, true);
   check('REPRODUCED with the old code: the newest workout has no thumbnail (flat icon)', oldRes === null || process.env.SKIP_OLD === '1', String(oldRes));
-  check('FIXED: the newest workout gets its own clip\'s frame even though the log was read earlier', res === 'thumb-of:file:///new.mp4', String(res));
+  check('FIXED: the newest workout gets its own clip\'s frame even though the log was read earlier', isFrame(res, 'new', true), String(res));
   // a lookup that found nothing is not remembered
   store = {};
   const t = Date.now();
   const a = await mod.getSessionThumbnail(t, 1000, 0);
   store['formpal_video_log'] = JSON.stringify([{ uri: 'file:///late.mp4', ts: t - 1000 }]);
   const b = await mod.getSessionThumbnail(t, 1000, 0);
-  check('a clip that is logged a moment AFTER the first lookup is found by the next one', a === null && b === 'thumb-of:file:///late.mp4', `${a} then ${b}`);
+  check('a clip that is logged a moment AFTER the first lookup is found by the next one', a === null && isFrame(b, 'late', true), `${a} then ${b}`);
   console.log(failed ? `${failed} FAILED` : 'ALL PASSED'); process.exit(failed ? 1 : 0);
 })();

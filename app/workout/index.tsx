@@ -22,7 +22,6 @@ import ScreenBackground from '../../components/ScreenBackground';
 import { usePlanStore } from '../../store/planStore';
 import { useWorkoutSessionStore } from '../../store/workoutSessionStore';
 import { FONT, W, Sp, R, Elev, Col } from '../../constants/theme';
-import { workoutMinutes } from '../../lib/trainData';
 import type { PlanProfile } from '../../types/plan';
 
 // TEMP, pre-auth: there's no real account/onboarding-profile flow feeding
@@ -95,19 +94,11 @@ export default function WorkoutOverviewScreen() {
   const router     = useRouter();
   const insets     = useSafeAreaInsets();
   const getNext    = usePlanStore(s => s.getNextWorkout);
-  const plan       = usePlanStore(s => s.plan);
-  const loadStore  = usePlanStore(s => s.loadFromStorage);
-  // ONE ?id=<workout id> path: the screen opens that exact workout. Two callers:
-  //  - My workouts: ?id=...            -> that workout, with its Start button (as before)
-  //  - Train's "Preview workout":      -> ?id=...&preview=1, a look at a later day's workout: no Start unless it is today's
-  // Without an id it is the next workout in the plan ("Today's Workout").
-  const { id, preview: previewParam } = useLocalSearchParams<{ id?: string; preview?: string }>();
-  const preview    = previewParam === '1';
-  React.useEffect(() => { if (id && !plan) void loadStore(); }, [id, plan, loadStore]);
+  // My workouts opens a specific workout (?id=...); anywhere else this is the next workout in the plan
+  const { id }     = useLocalSearchParams<{ id?: string }>();
   const createPlan = usePlanStore(s => s.createPlan);
   const startSess  = useWorkoutSessionStore(s => s.startWorkout);
-  const byId       = id ? (plan?.workouts.find(w => w.id === id) ?? null) : null;
-  const workout    = preview ? byId : (byId ?? getNext());
+  const workout    = (id ? usePlanStore.getState().plan?.workouts.find(w => w.id === id) : null) ?? getNext();
   const [creatingTestPlan, setCreatingTestPlan] = useState(false);
 
   // getNextWorkout is read once at mount (see workout's own selector above —
@@ -124,19 +115,6 @@ export default function WorkoutOverviewScreen() {
       setCreatingTestPlan(false);
     }
   };
-
-  if (!workout && preview) {
-    return (
-      <ScreenBackground>
-        <View style={[s.center, { paddingTop: insets.top }]}>
-          <Text style={s.noWorkout}>{plan ? 'That workout is not in your plan any more.' : 'Loading…'}</Text>
-          <Pressable onPress={() => router.back()} style={s.backBtn}>
-            <Text style={s.backBtnTxt}>Go back</Text>
-          </Pressable>
-        </View>
-      </ScreenBackground>
-    );
-  }
 
   if (!workout) {
     // Not really an edge case right now — see TEST_PROFILE's comment above.
@@ -162,10 +140,7 @@ export default function WorkoutOverviewScreen() {
     );
   }
 
-  // a preview uses the workout's real sets and rest (the same minutes Train shows on the card)
-  const estimatedSec = preview ? workoutMinutes(workout) * 60 : estimateWorkoutTime(workout.exercises.map(e => e.restSeconds));
-  const totalSets    = workout.exercises.reduce((a, e) => a + e.targetSets, 0);
-  const isCurrent    = !!plan && plan.workouts[plan.currentWorkoutIndex]?.id === workout.id;
+  const estimatedSec = estimateWorkoutTime(workout.exercises.map(e => e.restSeconds));
   const exCount      = workout.exercises.length;
 
   function handleStart() {
@@ -186,7 +161,7 @@ export default function WorkoutOverviewScreen() {
             style={{ width: 18, height: 18 }}
           />
         </Pressable>
-        <Text style={s.topLabel}>{preview ? 'Workout preview' : id ? 'Workout' : "Today's Workout"}</Text>
+        <Text style={s.topLabel}>Today's Workout</Text>
         <View style={{ width: 36 }} />
       </View>
 
@@ -204,7 +179,6 @@ export default function WorkoutOverviewScreen() {
         <View style={s.statsRow}>
           <StatChip icon="dumbbell.fill"  label={`${exCount} exercise${exCount === 1 ? '' : 's'}`} />
           <StatChip icon="clock.fill"     label={fmtTime(estimatedSec)} />
-          {preview && <StatChip icon="number" label={`${totalSets} sets`} />}
         </View>
 
         {/* Rationale */}
@@ -234,8 +208,7 @@ export default function WorkoutOverviewScreen() {
         </View>
       </ScrollView>
 
-      {/* Start button — fixed bottom (a preview of a later day has nothing to start yet) */}
-      {(!preview || isCurrent) && (
+      {/* Start button — fixed bottom */}
       <View style={[s.footer, { paddingBottom: Math.max(insets.bottom + 16, 32) }]}>
         <Pressable style={s.startBtn} onPress={handleStart}>
           <Text style={s.startBtnTxt}>Start Workout</Text>
@@ -248,7 +221,6 @@ export default function WorkoutOverviewScreen() {
           />
         </Pressable>
       </View>
-      )}
     </ScreenBackground>
   );
 }

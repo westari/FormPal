@@ -35,6 +35,7 @@ import { buildProgressData, type ProgressData } from '../../lib/progressData';
 import { tierDataUri } from '../../lib/rankImages';
 import { muscleIconUri } from '../../lib/muscleIcons';
 import { workoutFrame, workoutFallbackIcon } from '../../lib/workoutThumbs';
+import { openRecap } from '../../lib/openRecap';
 import { listProgressPhotos, addProgressPhoto, type PhotoPose } from '../../lib/progressPhotos';
 import { uploadProgressPhotoToCloud } from '../../lib/formpalSync';
 import * as ImagePicker from 'expo-image-picker';
@@ -164,7 +165,7 @@ export default function ProgressScreen() {
         break;
       }
       case 'openWorkout':
-        if (msg.ts != null) router.push({ pathname: '/recap', params: { ts: String(msg.ts) } } as any);
+        if (msg.ts != null) openRecap(router, msg.ts);
         break;
       case 'share': {
         const r = dataRef.current?.rank;

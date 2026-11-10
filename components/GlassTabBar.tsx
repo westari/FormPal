@@ -67,7 +67,7 @@ export default function GlassTabBar({ state, navigation }: BottomTabBarProps) {
                 <Pressable key={t.name} onPress={() => press(t.name)} style={s.itemHit} accessibilityRole="button" accessibilityLabel={t.label} accessibilityState={{ selected: on }}>
                   <View style={[s.item, on && s.itemOn]}>
                     <SymbolView name={(on ? t.on : t.off) as any} size={22} tintColor={on ? INK : MUTED} type="monochrome" style={s.icon} />
-                    <Text style={[s.label, { color: on ? INK : MUTED, fontWeight: on ? '700' : '600' }]} numberOfLines={1}>{t.label}</Text>
+                    <Text style={[s.label, { color: on ? INK : MUTED }]} numberOfLines={1}>{t.label}</Text>
                   </View>
                 </Pressable>
               );
@@ -100,6 +100,7 @@ const s = StyleSheet.create({
   item:    { flex: 1, borderRadius: (TAB_BAR_H - 12) / 2, alignItems: 'center', justifyContent: 'center', gap: 3 },
   itemOn:  { backgroundColor: 'rgba(17,17,20,0.08)' },
   icon:    { width: 24, height: 24 },
-  label:   { fontSize: 10.5, letterSpacing: -0.1 },
+  // Apple's own tab bar label: the system font (SF Pro, picked by iOS because no fontFamily is set), 10pt, medium, +0.12 tracking
+  label:   { fontSize: 10, fontWeight: '500', letterSpacing: 0.12 },
   plus:    { width: PLUS_SIZE, height: PLUS_SIZE, alignItems: 'center', justifyContent: 'center' },
 });

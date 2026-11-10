@@ -136,9 +136,23 @@ const AS = { __esModule: true, default: { getItem: async (k) => (mem.has(k) ? me
     await p.touchscreen.tap(rm.x, rm.y); await p.waitForTimeout(300);
     check('Train: the design\'s own remove control drops the row', !/Bicep Curl/.test(await sheetRows(p)), (await sheetRows(p)).slice(0, 100));
     const add = await p.evaluate(() => { const sh = [...document.querySelectorAll('div')].find(d => d.style.maxHeight === '620px'); const b = [...sh.querySelectorAll('div,a')].filter(e => /^Add exercise$/.test((e.innerText || '').trim()))[0]; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
-    await p.touchscreen.tap(add.x, add.y); await p.waitForTimeout(300);
+    await p.touchscreen.tap(add.x, add.y); await p.waitForTimeout(700);
+    const picker = () => p.evaluate(() => { const e = document.getElementById('__trpick'); return e ? { open: e.style.display === 'block', rows: [...e.querySelectorAll('[data-pick]')].map(r => r.getAttribute('data-pick')), none: /No exercises match/.test(e.innerText) } : null; });
+    const pk0 = await picker();
+    check('Train: "Add exercise" opens a picker (adds nothing yet)', pk0 && pk0.open && pk0.rows.length === 12 && !/Bodyweight Squat 3 × 10/.test(await sheetRows(p)), JSON.stringify(pk0 && pk0.rows.slice(0, 3)));
+    await p.fill('#__trpick input', 'lung'); await p.waitForTimeout(200);
+    const pk1 = await picker();
+    const want = pe.addableExercises().map(r => r[0]).filter(n => !['Push-up', 'Shoulder Press', 'Pull-up'].includes(n));
+    const rank = require('../lib/trainData').rankExercises(pe.addableExercises().filter(r => !['Push-up', 'Shoulder Press', 'Pull-up'].includes(r[0])), 'lung', 12).map(r => r[0]);
+    check('Train: picker search uses the SAME ranking as Practice Exercises (starts-with first, then contains)', pk1.rows.length > 0 && pk1.rows.join() === rank.join(), pk1.rows.join(' | '));
+    await p.fill('#__trpick input', 'zzzzq'); await p.waitForTimeout(200);
+    check('Train: picker with no match says so', (await picker()).none);
+    await p.fill('#__trpick input', 'bodyweight squat'); await p.waitForTimeout(200);
+    const pt = await p.evaluate(() => { const r = document.querySelector('#__trpick [data-pick]').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, n: document.querySelector('#__trpick [data-pick]').getAttribute('data-pick') }; });
+    await p.touchscreen.tap(pt.x, pt.y); await p.waitForTimeout(700);
     const after = await sheetRows(p);
-    check('Train: "Add exercise" adds a real catalogue exercise (Bodyweight Squat 3 × 10)', /Bodyweight Squat 3 × 10/.test(after), after.slice(0, 130));
+    check('Train: only the tapped exercise is added (and the picker closes)', after.includes(pt.n) && !(await picker()).open && (after.match(/\d × \d+/g) || []).length === 4, pt.n + ' / ' + after.slice(0, 130));
+    
     await closeSheet(); await p.waitForTimeout(900);
     const saves = msgs.filter(m => m.type === 'saveEdit');
     console.log('      posted:', JSON.stringify(saves));

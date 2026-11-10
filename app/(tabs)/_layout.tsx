@@ -13,7 +13,8 @@ export default function TabLayout() {
   return (
     <Tabs
       tabBar={(props) => <GlassTabBar {...props} />}
-      screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: '#eeeef1' } }}
+      // switching tabs cross-fades (it used to cut straight to the other page)
+      screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: '#eeeef1' }, animation: 'fade', transitionSpec: { animation: 'timing', config: { duration: 220 } } }}
     >
       <Tabs.Screen name="index" />
       <Tabs.Screen name="train" />

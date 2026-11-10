@@ -32,6 +32,7 @@ import { loadPlan } from '../../lib/planStorage';
 import { getAllSessions, calcStreak, groupIntoWorkouts, scoredSessions, computeMuscleTiers, type SessionEntry } from '../../lib/sessionLog';
 import { primaryMuscle } from '../../lib/progressData';
 import { workoutFrame, workoutFallbackIcon } from '../../lib/workoutThumbs';
+import { openRecap } from '../../lib/openRecap';
 import type { Plan } from '../../types/plan';
 import { DC_VIEWPORT_JS, DC_NO_ZOOM_JS, DC_SETTLE_JS } from '../../lib/dcWebviewHelpers';
 import { askCue } from '../../lib/cueApi';
@@ -573,7 +574,7 @@ export default function HomeScreen() {
           if (msg.type === 'start') { router.push('/workout' as any); return; }
           if (msg.type === 'cue') { router.push('/cue' as any); return; }
           if (msg.type === 'progress') { router.push('/(tabs)/progress' as any); return; }
-          if (msg.type === 'recap' && msg.ts != null) { router.push({ pathname: '/recap', params: { ts: String(msg.ts) } } as any); return; }
+          if (msg.type === 'recap' && msg.ts != null) { openRecap(router, msg.ts); return; }
           if (msg.type === 'homeCueSend' && msg.text) { void handleHomeCueSend(msg.text); return; }
           if (msg.type === 'saveEdit' && msg.wid && msg.rows) {
             // the Edit sheet closed with changes: save them to the plan, then refresh what this screen shows

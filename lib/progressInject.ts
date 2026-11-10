@@ -65,7 +65,16 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
     el.textContent = text;
     return el.offsetWidth || (String(text).length * 7.4 + 2 * PILL_PAD);
   }
+  // Walking a curve point by point costs about 80ms on a phone, and every render (opening ANY screen of this page
+  // re-renders it) asked again for the same unchanged line: that was the freeze when the Muscle Map opened. One line, one walk.
+  var sampleMemo = { d: null, out: [] };
   function sampleCurve(d) {
+    if (sampleMemo.d === d) return sampleMemo.out;
+    var res = sampleCurveRaw(d);
+    sampleMemo = { d: d, out: res };
+    return res;
+  }
+  function sampleCurveRaw(d) {
     var NS = 'http://www.w3.org/2000/svg', out = [];
     try {
       var sv = document.createElementNS(NS, 'svg'), pa = document.createElementNS(NS, 'path');
@@ -84,6 +93,14 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
     var smp = lineD ? sampleCurve(lineD) : [];
     for (var i = 0; i < smp.length; i++) if (smp[i][0] >= lo && smp[i][0] <= hi && smp[i][1] < minY) minY = smp[i][1];
     return { left: cx.toFixed(1) + 'px', top: Math.min(dotY - 12, minY - 10).toFixed(1) + 'px' };
+  }
+  // The tapped workout row dims at once, so the tap is answered in the same frame while the next screen gets ready.
+  function tapFeedback(e) {
+    try {
+      var el = e && e.currentTarget; if (!el || !el.style) return;
+      el.style.setProperty('opacity', '0.55', 'important');
+      setTimeout(function () { el.style.removeProperty('opacity'); }, 900);
+    } catch (x) {}
   }
   function tipLeft(x) { return Math.max(24, Math.min(76, (GUT + x) / 326 * 100)).toFixed(1) + '%'; }
   function pillStyle(sel) {
@@ -160,7 +177,7 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
       if (s.wYear == null && s.wMonth === 8 && s.wDay === 12) { wm = t.m; wd = t.d; } // design's hard-coded "today"
       var isToday = wy === t.y && wm === t.m && wd === t.d;
       var typed = s.wIn;
-      var canSubmit = !!typed || !!last;
+      var canSubmit = !!typed && parseFloat(typed) > 0; // nothing typed, nothing to submit (it used to fall back to the last weight)
 
       var monthList = [];
       for (var k = 5; k >= 0; k--) { var md = new Date(t.y, t.m - k, 1); monthList.push({ y: md.getFullYear(), m: md.getMonth() }); }
@@ -179,8 +196,8 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
           var n = todayParts();
           self.setState({ weigh: true, wIn: '', dateOpen: false, wYear: n.y, wMonth: n.m, wDay: n.d });
         },
-        wInShow: typed || (last ? fmt(last.w) : '0'),
-        wInColor: typed ? '#111114' : '#c4c4cc',
+        wInShow: typed || '', // empty until you type; the page draws a blinking cursor in it
+        wInColor: '#111114',
         subBg: canSubmit ? '#111114' : '#a9a9b0',
         subFg: canSubmit ? '#ffffff' : '#d8d8de',
         dateLabel: isToday ? 'Today' : MON[wm] + ' ' + wd,
@@ -206,17 +223,30 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
         })(),
         saveWeigh: function (e) {
           e.preventDefault();
-          var v = parseFloat(typed || (last ? String(last.w) : ''));
+          if (window.__athltDone) return; // the "weight logged" moment is already showing
+          var v = parseFloat(typed || '');
           if (!(v > 0) || v > 1500) return;
           v = Math.round(v * 10) / 10;
           var key = keyOf(wy, wm, wd);
           var d = D();
+          // "since last time" = the newest weigh-in before this date (none: nothing to compare)
+          var before = (d.weight || []).filter(function (x) { return x.d < key; });
+          var prev = before.length ? before[before.length - 1] : null;
+          var hadAny = (d.weight || []).filter(function (x) { return x.d !== key; }).length > 0;
           d.weight = (d.weight || []).filter(function (x) { return x.d !== key; })
             .concat([{ d: key, w: v }]).sort(function (a, b) { return a.d < b.d ? -1 : 1; });
           post({ type: 'logWeight', dateKey: key, weightLb: v });
-          // Close + redraw in the same render: the chart above reads d.weight.
-          self.setState({ weigh: false, logged: true, wIn: '', dateOpen: false });
-          if (window.__athltToast) window.__athltToast('Logged ' + fmt(v) + ' lb');
+          // The graph updates behind; a short "weight logged" moment shows the new number and the change, then the sheet
+          // closes onto the updated graph.
+          window.__athltDone = { v: v, delta: prev ? Math.round((v - prev.w) * 10) / 10 : null, first: !hadAny };
+          var finish = function () {
+            if (!window.__athltDone) return;
+            window.__athltDone = null;
+            self.setState({ weigh: false, logged: true, wIn: '', dateOpen: false });
+          };
+          window.__athltDoneEnd = finish;
+          self.setState({ wDoneAt: Date.now() });
+          setTimeout(finish, 2100);
         },
       };
       for (var key2 in out) base[key2] = out[key2];
@@ -285,11 +315,11 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
       var wk = d.workouts || [];
       v.recent = wk.slice(0, 8).map(function (w) {
         return { name: w.name, form: w.form + ' form', formPct: w.form,
-          open: function (e) { if (e && e.preventDefault) e.preventDefault(); post({ type: 'openWorkout', ts: w.ts }); } };
+          open: function (e) { if (e && e.preventDefault) e.preventDefault(); tapFeedback(e); post({ type: 'openWorkout', ts: w.ts }); } };
       });
       v.history = wk.map(function (w) {
         return { name: w.name, when: w.when, form: w.form, len: '',
-          open: function (e) { if (e && e.preventDefault) e.preventDefault(); post({ type: 'openWorkout', ts: w.ts }); } };
+          open: function (e) { if (e && e.preventDefault) e.preventDefault(); tapFeedback(e); post({ type: 'openWorkout', ts: w.ts }); } };
       });
 
       // ── Personal bests ──
@@ -388,6 +418,18 @@ export const PROGRESS_DOM_JS = String.raw`
     // The page's own markup shows raw template text ("{{ rankName }}") until its logic renders. Nothing
     // is painted until the pass below has seen real content and marks <html data-pready>; the bundle
     // replaces <html> while unpacking, so every fresh document starts hidden again.
+    // the blinking cursor in the empty weight field (a pseudo-element, which the global animation:none above does not reach)
+    + 'div[style*="z-index: 60"] div[style*="font-size: 52px"]::after{content:"";display:inline-block;width:3px;height:46px;margin-left:3px;border-radius:2px;background:#111114;vertical-align:-6px;animation:pg-blink 1.05s steps(1) infinite;}'
+    + '@keyframes pg-blink{0%,49%{opacity:1}50%,100%{opacity:0}}'
+    // the "weight logged" moment (these entrances are allowed to animate)
+    + '@keyframes pg-lg-in{from{opacity:0}to{opacity:1}}@keyframes pg-lg-pop{0%{transform:scale(.5);opacity:0}60%{transform:scale(1.08);opacity:1}100%{transform:scale(1);opacity:1}}'
+    + '@keyframes pg-lg-up{from{transform:translateY(14px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes pg-lg-draw{from{stroke-dashoffset:30}to{stroke-dashoffset:0}}'
+    + '#dc-root #__athlt_logged{animation:pg-lg-in 240ms ease-out both!important;}'
+    + '#dc-root #__athlt_logged .lg-c{animation:pg-lg-pop 480ms cubic-bezier(.2,.9,.3,1.2) 120ms both!important;}'
+    + '#dc-root #__athlt_logged .lg-p{stroke-dasharray:30;animation:pg-lg-draw 360ms ease-out 380ms both!important;}'
+    + '#dc-root #__athlt_logged .lg-1{animation:pg-lg-up 420ms cubic-bezier(.22,1,.36,1) 260ms both!important;}'
+    + '#dc-root #__athlt_logged .lg-2{animation:pg-lg-up 420ms cubic-bezier(.22,1,.36,1) 360ms both!important;}'
+    + '#dc-root #__athlt_logged .lg-3{animation:pg-lg-up 420ms cubic-bezier(.22,1,.36,1) 460ms both!important;}'
     + 'html:not([data-pready]) body{visibility:hidden!important;}';
 
   function ensureCss() {
@@ -399,7 +441,7 @@ export const PROGRESS_DOM_JS = String.raw`
     s.textContent = CSS;
     host.appendChild(s);
   }
-  var lastS = -1;
+  var lastS = -1, lastVh = 0;
   function fit() {
     var root = document.getElementById('dc-root');
     var vh = window.innerHeight;
@@ -409,8 +451,12 @@ export const PROGRESS_DOM_JS = String.raw`
       lastS = S;
       root.style.setProperty('transform', 'scale(' + S + ')', 'important');
     }
-    document.body.style.setProperty('height', vh + 'px', 'important');
-    document.documentElement.style.setProperty('height', vh + 'px', 'important');
+    // (writing the same height again still makes the browser lay the whole page out again, on every pass)
+    if (lastVh !== vh || !document.body.style.height) {
+      lastVh = vh;
+      document.body.style.setProperty('height', vh + 'px', 'important');
+      document.documentElement.style.setProperty('height', vh + 'px', 'important');
+    }
     return true;
   }
 
@@ -525,6 +571,45 @@ export const PROGRESS_DOM_JS = String.raw`
         tray.style.setProperty('padding-bottom', (tray.__pb0 + tb).toFixed(1) + 'px', 'important');
       }
     }
+    // Log weight sheet: the title, the small "Last: N lb" under the field, and the "weight logged" moment
+    if (sheet) {
+      var ttl = leafWithText('Confirm your weight');
+      if (ttl) setText(ttl, "Enter today's weight");
+      var num = sheet.querySelector('div[style*="font-size: 52px"]');
+      var numRow = num && num.parentElement;
+      var lastEl = document.getElementById('__athlt_wlast');
+      var wl = (d.weight || []).length ? d.weight[d.weight.length - 1] : null;
+      var lastTxt = wl ? 'Last: ' + (Math.round(wl.w * 10) / 10) + ' lb' : '';
+      if (numRow && lastTxt) {
+        if (!lastEl) {
+          lastEl = document.createElement('div');
+          lastEl.id = '__athlt_wlast';
+          lastEl.style.cssText = 'text-align:center;padding-top:8px;font-size:14px;font-weight:500;color:#8e8e96;';
+        }
+        if (lastEl.previousElementSibling !== numRow) numRow.insertAdjacentElement('afterend', lastEl);
+        setText(lastEl, lastTxt);
+      } else if (lastEl) lastEl.remove();
+    } else {
+      var lastGone = document.getElementById('__athlt_wlast'); if (lastGone) lastGone.remove();
+    }
+    var dn = window.__athltDone, lg = document.getElementById('__athlt_logged');
+    if (dn && sheet) {
+      if (!lg) {
+        lg = document.createElement('div');
+        lg.id = '__athlt_logged';
+        lg.style.cssText = 'position:absolute;inset:0;z-index:90;background:#ffffff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 30px 60px;text-align:center;';
+        var good = dn.delta == null ? '' : dn.delta === 0 ? 'Same as last time' : (dn.delta < 0 ? 'Down ' : 'Up ') + Math.abs(dn.delta) + ' lb since last time';
+        if (dn.first) good = 'Your first weigh-in';
+        lg.innerHTML = '<div class="lg-c" style="width:92px;height:92px;border-radius:50%;background:#111114;display:flex;align-items:center;justify-content:center;line-height:0;box-shadow:0 16px 34px -14px rgba(17,17,20,0.55);">'
+          + '<svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path class="lg-p" d="M5 12.8 10 17.6 19 7.4"></path></svg></div>'
+          + '<div class="lg-1" style="padding-top:26px;font-size:17px;font-weight:600;color:#6e6e77;letter-spacing:-0.3px;">Weight logged</div>'
+          + '<div class="lg-2" style="padding-top:6px;font-size:58px;font-weight:700;letter-spacing:-2px;color:#111114;font-variant-numeric:tabular-nums;line-height:1.05;">' + (Math.round(dn.v * 10) / 10) + '<span style="font-size:24px;letter-spacing:-0.4px;padding-left:7px;">lb</span></div>'
+          + (good ? '<div class="lg-3" style="margin-top:16px;height:36px;padding:0 16px;border-radius:999px;background:#f1f1f4;display:flex;align-items:center;font-size:14.5px;font-weight:600;color:#111114;">' + good + '</div>' : '');
+        lg.addEventListener('click', function () { if (window.__athltDoneEnd) window.__athltDoneEnd(); });
+        root.appendChild(lg);
+      }
+    } else if (lg) lg.remove();
+
     // Date picker: the month chips are a horizontally scrolling row whose last chip is cut off.
     // Make them share the row evenly so every month fits with no scrolling.
     if (sheet) {
@@ -837,6 +922,23 @@ export const PROGRESS_DOM_JS = String.raw`
     var cmpSlots = root.querySelectorAll('div[style*="aspect-ratio: 3 / 4"][style*="border-radius: 20px"]');
     if (cmpSlots[0]) setPhoto(cmpSlots[0], pv.cmpA);
     if (cmpSlots[1]) setPhoto(cmpSlots[1], pv.cmpB);
+    // An empty compare slot: the design's own picture there is a blurry, off-centre icon with a plus in the corner. It shows
+    // the same centred black plus as an empty tile in All photos instead.
+    var cmpPhotos = [pv.cmpA, pv.cmpB];
+    for (var cp = 0; cp < cmpSlots.length; cp++) {
+      var cslot = cmpSlots[cp], cmine = cslot.querySelector(':scope > [data-athlt-plus]'), cempty = !(cmpPhotos[cp] && cmpPhotos[cp].thumb);
+      if (cempty && !cmine) {
+        for (var ck = 0; ck < cslot.children.length; ck++) cslot.children[ck].style.setProperty('display', 'none', 'important');
+        cmine = document.createElement('div');
+        cmine.setAttribute('data-athlt-plus', '1');
+        cmine.style.cssText = 'width:26px;height:26px;border-radius:50%;background:#111114;display:flex;align-items:center;justify-content:center;line-height:0;';
+        cmine.innerHTML = '<svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round"></path></svg>';
+        cslot.appendChild(cmine);
+      } else if (!cempty && cmine) {
+        cmine.remove();
+        for (var cq = 0; cq < cslot.children.length; cq++) cslot.children[cq].style.removeProperty('display');
+      }
+    }
     var gridTiles = root.querySelectorAll('div[style*="aspect-ratio: 3 / 4"][style*="border-radius: 16px"]');
     for (var gt = 0; gt < gridTiles.length; gt++) {
       setPhoto(gridTiles[gt], pv.grid[gt] || null);

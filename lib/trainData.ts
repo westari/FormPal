@@ -35,6 +35,7 @@ export interface TrainData {
   lib: [string, string][];                       // Practice Exercises: [name, "Quads · Glutes"]
   libIds: Record<string, string>;                // name -> exercise id (what Check form opens)
   myWorkouts: { name: string; meta: string }[];  // the My Workouts rail (up to 3 cards)
+  libSets: Record<string, string>;               // exercise name -> its real default "3 × 10" (what the Add exercise picker adds)
   extra: [string, string][];                     // what the Edit sheet's "Add exercise" offers (real catalogue, real defaults)
 }
 
@@ -125,7 +126,7 @@ export function buildTrainData(
     } else if (i === 6) {
       if (tomorrowW) {
         moves[tomorrowW.splitLabel] = moves[tomorrowW.splitLabel] ?? plannedRows(tomorrowW);
-        days.push({ short: SHORT[date.getDay()], name: tomorrowW.splitLabel, meta: plannedMeta(tomorrowW), href: `tr:preview:${tomorrowW.id}`, restHref: 'tr:none', rows: plannedRows(tomorrowW), wid: tomorrowW.id });
+        days.push({ short: SHORT[date.getDay()], name: tomorrowW.splitLabel, meta: plannedMeta(tomorrowW), href: 'tr:none', restHref: 'tr:none', rows: plannedRows(tomorrowW), wid: tomorrowW.id });
       } else {
         days.push({ short: SHORT[date.getDay()], name: 'Rest day', meta: 'Recover for ' + LONG[addDays(date, 1).getDay()], rest: true, href: 'tr:none', restHref: 'tr:none', rows: [] });
       }
@@ -139,7 +140,22 @@ export function buildTrainData(
   const { lib, libIds } = practiceLibrary();
   return {
     insets, streak: calcStreak(sessions), cal, days, moves, lib, libIds,
+    libSets: Object.fromEntries(addableExercises()),
     extra: addableExercises(),
     myWorkouts: workouts.slice(0, 3).map(w => ({ name: w.splitLabel, meta: plural(w.exercises.length, 'exercise') })), // short, like the design's "42 min" (a longer line wraps and moves everything below)
   };
+}
+
+/**
+ * Search over the REAL catalogue, one rule everywhere (Practice Exercises and the Edit sheet's Add exercise picker):
+ * names that START with what you typed first, then names that merely contain it, each group A-Z. Nothing typed -> the
+ * first `limit` of the list as it comes (most popular first). The page runs the identical code (train.tsx).
+ */
+export function rankExercises(lib: [string, string][], query: string, limit = 12): [string, string][] {
+  const q = (query || '').trim().toLowerCase();
+  if (!q) return lib.slice(0, limit);
+  const starts: [string, string][] = [], has: [string, string][] = [];
+  for (const x of lib) { const i = x[0].toLowerCase().indexOf(q); if (i === 0) starts.push(x); else if (i > 0) has.push(x); }
+  const az = (a: [string, string], b: [string, string]) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
+  return starts.sort(az).concat(has.sort(az)).slice(0, limit);
 }
