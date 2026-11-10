@@ -59,12 +59,44 @@ const tlog = (...a: unknown[]) => { if (__DEV__) console.log('[TRAIN]', ...a); }
 // keeps TODAY in slot 5 (and its own scroll code centres slot 5), so lib/trainData.ts builds a rolling week.
 export const TRAIN_LOGIC_EXT = `function (Orig) {
   return class extends Orig {
+    // Tapping a day: the browser's own smooth scroll (runs on the compositor), instead of the design's script that
+    // wrote scrollLeft on every frame (a layout pass per frame on the phone). Same destination, same card centred.
+    goTo(i) {
+      var el = this.rail, kid = el && el.children[i];
+      if (!kid) return;
+      var to = kid.offsetLeft - (el.clientWidth - kid.offsetWidth) / 2;
+      var self = this;
+      this.sliding = true;
+      this.setState({ dayIdx: i });
+      clearTimeout(this._slideT);
+      try { el.scrollTo({ left: to, behavior: 'smooth' }); } catch (e) { el.scrollLeft = to; }
+      this._slideT = setTimeout(function () { self.sliding = false; }, 600);
+    }
     renderVals() {
       var d = window.__athltData;
       if (d) { this.DAYS = d.days; this.CAL = d.cal; this.MOVES = d.moves; this.LIB = d.lib; this.EXTRA = d.extra; }
       var v = super.renderVals();
       if (!d) return v;
       var self = this;
+      // Practice Exercises search: real catalogue exercises only. Names that START with what you typed come first, then
+      // names that merely contain it (each group A-Z). The design's own filter also matched muscle names and its list.
+      var q = (this.state.query || '').trim().toLowerCase();
+      var saved = this.state.saved || {};
+      var rows = [];
+      if (q) {
+        var starts = [], has = [];
+        d.lib.forEach(function (x) { var n = x[0].toLowerCase(), i = n.indexOf(q); if (i === 0) starts.push(x); else if (i > 0) has.push(x); });
+        var az = function (a, b) { return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0; };
+        rows = starts.sort(az).concat(has.sort(az)).slice(0, 12);
+      }
+      v.library = rows.map(function (x, i) {
+        return {
+          name: x[0], muscle: x[1], line: i === 0 ? 'none' : '1px solid rgba(17,17,20,0.07)',
+          fill: saved[x[0]] ? '#ffffff' : 'none', chip: saved[x[0]] ? '#ff4d6d' : '#c3c3cc',
+          toggle: function () { self.setState(function (st) { var o = {}; for (var k in (st.saved || {})) o[k] = st.saved[k]; o[x[0]] = !o[x[0]]; return { saved: o }; }); }
+        };
+      });
+      v.noResults = !!q && rows.length === 0;
       if (window.__editBridge) window.__editBridge(this); // an Edit-sheet change is saved to the plan when the sheet closes
       v.streak = String(d.streak);
       v.noWorkouts = d.myWorkouts.length === 0;
@@ -95,6 +127,11 @@ const TRAIN_CSS = `
   /* a button with nothing to do (tomorrow's rest card, "Train anyway") is hidden until it has somewhere to go */
   a[href="tr:none"] { display: none !important; }
   [style*="hm-rise"], [style*="hm-bar"] { animation: none !important; }
+  /* smooth day jumps: every card on its own layer (nothing repaints while they slide), no paint-heavy transition on the calendar */
+  div[data-scroll] > div { will-change: transform; transform: translateZ(0); }
+  div[style*="height: 76px"] { transition: none !important; }
+  /* the streak pill is a button */
+  [data-train-streak] { cursor: pointer; }
   ${CUE_ORB_CSS}
   html:not([data-pready]) body { visibility: hidden !important; }
 `;
@@ -120,7 +157,12 @@ export const TRAIN_WEB_INJECT = `
     return null;
   }
   function fit() {
-    var root = canvas(), vh = window.innerHeight;
+    var root = canvas();
+    // The iOS keyboard shrinks the web view; the canvas must not follow it (that rescaled the whole screen smaller when
+    // the search box was tapped). Until the page is ready the scale follows the real height; once it is ready the height
+    // is locked, and only a taller one (never the keyboard's shorter one) changes it.
+    var vh = window.innerHeight || 0;
+    if (window.__trLock) vh = Math.max(window.__trLock, vh);
     if (!root || !vh) return false;
     var S = vh / 844;
     window.__dcCanvasScale = S;
@@ -195,6 +237,98 @@ export const TRAIN_WEB_INJECT = `
     return null;
   }
 
+  // BUG FOUND (no flame, no card picture): the design ships its images as data: URIs inside inline styles, and its runtime
+  // cuts a style at the ';' in "data:image/webp;base64,..." - so the browser is left with url("data:image/webp") and
+  // paints nothing (the bare design file has the same hole). The full images are still in the page's template text, so
+  // they are read from there and put back as blob: URLs (a blob URL has no ';').
+  var blobs = {}, tpl = null, T0 = Date.now();
+  function blobOf(uri) {
+    if (blobs[uri]) return blobs[uri];
+    try {
+      var bin = atob(uri.slice(uri.indexOf(',') + 1)), u8 = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      blobs[uri] = URL.createObjectURL(new Blob([u8], { type: uri.slice(5, uri.indexOf(';')) }));
+    } catch (e) { blobs[uri] = null; }
+    return blobs[uri];
+  }
+  // The markup (with the full images) lives in the file's <script type="__bundler/template"> tag until the design's
+  // runtime unpacks it. It is read at DOMContentLoaded (before the runtime runs); if that was missed, the page fetches
+  // its own file and reads it from there.
+  function setTemplateText(raw) {
+    if (!raw || window.__trTplText) return;
+    var t = raw;
+    try { var j = JSON.parse(raw); if (typeof j === 'string') t = j; } catch (e) {}
+    window.__trTplText = t;
+  }
+  function grabTemplate() {
+    if (window.__trTplText) return;
+    var el = document.querySelector('script[type="__bundler/template"]');
+    if (el && el.textContent) setTemplateText(el.textContent);
+  }
+  function fetchTemplate() {
+    if (window.__trTplFetching) return;
+    window.__trTplFetching = true;
+    try {
+      fetch(location.href).then(function (r) { return r.text(); }).then(function (h) {
+        var i = h.indexOf('<script type="__bundler/template"'); if (i < 0) return;
+        var s0 = h.indexOf('>', i) + 1, e0 = h.indexOf('</script>', s0);
+        setTemplateText(h.slice(s0, e0));
+      }).catch(function () {});
+    } catch (e) {}
+  }
+  try { document.addEventListener('DOMContentLoaded', grabTemplate, true); } catch (e) {}
+  grabTemplate();
+  function template() {
+    if (tpl) return tpl;
+    grabTemplate();
+    var t = window.__trTplText;
+    if (!t) { if (Date.now() - T0 > 2500) fetchTemplate(); return null; }
+    var URI = '(data:image/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=]+)';
+    var flame = new RegExp('aria-label="Streak"[^>]*?url[(]' + URI + '[)]').exec(t);
+    var photos = [], re = /style="([^"]*rotate[(]6deg[)][^"]*)"/g, m;
+    while ((m = re.exec(t))) { var u = new RegExp('url[(]' + URI + '[)]').exec(m[1]); if (u) photos.push(u[1]); }
+    if (!flame && !photos.length) return null;
+    tpl = { flame: flame ? flame[1] : null, photos: photos };
+    return tpl;
+  }
+  function images() {
+    var T = template();
+    if (!T) return false;
+    var ok = true;
+    if (T.flame) {
+      var f = blobOf(T.flame), masks = document.querySelectorAll('div[role="img"][aria-label="Streak"]');
+      for (var i = 0; i < masks.length; i++) {
+        var el = masks[i];
+        if (f && el.style.getPropertyValue('-webkit-mask-image').indexOf('blob:') < 0) {
+          el.style.setProperty('-webkit-mask-image', 'url(' + f + ')', 'important'); el.style.setProperty('mask-image', 'url(' + f + ')', 'important');
+          el.style.setProperty('-webkit-mask-size', 'contain', 'important'); el.style.setProperty('mask-size', 'contain', 'important');
+          el.style.setProperty('-webkit-mask-repeat', 'no-repeat', 'important'); el.style.setProperty('mask-repeat', 'no-repeat', 'important');
+          el.style.setProperty('-webkit-mask-position', 'center', 'important'); el.style.setProperty('mask-position', 'center', 'important');
+        }
+      }
+      // the header pill (flame + "N Day Streak") is a button
+      if (masks.length && masks[0].parentElement && !masks[0].parentElement.hasAttribute('data-train-streak')) masks[0].parentElement.setAttribute('data-train-streak', '1');
+      if (!masks.length || !f) ok = false;
+    }
+    var rail0 = rail(), mine = document.querySelectorAll('a[href^="Workout Preview"]');
+    var pics = document.querySelectorAll('div[style*="rotate(6deg)"]');
+    for (var k = 0; k < pics.length; k++) {
+      var uri = null, host = pics[k];
+      if (rail0 && rail0.contains(host)) uri = T.photos[0];
+      else for (var a = 0; a < mine.length; a++) if (mine[a].contains(host)) uri = T.photos[1 + a] || T.photos[0];
+      var b = uri ? blobOf(uri) : null;
+      if (!b) continue;
+      if (host.style.getPropertyValue('background-image').indexOf('blob:') < 0) {
+        host.style.setProperty('background-image', 'url(' + b + ')', 'important');
+        host.style.setProperty('background-size', 'auto 118%', 'important');
+        host.style.setProperty('background-position', 'center 18%', 'important');
+        host.style.setProperty('background-repeat', 'no-repeat', 'important');
+      }
+    }
+    if (!pics.length) ok = false;
+    return ok;
+  }
+
   // My Workouts: the design's three example cards show the real first three plan workouts.
   function myWorkouts() {
     var d = D();
@@ -241,6 +375,7 @@ export const TRAIN_WEB_INJECT = `
         window.__editWid = (d0 && idx >= 0 && d0.days[idx]) ? (d0.days[idx].wid || null) : null;
         return; // the design's own handler opens the sheet
       }
+      if (el.hasAttribute('data-train-streak')) { ev.preventDefault(); ev.stopPropagation(); post({ type: 'nav', to: 'streak' }); return; }
       if (el.getAttribute('aria-label') === 'Check form') {
         ev.preventDefault(); ev.stopPropagation();
         var id = exerciseIdFor(el);
@@ -271,7 +406,7 @@ export const TRAIN_WEB_INJECT = `
       + ' title=' + ((document.querySelector('[data-train-header] div') || {}).textContent || '').trim();
   }
 
-  var reported = false, lastAsk = 0, deb, done = { fit: false, header: false, sheets: false, my: false };
+  var reported = false, lastAsk = 0, deb, done = { fit: false, header: false, sheets: false, my: false, img: false };
   function setPageReady(on) {
     var h = document.documentElement;
     if (!h) return;
@@ -284,13 +419,14 @@ export const TRAIN_WEB_INJECT = `
     done.header = header();
     done.sheets = sheets();
     done.my = myWorkouts();
+    done.img = images();
     // Native's first push can land before this document exists (and be lost): the page asks until it has data.
     if (!D() && Date.now() - lastAsk > 700) { lastAsk = Date.now(); post({ type: 'needData' }); }
     var r = rail();
-    var parts = done.fit && done.header && done.sheets && done.my && !!D() && !!window.__athltLogicReady && !!r && r.scrollLeft > 0;
+    var parts = done.fit && done.header && done.sheets && done.my && done.img && !!D() && !!window.__athltLogicReady && !!r && r.scrollLeft > 0;
     var real = reported || !!window.__trainForce || (parts && (!window.__dcSettle || window.__dcSettle(200)));
     setPageReady(real);
-    if (!reported && real) { reported = true; post({ type: 'ready' }); post({ type: 'fingerprint', fp: fingerprint() }); }
+    if (!reported && real) { reported = true; window.__trLock = window.innerHeight; post({ type: 'ready' }); post({ type: 'fingerprint', fp: fingerprint() }); }
     if (parts && !real) { clearTimeout(deb); deb = setTimeout(tick, 90); }
   }
   function schedule() { ensureCss(); clearTimeout(deb); deb = setTimeout(tick, 60); }
@@ -319,6 +455,7 @@ export default function TrainScreen() {
   const webRef = useRef<WebView>(null);
   const [revealed, setRevealed] = useState(false);
   const dataJsRef = useRef<string | null>(null);
+  const streakRef = useRef(0);
   const revealTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pongAt = useRef(0);
   const loads = useRef(0);
@@ -376,6 +513,7 @@ export default function TrainScreen() {
       td = buildTrainData(null, sessions, ins);
     }
     dataJsRef.current = athltSetDataJs(td);
+    streakRef.current = td.streak;
     webRef.current?.injectJavaScript(dataJsRef.current);
     tlog('data pushed to page; today =', td.days[5]?.name, '| streak', td.streak, '| my workouts', td.myWorkouts.length);
   }, [insets.top, insets.bottom]);
@@ -434,6 +572,7 @@ export default function TrainScreen() {
         else if (to === 'create') router.push('/create-workout' as any);
         else if (to === 'log') router.push('/log-session' as any);
         else if (to === 'myworkouts') router.push('/my-workouts' as any);
+        else if (to === 'streak') router.push({ pathname: '/streak-screen', params: { count: String(streakRef.current), from: 'tab', dest: '/(tabs)/train' } } as any);
         else if (to.startsWith('recap:')) router.push({ pathname: '/recap', params: { ts: to.slice('recap:'.length) } } as any);
         return;
       }

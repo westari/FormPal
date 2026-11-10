@@ -49,13 +49,15 @@ function streakInject(count: number): string {
 
 export default function StreakScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ count?: string; dest?: string }>();
+  const params = useLocalSearchParams<{ count?: string; dest?: string; from?: string }>();
   const count = parseInt(params.count ?? '1', 10) || 1;
   const dest = params.dest ?? '/(tabs)/';
   const [ready, setReady] = useState(false);
   const webRef = useRef<WebView>(null);
 
   const advance = async () => {
+    // opened by tapping the streak pill on a tab: just go back (no progress-photo prompt, that is for finishing a workout)
+    if (params.from === 'tab') { router.back(); return; }
     const variant = await decideProgressPhotoVariant();
     if (variant) {
       router.replace({ pathname: '/progress-photo-screen', params: { variant, dest } } as any);

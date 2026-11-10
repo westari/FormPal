@@ -374,6 +374,9 @@ export const PROGRESS_DOM_JS = String.raw`
     + 'body{margin:0!important;padding:0!important;background:#eeeef1!important;overflow:hidden!important;}'
     + '#dc-root{position:relative!important;margin:0 auto!important;width:390px!important;transform-origin:top center!important;}'
     + '#dc-root *{animation:none!important;-webkit-animation:none!important;transition:none!important;-webkit-transition:none!important;}'
+    // The screens the page opens when you tap (Log weight, Progress Photos, a workout, the rank page) slide in with the
+    // design's own push (opacity + translateX only: nothing is laid out while it runs). Every other entrance stays off.
+    + '#dc-root div[style*="pg-in"]{animation:pg-in 300ms cubic-bezier(.22,1,.36,1) both!important;-webkit-animation:pg-in 300ms cubic-bezier(.22,1,.36,1) both!important;will-change:transform,opacity;}'
     + '*{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important;}'
     // tapping a chart point must never flash the system tap-highlight box or a focus ring around the graph
     + '*,*:focus,*:active{-webkit-tap-highlight-color:rgba(0,0,0,0)!important;outline:none!important;}'
@@ -800,6 +803,17 @@ export const PROGRESS_DOM_JS = String.raw`
     var ppCard = pp && pp.next && pp.next.children[0];
     if (ppCard) ppCard.setAttribute('data-athlt-photos', '1');
     var pv = window.__athltPhotoView || { card: [], grid: [], cmpA: null, cmpB: null };
+    // Every photo is decoded as soon as the data lands, so opening the Photos page or switching Front / Side / Back
+    // paints the pictures in the very first frame instead of an empty slot that fills a moment later.
+    var allPh = (d.photos || []);
+    window.__phImgs = window.__phImgs || {};
+    for (var pi = 0; pi < allPh.length; pi++) {
+      var ph0 = allPh[pi];
+      if (ph0 && ph0.thumb && !window.__phImgs[ph0.id + '|' + ph0.thumb.length]) {
+        var im0 = new Image(); im0.src = ph0.thumb; window.__phImgs[ph0.id + '|' + ph0.thumb.length] = im0;
+        try { if (im0.decode) im0.decode().catch(function () {}); } catch (e0) {}
+      }
+    }
     var setPhoto = function (el, photo) {
       var sig = photo ? photo.id + '|' + (photo.thumb ? photo.thumb.length : 0) : '';
       if (el.__phSig === sig) return;
@@ -906,7 +920,7 @@ export const PROGRESS_DOM_JS = String.raw`
     if (!(r.okFit && r.filled && window.__athltLogicReady && root && leafWithText('Progress'))) return false;
     if ((root.textContent || '').indexOf('{{') >= 0) return false;
     // still for a moment: the viewport has stopped changing and the page has stopped re-rendering
-    return !window.__dcSettle || window.__dcSettle(160);
+    return !window.__dcSettle || window.__dcSettle(100);
   }
   function setPageReady(on) {
     var h = document.documentElement;
@@ -928,12 +942,19 @@ export const PROGRESS_DOM_JS = String.raw`
       post({ type: 'ready' });
     }
     // data has landed but the page is still settling: look again soon instead of waiting for the interval
-    if (!ok && r.okFit && r.filled && window.__athltLogicReady) { clearTimeout(deb); deb = setTimeout(tick, 90); }
+    if (!ok && r.okFit && r.filled && window.__athltLogicReady) { clearTimeout(deb); deb = setTimeout(tick, 40); }
   }
-  function schedule() { ensureCss(); clearTimeout(deb); deb = setTimeout(tick, 50); }
-  try { new MutationObserver(schedule).observe(document, { childList: true, subtree: true, attributes: false }); } catch (e) {}
+  function schedule() { ensureCss(); clearTimeout(deb); deb = setTimeout(tick, 20); }
+  // After the first reveal, a screen the page just opened (Log weight, Photos, back to the top) is fixed up
+  // IMMEDIATELY, in the same task as the page's own render (before the browser paints it), not 20ms later: a fix
+  // that lands a frame after the screen shows is the "glitch" (keypad jumping up, photos popping in, labels appearing).
+  var syncing = false;
+  try { new MutationObserver(function () {
+    if (reported && !syncing) { syncing = true; try { apply(); } catch (e) {} syncing = false; }
+    schedule();
+  }).observe(document, { childList: true, subtree: true, attributes: false }); } catch (e) {}
   window.addEventListener('resize', schedule);
-  setInterval(tick, 500);
+  setInterval(tick, 250);
   tick();
 })();
 true;

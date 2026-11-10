@@ -20,6 +20,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, Modal, Pressable, Image, Animated } from 'react-native';
 import { useRevealFade } from '../../lib/useRevealFade';
+import { createTabLag } from '../../lib/tabLag';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
@@ -54,6 +55,10 @@ export default function ProgressScreen() {
   const webRef = useRef<WebView>(null);
   const { fade, onReady, onLoadStart, onLoadEnd } = useRevealFade(m => { if (__DEV__) console.log('[PROGRESS]', m); });
   const dataRef = useRef<ProgressData | null>(null);
+  const lag = useRef(createTabLag('progress')).current;
+  const artReady = useRef(false);   // the rank emblem + muscle icons are in the data (the first picture needs them)
+  const inflight = useRef<Promise<void> | null>(null);
+  const firstShown = useRef(true);
   const photosRef = useRef<{ id: string; uri: string }[]>([]);
   const [viewing, setViewing] = useState<string | null>(null); // file uri of the photo shown full screen
 
@@ -85,6 +90,8 @@ export default function ProgressScreen() {
     if (dataRef.current !== data) return;
     if (cur) data.rank.emblem = cur;
     data.muscles.forEach((m, i) => { m.icon = icons[i]; });
+    artReady.current = true;
+    lag.mark('dataReady');
     push();
     // Below-the-fold art arrives afterwards: ladder, video frames.
     const imgs = await Promise.all(TIER_ORDER.map(t => tierDataUri(t)));
@@ -103,7 +110,7 @@ export default function ProgressScreen() {
       frames.forEach((f, i) => { if (f) data.workouts[from + i].thumb = f; });
       push();
     }
-  }, [push, insets.top, insets.bottom]);
+  }, [push, lag, insets.top, insets.bottom]);
 
   // Take a photo, save it ON THE DEVICE (never fails just because the network or sign-in does),
   // then try the cloud copy quietly in the background.
@@ -124,15 +131,28 @@ export default function ProgressScreen() {
     }
   }, [load]);
 
-  useFocusEffect(useCallback(() => { load().catch(() => {}); }, [load]));
+  // Prepared when the screen MOUNTS (app launch): the data AND the art it needs (rank emblem, muscle icons, which are file
+  // reads) are ready before the tab is ever opened, so the first open only hands the page what is already there. Two
+  // loads never run at once: a focus while one is running just waits for it.
+  const prefetch = useCallback(() => {
+    if (!inflight.current) inflight.current = load().catch(() => {}).finally(() => { inflight.current = null; });
+    return inflight.current;
+  }, [load]);
+  useEffect(() => { lag.mark('mount'); void prefetch(); }, [prefetch, lag]);
+  useFocusEffect(useCallback(() => {
+    lag.mark('shown');
+    if (firstShown.current) { firstShown.current = false; if (dataRef.current && artReady.current) push(); }
+    void prefetch();
+  }, [prefetch, push, lag]));
 
   const onMessage = useCallback((raw: string) => {
     let msg: { type?: string; dateKey?: string; weightLb?: number; ts?: number; msg?: string; pose?: string };
     try { msg = JSON.parse(raw); } catch { return; }
     switch (msg.type) {
-      case 'ready': onReady(); break;
+      case 'ready': lag.mark('ready'); onReady(); break;
       case 'pageConsole': if (__DEV__) console.log('[progress-page]', msg.msg); break;
-      case 'needData': push(); break;
+      // (the first picture needs the art: until it is in, load() pushes the moment it is, so no half-filled first paint)
+      case 'needData': lag.mark('asked'); if (artReady.current) { lag.mark('pushed'); push(); } break;
       case 'logWeight': {
         // The page already updated its own chart + closed the sheet instantly;
         // this just persists it, then re-syncs from storage.
@@ -156,7 +176,7 @@ export default function ProgressScreen() {
       case 'viewPhoto': { const hit = photosRef.current.find(p => p.id === (msg as any).id); if (hit) setViewing(hit.uri); break; }
       case 'addPhoto': void addPhoto((msg.pose as PhotoPose) || 'front'); break;
     }
-  }, [push, load, router, addPhoto]);
+  }, [push, load, router, addPhoto, lag]);
 
   return (
     <View style={styles.root}>
@@ -168,8 +188,8 @@ export default function ProgressScreen() {
         originWhitelist={['*']}
         injectedJavaScriptBeforeContentLoaded={PROGRESS_BEFORE}
         onMessage={(e) => onMessage(e.nativeEvent.data)}
-        onLoadStart={onLoadStart}
-        onLoadEnd={onLoadEnd}
+        onLoadStart={() => { lag.mark('loadStart'); onLoadStart(); }}
+        onLoadEnd={() => { lag.mark('loadEnd'); onLoadEnd(); }}
         style={styles.web}
         scrollEnabled
         bounces={false}

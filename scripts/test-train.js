@@ -270,7 +270,7 @@ async function openTab(browser, { width = 402, height = 874, insets = INS, datas
   // ── a rest card with nothing to do has no button (tomorrow's "Train anyway" went nowhere) ──
   {
     const e = await openTab(wk, { dataset: empty });
-    const btns = await e.p.evaluate(() => { const r = [...document.querySelectorAll('div[data-scroll]')].find(x => x.style.overflowX === 'auto' && x.children.length === 7); return [5, 6].map(i => [...r.children[i].querySelectorAll('a')].map(a => ({ t: a.innerText.trim(), d: getComputedStyle(a).display, h: a.getAttribute('href') }))); });
+    const btns = await e.p.evaluate(() => { const r = [...document.querySelectorAll('div[data-scroll]')].find(x => x.style.overflowX === 'auto' && x.children.length === 7); return [5, 6].map(i => [...r.children[i].querySelectorAll('a')].map(a => ({ t: (a.textContent || '').trim(), d: getComputedStyle(a).display, h: a.getAttribute('href') }))); });
     console.log('      no plan, buttons today/tomorrow:', JSON.stringify(btns));
     check('the rest card for today keeps its "Train anyway" button', btns[0].some(b => /Train anyway/.test(b.t) && b.d !== 'none'));
     check('the rest card for tomorrow has NO dead button (hidden)', btns[1].every(b => b.d === 'none'), JSON.stringify(btns[1]));

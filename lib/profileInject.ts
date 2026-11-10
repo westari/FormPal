@@ -321,7 +321,7 @@ export const PROFILE_DOM_JS = String.raw`
     var root = document.getElementById('dc-root');
     if (!(r.okFit && r.filled && window.__athltLogicReady && root && leafWithText('Profile'))) return false;
     if ((root.textContent || '').indexOf('{{') >= 0) return false;
-    return !window.__dcSettle || window.__dcSettle(160);
+    return !window.__dcSettle || window.__dcSettle(100);
   }
   function setPageReady(on) {
     var h = document.documentElement;
@@ -340,12 +340,12 @@ export const PROFILE_DOM_JS = String.raw`
       reported = true;
       post({ type: 'ready' });
     }
-    if (!ok && r.okFit && r.filled && window.__athltLogicReady) { clearTimeout(deb); deb = setTimeout(tick, 90); }
+    if (!ok && r.okFit && r.filled && window.__athltLogicReady) { clearTimeout(deb); deb = setTimeout(tick, 40); }
   }
-  function schedule() { ensureCss(); clearTimeout(deb); deb = setTimeout(tick, 50); }
+  function schedule() { ensureCss(); clearTimeout(deb); deb = setTimeout(tick, 20); }
   try { new MutationObserver(function () { try { textPass(); } catch (e) {} schedule(); }).observe(document, { childList: true, subtree: true }); } catch (e) {}
   window.addEventListener('resize', schedule);
-  setInterval(tick, 500);
+  setInterval(tick, 250);
   tick();
 })();
 true;

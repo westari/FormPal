@@ -15,6 +15,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, Alert, Share, Animated } from 'react-native';
 import { useRevealFade } from '../../lib/useRevealFade';
+import { createTabLag } from '../../lib/tabLag';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
@@ -62,6 +63,9 @@ export default function ProfileScreen() {
   const plog = (m: string) => { if (__DEV__) console.log('[PROFILE]', m); };
   const { fade, onReady, onLoadStart, onLoadEnd } = useRevealFade(plog);
   const openedAt = useRef(Date.now());
+  const lag = useRef(createTabLag('profile')).current;
+  const firstShown = useRef(true);
+  const inflight = useRef<Promise<void> | null>(null);
   const dataRef = useRef<ProfileData | null>(null);
   const seedRef = useRef(0);
 
@@ -70,9 +74,11 @@ export default function ProfileScreen() {
   }, []);
 
   const load = useCallback(async (reseed: boolean) => {
-    const [sessions, weights, plan, planProfile, location, details, userRes] = await Promise.all([
+    // The account email comes from the saved session on the phone (getSession). It used to be getUser(), which is a
+    // network round trip: the first open of this tab waited for the internet before it could show anything.
+    const [sessions, weights, plan, planProfile, location, details, sessionRes] = await Promise.all([
       getAllSessions(), getWeightLog(), loadPlan(), loadProfile(),
-      AsyncStorage.getItem(LOCATION_KEY), loadDetails(), supabase.auth.getUser().catch(() => null),
+      AsyncStorage.getItem(LOCATION_KEY), loadDetails(), supabase.auth.getSession().catch(() => null),
     ]);
     if (reseed) seedRef.current += 1;
     const audio = useAudioSettingsStore.getState();
@@ -81,7 +87,7 @@ export default function ProfileScreen() {
       referral,
       seedVersion: seedRef.current,
       name: useCustomizationStore.getState().displayName,
-      email: userRes?.data?.user?.email ?? null,
+      email: sessionRes?.data?.session?.user?.email ?? null,
       sessions, streak: calcStreak(sessions),
       planProfile, planGeneratedAt: plan?.generatedAt ?? null,
       location, latestWeightLb: weights.length ? weights[weights.length - 1].weightLb : null,
@@ -90,10 +96,22 @@ export default function ProfileScreen() {
       insets: { top: insets.top, bottom: insets.bottom },
       appVersion: `FormPal ${Constants.expoConfig?.version ?? ''}${Constants.expoConfig?.ios?.buildNumber ? ` (${Constants.expoConfig.ios.buildNumber})` : ''}`.trim(),
     });
+    lag.mark('dataReady');
     push();
-  }, [push, insets.top, insets.bottom]);
+  }, [push, lag, insets.top, insets.bottom]);
 
-  useFocusEffect(useCallback(() => { load(true).catch(() => {}); }, [load]));
+  // The data is prepared when the screen MOUNTS (app launch), not when the tab is first opened, so the first open only has
+  // to hand the page what is already there. Later focuses refresh it (a new seed re-opens the page's own state).
+  const prefetch = useCallback((reseed: boolean) => {
+    if (!inflight.current) inflight.current = load(reseed).catch(() => {}).finally(() => { inflight.current = null; });
+    return inflight.current;
+  }, [load]);
+  useEffect(() => { lag.mark('mount'); void prefetch(false); }, [prefetch, lag]);
+  useFocusEffect(useCallback(() => {
+    lag.mark('shown');
+    if (firstShown.current) { firstShown.current = false; if (dataRef.current) push(); void prefetch(false); return; }
+    void prefetch(true);
+  }, [prefetch, push, lag]));
 
   // Persist edits made on the page to their real homes.
   const save = useCallback(async (p: Record<string, any>) => {
@@ -136,8 +154,8 @@ export default function ProfileScreen() {
     let msg: { type?: string; to?: string; patch?: Record<string, any>; msg?: string };
     try { msg = JSON.parse(raw); } catch { return; }
     switch (msg.type) {
-      case 'ready': plog('page ready +' + (Date.now() - openedAt.current) + 'ms after mount'); onReady(); break;
-      case 'needData': plog('page asked for data;' + (dataRef.current ? ' sending' : ' not loaded yet')); push(); break;
+      case 'ready': plog('page ready +' + (Date.now() - openedAt.current) + 'ms after mount'); lag.mark('ready'); onReady(); break;
+      case 'needData': lag.mark('asked'); plog('page asked for data;' + (dataRef.current ? ' sending' : ' not loaded yet')); if (dataRef.current) lag.mark('pushed'); push(); break;
       case 'pageConsole': if (__DEV__) console.log('[profile-page]', msg.msg); break;
       case 'save': if (msg.patch) void save(msg.patch); break;
       case 'applyPlan': void applyPlan(); break;
@@ -186,7 +204,7 @@ export default function ProfileScreen() {
         ]);
         break;
     }
-  }, [push, save, applyPlan, router]);
+  }, [push, save, applyPlan, router, lag]);
 
   return (
     <View style={styles.root}>
@@ -198,8 +216,8 @@ export default function ProfileScreen() {
         originWhitelist={['*']}
         injectedJavaScriptBeforeContentLoaded={PROFILE_BEFORE}
         onMessage={(e) => onMessage(e.nativeEvent.data)}
-        onLoadStart={() => { plog('web view load start +' + (Date.now() - openedAt.current) + 'ms after mount'); onLoadStart(); }}
-        onLoadEnd={() => { plog('web view load end'); onLoadEnd(); }}
+        onLoadStart={() => { lag.mark('loadStart'); plog('web view load start +' + (Date.now() - openedAt.current) + 'ms after mount'); onLoadStart(); }}
+        onLoadEnd={() => { lag.mark('loadEnd'); plog('web view load end'); onLoadEnd(); }}
         style={styles.web}
         scrollEnabled
         bounces={false}
