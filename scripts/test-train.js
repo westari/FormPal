@@ -192,7 +192,7 @@ async function openTab(browser, { width = 402, height = 874, insets = INS, datas
   clear(); await tapEl(linkIn, { i: 3, re: 'Log a session' });
   check('Log a session (rest day) -> the real log screen', take().some(m => m.to === 'log'));
   clear(); await tapEl(linkIn, { i: 6, re: 'Preview workout' });
-  check('Preview workout (tomorrow) -> My Workouts', take().some(m => m.to === 'myworkouts'));
+  check('Preview workout (tomorrow) -> a preview of THAT workout (its own id), not My Workouts', take().some(m => m.to === 'preview:w2'));
   const byText = (re) => [...document.querySelectorAll('a')].find(a => new RegExp(re).test(a.innerText));
   clear(); await tapEl(byText, '^Create workout');
   check('Create workout -> the real create screen', take().some(m => m.to === 'create'));

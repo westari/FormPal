@@ -503,7 +503,8 @@ export const PROGRESS_DOM_JS = String.raw`
     // overlay) is lifted above it.
     var S = (window.innerHeight || 844) / 844;
     var ins = d.insets || { top: 0, bottom: 0 };
-    var tb = (ins.bottom + 49 + 16) / S;
+    var cover = ins.tabCover != null ? ins.tabCover : ins.bottom + 49; // the floating tab bar (lib/tabBarMetrics.ts)
+    var tb = (cover + 16) / S;
     window.__athltTb = Math.round(tb + 8);
     var scrollers = root.querySelectorAll('div[data-scroll]');
     for (var sc = 0; sc < scrollers.length; sc++) {

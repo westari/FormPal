@@ -47,7 +47,7 @@ export interface ProfileData {
   audioLabel: string;
   badgesEarned: boolean[];
   appVersion: string;
-  insets: { top: number; bottom: number };
+  insets: { top: number; bottom: number; tabCover?: number };
   /** the user's own referral code; friends joined is 0 until a referral backend exists */
   referral: { code: string; joined: number };
 }
@@ -96,7 +96,7 @@ export function buildProfileData(i: {
   details: ProfileDetails;
   audio: { enabled: boolean; voiceFrequency: 'off' | 'correctionsOnly' | 'correctionsAndCounts' };
   appVersion: string;
-  insets?: { top: number; bottom: number };
+  insets?: { top: number; bottom: number; tabCover?: number };
   referral?: { code: string; joined: number };
   now?: number;
 }): ProfileData {

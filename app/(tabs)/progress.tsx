@@ -21,6 +21,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, Modal, Pressable, Image, Animated } from 'react-native';
 import { useRevealFade } from '../../lib/useRevealFade';
 import { createTabLag } from '../../lib/tabLag';
+import { tabBarCover } from '../../lib/tabBarMetrics';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
@@ -70,7 +71,7 @@ export default function ProgressScreen() {
     const [sessions, weights, photos] = await Promise.all([getAllSessions(), getWeightLog(), listProgressPhotos()]);
     photosRef.current = photos.map(p => ({ id: p.id, uri: p.uri }));
     const tiers = computeMuscleTiers(sessions);
-    const data = buildProgressData(sessions, tiers, weights, Date.now(), { insets: { top: insets.top, bottom: insets.bottom }, photos });
+    const data = buildProgressData(sessions, tiers, weights, Date.now(), { insets: { top: insets.top, bottom: insets.bottom, tabCover: tabBarCover(insets.bottom) }, photos });
     // Keep art we already fetched so a refresh never blanks it.
     const prev = dataRef.current;
     if (prev) {

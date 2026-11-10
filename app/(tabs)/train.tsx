@@ -44,6 +44,8 @@ import { loadPlan } from '../../lib/planStorage';
 import { getAllSessions } from '../../lib/sessionLog';
 import { askCue } from '../../lib/cueApi';
 import { buildTrainData, type TrainData } from '../../lib/trainData';
+import { extractTrainImages } from '../../lib/trainTemplate';
+import { tabBarCover } from '../../lib/tabBarMetrics';
 
 const TRAIN_HTML = require('../../assets/app screens/traintab.html');
 const TRAIN_BUILD = 'train-4';
@@ -223,7 +225,7 @@ export const TRAIN_WEB_INJECT = `
       if (!cue && divs[i].style.height === '520px' && divs[i].style.position === 'absolute') cue = divs[i];
     }
     if (!edit || !cue) return false;
-    var extra = (d.insets.bottom + 49) / S;
+    var extra = (d.insets.tabCover != null ? d.insets.tabCover : d.insets.bottom + 49) / S; // the floating tab bar
     edit.style.setProperty('bottom', (8 + extra) + 'px', 'important');
     cue.style.setProperty('bottom', (8 + extra) + 'px', 'important');
     hideWhenClosed(edit); hideWhenClosed(cue);
@@ -280,6 +282,8 @@ export const TRAIN_WEB_INJECT = `
   grabTemplate();
   function template() {
     if (tpl) return tpl;
+    // the app reads the images from the HTML file it is loading and hands them over (window.__trImgs): the most reliable source
+    if (window.__trImgs && (window.__trImgs.flame || (window.__trImgs.photos || []).length)) { tpl = window.__trImgs; return tpl; }
     grabTemplate();
     var t = window.__trTplText;
     if (!t) { if (Date.now() - T0 > 2500) fetchTemplate(); return null; }
@@ -325,7 +329,6 @@ export const TRAIN_WEB_INJECT = `
         host.style.setProperty('background-repeat', 'no-repeat', 'important');
       }
     }
-    if (!pics.length) ok = false;
     return ok;
   }
 
@@ -406,7 +409,7 @@ export const TRAIN_WEB_INJECT = `
       + ' title=' + ((document.querySelector('[data-train-header] div') || {}).textContent || '').trim();
   }
 
-  var reported = false, lastAsk = 0, deb, done = { fit: false, header: false, sheets: false, my: false, img: false };
+  var reported = false, diagSent = false, lastAsk = 0, deb, done = { fit: false, header: false, sheets: false, my: false, img: false };
   function setPageReady(on) {
     var h = document.documentElement;
     if (!h) return;
@@ -419,11 +422,22 @@ export const TRAIN_WEB_INJECT = `
     done.header = header();
     done.sheets = sheets();
     done.my = myWorkouts();
-    done.img = images();
+    // The pictures must never hold the whole tab back (that left the tab blank on first open): they are waited for
+    // for 1.5s at most, then the tab shows and they fill in as soon as they can.
+    done.img = images() || (Date.now() - T0 > 1500);
     // Native's first push can land before this document exists (and be lost): the page asks until it has data.
     if (!D() && Date.now() - lastAsk > 700) { lastAsk = Date.now(); post({ type: 'needData' }); }
     var r = rail();
-    var parts = done.fit && done.header && done.sheets && done.my && done.img && !!D() && !!window.__athltLogicReady && !!r && r.scrollLeft > 0;
+    // The design centres Today itself, but only while its own animation-frame retries last (about 2s); if the page was
+    // not on screen yet they run out and the strip stays at the left edge. Done here too, the same way.
+    if (!reported && r && r.scrollLeft === 0 && r.children[5] && r.children[5].offsetWidth > 0 && r.clientWidth > 0) {
+      r.scrollLeft = r.children[5].offsetLeft - (r.clientWidth - r.children[5].offsetWidth) / 2;
+    }
+    if (!reported && !diagSent && Date.now() - T0 > 3000) {
+      diagSent = true;
+      post({ type: 'notReady', parts: { fit: done.fit, header: done.header, sheets: done.sheets, my: done.my, img: done.img, data: !!D(), logic: !!window.__athltLogicReady, rail: !!r, left: r ? Math.round(r.scrollLeft) : -1, w: window.innerWidth, h: window.innerHeight } });
+    }
+    var parts = done.fit && done.header && done.sheets && done.my && done.img && !!D() && !!window.__athltLogicReady && !!r;
     var real = reported || !!window.__trainForce || (parts && (!window.__dcSettle || window.__dcSettle(200)));
     setPageReady(real);
     if (!reported && real) { reported = true; window.__trLock = window.innerHeight; post({ type: 'ready' }); post({ type: 'fingerprint', fp: fingerprint() }); }
@@ -456,6 +470,7 @@ export default function TrainScreen() {
   const [revealed, setRevealed] = useState(false);
   const dataJsRef = useRef<string | null>(null);
   const streakRef = useRef(0);
+  const imgsJsRef = useRef<string | null>(null);
   const revealTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pongAt = useRef(0);
   const loads = useRef(0);
@@ -467,10 +482,10 @@ export default function TrainScreen() {
   const armReveal = useCallback(() => {
     if (revealTimer.current) clearTimeout(revealTimer.current);
     revealTimer.current = setTimeout(() => {
-      tlog('revealed by 12s safety net after load (page never said ready)');
+      tlog('revealed by the 4s safety net after load (page never said ready)');
       webRef.current?.injectJavaScript("window.__trainForce=1; try{window.__trainTick&&window.__trainTick()}catch(e){} true;");
       setRevealed(true);
-    }, 12000);
+    }, 4000);
   }, []);
   const fade = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -488,6 +503,9 @@ export default function TrainScreen() {
         await asset.downloadAsync();
         const res = await fetch(asset.localUri ?? asset.uri);
         const text = await res.text();
+        const imgs = extractTrainImages(text);
+        if (imgs) { imgsJsRef.current = `window.__trImgs = ${JSON.stringify(imgs)}; true;`; webRef.current?.injectJavaScript(imgsJsRef.current); }
+        tlog('html images:', imgs ? `flame ${imgs.flame ? 'ok' : 'MISSING'}, ${imgs.photos.length} photos` : 'NOT FOUND in the file');
         tlog('html file: size', text.length, 'chars | fnv', fnv(text));
       } catch (e) { tlog('html fingerprint failed:', e && (e as Error).message ? (e as Error).message : String(e)); }
     })();
@@ -504,7 +522,7 @@ export default function TrainScreen() {
   const pushData = useCallback(async () => {
     const [plan, sessions] = await Promise.all([loadPlan(), getAllSessions()]);
     tlog('data loaded: plan', plan ? plan.workouts.length + ' workouts' : 'none', '| sessions', sessions.length);
-    const ins = { top: insets.top, bottom: insets.bottom };
+    const ins = { top: insets.top, bottom: insets.bottom, tabCover: tabBarCover(insets.bottom) };
     let td: TrainData;
     try { td = buildTrainData(plan, sessions, ins); }
     catch (e) {
@@ -554,7 +572,8 @@ export default function TrainScreen() {
       case 'tap': Haptics.selectionAsync(); return;
       case 'ready': tlog('page ready (layout + data + logic all in place, page still)'); if (revealTimer.current) clearTimeout(revealTimer.current); setRevealed(true); return;
       case 'fingerprint': tlog('page fingerprint:', m.fp); return;
-      case 'needData': tlog('page asked for data;', dataJsRef.current ? 'sending' : 'not loaded yet'); if (dataJsRef.current) webRef.current?.injectJavaScript(dataJsRef.current); return;
+      case 'notReady': tlog('page NOT ready after 3s, parts:', JSON.stringify((m as any).parts)); return;
+      case 'needData': tlog('page asked for data;', dataJsRef.current ? 'sending' : 'not loaded yet'); if (imgsJsRef.current) webRef.current?.injectJavaScript(imgsJsRef.current); if (dataJsRef.current) webRef.current?.injectJavaScript(dataJsRef.current); return;
       case 'logicReady': return;
       case 'pageConsole': if (m.level === 'error' || m.level === 'warn') tlog('page ' + m.level + ':', m.msg); return;
       case 'homeCueSend': if (m.text) void handleCueSend(m.text); return;
@@ -571,6 +590,7 @@ export default function TrainScreen() {
         if (to === 'start') router.push('/workout' as any);
         else if (to === 'create') router.push('/create-workout' as any);
         else if (to === 'log') router.push('/log-session' as any);
+        else if (to.startsWith('preview:')) router.push({ pathname: '/workout', params: { id: to.slice('preview:'.length) } } as any);
         else if (to === 'myworkouts') router.push('/my-workouts' as any);
         else if (to === 'streak') router.push({ pathname: '/streak-screen', params: { count: String(streakRef.current), from: 'tab', dest: '/(tabs)/train' } } as any);
         else if (to.startsWith('recap:')) router.push({ pathname: '/recap', params: { ts: to.slice('recap:'.length) } } as any);

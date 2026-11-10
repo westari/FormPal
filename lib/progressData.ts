@@ -40,7 +40,7 @@ export interface ProgressData {
   bests: { name: string; value: string; unit: string; kind: 'streak' | 'form' | 'reps' }[];
   workouts: { ts: number; name: string; when: string; form: string; formPct: number | null; reps: number; sets: number; thumb: string | null; muscle: string | null; fallback: string | null }[];
   hasSessions: boolean;
-  insets: { top: number; bottom: number };
+  insets: { top: number; bottom: number; tabCover?: number };
   photos: PhotoView[];
 }
 
@@ -89,7 +89,7 @@ export function primaryMuscle(entries: SessionEntry[]): string | null {
 
 export function buildProgressData(
   sessions: SessionEntry[], tiers: MuscleTiers, weights: WeightEntry[], now: number = Date.now(),
-  extras: { insets?: { top: number; bottom: number }; photos?: { id: string; ts: number; pose: 'front' | 'side' | 'back'; thumb: string | null }[] } = {},
+  extras: { insets?: { top: number; bottom: number; tabCover?: number }; photos?: { id: string; ts: number; pose: 'front' | 'side' | 'back'; thumb: string | null }[] } = {},
 ): ProgressData {
   const standing = computeOverallStanding(tiers);
   const tier = standing?.tier ?? null;
