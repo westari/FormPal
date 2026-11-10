@@ -40,6 +40,7 @@ import { handleRepAudio, playReadyCue } from '../lib/audioFeedback';
 import { createCalibSynth } from '../lib/calibLog';
 import { prefetchSoloRecap } from '../lib/recapPrefetch';
 import { postLag, postLagStart } from '../lib/postLag';
+import { setFlashBrightness, FLASH_FRAME } from '../lib/screenFlash';
 import { createRepDiagnostic, STREAM_DEAD_SEC_FLOOR } from '../lib/repDiagnostics';
 import { useKeepAwake } from 'expo-keep-awake';
 import { NO_ZOOM_JS } from '../lib/noZoom';
@@ -854,6 +855,12 @@ export default function FormCheckScreen() {
   const counterRef = useRef(createCounterSignal()).current;
   // Shown instead of "Perfect. Hold still" while Go waits for the start position (shoulder press: hands at the shoulders).
   const [startPoseWaiting, setStartPoseWaiting] = useState(false);
+  // Front-camera flash (lib/screenFlash.ts): the button only exists while the FRONT camera is on
+  const [camPosition, setCamPosition] = useState<'front' | 'back' | null>(null);
+  const [flashOn, setFlashOn] = useState(false);
+  const flashActive = flashOn && camPosition === 'front';
+  useEffect(() => { void setFlashBrightness(flashActive); }, [flashActive]);
+  useEffect(() => () => { void setFlashBrightness(false); }, []);
 
   // Full session log buffer — accumulates EVERY line for post-session review.
   // Not a state value; we never need it to trigger re-renders during the session.
@@ -934,6 +941,7 @@ export default function FormCheckScreen() {
 
     const errSub   = addErrorListener(e => { if (mounted) setError(e.message); });
     const camSub   = addCameraStateListener(e => {
+      if (mounted && e.position) setCamPosition(e.position);
       if (mounted && e.running) setPhase(p => (p === 'starting' ? 'setup' : p));
     });
     const setupSub = addSetupStatusListener(event => {
@@ -1421,6 +1429,10 @@ export default function FormCheckScreen() {
   return (
     <View style={s.root}>
       <ATHLTCameraView style={StyleSheet.absoluteFill} />
+      {/* Front-camera flash: bright white around the camera view to light your face (under every control) */}
+      {flashActive && (
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderLeftWidth: FLASH_FRAME.side, borderRightWidth: FLASH_FRAME.side, borderBottomWidth: FLASH_FRAME.bottom, borderColor: '#FFFFFF' }]} />
+      )}
 
       {/* Accent flash on rep */}
       <Animated.View
@@ -1540,6 +1552,17 @@ export default function FormCheckScreen() {
               size={18} tintColor={C.text} type="monochrome" style={{ width: 18, height: 18 }}
             />
           </LiquidGlassButton>
+          {camPosition === 'front' && (
+            <LiquidGlassButton
+              onPress={() => setFlashOn(v => !v)}
+              radius={20}
+              colorScheme="dark"
+              fallbackColor="rgba(40,41,48,0.55)"
+              style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <SymbolView name={flashOn ? 'bolt.fill' : 'bolt.slash.fill'} size={18} tintColor={flashOn ? '#FFD60A' : C.text} type="monochrome" style={{ width: 18, height: 18 }} />
+            </LiquidGlassButton>
+          )}
           <LiquidGlassButton
             onPress={handleFlip}
             radius={20}
