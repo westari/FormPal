@@ -4322,6 +4322,18 @@ export function isRepCounterExercise(id: string): boolean {
     // 52-53 drift. PLACEHOLDERS until the next logs show the real [REP] lines.
     d.repEnterThreshold = 50;
     d.repExitThreshold  = 58;
+    // 2026-11-10 log (same exercise, in frame and lit): SIX real presses in a row were thrown away with "[REP] rejected -
+    // tracking unreliable for 4/4 frames (100%)" (then 100%, 100%, 100%, 93%, 79%). The rule rejects a rep when more than
+    // half of its frames have a shoulder/elbow joint under 0.6 confidence; Vision's confidence for these joints sat at
+    // 0.17-0.71 the whole time (typical indoor light), so a normal press could never pass, and the later presses only
+    // counted when it happened to rise. The camera DID see the arms (the angle moved smoothly through every rep), so
+    // confidence alone no longer throws a rep away (1.0 = never). The other guards (movement, depth) still apply.
+    d.repReliabilityMaxUnreliableFraction = 1.0;
+    // The engine would not start counting until the resting reading was >= 63.7 (settleAnchorMinFraction 0.3), but this
+    // user's rest reads 59-65 in the 11-08 and 11-10 logs (and 62-67 on 11-02), so "Go" came 10+ seconds late and the first
+    // presses were ignored. 0.1 asks for >= 57.9: still above the new enter threshold (50), so a mid-press reading can
+    // never be taken for the rest position. PLACEHOLDER from three logs.
+    d.settleAnchorMinFraction = 0.1;
   }
 }
 

@@ -27,7 +27,7 @@ export interface TrainDay {
 }
 
 export interface TrainData {
-  insets: { top: number; bottom: number };
+  insets: { top: number; bottom: number; tabCover?: number };
   streak: number;
   cal: [string, number][];                       // the strip: ["Mon", 7] x7
   days: TrainDay[];                              // 7 cards, today = 5
@@ -89,7 +89,7 @@ export function practiceLibrary(): { lib: [string, string][]; libIds: Record<str
 export function buildTrainData(
   plan: Plan | null,
   sessions: SessionEntry[],
-  insets: { top: number; bottom: number } = { top: 0, bottom: 0 },
+  insets: { top: number; bottom: number; tabCover?: number } = { top: 0, bottom: 0 },
   now: Date = new Date(),
 ): TrainData {
   const today = dayStart(now);
@@ -125,7 +125,7 @@ export function buildTrainData(
     } else if (i === 6) {
       if (tomorrowW) {
         moves[tomorrowW.splitLabel] = moves[tomorrowW.splitLabel] ?? plannedRows(tomorrowW);
-        days.push({ short: SHORT[date.getDay()], name: tomorrowW.splitLabel, meta: plannedMeta(tomorrowW), href: 'tr:myworkouts', restHref: 'tr:none', rows: plannedRows(tomorrowW), wid: tomorrowW.id });
+        days.push({ short: SHORT[date.getDay()], name: tomorrowW.splitLabel, meta: plannedMeta(tomorrowW), href: `tr:preview:${tomorrowW.id}`, restHref: 'tr:none', rows: plannedRows(tomorrowW), wid: tomorrowW.id });
       } else {
         days.push({ short: SHORT[date.getDay()], name: 'Rest day', meta: 'Recover for ' + LONG[addDays(date, 1).getDay()], rest: true, href: 'tr:none', restHref: 'tr:none', rows: [] });
       }

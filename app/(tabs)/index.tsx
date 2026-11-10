@@ -41,6 +41,7 @@ import { EDIT_BRIDGE_JS } from '../../lib/editSheetBridge';
 import { saveWorkoutEdit } from '../../lib/planEditSave';
 import { addableExercises, type EditRow } from '../../lib/planEdit';
 import { plannedMeta } from '../../lib/trainData';
+import { tabBarCover } from '../../lib/tabBarMetrics';
 
 const HOME_HTML = require('../../assets/app screens/home.html');
 const HOME_BUILD = 'home-5';
@@ -281,7 +282,7 @@ export function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[], i
     // insets don't include since it's a navigation chrome element, not a
     // system inset.
     var INSET_BOTTOM = ${insetBottom};
-    var TAB_BAR_ESTIMATE = 49;
+    var TAB_BAR_COVER = ${tabBarCover(insetBottom)}; // the floating tab bar (lib/tabBarMetrics.ts)
     // Same fix, two sheets — the edit-workout sheet (max-height: 620px)
     // AND the separate in-page "Edit via Cue" chat overlay (height: 520px,
     // its own send button at the bottom) have the identical bottom:8px-
@@ -297,7 +298,7 @@ export function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[], i
         if (editSheet && cueSheet) break;
       }
       if(!editSheet && !cueSheet) return false;
-      var extra = (INSET_BOTTOM + TAB_BAR_ESTIMATE) / scale;
+      var extra = TAB_BAR_COVER / scale;
       if(editSheet) editSheet.style.setProperty('bottom', (8 + extra) + 'px', 'important');
       if(cueSheet) cueSheet.style.setProperty('bottom', (8 + extra) + 'px', 'important');
       hideWhenClosed(editSheet); hideWhenClosed(cueSheet);

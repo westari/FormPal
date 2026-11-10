@@ -1,40 +1,25 @@
-import { DarkTheme, ThemeProvider } from '@react-navigation/native';
-import { NativeTabs, Icon, Label } from 'expo-router/unstable-native-tabs';
+import { Tabs } from 'expo-router';
+import GlassTabBar from '../../components/GlassTabBar';
 
-// The tabs, in bar order. Every name must have a file in app/(tabs) (scripts/test-tabs.js checks that).
+// The routes of this group. Every name must have a file in app/(tabs) (scripts/test-tabs.js checks that).
+// "plus" is not a page any more: the + button on the bar opens the menu (components/PlusMenu.tsx); the file stays only so
+// old links to it do not break, and it is hidden from the bar.
 export const TAB_NAMES = ['index', 'train', 'plus', 'progress', 'profile'] as const;
 
+// The bar itself: Home / Train / Progress / Profile in one real Liquid Glass capsule, the + on its own
+// (components/GlassTabBar.tsx).
 export default function TabLayout() {
   if (__DEV__) console.log('[TABS] layout mounted, tabs:', TAB_NAMES.join(', '));
   return (
-    <ThemeProvider value={DarkTheme}>
-      <NativeTabs>
-        <NativeTabs.Trigger name="index">
-          <Icon sf={'house.fill' as any} />
-          <Label>Home</Label>
-        </NativeTabs.Trigger>
-
-        <NativeTabs.Trigger name="train">
-          <Icon sf={'figure.strengthtraining.traditional' as any} />
-          <Label>Train</Label>
-        </NativeTabs.Trigger>
-
-        {/* Center action tab — sf prop is the only reliable rendering path; no label */}
-        <NativeTabs.Trigger name="plus">
-          <Icon sf={'plus.circle.fill' as any} />
-          <Label hidden />
-        </NativeTabs.Trigger>
-
-        <NativeTabs.Trigger name="progress">
-          <Icon sf={'chart.line.uptrend.xyaxis' as any} />
-          <Label>Progress</Label>
-        </NativeTabs.Trigger>
-
-        <NativeTabs.Trigger name="profile">
-          <Icon sf={'person.fill' as any} />
-          <Label>Profile</Label>
-        </NativeTabs.Trigger>
-      </NativeTabs>
-    </ThemeProvider>
+    <Tabs
+      tabBar={(props) => <GlassTabBar {...props} />}
+      screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: '#eeeef1' } }}
+    >
+      <Tabs.Screen name="index" />
+      <Tabs.Screen name="train" />
+      <Tabs.Screen name="plus" options={{ href: null }} />
+      <Tabs.Screen name="progress" />
+      <Tabs.Screen name="profile" />
+    </Tabs>
   );
 }

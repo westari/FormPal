@@ -193,6 +193,8 @@ export const PROFILE_DOM_JS = String.raw`
     // relies on — give them back (higher specificity than the blanket rule).
     + '#dc-root div[style*="pf-toast"]{animation:pf-toast 2200ms cubic-bezier(.22,1,.36,1) both!important;}'
     + '#dc-root div[style*="pf-sheet"]{animation:pf-sheet 380ms cubic-bezier(.22,1,.36,1) both!important;}'
+    // tapping a row opens its page with the design's own push (opacity + translateX only), not an instant jump
+    + '#dc-root div[style*="pf-in"]{animation:pf-in 300ms cubic-bezier(.22,1,.36,1) both!important;-webkit-animation:pf-in 300ms cubic-bezier(.22,1,.36,1) both!important;will-change:transform,opacity;}'
     + '#dc-root div[style*="pf-fade"]{animation:pf-fade 220ms ease both!important;}'
     + '#dc-root div[style*="pf-card"]{animation:pf-card 520ms cubic-bezier(.2,.8,.2,1) 60ms both!important;}'
     + '#dc-root div[style*="preserve-3d"]{transition:transform 380ms cubic-bezier(.2,.8,.2,1)!important;}';
@@ -288,7 +290,8 @@ export const PROFILE_DOM_JS = String.raw`
       // item scrolls clear of it, and the member-card sheet's content sits above it.
       var S = (window.innerHeight || 844) / 844;
       var ins = d.insets || { top: 0, bottom: 0 };
-      var tb = (ins.bottom + 49 + 16) / S;
+      var cover = ins.tabCover != null ? ins.tabCover : ins.bottom + 49; // the floating tab bar (lib/tabBarMetrics.ts)
+      var tb = (cover + 16) / S;
       var scrollers = root.querySelectorAll('div[data-scroll]');
       for (var sc = 0; sc < scrollers.length; sc++) {
         var el = scrollers[sc];

@@ -1,0 +1,458 @@
+22:28:02.776 [log] [DEF-LOOKUP] id=shoulderPress found=yes overrides=none
+22:28:02.777 [log] [DEBUG] [DEF-LOAD] loaded 'shoulderPress' from JSON: repMetric=bestSide formChecks=4 cameraSetup=ok calibration=ok source=JSON
+22:28:22.953 [log] [DEBUG] [METRIC] shoulderPress value=18.2412 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+22:28:22.953 [log] [DEBUG] [SETUP] shoulderPress rep metric trackable — starting 2.0s hold at timestamp=1794349702.953038
+22:28:23.139 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.1863 holdProgress=0.09 start=1794349702.953038 now=1794349703.1393728
+22:28:23.240 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.2876 holdProgress=0.14 start=1794349702.953038 now=1794349703.240639
+22:28:23.340 [log] [DEBUG] [METRIC] shoulderPress value=62.5347 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+22:28:23.340 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.3871 holdProgress=0.19 start=1794349702.953038 now=1794349703.34017
+22:28:23.440 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.4872 holdProgress=0.24 start=1794349702.953038 now=1794349703.4402242
+22:28:23.540 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.5873 holdProgress=0.29 start=1794349702.953038 now=1794349703.540289
+22:28:23.848 [log] [DEBUG] [METRIC] shoulderPress value=56.5927 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+22:28:23.848 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.8947 holdProgress=0.45 start=1794349702.953038 now=1794349703.8477368
+22:28:23.942 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.9896 holdProgress=0.49 start=1794349702.953038 now=1794349703.9426131
+22:28:24.049 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.0958 holdProgress=0.55 start=1794349702.953038 now=1794349704.048868
+22:28:24.147 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.1942 holdProgress=0.60 start=1794349702.953038 now=1794349704.147218
+22:28:24.247 [log] [DEBUG] [METRIC] shoulderPress value=60.3218 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+22:28:24.247 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.2940 holdProgress=0.65 start=1794349702.953038 now=1794349704.2470288
+22:28:24.346 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.3937 holdProgress=0.70 start=1794349702.953038 now=1794349704.346695
+22:28:24.445 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.4918 holdProgress=0.75 start=1794349702.953038 now=1794349704.4448318
+22:28:24.547 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.5939 holdProgress=0.80 start=1794349702.953038 now=1794349704.546927
+22:28:24.646 [log] [DEBUG] [METRIC] shoulderPress value=61.1670 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+22:28:24.646 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.6935 holdProgress=0.85 start=1794349702.953038 now=1794349704.646584
+22:28:24.744 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.7910 holdProgress=0.90 start=1794349702.953038 now=1794349704.743994
+22:28:24.844 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.8912 holdProgress=0.95 start=1794349702.953038 now=1794349704.844277
+22:28:24.943 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.9902 holdProgress=1.00 start=1794349702.953038 now=1794349704.94326
+22:28:25.044 [log] [DEBUG] [METRIC] shoulderPress value=60.4802 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+22:28:25.044 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=2.0910 holdProgress=1.00 start=1794349702.953038 now=1794349705.044004
+22:28:25.044 [log] [DEBUG] [SETUP] shoulderPress PASSED — entering ACTIVE
+22:28:25.044 [log] [READY-GATE] native setup passed; steady so far 2091ms, need 3500ms (placeholder)
+22:28:25.050 [log] [READY-GATE] waiting: steady 2097ms of 3500ms needed (placeholder), meter high
+22:28:25.248 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=61.1011 settleCandidateTop=61.1011 framesSeen=1
+22:28:25.353 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=60.9916 settleCandidateTop=61.1011 framesSeen=2
+22:28:25.451 [log] [READY-GATE] waiting: steady 2498ms of 3500ms needed (placeholder), meter high
+22:28:25.455 [log] [DEBUG] [METRIC] shoulderPress value=61.1707 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:25.455 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=61.1707 settleCandidateTop=61.1707 framesSeen=3
+22:28:25.544 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=61.3788 settleCandidateTop=61.3788 framesSeen=4
+22:28:25.648 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=61.3397 settleCandidateTop=61.3788 framesSeen=5
+22:28:25.763 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=60.9532 settleCandidateTop=61.3788 framesSeen=6
+22:28:25.858 [log] [DEBUG] [METRIC] shoulderPress value=61.1568 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:25.859 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=61.1568 settleCandidateTop=61.3788 framesSeen=7
+22:28:25.868 [log] [READY-GATE] waiting: steady 2915ms of 3500ms needed (placeholder), meter high
+22:28:25.947 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=61.3334 settleCandidateTop=61.3788 framesSeen=8
+22:28:25.947 [log] [DEBUG] [SETTLE] rejected — candidate=61.333 required>=63.700 — not a genuine starting position for this exercise, still waiting
+22:28:26.049 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=61.4287 settleCandidateTop=61.4287 framesSeen=9
+22:28:26.148 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=61.5161 settleCandidateTop=61.5161 framesSeen=10
+22:28:26.249 [log] [DEBUG] [METRIC] shoulderPress value=61.2720 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:26.249 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=61.2720 settleCandidateTop=61.5161 framesSeen=11
+22:28:26.285 [log] [READY-GATE] waiting: steady 3331ms of 3500ms needed (placeholder), meter high
+22:28:26.347 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=61.3320 settleCandidateTop=61.5161 framesSeen=12
+22:28:26.452 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=61.5882 settleCandidateTop=61.5882 framesSeen=13
+22:28:26.468 [log] [READY-GATE] waiting: counter sees you; metric 61.6 is NOT at the start position (need >= 63.7) (placeholder)
+22:28:26.543 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=61.6733 settleCandidateTop=61.6733 framesSeen=14
+22:28:26.649 [log] [DEBUG] [METRIC] shoulderPress value=61.4133 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:26.649 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=61.4133 settleCandidateTop=61.6733 framesSeen=15
+22:28:26.735 [log] [READY-GATE] waiting: counter sees you; metric 61.4 is NOT at the start position (need >= 63.7) (placeholder)
+22:28:26.748 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=61.5254 settleCandidateTop=61.6733 framesSeen=16
+22:28:26.849 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=61.5275 settleCandidateTop=61.6733 framesSeen=17
+22:28:26.953 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=61.2583 settleCandidateTop=61.6733 framesSeen=18
+22:28:26.953 [log] [DEBUG] [SETTLE] rejected — candidate=61.258 required>=63.700 — not a genuine starting position for this exercise, still waiting
+22:28:27.001 [log] [READY-GATE] waiting: counter sees you; metric 61.3 is NOT at the start position (need >= 63.7) (placeholder)
+22:28:27.056 [log] [DEBUG] [METRIC] shoulderPress value=61.2399 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:27.056 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=61.2399 settleCandidateTop=61.6733 framesSeen=19
+22:28:27.147 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=61.3153 settleCandidateTop=61.6733 framesSeen=20
+22:28:27.252 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=61.2912 settleCandidateTop=61.6733 framesSeen=21
+22:28:27.268 [log] [READY-GATE] waiting: counter sees you; metric 61.3 is NOT at the start position (need >= 63.7) (placeholder)
+22:28:27.355 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=62.0311 settleCandidateTop=62.0311 framesSeen=22
+22:28:27.449 [log] [DEBUG] [METRIC] shoulderPress value=61.1415 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:27.449 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=61.1415 settleCandidateTop=62.0311 framesSeen=23
+22:28:27.535 [log] [READY-GATE] waiting: counter sees you; metric 61.1 is NOT at the start position (need >= 63.7) (placeholder)
+22:28:27.549 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=61.8867 settleCandidateTop=62.0311 framesSeen=24
+22:28:27.647 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=61.5076 settleCandidateTop=62.0311 framesSeen=25
+22:28:27.748 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=61.1546 settleCandidateTop=62.0311 framesSeen=26
+22:28:27.801 [log] [READY-GATE] waiting: counter sees you; metric 61.2 is NOT at the start position (need >= 63.7) (placeholder)
+22:28:27.849 [log] [DEBUG] [METRIC] shoulderPress value=60.6391 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:27.849 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=60.6391 settleCandidateTop=62.0311 framesSeen=27
+22:28:27.947 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=59.7367 settleCandidateTop=62.0311 framesSeen=28
+22:28:28.049 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=59.1053 settleCandidateTop=62.0311 framesSeen=29
+22:28:28.050 [log] [DEBUG] [SETTLE] rejected — candidate=59.105 required>=63.700 — not a genuine starting position for this exercise, still waiting
+22:28:28.068 [log] [READY-GATE] waiting: counter sees you; metric 59.1 is NOT at the start position (need >= 63.7) (placeholder)
+22:28:28.263 [log] [DEBUG] [METRIC] shoulderPress value=72.7921 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:28.263 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=72.7921 settleCandidateTop=72.7921 framesSeen=30
+22:28:28.263 [log] [DEBUG] [SETTLE] top stable (value=72.792) — rep counting active
+22:28:28.335 [log] [READY-GATE] waiting: counter sees you; metric 72.8 is NOT at the start position (need >= 63.7) (placeholder)
+22:28:28.602 [log] [READY-GATE] waiting: counter sees you; metric 72.8 is NOT at the start position (need >= 63.7) (placeholder)
+22:28:28.868 [log] [READY-GATE] waiting: counter sees you; metric 72.8 is NOT at the start position (need >= 63.7) (placeholder)
+22:28:29.135 [log] [READY-GATE] waiting: counter sees you; metric 72.8 is NOT at the start position (need >= 63.7) (placeholder)
+22:28:29.163 [log] [DEBUG] [METRIC] shoulderPress value=59.6452 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:29.402 [log] [READY-GATE] waiting: counter sees you; metric 59.6 is NOT at the start position (need >= 63.7) (placeholder)
+22:28:29.547 [log] [DEBUG] [METRIC] shoulderPress value=64.7626 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:29.668 [log] [READY-GATE] waiting: counter cannot see you steadily (pose gap or too few samples); metric 64.8 is NOT at the start position (need >= 63.7) (placeholder)
+22:28:29.935 [log] [READY-GATE] waiting: counter cannot see you steadily (pose gap or too few samples); metric 64.8 is NOT at the start position (need >= 63.7) (placeholder)
+22:28:29.953 [log] [DEBUG] [METRIC] shoulderPress value=64.1587 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:30.202 [log] [READY-GATE] waiting: counter sees you; metric 64.2 is NOT at the start position (need >= 63.7) (placeholder)
+22:28:30.349 [log] [DEBUG] [METRIC] shoulderPress value=62.4028 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:30.469 [log] [READY-GATE] waiting: counter sees you; metric 62.4 is NOT at the start position (need >= 63.7) (placeholder)
+22:28:30.735 [log] [READY-GATE] waiting: counter sees you; metric 62.4 is NOT at the start position (need >= 63.7) (placeholder)
+22:28:30.749 [log] [DEBUG] [METRIC] shoulderPress value=73.4881 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:31.002 [log] [READY-GATE] waiting: counter sees you; metric 73.5 is NOT at the start position (need >= 63.7) (placeholder)
+22:28:31.154 [log] [DEBUG] [METRIC] shoulderPress value=59.4426 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:31.269 [log] [READY-GATE] waiting: counter sees you; metric 59.4 is NOT at the start position (need >= 63.7) (placeholder)
+22:28:31.535 [log] [READY-GATE] waiting: counter sees you; metric 59.4 is NOT at the start position (need >= 63.7) (placeholder)
+22:28:31.553 [log] [DEBUG] [METRIC] shoulderPress value=62.2190 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:31.802 [log] [READY-GATE] waiting: counter sees you; metric 62.2 is NOT at the start position (need >= 63.7) (placeholder)
+22:28:31.949 [log] [DEBUG] [METRIC] shoulderPress value=62.9441 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:32.069 [log] [READY-GATE] waiting: counter sees you; metric 62.9 is NOT at the start position (need >= 63.7) (placeholder)
+22:28:32.336 [log] [READY-GATE] waiting: counter sees you; metric 62.9 is NOT at the start position (need >= 63.7) (placeholder)
+22:28:32.355 [log] [DEBUG] [METRIC] shoulderPress value=63.9892 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:32.602 [log] [READY-GATE] waiting: counter sees you; metric 64.0 is NOT at the start position (need >= 63.7) (placeholder)
+22:28:32.754 [log] [DEBUG] [METRIC] shoulderPress value=63.6315 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:32.869 [log] [READY-GATE] waiting: counter sees you; metric 63.6 is NOT at the start position (need >= 63.7) (placeholder)
+22:28:33.136 [log] [READY-GATE] waiting: counter sees you; metric 63.6 is NOT at the start position (need >= 63.7) (placeholder)
+22:28:33.156 [log] [DEBUG] [METRIC] shoulderPress value=63.3826 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:33.402 [log] [READY-GATE] waiting: counter sees you; metric 63.4 is NOT at the start position (need >= 63.7) (placeholder)
+22:28:33.554 [log] [DEBUG] [METRIC] shoulderPress value=64.8210 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:33.669 [log] [READY-GATE] waiting: counter sees you; metric 64.8 is NOT at the start position (need >= 63.7) (placeholder)
+22:28:33.936 [log] [READY-GATE] waiting: counter sees you; metric 64.8 is NOT at the start position (need >= 63.7) (placeholder)
+22:28:33.956 [log] [DEBUG] [METRIC] shoulderPress value=63.2370 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:34.203 [log] [READY-GATE] waiting: counter sees you; metric 63.2 is NOT at the start position (need >= 63.7) (placeholder)
+22:28:34.349 [log] [DEBUG] [METRIC] shoulderPress value=63.9981 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:34.469 [log] [READY-GATE] waiting: counter sees you; metric 64.0 is NOT at the start position (need >= 63.7) (placeholder)
+22:28:34.736 [log] [READY-GATE] waiting: counter sees you; metric 64.0 is NOT at the start position (need >= 63.7) (placeholder)
+22:28:34.756 [log] [DEBUG] [METRIC] shoulderPress value=64.5374 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:35.003 [log] [READY-GATE] waiting: counter sees you; metric 64.5 is NOT at the start position (need >= 63.7) (placeholder)
+22:28:35.153 [log] [DEBUG] [METRIC] shoulderPress value=64.5233 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:35.269 [log] [READY-GATE] Ready: steady 12316ms >= 3500ms (placeholder), meter high, counter sees you
+22:28:35.531 [log] [DEBUG] [METRIC] shoulderPress value=64.1793 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:35.943 [log] [DEBUG] [METRIC] shoulderPress value=65.1890 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:36.356 [log] [DEBUG] [METRIC] shoulderPress value=65.3849 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:36.771 [log] [DEBUG] [METRIC] shoulderPress value=65.1153 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:36.836 [log] [DEBUG] [METRIC] shoulderPress value=64.9165 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=waiting
+22:28:36.938 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=65.2475 settleCandidateTop=65.2475 framesSeen=1
+22:28:37.046 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=63.0417 settleCandidateTop=65.2475 framesSeen=2
+22:28:37.148 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=63.5139 settleCandidateTop=65.2475 framesSeen=3
+22:28:37.254 [log] [DEBUG] [METRIC] shoulderPress value=62.1659 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:37.255 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=62.1659 settleCandidateTop=65.2475 framesSeen=4
+22:28:37.348 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=63.1680 settleCandidateTop=65.2475 framesSeen=5
+22:28:37.450 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=62.2036 settleCandidateTop=65.2475 framesSeen=6
+22:28:37.559 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=62.9466 settleCandidateTop=65.2475 framesSeen=7
+22:28:37.660 [log] [DEBUG] [METRIC] shoulderPress value=63.2717 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:37.660 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=63.2717 settleCandidateTop=65.2475 framesSeen=8
+22:28:37.660 [log] [DEBUG] [SETTLE] rejected — candidate=63.272 required>=63.700 — not a genuine starting position for this exercise, still waiting
+22:28:37.747 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=64.1735 settleCandidateTop=65.2475 framesSeen=9
+22:28:37.747 [log] [DEBUG] [SETTLE] top stable (value=64.174) — rep counting active
+22:28:38.044 [log] [DEBUG] [METRIC] shoulderPress value=63.5241 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:38.441 [log] [DEBUG] [METRIC] shoulderPress value=65.0671 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:38.842 [log] [DEBUG] [METRIC] shoulderPress value=64.5262 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:39.257 [log] [DEBUG] [METRIC] shoulderPress value=62.1966 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:39.656 [log] [DEBUG] [METRIC] shoulderPress value=64.1925 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:40.051 [log] [DEBUG] [METRIC] shoulderPress value=64.9884 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:40.463 [log] [DEBUG] [METRIC] shoulderPress value=64.2125 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:40.843 [log] [DEBUG] [METRIC] shoulderPress value=64.6499 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:41.251 [log] [DEBUG] [METRIC] shoulderPress value=64.7003 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:41.663 [log] [DEBUG] [METRIC] shoulderPress value=65.1145 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:42.058 [log] [DEBUG] [METRIC] shoulderPress value=62.0767 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:42.461 [log] [DEBUG] [METRIC] shoulderPress value=61.1171 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:42.847 [log] [DEBUG] [METRIC] shoulderPress value=61.0082 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:43.248 [log] [DEBUG] [METRIC] shoulderPress value=64.0339 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:43.651 [log] [DEBUG] [METRIC] shoulderPress value=60.7600 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:44.056 [log] [DEBUG] [METRIC] shoulderPress value=61.7851 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:44.455 [log] [DEBUG] [METRIC] shoulderPress value=62.7763 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:44.852 [log] [DEBUG] [METRIC] shoulderPress value=62.4634 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:45.262 [log] [DEBUG] [METRIC] shoulderPress value=63.7178 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:45.665 [log] [DEBUG] [METRIC] shoulderPress value=66.9392 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:46.056 [log] [DEBUG] [METRIC] shoulderPress value=66.2162 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:46.448 [log] [DEBUG] [METRIC] shoulderPress value=65.0959 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:46.849 [log] [DEBUG] [METRIC] shoulderPress value=65.3081 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:47.263 [log] [DEBUG] [METRIC] shoulderPress value=65.0046 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:47.659 [log] [DEBUG] [METRIC] shoulderPress value=63.4523 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:48.060 [log] [DEBUG] [METRIC] shoulderPress value=66.3023 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:48.467 [log] [DEBUG] [METRIC] shoulderPress value=67.4509 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:48.845 [log] [DEBUG] [METRIC] shoulderPress value=66.5066 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:49.268 [log] [DEBUG] [METRIC] shoulderPress value=66.7954 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:49.655 [log] [DEBUG] [METRIC] shoulderPress value=66.8910 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:50.060 [log] [DEBUG] [METRIC] shoulderPress value=65.4959 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:50.466 [log] [DEBUG] [METRIC] shoulderPress value=65.6867 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:50.849 [log] [DEBUG] [METRIC] shoulderPress value=66.9642 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:51.262 [log] [DEBUG] [METRIC] shoulderPress value=65.3714 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:51.667 [log] [DEBUG] [METRIC] shoulderPress value=64.1930 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:52.058 [log] [DEBUG] [METRIC] shoulderPress value=67.1035 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:52.472 [log] [DEBUG] [METRIC] shoulderPress value=64.7409 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:52.852 [log] [DEBUG] [METRIC] shoulderPress value=65.8756 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:53.260 [log] [DEBUG] [METRIC] shoulderPress value=65.7382 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:53.660 [log] [DEBUG] [METRIC] shoulderPress value=66.8846 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:54.060 [log] [DEBUG] [METRIC] shoulderPress value=66.5960 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:54.468 [log] [DEBUG] [METRIC] shoulderPress value=66.9241 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:54.845 [log] [DEBUG] [METRIC] shoulderPress value=67.7474 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:55.266 [log] [DEBUG] [METRIC] shoulderPress value=67.6275 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:55.659 [log] [DEBUG] [METRIC] shoulderPress value=65.4866 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:56.054 [log] [DEBUG] [METRIC] shoulderPress value=64.1607 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:56.470 [log] [DEBUG] [METRIC] shoulderPress value=62.8209 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:56.848 [log] [DEBUG] [METRIC] shoulderPress value=66.7124 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:57.259 [log] [DEBUG] [METRIC] shoulderPress value=67.1474 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:57.677 [log] [DEBUG] [METRIC] shoulderPress value=66.3509 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:58.060 [log] [DEBUG] [METRIC] shoulderPress value=66.0783 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:58.467 [log] [DEBUG] [METRIC] shoulderPress value=65.8416 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:58.854 [log] [DEBUG] [METRIC] shoulderPress value=54.4535 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:59.257 [log] [DEBUG] [METRIC] shoulderPress value=65.6384 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:28:59.667 [log] [DEBUG] [METRIC] shoulderPress value=63.9490 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:00.060 [log] [DEBUG] [METRIC] shoulderPress value=66.6915 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:00.459 [log] [DEBUG] [METRIC] shoulderPress value=66.0158 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:00.854 [log] [DEBUG] [METRIC] shoulderPress value=66.4975 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:01.270 [log] [DEBUG] [METRIC] shoulderPress value=62.4693 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:01.664 [log] [DEBUG] [METRIC] shoulderPress value=65.0135 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:02.063 [log] [DEBUG] [METRIC] shoulderPress value=63.3174 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:02.458 [log] [DEBUG] [METRIC] shoulderPress value=66.2268 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:02.855 [log] [DEBUG] [METRIC] shoulderPress value=62.3413 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:03.269 [log] [DEBUG] [METRIC] shoulderPress value=65.8241 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:03.662 [log] [DEBUG] [METRIC] shoulderPress value=65.8792 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:04.062 [log] [DEBUG] [METRIC] shoulderPress value=65.8230 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:04.467 [log] [DEBUG] [METRIC] shoulderPress value=66.2886 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:04.850 [log] [DEBUG] [METRIC] shoulderPress value=59.0608 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:05.270 [log] [DEBUG] [METRIC] shoulderPress value=63.7951 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:05.655 [log] [DEBUG] [METRIC] shoulderPress value=65.0598 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:06.060 [log] [DEBUG] [METRIC] shoulderPress value=61.6656 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:06.471 [log] [DEBUG] [METRIC] shoulderPress value=61.8762 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:06.854 [log] [DEBUG] [METRIC] shoulderPress value=62.0874 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:07.269 [log] [DEBUG] [METRIC] shoulderPress value=62.7386 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:07.668 [log] [DEBUG] [METRIC] shoulderPress value=68.9534 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:08.061 [log] [DEBUG] [METRIC] shoulderPress value=66.6435 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:08.472 [log] [DEBUG] [METRIC] shoulderPress value=64.7462 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:08.849 [log] [DEBUG] [METRIC] shoulderPress value=57.0623 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:09.265 [log] [DEBUG] [METRIC] shoulderPress value=65.7107 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:09.672 [log] [DEBUG] [METRIC] shoulderPress value=56.5699 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:10.061 [log] [DEBUG] [METRIC] shoulderPress value=57.1894 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:10.471 [log] [DEBUG] [METRIC] shoulderPress value=62.2697 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:10.852 [log] [DEBUG] [METRIC] shoulderPress value=62.2889 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:11.257 [log] [DEBUG] [METRIC] shoulderPress value=76.6685 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:11.660 [log] [DEBUG] [METRIC] shoulderPress value=49.4498 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+22:29:11.661 [log] [DEBUG] [REP-TRACE] shoulderPress angle=49.4498 repMinAngle=45.1487 framesSincePoseGap=105
+22:29:11.753 [log] [DEBUG] [REP-TRACE] shoulderPress angle=70.6843 repMinAngle=45.1487 framesSincePoseGap=105
+22:29:11.845 [log] [DEBUG] [REP-TRACE] shoulderPress angle=89.1126 repMinAngle=45.1487 framesSincePoseGap=105
+22:29:11.956 [log] [DEBUG] [REP-TRACE] shoulderPress angle=80.3399 repMinAngle=45.1487 framesSincePoseGap=105
+22:29:11.956 [log] [DEBUG] [REP] rejected — tracking unreliable for 4/4 frames (100%), not counted | joint conf (min-max over rep): leftShoulder=[0.34-0.50] leftElbow=[0.17-0.59] rightShoulder=[0.43-0.53] rightElbow=[0.21-0.43]
+22:29:12.053 [log] [DEBUG] [METRIC] shoulderPress value=68.1037 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:12.460 [log] [DEBUG] [METRIC] shoulderPress value=68.8306 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:12.849 [log] [DEBUG] [METRIC] shoulderPress value=69.9309 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:13.262 [log] [DEBUG] [METRIC] shoulderPress value=66.5265 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:13.675 [log] [DEBUG] [METRIC] shoulderPress value=69.5452 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:14.062 [log] [DEBUG] [METRIC] shoulderPress value=71.3452 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:14.472 [log] [DEBUG] [METRIC] shoulderPress value=69.7582 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:14.850 [log] [DEBUG] [METRIC] shoulderPress value=57.9993 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:15.362 [log] [DEBUG] [METRIC] shoulderPress value=74.4340 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:15.773 [log] [DEBUG] [METRIC] shoulderPress value=79.0299 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:16.165 [log] [DEBUG] [METRIC] shoulderPress value=77.6134 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:16.576 [log] [DEBUG] [METRIC] shoulderPress value=74.3294 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:16.960 [log] [DEBUG] [METRIC] shoulderPress value=67.2117 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:20.662 [log] [DEBUG] [METRIC] shoulderPress value=54.3496 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:21.058 [log] [DEBUG] [METRIC] shoulderPress value=82.5436 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:21.473 [log] [DEBUG] [METRIC] shoulderPress value=62.3973 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:21.859 [log] [DEBUG] [METRIC] shoulderPress value=54.6042 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:22.262 [log] [DEBUG] [METRIC] shoulderPress value=60.5496 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:22.654 [log] [DEBUG] [METRIC] shoulderPress value=58.5044 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:23.057 [log] [DEBUG] [METRIC] shoulderPress value=60.3783 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:23.466 [log] [DEBUG] [METRIC] shoulderPress value=60.2311 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:23.863 [log] [DEBUG] [METRIC] shoulderPress value=59.7806 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:24.265 [log] [DEBUG] [METRIC] shoulderPress value=57.5581 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:24.667 [log] [DEBUG] [METRIC] shoulderPress value=56.8913 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:25.064 [log] [DEBUG] [METRIC] shoulderPress value=57.4236 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:25.468 [log] [DEBUG] [METRIC] shoulderPress value=56.4648 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:25.861 [log] [DEBUG] [METRIC] shoulderPress value=57.0358 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:26.368 [log] [DEBUG] [METRIC] shoulderPress value=70.1009 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+22:29:26.368 [log] [DEBUG] [REP-TRACE] shoulderPress angle=70.1009 repMinAngle=11.3052 framesSincePoseGap=56
+22:29:26.457 [log] [DEBUG] [REP-TRACE] shoulderPress angle=66.2558 repMinAngle=11.3052 framesSincePoseGap=57
+22:29:26.558 [log] [DEBUG] [REP-TRACE] shoulderPress angle=66.9629 repMinAngle=11.3052 framesSincePoseGap=58
+22:29:26.558 [log] [DEBUG] [REP] rejected — tracking unreliable for 3/3 frames (100%), not counted | joint conf (min-max over rep): leftShoulder=[0.33-0.46] leftElbow=[0.39-0.53] rightShoulder=[0.39-0.56] rightElbow=[0.23-0.30]
+22:29:26.762 [log] [DEBUG] [METRIC] shoulderPress value=82.1971 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:27.164 [log] [DEBUG] [METRIC] shoulderPress value=59.1305 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:27.580 [log] [DEBUG] [METRIC] shoulderPress value=73.5779 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:27.957 [log] [DEBUG] [METRIC] shoulderPress value=77.6911 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:28.374 [log] [DEBUG] [METRIC] shoulderPress value=61.3226 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:28.781 [log] [DEBUG] [METRIC] shoulderPress value=67.7972 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:29.164 [log] [DEBUG] [METRIC] shoulderPress value=65.4683 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:29.671 [log] [DEBUG] [METRIC] shoulderPress value=64.1166 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:30.063 [log] [DEBUG] [METRIC] shoulderPress value=59.8227 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:30.466 [log] [DEBUG] [METRIC] shoulderPress value=63.2893 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:30.869 [log] [DEBUG] [METRIC] shoulderPress value=69.1544 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:31.263 [log] [DEBUG] [METRIC] shoulderPress value=65.2591 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:31.668 [log] [DEBUG] [METRIC] shoulderPress value=67.1613 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:32.262 [log] [DEBUG] [METRIC] shoulderPress value=68.1757 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:32.674 [log] [DEBUG] [METRIC] shoulderPress value=75.7099 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:33.277 [log] [DEBUG] [METRIC] shoulderPress value=20.7701 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:33.362 [log] [DEBUG] [REP-TRACE] shoulderPress angle=49.1531 repMinAngle=20.7701 framesSincePoseGap=105
+22:29:33.465 [log] [DEBUG] [REP-TRACE] shoulderPress angle=6.2328 repMinAngle=20.7701 framesSincePoseGap=105
+22:29:33.571 [log] [DEBUG] [REP-TRACE] shoulderPress angle=78.1626 repMinAngle=6.2328 framesSincePoseGap=105
+22:29:33.663 [log] [DEBUG] [METRIC] shoulderPress value=82.7048 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+22:29:33.663 [log] [DEBUG] [REP-TRACE] shoulderPress angle=82.7048 repMinAngle=6.2328 framesSincePoseGap=105
+22:29:33.761 [log] [DEBUG] [REP-TRACE] shoulderPress angle=74.5565 repMinAngle=6.2328 framesSincePoseGap=105
+22:29:33.761 [log] [DEBUG] [REP] rejected — tracking unreliable for 5/5 frames (100%), not counted | joint conf (min-max over rep): leftShoulder=[0.29-0.64] leftElbow=[0.35-0.49] rightShoulder=[0.35-0.60] rightElbow=[0.24-0.51]
+22:29:34.064 [log] [DEBUG] [METRIC] shoulderPress value=67.7102 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:34.568 [log] [DEBUG] [METRIC] shoulderPress value=84.6480 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:34.763 [log] [DEBUG] [REP-TRACE] shoulderPress angle=48.3207 repMinAngle=33.2217 framesSincePoseGap=105
+22:29:34.860 [log] [DEBUG] [REP-TRACE] shoulderPress angle=61.7913 repMinAngle=33.2217 framesSincePoseGap=105
+22:29:34.962 [log] [DEBUG] [METRIC] shoulderPress value=87.8748 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+22:29:34.962 [log] [DEBUG] [REP-TRACE] shoulderPress angle=87.8748 repMinAngle=33.2217 framesSincePoseGap=105
+22:29:35.060 [log] [DEBUG] [REP-TRACE] shoulderPress angle=75.0275 repMinAngle=33.2217 framesSincePoseGap=105
+22:29:35.060 [log] [DEBUG] [REP] rejected — tracking unreliable for 4/4 frames (100%), not counted | joint conf (min-max over rep): leftShoulder=[0.34-0.53] leftElbow=[0.23-0.52] rightShoulder=[0.47-0.60] rightElbow=[0.35-0.58]
+22:29:35.375 [log] [DEBUG] [METRIC] shoulderPress value=66.9095 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:35.781 [log] [DEBUG] [METRIC] shoulderPress value=83.4694 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:36.165 [log] [DEBUG] [METRIC] shoulderPress value=78.6430 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:36.561 [log] [DEBUG] [METRIC] shoulderPress value=71.5420 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:36.955 [log] [DEBUG] [METRIC] shoulderPress value=70.9111 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:37.375 [log] [DEBUG] [METRIC] shoulderPress value=74.4342 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:37.765 [log] [DEBUG] [METRIC] shoulderPress value=66.5966 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:38.265 [log] [DEBUG] [METRIC] shoulderPress value=33.7035 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+22:29:38.265 [log] [DEBUG] [REP-TRACE] shoulderPress angle=33.7035 repMinAngle=38.1686 framesSincePoseGap=105
+22:29:38.364 [log] [DEBUG] [REP-TRACE] shoulderPress angle=28.1281 repMinAngle=33.7035 framesSincePoseGap=105
+22:29:38.750 [log] [DEBUG] [METRIC] shoulderPress value=23.5596 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+22:29:38.751 [log] [DEBUG] [REP-TRACE] shoulderPress angle=23.5596 repMinAngle=28.1281 framesSincePoseGap=1
+22:29:38.858 [log] [DEBUG] [REP-TRACE] shoulderPress angle=13.6143 repMinAngle=28.1281 framesSincePoseGap=2
+22:29:38.957 [log] [DEBUG] [REP-TRACE] shoulderPress angle=14.4314 repMinAngle=28.1281 framesSincePoseGap=3
+22:29:39.058 [log] [DEBUG] [REP-TRACE] shoulderPress angle=16.1266 repMinAngle=28.1281 framesSincePoseGap=4
+22:29:39.168 [log] [DEBUG] [METRIC] shoulderPress value=7.6225 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+22:29:39.168 [log] [DEBUG] [REP-TRACE] shoulderPress angle=7.6225 repMinAngle=28.1281 framesSincePoseGap=5
+22:29:39.364 [log] [DEBUG] [REP-TRACE] shoulderPress angle=27.1969 repMinAngle=7.6225 framesSincePoseGap=6
+22:29:39.583 [log] [DEBUG] [METRIC] shoulderPress value=62.2877 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+22:29:39.583 [log] [DEBUG] [REP-TRACE] shoulderPress angle=62.2877 repMinAngle=7.6225 framesSincePoseGap=7
+22:29:39.657 [log] [DEBUG] [REP-TRACE] shoulderPress angle=33.9104 repMinAngle=7.6225 framesSincePoseGap=8
+22:29:39.764 [log] [DEBUG] [REP-TRACE] shoulderPress angle=4.7970 repMinAngle=7.6225 framesSincePoseGap=9
+22:29:39.861 [log] [DEBUG] [REP-TRACE] shoulderPress angle=61.3701 repMinAngle=4.7970 framesSincePoseGap=10
+22:29:39.958 [log] [DEBUG] [METRIC] shoulderPress value=61.7116 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+22:29:39.958 [log] [DEBUG] [REP-TRACE] shoulderPress angle=61.7116 repMinAngle=4.7970 framesSincePoseGap=11
+22:29:40.060 [log] [DEBUG] [REP-TRACE] shoulderPress angle=63.0969 repMinAngle=4.7970 framesSincePoseGap=12
+22:29:40.060 [log] [DEBUG] [REP] rejected — tracking unreliable for 13/14 frames (93%), not counted | joint conf (min-max over rep): leftShoulder=[0.26-0.71] leftElbow=[0.25-0.63] rightShoulder=[0.18-0.69] rightElbow=[0.00-0.47]
+22:29:40.262 [log] [DEBUG] [REP-TRACE] shoulderPress angle=65.7379 repMinAngle=17.1847 framesSincePoseGap=14
+22:29:40.369 [log] [DEBUG] [METRIC] shoulderPress value=26.6012 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+22:29:40.370 [log] [DEBUG] [REP-TRACE] shoulderPress angle=26.6012 repMinAngle=17.1847 framesSincePoseGap=15
+22:29:40.460 [log] [DEBUG] [REP-TRACE] shoulderPress angle=28.1011 repMinAngle=17.1847 framesSincePoseGap=16
+22:29:40.562 [log] [DEBUG] [REP-TRACE] shoulderPress angle=46.7590 repMinAngle=17.1847 framesSincePoseGap=17
+22:29:40.666 [log] [DEBUG] [REP-TRACE] shoulderPress angle=75.2265 repMinAngle=17.1847 framesSincePoseGap=18
+22:29:40.771 [log] [DEBUG] [METRIC] shoulderPress value=19.2799 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+22:29:40.771 [log] [DEBUG] [REP-TRACE] shoulderPress angle=19.2799 repMinAngle=17.1847 framesSincePoseGap=19
+22:29:40.858 [log] [DEBUG] [REP-TRACE] shoulderPress angle=51.8766 repMinAngle=17.1847 framesSincePoseGap=20
+22:29:40.957 [log] [DEBUG] [REP-TRACE] shoulderPress angle=62.4434 repMinAngle=17.1847 framesSincePoseGap=21
+22:29:41.375 [log] [DEBUG] [METRIC] shoulderPress value=73.5037 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+22:29:41.376 [log] [DEBUG] [REP-TRACE] shoulderPress angle=73.5037 repMinAngle=17.1847 framesSincePoseGap=1
+22:29:41.460 [log] [DEBUG] [REP-TRACE] shoulderPress angle=72.6890 repMinAngle=17.1847 framesSincePoseGap=2
+22:29:41.564 [log] [DEBUG] [REP-TRACE] shoulderPress angle=73.1575 repMinAngle=17.1847 framesSincePoseGap=3
+22:29:41.678 [log] [DEBUG] [REP-TRACE] shoulderPress angle=72.8328 repMinAngle=17.1847 framesSincePoseGap=4
+22:29:41.762 [log] [DEBUG] [METRIC] shoulderPress value=5.9187 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+22:29:41.762 [log] [DEBUG] [REP-TRACE] shoulderPress angle=5.9187 repMinAngle=17.1847 framesSincePoseGap=5
+22:29:41.956 [log] [DEBUG] [REP-TRACE] shoulderPress angle=62.7111 repMinAngle=5.9187 framesSincePoseGap=6
+22:29:42.060 [log] [DEBUG] [REP-TRACE] shoulderPress angle=43.7648 repMinAngle=5.9187 framesSincePoseGap=7
+22:29:42.165 [log] [DEBUG] [METRIC] shoulderPress value=14.6123 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+22:29:42.165 [log] [DEBUG] [REP-TRACE] shoulderPress angle=14.6123 repMinAngle=5.9187 framesSincePoseGap=8
+22:29:42.364 [log] [DEBUG] [REP-TRACE] shoulderPress angle=72.2548 repMinAngle=5.9187 framesSincePoseGap=9
+22:29:42.466 [log] [DEBUG] [REP-TRACE] shoulderPress angle=71.8095 repMinAngle=5.9187 framesSincePoseGap=10
+22:29:42.573 [log] [DEBUG] [METRIC] shoulderPress value=72.4082 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+22:29:42.574 [log] [DEBUG] [REP-TRACE] shoulderPress angle=72.4082 repMinAngle=5.9187 framesSincePoseGap=11
+22:29:42.574 [log] [DEBUG] [REP] rejected — tracking unreliable for 15/19 frames (79%), not counted | joint conf (min-max over rep): leftShoulder=[0.43-0.68] leftElbow=[0.12-0.65] rightShoulder=[0.33-0.69] rightElbow=[0.00-0.66]
+22:29:42.956 [log] [DEBUG] [METRIC] shoulderPress value=69.3992 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:43.370 [log] [DEBUG] [METRIC] shoulderPress value=84.0504 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:46.267 [log] [DEBUG] [METRIC] shoulderPress value=0.9136 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:46.776 [log] [DEBUG] [METRIC] shoulderPress value=28.0416 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:47.157 [log] [DEBUG] [METRIC] shoulderPress value=17.4464 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:47.254 [log] [DEBUG] [REP-TRACE] shoulderPress angle=18.0800 repMinAngle=17.4464 framesSincePoseGap=6
+22:29:47.355 [log] [DEBUG] [REP-TRACE] shoulderPress angle=23.0722 repMinAngle=17.4464 framesSincePoseGap=7
+22:29:47.463 [log] [DEBUG] [REP-TRACE] shoulderPress angle=22.0499 repMinAngle=17.4464 framesSincePoseGap=8
+22:29:47.565 [log] [DEBUG] [METRIC] shoulderPress value=23.8291 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+22:29:47.565 [log] [DEBUG] [REP-TRACE] shoulderPress angle=23.8291 repMinAngle=17.4464 framesSincePoseGap=9
+22:29:47.665 [log] [DEBUG] [REP-TRACE] shoulderPress angle=18.8255 repMinAngle=17.4464 framesSincePoseGap=10
+22:29:47.770 [log] [DEBUG] [REP-TRACE] shoulderPress angle=59.0384 repMinAngle=17.4464 framesSincePoseGap=11
+22:29:47.866 [log] [DEBUG] [REP-TRACE] shoulderPress angle=68.7100 repMinAngle=17.4464 framesSincePoseGap=12
+22:29:47.973 [log] [DEBUG] [METRIC] shoulderPress value=75.0937 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+22:29:47.974 [log] [DEBUG] [REP-TRACE] shoulderPress angle=75.0937 repMinAngle=17.4464 framesSincePoseGap=13
+22:29:47.983 [log] [DEBUG] [REP] #1 top=28.0 bottom=17.4 thr=55.0 swing=10.6 ROM=ok cue=GOOD
+22:29:48.354 [log] [DEBUG] [METRIC] shoulderPress value=72.4356 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:48.762 [log] [DEBUG] [METRIC] shoulderPress value=72.1767 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:49.162 [log] [DEBUG] [METRIC] shoulderPress value=65.2569 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:49.566 [log] [DEBUG] [METRIC] shoulderPress value=57.4562 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:49.961 [log] [DEBUG] [METRIC] shoulderPress value=65.9679 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:50.364 [log] [DEBUG] [METRIC] shoulderPress value=53.0695 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:50.666 [log] [DEBUG] [REP-TRACE] shoulderPress angle=68.8680 repMinAngle=41.6223 framesSincePoseGap=40
+22:29:50.765 [log] [DEBUG] [METRIC] shoulderPress value=82.5043 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+22:29:50.765 [log] [DEBUG] [REP-TRACE] shoulderPress angle=82.5043 repMinAngle=41.6223 framesSincePoseGap=41
+22:29:50.862 [log] [DEBUG] [REP-TRACE] shoulderPress angle=69.5517 repMinAngle=41.6223 framesSincePoseGap=42
+22:29:50.862 [log] [DEBUG] [REP] #2 top=86.0 bottom=41.6 thr=55.0 swing=44.4 ROM=ok cue=GOOD
+22:29:51.055 [log] [DEBUG] [REP-TRACE] shoulderPress angle=49.2157 repMinAngle=47.5708 framesSincePoseGap=44
+22:29:51.159 [log] [DEBUG] [METRIC] shoulderPress value=68.8574 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+22:29:51.159 [log] [DEBUG] [REP-TRACE] shoulderPress angle=68.8574 repMinAngle=47.5708 framesSincePoseGap=45
+22:29:51.259 [log] [DEBUG] [REP-TRACE] shoulderPress angle=88.7505 repMinAngle=47.5708 framesSincePoseGap=46
+22:29:51.359 [log] [DEBUG] [REP-TRACE] shoulderPress angle=79.8526 repMinAngle=47.5708 framesSincePoseGap=47
+22:29:51.567 [log] [DEBUG] [METRIC] shoulderPress value=74.5878 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:51.974 [log] [DEBUG] [METRIC] shoulderPress value=79.4170 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:52.269 [log] [DEBUG] [REP-TRACE] shoulderPress angle=56.3858 repMinAngle=47.2646 framesSincePoseGap=56
+22:29:52.361 [log] [DEBUG] [METRIC] shoulderPress value=72.8705 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+22:29:52.361 [log] [DEBUG] [REP-TRACE] shoulderPress angle=72.8705 repMinAngle=47.2646 framesSincePoseGap=57
+22:29:52.463 [log] [DEBUG] [REP-TRACE] shoulderPress angle=87.3602 repMinAngle=47.2646 framesSincePoseGap=58
+22:29:52.566 [log] [DEBUG] [REP-TRACE] shoulderPress angle=76.1149 repMinAngle=47.2646 framesSincePoseGap=59
+22:29:52.567 [log] [DEBUG] [REP] #3 top=86.0 bottom=47.3 thr=55.0 swing=38.7 ROM=ok cue=GOOD
+22:29:52.758 [log] [DEBUG] [METRIC] shoulderPress value=73.7296 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:53.167 [log] [DEBUG] [METRIC] shoulderPress value=85.7905 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:53.564 [log] [DEBUG] [METRIC] shoulderPress value=67.2626 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:53.976 [log] [DEBUG] [METRIC] shoulderPress value=71.7842 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:54.370 [log] [DEBUG] [METRIC] shoulderPress value=79.5915 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:54.771 [log] [DEBUG] [METRIC] shoulderPress value=60.1334 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:55.169 [log] [DEBUG] [METRIC] shoulderPress value=79.3709 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:55.565 [log] [DEBUG] [METRIC] shoulderPress value=74.1485 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:55.978 [log] [DEBUG] [METRIC] shoulderPress value=52.9751 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:56.369 [log] [DEBUG] [METRIC] shoulderPress value=76.9211 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:56.770 [log] [DEBUG] [METRIC] shoulderPress value=74.2018 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:57.175 [log] [DEBUG] [METRIC] shoulderPress value=73.0522 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:57.573 [log] [DEBUG] [METRIC] shoulderPress value=73.0378 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:57.973 [log] [DEBUG] [METRIC] shoulderPress value=73.0955 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:58.369 [log] [DEBUG] [METRIC] shoulderPress value=67.7373 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:58.768 [log] [DEBUG] [METRIC] shoulderPress value=76.8215 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:59.169 [log] [DEBUG] [METRIC] shoulderPress value=75.3062 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:59.577 [log] [DEBUG] [METRIC] shoulderPress value=78.6647 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:29:59.973 [log] [DEBUG] [METRIC] shoulderPress value=55.7210 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:00.371 [log] [DEBUG] [METRIC] shoulderPress value=83.7985 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:00.775 [log] [DEBUG] [METRIC] shoulderPress value=73.2038 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:01.168 [log] [DEBUG] [METRIC] shoulderPress value=83.4682 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:01.571 [log] [DEBUG] [METRIC] shoulderPress value=70.2587 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:01.975 [log] [DEBUG] [METRIC] shoulderPress value=72.1456 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:02.371 [log] [DEBUG] [METRIC] shoulderPress value=73.1608 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:02.774 [log] [DEBUG] [METRIC] shoulderPress value=79.7461 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:03.168 [log] [DEBUG] [METRIC] shoulderPress value=68.2892 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:03.579 [log] [DEBUG] [METRIC] shoulderPress value=80.4669 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:03.977 [log] [DEBUG] [METRIC] shoulderPress value=79.3451 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:04.372 [log] [DEBUG] [METRIC] shoulderPress value=80.5757 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:04.782 [log] [DEBUG] [METRIC] shoulderPress value=52.1268 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:05.165 [log] [DEBUG] [METRIC] shoulderPress value=72.8570 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:05.575 [log] [DEBUG] [METRIC] shoulderPress value=82.2173 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:05.977 [log] [DEBUG] [METRIC] shoulderPress value=72.6284 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:06.370 [log] [DEBUG] [METRIC] shoulderPress value=61.1771 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:06.771 [log] [DEBUG] [METRIC] shoulderPress value=27.5224 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:07.174 [log] [DEBUG] [METRIC] shoulderPress value=20.8088 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:07.678 [log] [DEBUG] [METRIC] shoulderPress value=27.2994 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:09.472 [log] [DEBUG] [METRIC] shoulderPress value=24.9882 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:09.873 [log] [DEBUG] [METRIC] shoulderPress value=17.5154 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:10.270 [log] [DEBUG] [METRIC] shoulderPress value=21.8556 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:10.672 [log] [DEBUG] [METRIC] shoulderPress value=33.5873 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:11.071 [log] [DEBUG] [METRIC] shoulderPress value=75.1399 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:11.469 [log] [DEBUG] [METRIC] shoulderPress value=69.6249 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:11.872 [log] [DEBUG] [METRIC] shoulderPress value=85.9418 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:12.273 [log] [DEBUG] [METRIC] shoulderPress value=69.5018 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:12.670 [log] [DEBUG] [METRIC] shoulderPress value=72.8763 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:13.071 [log] [DEBUG] [METRIC] shoulderPress value=52.6454 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:13.481 [log] [DEBUG] [METRIC] shoulderPress value=84.9032 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:13.872 [log] [DEBUG] [METRIC] shoulderPress value=71.5330 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:14.274 [log] [DEBUG] [METRIC] shoulderPress value=89.0070 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:14.668 [log] [DEBUG] [METRIC] shoulderPress value=62.3541 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:15.069 [log] [DEBUG] [METRIC] shoulderPress value=79.4740 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:15.475 [log] [DEBUG] [METRIC] shoulderPress value=74.7117 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:15.872 [log] [DEBUG] [METRIC] shoulderPress value=73.7111 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:16.273 [log] [DEBUG] [METRIC] shoulderPress value=73.6273 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:16.673 [log] [DEBUG] [METRIC] shoulderPress value=85.9160 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:17.073 [log] [DEBUG] [METRIC] shoulderPress value=60.4728 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:17.475 [log] [DEBUG] [METRIC] shoulderPress value=69.4341 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:17.872 [log] [DEBUG] [METRIC] shoulderPress value=74.9696 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:18.274 [log] [DEBUG] [METRIC] shoulderPress value=62.2833 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:18.671 [log] [DEBUG] [METRIC] shoulderPress value=84.0282 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:19.070 [log] [DEBUG] [METRIC] shoulderPress value=72.9009 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:19.476 [log] [DEBUG] [METRIC] shoulderPress value=59.6061 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:19.865 [log] [DEBUG] [METRIC] shoulderPress value=86.0596 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:20.273 [log] [DEBUG] [METRIC] shoulderPress value=71.5942 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:20.678 [log] [DEBUG] [METRIC] shoulderPress value=86.7720 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:21.068 [log] [DEBUG] [METRIC] shoulderPress value=79.7485 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+22:30:21.475 [log] [DEBUG] [METRIC] shoulderPress value=68.6506 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top

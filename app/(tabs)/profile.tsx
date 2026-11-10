@@ -16,6 +16,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, Alert, Share, Animated } from 'react-native';
 import { useRevealFade } from '../../lib/useRevealFade';
 import { createTabLag } from '../../lib/tabLag';
+import { tabBarCover } from '../../lib/tabBarMetrics';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
@@ -93,7 +94,7 @@ export default function ProfileScreen() {
       location, latestWeightLb: weights.length ? weights[weights.length - 1].weightLb : null,
       details,
       audio: { enabled: audio.audioEnabled, voiceFrequency: audio.voiceFrequency },
-      insets: { top: insets.top, bottom: insets.bottom },
+      insets: { top: insets.top, bottom: insets.bottom, tabCover: tabBarCover(insets.bottom) },
       appVersion: `FormPal ${Constants.expoConfig?.version ?? ''}${Constants.expoConfig?.ios?.buildNumber ? ` (${Constants.expoConfig.ios.buildNumber})` : ''}`.trim(),
     });
     lag.mark('dataReady');
