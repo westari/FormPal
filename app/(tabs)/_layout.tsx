@@ -13,12 +13,15 @@ export default function TabLayout() {
   return (
     <Tabs
       tabBar={(props) => <GlassTabBar {...props} />}
-      // switching tabs cross-fades (it used to cut straight to the other page)
-      screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: '#eeeef1' }, animation: 'fade', transitionSpec: { animation: 'timing', config: { duration: 220 } } }}
+      // Every tab is built at launch and stays attached behind the open one (detachInactiveScreens off), so tapping a tab only
+      // brings it to the front: no fade, no first-open load. (A fade between tabs also let the dark navigator background
+      // show through for a moment, and could leave a tab half-transparent: the all-black screen.)
+      detachInactiveScreens={false}
+      screenOptions={{ headerShown: false, lazy: false, animation: 'none', sceneStyle: { backgroundColor: '#eeeef1' } }}
     >
       <Tabs.Screen name="index" />
       <Tabs.Screen name="train" />
-      <Tabs.Screen name="plus" options={{ href: null }} />
+      <Tabs.Screen name="plus" options={{ href: null, lazy: true }} />
       <Tabs.Screen name="progress" />
       <Tabs.Screen name="profile" />
     </Tabs>

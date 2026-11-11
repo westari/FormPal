@@ -19,7 +19,7 @@ import CueOrb from './CueOrb';
 import { PLUS_SIZE, TAB_BAR_SIDE } from '../lib/tabBarMetrics';
 
 const BTN = 60;
-const ORB = 60; // the same footprint as a glass button (halo included), so it reads as the same size as the others
+const ORB = 48; // the orb itself (no halo): about the size of the glyph circles around it, centred in the same 60 box
 
 // Top to bottom. Cue on top (the assistant, set apart), then the three things you do, the main one nearest the "+".
 export const PLUS_ACTIONS = [
@@ -60,7 +60,7 @@ export default function PlusMenu({ open, onClose, bottom }: { open: boolean; onC
   if (!mounted) return null;
 
   const go = (route: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); // an ordinary row press
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft); // a row that opens something
     onClose();
     router.push(route as any);
   };
@@ -85,7 +85,7 @@ export default function PlusMenu({ open, onClose, bottom }: { open: boolean; onC
               </LiquidGlassButton>
             ) : (
               <Pressable onPress={() => go(a.route)} accessibilityLabel={a.label} style={s.orb} hitSlop={4}>
-                <CueOrb size={ORB} />
+                <CueOrb size={ORB} halo={false} />
               </Pressable>
             )}
           </Animated.View>

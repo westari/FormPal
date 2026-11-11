@@ -23,8 +23,15 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
   var MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   var RANGE_DAYS = [61, 183, 365, 0];
   var DAY = 86400000;
-  // PLACEHOLDER RULE (Ari to confirm): a new weight more than 15% away from the last one asks "Are you sure?" before it is saved.
-  var SANITY_PCT = 0.15;
+  // PLACEHOLDER RULE (Ari to confirm the numbers): a new weight asks "Are you sure?" when it is further from the last logged one
+  // than the allowed change: 2.5% of that weight, plus 1% of it for every week since that entry, never more than 20%.
+  // (200 lb yesterday: about 5.3 lb allowed, so +10 asks. 200 lb a month ago: about 13.6 lb allowed, so +10 does not.)
+  var SANITY_BASE_PCT = 0.025, SANITY_WEEKLY_PCT = 0.01, SANITY_CAP_PCT = 0.20;
+  function sanityAllowed(lastLb, daysSince) {
+    var pct = Math.min(SANITY_CAP_PCT, SANITY_BASE_PCT + SANITY_WEEKLY_PCT * (Math.max(0, daysSince) / 7));
+    return lastLb * pct;
+  }
+  window.__athltSanityAllowed = sanityAllowed;
   function D() { return window.__athltData || {}; }
   function post(m) { try { window.ReactNativeWebView.postMessage(JSON.stringify(m)); } catch (e) {} }
   function pad2(n) { return n < 10 ? '0' + n : '' + n; }
@@ -163,16 +170,20 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
 
       // One-line summary under the chart (replaces "You're X% of the way to your goal" —
       // there is no goal weight stored locally to compute that from).
-      var summary;
+      var summary, statBig = '', statSmall = '';
       var dlabel = function (k) { var dt = parseKey(k); return MON[dt.getMonth()] + ' ' + dt.getDate(); };
       window.__athltChart = all.length === 0 ? 'none' : series.length === 0 ? 'range' : 'ok';
-      if (all.length === 0) summary = 'Log your weight to start your chart';
-      else if (all.length === 1) summary = 'Log again to see your trend';
+      if (all.length === 0) { summary = 'Log your weight to start your chart'; statSmall = summary; }
+      else if (all.length === 1) { summary = 'Log again to see your trend'; statSmall = summary; }
       else {
         var diff = Math.round((all[all.length - 1].w - all[0].w) * 10) / 10;
         summary = diff === 0 ? 'Same weight as ' + dlabel(all[0].d)
           : Math.abs(diff) + ' lb ' + (diff < 0 ? 'down' : 'up') + ' since ' + dlabel(all[0].d);
+        // the same line as a real stat: a big number and a short label
+        statBig = Math.abs(diff) + ' lb';
+        statSmall = diff === 0 ? 'same as ' + dlabel(all[0].d) : (diff < 0 ? 'down' : 'up') + ' since ' + dlabel(all[0].d);
       }
+      window.__athltStat = { big: statBig, small: statSmall };
 
       var t = todayParts();
       var wy = s.wYear == null ? t.y : s.wYear, wm = s.wMonth, wd = s.wDay;
@@ -188,7 +199,7 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
         // "Oct 20 · 180" + the design's own " lb"
         wNow: shown == null ? '–' : dlabel(series[selIdx].d) + ' · ' + fmt(shown),
         wLine: line, wArea: area, wTicks: ticks, wLast: lastPt, wMonths: months,
-        wGoalPctLabel: summary,
+        wGoalPctLabel: statBig,
         wRanges: ['2m', '6m', '1y', 'All'].map(function (label, i) {
           var p = pillStyle(i === ri);
           return { label: label, fg: p.fg, bg: p.bg, shadow: p.shadow, pick: function () { self.setState({ wRange: i, wSel: null }); } };
@@ -259,7 +270,8 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
             setTimeout(finish, 2100);
           };
           // far from the last weight: ask first
-          if (ref && Math.abs(v - ref.w) / ref.w > SANITY_PCT) {
+          var daysSince = ref ? Math.abs(parseKey(key).getTime() - parseKey(ref.d).getTime()) / DAY : 0;
+          if (ref && Math.abs(v - ref.w) > sanityAllowed(ref.w, daysSince)) {
             if (window.__hapticClaim) window.__hapticClaim('warning'); // the warning replaces this press's guessed haptic
             window.__athltConfirm = {
               v: v, last: ref.w, diff: Math.round(Math.abs(v - ref.w) * 10) / 10,
@@ -646,7 +658,7 @@ export const PROGRESS_DOM_JS = String.raw`
       if (!cg) {
         cg = document.createElement('div');
         cg.id = '__athlt_confirm';
-        cg.style.cssText = 'position:absolute;inset:0;z-index:95;background:rgba(17,17,20,0.38);display:flex;align-items:flex-end;justify-content:center;padding:0 14px 40px;';
+        cg.style.cssText = 'position:absolute;inset:0;z-index:95;background:rgba(17,17,20,0.38);display:flex;align-items:center;justify-content:center;padding:0 22px ' + Math.round((window.__athltTb || 110) * 0.5) + 'px;'; // in the middle of the screen, clear of the tab bar
         cg.innerHTML = '<div class="cf-card" style="width:100%;border-radius:30px;background:#ffffff;padding:26px 22px 20px;text-align:center;box-shadow:0 20px 50px -20px rgba(17,17,20,0.5);">'
           + '<div style="font-size:22px;font-weight:700;letter-spacing:-0.6px;color:#111114;">Are you sure?</div>'
           + '<div style="padding-top:8px;font-size:15px;font-weight:500;line-height:1.4;color:#5f5f69;">That\'s ' + cf.diff + ' lb different from last time (' + (Math.round(cf.last * 10) / 10) + ' lb to ' + cf.v + ' lb).</div>'
@@ -911,22 +923,39 @@ export const PROGRESS_DOM_JS = String.raw`
             var node = goalEl.childNodes[c];
             if (node.nodeType === 3 && node.nodeValue !== '') node.nodeValue = '';
           }
+          // The insight, back under the graph, as a real stat: a big number over a short label, beside a bright moving Cue orb.
+          var st = window.__athltStat || { big: '', small: '' };
           var gsp = goalEl.querySelector('span');
-          if (gsp) { gsp.style.setProperty('font-weight', '700'); }
-          // same footer type as the Form Score card: 13.5px / 500 / #3c3c43, 7px from the orb
-          goalEl.style.setProperty('font-size', '13.5px'); goalEl.style.setProperty('font-weight', '500'); goalEl.style.setProperty('color', 'rgb(60, 60, 67)');
-          if (goalEl.parentElement) goalEl.parentElement.style.setProperty('gap', '7px');
-          // The insight line moves to the TOP of the graph (under the range pills): ordering only, no node is moved
           var irow = goalEl.parentElement;
-          if (irow && irow.parentElement === wcard) {
-            wcard.style.setProperty('display', 'flex', 'important'); wcard.style.setProperty('flex-direction', 'column', 'important');
-            for (var wk2 = 0; wk2 < wcard.children.length; wk2++) {
-              var kid = wcard.children[wk2];
-              kid.style.setProperty('order', kid === irow ? '1' : String(wk2 === 0 ? 0 : wk2 + 2), 'important');
+          goalEl.style.setProperty('display', 'flex'); goalEl.style.setProperty('flex-direction', 'column'); goalEl.style.setProperty('align-items', 'flex-start');
+          goalEl.style.setProperty('gap', '2px'); goalEl.style.setProperty('line-height', '1.1');
+          if (gsp) {
+            gsp.style.setProperty('display', st.big ? 'block' : 'none');
+            gsp.style.setProperty('font-size', '27px'); gsp.style.setProperty('font-weight', '800'); gsp.style.setProperty('letter-spacing', '-0.9px');
+            gsp.style.setProperty('color', '#111114'); gsp.style.setProperty('font-variant-numeric', 'tabular-nums');
+          }
+          var slbl = null;
+          for (var sk = 0; sk < goalEl.children.length; sk++) if (goalEl.children[sk].hasAttribute('data-athlt-statlbl')) slbl = goalEl.children[sk];
+          if (!slbl) { slbl = document.createElement('div'); slbl.setAttribute('data-athlt-statlbl', '1'); goalEl.appendChild(slbl); }
+          setText(slbl, st.small);
+          slbl.style.setProperty('font-size', st.big ? '12.5px' : '13.5px'); slbl.style.setProperty('font-weight', st.big ? '600' : '500');
+          slbl.style.setProperty('color', st.big ? '#6e6e77' : 'rgb(60, 60, 67)');
+          if (irow) {
+            irow.style.setProperty('gap', '12px');
+            var orb = irow.children[0];
+            if (orb && !orb.__alive) {
+              orb.__alive = true;
+              orb.style.setProperty('width', '36px', 'important'); orb.style.setProperty('height', '36px', 'important');
+              orb.style.setProperty('filter', 'saturate(1.55) brightness(1.1)', 'important');
+              orb.style.setProperty('border-radius', '50%', 'important'); // (the design leaves the box square, a glow on it would be square too)
+              orb.style.setProperty('box-shadow', '0 0 18px 3px rgba(110,160,255,0.55)', 'important');
+              // the page switches every animation off; the orb's own (the design's hm-orb-* ones) are put back one by one
+              var layers = [orb].concat([].slice.call(orb.querySelectorAll('*')));
+              for (var ly = 0; ly < layers.length; ly++) {
+                var am = /animation:\s*([^;]+);?/.exec(layers[ly].getAttribute('style') || '');
+                if (am) layers[ly].style.setProperty('animation', am[1].replace(/!important/, '').trim(), 'important');
+              }
             }
-            wcard.children[0].style.setProperty('align-self', 'flex-start', 'important');
-            irow.style.setProperty('margin-top', '12px', 'important');
-            irow.style.setProperty('margin-bottom', '-2px', 'important');
           }
         }
         // the card's black button: "Log weight", or "Edit today's weight" once today's is in
@@ -937,6 +966,13 @@ export const PROGRESS_DOM_JS = String.raw`
           var nd = new Date(), tk2 = nd.getFullYear() + '-' + String(nd.getMonth() + 1).padStart(2, '0') + '-' + String(nd.getDate()).padStart(2, '0');
           var hasToday = (d.weight || []).some(function (x) { return x.d === tk2; });
           if (tn) { var want = hasToday ? "Edit today's weight" : 'Log weight'; if (tn.nodeValue !== want) tn.nodeValue = want; }
+          // a pencil (not a +) once today's weight is in
+          var ico = wlink.querySelector('svg path');
+          if (ico) {
+            if (!ico.__plusD) ico.__plusD = ico.getAttribute('d');
+            var wantD = hasToday ? 'M10.8 2.6 13.4 5.2 5.9 12.7 2.6 13.4 3.3 10.1z M9.4 4 12 6.6' : ico.__plusD;
+            if (ico.getAttribute('d') !== wantD) { ico.setAttribute('d', wantD); ico.setAttribute('stroke-width', hasToday ? '1.5' : '2.2'); ico.setAttribute('stroke-linejoin', 'round'); }
+          }
         }
       }
     }
@@ -1055,9 +1091,11 @@ export const PROGRESS_DOM_JS = String.raw`
     var vidBoxes = root.querySelectorAll('div[role="img"][aria-label$=" video"]');
     var listBoxes = root.querySelectorAll('div[style*="width: 74px"][style*="height: 92px"]');
     var setThumb = function (el, w) {
-      var sig = w.thumb ? 'v' + w.thumb.length : w.fallback ? 'f' + w.fallback.length : '';
+      var sig = w.logged ? 'L' : w.thumb ? 'v' + w.thumb.length : w.fallback ? 'f' + w.fallback.length : '';
       if (!sig || el.__thumb === sig) return;
       el.__thumb = sig;
+      if (window.__paintLogged) window.__paintLogged(el, !!w.logged);
+      if (w.logged) return; // typed in by hand: a "Logged" tile, never a camera frame
       if (w.thumb) {
         el.style.setProperty('background-image', 'url(' + w.thumb + ')', 'important');
         el.style.setProperty('background-size', 'cover', 'important');

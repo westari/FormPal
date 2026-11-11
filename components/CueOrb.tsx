@@ -31,7 +31,9 @@ function useDrift(totalMs: number, frames: [number, number, number][]) {
   };
 }
 
-export default function CueOrb({ size = 28 }: { size?: number }) {
+/** halo = false: just the orb, a full clean circle (no glow disc around it). The halo's own drawing is wider than its box, so
+ *  where it is on it shows as a cut-off glow, which is what the plus menu must not have. */
+export default function CueOrb({ size = 28, halo: withHalo = true }: { size?: number; halo?: boolean }) {
   const breathe = useRef(new Animated.Value(0)).current;
   const halo = useRef(new Animated.Value(0)).current;
   const wobble = useRef(new Animated.Value(0)).current;
@@ -49,7 +51,7 @@ export default function CueOrb({ size = 28 }: { size?: number }) {
   const white = useDrift(6500, [[-0.18, 0.22, 1], [0.24, -0.08, 1.25], [-0.06, -0.26, 0.9], [-0.18, 0.22, 1]]);
   const purple = useDrift(8000, [[0.22, -0.2, 1.1], [-0.24, 0.06, 0.85], [0.1, 0.26, 1.2], [0.22, -0.2, 1.1]]);
 
-  const body = size * 0.78;                 // the orb body inside its halo
+  const body = withHalo ? size * 0.78 : size; // the orb body inside its halo (or the whole box when there is no halo)
   const off = (size - body) / 2;
   const breatheScale = breathe.interpolate({ inputRange: [0, 1], outputRange: [1, 1.045] });
   const haloOpacity = halo.interpolate({ inputRange: [0, 1], outputRange: [0.55, 1] });
@@ -63,7 +65,7 @@ export default function CueOrb({ size = 28 }: { size?: number }) {
   return (
     <Animated.View style={{ width: size, height: size, transform: [{ scale: breatheScale }] }} pointerEvents="none">
       {/* halo */}
-      <Animated.View style={{ position: 'absolute', left: 0, top: 0, width: size, height: size, opacity: haloOpacity }}>
+      {withHalo && <Animated.View style={{ position: 'absolute', left: 0, top: 0, width: size, height: size, opacity: haloOpacity }}>
         <Svg width={size} height={size} viewBox="0 0 100 100">
           <Defs>
             <RadialGradient id="halo" cx="50" cy="54" r="50" gradientUnits="userSpaceOnUse">
@@ -72,7 +74,7 @@ export default function CueOrb({ size = 28 }: { size?: number }) {
           </Defs>
           <Circle cx="50" cy="54" r="50" fill="url(#halo)" />
         </Svg>
-      </Animated.View>
+      </Animated.View>}
       {/* the body: clipped to a (slightly wobbling) circle */}
       <Animated.View style={{ position: 'absolute', left: off, top: off, width: body, height: body, borderRadius: body / 2, overflow: 'hidden', transform: [{ scaleX: wobX }, { scaleY: wobY }] }}>
         <Svg width={body} height={body} viewBox="0 0 100 100" style={{ position: 'absolute' }}>

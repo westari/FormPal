@@ -27,7 +27,7 @@ for (const s of screens) {
   const f = path.join(TABS, s.name + '.tsx');
   check(`route "${s.name}" has app/(tabs)/${s.name}.tsx with a default export`, fs.existsSync(f) && /export default/.test(fs.readFileSync(f, 'utf8')));
 }
-check('Plus is hidden from the bar (it is a button now, not a page)', /name="plus" options=\{\{ href: null \}\}/.test(layout) && /Redirect/.test(read('app', '(tabs)', 'plus.tsx')));
+check('Plus is hidden from the bar (it is a button now, not a page)', /name="plus" options=\{\{ href: null, lazy: true \}\}/.test(layout) && /Redirect/.test(read('app', '(tabs)', 'plus.tsx')));
 check('the layout uses the glass bar (components/GlassTabBar), not NativeTabs', /tabBar=\{\(props\) => <GlassTabBar/.test(layout) && !/NativeTabs/.test(layout));
 check('TAB_NAMES (logged at runtime as [TABS]) matches the registered routes', /TAB_NAMES = \['index', 'train', 'plus', 'progress', 'profile'\]/.test(layout));
 
@@ -64,14 +64,15 @@ check('tapping outside fades the menu out smoothly (blur + actions animate back 
 const orb = read('components', 'CueOrb.tsx');
 check('the Cue orb in the menu animates like the other orbs (drifting glow + core, wobble, breathing, native driven)', (orb.match(/useDrift\(/g) || []).length >= 3 && /useNativeDriver: true/.test(orb) && !/useNativeDriver: false/.test(orb) && /CUE_ORB_ANIMATED_LAYERS/.test(orb) && require('../components/CueOrb.tsx').CUE_ORB_ANIMATED_LAYERS.length >= 4, String(require('../components/CueOrb.tsx').CUE_ORB_ANIMATED_LAYERS));
 check('tab labels use the Apple system font (no fontFamily) at the tab bar size 10pt medium', /label:\s+\{ fontSize: 10, fontWeight: '500', letterSpacing: 0\.12 \}/.test(bar) && !/\n  label:[^\n]*fontFamily/.test(bar));
-check('switching tabs cross-fades instead of cutting (animation fade, 220ms timing)', /animation: 'fade'/.test(layout) && /transitionSpec: \{ animation: 'timing', config: \{ duration: 220 \} \}/.test(layout));
+check('tabs show instantly: all built at launch (lazy false), kept attached behind the open one (detachInactiveScreens false), no fade between them (animation none: a fade let the dark navigator show through = the black screen)', /lazy: false/.test(layout) && /detachInactiveScreens=\{false\}/.test(layout) && /animation: 'none'/.test(layout) && !/animation: 'fade'/.test(layout) && /name="plus" options=\{\{ href: null, lazy: true \}\}/.test(layout));
+check('Home, Progress and Profile pages reload at once when iOS kills their web view (no blank/black page left behind)', ['index', 'progress', 'profile'].every(f => /onContentProcessDidTerminate=\{\(\) => \{ hide\(\); webRef\.current\?\.reload\(\); \}\}/.test(read('app', '(tabs)', f + '.tsx'))));
 check('every action button is real Liquid Glass (LiquidGlassButton)', /<LiquidGlassButton[\s\S]*?onPress=\{\(\) => go\(a\.route\)\}/.test(menu));
-check('Cue is only its moving orb: no glass, no border, no background around it', /<CueOrb size=\{ORB\} \/>/.test(menu) && !/borderWidth|borderColor/.test(menu) && /orb:\s+\{ width: BTN, height: BTN, alignItems: 'center', justifyContent: 'center', overflow: 'visible' \}/.test(menu));
+check('Cue is only its moving orb: no glass, no border, no background around it', /<CueOrb size=\{ORB\} halo=\{false\} \/>/.test(menu) && !/borderWidth|borderColor/.test(menu) && /orb:\s+\{ width: BTN, height: BTN, alignItems: 'center', justifyContent: 'center', overflow: 'visible' \}/.test(menu));
 check('the menu opens the real screens (exercise-picker, workout, log-session, cue)', ['/exercise-picker', '/create-workout', '/workout', '/log-session', '/cue'].every(r => menu.includes(`route: '${r}'`)));
 check('the + turns into an x while the menu is open (rotates 45 degrees)', /outputRange: \['0deg', '45deg'\]/.test(bar));
 
 check('the + icon is thin (light weight, not semibold)', /name=\{'plus' as any\} size=\{26\} weight="light"/.test(bar) && !/weight="semibold"/.test(bar));
-check('the Cue orb has the same footprint as a glass button (ORB = BTN)', /const BTN = 60;/.test(menu) && /const ORB = 60;/.test(menu));
+check('the Cue orb in the menu is a full clean orb: no halo disc, centred in the same 60 box as the glass buttons', /const BTN = 60;/.test(menu) && /const ORB = 48;/.test(menu) && /<CueOrb size=\{ORB\} halo=\{false\} \/>/.test(menu));
 check('the bar and + are smaller than before (58 / 64, were 64 / 72), same layout', M.TAB_BAR_H === 58 && M.PLUS_SIZE === 64 && M.PLUS_SIZE > M.TAB_BAR_H);
 check('ONE glass pill slides between tabs on a spring (not a square painted on each tab)', /Animated\.spring\(slide/.test(bar) && /translateX: slide/.test(bar) && (bar.match(/variant="clear"/g) || []).length === 1 && !/itemOn/.test(bar));
 check('the pill starts on the current tab without sliding in from the side (first placement is instant)', /if \(!placed\.current\) \{ slide\.setValue\(idx \* itemW\)/.test(bar));

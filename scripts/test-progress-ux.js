@@ -22,7 +22,7 @@ const png = (c) => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http:
   const msgs = [];
   await p.exposeFunction('__post', (d) => { try { msgs.push(JSON.parse(d)); } catch {} });
   await p.addInitScript(() => { window.ReactNativeWebView = { postMessage: (d) => window.__post(d) }; });
-  await p.addInitScript(H.DC_VIEWPORT_JS + H.DC_NO_ZOOM_JS + H.CONSOLE_FORWARD_JS + H.DC_SETTLE_JS + dcLogicPatchJs(INJ.PROGRESS_LOGIC_EXT) + INJ.PROGRESS_DOM_JS + require('../lib/haptics.ts').HAPTIC_PAGE_JS);
+  await p.addInitScript(H.DC_VIEWPORT_JS + H.DC_NO_ZOOM_JS + H.CONSOLE_FORWARD_JS + H.DC_SETTLE_JS + dcLogicPatchJs(INJ.PROGRESS_LOGIC_EXT) + INJ.PROGRESS_DOM_JS + require('../lib/haptics.ts').HAPTIC_PAGE_JS + require('../lib/loggedTile.ts').LOGGED_TILE_JS);
   p.on('pageerror', (e) => console.log('PAGEERROR', e.message));
   const data = makeData(); const now = Date.now(), DAY = 86400000;
   data.photos = [0, 1, 2].map(i => ({ id: 'p' + i, ts: now - i * 9 * DAY, pose: ['front', 'side', 'back'][i % 3], thumb: png(['#c0392b', '#2980b9', '#27ae60'][i % 3]) }));
@@ -32,7 +32,7 @@ const png = (c) => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http:
   data.form = FORM_DAYS.map((d, i) => ({ ts: now + d * DAY, pct: 60 + i * 4 }));
   { const t = new Date(now), tk = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0'); data.weight = data.weight.filter(w => w.d !== tk); } // nothing logged today yet
   const frameImg = png('#8e44ad');
-  data.workouts = [0, 1, 2].map(i => ({ ts: now - i * DAY, name: ['Upper Body', 'Lower Body', 'Full Body'][i], when: ['Today', 'Yesterday', '2 days ago'][i] + ' · 24 min', form: 90 - i, formPct: 90 - i, reps: 40, sets: 4, thumb: i < 2 ? frameImg : null, muscle: 'chest', fallback: frameImg.replace('8e44ad', 'cccccc') }));
+  data.workouts = [0, 1, 2, 3].map(i => ({ ts: now - i * DAY, name: ['Upper Body', 'Lower Body', 'Full Body', 'Core'][i], when: ['Today', 'Yesterday', '2 days ago', '3 days ago'][i] + ' · 24 min', form: 90 - i, formPct: 90 - i, reps: 40, sets: 4, thumb: i < 2 ? frameImg : null, muscle: 'chest', fallback: frameImg.replace('8e44ad', 'cccccc'), logged: i === 2 }));
   await p.goto(pathToFileURL(path.join(ROOT, 'assets', 'app screens', 'progress.html')).href, { waitUntil: 'commit' });
   const t0 = Date.now(); let pushed = false;
   while (!(await p.evaluate(() => document.documentElement.hasAttribute('data-pready')).catch(() => false)) && Date.now() - t0 < 25000) { if (!pushed && msgs.some(m => m.type === 'needData')) { pushed = true; await p.evaluate(athltSetDataJs(data)); } await p.waitForTimeout(50); }
@@ -124,7 +124,7 @@ const png = (c) => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http:
 
   // ── 5. the insight line sits at the TOP of the weight graph ──
   const lay = await p.evaluate(() => {
-    const goal = [...document.querySelectorAll('#dc-root div')].find(d => /(lb (up|down) since|Same weight as|Log again|Log your weight)/.test(d.textContent) && d.children.length <= 1 && d.textContent.length < 60);
+    const goal = (document.querySelector('[data-athlt-statlbl]') || {}).parentElement;
     const row = goal && goal.parentElement;
     const svg = [...document.querySelectorAll('#dc-root svg')].find(s => s.querySelector('path[fill="url(#pgWt)"]'));
     const pill = [...document.querySelectorAll('#dc-root *')].filter(d => d.textContent.trim() === '2m' && ![...d.children].some(c => c.textContent.trim() === '2m'))[0];
@@ -133,8 +133,12 @@ const png = (c) => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http:
     return { rowTop: Math.round(r.top), rowBottom: Math.round(r.bottom), chartTop: Math.round(c.top), pillBottom: Math.round(pl.bottom), text: row.textContent.trim().slice(0, 40) };
   });
   console.log('      insight line:', JSON.stringify(lay), JSON.stringify(await p.evaluate(() => [...document.querySelectorAll('#dc-root div')].filter(d => /since|Same weight/.test(d.textContent) && d.children.length <= 3 && d.textContent.length < 70).map(d => d.textContent.trim().slice(0, 30) + '|' + d.style.justifyContent + '|' + d.children.length).slice(0, 5))));
-  check('5. The Cue insight line is at the top of the graph (under the 2m/6m/1y pills, above the chart), not under it', lay && lay.rowTop >= lay.pillBottom - 2 && lay.rowBottom <= lay.chartTop + 6, JSON.stringify(lay));
-  await shot('ux_insight_top');
+  const stat = await p.evaluate(() => { const lbl = document.querySelector('[data-athlt-statlbl]'); if (!lbl) return null; const goal = lbl.parentElement, row = goal.parentElement; const big = goal.querySelector('span'); const orb = row.children[0]; const anim = [orb, ...orb.querySelectorAll('*')].map(e => getComputedStyle(e).animationName).filter(n => n && n !== 'none'); return { big: big.textContent.trim(), bigSize: getComputedStyle(big).fontSize, label: lbl.textContent.trim(), orbW: Math.round(orb.getBoundingClientRect().width), anims: anim.length, bright: getComputedStyle(orb).filter }; });
+  console.log('      stat:', JSON.stringify(stat));
+  check('4. The Cue insight is back UNDER the graph (below the chart, above the Log button), not at the top', lay && lay.rowTop >= lay.chartTop + 100, JSON.stringify(lay));
+  check('4. It is a real stat: a big number and a short label ("5.8 lb" / "down since Oct 2")', stat && /^\d+(\.\d)? lb$/.test(stat.big) && parseFloat(stat.bigSize) >= 24 && /^(down|up) since /.test(stat.label), JSON.stringify(stat));
+  check('4. The Cue orb beside it is brighter, bigger and MOVING (its own animations are running)', stat && stat.orbW >= 36 && stat.anims >= 3 && /saturate\(1\.5/.test(stat.bright), JSON.stringify({ w: stat.orbW, anims: stat.anims, f: stat.bright }));
+  await shot('ux_insight_stat');
 
   // 13. segment controls, buttons and scrolling
   { const hp = hz().length; await tapAt(`() => [...document.querySelectorAll('#dc-root *')].filter(d => d.textContent.trim() === '6m' && ![...d.children].some(c => c.textContent.trim() === '6m'))[0]`); await p.waitForTimeout(250);
@@ -164,6 +168,8 @@ const png = (c) => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http:
   // ── 3. edit today's weight (and 2, 4) ──
   const lbl = await p.evaluate(() => [...document.querySelectorAll('#dc-root a')].map(a => a.innerText.trim()).filter(t => /weight$/.test(t) && t.length < 30));
   check('3. After logging, the card button says "Edit today\'s weight"', lbl.includes("Edit today's weight"), JSON.stringify(lbl));
+  const ico = await p.evaluate(() => { const a = [...document.querySelectorAll('#dc-root a')].find(x => /Edit today's weight/.test(x.innerText)); const pth = a.querySelector('svg path'); return { d: pth.getAttribute('d'), plusLike: /^M8 2\.5v11/.test(pth.getAttribute('d')) }; });
+  check('5. After logging today the button shows a pencil (not the +)', !ico.plusLike && /^M10\.8 2\.6/.test(ico.d), ico.d);
   await tapAt(`() => [...document.querySelectorAll('#dc-root a')].find(a => /Edit today's weight/.test(a.innerText))`);
   await p.waitForTimeout(900);
   const e0 = await sheet();
@@ -187,6 +193,13 @@ const png = (c) => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http:
   const same = await p.evaluate(() => (window.__athltData.weight || []).filter(w => { const t = new Date(); return w.d === t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0'); }).map(w => w.w));
   check('3. Only ONE entry exists for today and it is the edited one', same.length === 1 && same[0] === 179.2, JSON.stringify(same));
 
+  // ── 7. the time-aware rule: 2.5% of the last weight + 1% per week since it, at most 20% ──
+  const allowed = await p.evaluate(() => ({ y200: window.__athltSanityAllowed(200, 1), m200: window.__athltSanityAllowed(200, 30), w200: window.__athltSanityAllowed(200, 7), long: window.__athltSanityAllowed(200, 400), zero: window.__athltSanityAllowed(200, 0) }));
+  console.log('      allowed change for 200 lb:', JSON.stringify(allowed));
+  check('7. 200 lb logged yesterday: about 5.3 lb is allowed, so +10 lb asks "Are you sure?"', Math.abs(allowed.y200 - 5.286) < 0.05 && 10 > allowed.y200, String(allowed.y200));
+  check('7. 200 lb logged a month ago: about 13.6 lb is allowed, so +10 lb does NOT ask', Math.abs(allowed.m200 - 13.57) < 0.1 && 10 <= allowed.m200, String(allowed.m200));
+  check('7. The allowance grows by 1% a week (200 lb: 7 days = 7 lb), starts at 2.5% (5 lb), and is capped at 20% (40 lb)', Math.abs(allowed.w200 - 7) < 0.01 && Math.abs(allowed.zero - 5) < 0.01 && allowed.long === 40, JSON.stringify(allowed));
+
   // ── 2. far from the last weight: "Are you sure?" (placeholder rule: more than 15%) ──
   await tapAt(`() => [...document.querySelectorAll('#dc-root a')].find(a => /Edit today's weight/.test(a.innerText))`);
   await p.waitForTimeout(800);
@@ -197,6 +210,9 @@ const png = (c) => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http:
   await submitTap(); await p.waitForTimeout(500);
   const cf = await p.evaluate(() => { const e = document.getElementById('__athlt_confirm'); return e ? e.innerText.replace(/\s+/g, ' ').trim() : null; });
   console.log('      confirm:', cf);
+  const cbox = await p.evaluate(() => { const c = document.querySelector('#__athlt_confirm .cf-card').getBoundingClientRect(); return { mid: Math.round(c.top + c.height / 2), vh: window.innerHeight, top: Math.round(c.top), bottom: Math.round(c.bottom) }; });
+  check('6. The "Are you sure?" box is in the middle of the screen (not at the bottom behind the tab bar)', Math.abs(cbox.mid - cbox.vh / 2) < cbox.vh * 0.15 && cbox.bottom < cbox.vh - 110, JSON.stringify(cbox));
+  await shot('ux_confirm_mid');
   check('2. 400 lb after 182.1 lb asks "Are you sure?" with the difference, and saves NOTHING yet', /Are you sure\?/.test(cf || '') && /217\.9 lb different from last time/.test(cf || '') && /Fix/.test(cf) && /Yes, it's right/.test(cf) && msgs.filter(m => m.type === 'logWeight').length === np, cf);
   check('2. The Submit that ends in "Are you sure?" makes exactly ONE haptic, the warning', msgs.filter(m => m.type === 'haptic').slice(hzN).map(m => m.kind).join() === 'warning', msgs.filter(m => m.type === 'haptic').slice(hzN).map(m => m.kind).join());
   await shot('ux_confirm');
@@ -224,7 +240,11 @@ const png = (c) => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http:
   const rows = await p.evaluate(() => [...document.querySelectorAll('#dc-root div[role="img"][aria-label$=" video"]')].map(e => ({ img: (e.style.backgroundImage || '').slice(0, 30), size: e.style.backgroundSize })));
   console.log('      past workout boxes:', JSON.stringify(rows));
   check('16. Past workouts show their video frame (a picture), not the flat icon, when they have one', rows.length >= 2 && /^url\("?data:image/.test(rows[0].img) && rows[0].size === 'cover' && rows[1].size === 'cover', JSON.stringify(rows));
-  check('16. A workout with no video still shows the muscle icon tile (never a black box)', rows.length >= 3 && /linear-gradient|data:image/.test((await p.evaluate(() => document.querySelectorAll('#dc-root div[role="img"][aria-label$=" video"]')[2].style.backgroundImage))) , '');
+  check('16. A workout with no video still shows the muscle icon tile (never a black box)', rows.length >= 4 && /linear-gradient|data:image/.test((await p.evaluate(() => document.querySelectorAll('#dc-root div[role="img"][aria-label$=" video"]')[3].style.backgroundImage))) , '');
+  const lg8 = await p.evaluate(() => [...document.querySelectorAll('#dc-root div[role="img"][aria-label$=" video"]')].map(e => { const m = e.querySelector('[data-athlt-logged]'); return m ? m.innerText.trim() : ''; }));
+  console.log('      logged tiles by workout:', JSON.stringify(lg8));
+  check('8. A workout typed in by hand shows a "Logged" tile with a logged icon (not a video frame); the camera ones do not', lg8[2] === 'Logged' && !lg8[0] && !lg8[1] && !lg8[3], JSON.stringify(lg8));
+  await shot('ux_logged_tile');
   const openAt = msgs.filter(m => m.type === 'openWorkout').length;
   await p.evaluate(() => window.__probe(() => ({ op: [...document.querySelectorAll('#dc-root div[role="img"][aria-label$=" video"]')].map(e => { let n = e; for (let i = 0; i < 6 && n; i++, n = n.parentElement) { if (n.tagName === 'A') return parseFloat(getComputedStyle(n).opacity); } return 1; })[0] })));
   await tapAt(`() => document.querySelector('#dc-root div[role="img"][aria-label$=" video"]')`);

@@ -1,20 +1,22 @@
 /**
  * lib/haptics.ts
  *
- * ONE place for every haptic in the app, using Apple's standard rules (expo-haptics):
+ * ONE place for every haptic in the app. Subtle on purpose (like Cal AI): nothing uses Medium or Heavy.
  *
- *   hapticSelect()   switching tabs, segment controls (2M/6M/1Y, Front/Side/Back), pickers, the day strip, chips, keypad keys
- *   hapticLight()    a normal button / card / row press
- *   hapticMedium()   main actions: Start, Save, Submit, Continue, the + button
- *   hapticSuccess()  success moments: weight logged, plan ready, rank up
- *   hapticWarning()  warnings: the "Are you sure?" weight check
+ *   hapticSelect()   the lightest tick: tabs, segment controls (2M/6M/1Y, Front/Side/Back), pickers, chips, the day strip, and
+ *                    every ordinary tap
+ *   hapticSoft()     a button that OPENS something (a card, a row, a menu item): impact Soft
+ *   hapticMain()     a main action (Start, Save, Submit, Continue, the + button): impact Light
+ *   hapticSuccess()  big success moments only (weight logged, rank up, workout complete, plan ready)
+ *   hapticWarning()  warnings ("Are you sure?" weight check)
  *   hapticError()    errors
  *
  * One haptic per press, never doubled: any haptic asked for within 60ms of the last one is dropped, and a press that already
  * made its own haptic does not get the automatic one (see installPressHaptics). Nothing here is ever called while scrolling.
  *
  * This file also exports the same names expo-haptics has (selectionAsync, impactAsync, notificationAsync, the style enums), so
- * `import * as Haptics from '.../lib/haptics'` is a drop-in that routes older call sites through the same guard.
+ * `import * as Haptics from '.../lib/haptics'` is a drop-in that routes older call sites through the same rules:
+ * impactAsync(Light) = an ordinary press = selection, impactAsync(Soft) = Soft, impactAsync(Medium/Heavy/Rigid) = a main action = Light.
  */
 import * as Haptics from 'expo-haptics';
 
@@ -37,8 +39,8 @@ function fire(run: () => Promise<void>): void {
 }
 
 export const hapticSelect  = () => fire(() => backend.selectionAsync());
-export const hapticLight   = () => fire(() => backend.impactAsync(backend.ImpactFeedbackStyle.Light));
-export const hapticMedium  = () => fire(() => backend.impactAsync(backend.ImpactFeedbackStyle.Medium));
+export const hapticSoft    = () => fire(() => backend.impactAsync(backend.ImpactFeedbackStyle.Soft));
+export const hapticMain    = () => fire(() => backend.impactAsync(backend.ImpactFeedbackStyle.Light));
 export const hapticSuccess = () => fire(() => backend.notificationAsync(backend.NotificationFeedbackType.Success));
 export const hapticWarning = () => fire(() => backend.notificationAsync(backend.NotificationFeedbackType.Warning));
 export const hapticError   = () => fire(() => backend.notificationAsync(backend.NotificationFeedbackType.Error));
@@ -46,8 +48,9 @@ export const hapticError   = () => fire(() => backend.notificationAsync(backend.
 // ── drop-in for `import * as Haptics from 'expo-haptics'` ──
 export const selectionAsync = async () => { hapticSelect(); };
 export const impactAsync = async (style: Haptics.ImpactFeedbackStyle = Haptics.ImpactFeedbackStyle.Medium) => {
-  // Apple's two everyday weights: Light for ordinary presses, Medium for main actions (heavier ones are main actions too)
-  if (style === Haptics.ImpactFeedbackStyle.Light || style === Haptics.ImpactFeedbackStyle.Soft) hapticLight(); else hapticMedium();
+  if (style === Haptics.ImpactFeedbackStyle.Light) hapticSelect();       // an ordinary press: the lightest tick
+  else if (style === Haptics.ImpactFeedbackStyle.Soft) hapticSoft();     // opens something
+  else hapticMain();                                                      // Medium / Heavy / Rigid were main actions: now Light
 };
 export const notificationAsync = async (type: Haptics.NotificationFeedbackType = Haptics.NotificationFeedbackType.Success) => {
   if (type === Haptics.NotificationFeedbackType.Warning) hapticWarning();
@@ -58,12 +61,12 @@ export const notificationAsync = async (type: Haptics.NotificationFeedbackType =
 /** A haptic named by a WebView page ('select' | 'light' | 'medium' | 'success' | 'warning' | 'error'). */
 export function hapticKind(kind: string | undefined): void {
   switch (kind) {
-    case 'select': hapticSelect(); break;
-    case 'medium': hapticMedium(); break;
+    case 'select': case 'selection': hapticSelect(); break;
+    case 'soft': hapticSoft(); break;
     case 'success': hapticSuccess(); break;
     case 'warning': hapticWarning(); break;
     case 'error': hapticError(); break;
-    case 'light': hapticLight(); break;
+    case 'light': case 'main': case 'medium': hapticMain(); break;
     default: break;
   }
 }
@@ -86,7 +89,7 @@ export function installPressHaptics(): void {
         const wrapped: any = function (e: unknown) {
           const before = fired;
           const out = inner(e);
-          if (fired === before) hapticLight();
+          if (fired === before) hapticSelect(); // an ordinary tap: the lightest tick
           return out;
         };
         wrapped.__haptic = true;
@@ -125,7 +128,8 @@ export const HAPTIC_PAGE_JS = String.raw`
     if (!el) return;
     var forced = el.getAttribute && el.getAttribute('data-hp');
     var txt = ((el.innerText || el.textContent || '') + '').trim();
-    var kind = forced || (MAIN.test(txt) ? 'medium' : (KEY.test(txt) || SEL.test(txt.split('\n')[0])) ? 'select' : 'light');
+    // main action = Light, segment / key / chip / day = the lightest tick, a link or card that opens something = Soft
+    var kind = forced || (MAIN.test(txt) ? 'light' : (KEY.test(txt) || SEL.test(txt.split('\n')[0])) ? 'select' : (el.tagName === 'A' ? 'soft' : 'select'));
     var token = {}; pending = token;
     setTimeout(function () { if (pending === token) { pending = null; send(kind); } }, 0);
   }, true);

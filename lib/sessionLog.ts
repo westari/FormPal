@@ -37,6 +37,13 @@ export interface SessionEntry {
   // muscle ranks but never a quality score, and are excluded from every
   // form-score aggregate. Omitted/true on every pre-existing entry (back-compat).
   formChecked?: boolean;
+  // true = typed in by hand in Log a session (never recorded with the camera). Older hand-logged entries have no flag: see isManualEntry.
+  manual?: boolean;
+}
+
+/** A session the user typed in (new entries carry manual: true; older ones are recognised by the way they were written: no form judged, no good reps, no score). */
+export function isManualEntry(e: SessionEntry): boolean {
+  return e.manual === true || (e.formChecked === false && (e.goodReps ?? 0) === 0 && (e.pct ?? 0) === 0);
 }
 
 // Per-rep good/bad + cue, EPHEMERAL only — never persisted into SessionEntry/

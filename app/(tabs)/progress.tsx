@@ -36,6 +36,7 @@ import { tierDataUri } from '../../lib/rankImages';
 import { muscleIconUri } from '../../lib/muscleIcons';
 import { workoutFrame, workoutFallbackIcon } from '../../lib/workoutThumbs';
 import { openRecap } from '../../lib/openRecap';
+import { LOGGED_TILE_JS } from '../../lib/loggedTile';
 import { HAPTIC_PAGE_JS, hapticKind } from '../../lib/haptics';
 import { listProgressPhotos, addProgressPhoto, type PhotoPose } from '../../lib/progressPhotos';
 import { uploadProgressPhotoToCloud } from '../../lib/formpalSync';
@@ -50,13 +51,13 @@ const PROGRESS_HTML = require('../../assets/app screens/progress.html');
 const PROGRESS_BUILD = 'progress-3';
 if (__DEV__) console.log(`[progress] build ${PROGRESS_BUILD}`);
 
-const PROGRESS_BEFORE = DC_VIEWPORT_JS + DC_NO_ZOOM_JS + CONSOLE_FORWARD_JS + DC_SETTLE_JS + dcLogicPatchJs(PROGRESS_LOGIC_EXT) + PROGRESS_DOM_JS + HAPTIC_PAGE_JS;
+const PROGRESS_BEFORE = DC_VIEWPORT_JS + DC_NO_ZOOM_JS + CONSOLE_FORWARD_JS + DC_SETTLE_JS + dcLogicPatchJs(PROGRESS_LOGIC_EXT) + PROGRESS_DOM_JS + HAPTIC_PAGE_JS + LOGGED_TILE_JS;
 
 export default function ProgressScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const webRef = useRef<WebView>(null);
-  const { fade, onReady, onLoadStart, onLoadEnd } = useRevealFade(m => { if (__DEV__) console.log('[PROGRESS]', m); });
+  const { fade, onReady, onLoadStart, onLoadEnd, hide } = useRevealFade(m => { if (__DEV__) console.log('[PROGRESS]', m); });
   const dataRef = useRef<ProgressData | null>(null);
   const lag = useRef(createTabLag('progress')).current;
   const artReady = useRef(false);   // the rank emblem + muscle icons are in the data (the first picture needs them)
@@ -105,7 +106,8 @@ export default function ProgressScreen() {
     if (dataRef.current === data) { data.workouts.forEach((w, i) => { if (wIcons[i]) w.fallback = wIcons[i]; }); push(); }
     // each workout owns the videos logged since the previous (older) workout ended
     const prevTsOf = (w: { ts: number }) => { const i = data.workouts.findIndex(x => x.ts === w.ts); return data.workouts[i + 1]?.ts ?? 0; };
-    const frameOf = (w: { ts: number }) => workoutFrame(w.ts, prevTsOf(w));
+    // a workout typed in by hand has no video: no frame is looked for
+    const frameOf = (w: { ts: number; logged?: boolean }) => (w.logged ? Promise.resolve(null) : workoutFrame(w.ts, prevTsOf(w)));
     // the carousel's 8 first, then the rest of the list
     for (const [from, to] of [[0, 8], [8, data.workouts.length]]) {
       const frames = await Promise.all(data.workouts.slice(from, to).map(frameOf));
@@ -188,6 +190,7 @@ export default function ProgressScreen() {
       <Animated.View style={{ flex: 1, opacity: fade }}>
       <WebView
         ref={webRef}
+        onContentProcessDidTerminate={() => { hide(); webRef.current?.reload(); }} /* iOS killed the page's process while it was hidden: load it again at once instead of showing a blank screen */
         source={PROGRESS_HTML}
         originWhitelist={['*']}
         injectedJavaScriptBeforeContentLoaded={PROGRESS_BEFORE}

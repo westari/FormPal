@@ -63,7 +63,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const webRef = useRef<WebView>(null);
   const plog = (m: string) => { if (__DEV__) console.log('[PROFILE]', m); };
-  const { fade, onReady, onLoadStart, onLoadEnd } = useRevealFade(plog);
+  const { fade, onReady, onLoadStart, onLoadEnd, hide } = useRevealFade(plog);
   const openedAt = useRef(Date.now());
   const lag = useRef(createTabLag('profile')).current;
   const firstShown = useRef(true);
@@ -215,6 +215,7 @@ export default function ProfileScreen() {
       <Animated.View style={{ flex: 1, opacity: fade }}>
       <WebView
         ref={webRef}
+        onContentProcessDidTerminate={() => { hide(); webRef.current?.reload(); }} /* iOS killed the page's process while it was hidden: load it again at once instead of showing a blank screen */
         source={PROFILE_HTML}
         originWhitelist={['*']}
         injectedJavaScriptBeforeContentLoaded={PROFILE_BEFORE}

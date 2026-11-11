@@ -9,7 +9,7 @@
 import { Muscle, getExerciseDef, muscleCreditParts } from '../constants/exercises';
 import { TIER_META } from '../constants/tierPalette';
 import {
-  TIER_ORDER, tierIndex, tierProgress, muscleCreditTotals, belowBronzeProgress, groupIntoWorkouts, calcStreak,
+  TIER_ORDER, tierIndex, tierProgress, muscleCreditTotals, belowBronzeProgress, groupIntoWorkouts, calcStreak, isManualEntry,
   type SessionEntry, type MuscleTiers, type Tier,
 } from './sessionLog';
 import { computeOverallStanding, MUSCLE_DISPLAY_ORDER } from '../components/MuscleTierMap';
@@ -38,7 +38,7 @@ export interface ProgressData {
   weight: { d: string; w: number }[];
   form: { ts: number; pct: number }[];
   bests: { name: string; value: string; unit: string; kind: 'streak' | 'form' | 'reps' }[];
-  workouts: { ts: number; name: string; when: string; form: string; formPct: number | null; reps: number; sets: number; thumb: string | null; muscle: string | null; fallback: string | null }[];
+  workouts: { ts: number; name: string; when: string; form: string; formPct: number | null; reps: number; sets: number; thumb: string | null; muscle: string | null; fallback: string | null; logged: boolean }[];
   hasSessions: boolean;
   insets: { top: number; bottom: number; tabCover?: number };
   photos: PhotoView[];
@@ -133,6 +133,8 @@ export function buildProgressData(
       reps: g.totalReps, sets: g.entries.length, thumb: null as string | null,
       // the muscle this workout worked most: its icon is the picture when no video frame exists
       muscle: primaryMuscle(g.entries), fallback: null as string | null,
+      // typed in by hand (Log a session): shown as a "Logged" tile, never as a camera workout
+      logged: g.entries.every(isManualEntry),
     };
   });
 

@@ -449,7 +449,7 @@ export function entriesFromPage(
   const byName = new Map(catalog.map(c => [c.name, c]));
   const entries = payload.items.filter(i => byName.has(i.n)).map(i => {
     const c = byName.get(i.n)!;
-    return { ts, exerciseId: c.id, displayName: c.name, reps: i.sets * i.reps, goodReps: 0, pct: 0, formChecked: false };
+    return { ts, exerciseId: c.id, displayName: c.name, reps: i.sets * i.reps, goodReps: 0, pct: 0, formChecked: false, manual: true };
   });
   return { ts, entries };
 }

@@ -29,7 +29,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
 import { loadPlan } from '../../lib/planStorage';
-import { getAllSessions, calcStreak, groupIntoWorkouts, scoredSessions, computeMuscleTiers, type SessionEntry } from '../../lib/sessionLog';
+import { getAllSessions, calcStreak, groupIntoWorkouts, scoredSessions, computeMuscleTiers, isManualEntry, type SessionEntry } from '../../lib/sessionLog';
 import { primaryMuscle } from '../../lib/progressData';
 import { workoutFrame, workoutFallbackIcon } from '../../lib/workoutThumbs';
 import { openRecap } from '../../lib/openRecap';
@@ -41,6 +41,7 @@ import { dcLogicPatchJs, athltSetDataJs } from '../../lib/dcLogicPatch';
 import { EDIT_BRIDGE_JS } from '../../lib/editSheetBridge';
 import { ADD_PICKER_JS } from '../../lib/addExercisePicker';
 import { HAPTIC_PAGE_JS, hapticKind } from '../../lib/haptics';
+import { LOGGED_TILE_JS } from '../../lib/loggedTile';
 import { saveWorkoutEdit } from '../../lib/planEditSave';
 import { addableExercises, type EditRow } from '../../lib/planEdit';
 import { plannedMeta } from '../../lib/trainData';
@@ -437,9 +438,11 @@ export function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[], i
       var boxes = document.querySelectorAll('div[role="img"][aria-label$=" video"]');
       for (var i = 0; i < boxes.length && i < list.length; i++) {
         var w = list[i], el = boxes[i];
-        var sig = w.thumb ? 'v' + w.thumb.length : w.fallback ? 'f' + w.fallback.length : '';
+        var sig = w.logged ? 'L' : w.thumb ? 'v' + w.thumb.length : w.fallback ? 'f' + w.fallback.length : '';
         if (!sig || el.__thumb === sig) continue;
         el.__thumb = sig;
+        if (window.__paintLogged) window.__paintLogged(el, !!w.logged);
+        if (w.logged) continue; // typed in by hand: the "Logged" tile, not a video frame
         if (w.thumb) {
           el.style.setProperty('background-image', 'url(' + w.thumb + ')', 'important');
           el.style.setProperty('background-size', 'cover', 'important');
@@ -525,9 +528,9 @@ export default function HomeScreen() {
   const [injectJs, setInjectJs] = useState<string | null>(null);
   const [pageLoaded, setPageLoaded] = useState(false);
   const [logicJs, setLogicJs] = useState<string | null>(null);
-  const { fade, onReady, onLoadStart, onLoadEnd } = useRevealFade(m => { if (__DEV__) console.log('[HOME]', m); });
+  const { fade, onReady, onLoadStart, onLoadEnd, hide } = useRevealFade(m => { if (__DEV__) console.log('[HOME]', m); });
   // one picture per recent workout (same code as the Progress tab): a video frame, else its muscle icon
-  const [thumbs, setThumbs] = useState<{ thumb: string | null; fallback: string | null }[]>([]);
+  const [thumbs, setThumbs] = useState<{ thumb: string | null; fallback: string | null; logged?: boolean }[]>([]);
 
   useFocusEffect(useCallback(() => {
     let alive = true;
@@ -539,9 +542,10 @@ export default function HomeScreen() {
       const tiers = computeMuscleTiers(sessions);
       const recent = groups.slice(0, 3);
       const icons = await Promise.all(recent.map(g => { const m = primaryMuscle(g.entries); return workoutFallbackIcon(m, m ? tiers[m as keyof typeof tiers]?.tier : null); }));
-      if (alive) setThumbs(recent.map((_, i) => ({ thumb: null, fallback: icons[i] })));
-      const frames = await Promise.all(recent.map((g, i) => workoutFrame(g.ts, groups[i + 1]?.ts ?? 0)));
-      if (alive) setThumbs(recent.map((_, i) => ({ thumb: frames[i], fallback: icons[i] })));
+      const loggedBy = recent.map(g => g.entries.every(isManualEntry)); // typed in by hand: a "Logged" tile, no video lookup
+      if (alive) setThumbs(recent.map((_, i) => ({ thumb: null, fallback: icons[i], logged: loggedBy[i] })));
+      const frames = await Promise.all(recent.map((g, i) => (loggedBy[i] ? Promise.resolve(null) : workoutFrame(g.ts, groups[i + 1]?.ts ?? 0))));
+      if (alive) setThumbs(recent.map((_, i) => ({ thumb: frames[i], fallback: icons[i], logged: loggedBy[i] })));
     }).catch(() => {});
     return () => { alive = false; };
   }, []));
@@ -569,9 +573,10 @@ export default function HomeScreen() {
       <Animated.View style={{ flex: 1, opacity: fade }}>
       <WebView
         ref={webRef}
+        onContentProcessDidTerminate={() => { hide(); webRef.current?.reload(); }} /* iOS killed the page's process while it was hidden: load it again at once instead of showing a blank screen */
         source={HOME_HTML}
         originWhitelist={['*']}
-        injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS + DC_NO_ZOOM_JS + DC_SETTLE_JS + HOME_GUARD_JS + EDIT_BRIDGE_JS + ADD_PICKER_JS + HAPTIC_PAGE_JS + dcLogicPatchJs(HOME_LOGIC_EXT)}
+        injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS + DC_NO_ZOOM_JS + DC_SETTLE_JS + HOME_GUARD_JS + EDIT_BRIDGE_JS + ADD_PICKER_JS + HAPTIC_PAGE_JS + LOGGED_TILE_JS + dcLogicPatchJs(HOME_LOGIC_EXT)}
         injectedJavaScript={HOME_SCALE_FIT_JS + HOME_CUE_REAL_JS}
         onLoadStart={() => { setPageLoaded(false); onLoadStart(); }}
         onLoadEnd={() => { setPageLoaded(true); onLoadEnd(); }}

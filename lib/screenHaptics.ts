@@ -11,30 +11,21 @@
  *   success    workout complete, rank up                                   notificationAsync(Success)
  *   error      errors                                                      notificationAsync(Error)
  */
-let H: any = null;
-let tried = false;
-function mod(): any {
-  if (tried) return H;
-  tried = true;
-  try { H = require('expo-haptics'); } catch { H = null; }
-  return H;
-}
+import { hapticSelect, hapticSoft, hapticMain, hapticSuccess, hapticWarning, hapticError } from './haptics';
 
 export type HapticKind = 'selection' | 'light' | 'medium' | 'warning' | 'success' | 'error';
 
+// Everything goes through lib/haptics.ts now (one mapping, one guard against doubles). The page's names keep working:
+// 'selection' = the lightest tick, 'light' (a button / card / row that opens something) = Soft, 'medium' (a main action) = Light.
 export function haptic(kind: HapticKind): void {
-  const h = mod();
-  if (!h) return;
-  try {
-    switch (kind) {
-      case 'selection': void h.selectionAsync(); break;
-      case 'light':     void h.impactAsync(h.ImpactFeedbackStyle.Light); break;
-      case 'medium':    void h.impactAsync(h.ImpactFeedbackStyle.Medium); break;
-      case 'warning':   void h.notificationAsync(h.NotificationFeedbackType.Warning); break;
-      case 'success':   void h.notificationAsync(h.NotificationFeedbackType.Success); break;
-      case 'error':     void h.notificationAsync(h.NotificationFeedbackType.Error); break;
-    }
-  } catch { /* ignore */ }
+  switch (kind) {
+    case 'selection': hapticSelect(); break;
+    case 'light':     hapticSoft(); break;
+    case 'medium':    hapticMain(); break;
+    case 'warning':   hapticWarning(); break;
+    case 'success':   hapticSuccess(); break;
+    case 'error':     hapticError(); break;
+  }
 }
 
 export const isHapticKind = (k: unknown): k is HapticKind =>
