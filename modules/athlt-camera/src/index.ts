@@ -364,7 +364,7 @@ export function addDebugLogListener(
 const MAX_DEBUG_LOG_LINES = 4000;
 let debugLogBuffer: string[] = [];
 if (nativeEmitter) {
-  nativeEmitter.addListener('onDebugLog', (e: DebugLogEvent) => {
+  safeListen('onDebugLog', (e: DebugLogEvent) => {
     debugLogBuffer.push(e.message);
     if (debugLogBuffer.length > MAX_DEBUG_LOG_LINES) {
       debugLogBuffer = debugLogBuffer.slice(-MAX_DEBUG_LOG_LINES);
