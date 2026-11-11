@@ -121,3 +121,20 @@ export function shortCue(text: string | null | undefined): string {
   // mixed-case input that is already short ("Step back into frame") keeps its own casing
   return out === out.toUpperCase() ? sentenceCase(out) : out.charAt(0).toUpperCase() + out.slice(1);
 }
+
+// ── THE COACH's words ────────────────────────────────────────────────────────────────────────────────────────────
+// The Coach is the check / X with a reason on each rep: form feedback only. Cues about WHERE THE USER STANDS or the camera are the
+// Guide's (lib/guideCoach.ts) and are never Coach words.
+export const SETUP_ONLY_CUES = new Set(['Adjust position', 'Face the camera', 'Face away', 'Turn sideways', 'Step back']);
+const GUIDE_WORDS_IN_TEXT = /\b(phone|camera|frame|picture|light)\b/i;
+
+/** The Coach's word list: every plain form cue the app can show on an X. Never a setup line. */
+export const COACH_WORDS: string[] = Array.from(new Set(['Go higher', 'Go lower', 'Full movement', ...Object.values(EXACT)])).filter((w) => !SETUP_ONLY_CUES.has(w));
+
+/** The Coach version of a cue (2-3 plain form words), or null when the text is a setup / camera line (that is the Guide's). */
+export function coachLine(text: string | null | undefined): string | null {
+  const s = shortCue(text);
+  if (!s) return null;
+  if (SETUP_ONLY_CUES.has(s) || GUIDE_WORDS_IN_TEXT.test(s)) return null;
+  return s;
+}

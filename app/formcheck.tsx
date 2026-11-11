@@ -46,9 +46,12 @@ import { setFlashBrightness } from '../lib/screenFlash';
 import RingLight from '../components/RingLight';
 import { createRepDiagnostic, STREAM_DEAD_SEC_FLOOR } from '../lib/repDiagnostics';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
-import { persistVideo } from '../lib/videoStore';
+import { persistVideo, recoverRecentClip } from '../lib/videoStore';
 import { NO_ZOOM_JS } from '../lib/noZoom';
 import { shortCue } from '../lib/shortCue';
+import { createMovementMatch } from '../lib/movementMatch';
+import { createCameraConfidence } from '../lib/cameraConfidence';
+import { createGuide, createCoach, guideLine, GUIDE_LINES, handsMatter } from '../lib/guideCoach';
 import { createSetupGuide, needsLockout, SETUP_TUNING, type SetupDecision } from '../lib/setupGuide';
 import { createAttemptDetector, type DetectorEvent } from '../lib/attemptDetector';
 import { hapticError, hapticMain, hapticSelect, hapticWarning } from '../lib/haptics';
@@ -291,14 +294,18 @@ const gp = StyleSheet.create({
 // bit") and live cues ("Rep not counted", "Step back into frame") both render
 // through this one component, so they can never look different from each other.
 function CueGlass({ text, ready }: { text: string; ready?: boolean }) {
+  // The Guide is one line. When a line cannot fit on one line it wraps beside the stars and the stars grow to match the two lines.
+  const [lines, setLines] = useState(1);
+  const big = lines > 1;
+  const icon = big ? 34 : 22;
   return (
     <GlassPanel radius={999} style={s.trackingCueCard}>
       <View style={s.trackingCueInner}>
         {ready
-          ? <SymbolView name="checkmark.circle.fill" size={22} tintColor={C.good} type="monochrome" style={{ width: 22, height: 22 }} />
-          : <Image source={SPARKLE_DUO} style={s.trackingCueIcon} />}
+          ? <SymbolView name="checkmark.circle.fill" size={icon} tintColor={C.good} type="monochrome" style={{ width: icon, height: icon }} />
+          : <Image source={SPARKLE_DUO} style={[s.trackingCueIcon, big ? { width: 34, height: 34 } : null]} />}
         {/* the original layout: stars on the left, the cue beside them (a long cue wraps to a second line beside the stars, never under them) */}
-        <Text style={s.trackingCueText} numberOfLines={2}>{text}</Text>
+        <Text style={s.trackingCueText} numberOfLines={2} onTextLayout={(e) => { const n = e.nativeEvent.lines.length; setLines((p) => (p === n ? p : n)); }}>{text}</Text>
       </View>
     </GlassPanel>
   );
@@ -598,9 +605,11 @@ const ri = StyleSheet.create({
 // createMeterSmoother in lib/liveTracking.ts — in its own state, so its ticks
 // never re-render the whole camera screen. Always mounted (renders nothing when
 // !show) so the "is it high yet" report that gates "Ready. Go!" keeps working.
-function TrackingMeter({ target, show, top, onHighChange, counter, counterActive, flags }: {
+function TrackingMeter({ target, show, top, onHighChange, counter, counterActive, flags, confidence }: {
   target: number; show: boolean; top: number; onHighChange: (high: boolean) => void;
   counter: CounterSignal; counterActive: boolean; flags: { diag: boolean; cue: boolean };
+  /** the live CAMERA CONFIDENCE (lib/cameraConfidence.ts), or null before tracking has produced one */
+  confidence: { current: number | null };
 }) {
   const [display, setDisplay] = useState(0);
   const smoother = useRef(createMeterSmoother()).current;
@@ -618,9 +627,11 @@ function TrackingMeter({ target, show, top, onHighChange, counter, counterActive
       let tgt = targetRef.current;
       // While tracking the number IS the counter's continuous score (the soft warnings fade in and out inside it), not the
       // old 100 / 55 / 35 steps; the steps are only a fallback when no counter signal exists (release build, no debug log).
+      // CAMERA CONFIDENCE (Movement Match + counting + path coverage) is the number; the old rep-counter score is only the fallback.
+      // The cue caps (frame hint 35, setup step caps) still hold it down.
       if (activeRef.current && tgt > 0) {
-        counter.setFlags(flagsRef.current);
-        if (counter.seen()) tgt = counter.score(now);
+        if (confidence.current !== null) tgt = Math.min(tgt, confidence.current);
+        else { counter.setFlags(flagsRef.current); if (counter.seen()) tgt = counter.score(now); }
       }
       const d = smoother.tick(tgt, now);
       setDisplay((prev) => (prev === d ? prev : d));
@@ -628,7 +639,7 @@ function TrackingMeter({ target, show, top, onHighChange, counter, counterActive
       if (high !== highRef.current) { highRef.current = high; onHighChange(high); }
     }, 33);
     return () => clearInterval(id);
-  }, [smoother, onHighChange, counter]);
+  }, [smoother, onHighChange, counter, confidence]);
   if (!show) return null;
   const level = display >= 95 ? C.good : display <= 35 ? C.warn : '#FFFFFF';
   return (
@@ -911,6 +922,17 @@ export default function FormCheckScreen() {
   const statsRef = useRef<DebugStatsEvent | null>(null);
   // Attempt detector (lib/attemptDetector.ts): is the person clearly TRYING the movement, separate from whether a rep passed.
   const attemptRef = useRef(createAttemptDetector({ exerciseId: exerciseType, log: (m: string) => { console.log(m); } }));
+  // MOVEMENT MATCH / CAMERA CONFIDENCE / THE GUIDE / THE COACH (docs/movement-match.md, lib/coachTuning.ts, all placeholders).
+  // The Guide = the line with the Cue stars (setup only, never form). The Coach = the check / X with a reason (form only, never setup).
+  const tagLog = useCallback((m: string) => { console.log(m); sessionLogRef.current.push(m); }, []);
+  const matchRef = useRef(createMovementMatch({ log: (m: string) => tagLog(m) })).current;
+  const confRef = useRef(createCameraConfidence({ log: (m: string) => tagLog(m) })).current;
+  const guideEngine = useRef(createGuide({ log: (m: string) => tagLog(m) })).current;
+  const coachRef = useRef(createCoach({ log: (m: string) => tagLog(m) })).current;
+  const confidenceRef = useRef<number | null>(null);   // the live camera confidence (0-100), read by the meter
+  const lastCountAtRef = useRef(0);                      // when the last rep counted (native or soft)
+  const missedSinceCountRef = useRef(0);                 // attempts that did not count since then
+  const [guideTrack, setGuideTrack] = useState<string | null>(null); // the Guide's line while tracking
   const softRepsRef = useRef(0);          // reps the detector counted itself (engine paused / adapted range); negative = a counted rep it took back
   const softGoodRef = useRef(0);          // the same, for good reps
   const lastNativeRep = useRef<{ at: number; good: boolean; retracted: boolean } | null>(null);
@@ -942,6 +964,7 @@ export default function FormCheckScreen() {
     const sub = addDebugLogListener(e => {
       console.log('[DEBUG]', e.message);
       counterRef.feedLog(e.message, Date.now());
+      matchRef.feed(e.message);
       // Full session buffer: every line, no limit — feeds the post-session review only.
       sessionLogRef.current.push(e.message);
       // Synthesize clean [CALIB] lines alongside the raw stream.
@@ -1048,6 +1071,8 @@ export default function FormCheckScreen() {
               calibRef.current.reset();
               repDiagRef.current.reset();
               attemptRef.current.reset();
+              matchRef.reset(); confRef.reset(); guideEngine.reset(); coachRef.reset();
+              confidenceRef.current = null; lastCountAtRef.current = 0; missedSinceCountRef.current = 0; setGuideTrack(null);
               softRepsRef.current = 0; softGoodRef.current = 0; lastNativeRep.current = null; nativeRepsRef.current = 0; nativeGoodRef.current = 0;
               setAttemptCue(null);
               setRepDiag(null);
@@ -1149,6 +1174,7 @@ export default function FormCheckScreen() {
       setReps(rep.reps + softRepsRef.current);
       setGoodReps(rep.goodReps + softGoodRef.current);
       lastNativeRep.current = { at: Date.now(), good: rep.good, retracted: false };
+      lastCountAtRef.current = Date.now(); missedSinceCountRef.current = 0; matchRef.noteRep(); // a rep counted: reps are counting
       setAttemptCue(null);
       // A rep landed — re-ask the diagnostic rather than force-clearing. If
       // several reps are merging (attempts >> counted) or the legs kicked,
@@ -1164,17 +1190,29 @@ export default function FormCheckScreen() {
         repEvents.current.push({ timeSec: timeSecH, good: rep.good, reason: rep.reason });
         return;
       }
+      // THE COACH decides: a check / X only when Movement Match says the user is really doing this exercise (LOW = no check, no X), and the
+      // X carries a plain FORM reason (never a camera / setup line: that is the Guide's).
+      let shownGood = rep.good, shownReason = rep.reason;
+      if (!repCounterOnly) {
+        const cv = coachRef.verdict({ now: Date.now(), match: matchRef.result(), source: 'native', good: rep.good, reason: rep.reason });
+        if (!cv.show) {
+          const timeSecC = startTimestamp.current != null ? (Date.now() - startTimestamp.current) / 1000 : 0;
+          repEvents.current.push({ timeSec: timeSecC, good: rep.good, reason: rep.reason });
+          return;
+        }
+        shownGood = cv.show === 'check'; shownReason = cv.reason;
+      }
       lastJudgedAt.current = Date.now();
       setTimeout(() => setJudgedTick(t => t + 1), JUDGED_QUIET_MS + 50);
       flashAnim.setValue(1);
       Animated.timing(flashAnim, { toValue: 0, duration: 700, useNativeDriver: true }).start();
-      (rep.good ? hapticSelect() : hapticWarning()); // rep counted = light tap, rejected (the X) = warning
+      (shownGood ? hapticSelect() : hapticWarning()); // rep counted = light tap, rejected (the X) = warning
       if (repCounterOnly) {
         // Reps only — no ✓/✗ orb, no corrective speech. Just a rep tick + the
         // milestone count announcement, driven by total reps.
         handleRepAudio(true, '', rep.reps, false);
       } else {
-        setFeedback({ good: rep.good, reason: rep.reason, seq: ++feedbackSeq.current });
+        setFeedback({ good: shownGood, reason: shownReason, seq: ++feedbackSeq.current });
         handleRepAudio(rep.good, rep.reason, rep.goodReps);
       }
       const timeSec = startTimestamp.current != null
@@ -1247,6 +1285,14 @@ export default function FormCheckScreen() {
     isTrackingRef.current = false;
     const final = await stopTracking();
     postLag('formcheck: native stopTracking returned (recording finished)');
+    // The workout video: what the camera handed back, and a rescue when it handed back nothing (the clip file is often still
+    // in the temp folder). Without a video the Workout complete page has nothing to play, no rep feedback and no thumbnails.
+    console.log('[VIDEO] stop: camera returned ' + (final.videoUri ? 'a clip (' + final.videoUri.split('/').pop() + ')' : 'NO clip') + ', ' + (startTimestamp.current ? Math.round((Date.now() - startTimestamp.current) / 1000) : 0) + 's tracked');
+    if (!final.videoUri && startTimestamp.current) {
+      const rescued = recoverRecentClip(startTimestamp.current - 5000);
+      if (rescued) { final.videoUri = rescued.uri; console.log('[VIDEO] rescued the clip from the temp folder: ' + rescued.uri.split('/').pop() + ' (' + rescued.bytes + ' bytes)'); }
+      else console.log('[VIDEO] no clip file found in the temp folder either: this set has no video (the camera never kept a recording)');
+    }
     sessionStopped.current = true;
     // The camera teardown (captureSession.stopRunning) is slow and nothing after it needs to wait for it: the final
     // numbers and the video file already exist. It runs on the camera's own serial queue, so a later startSession is
@@ -1291,14 +1337,9 @@ export default function FormCheckScreen() {
   // itself (the engine had paused, or the person's real range is just short of the line) gets a check and counts as a rep.
   onAttemptRef.current = (evs: DetectorEvent[]) => {
     if (demoOpenRef.current) return;
-    const showCue = (text: string) => {
-      setAttemptCue(text);
-      if (attemptCueTimer.current) clearTimeout(attemptCueTimer.current);
-      attemptCueTimer.current = setTimeout(() => setAttemptCue(null), 4000);
-    };
     for (const ev of evs) {
-      if (ev.kind === 'adapt') { showCue('Range set'); continue; }
-      if (ev.kind === 'stuck') { showCue(ev.cue); continue; }
+      // (no "Range set" / stuck cue lines any more: a stuck set is the Guide's job, picked from WHY it cannot count, lib/guideCoach.ts)
+      if (ev.kind === 'adapt' || ev.kind === 'stuck') continue;
       if (ev.kind === 'ignored') {
         // A movement that is not the exercise (reaching for the phone, fumbling). If the engine counted a rep at that moment, take it
         // back: no check, and the count goes down again. Never an X for it either.
@@ -1316,23 +1357,31 @@ export default function FormCheckScreen() {
       }
       if (ev.outcome === 'soft') {
         softRepsRef.current += 1; softGoodRef.current += 1;
+        lastCountAtRef.current = Date.now(); missedSinceCountRef.current = 0; matchRef.noteRep();
         setReps(nativeRepsRef.current + softRepsRef.current);
         setGoodReps(nativeGoodRef.current + softGoodRef.current);
-        lastJudgedAt.current = Date.now();
-        setFeedback({ good: true, reason: '', seq: ++feedbackSeq.current });
-        hapticSelect();
+        const cvs = coachRef.verdict({ now: Date.now(), match: matchRef.result(), source: 'soft' });
+        if (cvs.show) {
+          lastJudgedAt.current = Date.now();
+          setFeedback({ good: true, reason: '', seq: ++feedbackSeq.current });
+          hapticSelect();
+        }
         const timeSec = startTimestamp.current != null ? (Date.now() - startTimestamp.current) / 1000 : 0;
         repEvents.current.push({ timeSec, good: true, reason: '' });
         continue;
       }
       if (ev.outcome === 'missed' || ev.outcome === 'rejected') {
-        const reason = ev.reason; // 2-3 plain words: Go higher / Go lower / Step back ...
+        missedSinceCountRef.current += 1;
+        // THE COACH: an X only for a stroke that stayed SHORT ("Go higher" / "Go lower"), and only when Movement Match says the user is trying.
+        // A stroke the camera could not see (tracking, angle, light, a cut path) is never an X: that is the Guide's job.
         const hint = repDiagRef.current.message() ?? statsRef.current?.trackingCue ?? null;
         if (!showVerdict(ev.outcome === 'rejected' ? null : hint, statsRef.current?.personDetected)) continue; // frame hint up: no verdict
+        const cva = coachRef.verdict({ now: Date.now(), match: matchRef.result(), source: 'attempt', blocker: ev.blocker, rangeWord: ev.reason, n: ev.n });
+        if (cva.show !== 'x') continue;
         if (Date.now() - lastAttemptX.current < 1200) continue; // one X per stroke
         lastAttemptX.current = Date.now();
         lastJudgedAt.current = Date.now();
-        setFeedback({ good: false, reason, seq: ++feedbackSeq.current });
+        setFeedback({ good: false, reason: cva.reason, seq: ++feedbackSeq.current });
         hapticWarning();
       }
     }
@@ -1542,13 +1591,31 @@ export default function FormCheckScreen() {
   // (a lost pose also stops the log lines, so nothing woke it up).
   useEffect(() => {
     if (phase !== 'tracking') return;
+    const facing = (EXERCISE_DEFINITIONS[exerciseType] as any)?.cameraSetup?.facing as 'camera' | 'side' | undefined;
     const id = setInterval(() => {
       if (demoOpenRef.current) return;
       const d = repDiagRef.current.message();
       setRepDiag(prev => (prev === d ? prev : d));
+      // MOVEMENT MATCH -> CAMERA CONFIDENCE -> THE GUIDE, every 200ms while tracking (repCounterOnly exercises have no per-frame signal: skipped)
+      if (repCounterOnly || !DEBUG_LOG_ENABLED) return;
+      const now = Date.now();
+      const m = matchRef.result();
+      attemptRef.current.setPathCut(m.cut);
+      counterRef.setFlags({ diag: !!d, cue: !!(statsRef.current?.trackingCue || statsRef.current?.outOfPlaneCue) });
+      const conf = confRef.update({ now, visibility: counterRef.score(now), match: m, lastCountAt: lastCountAtRef.current, missedSinceCount: missedSinceCountRef.current });
+      confidenceRef.current = conf.value;
+      const rej = attemptRef.current.recentReject(8000);
+      const dec = guideEngine.decide({
+        now, exerciseId: exerciseType, personMissing: statsRef.current?.personDetected === false,
+        nativeCue: isFloor ? null : (statsRef.current?.trackingCue || null), outOfPlaneCue: statsRef.current?.outOfPlaneCue || null, diag: d,
+        match: m, stuck: conf.stuck, rejectedLowQuality: rej.lowQuality, rejectedDark: rej.dark, facing,
+      });
+      // a plain framing hint is not shown right after a rep was judged (the camera obviously sees the person); a real "cannot count" fix always is
+      const line = dec.reason === 'hint' && now - lastJudgedAt.current < JUDGED_QUIET_MS ? null : dec.line;
+      setGuideTrack(prev => (prev === line ? prev : line));
     }, 200);
     return () => clearInterval(id);
-  }, [phase]);
+  }, [phase, repCounterOnly, exerciseType, isFloor, matchRef, confRef, guideEngine, counterRef]);
 
   // ROOT CAUSE of "pulling the drawer up does nothing": this was a plain
   // template string, recomputed fresh on every render — and this screen
@@ -1656,10 +1723,10 @@ export default function FormCheckScreen() {
               {/* Same glass pill as the live cues AFTER you're in place (CueGlass),
                   so a message looks identical before and after setup. */}
               <CueGlass text={guide
-                ? (guide.stage === 'ready' ? 'Hold still' : guide.text)
+                ? (guide.stage === 'ready' ? GUIDE_LINES.holdStill : guide.text)
                 : startPoseWaiting
-                ? 'Hands at your shoulders'
-                : (setupHint || SETUP_INFO[exerciseType].title)} />
+                ? GUIDE_LINES.handsStart
+                : (guideLine(setupHint, exerciseType) ?? (setupHint || SETUP_INFO[exerciseType].title))} />
             </View>
           )}
         </PositioningGuide>
@@ -1763,6 +1830,7 @@ export default function FormCheckScreen() {
         counter={counterRef}
         counterActive={isTracking}
         flags={{ diag: !!repDiag, cue: !!(stats?.trackingCue || stats?.outOfPlaneCue) }}
+        confidence={confidenceRef}
       />
 
       {/* Error */}
@@ -1796,46 +1864,14 @@ export default function FormCheckScreen() {
           trackingCueHint right below it. This one was missing that gate
           (trackingCueHint already had it), which is exactly how a live
           pose-correction overlay kept leaking into the workout HUD. */}
-      {isTracking && !!stats?.outOfPlaneCue && !isWorkoutHud && (
-        <View style={s.outOfPlaneHint} pointerEvents="none">
-          <Text style={s.outOfPlaneText}>
-            {shortCue(stats.outOfPlaneCue)}<Image source={SPARKLE_DUO} style={s.cueSparkleImg} />
-          </Text>
-        </View>
+      {/* (the separate planarity hint is gone: the Guide says "Stand sideways to the phone" / "Face the phone" instead) */}
+      {/* THE GUIDE while tracking: setup lines only (where to stand, where the phone goes, light), picked from WHY the camera cannot count
+          (lib/guideCoach.ts). Never form words: those are the Coach's, on the check / X. */}
+      {isTracking && !!guideTrack && (
+        <Animated.View style={[s.trackingCueHint, { transform: [{ rotate: floorSpin }] }]} pointerEvents="none">
+          <CueGlass text={guideTrack} />
+        </Animated.View>
       )}
-
-      {/* Live guidance while tracking. Priority:
-          1. repDiag — "why aren't reps counting" worked out from the log
-             stream (all exercises, incl. sit-up). This is the link between
-             the counter and the on-screen command the user asked for.
-          2. stats.trackingCue — native "step back into frame" (non-floor
-             only; a floor body legitimately leaves frame each rep).
-          Suppressed while a planarity hint is already showing.
-          Now shown during real workouts too (isWorkoutHud), not just solo
-          form-check — explicit user requirement: whenever a rep isn't
-          being counted mid-workout, the user needs to see WHY and what to
-          do about it, same as solo mode. Previously this whole block was
-          gated off for workouts, which is why reps could silently fail to
-          count with zero on-screen explanation. */}
-      {isTracking && !stats?.outOfPlaneCue && (() => {
-        const rawCue = attemptCue ?? repDiag
-          ?? (isFloor ? null : (stats?.personDetected === false ? NO_PERSON_CUE : (stats?.trackingCue || null)));
-        // a frame hint is never shown right after a rep was judged (a check / X means the camera sees the person)
-        void judgedTick;
-        const gated = showFrameHint(rawCue, Date.now() - lastJudgedAt.current);
-        if (!gated) return null;
-        const cue = shortCue(gated);
-        // Redesigned from bare floating text to a contained glass pill —
-        // explicit complaint: "I don't like the design of the live cues...
-        // it just doesn't feel clean at all." Same GlassPanel treatment
-        // the "Ready. Go!" setup-success card already uses, instead of
-        // raw drop-shadowed text floating over the camera feed.
-        return (
-          <Animated.View style={[s.trackingCueHint, { transform: [{ rotate: floorSpin }] }]} pointerEvents="none">
-            <CueGlass text={cue} />
-          </Animated.View>
-        );
-      })()}
 
       {/* Debug stats panel removed from the default view to match
           in-workout's clean look (it was solo-only before). stats itself

@@ -1,70 +1,63 @@
 /**
  * lib/rankTuning.ts
  *
- * EVERY tunable number of the rank system, in one place. Nothing else in the app has its own copy of a threshold,
- * half-life or log size: lib/sessionLog.ts (computeMuscleTiers / tierProgress) reads these, and every screen reads
- * sessionLog.
+ * EVERY tunable number of the rank system, in one place. lib/sessionLog.ts (computeMuscleTiers / tierProgress) reads these,
+ * and every screen reads sessionLog.
  *
- * !! PLACEHOLDERS !!  Every number in this file is a first guess, tuned with scripts/sim-rank-progress.js against an
- * imagined user (3 workouts a week, 30 reps per exercise, every muscle trained each workout). They are meant to be
- * re-tuned from real use. Change a number here, run `node scripts/sim-rank-progress.js --check`, read the table.
+ * RANKS GO BY GOOD REPS, NOT BY WEEKS (2026-11-12):
+ *  - Each muscle has its own good-rep total. A good rep adds its muscle credit (main muscle 1.0, helpers less, see
+ *    constants/muscleWeights.ts). A rep with bad form adds nothing.
+ *  - There is NO fading: a rep counts the same today and in a year. Resting never lowers a rank.
+ *  - Each rank needs a fixed number of good reps to get to the next one, so every rep at that rank is worth a fixed number of
+ *    percent. The numbers below are PLACEHOLDERS (first guesses, to be tuned from real use).
+ *  - Everyone starts at Bronze 0%. There is no "Unranked". The first rank-up is Bronze -> Silver.
+ *  - The OVERALL rank is not a rep count: it is built from the muscles (components/MuscleTierMap.tsx computeOverallStanding).
  *
- * THE SHAPE (what the numbers are for):
- *  - Progress is "decayed volume" (reps, each worth less as it ages). A constant training rate can never climb past
- *    rate x HALF_LIFE / ln2, so the top ranks sit close to that ceiling: only people who keep training hard for a
- *    long time get there, and a casual user's ceiling is simply lower (never too easy).
- *  - The gap between one rank and the next grows at every step (150, 460, 720, 980, 1190, 1350 reps between ranks), so the same 30 reps move the progress bar a lot at Bronze and only a little at Gold or Diamond: fast
- *    at the bottom, a slow grind at the top.
- *  - Good form is a second gate: the share of reps with good form must clear a bar that rises with every rank, so
- *    a high rank also means clean reps, not just a lot of them.
+ *   rank step            good reps   percent per rep
+ *   Bronze   -> Silver        150        +0.67%
+ *   Silver   -> Gold          500        +0.20%
+ *   Gold     -> Platinum    1,200        +0.083%
+ *   Platinum -> Diamond     2,500        +0.04%
+ *   Diamond  -> Master      5,000        +0.02%
+ *   Master   -> Champion   10,000        +0.01%
+ *
+ * Rep exercises that cannot judge form (rep counter only, or typed in by hand in Log a session) have no good/bad, so every
+ * rep counts. PLACEHOLDER decision.
+ *
+ * Run `node scripts/sim-rank-progress.js` for the reps table.
  */
 import type { Tier } from './sessionLog';
 
-/** How long until an unused rep is worth half. Long on purpose: a holiday should barely move a rank. PLACEHOLDER. */
-export const DECAY_HALF_LIFE_DAYS = 240;
-
-/**
- * There is NO "Unranked". Everyone starts at Bronze 0%, so Bronze needs 0 and the first rank-up is Bronze -> Silver. Silver is at
- * 150 decayed reps (the number the old first rank, Bronze, was at): 30 good reps on one muscle read +20% (30 of 150), and a normal
- * user (3 workouts a week, one 30-rep slot per muscle per workout) ranks up to Silver in 5 workouts, about 1.7 weeks. Gold and above
- * are unchanged. See `node scripts/sim-rank-progress.js` for the table.
- *
- * Decayed reps needed for each tier (PLACEHOLDERS). Highest first, as tierFromVolume expects.
- * A user training a muscle 3x a week (30 reps each) reaches Silver in week 2, Gold week 7, Platinum month 4, Diamond
- * month 8, Master month 16 and can never reach Champion (their ceiling, ~4450, is below it). Training 4x a week with
- * very clean form gets Champion in about 18 months. scripts/sim-rank-progress.js prints the exact table.
- */
-export const VOLUME_THRESHOLDS: [Tier, number][] = [
-  ['champion', 4850],
-  ['master',   3500],
-  ['diamond',  2310],
-  ['platinum', 1330],
-  ['gold',      610],
-  ['silver',    150],
-  ['bronze',      0],
+/** Good reps (muscle credit) needed to go from each rank to the NEXT one. PLACEHOLDERS. */
+export const REPS_TO_NEXT_RANK: { from: Tier; to: Tier; reps: number }[] = [
+  { from: 'bronze',   to: 'silver',   reps: 150 },
+  { from: 'silver',   to: 'gold',     reps: 500 },
+  { from: 'gold',     to: 'platinum', reps: 1200 },
+  { from: 'platinum', to: 'diamond',  reps: 2500 },
+  { from: 'diamond',  to: 'master',   reps: 5000 },
+  { from: 'master',   to: 'champion', reps: 10000 },
 ];
 
+/** Percent of the next rank that ONE good rep (credit 1.0) adds while at each rank. Derived from the table above. */
+export const PERCENT_PER_REP: Record<string, number> = Object.fromEntries(REPS_TO_NEXT_RANK.map(r => [r.from, 100 / r.reps]));
+
+/** Total good reps (muscle credit) at which each rank STARTS, highest first (tierFromVolume expects that order). */
+export const VOLUME_THRESHOLDS: [Tier, number][] = (() => {
+  const out: [Tier, number][] = [['bronze', 0]];
+  let total = 0;
+  for (const r of REPS_TO_NEXT_RANK) { total += r.reps; out.push([r.to, total]); }
+  return out.reverse();
+})();
+
 /**
- * A muscle counts toward the OVERALL rank once it has real training: this many decayed reps (Silver's bar). Without it, a muscle
+ * A muscle counts toward the OVERALL rank once it has real training: this many good reps (Silver's bar). Without it, a muscle
  * that only gets a few helper reps (abs from push-ups) sits at Bronze for ever and holds the overall rank at Bronze for everyone.
  * Before any muscle has this much, the overall bar is the average of everything trained, so it moves from the first workout.
  */
 export const OVERALL_MIN_VOLUME: number = VOLUME_THRESHOLDS.find(([t]) => t === 'silver')![1];
 
-/** Share of judged reps that must be good form for each tier (PLACEHOLDERS), highest first. */
-export const QUALITY_THRESHOLDS: [Tier, number][] = [
-  ['champion', 0.94],
-  ['master',   0.88],
-  ['diamond',  0.80],
-  ['platinum', 0.72],
-  ['gold',     0.62],
-  ['silver',   0.50],
-  ['bronze',   0],
-];
-
 /**
- * How many logged exercises are kept. It was 200, which at ~18 a week is only the last 11 weeks: older training fell
- * out of the log, so volume (and rank) could never climb past what 11 weeks can reach. Ranks are computed from the
- * whole log, so it must hold years. PLACEHOLDER: ~6.4 years at 18 entries a week (about 0.8 MB of storage).
+ * How many logged exercises are kept. Ranks are computed from the whole log (no fading), so it must hold years.
+ * PLACEHOLDER: ~6.4 years at 18 entries a week (about 0.8 MB of storage).
  */
 export const MAX_LOG_ENTRIES = 6000;

@@ -208,7 +208,7 @@ check('no false cue while METRIC lines keep flowing', (() => {
 {
   const src = fs.readFileSync(path.join(__dirname, '..', 'app', 'formcheck.tsx'), 'utf8');
   check('glass: setup guidance renders through <CueGlass> (was plain text)', /<CueGlass text=\{guide/.test(src) && !/<Text style=\{s\.setupBig\}>/.test(src));
-  check('glass: live cues render through the very same <CueGlass>', /<CueGlass text=\{cue\} \/>/.test(src));
+  check('glass: live cues render through the very same <CueGlass>', /<CueGlass text=\{guideTrack\} \/>/.test(src));
   check('glass: CueGlass is a GlassPanel pill (the look you like)', /function CueGlass[\s\S]*?<GlassPanel radius=\{999\}/.test(src));
   check('meter: premium glass pill (GlassPanel + ring + Plus Jakarta), no bare 40px text', /<GlassPanel radius=\{999\} style=\{s\.meterPill\}>/.test(src) && !/cameraLockPct/.test(src));
 }

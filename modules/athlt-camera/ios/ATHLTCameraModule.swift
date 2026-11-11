@@ -126,6 +126,10 @@ public class ATHLTCameraModule: Module {
 
     // MARK: – Recording / stopTracking handshake
     private var pendingStopPromise: Promise?
+    // The clip being recorded now, and the last one that finished (even when it ended early with an error): stopTracking hands back
+    // a finished clip whose file exists instead of "no video" (2026-11-11: a recording that ended early lost the whole video).
+    private var currentClipURL: URL?
+    private var lastFinishedClipURL: URL?
 
     // MARK: – Module definition ─────────────────────────────────────────────────
 
@@ -175,7 +179,7 @@ public class ATHLTCameraModule: Module {
                     if let p = self.pendingStopPromise {
                         p.resolve(["reps":     self.engine.totalReps,
                                    "goodReps": self.engine.goodReps,
-                                   "videoUri": NSNull()])
+                                   "videoUri": self.lastFinishedClipURL?.absoluteString ?? NSNull()])
                         self.pendingStopPromise = nil
                     }
                     self.engine.reset()
@@ -403,6 +407,8 @@ public class ATHLTCameraModule: Module {
                     if movieOut.isRecording { movieOut.stopRecording() }
                     let tmp = FileManager.default.temporaryDirectory
                         .appendingPathComponent("athlt_\(Int(Date().timeIntervalSince1970)).mov")
+                    self.currentClipURL = tmp
+                    self.lastFinishedClipURL = nil
                     movieOut.startRecording(to: tmp, recordingDelegate: movieDel)
                     NSLog("[GymCamera] recording → %@", tmp.lastPathComponent)
                 }
@@ -419,11 +425,11 @@ public class ATHLTCameraModule: Module {
                     self.pendingStopPromise = promise
                     self.sessionQueue.async { movieOut.stopRecording() }
                 } else {
-                    NSLog("[GymCamera] tracking stopped — %d good / %d reps (no recording)",
-                          self.engine.goodReps, self.engine.totalReps)
+                    NSLog("[GymCamera] tracking stopped — %d good / %d reps (not recording now; last finished clip: %@)",
+                          self.engine.goodReps, self.engine.totalReps, self.lastFinishedClipURL?.lastPathComponent ?? "none")
                     promise.resolve(["reps":     self.engine.totalReps,
                                      "goodReps": self.engine.goodReps,
-                                     "videoUri": NSNull()])
+                                     "videoUri": self.lastFinishedClipURL?.absoluteString ?? NSNull()])
                 }
             }
         }
@@ -623,19 +629,31 @@ public class ATHLTCameraModule: Module {
                 "reps":     self.engine.totalReps,
                 "goodReps": self.engine.goodReps,
             ]
-            if let err = error as NSError?,
-               !(err.domain == AVFoundationErrorDomain &&
-                 err.code   == AVError.Code.operationInterrupted.rawValue) {
-                NSLog("[GymCamera] recording error: %@", err.localizedDescription)
-                dict["videoUri"] = NSNull()
-            } else {
-                NSLog("[GymCamera] recording saved: %@", url.lastPathComponent)
+            // AVFoundation reports an error for many recordings that DID finish (AVErrorRecordingSuccessfullyFinishedKey), and the
+            // file is usable whenever it exists with content. Only a recording with no usable file is "no video".
+            var usable = true
+            if let err = error as NSError? {
+                let finished = (err.userInfo[AVErrorRecordingSuccessfullyFinishedKey] as? Bool) ?? false
+                let interrupted = err.domain == AVFoundationErrorDomain && err.code == AVError.Code.operationInterrupted.rawValue
+                NSLog("[GymCamera] recording error: %@ (finishedOk=%d interrupted=%d)", err.localizedDescription, finished ? 1 : 0, interrupted ? 1 : 0)
+                usable = finished || interrupted
+            }
+            let size = ((try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? NSNumber)?.intValue ?? 0
+            if size <= 0 { usable = false }
+            if usable {
+                NSLog("[GymCamera] recording saved: %@ (%d bytes)", url.lastPathComponent, size)
                 dict["videoUri"] = url.absoluteString
+                if url == self.currentClipURL { self.lastFinishedClipURL = url }
+            } else {
+                NSLog("[GymCamera] recording has no usable file: %@ (%d bytes)", url.lastPathComponent, size)
+                dict["videoUri"] = NSNull()
             }
             NSLog("[GymCamera] tracking stopped — %d good / %d reps",
                   self.engine.goodReps, self.engine.totalReps)
-            self.pendingStopPromise?.resolve(dict)
-            self.pendingStopPromise = nil
+            if let p = self.pendingStopPromise {
+                p.resolve(dict)
+                self.pendingStopPromise = nil
+            }
         }
     }
 

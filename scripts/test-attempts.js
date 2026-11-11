@@ -121,8 +121,8 @@ check('strokes that did NOT reach the line are not counted (lows of 61-68 stay m
   const adaptEv = evs.find((e) => e.kind === 'adapt');
   const atts = evs.filter((e) => e.kind === 'attempt');
   console.log('    outcomes: ' + atts.map((a) => a.outcome).join(', '));
-  check('lows that keep stopping at ~56 (line 50) are recognised as a consistent range and ADAPTED to (logged as placeholder)', !!adaptEv && adaptEv.side === 'bottom' && logs.some((l) => /ADAPT bottom/.test(l) && /PLACEHOLDER/.test(l)), adaptEv ? `enter ${adaptEv.enter.toFixed(1)}` : 'none');
-  check('after adapting, those attempts count as soft reps (so the person is not stuck forever)', det.softReps() >= 1 && atts.some((a) => a.outcome === 'soft'), `soft ${det.softReps()}`);
+  check('NO ADAPTING: lows that keep stopping at ~56 (line 50) are never accepted as a new range (a half rep always gets an X)', !adaptEv && !logs.some((l) => /ADAPT/.test(l)));
+  check('NO ADAPTING: those attempts never become counted reps: every one is missed with "Go lower"', det.softReps() === 0 && atts.length >= 5 && atts.every((x) => x.outcome === 'missed' && x.blocker === 'bottom-short' && x.reason === 'Go lower'), `soft ${det.softReps()} / ` + atts.map((x) => x.outcome + ':' + x.reason).join(','));
   check('before adapting, each missed attempt carried a reason (never silent)', atts.filter((a) => a.outcome === 'missed').every((a) => a.reason && a.reason.split(' ').length <= 3), atts.filter((a) => a.outcome === 'missed').map((a) => a.reason).join(','));
 }
 // ── a far-off range is NOT adapted (that is form, not camera angle): the real cue is given instead ─────────────────

@@ -81,8 +81,8 @@ const H = require('../lib/haptics.ts');
   // ── Part 3: native screens call it ──
   const read = (f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8').split('\r\n').join('\n');
   const fc = read('app/formcheck.tsx'), rc = read('app/recap.tsx'), ws = read('components/WarmSurfaces.tsx'), ds = read('components/DesignScreen.tsx');
-  check('camera: rep counted -> Light, rejected (X) -> Warning, one call per rep (lib/haptics.ts)', fc.includes('(rep.good ? hapticSelect() : hapticWarning())') && fc.includes("from '../lib/haptics'"));
-  check('camera: a missed attempt (X from the attempt detector) -> Warning; a soft rep -> Light', fc.includes('hapticWarning();\n      }\n    }\n  };') && fc.includes("setFeedback({ good: true, reason: '', seq: ++feedbackSeq.current });\n        hapticSelect()"));
+  check('camera: rep counted -> Light, rejected (X) -> Warning, one call per rep (lib/haptics.ts)', fc.includes('(shownGood ? hapticSelect() : hapticWarning())') && fc.includes("from '../lib/haptics'"));
+  check('camera: a missed attempt (X from the attempt detector) -> Warning; a soft rep -> Light', fc.includes('hapticWarning();\n      }\n    }\n  };') && fc.includes("setFeedback({ good: true, reason: '', seq: ++feedbackSeq.current });\n          hapticSelect()"));
   check('camera: stop = Medium, back = Light, mute and flash = selection, flip = Light', fc.includes('hapticMain(); void handleStop') && fc.includes('hapticSelect(); void handleBack') && fc.includes('hapticSelect(); handleToggleMute') && fc.includes('hapticSelect(); handleFlash') && fc.includes('hapticSelect(); handleFlip'));
   check('camera: errors -> Error', (fc.match(/hapticError\(\)/g) || []).length >= 2);
   check('Workout complete (a real workout) and a rank up -> Success, once each', rc.includes('celebrated.current = true; hapticSuccess()') && rc.includes('rankCelebrated.current = true; hapticSuccess()'));
