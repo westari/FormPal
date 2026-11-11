@@ -177,7 +177,7 @@ const rf = StyleSheet.create({
   cue: {
     marginTop: 20,
     maxWidth: 300,
-    fontFamily: 'BricolageGrotesque_800ExtraBold',
+    fontFamily: 'PlusJakartaSans_700Bold',
     fontSize: 24,
     color: '#fff',
     textAlign: 'center',

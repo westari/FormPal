@@ -10,7 +10,7 @@ import { View, StyleSheet, Animated } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
 import { useRevealFade } from '../lib/useRevealFade';
-import { haptic, isHapticKind } from '../lib/screenHaptics';
+import { hapticKind } from '../lib/haptics';
 
 export interface DesignMessage { type: string; [k: string]: any }
 
@@ -41,7 +41,7 @@ export default function DesignScreen({
     if (msg.type === 'needData') { push(); return; }
     if (msg.type === 'pageConsole') { if (__DEV__) console.log(`[${name}-page]`, msg.msg); return; }
     if (msg.type === 'logicReady') return;
-    if (msg.type === 'haptic') { if (isHapticKind(msg.kind)) haptic(msg.kind); return; }
+    if (msg.type === 'haptic') { hapticKind(msg.kind); return; }
     onMessage(msg);
   }, [onMessage, onReady, push, name]);
 

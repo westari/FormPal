@@ -68,7 +68,7 @@ import { EXERCISE_DEFINITIONS } from '../constants/exerciseDefinitions';
 import { Muscle, type ExerciseId } from '../constants/exercises';
 import { computeOverallStanding, MUSCLE_LABELS, MUSCLE_ICON_SOURCES } from '../components/MuscleTierMap';
 import { Asset } from 'expo-asset';
-import { haptic } from '../lib/screenHaptics';
+import { hapticSuccess } from '../lib/haptics';
 import { buildMuscleRanksPayload, workedMuscles, type MuscleRanksPayload } from '../lib/muscleRanksData';
 import { tierDataUri } from '../lib/rankImages';
 import { allSetsDataJs, setTilesFor } from '../lib/allSetsInject';
@@ -396,7 +396,7 @@ export default function RecapScreen() {
         // The data was already published synchronously (see useState above);
         // persist in the background. The rank effect awaits persistRef so it
         // still reads sessions that include this one.
-        if (persistOnMount.current.length > 0) persistRef.current = appendSessions(persistOnMount.current).catch(() => {});
+        if (persistOnMount.current.length > 0) persistRef.current = appendSessions(persistOnMount.current, isWorkoutMode ? 'recap-workout' : 'recap-camera').catch(() => {});
       } else if (isLoggedMode) {
         // the entries of the session that was just saved (they all carry the same timestamp)
         const all = await getAllSessions();
@@ -421,7 +421,7 @@ export default function RecapScreen() {
         });
       } else {
         // Solo-live: data was built synchronously above; persist in background.
-        if (persistOnMount.current.length > 0) persistRef.current = appendSessions(persistOnMount.current).catch(() => {});
+        if (persistOnMount.current.length > 0) persistRef.current = appendSessions(persistOnMount.current, isWorkoutMode ? 'recap-workout' : 'recap-camera').catch(() => {});
       }
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -737,8 +737,8 @@ export default function RecapScreen() {
     // in independently, whenever IT'S ready, via videoFade above.
     if (__DEV__) console.log('[recap-debug] blocked on loading gate:', { hasData: !!data, hasSummaryData: !!summaryDataJs });
     return (
-      <View style={styles.root}>
-        <StatusBar style="light" />
+      <View style={[styles.root, isLoggedMode ? { backgroundColor: '#f2f2f6' } : null]}>
+        <StatusBar style={isLoggedMode ? 'dark' : 'light'} />
       </View>
     );
   }
@@ -746,8 +746,8 @@ export default function RecapScreen() {
   onWebMsg.current = (msg: InMsg) => {
     // Haptics: Workout complete (a real workout, not a past one opened from history) and a rank up are celebrated once each
     if (msg.type === 'ready') {
-      if (!isHistoryMode && !celebrated.current) { celebrated.current = true; haptic('success'); }
-      if (view === 'ranks' && ranksPayload?.rank.rankedUp && !rankCelebrated.current) { rankCelebrated.current = true; haptic('success'); }
+      if (!isHistoryMode && !celebrated.current) { celebrated.current = true; hapticSuccess(); }
+      if (view === 'ranks' && ranksPayload?.rank.rankedUp && !rankCelebrated.current) { rankCelebrated.current = true; hapticSuccess(); }
     }
     if (__DEV__) console.log('[recap-debug] onMessage:', msg.type, 'current view=', view, 'effectiveView=', effectiveView);
     if (msg.type === 'videoDebug') { if (__DEV__) console.log('[recap-debug] video event:', msg.msg, msg.code); }
@@ -782,8 +782,8 @@ export default function RecapScreen() {
   };
 
   return (
-    <View style={styles.root}>
-      <StatusBar style="light" />
+    <View style={[styles.root, isLoggedMode ? { backgroundColor: '#f2f2f6' } : null]}>
+      <StatusBar style={isLoggedMode ? 'dark' : 'light'} />
       {/* Native video — a real AVPlayer, its own process, nothing to do
           with the WebView (see file header). Sits BEHIND the WebView;
           the summary WebView's own background goes transparent above so

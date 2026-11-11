@@ -207,7 +207,7 @@ check('no false cue while METRIC lines keep flowing', (() => {
 // 5. glass: setup guidance and live cues go through the SAME component
 {
   const src = fs.readFileSync(path.join(__dirname, '..', 'app', 'formcheck.tsx'), 'utf8');
-  check('glass: setup guidance renders through <CueGlass> (was plain text)', /<CueGlass text=\{startPoseWaiting/.test(src) && !/<Text style=\{s\.setupBig\}>/.test(src));
+  check('glass: setup guidance renders through <CueGlass> (was plain text)', /<CueGlass text=\{guide/.test(src) && !/<Text style=\{s\.setupBig\}>/.test(src));
   check('glass: live cues render through the very same <CueGlass>', /<CueGlass text=\{cue\} \/>/.test(src));
   check('glass: CueGlass is a GlassPanel pill (the look you like)', /function CueGlass[\s\S]*?<GlassPanel radius=\{999\}/.test(src));
   check('meter: premium glass pill (GlassPanel + ring + Plus Jakarta), no bare 40px text', /<GlassPanel radius=\{999\} style=\{s\.meterPill\}>/.test(src) && !/cameraLockPct/.test(src));
@@ -219,8 +219,8 @@ check('no false cue while METRIC lines keep flowing', (() => {
   const run = fs.readFileSync(path.join(__dirname, '..', 'app', 'workout', 'run.tsx'), 'utf8');
   const swift = fs.readFileSync(path.join(__dirname, '..', 'modules', 'athlt-camera', 'ios', 'ATHLTCameraModule.swift'), 'utf8');
   const pkg = fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8');
-  check('keep awake: the camera screen calls useKeepAwake() and re-asserts the lock (mount, every 15s, on foreground)', fc.includes("useKeepAwake('formcheck')") && fc.includes('activateKeepAwakeAsync') && fc.includes('}, 15000)') && fc.includes("AppState.addEventListener('change'") && fc.includes('[AWAKE]'));
-  check('keep awake: the native camera also sets isIdleTimerDisabled (on start, off on stop) and expo-keep-awake is a declared dependency', swift.includes('isIdleTimerDisabled = true') && swift.includes('isIdleTimerDisabled = false') && pkg.includes('"expo-keep-awake"'));
+  check('keep awake: the camera screen RELEASES AND TAKES the lock again every 15s and on return to the app (expo-keep-awake ignores a second request while it thinks it is on), logs [AWAKE], and no longer uses the one-shot hook', fc.includes('await deactivateKeepAwake(TAG)') && fc.includes('await activateKeepAwakeAsync(TAG)') && fc.includes('}, 15000)') && fc.includes("AppState.addEventListener('change'") && fc.includes('[AWAKE]') && !fc.includes("useKeepAwake('formcheck')"));
+  check('keep awake: the native camera no longer switches the idle timer OFF when a session stops (that turned the screen lock back on behind expo-keep-awake), and expo-keep-awake is a declared dependency', swift.includes('isIdleTimerDisabled = true') && !swift.includes('isIdleTimerDisabled = false') && pkg.includes('"expo-keep-awake"'));
   check('keep awake: the workout screen calls useKeepAwake()', /import \{ useKeepAwake \} from 'expo-keep-awake'/.test(run) && /export default function WorkoutRunScreen\(\) \{[\s\S]{0,300}useKeepAwake\(\);/.test(run));
   check('pill: label "Camera confidence" is OUTSIDE the glass, just above it (before the <GlassPanel>)', /<Text style=\{s\.meterLabel\}>Camera confidence<\/Text>\s*<GlassPanel radius=\{999\} style=\{s\.meterPill\}>/.test(fc) && !/Body tracking|Form detection/.test(fc));
   const num = +(fc.match(/meterNum:.*?fontSize: (\d+)/) || [])[1], trackW = +(fc.match(/meterTrack: \{ width: (\d+), height: (\d+)/) || [])[1], trackH = +(fc.match(/meterTrack: \{ width: \d+, height: (\d+)/) || [])[1];
@@ -317,6 +317,13 @@ check('no false cue while METRIC lines keep flowing', (() => {
     if (frame && verdict) both++;
   }
   check('replay over 20s: the frame hint and a verdict are never both allowed at the same time', both === 0, String(both));
+}
+// ── status, confidence and cues agree ──
+{
+  const { capMeterTarget, FRAME_HINT_METER_CAP } = LT;
+  check('a frame hint on screen caps the confidence at 35, whatever the raw number says (it read 75 beside "Step back into frame")', capMeterTarget(75, null, true) === FRAME_HINT_METER_CAP && capMeterTarget(100, null, true) === 35 && capMeterTarget(20, null, true) === 20);
+  check('while setting up, the step caps the number (100 only at Go); no cap otherwise', capMeterTarget(100, 70, false) === 70 && capMeterTarget(100, 100, false) === 100 && capMeterTarget(88, null, false) === 88);
+  check('both caps apply together (the lowest wins)', capMeterTarget(100, 80, true) === 35);
 }
 console.log(failed ? `\n${failed} FAILED` : '\nall passed');
 process.exit(failed ? 1 : 0);

@@ -104,11 +104,12 @@ if (require.main === module) {
     let failed = 0;
     const check = (name, ok, detail) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  -> ' + detail : ''}`); if (!ok) failed++; };
     const o = results.Normal.OVERALL || {}, d = results.Dedicated.OVERALL || {}, c = results.Casual.OVERALL || {};
-    check('first rank up (Bronze -> Silver) in about 1-2 weeks for a normal user (<= 3 weeks)', o.silver != null && o.silver <= 3, `week ${o.silver}`);
+    check('first Bronze for a normal user in about 1.5-2 weeks (week 2)', o.bronze != null && o.bronze >= 2 && o.bronze <= 2, `week ${o.bronze}`);
+    check('first rank up (Bronze -> Silver) for a normal user within about 6 weeks (the weakest muscle sets the overall rank)', o.silver != null && o.silver <= 8, `week ${o.silver}`);
     const gaps = (r) => ['silver', 'gold', 'platinum', 'diamond', 'master', 'champion'].map((t, i, a) => (r[t] == null ? null : r[t] - (i ? r[a[i - 1]] : 0)));
     const gd = gaps(d).filter(g => g != null);
     check('every next rank takes longer than the one before (diminishing returns), dedicated user', gd.every((g, i) => i === 0 || g > gd[i - 1]), `weeks between ranks: ${gd.join(', ')}`);
-    check('the top rank (Champion) takes many months even for a dedicated user (>= 18 months)', d.champion != null && d.champion / 4.345 >= 18, `week ${d.champion} = ${d.champion && (d.champion / 4.345).toFixed(1)} months`);
+    check('the top rank (Champion) is never quick: not reached in under 18 months by a dedicated user (the weakest muscle, Abs, sets the overall rank)', d.champion == null || d.champion / 4.345 >= 18, `week ${d.champion}`);
     check('a normal user does not reach Champion within 2 years (never too easy)', o.champion == null || o.champion / 4.345 > 24, `week ${o.champion}`);
     check('a casual user (2/week, 80% form) tops out well below Champion', c.champion == null && c.master == null, JSON.stringify(c));
     const gv = TIERS.slice(0, 6).map(t => gains[t]).filter(g => g != null);

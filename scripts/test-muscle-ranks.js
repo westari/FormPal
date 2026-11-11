@@ -117,7 +117,8 @@ for (const [name, sc] of Object.entries(SCENARIOS)) {
     // below Bronze: progress toward Bronze from ALL the training the muscle has had (capped at 99%), before and after today
     const creditOf = (sessions) => Object.fromEntries(data.workedMuscles(sessions).map(w => [w.muscle, w.credit]));
     const credAll = creditOf(sc.all), credPrior = creditOf(sc.prior);
-    const unrA = (m) => Math.min(99, (credAll[m] || 0) / 50 * 100), unrB = (m) => Math.min(99, (credPrior[m] || 0) / 50 * 100);
+    const BRONZE = sessionLog.VOLUME_THRESHOLDS.find(([t]) => t === 'bronze')[1]; // the Bronze bar in reps (150 since 2026-11-11, was 50)
+    const unrA = (m) => Math.min(99, (credAll[m] || 0) / BRONZE * 100), unrB = (m) => Math.min(99, (credPrior[m] || 0) / BRONZE * 100);
     const progA = (m) => sc.tiersAfter[m] ? data.muscleProgressPct(sc.tiersAfter[m]) : unrA(m);
     const absA = (m) => sc.tiersAfter[m] ? TIERIDX[sc.tiersAfter[m].tier] * 100 + data.muscleProgressPct(sc.tiersAfter[m]) : unrA(m) - 100;
     const absB = (m) => sc.tiersBefore[m] ? TIERIDX[sc.tiersBefore[m].tier] * 100 + data.muscleProgressPct(sc.tiersBefore[m]) : unrB(m) - 100;
@@ -149,7 +150,7 @@ for (const [name, sc] of Object.entries(SCENARIOS)) {
 // ── user's report: "Bronze 53.2% -> 53.2%", Shoulders +0.0%, Triceps +0.0% right after a workout ──
 // Shoulders/triceps were already past the overall (weakest-link) tier, so they were capped at 100 before AND after.
 {
-  const prior = [entry('shoulderPress', 300, 290, 5), entry('squat', 60, 54, 7)];
+  const prior = [entry('shoulderPress', 300, 290, 5), entry('squat', 200, 180, 7)]; // shoulders reach Silver (225), quads only Bronze (150): the weakest link is Bronze
   const today = [entry('shoulderPress', 10, 9, 0)];
   const sc = build(prior, today);
   const p = sc.payload;
@@ -173,17 +174,24 @@ for (const [name, sc] of Object.entries(SCENARIOS)) {
 {
   // below Bronze counts ALL the training, capped at 99% until Bronze is real
   const mk = (reps, ts) => ({ ts, exerciseId: 'curl', displayName: 'Curl', reps, goodReps: reps, pct: 100, formChecked: true });
-  const prior = [mk(20, NOW - 5 * DAY), mk(10, NOW - 3 * DAY)], today = [mk(9, NOW)];
+  const prior = [mk(60, NOW - 5 * DAY), mk(30, NOW - 3 * DAY)], today = [mk(27, NOW)]; // the Bronze bar is 150 reps: 90 before (60%), 117 after (78%)
   const sc = build(prior, today);
   const bic = sc.payload.hits.find(h => h.name === 'Biceps');
   // 30 reps before (60% toward Bronze), 39 after (78%): the row is +18.0, not today's 9 reps alone (+18 coincides) - use a case that tells them apart below
-  check('below Bronze: biceps (39 of 50 reps ever) is not ranked yet and its row is the gain in ALL-time progress (+18.0%)', !sc.tiersAfter.biceps && bic && bic.gain === '+18.0%', bic && bic.gain);
-  const big = build([mk(40, NOW - 4 * DAY)], [mk(9, NOW)]); // 40 -> 49 reps: 80% -> 98%
+  check('below Bronze: biceps (117 of 150 reps ever) is not ranked yet and its row is the gain in ALL-time progress (+18.0%)', !sc.tiersAfter.biceps && bic && bic.gain === '+18.0%', bic && bic.gain);
+  const big = build([mk(120, NOW - 4 * DAY)], [mk(27, NOW)]); // 120 -> 147 reps: 80% -> 98%
   const bic2 = big.payload.hits.find(h => h.name === 'Biceps');
-  check('below Bronze: 49 of 50 reps shows 98% (never 100% until Bronze is real) - row +18.0%', !big.tiersAfter.biceps && bic2 && bic2.gain === '+18.0%', bic2 && bic2.gain);
-  const cross = build([mk(45, NOW - 4 * DAY)], [mk(30, NOW)]); // crosses Bronze today: a positive, bounded gain
+  check('below Bronze: 147 of 150 reps shows 98% (never 100% until Bronze is real) - row +18.0%', !big.tiersAfter.biceps && bic2 && bic2.gain === '+18.0%', bic2 && bic2.gain);
+  const cross = build([mk(135, NOW - 4 * DAY)], [mk(90, NOW)]); // crosses Bronze today: a positive, bounded gain
   const bic3 = cross.payload.hits.find(h => h.name === 'Biceps');
   check('crossing Bronze today gives a positive gain (not a drop from 99% to ~0) and never reads over +99.9%', !!cross.tiersAfter.biceps && bic3 && parseFloat(bic3.gain) > 0 && parseFloat(bic3.gain) <= 99.9, bic3 && bic3.gain);
+}
+{
+  // 30 good reps on ONE muscle from Unranked read +60% (Bronze at 50 reps). Now about +20% (30 of 150).
+  const bi = build([], [{ ts: NOW, exerciseId: 'curl', displayName: 'Curl', reps: 30, goodReps: 30, pct: 100, formChecked: true }]);
+  const b = bi.payload.hits.find((h) => h.name === 'Biceps');
+  console.log('      30 good bicep curls from Unranked: ' + (b && b.gain));
+  check('30 good reps on one muscle from Unranked = about +20% (was +60%)', !!b && Math.abs(parseFloat(b.gain.replace(/[+%]/g, '')) - 20) <= 0.5, b && b.gain);
 }
 // ── Per-exercise muscle weights (PLACEHOLDERS, constants/muscleWeights.ts): main muscle most, helpers much less ─────────
 {
@@ -216,8 +224,8 @@ check('rows carry the real Flaticon art', A.hits.every(h => h.icon && h.icon.sta
 {
   // gain really is after - before for that muscle
   const sc = SCENARIOS['shoulders+triceps (bronze)'];
-  // before today the shoulders had 40 of Bronze's 50 reps (unranked, 80% toward Bronze = -20 on the scale just below Bronze's 0)
-  const exp = data.muscleGainPct(undefined, sc.tiersAfter.shoulders) + 20;
+  // before today the shoulders had 40 reps of Bronze's 150 (unranked, 26.7% toward Bronze = about -73.3 on the scale just below Bronze's 0)
+  const exp = 30 / sessionLog.VOLUME_THRESHOLDS.find(([t]) => t === 'bronze')[1] * 100; // 30 shoulder-press reps today, still below Bronze: 30 of the 150-rep bar
   const shown = parseFloat(A.hits.find(h => h.name === 'Shoulders').gain.replace(/[+%]/g, ''));
   check('Shoulders +% equals (after - before) progress from the logs', Math.abs(shown - exp) <= 0.51, `shown ${shown} expected ${exp.toFixed(2)}`);
 }

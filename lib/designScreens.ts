@@ -298,6 +298,23 @@ export const LOG_SESSION_DOM_JS = String.raw`
       }
       if (title && title.firstChild && title.firstChild.nodeType === 3 && title.firstChild.nodeValue !== 'Log an exercise') title.firstChild.nodeValue = 'Log an exercise';
       var oldHelp = document.getElementById('__ds_help'); if (oldHelp) oldHelp.remove();
+      // the calendar ("Today" picker) was see-through (white at 74% with a blur): fully opaque white now, nothing shows through it
+      var cals = root.querySelectorAll('div[style*="ls-cal"]');
+      for (var ci = 0; ci < cals.length; ci++) {
+        cals[ci].style.setProperty('background', '#ffffff', 'important');
+        cals[ci].style.setProperty('backdrop-filter', 'none', 'important');
+        cals[ci].style.setProperty('-webkit-backdrop-filter', 'none', 'important');
+        // the design's month heading is frozen on "September 2026": the real month
+        var heads = cals[ci].querySelectorAll('div');
+        for (var hi = 0; hi < heads.length; hi++) {
+          var hd = heads[hi];
+          if (hd.children.length === 0 && /^[A-Za-z]+ [0-9]{4}$/.test((hd.textContent || '').trim()) && hd.firstChild && hd.firstChild.nodeType === 3) {
+            var want = ['January','February','March','April','May','June','July','August','September','October','November','December'][D.today.m] + ' ' + D.today.y;
+            if (hd.firstChild.nodeValue !== want) hd.firstChild.nodeValue = want;
+            break;
+          }
+        }
+      }
       // 2. under the search box: your Recent exercises (or Popular ones until you have logged some) as ONE tidy list, in the
       // design's own result-card style (white rounded card, name on the left, a round + / tick on the right). Hidden while searching.
       var wrap = inp.parentElement && inp.parentElement.parentElement;
@@ -317,6 +334,12 @@ export const LOG_SESSION_DOM_JS = String.raw`
         if (box.getAttribute('data-sig') !== sig) {
           box.setAttribute('data-sig', sig);
           box.textContent = '';
+          // the main action: a clear "Log exercise" button (like Create workout's "Add exercise") that opens the search
+          var lb = document.createElement('div'); lb.setAttribute('data-ds-log', '1'); lb.setAttribute('role', 'button');
+          lb.style.cssText = 'margin:0 auto 18px;height:48px;padding:0 24px;border-radius:999px;display:flex;width:max-content;align-items:center;gap:8px;cursor:pointer;background:#111114;color:#ffffff;font-size:15px;font-weight:700;letter-spacing:-0.2px;box-shadow:0 10px 22px -10px rgba(17,17,20,0.55);';
+          lb.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1.5v11M1.5 7h11" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round"/></svg><span>Log exercise</span>';
+          lb.addEventListener('click', function () { var inp2 = document.querySelector('input[placeholder="Search exercises"]'); if (inp2) { try { inp2.scrollIntoView({ block: 'center' }); } catch (e) {} inp2.focus(); } });
+          box.appendChild(lb);
           if (listNames.length) {
             var l = document.createElement('div');
             l.style.cssText = 'padding:0 8px 8px;font-size:13px;font-weight:700;letter-spacing:0.2px;color:#5f5f69;';

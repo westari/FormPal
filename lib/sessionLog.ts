@@ -89,11 +89,19 @@ export async function getAllSessions(): Promise<SessionEntry[]> {
   }
 }
 
-export async function appendSessions(entries: SessionEntry[]): Promise<void> {
+// EVERY write to the session log says where it came from (device logs: `[SESSION-WRITE] source=...`), and a write that is already in
+// the log (same time, exercise and reps) is dropped, so a screen that mounts twice can never add the same session twice. The only
+// callers are: the camera/workout recap ('recap-workout' / 'recap-camera') and the user pressing Save session ('log-session').
+// Nothing else (no replay, no test data, no attempt detector) writes here.
+export async function appendSessions(entries: SessionEntry[], source: string = 'unknown'): Promise<void> {
   if (entries.length === 0) return;
   try {
     const existing = await getAllSessions();
-    const log = [...existing, ...entries];
+    const have = new Set(existing.map(e => `${e.ts}|${e.exerciseId}|${e.reps}`));
+    const fresh = entries.filter(e => !have.has(`${e.ts}|${e.exerciseId}|${e.reps}`));
+    console.log(`[SESSION-WRITE] source=${source} entries=${entries.length} new=${fresh.length} :: ` + entries.map(e => `${e.displayName} x${e.reps}`).join(', '));
+    if (fresh.length === 0) return;
+    const log = [...existing, ...fresh];
     if (log.length > MAX_LOG_ENTRIES) log.splice(0, log.length - MAX_LOG_ENTRIES);
     await AsyncStorage.setItem(SESSION_LOG_KEY, JSON.stringify(log));
   } catch {}

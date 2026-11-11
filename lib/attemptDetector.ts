@@ -26,7 +26,11 @@
 export const ATTEMPT_TUNING = {
   smoothN: 3,               // median of the last N samples (the log gives a value about every 0.33s)
   swingHysteresis: 0.22,    // a turn is real when the value moved this fraction of the exercise's full range
-  minStrokeFraction: 0.45,  // a low-to-high stroke must cover at least this much of the full range to be an attempt
+  minStrokeFraction: 0.3,   // a low-to-high stroke (and the drop before it) must cover at least this much of the full range to be an attempt
+  minStrokeSec: 0.5,        // a real stroke (down and up) takes at least this long; a flick is not a rep
+  maxLowAboveEnter: 0.75,   // a stroke whose low stays further above the entry line than this (fraction of the range) is a wiggle at the top
+  lowRangeBelowEnter: 0.7,  // a low further under the entry line than this (fraction of the range) is not this exercise's path (arms dropped to the side)
+  lockoutFraction: 0.94,    // for the "Go higher" side: the top reading counts as full when it reaches this fraction of the top value
   minPeriodSec: 1.0,        // two attempts closer than this are one wobble
   maxPeriodSec: 8,          // a stroke slower than this is not a rep rhythm
   stuckAttempts: 3,         // this many attempts in a row with no rep counted -> say the real blocker
@@ -52,7 +56,8 @@ export interface AttemptEvent {
 }
 export interface StuckEvent { kind: 'stuck'; blocker: Blocker; cue: string; attemptsInARow: number; sinceRepSec: number }
 export interface AdaptEvent { kind: 'adapt'; side: 'bottom' | 'top'; enter: number; exit: number; basedOn: number }
-export type DetectorEvent = AttemptEvent | StuckEvent | AdaptEvent;
+export interface IgnoredEvent { kind: 'ignored'; why: string; low: number; high: number; /** hard evidence it was not the exercise (the arms dropped far below the path): a rep the engine counted for it is taken back */ retract: boolean }
+export type DetectorEvent = AttemptEvent | StuckEvent | AdaptEvent | IgnoredEvent;
 
 export interface Detector {
   feed(line: string): DetectorEvent[];
@@ -61,6 +66,8 @@ export interface Detector {
   /** current blocker cue (2-3 words) while it should be on screen, else null */
   cue(): string | null;
   softReps(): number;
+  /** true if a movement that did NOT match the exercise path (reaching for the phone, fumbling) was seen within the last `ms` */
+  recentlyIgnored(ms: number): boolean;
   adapted(): { enter: number; exit: number } | null;
   reset(): void;
 }
@@ -70,14 +77,16 @@ export function blockerCue(blocker: Blocker, exerciseId: string | undefined): st
   const id = exerciseId ?? '';
   const press = /press|overhead/i.test(id), raise = /raise/i.test(id), squat = /squat|lunge|stepup|dip/i.test(id);
   const push = /pushup/i.test(id), pull = /curl|row|pull/i.test(id);
+  // Plain body words a first-time user understands at a glance, 2-3 words. "Go higher" / "Go lower" name the END of the movement
+  // that fell short.
   switch (blocker) {
-    case 'bottom-short': return press ? 'Elbows lower' : squat || push ? 'Go lower' : raise ? 'Arms down' : pull ? 'Arms down' : 'Go lower';
-    case 'top-short':    return press ? 'Press higher' : squat ? 'Stand tall' : push ? 'Push higher' : raise ? 'Raise higher' : pull ? 'Pull higher' : 'Go higher';
+    case 'bottom-short': return 'Go lower';
+    case 'top-short':    return 'Go higher';
     case 'tracking':     return 'Step back';
-    case 'paused':       return press ? 'Hands to shoulders' : 'Reset, start over';
-    case 'angle':        return 'Turn to the side';
+    case 'paused':       return press ? 'Hands to shoulders' : 'Start again';
+    case 'angle':        return 'Turn sideways';
     case 'light':        return 'More light';
-    default:             return 'Bigger movement';
+    default:             return 'Go further';
   }
 }
 
@@ -105,6 +114,8 @@ export function createAttemptDetector(opts: { exerciseId?: string; now?: () => n
   let stuckCue: { text: string; until: number } | null = null;
   let missedLows: number[] = [], missedHighs: number[] = [], missedBlockers: Blocker[] = [];
   let adaptedLine: { enter: number; exit: number } | null = null;
+  let cand: { start: Pt; low: Pt; high: Pt } | null = null;
+  let ignoredAt = 0;
   let startedAt = 0;
 
   const range = () => Math.max(1e-6, Math.abs(top - rom));
@@ -121,10 +132,15 @@ export function createAttemptDetector(opts: { exerciseId?: string; now?: () => n
     if (lastNoPersonAt && t - lastNoPersonAt < 3000) return 'tracking';
     if (rejectKind === 'unreliable' && pendingRejectAt && t - pendingRejectAt < 6000) return rejectLightMax < 0.45 ? 'light' : 'tracking';
     if (angleCue) return 'angle';
-    const bottomShort = low > enter;              // never got below the engine's entry line
-    const topShort = high < exit;                 // never got back above the exit line
-    if (bottomShort && (!topShort || low - enter >= exit - high)) return 'bottom-short';
-    if (topShort) return 'top-short';
+    // Which END fell short, as the person sees it: how far the top is under full lockout, and how far the bottom is above the engine's
+    // entry line. For presses a top that is not near lockout is called first ("Go higher"): that is what a beginner can fix.
+    const lockMin = top * T.lockoutFraction;
+    const topDef = Math.max(0, (lockMin - high) / range());
+    const bottomDef = Math.max(0, (low - enter) / range());
+    const press = /press|overhead/i.test(exerciseId ?? '');
+    if (press && topDef > 0.08) return 'top-short';
+    if (bottomDef > 0 && bottomDef >= topDef) return 'bottom-short';
+    if (topDef > 0) return 'top-short';
     return 'none';
   }
 
@@ -188,8 +204,10 @@ export function createAttemptDetector(opts: { exerciseId?: string; now?: () => n
       }
     } else {
       missedInARow = 0; missedLows = []; missedHighs = []; missedBlockers = [];
+      // the engine threw it out: say which end fell short (or that it could not see you), same words as a missed one
+      if (outcome === 'rejected') blocker = blockerFor(low.v, high.v);
     }
-    const ev: AttemptEvent = { kind: 'attempt', n: nAttempts, score, low: low.v, high: high.v, periodSec: period, outcome, blocker, reason: outcome === 'missed' ? blockerCue(blocker, exerciseId) : outcome === 'rejected' ? '' : '' };
+    const ev: AttemptEvent = { kind: 'attempt', n: nAttempts, score, low: low.v, high: high.v, periodSec: period, outcome, blocker, reason: outcome === 'missed' || outcome === 'rejected' ? blockerCue(blocker === 'none' ? 'bottom-short' : blocker, exerciseId) : '' };
     out.push(ev);
     opts.log?.(`[ATTEMPT] #${nAttempts} score=${score} low=${low.v.toFixed(1)} high=${high.v.toFixed(1)} period=${period.toFixed(1)}s outcome=${outcome} blocker=${blocker} (enter=${enter} exit=${exit}${adaptedLine ? ` adapted=${adaptedLine.enter.toFixed(1)}/${adaptedLine.exit.toFixed(1)}` : ''})`);
 
@@ -206,6 +224,34 @@ export function createAttemptDetector(opts: { exerciseId?: string; now?: () => n
       opts.log?.(`[ATTEMPT] STUCK ${missedInARow} attempts in a row / ${sinceRep.toFixed(0)}s with no rep: blocker=${best} -> "${cue}"`);
     }
     return out;
+  }
+
+  // Does this stroke follow the exercise's path? Anything else (reaching for the phone, fumbling, shaking, the arms dropping to the
+  // side) is IGNORED: no attempt, no X, and a rep the engine counted at that moment gets no check.
+  function finishStroke(c: { start: Pt; low: Pt; high: Pt }, t: number): DetectorEvent[] {
+    const R_ = range();
+    const dur = (c.high.t - c.start.t) / 1000;
+    let why = '';
+    if (c.low.v < enter - T.lowRangeBelowEnter * R_) why = 'the low is far below this exercise\'s path (arms dropped)';
+    else if (c.high.v < exit - 0.1 * R_) why = 'it never came back up to the start zone';
+    else if (c.low.v > enter + T.maxLowAboveEnter * R_) why = 'it stays up near the top (a wiggle, not a stroke)';
+    else if (dur < T.minStrokeSec) why = 'too quick to be a rep (a flick)';
+    else if (dur > T.maxPeriodSec) why = 'too slow to be a rep';
+    // NOTE: shaking / fumbling was tried as a rule (direction changes, big back-and-forth jumps) and removed: on the real log it fired on
+    // this person's real FAST reps (1.4s apart, jumps of half the range every 0.3s are normal for them). Only hard evidence is used.
+    if (why) {
+      ignoredAt = t;
+      opts.log?.(`[ATTEMPT] ignored low=${c.low.v.toFixed(1)} high=${c.high.v.toFixed(1)} dur=${dur.toFixed(1)}s: ${why} (not the exercise path, no check or X)`);
+      return [{ kind: 'ignored', why, low: c.low.v, high: c.high.v, retract: /arms dropped/.test(why) }];
+    }
+    const tooSoon = lastAttemptAt && (t - lastAttemptAt) / 1000 < T.minPeriodSec;
+    if (tooSoon) return [];
+    const period = lastAttemptAt ? (t - lastAttemptAt) / 1000 : 0;
+    lastAttemptAt = t;
+    // the engine's [REP] line comes when the rep completes, i.e. before the stroke's peak has settled: it counts for this stroke if it
+    // arrived after the stroke's low
+    pending.push({ low: c.low, high: c.high, at: t, period, repSeen: lastRepAt > 0 && lastRepAt >= c.low.t - 500 });
+    return [];
   }
 
   function step(v: number): DetectorEvent[] {
@@ -227,17 +273,17 @@ export function createAttemptDetector(opts: { exerciseId?: string; now?: () => n
         lastLow = ext; dir = 'up'; ext = s;
       }
     }
-    // an attempt completes when we are heading up after a low and have risen the minimum stroke above that low
-    if (lastLow && lastHigh && dir === 'up' && lastLow.t > lastHigh.t) {
-      const risen = (ext!.v - lastLow.v) / range();
-      const highAhead = ext!;
-      if (risen >= T.minStrokeFraction) {
-        const slow = (highAhead.t - lastHigh.t) / 1000 > T.maxPeriodSec;
-        const tooSoon = lastAttemptAt && (t - lastAttemptAt) / 1000 < T.minPeriodSec;
-        const low = lastLow, high = highAhead;
-        lastLow = null;
-        if (!slow && !tooSoon) { const period = lastAttemptAt ? (t - lastAttemptAt) / 1000 : 0; lastAttemptAt = t; pending.push({ low, high, at: t, period, repSeen: false }); return []; }
-      }
+    // A stroke is complete once it has come back up by a real amount from its low AND has stopped rising (so its HIGH is the real peak,
+    // not the first point that cleared the minimum).
+    if (lastLow && lastHigh && dir === 'up' && lastLow.t > lastHigh.t && !cand) {
+      const risen = (ext!.v - lastLow.v) / range(), dropped = (lastHigh.v - lastLow.v) / range();
+      if (risen >= T.minStrokeFraction && dropped >= T.minStrokeFraction) { cand = { start: lastHigh, low: lastLow, high: ext! }; lastLow = null; }
+    }
+    if (cand) {
+      if (dir === 'up' && ext!.v > cand.high.v) cand.high = ext!;
+      const fell = dir === 'down';
+      const stalled = t - cand.high.t >= 900;
+      if (fell || stalled) { const c2 = cand; cand = null; return finishStroke(c2, t); }
     }
     return out;
   }
@@ -283,11 +329,12 @@ export function createAttemptDetector(opts: { exerciseId?: string; now?: () => n
     setAngleCue(c) { angleCue = c && c.trim() ? c : null; },
     cue() { const t = now(); if (stuckCue && t < stuckCue.until) return stuckCue.text; return null; },
     softReps() { return soft; },
+    recentlyIgnored(ms: number) { return ignoredAt > 0 && now() - ignoredAt <= ms; },
     adapted() { return adaptedLine; },
     reset() {
       samples = []; lastHigh = lastLow = null; dir = null; ext = null; lastAttemptAt = 0; nAttempts = 0; missedInARow = 0;
       lastRepAt = 0; repCount = 0; soft = 0; pendingRejectAt = 0; rejectKind = ''; suppressedAt = 0; lastNoPersonAt = 0;
-      stuckCue = null; missedLows = []; missedHighs = []; missedBlockers = []; adaptedLine = null; startedAt = 0; pending = [];
+      stuckCue = null; missedLows = []; missedHighs = []; missedBlockers = []; adaptedLine = null; startedAt = 0; pending = []; cand = null; ignoredAt = 0;
     },
   };
 }

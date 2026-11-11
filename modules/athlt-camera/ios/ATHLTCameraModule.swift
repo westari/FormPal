@@ -147,7 +147,7 @@ public class ATHLTCameraModule: Module {
                 if let mov = self.movieOutput, mov.isRecording { mov.stopRecording() }
 
                 self.videoOutput?.setSampleBufferDelegate(nil, queue: nil)
-                DispatchQueue.main.async { UIApplication.shared.isIdleTimerDisabled = false }
+                // idle timer: owned by expo-keep-awake (JS); never switched off here
                 self.captureSession?.stopRunning()
                 self.captureSession  = nil
                 self.videoOutput     = nil
