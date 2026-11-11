@@ -42,6 +42,9 @@ interface PlanState {
   // ── Completion ────────────────────────────────────────────────────────────
   markWorkoutComplete: (workoutId: string) => Promise<void>;
 
+  /** Change one exercise's sets and reps in a plan workout (the workout preview's pencil) and save the plan. */
+  setExerciseTargets: (workoutId: string, exerciseIndex: number, sets: number, reps: number) => Promise<void>;
+
   // ── Reset ─────────────────────────────────────────────────────────────────
   resetAll: () => Promise<void>;
 }
@@ -135,6 +138,20 @@ export const usePlanStore = create<PlanState>()((set, get) => ({
 
     await savePlan(updatedPlan);
     set({ plan: updatedPlan });
+  },
+
+  // ── Edit one exercise's sets and reps ─────────────────────────────────────
+
+  setExerciseTargets: async (workoutId: string, exerciseIndex: number, sets: number, reps: number) => {
+    const { plan } = get();
+    if (!plan) return;
+    const updatedWorkouts = plan.workouts.map(w => w.id !== workoutId ? w : {
+      ...w,
+      exercises: w.exercises.map((e, i) => i === exerciseIndex ? { ...e, targetSets: sets, targetReps: reps } : e),
+    });
+    const updatedPlan: Plan = { ...plan, workouts: updatedWorkouts };
+    set({ plan: updatedPlan });
+    await savePlan(updatedPlan);
   },
 
   // ── Reset everything ──────────────────────────────────────────────────────

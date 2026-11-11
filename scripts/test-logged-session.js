@@ -24,7 +24,7 @@ check('recap loads the saved entries for that timestamp and counts them (they ar
 check('it waits for the muscle page data before showing anything (no flash of the Workout complete card)', /\(isLoggedMode && !ranksPayload\)/.test(rc));
 check('Done (and the page\'s back) close it to Home; the logged mode is never treated as a past workout', /isHistoryMode = !isWorkoutMode && !isLoggedMode/.test(rc) && /closeRanks'\) \{ if \(isLoggedMode\) void handleDoneRanks\(\)/.test(rc));
 
-check('15: Save shows the short Session logged check (success haptic), THEN one replace to Today's progress; no timer of its own (the check owns the hold)', !/setTimeout/.test(ls) && !ls.includes('__dsSaved') && ls.includes('<SavedCheck text="Session logged" onDone={onLoggedDone} />') && ls.includes('hapticSuccess()') && (ls.match(/router\.replace/g) || []).length === 1);
+check('15: Save shows the short Session logged check (success haptic), THEN one replace to Today progress; no timer of its own (the check owns the hold)', !/setTimeout/.test(ls) && !ls.includes('__dsSaved') && ls.includes('<SavedCheck text="Session logged" onDone={onLoggedDone} />') && ls.includes('hapticSuccess()') && (ls.match(/router\.replace/g) || []).length === 1);
 check('15: the next screen opens on the same light background (no dark flash): the logged mode uses a light root and dark status bar', rc.includes("isLoggedMode ? { backgroundColor: '#f2f2f6' } : null") && rc.includes("isLoggedMode ? 'dark' : 'light'"));
 check('16: app/session-logged.tsx is no longer referenced anywhere', !['app/_layout.tsx', 'app/log-session.tsx', 'app/recap.tsx', 'lib/designScreens.ts'].some((f) => read(f).includes('session-logged')));
 const { buildCatalog, entriesFromPage } = require('../lib/designScreens.ts');
