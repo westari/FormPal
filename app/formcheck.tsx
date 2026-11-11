@@ -40,12 +40,15 @@ import { handleRepAudio, playReadyCue } from '../lib/audioFeedback';
 import { createCalibSynth } from '../lib/calibLog';
 import { prefetchSoloRecap } from '../lib/recapPrefetch';
 import { postLag, postLagStart } from '../lib/postLag';
-import { setFlashBrightness, FLASH_FRAME } from '../lib/screenFlash';
+import { setFlashBrightness } from '../lib/screenFlash';
+import RingLight from '../components/RingLight';
 import { createRepDiagnostic, STREAM_DEAD_SEC_FLOOR } from '../lib/repDiagnostics';
 import { useKeepAwake, activateKeepAwakeAsync } from 'expo-keep-awake';
 import { persistVideo } from '../lib/videoStore';
 import { NO_ZOOM_JS } from '../lib/noZoom';
 import { shortCue } from '../lib/shortCue';
+import { createAttemptDetector, type DetectorEvent } from '../lib/attemptDetector';
+import { haptic } from '../lib/screenHaptics';
 import { isFrameHint, showVerdict, showFrameHint, JUDGED_QUIET_MS, meterTarget, createMeterSmoother, trackingIsHigh, NO_PERSON_CUE, createSteadyGate, READY_STEADY_MS, createCounterSignal, READY_COUNTER_WINDOW_MS, READY_COUNTER_MIN_SAMPLES, type CounterSignal } from '../lib/liveTracking';
 import { useAudioSettingsStore } from '../store/audioSettingsStore';
 import { useFormTheme, type FormTheme } from '../lib/activeTheme';
@@ -562,7 +565,7 @@ function RepCounterIntro({ topInset, bottomInset, onContinue }: {
         <Text style={ri.h1}>Some exercises{'\n'}only count reps</Text>
         <Text style={ri.sub}>No form check on this one, just the count. Nothing here affects your rank.</Text>
       </View>
-      <Pressable style={ri.cta} onPress={onContinue}>
+      <Pressable style={ri.cta} onPress={() => { haptic('medium'); onContinue(); }}>
         <Text style={ri.ctaTxt}>Continue</Text>
       </Pressable>
     </View>
@@ -862,6 +865,8 @@ export default function FormCheckScreen() {
   // Native setup passed, but "Ready. Go!" (shown + spoken) is held until the
   // TRACKING meter actually reads high — see the readyPending effect below.
   const [readyPending, setReadyPending] = useState(false);
+  const readyPendingRef = useRef(false);
+  readyPendingRef.current = readyPending;
   const announceReadyRef = useRef<(() => void) | null>(null);
   // Full body tracked without a break (see createSteadyGate in lib/liveTracking.ts); gates "Ready. Go!" together with the meter.
   const steadyGate = useRef(createSteadyGate()).current;
@@ -889,6 +894,14 @@ export default function FormCheckScreen() {
   // stream the counter does and turns a silent 0-rep session into one short
   // on-screen instruction. See lib/repDiagnostics.ts.
   const statsRef = useRef<DebugStatsEvent | null>(null);
+  // Attempt detector (lib/attemptDetector.ts): is the person clearly TRYING the movement, separate from whether a rep passed.
+  const attemptRef = useRef(createAttemptDetector({ exerciseId: exerciseType, log: (m: string) => { console.log(m); } }));
+  const softRepsRef = useRef(0);          // reps the detector counted itself (engine paused / adapted range)
+  const nativeRepsRef = useRef(0), nativeGoodRef = useRef(0);
+  const [attemptCue, setAttemptCue] = useState<string | null>(null);
+  const attemptCueTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastAttemptX = useRef(0);
+  const onAttemptRef = useRef<(evs: DetectorEvent[]) => void>(() => {});
   const lastJudgedAt = useRef(0);
   const [judgedTick, setJudgedTick] = useState(0); // re-render once the "just judged" quiet period ends
   const repDiagRef = useRef(createRepDiagnostic(isFloor ? STREAM_DEAD_SEC_FLOOR : undefined, exerciseType));
@@ -923,6 +936,11 @@ export default function FormCheckScreen() {
       repDiagRef.current.feed(e.message);
       const d = repDiagRef.current.message();
       setRepDiag(prev => (prev === d ? prev : d));
+      // Attempts: only while really tracking (after Go), never during setup or the Ready wait
+      if (trackingActiveRef.current && !readyPendingRef.current) {
+        const evs = attemptRef.current.feed(e.message);
+        if (evs.length) { for (const ev of evs) if (ev.kind === 'attempt') sessionLogRef.current.push(`[ATTEMPT] #${ev.n} score=${ev.score} low=${ev.low.toFixed(1)} high=${ev.high.toFixed(1)} outcome=${ev.outcome} blocker=${ev.blocker}`); onAttemptRef.current(evs); }
+      }
       // Parse [METRIC] lines for live push-up readout
       if (e.message.startsWith('[METRIC]')) {
         const vMatch  = e.message.match(/value=([-\d.]+)/);
@@ -958,7 +976,7 @@ export default function FormCheckScreen() {
     isTrackingRef.current   = false;
     trackingActiveRef.current = false;
 
-    const errSub   = addErrorListener(e => { if (mounted) setError(e.message); });
+    const errSub   = addErrorListener(e => { if (mounted) { haptic('error'); setError(e.message); } });
     const camSub   = addCameraStateListener(e => {
       if (mounted && e.position) setCamPosition(e.position);
       if (mounted && e.running) setPhase(p => (p === 'starting' ? 'setup' : p));
@@ -1012,6 +1030,9 @@ export default function FormCheckScreen() {
               sessionLogRef.current = []; // clear buffer at start of each tracking session
               calibRef.current.reset();
               repDiagRef.current.reset();
+              attemptRef.current.reset();
+              softRepsRef.current = 0; nativeRepsRef.current = 0; nativeGoodRef.current = 0;
+              setAttemptCue(null);
               setRepDiag(null);
               startTimestamp.current = Date.now();
               repEvents.current      = [];
@@ -1071,6 +1092,7 @@ export default function FormCheckScreen() {
     startSession().then(async result => {
       if (!mounted) return;
       if (!result.success) {
+        haptic('error');
         setError(result.error ?? 'Camera failed to start. Check camera permission in Settings.');
         setPhase('idle');
       } else {
@@ -1106,8 +1128,10 @@ export default function FormCheckScreen() {
     if (phase !== 'tracking') return;
     const repSub = addRepListener((rep: RepEvent) => {
       if (demoOpenRef.current) return;
-      setReps(rep.reps);
-      setGoodReps(rep.goodReps);
+      nativeRepsRef.current = rep.reps; nativeGoodRef.current = rep.goodReps;
+      setReps(rep.reps + softRepsRef.current);
+      setGoodReps(rep.goodReps + softRepsRef.current);
+      setAttemptCue(null);
       // A rep landed — re-ask the diagnostic rather than force-clearing. If
       // several reps are merging (attempts >> counted) or the legs kicked,
       // it keeps a "why" on screen instead of going quiet after each merge.
@@ -1126,6 +1150,7 @@ export default function FormCheckScreen() {
       setTimeout(() => setJudgedTick(t => t + 1), JUDGED_QUIET_MS + 50);
       flashAnim.setValue(1);
       Animated.timing(flashAnim, { toValue: 0, duration: 700, useNativeDriver: true }).start();
+      haptic(rep.good ? 'light' : 'warning'); // rep counted = light tap, rejected (the X) = warning
       if (repCounterOnly) {
         // Reps only — no ✓/✗ orb, no corrective speech. Just a rep tick + the
         // milestone count announcement, driven by total reps.
@@ -1141,9 +1166,11 @@ export default function FormCheckScreen() {
     const dbgSub = addDebugStatsListener((e: DebugStatsEvent) => {
       if (demoOpenRef.current) return;
       statsRef.current = e;
+      attemptRef.current.setAngleCue(e.outOfPlaneCue || null);
+      nativeRepsRef.current = e.reps; nativeGoodRef.current = e.goodReps;
       setStats(e);
-      setReps(e.reps);
-      setGoodReps(e.goodReps);
+      setReps(e.reps + softRepsRef.current);
+      setGoodReps(e.goodReps + softRepsRef.current);
       // Re-poll the diagnostic on this ~1/sec tick too — it keeps firing
       // even when the pose is lost and the debug-log stream goes silent, so
       // a dead stream ("can't see you") still surfaces a command.
@@ -1210,7 +1237,8 @@ export default function FormCheckScreen() {
     void stopSession().then(() => postLag(`formcheck: camera teardown finished in the background (${Date.now() - sessionStopped0}ms, no longer blocks navigation)`)).catch(() => {});
     if (final.videoUri) void logSessionVideo(final.videoUri);
 
-    const navParams = { reps: final.reps, goodReps: final.goodReps, videoUri: final.videoUri ?? '' };
+    // reps the attempt detector counted itself (engine paused / adapted range) are part of the set
+    const navParams = { reps: final.reps + softRepsRef.current, goodReps: final.goodReps + softRepsRef.current, videoUri: final.videoUri ?? '' };
 
     // Fill the (already loaded) Workout Complete card NOW, as soon as the final
     // numbers exist — not at navigation time, which can be a debug-review screen
@@ -1240,6 +1268,42 @@ export default function FormCheckScreen() {
   const handleReviewDone = useCallback(() => {
     if (pendingNavRef.current) doNavigate(pendingNavRef.current);
   }, [doNavigate]);
+
+  // What the attempt detector found. A missed attempt gets an X with its reason (never silent); an attempt the detector counts
+  // itself (the engine had paused, or the person's real range is just short of the line) gets a check and counts as a rep.
+  onAttemptRef.current = (evs: DetectorEvent[]) => {
+    if (demoOpenRef.current) return;
+    const showCue = (text: string) => {
+      setAttemptCue(text);
+      if (attemptCueTimer.current) clearTimeout(attemptCueTimer.current);
+      attemptCueTimer.current = setTimeout(() => setAttemptCue(null), 4000);
+    };
+    for (const ev of evs) {
+      if (ev.kind === 'adapt') { showCue('Range set'); continue; }
+      if (ev.kind === 'stuck') { showCue(ev.cue); continue; }
+      if (ev.outcome === 'soft') {
+        softRepsRef.current += 1;
+        setReps(nativeRepsRef.current + softRepsRef.current);
+        setGoodReps(nativeGoodRef.current + softRepsRef.current);
+        lastJudgedAt.current = Date.now();
+        setFeedback({ good: true, reason: '', seq: ++feedbackSeq.current });
+        haptic('light');
+        const timeSec = startTimestamp.current != null ? (Date.now() - startTimestamp.current) / 1000 : 0;
+        repEvents.current.push({ timeSec, good: true, reason: '' });
+        continue;
+      }
+      if (ev.outcome === 'missed' || ev.outcome === 'rejected') {
+        const reason = ev.outcome === 'missed' ? ev.reason : (repDiagRef.current.message() ?? 'Not counted');
+        const hint = repDiagRef.current.message() ?? statsRef.current?.trackingCue ?? null;
+        if (!showVerdict(ev.outcome === 'rejected' ? null : hint, statsRef.current?.personDetected)) continue; // frame hint up: no verdict
+        if (Date.now() - lastAttemptX.current < 1200) continue; // one X per stroke
+        lastAttemptX.current = Date.now();
+        lastJudgedAt.current = Date.now();
+        setFeedback({ good: false, reason, seq: ++feedbackSeq.current });
+        haptic('warning');
+      }
+    }
+  };
 
   const handleFlip = useCallback(() => {
     void flipCamera().then(r => { if (r && r.position) setCamPosition(r.position); }).catch(() => {});
@@ -1470,10 +1534,8 @@ export default function FormCheckScreen() {
   return (
     <View style={s.root}>
       <ATHLTCameraView style={StyleSheet.absoluteFill} />
-      {/* Front-camera flash: bright white around the camera view to light your face (under every control) */}
-      {flashActive && (
-        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderLeftWidth: FLASH_FRAME.side, borderRightWidth: FLASH_FRAME.side, borderBottomWidth: FLASH_FRAME.bottom, borderColor: '#FFFFFF' }]} />
-      )}
+      {/* Front-camera flash = a ring light: a soft even white glow around the whole screen edge (lights the face, never covers the body or the framing guide) */}
+      {flashActive && <RingLight />}
 
       {/* Accent flash on rep */}
       <Animated.View
@@ -1567,7 +1629,7 @@ export default function FormCheckScreen() {
           fill) everywhere else — see LiquidGlass.tsx's own header comment. */}
       <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
         <LiquidGlassButton
-          onPress={handleBack}
+          onPress={() => { haptic('light'); void handleBack(); }}
           radius={20}
           colorScheme="dark"
           fallbackColor="rgba(40,41,48,0.55)"
@@ -1582,7 +1644,7 @@ export default function FormCheckScreen() {
         </Text>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <LiquidGlassButton
-            onPress={handleToggleMute}
+            onPress={() => { haptic('selection'); handleToggleMute(); }}
             radius={20}
             colorScheme="dark"
             fallbackColor="rgba(40,41,48,0.55)"
@@ -1595,7 +1657,7 @@ export default function FormCheckScreen() {
           </LiquidGlassButton>
           {(
             <LiquidGlassButton
-              onPress={handleFlash}
+              onPress={() => { haptic('selection'); handleFlash(); }}
               radius={20}
               colorScheme="dark"
               fallbackColor="rgba(40,41,48,0.55)"
@@ -1605,7 +1667,7 @@ export default function FormCheckScreen() {
             </LiquidGlassButton>
           )}
           <LiquidGlassButton
-            onPress={handleFlip}
+            onPress={() => { haptic('light'); handleFlip(); }}
             radius={20}
             colorScheme="dark"
             fallbackColor="rgba(40,41,48,0.55)"
@@ -1684,7 +1746,7 @@ export default function FormCheckScreen() {
           gated off for workouts, which is why reps could silently fail to
           count with zero on-screen explanation. */}
       {isTracking && !stats?.outOfPlaneCue && (() => {
-        const rawCue = repDiag
+        const rawCue = attemptCue ?? repDiag
           ?? (isFloor ? null : (stats?.personDetected === false ? NO_PERSON_CUE : (stats?.trackingCue || null)));
         // a frame hint is never shown right after a rep was judged (a check / X means the camera sees the person)
         void judgedTick;
@@ -1736,7 +1798,7 @@ export default function FormCheckScreen() {
           // started, so a tap during setup is a no-op instead of calling
           // those in a state they don't expect.
           <Pressable
-            onPress={isTracking ? handleStop : undefined}
+            onPress={isTracking ? () => { haptic('medium'); void handleStop(); } : undefined}
             onPressIn={() => Animated.spring(stopScale, { toValue: 0.88, useNativeDriver: true, speed: 30, bounciness: 0 }).start()}
             onPressOut={() => Animated.spring(stopScale, { toValue: 1, useNativeDriver: true, speed: 14, bounciness: 9 }).start()}
             hitSlop={12}
@@ -1894,10 +1956,10 @@ function SessionLogReview({
           <Text style={r.headerTitle}>SESSION LOG</Text>
           <Text style={r.headerSub}>{reps} reps · {goodReps} good · {log.length} lines</Text>
         </View>
-        <Pressable style={r.shareBtn} onPress={shareLog}>
+        <Pressable style={r.shareBtn} onPress={() => { haptic('light'); shareLog(); }}>
           <Text style={r.shareBtnTxt}>Share</Text>
         </Pressable>
-        <Pressable style={r.doneBtn} onPress={onDone}>
+        <Pressable style={r.doneBtn} onPress={() => { haptic('medium'); onDone(); }}>
           <Text style={r.doneBtnTxt}>Done</Text>
         </Pressable>
       </View>

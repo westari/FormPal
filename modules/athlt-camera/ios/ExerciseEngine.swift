@@ -2043,6 +2043,9 @@ final class ExerciseEngine {
             if resumeConsecFrames >= Self.RESUME_CONSEC_FRAMES {
                 activityState = .active
                 resumeConsecFrames = 0
+                // FIX (2026-11-11 log): the inactivity clock must restart on resume. It never did, so the very next frame saw a gap of
+                // 8s+ again and suppressed counting again: "active" for one frame, then paused for minutes, real reps never counted.
+                lastRepTime = timestamp
                 let msg = "[ACTIVITY] state=active reason=returned_to_start_position"
                 NSLog("[Engine] [%@] %@", def.id, msg)
                 onDebugLog?(msg)

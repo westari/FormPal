@@ -10,6 +10,7 @@ import { Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { EXERCISE_CATALOG } from '../constants/exercises';
 import { loadPlan, savePlan } from '../lib/planStorage';
+import { haptic } from '../lib/screenHaptics';
 import DesignScreen, { type DesignMessage } from '../components/DesignScreen';
 import {
   buildCatalog, createWorkoutBeforeJs, createWorkoutData, athltSetDataJs, workoutFromPage,
@@ -26,15 +27,15 @@ export default function CreateWorkoutScreen() {
   const save = useCallback(async (msg: DesignMessage) => {
     try {
       const plan = await loadPlan();
-      if (!plan) { Alert.alert('No plan yet', 'You need a generated plan before you can add a custom workout to it.'); return; }
+      if (!plan) { haptic('error'); Alert.alert('No plan yet', 'You need a generated plan before you can add a custom workout to it.'); return; }
       const workout = workoutFromPage({ name: msg.name, items: msg.items }, catalog, plan.workouts.length, Date.now());
-      if (workout.exercises.length === 0) { Alert.alert('Add an exercise', 'Add at least one exercise before saving.'); return; }
+      if (workout.exercises.length === 0) { haptic('error'); Alert.alert('Add an exercise', 'Add at least one exercise before saving.'); return; }
       const next = [...plan.workouts];
       next.splice(plan.currentWorkoutIndex, 0, workout);
       await savePlan({ ...plan, workouts: next });
       router.back();
     } catch {
-      Alert.alert('Something went wrong', 'Could not save this workout. Try again.');
+      haptic('error'); Alert.alert('Something went wrong', 'Could not save this workout. Try again.');
     }
   }, [catalog, router]);
 

@@ -19,6 +19,7 @@
 import { CONSOLE_FORWARD_JS, DC_VIEWPORT_JS, DC_SETTLE_JS } from './dcWebviewHelpers';
 import { dcLogicPatchJs, athltSetDataJs } from './dcLogicPatch';
 import { NO_ZOOM_JS } from './noZoom';
+import { HAPTIC_CLICK_JS } from './hapticClick';
 import { EXERCISE_SEARCH_PAGE_JS } from './exerciseSearch';
 
 // ─── shared page-side base ──────────────────────────────────────────────────────
@@ -118,11 +119,8 @@ const CATALOG_PAGE = String.raw`
     }
     return true;
   }
-  // the ONE search rule (lib/exerciseSearch.ts): starts with first, then a later word starts with it, never mid-word
-  function libFor(self, names) {
-    var q = String((self.state && self.state.query) || '').trim();
-    return q ? dsSearch(names, q) : names;
-  }
+  // the ONE search rule (lib/exerciseSearch.ts, dsSearch below): starts with first, then a later word starts with it, then a one-typo
+  // match; never mid-word. The design's own filter is "contains", so the result rows are rebuilt here from the shared rule.
   function defaultsFor(self, n) {
     var c = (self.__dsDef || {})[n] || { sets: 3, reps: 10 };
     return self.BODYWEIGHT[n] ? { sets: c.sets, reps: c.reps } : { sets: c.sets, reps: c.reps, load: 45 };
@@ -177,9 +175,17 @@ ${CATALOG_PAGE}
       // the design starts with a demo "Squat / Push-up" workout: a new workout starts empty
       if (!this.__dsInit) { this.__dsInit = true; this.state = Object.assign({}, this.state, { order: [], data: {}, name: '' }); }
       var allNames = d0.catalog.map(function (c) { return c.name; });
-      this.LIB = libFor(this, allNames);
-      var v = super.renderVals(), s = this.state;
-      this.LIB = allNames;
+      var v = super.renderVals(), s = this.state, selfC = this;
+      var qn = String(s.query || '').trim();
+      if (qn) {
+        var rankedC = dsSearch(allNames, qn);
+        v.results = rankedC.slice(0, 6).map(function (n, i) {
+          var on = !!s.data[n];
+          return { name: n, line: i === 0 ? 'none' : '1px solid rgba(17,17,20,0.07)', dotBg: on ? '#111114' : '#f4f4f7',
+            glyph: on ? 'M2.6 6.4 5 8.8l4.4-5' : 'M6 2.2v7.6M2.2 6h7.6', glyphColor: on ? '#ffffff' : '#111114', add: function () { selfC.toggle(n); } };
+        });
+        v.noResults = rankedC.length === 0;
+      }
       window.__athltCurrent = { name: s.name || '', items: s.order.map(function (n) { var x = s.data[n]; return { n: n, sets: x.sets, reps: x.reps, load: x.load == null ? null : x.load }; }) };
       return v;
     }
@@ -232,13 +238,9 @@ ${CATALOG_PAGE}
       var d = D(), self = this;
       // the design is frozen on a demo date ("Sep 12", Squat / Push-up already logged): real today, nothing logged yet
       if (!this.__dsInit) { this.__dsInit = true; this.state = Object.assign({}, this.state, { picked: {}, sel: d.today.d }); }
-      // search = the shared rule (starts with first, then a later word starts with it, never mid-word). The design filters this.LIB
-      // with its own "contains", so LIB is set to the matching names (best first) for this one render, then put back.
       var allNames = d.catalog.map(function (c) { return c.name; });
-      this.LIB = libFor(this, allNames);
       window.__athltSearching = !!String((this.state && this.state.query) || '').trim();
       var v = super.renderVals(), s = this.state, t = d.today;
-      this.LIB = allNames;
       // the recent / popular chips (DOM pass) pick through this
       window.__athltPick = function (n) { self.setState(function (st) {
         var p = Object.assign({}, st.picked);
@@ -258,13 +260,21 @@ ${CATALOG_PAGE}
       });
       v.jumpToday = function () { self.setState({ sel: t.d, calOpen: false }); };
       // searching toggles with the real catalog's defaults (the design's own toggle hard-codes 3 x 10 @ 45)
-      v.results = v.results.map(function (r) {
-        return Object.assign({}, r, { toggle: function () { self.setState(function (st) {
-          var p = Object.assign({}, st.picked);
-          if (p[r.name]) delete p[r.name]; else p[r.name] = defaultsFor(self, r.name);
-          return { picked: p, query: '' };
-        }); } });
-      });
+      var qn = String(s.query || '').trim();
+      if (qn) {
+        var rankedL = dsSearch(allNames, qn);
+        v.results = rankedL.slice(0, 6).map(function (n, i) {
+          var on = !!s.picked[n];
+          return { name: n, line: i === 0 ? 'none' : '1px solid rgba(17,17,20,0.07)', dotBg: on ? '#111114' : '#f4f4f7', dotRing: 'none',
+            glyph: on ? 'M2.6 6.4 5 8.8l4.4-5' : 'M6 2.2v7.6M2.2 6h7.6', glyphColor: on ? '#ffffff' : '#111114',
+            toggle: function () { self.setState(function (st) {
+              var p = Object.assign({}, st.picked);
+              if (p[n]) delete p[n]; else p[n] = defaultsFor(self, n);
+              return { picked: p, query: '' };
+            }); } };
+        });
+        v.noResults = rankedL.length === 0;
+      }
       window.__athltCurrent = { dayNum: s.sel, year: t.y, month: t.m, items: Object.keys(s.picked).map(function (n) { var x = s.picked[n]; return { n: n, sets: x.sets, reps: x.reps, load: x.load == null ? null : x.load }; }) };
       return v;
     }
@@ -281,55 +291,52 @@ export const LOG_SESSION_DOM_JS = String.raw`
     var D = window.__athltData;
     var inp = root.querySelector('input[placeholder="Search exercises"]');
     if (D && inp) {
-      // 1. a clear title and helper line (it was just "What Did You Do?" over a search bar)
+      // 1. ONE clear title (it was "What Did You Do?"); no helper text, so the header is just the title and the Cue button
       var divs = root.querySelectorAll('div'), title = null;
       for (var i = 0; i < divs.length; i++) {
         if (divs[i].children.length === 0 && /^(What Did You Do\?|Log an exercise)$/i.test((divs[i].textContent || '').trim())) { title = divs[i]; break; }
       }
       if (title && title.firstChild && title.firstChild.nodeType === 3 && title.firstChild.nodeValue !== 'Log an exercise') title.firstChild.nodeValue = 'Log an exercise';
-      var row = title ? title.parentElement : null;
-      if (row && !document.getElementById('__ds_help')) {
-        var h = document.createElement('div'); h.id = '__ds_help';
-        h.style.cssText = 'padding:6px 22px 0;font-size:14px;font-weight:500;line-height:1.35;color:#5f5f69;';
-        h.textContent = 'Pick an exercise you did, then set the sets and reps. It counts toward your muscle ranks.';
-        row.parentNode.insertBefore(h, row.nextSibling);
-      }
-      // 2. tappable recent + popular exercises under the search box (hidden while searching)
+      var oldHelp = document.getElementById('__ds_help'); if (oldHelp) oldHelp.remove();
+      // 2. under the search box: your Recent exercises (or Popular ones until you have logged some) as ONE tidy list, in the
+      // design's own result-card style (white rounded card, name on the left, a round + / tick on the right). Hidden while searching.
       var wrap = inp.parentElement && inp.parentElement.parentElement;
       if (wrap) {
         var cur = window.__athltCurrent, picked = {};
         ((cur && cur.items) || []).forEach(function (x) { picked[x.n] = 1; });
-        var recent = (D.recent || []).slice(0, 6);
-        var popular = (D.popular || []).filter(function (n) { return recent.indexOf(n) < 0; }).slice(0, 8);
-        var sig = recent.join('|') + '#' + popular.join('|') + '#' + Object.keys(picked).sort().join('|');
+        var recent = (D.recent || []).slice(0, 5);
+        var listNames = recent.length ? recent : (D.popular || []).slice(0, 5);
+        var listLabel = recent.length ? 'Recent' : 'Popular';
+        var sig = listLabel + '#' + listNames.join('|') + '#' + Object.keys(picked).sort().join('|');
         var box = document.getElementById('__ds_chips');
         if (!box) {
-          box = document.createElement('div'); box.id = '__ds_chips'; box.style.cssText = 'padding:16px 14px 0;';
+          box = document.createElement('div'); box.id = '__ds_chips'; box.style.cssText = 'padding:18px 14px 0;';
           wrap.parentNode.insertBefore(box, wrap.nextSibling);
         }
         box.style.display = window.__athltSearching ? 'none' : 'block';
         if (box.getAttribute('data-sig') !== sig) {
           box.setAttribute('data-sig', sig);
           box.textContent = '';
-          var section = function (label, names) {
-            if (!names.length) return;
+          if (listNames.length) {
             var l = document.createElement('div');
-            l.style.cssText = 'padding:0 8px 8px;font-size:12px;font-weight:700;letter-spacing:0.7px;text-transform:uppercase;color:#8e8e96;';
-            l.textContent = label; box.appendChild(l);
-            var r = document.createElement('div'); r.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;padding:0 4px 16px;';
-            names.forEach(function (n) {
-              var on = !!picked[n], c = document.createElement('div');
-              c.setAttribute('data-ds-chip', n); c.setAttribute('role', 'button');
-              c.style.cssText = 'height:38px;padding:0 15px;border-radius:999px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:600;letter-spacing:-0.2px;'
-                + (on ? 'background:#111114;color:#ffffff;box-shadow:0 6px 14px -8px rgba(17,17,20,0.6);' : 'background:#ffffff;color:#111114;box-shadow:inset 0 1px 0 rgba(255,255,255,1),0 6px 14px -8px rgba(40,50,90,0.3),0 1px 2px -1px rgba(40,50,90,0.1);');
-              c.textContent = (on ? '\u2713 ' : '+ ') + n;
-              c.addEventListener('click', function () { if (window.__athltPick) window.__athltPick(n); });
-              r.appendChild(c);
+            l.style.cssText = 'padding:0 8px 8px;font-size:13px;font-weight:700;letter-spacing:0.2px;color:#5f5f69;';
+            l.textContent = listLabel + ' exercises'; box.appendChild(l);
+            var card = document.createElement('div');
+            card.style.cssText = 'border-radius:24px;padding:4px 16px;background:linear-gradient(160deg,#ffffff 0%,#fbfbfd 100%);box-shadow:inset 0 0 0.5px rgba(255,255,255,0.9),0 12px 28px -14px rgba(40,50,90,0.24),0 2px 6px -2px rgba(40,50,90,0.08);';
+            listNames.forEach(function (n, idx) {
+              var on = !!picked[n], r = document.createElement('div');
+              r.setAttribute('data-ds-chip', n); r.setAttribute('data-ds-on', on ? '1' : '0'); r.setAttribute('role', 'button');
+              r.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 0;cursor:pointer;' + (idx === 0 ? '' : 'border-top:1px solid rgba(17,17,20,0.07);');
+              var nm = document.createElement('div'); nm.style.cssText = 'font-size:15px;font-weight:600;letter-spacing:-0.2px;'; nm.textContent = n;
+              var dot = document.createElement('div');
+              dot.style.cssText = 'width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;line-height:0;background:' + (on ? '#111114' : '#f4f4f7') + ';';
+              dot.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="' + (on ? 'M2.6 6.4 5 8.8l4.4-5' : 'M6 2.2v7.6M2.2 6h7.6') + '" stroke="' + (on ? '#ffffff' : '#111114') + '" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
+              r.appendChild(nm); r.appendChild(dot);
+              r.addEventListener('click', function () { if (window.__athltPick) window.__athltPick(n); });
+              card.appendChild(r);
             });
-            box.appendChild(r);
-          };
-          section('Recent', recent);
-          section('Popular', popular);
+            box.appendChild(card);
+          }
         }
       }
     }
@@ -402,7 +409,7 @@ export const MY_WORKOUTS_DOM_JS = String.raw`
 true;`;
 
 // ─── before-content-loaded bundles ──────────────────────────────────────────────
-const COMMON = DC_VIEWPORT_JS + NO_ZOOM_JS + CONSOLE_FORWARD_JS + DC_SETTLE_JS;
+const COMMON = DC_VIEWPORT_JS + NO_ZOOM_JS + CONSOLE_FORWARD_JS + DC_SETTLE_JS + HAPTIC_CLICK_JS;
 export const createWorkoutBeforeJs = () => COMMON + dcLogicPatchJs(CREATE_WORKOUT_LOGIC_EXT) + DS_BASE_JS + CREATE_WORKOUT_DOM_JS;
 export const logSessionBeforeJs   = () => COMMON + dcLogicPatchJs(LOG_SESSION_LOGIC_EXT) + DS_BASE_JS + LOG_SESSION_DOM_JS;
 export const myWorkoutsBeforeJs   = () => COMMON + dcLogicPatchJs(MY_WORKOUTS_LOGIC_EXT) + DS_BASE_JS + MY_WORKOUTS_DOM_JS;
