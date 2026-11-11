@@ -19,6 +19,7 @@
  * escaping. NEVER put a backtick or a dollar-brace in the page code.
  */
 
+import { CUE_ORB_CSS } from './cueOrb';
 export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
   var MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   var RANGE_DAYS = [61, 183, 365, 0];
@@ -291,7 +292,7 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
     renderVals() {
       var v = super.renderVals();
       var d = D(), self = this, s = this.state;
-      var R = d.rank || { label: 'Unranked', pct: 0, nextLabel: 'Bronze', atTop: false, lo: '#B97A42' };
+      var R = d.rank || { label: 'Bronze', pct: 0, nextLabel: 'Silver', atTop: false, has: true, lo: '#B97A42' };
       window.__athltSide = s.side || 0;
       // Front/Back must flip in the same render as the tap, not after the next DOM pass.
       if (window.__athltFlip) window.__athltFlip();
@@ -438,7 +439,9 @@ export const PROGRESS_DOM_JS = String.raw`
     + 'html{background:#eeeef1!important;overflow:hidden!important;}'
     + 'body{margin:0!important;padding:0!important;background:#eeeef1!important;overflow:hidden!important;}'
     + '#dc-root{position:relative!important;margin:0 auto!important;width:390px!important;transform-origin:top center!important;}'
-    + '#dc-root *{animation:none!important;-webkit-animation:none!important;transition:none!important;-webkit-transition:none!important;}'
+    + '#dc-root *:not([style*="hm-orb"]){animation:none!important;-webkit-animation:none!important;transition:none!important;-webkit-transition:none!important;}'
+    // every Cue orb (Muscle map, Weight, Form score) is the shared orb (lib/cueOrb.ts): fully animated, no background behind it
+    + ${JSON.stringify(CUE_ORB_CSS)}
     // The screens the page opens when you tap (Log weight, Progress Photos, a workout, the rank page) slide in with the
     // design's own push (opacity + translateX only: nothing is laid out while it runs). Every other entrance stays off.
     + '#dc-root div[style*="pg-in"]{animation:pg-in 300ms cubic-bezier(.22,1,.36,1) both!important;-webkit-animation:pg-in 300ms cubic-bezier(.22,1,.36,1) both!important;will-change:transform,opacity;}'
@@ -725,7 +728,7 @@ export const PROGRESS_DOM_JS = String.raw`
       var emb = rankLink.querySelector('div[role="img"]');
       if (emb) {
         if (R.emblem && emb.__emb !== R.emblem) { emb.__emb = R.emblem; emb.style.setProperty('background-image', 'url(' + R.emblem + ')', 'important'); }
-        emb.setAttribute('aria-label', (R.label || 'Unranked') + ' rank');
+        emb.setAttribute('aria-label', (R.label || 'Bronze') + ' rank');
         if (!R.has) emb.style.setProperty('opacity', '0.35');
         else emb.style.removeProperty('opacity');
       }
@@ -749,10 +752,12 @@ export const PROGRESS_DOM_JS = String.raw`
     var all = root.querySelectorAll('div');
     for (var a = 0; a < all.length; a++) {
       var el = all[a];
-      if (el.children.length === 1 && el.children[0].tagName === 'SPAN' && /^\s*Target your\s*$/.test(el.firstChild && el.firstChild.nodeValue || '')) {
+      if (el.children.length === 1 && el.children[0].tagName === 'SPAN' && (el.hasAttribute('data-athlt-weak') || /^\s*Target your\s*$/.test(el.firstChild && el.firstChild.nodeValue || ''))) {
         var span = el.children[0], tail = el.lastChild;
-        if (d.weakest) { setText(span, d.weakest.toLowerCase()); if (el.firstChild.nodeValue !== 'Target your ') el.firstChild.nodeValue = 'Target your '; if (tail && tail.nodeType === 3 && tail.nodeValue !== ' this week.') tail.nodeValue = ' this week.'; }
-        else { span.textContent = ''; el.firstChild.nodeValue = 'Train a few exercises to see your weakest muscle'; if (tail && tail.nodeType === 3) tail.nodeValue = ''; }
+        el.setAttribute('data-athlt-weak', '1');
+        el.style.setProperty('white-space', 'nowrap', 'important'); // always ONE short line
+        if (d.weakest) { setText(span, d.weakest.toLowerCase()); if (el.firstChild.nodeValue !== 'Work on ') el.firstChild.nodeValue = 'Work on '; if (tail && tail.nodeType === 3 && tail.nodeValue !== ' this week') tail.nodeValue = ' this week'; }
+        else { span.textContent = ''; el.firstChild.nodeValue = 'Train to find your weak spot'; if (tail && tail.nodeType === 3) tail.nodeValue = ''; }
         break;
       }
     }
@@ -927,34 +932,27 @@ export const PROGRESS_DOM_JS = String.raw`
           var st = window.__athltStat || { big: '', small: '' };
           var gsp = goalEl.querySelector('span');
           var irow = goalEl.parentElement;
-          goalEl.style.setProperty('display', 'flex'); goalEl.style.setProperty('flex-direction', 'column'); goalEl.style.setProperty('align-items', 'flex-start');
-          goalEl.style.setProperty('gap', '2px'); goalEl.style.setProperty('line-height', '1.1');
+          // ONE small line, every part the same size: [orb] 1 lb  down since Oct 25
+          goalEl.style.setProperty('display', 'flex'); goalEl.style.setProperty('flex-direction', 'row'); goalEl.style.setProperty('align-items', 'center');
+          goalEl.style.setProperty('gap', '5px'); goalEl.style.setProperty('line-height', '1.2'); goalEl.style.setProperty('font-size', '13px');
           if (gsp) {
-            gsp.style.setProperty('display', st.big ? 'block' : 'none');
-            gsp.style.setProperty('font-size', '27px'); gsp.style.setProperty('font-weight', '800'); gsp.style.setProperty('letter-spacing', '-0.9px');
+            gsp.style.setProperty('display', st.big ? 'inline' : 'none');
+            gsp.style.setProperty('font-size', '13px'); gsp.style.setProperty('font-weight', '700'); gsp.style.setProperty('letter-spacing', '0');
             gsp.style.setProperty('color', '#111114'); gsp.style.setProperty('font-variant-numeric', 'tabular-nums');
           }
           var slbl = null;
           for (var sk = 0; sk < goalEl.children.length; sk++) if (goalEl.children[sk].hasAttribute('data-athlt-statlbl')) slbl = goalEl.children[sk];
           if (!slbl) { slbl = document.createElement('div'); slbl.setAttribute('data-athlt-statlbl', '1'); goalEl.appendChild(slbl); }
           setText(slbl, st.small);
-          slbl.style.setProperty('font-size', st.big ? '12.5px' : '13.5px'); slbl.style.setProperty('font-weight', st.big ? '600' : '500');
+          slbl.style.setProperty('font-size', '13px'); slbl.style.setProperty('font-weight', '500');
           slbl.style.setProperty('color', st.big ? '#6e6e77' : 'rgb(60, 60, 67)');
           if (irow) {
-            irow.style.setProperty('gap', '12px');
+            irow.style.setProperty('gap', '8px');
             var orb = irow.children[0];
             if (orb && !orb.__alive) {
-              orb.__alive = true;
-              orb.style.setProperty('width', '36px', 'important'); orb.style.setProperty('height', '36px', 'important');
-              orb.style.setProperty('filter', 'saturate(1.55) brightness(1.1)', 'important');
-              orb.style.setProperty('border-radius', '50%', 'important'); // (the design leaves the box square, a glow on it would be square too)
-              orb.style.setProperty('box-shadow', '0 0 18px 3px rgba(110,160,255,0.55)', 'important');
-              // the page switches every animation off; the orb's own (the design's hm-orb-* ones) are put back one by one
-              var layers = [orb].concat([].slice.call(orb.querySelectorAll('*')));
-              for (var ly = 0; ly < layers.length; ly++) {
-                var am = /animation:\s*([^;]+);?/.exec(layers[ly].getAttribute('style') || '');
-                if (am) layers[ly].style.setProperty('animation', am[1].replace(/!important/, '').trim(), 'important');
-              }
+              orb.__alive = true; // the shared orb at the size of the text line: no glow, no background (lib/cueOrb.ts)
+              orb.style.setProperty('width', '20px', 'important'); orb.style.setProperty('height', '20px', 'important');
+              orb.style.setProperty('flex', '0 0 20px', 'important');
             }
           }
         }
@@ -1108,6 +1106,8 @@ export const PROGRESS_DOM_JS = String.raw`
         el.style.setProperty('background-repeat', 'no-repeat, no-repeat', 'important');
       }
     };
+    // long-press a workout card / row -> the Delete menu (lib/workoutMenu.ts)
+    if (window.__athltLongPress) window.__athltLongPress(['div[role="img"][aria-label$=" video"]', 'div[style*="width: 74px"][style*="height: 92px"]'], function (s, i) { var w = ((window.__athltData || {}).workouts || [])[i]; return w ? w.ts : null; });
     for (var vb = 0; vb < vidBoxes.length; vb++) if (wk[vb]) setThumb(vidBoxes[vb], wk[vb]);
     for (var lb = 0; lb < listBoxes.length; lb++) if (wk[lb]) setThumb(listBoxes[lb], wk[lb]);
 

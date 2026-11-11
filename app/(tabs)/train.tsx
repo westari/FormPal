@@ -591,6 +591,7 @@ export default function TrainScreen() {
         else if (to === 'log') router.push('/log-session' as any);
         else if (to === 'myworkouts') router.push('/my-workouts' as any);
         else if (to === 'streak') router.push({ pathname: '/streak-screen', params: { count: String(streakRef.current), from: 'tab', dest: '/(tabs)/train' } } as any);
+        else if (to.startsWith('preview:')) router.push({ pathname: '/workout', params: { id: to.slice('preview:'.length), preview: '1' } } as any);
         else if (to.startsWith('recap:')) router.push({ pathname: '/recap', params: { ts: to.slice('recap:'.length) } } as any);
         return;
       }

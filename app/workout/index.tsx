@@ -1,34 +1,32 @@
 /**
  * app/workout/index.tsx
  *
- * Pre-workout overview screen.
- * Shows the full workout (name, rationale, ordered exercise list)
- * and the big "Start" button that kicks off the run flow.
+ * The workout preview: every "Start workout" (plus menu, Home, Train) opens this first, and its black Start button opens the
+ * workout itself (/workout/run). Train's "Preview workout" on a future day opens it for THAT day (?id=<workout>&preview=1)
+ * with no Start button, because that day is not today.
+ *
+ * Built in native code to match Ari's design screenshot: soft grey page with a pink glow top left, a white round back button,
+ * the workout name over "52 min · 8 exercises", one white rounded card per exercise (picture square, name,
+ * "4 sets · 8 reps", pencil) and the black "Start workout" pill floating at the bottom. Real data: the plan's workout.
  */
-
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  Pressable,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { SymbolView } from 'expo-symbols';
+import * as Haptics from '../../lib/haptics';
 import ScreenBackground from '../../components/ScreenBackground';
 import { usePlanStore } from '../../store/planStore';
 import { useWorkoutSessionStore } from '../../store/workoutSessionStore';
+import { workoutMinutes } from '../../lib/trainData';
 import { FONT, W, Sp, R, Elev, Col } from '../../constants/theme';
 import type { PlanProfile } from '../../types/plan';
 
-// TEMP, pre-auth: there's no real account/onboarding-profile flow feeding
-// createPlan() yet, so "no workout scheduled" is the permanent, only state
-// this screen can ever reach right now — not an edge case. This lets it be
-// tested end-to-end today; remove once real profile creation exists and
-// PlanProfile is coming from an actual user, not a hardcoded stand-in.
+// TEMP, pre-auth: there's no real account/onboarding-profile flow feeding createPlan() yet, so "no workout scheduled" can be
+// the only state this screen reaches on a fresh install. This lets it be tested end-to-end; remove once real profile
+// creation exists and PlanProfile is coming from an actual user, not a hardcoded stand-in.
 const TEST_PROFILE: PlanProfile = {
   goal:        'general',
   experience:  'beginner',
@@ -36,76 +34,56 @@ const TEST_PROFILE: PlanProfile = {
   location:    'home',
 };
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+const INK = '#111114';
+const SUB = '#5f5f69';
+const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
 
-function fmtTime(totalSec: number): string {
-  const m = Math.ceil(totalSec / 60);
-  return m < 60 ? `${m} min` : `${Math.floor(m / 60)}h ${m % 60}m`;
-}
-
-function estimateWorkoutTime(restSeconds: number[]): number {
-  // ~45s per set (including motion), plus rest between exercises
-  const sets    = restSeconds.length * 3;          // assume 3 sets per exercise
-  const setTime = sets * 45;
-  const rest    = restSeconds.reduce((a, b) => a + b, 0);
-  return setTime + rest;
-}
-
-// ─── Exercise row ────────────────────────────────────────────────────────────
-
-function ExRow({
-  num,
-  name,
-  sets,
-  reps,
-  rest,
-}: {
-  num:  number;
-  name: string;
-  sets: number;
-  reps: number;
-  rest: number;
-}) {
+/** The design's page: grey-to-white wash with a pink glow at the top left corner. */
+function PageBackground() {
   return (
-    <View style={s.exRow}>
-      <View style={s.exNum}>
-        <Text style={s.exNumTxt}>{num}</Text>
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={s.exName}>{name}</Text>
-        <Text style={s.exMeta}>
-          {sets} × {reps} · {fmtTime(rest)} rest
-        </Text>
-      </View>
-      <SymbolView
-        name="chevron.right"
-        size={13}
-        tintColor={Col.textDim}
-        type="monochrome"
-        style={{ width: 13, height: 13 }}
-      />
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <LinearGradient colors={['#ebebef', '#f4f4f6', '#fafafb', '#ffffff']} locations={[0, 0.26, 0.6, 1]} style={StyleSheet.absoluteFill} />
+      <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
+        <Defs>
+          <RadialGradient id="pink" cx="0" cy="0" fx="0" fy="0" rx="0.6" ry="0.2" gradientUnits="objectBoundingBox">
+            <Stop offset="0" stopColor="rgb(255,214,222)" stopOpacity="0.32" />
+            <Stop offset="0.7" stopColor="rgb(255,214,222)" stopOpacity="0" />
+          </RadialGradient>
+        </Defs>
+        <Rect x="0" y="0" width="100%" height="100%" fill="url(#pink)" />
+      </Svg>
     </View>
   );
 }
 
-// ─── Screen ──────────────────────────────────────────────────────────────────
+function ExCard({ name, sets, reps }: { name: string; sets: number; reps: number }) {
+  return (
+    <View style={s.card}>
+      <LinearGradient colors={['#ffffff', '#fbfbfd']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { borderRadius: 26 }]} />
+      <View style={s.pic} />
+      <View style={s.cardText}>
+        <Text style={s.exName} numberOfLines={1}>{name}</Text>
+        <Text style={s.exMeta} numberOfLines={1}>{plural(sets, 'set')} · {plural(reps, 'rep')}</Text>
+      </View>
+      <SymbolView name="pencil" size={16} weight="semibold" tintColor={INK} type="monochrome" style={s.pencil} />
+    </View>
+  );
+}
 
-export default function WorkoutOverviewScreen() {
+export default function WorkoutPreviewScreen() {
   const router     = useRouter();
   const insets     = useSafeAreaInsets();
-  const getNext    = usePlanStore(s => s.getNextWorkout);
-  // My workouts opens a specific workout (?id=...); anywhere else this is the next workout in the plan
-  const { id }     = useLocalSearchParams<{ id?: string }>();
-  const createPlan = usePlanStore(s => s.createPlan);
-  const startSess  = useWorkoutSessionStore(s => s.startWorkout);
+  const getNext    = usePlanStore(st => st.getNextWorkout);
+  // a specific workout (?id=...: My workouts, or a future day on Train), else the next workout in the plan
+  const { id, preview } = useLocalSearchParams<{ id?: string; preview?: string }>();
+  const createPlan = usePlanStore(st => st.createPlan);
+  const startSess  = useWorkoutSessionStore(st => st.startWorkout);
   const workout    = (id ? usePlanStore.getState().plan?.workouts.find(w => w.id === id) : null) ?? getNext();
   const [creatingTestPlan, setCreatingTestPlan] = useState(false);
+  const previewOnly = preview === '1'; // a day that is not today: look, no Start button
 
-  // getNextWorkout is read once at mount (see workout's own selector above —
-  // it subscribes to the function reference, not to `plan`, so this screen
-  // won't auto-re-render when createPlan() resolves). router.replace forces
-  // a fresh mount of this same screen, which re-reads getNextWorkout() and
-  // picks up the plan that createPlan just saved.
+  // getNextWorkout is read once at mount (it subscribes to the function reference, not to `plan`), so after createPlan()
+  // resolves, router.replace gives this screen a fresh mount that re-reads it.
   const handleGenerateTestPlan = async () => {
     setCreatingTestPlan(true);
     try {
@@ -117,7 +95,6 @@ export default function WorkoutOverviewScreen() {
   };
 
   if (!workout) {
-    // Not really an edge case right now — see TEST_PROFILE's comment above.
     return (
       <ScreenBackground>
         <View style={[s.center, { paddingTop: insets.top }]}>
@@ -126,11 +103,7 @@ export default function WorkoutOverviewScreen() {
             There's no account/profile system yet, so no real plan exists to pull from.
           </Text>
           <Pressable onPress={handleGenerateTestPlan} disabled={creatingTestPlan} style={s.testPlanBtn}>
-            {creatingTestPlan ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={s.testPlanBtnTxt}>Generate a Test Plan</Text>
-            )}
+            {creatingTestPlan ? <ActivityIndicator color="#fff" /> : <Text style={s.testPlanBtnTxt}>Generate a Test Plan</Text>}
           </Pressable>
           <Pressable onPress={() => router.back()} style={s.backBtn}>
             <Text style={s.backBtnTxt}>Go back</Text>
@@ -140,111 +113,53 @@ export default function WorkoutOverviewScreen() {
     );
   }
 
-  const estimatedSec = estimateWorkoutTime(workout.exercises.map(e => e.restSeconds));
-  const exCount      = workout.exercises.length;
-
-  function handleStart() {
-    startSess(workout!);
+  const exCount = workout.exercises.length;
+  const handleStart = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); // a main action (the shim plays it as Light)
+    startSess(workout);
     router.push('/workout/run' as any);
-  }
+  };
+  const footer = Math.max(insets.bottom - 4, 20);
 
   return (
-    <ScreenBackground>
-      {/* Back button */}
-      <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
-        <Pressable hitSlop={12} onPress={() => router.back()} style={s.backChev}>
-          <SymbolView
-            name="chevron.left"
-            size={18}
-            tintColor={Col.text}
-            type="monochrome"
-            style={{ width: 18, height: 18 }}
-          />
+    <View style={s.root}>
+      <PageBackground />
+
+      <View style={[s.header, { paddingTop: Math.max(insets.top - 6, 14) }]}>
+        <Pressable hitSlop={10} onPress={() => router.back()} style={s.backCircle} accessibilityRole="button" accessibilityLabel="Back">
+          <SymbolView name="chevron.left" size={15} weight="bold" tintColor={INK} type="monochrome" style={{ width: 15, height: 15 }} />
         </Pressable>
-        <Text style={s.topLabel}>Today's Workout</Text>
-        <View style={{ width: 36 }} />
+        <View style={s.titleBlock}>
+          <Text style={s.title} numberOfLines={1}>{workout.splitLabel}</Text>
+          <Text style={s.subtitle} numberOfLines={1}>{workoutMinutes(workout)} min · {plural(exCount, 'exercise')}</Text>
+        </View>
       </View>
 
       <ScrollView
-        contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 120 }]}
+        style={s.flex}
+        contentContainerStyle={[s.list, { paddingBottom: (previewOnly ? 0 : 58 + footer + 24) + insets.bottom + 8 }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Hero header */}
-        <View style={s.hero}>
-          <Text style={s.splitLabel}>{workout.splitLabel}</Text>
-          <Text style={s.sessionNum}>Session {workout.sessionNumber}</Text>
-        </View>
-
-        {/* Stats row */}
-        <View style={s.statsRow}>
-          <StatChip icon="dumbbell.fill"  label={`${exCount} exercise${exCount === 1 ? '' : 's'}`} />
-          <StatChip icon="clock.fill"     label={fmtTime(estimatedSec)} />
-        </View>
-
-        {/* Rationale */}
-        {!!workout.rationale && (
-          <View style={s.rationaleCard}>
-            <Text style={s.rationaleText}>{workout.rationale}</Text>
-          </View>
-        )}
-
-        {/* Exercise list */}
-        <View style={s.section}>
-          <Text style={s.sectionTitle}>EXERCISES</Text>
-          <View style={s.card}>
-            {workout.exercises.map((ex, i) => (
-              <React.Fragment key={ex.exerciseId}>
-                <ExRow
-                  num={i + 1}
-                  name={ex.displayName}
-                  sets={ex.targetSets}
-                  reps={ex.targetReps}
-                  rest={ex.restSeconds}
-                />
-                {i < workout.exercises.length - 1 && <View style={s.divider} />}
-              </React.Fragment>
-            ))}
-          </View>
-        </View>
+        {workout.exercises.map((ex, i) => (
+          <ExCard key={ex.exerciseId + ':' + i} name={ex.displayName} sets={ex.targetSets} reps={ex.targetReps} />
+        ))}
       </ScrollView>
 
-      {/* Start button — fixed bottom */}
-      <View style={[s.footer, { paddingBottom: Math.max(insets.bottom + 16, 32) }]}>
-        <Pressable style={s.startBtn} onPress={handleStart}>
-          <Text style={s.startBtnTxt}>Start Workout</Text>
-          <SymbolView
-            name="play.fill"
-            size={16}
-            tintColor="#fff"
-            type="monochrome"
-            style={{ width: 16, height: 16 }}
-          />
-        </Pressable>
-      </View>
-    </ScreenBackground>
-  );
-}
-
-// ─── StatChip ────────────────────────────────────────────────────────────────
-
-function StatChip({ icon, label }: { icon: string; label: string }) {
-  return (
-    <View style={s.statChip}>
-      <SymbolView
-        name={icon as any}
-        size={14}
-        tintColor={Col.textSub}
-        type="monochrome"
-        style={{ width: 14, height: 14 }}
-      />
-      <Text style={s.statChipTxt}>{label}</Text>
+      {!previewOnly && (
+        <View style={[s.footer, { bottom: footer }]} pointerEvents="box-none">
+          <Pressable style={s.startBtn} onPress={handleStart} accessibilityRole="button" accessibilityLabel="Start workout">
+            <SymbolView name="play.fill" size={12} tintColor="#ffffff" type="monochrome" style={{ width: 12, height: 12 }} />
+            <Text style={s.startTxt}>Start workout</Text>
+          </Pressable>
+        </View>
+      )}
     </View>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
 const s = StyleSheet.create({
+  root: { flex: 1, backgroundColor: '#fafafb' },
+  flex: { flex: 1 },
   center:    { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Sp.md },
   noWorkout: { fontSize: 16, fontWeight: W.semi, color: Col.text },
   noWorkoutSub: {
@@ -260,127 +175,33 @@ const s = StyleSheet.create({
   backBtn:   { paddingHorizontal: Sp.lg, paddingVertical: Sp.sm, borderRadius: R.pill, backgroundColor: Col.card },
   backBtnTxt:{ fontSize: 15, fontWeight: W.semi, color: Col.text },
 
-  topBar: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Sp.md,
-    paddingBottom:  Sp.sm,
-  },
-  topLabel: {
-    fontSize:   14,
-    fontWeight: W.semi,
-    color:      Col.textSub,
-    letterSpacing: 0.2,
-  },
-  backChev: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: R.pill,
-    backgroundColor: Col.card,
-    ...Elev.low,
-    boxShadow: Elev.low.shadow,
+  // header: round white back button, then the name over "52 min · 8 exercises"
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 0, gap: 15 },
+  backCircle: {
+    width: 34, height: 34, borderRadius: 17, backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center',
+    boxShadow: '0 6px 16px -6px rgba(40,50,90,0.28), 0 1px 3px rgba(40,50,90,0.08)',
   } as any,
+  titleBlock: { flex: 1 },
+  title: { fontFamily: FONT.displayBlack, fontSize: 25, lineHeight: 29, letterSpacing: -0.8, color: INK },
+  subtitle: { fontFamily: FONT.display, fontSize: 13.5, lineHeight: 18, color: SUB, marginTop: 2 },
 
-  scroll: {
-    paddingHorizontal: Sp.md,
-    paddingTop:        Sp.md,
-    gap:               Sp.md,
-  },
-
-  hero: { gap: 4, marginBottom: Sp.xs },
-  splitLabel: {
-    fontFamily:    FONT.displayBold,
-    fontSize:      28,
-    color:         Col.text,
-    letterSpacing: -0.5,
-  },
-  sessionNum: {
-    fontSize:   14,
-    fontWeight: W.medium,
-    color:      Col.textSub,
-  },
-
-  statsRow:  { flexDirection: 'row', gap: Sp.sm },
-  statChip:  {
-    flexDirection:     'row',
-    alignItems:        'center',
-    gap:               6,
-    backgroundColor:   Col.card,
-    borderRadius:      R.pill,
-    paddingHorizontal: Sp.md,
-    paddingVertical:   7,
-    boxShadow:         Elev.low.shadow,
-  } as any,
-  statChipTxt: { fontSize: 13, fontWeight: W.medium, color: Col.textSub },
-
-  rationaleCard: {
-    backgroundColor:   Col.card,
-    borderRadius:      R.card,
-    padding:           Sp.md,
-    boxShadow:         Elev.low.shadow,
-  } as any,
-  rationaleText: {
-    fontSize:   14,
-    color:      Col.textSub,
-    lineHeight: 21,
-  },
-
-  section:      { gap: Sp.sm },
-  sectionTitle: {
-    fontSize:      11,
-    fontWeight:    W.bold,
-    color:         Col.textDim,
-    letterSpacing: 0.8,
-    marginLeft:    4,
-  },
+  // one card per exercise
+  list: { paddingHorizontal: 14, paddingTop: 25, gap: 10 },
   card: {
-    backgroundColor: Col.card,
-    borderRadius:    R.card,
-    overflow:        'hidden',
-    boxShadow:       Elev.low.shadow,
+    height: 80, borderRadius: 26, flexDirection: 'row', alignItems: 'center', paddingLeft: 10, paddingRight: 19,
+    backgroundColor: '#ffffff',
+    boxShadow: '0 14px 34px -14px rgba(40,50,90,0.24), 0 2px 6px -2px rgba(40,50,90,0.08)',
   } as any,
+  pic: { width: 60, height: 60, borderRadius: 16, backgroundColor: '#f1f1f4' },
+  cardText: { flex: 1, marginLeft: 14, gap: 3 },
+  exName: { fontFamily: FONT.displayBold, fontSize: 16, lineHeight: 20, letterSpacing: -0.2, color: INK },
+  exMeta: { fontFamily: FONT.display, fontSize: 13.5, lineHeight: 17, color: SUB },
+  pencil: { width: 16, height: 16, marginLeft: 8 },
 
-  exRow:    { flexDirection: 'row', alignItems: 'center', padding: Sp.md, gap: Sp.md },
-  exNum:    {
-    width:           28,
-    height:          28,
-    borderRadius:    R.pill,
-    backgroundColor: '#F0F0F4',
-    alignItems:      'center',
-    justifyContent:  'center',
-    flexShrink:      0,
-  },
-  exNumTxt: { fontSize: 13, fontWeight: W.bold, color: Col.textSub },
-  exName:   { fontSize: 15, fontWeight: W.semi, color: Col.text },
-  exMeta:   { fontSize: 12, color: Col.textSub, marginTop: 2 },
-  divider:  { height: StyleSheet.hairlineWidth, backgroundColor: '#F0F0F4', marginLeft: 56 },
-
-  footer: {
-    position:          'absolute',
-    bottom:            0,
-    left:              0,
-    right:             0,
-    paddingHorizontal: Sp.md,
-    paddingTop:        Sp.md,
-    backgroundColor:   'rgba(251,251,253,0.92)',
-  },
+  footer: { position: 'absolute', left: 16, right: 16 },
   startBtn: {
-    backgroundColor:   '#0b1020',
-    borderRadius:      R.pill,
-    height:            56,
-    flexDirection:     'row',
-    alignItems:        'center',
-    justifyContent:    'center',
-    gap:               10,
-    boxShadow:         Elev.high.shadow,
+    height: 58, borderRadius: 29, backgroundColor: INK, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9,
+    boxShadow: '0 16px 30px -16px rgba(17,17,20,0.6)',
   } as any,
-  startBtnTxt: {
-    fontFamily: FONT.displayBold,
-    fontSize:   17,
-    color:      '#fff',
-    letterSpacing: 0.1,
-  },
+  startTxt: { fontFamily: FONT.displayBold, fontSize: 16.5, letterSpacing: -0.2, color: '#ffffff' },
 });

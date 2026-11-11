@@ -104,7 +104,7 @@ export default function GlassTabBar({ state, navigation }: BottomTabBarProps) {
       slide.stopAnimation();
       slide.setValue(lensLeft(x, L.itemW, ITEMS_PAD));
       stretch.setValue(lensStretch(g.vx));
-      Animated.spring(stretch, { toValue: 1, damping: 12, stiffness: 220, mass: 0.6, useNativeDriver: true }).start();
+      Animated.spring(stretch, { toValue: 1, damping: 30, stiffness: 220, mass: 0.6, overshootClamping: true, useNativeDriver: true }).start();
       const i = tabIndexAt(x, L.itemW, ITEMS_PAD);
       if (i !== L.hover) { L.hover = i; setHover(i); Haptics.selectionAsync(); } // one tick per tab crossed
     },
@@ -137,27 +137,27 @@ export default function GlassTabBar({ state, navigation }: BottomTabBarProps) {
       <PlusMenu open={menuOpen} onClose={() => setMenuOpen(false)} bottom={bottom + PLUS_SIZE + 14} />
       <View style={[s.row, { bottom, left: TAB_BAR_SIDE, right: TAB_BAR_SIDE }]} pointerEvents="box-none">
         <View style={s.capsuleWrap} onLayout={(e) => setBarW(e.nativeEvent.layout.width)}>
-          <LiquidGlass radius={TAB_BAR_H / 2} variant="regular" colorScheme="light" fallbackColor="rgba(255,255,255,0.82)" style={StyleSheet.absoluteFill}>
-            <View style={s.items} pointerEvents="none">
-              {TABS.map((t, i) => {
-                const on = lit === i;
-                return (
-                  <View key={t.name} style={s.itemHit} accessible accessibilityRole="button" accessibilityLabel={t.label} accessibilityState={{ selected: idx === i }} onAccessibilityTap={() => openTab(t.name)}>
-                    <View style={s.item}>
-                      <SymbolView name={(on ? t.on : t.off) as any} size={20} tintColor={on ? INK : MUTED} type="monochrome" style={s.icon} />
-                      <Text style={[s.label, { color: on ? INK : MUTED }]} numberOfLines={1}>{t.label}</Text>
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-          </LiquidGlass>
+          <LiquidGlass radius={TAB_BAR_H / 2} variant="regular" colorScheme="light" fallbackColor="rgba(255,255,255,0.82)" style={StyleSheet.absoluteFill} />
           {/* the lens: outside the capsule so it can stand out of it while lifted */}
           {itemW > 0 && idx >= 0 && (
             <Animated.View pointerEvents="none" style={[s.pill, { width: itemW, transform: [{ translateX: slide }, { scaleX: lensScaleX }, { scaleY: lensScaleY }] }]}>
               <LiquidGlass radius={PILL_H / 2} variant="clear" colorScheme="light" fallbackColor="rgba(17,17,20,0.08)" style={s.pillGlass} />
             </Animated.View>
           )}
+          {/* icons and labels sit ABOVE the lens, so the glass never smears or magnifies them (that blurred the open tab) */}
+          <View style={[StyleSheet.absoluteFill, s.items]} pointerEvents="none">
+            {TABS.map((t, i) => {
+              const on = lit === i;
+              return (
+                <View key={t.name} style={s.itemHit} accessible accessibilityRole="button" accessibilityLabel={t.label} accessibilityState={{ selected: idx === i }} onAccessibilityTap={() => openTab(t.name)}>
+                  <View style={s.item}>
+                    <SymbolView name={(on ? t.on : t.off) as any} size={20} tintColor={on ? INK : MUTED} type="monochrome" style={s.icon} />
+                    <Text style={[s.label, { color: on ? INK : MUTED }]} numberOfLines={1}>{t.label}</Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
           <View style={StyleSheet.absoluteFill} {...pan.panHandlers} />
         </View>
         <View style={{ width: TAB_BAR_GAP }} />

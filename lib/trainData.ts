@@ -21,7 +21,7 @@ export interface TrainDay {
   meta: string;           // "38 min · 4 exercises" | "Recover for Wednesday"
   done?: boolean;
   rest?: boolean;
-  href: string;           // what the main button does ("tr:start" | "tr:recap:<ts>" | "tr:myworkouts" | "tr:none")
+  href: string;           // what the main button does ("tr:start" | "tr:recap:<ts>" | "tr:preview:<workout id>" | "tr:myworkouts" | "tr:none")
   restHref: string;       // what a rest card's button does
   rows: [string, string][]; // what the Edit sheet shows for this card
   wid?: string;           // the plan workout this card is (so an Edit-sheet change can be saved to it); not set for finished days
@@ -127,7 +127,7 @@ export function buildTrainData(
     } else if (i === 6) {
       if (tomorrowW) {
         moves[tomorrowW.splitLabel] = moves[tomorrowW.splitLabel] ?? plannedRows(tomorrowW);
-        days.push({ short: SHORT[date.getDay()], name: tomorrowW.splitLabel, meta: plannedMeta(tomorrowW), href: 'tr:none', restHref: 'tr:none', rows: plannedRows(tomorrowW), wid: tomorrowW.id });
+        days.push({ short: SHORT[date.getDay()], name: tomorrowW.splitLabel, meta: plannedMeta(tomorrowW), href: `tr:preview:${tomorrowW.id}`, restHref: 'tr:none', rows: plannedRows(tomorrowW), wid: tomorrowW.id }); // "Preview workout": opens the preview for that day (no Start button)
       } else {
         days.push({ short: SHORT[date.getDay()], name: 'Rest day', meta: 'Recover for ' + LONG[addDays(date, 1).getDay()], rest: true, href: 'tr:none', restHref: 'tr:none', rows: [] });
       }

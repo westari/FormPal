@@ -18,7 +18,7 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { resolveVideoUri, persistVideo, persistThumb, savedThumb, isPermanent } from './videoStore';
+import { resolveVideoUri, persistVideo, persistThumb, savedThumb, isPermanent, removeClipFiles } from './videoStore';
 
 // require() inside try/catch on purpose: expo-video-thumbnails reads its native module at IMPORT time, which throws
 // synchronously on a build that has not been rebuilt with it linked in, and a plain top-level import would crash the app at
@@ -71,6 +71,21 @@ export function keepVideosSafe(): Promise<void> {
     }
   })().finally(() => { keeping = null; });
   return keeping;
+}
+
+/** Remove the clips (and their pictures) of ONE workout and forget them in the video log. Used by "Delete workout". */
+export async function removeSessionVideos(sessionTs: number, prevSessionTs: number = 0): Promise<number> {
+  const mine = await entriesFor(sessionTs, prevSessionTs);
+  if (!mine.length) return 0;
+  for (const e of mine) removeClipFiles(e.uri);
+  const gone = new Set(mine.map(e => e.ts + '|' + e.uri));
+  try {
+    const all = await loadVideoLog();
+    await AsyncStorage.setItem(VIDEO_LOG_KEY, JSON.stringify(all.filter(e => !gone.has(e.ts + '|' + e.uri))));
+  } catch { /* the files are gone either way */ }
+  cachedRaw = undefined;
+  for (const k of [...thumbCache.keys()]) if (k.startsWith(sessionTs + '@')) thumbCache.delete(k);
+  return mine.length;
 }
 
 /** The clips that belong to this workout, newest first. */

@@ -67,8 +67,8 @@ const png = (c) => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http:
   const worst = Math.max(...g12.slice(3));
   console.log(`      Muscle Map open (4x slower CPU): slowest frame ${worst}ms (it was ~440ms before)`);
   check('12. Muscle Map: opening never stalls a frame for long (slowest frame under 200ms at 4x slower CPU)', worst < 200, 'slowest ' + worst + 'ms');
-  const mm = await p.evaluate(() => ({ svgs: document.querySelectorAll('#dc-root div[aria-label="Body map space"][style*="height: 300px"] svg').length, text: (document.getElementById('dc-root').innerText.match(/(Target your|Train a few exercises).*/) || [''])[0] }));
-  check('12. Muscle Map: the body map and the "Target your ..." line are there', mm.svgs >= 2 && /(Target your .+ this week|Train a few exercises to see your weakest muscle)/.test(mm.text), JSON.stringify(mm));
+  const mm = await p.evaluate(() => ({ svgs: document.querySelectorAll('#dc-root div[aria-label="Body map space"][style*="height: 300px"] svg').length, text: (document.getElementById('dc-root').innerText.match(/(Work on|Train to find).*/) || [''])[0], oneLine: (() => { const e = document.querySelector('[data-athlt-weak]'); if (!e) return null; const r = e.getBoundingClientRect(); return { h: Math.round(r.height), lh: parseFloat(getComputedStyle(e).lineHeight) || parseFloat(getComputedStyle(e).fontSize) * 1.3 }; })() }));
+  check('12. Muscle Map: the body map and ONE short line ("Work on triceps this week") are there', mm.svgs >= 2 && /^(Work on .+ this week|Train to find your weak spot)$/.test(mm.text.trim()) && mm.oneLine && mm.oneLine.h < mm.oneLine.lh * 1.6, JSON.stringify(mm));
 
   await shot('ux_musclemap');
   await tapAt(`() => document.querySelector('#dc-root a[aria-label="Back"]') || [...document.querySelectorAll('#dc-root a')].find(x => x.querySelector('path[d^="M19 12H5"]'))`);
@@ -133,11 +133,14 @@ const png = (c) => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http:
     return { rowTop: Math.round(r.top), rowBottom: Math.round(r.bottom), chartTop: Math.round(c.top), pillBottom: Math.round(pl.bottom), text: row.textContent.trim().slice(0, 40) };
   });
   console.log('      insight line:', JSON.stringify(lay), JSON.stringify(await p.evaluate(() => [...document.querySelectorAll('#dc-root div')].filter(d => /since|Same weight/.test(d.textContent) && d.children.length <= 3 && d.textContent.length < 70).map(d => d.textContent.trim().slice(0, 30) + '|' + d.style.justifyContent + '|' + d.children.length).slice(0, 5))));
-  const stat = await p.evaluate(() => { const lbl = document.querySelector('[data-athlt-statlbl]'); if (!lbl) return null; const goal = lbl.parentElement, row = goal.parentElement; const big = goal.querySelector('span'); const orb = row.children[0]; const anim = [orb, ...orb.querySelectorAll('*')].map(e => getComputedStyle(e).animationName).filter(n => n && n !== 'none'); return { big: big.textContent.trim(), bigSize: getComputedStyle(big).fontSize, label: lbl.textContent.trim(), orbW: Math.round(orb.getBoundingClientRect().width), anims: anim.length, bright: getComputedStyle(orb).filter }; });
+  const stat = await p.evaluate(() => { const lbl = document.querySelector('[data-athlt-statlbl]'); if (!lbl) return null; const goal = lbl.parentElement, row = goal.parentElement; const big = goal.querySelector('span'); const orb = row.children[0]; const anim = [orb, ...orb.querySelectorAll('*')].map(e => getComputedStyle(e).animationName).filter(n => n && n !== 'none'); return { big: big.textContent.trim(), bigSize: getComputedStyle(big).fontSize, label: lbl.textContent.trim(), orbW: Math.round(orb.getBoundingClientRect().width), anims: anim.length, bright: getComputedStyle(orb).filter, shadow: getComputedStyle(orb).boxShadow, labelSize: getComputedStyle(lbl).fontSize, oneLine: Math.abs(lbl.getBoundingClientRect().top - big.getBoundingClientRect().top) < 8 }; });
   console.log('      stat:', JSON.stringify(stat));
   check('4. The Cue insight is back UNDER the graph (below the chart, above the Log button), not at the top', lay && lay.rowTop >= lay.chartTop + 100, JSON.stringify(lay));
-  check('4. It is a real stat: a big number and a short label ("5.8 lb" / "down since Oct 2")', stat && /^\d+(\.\d)? lb$/.test(stat.big) && parseFloat(stat.bigSize) >= 24 && /^(down|up) since /.test(stat.label), JSON.stringify(stat));
-  check('4. The Cue orb beside it is brighter, bigger and MOVING (its own animations are running)', stat && stat.orbW >= 36 && stat.anims >= 3 && /saturate\(1\.5/.test(stat.bright), JSON.stringify({ w: stat.orbW, anims: stat.anims, f: stat.bright }));
+  check('4. The Cue stat is small: "5.8 lb" and "down since Oct 2" are the same size (13px), one line', stat && /^\d+(\.\d)? lb$/.test(stat.big) && stat.bigSize === '13px' && /^(down|up) since /.test(stat.label) && stat.labelSize === '13px' && stat.oneLine, JSON.stringify(stat));
+  const orbs = await p.evaluate(() => [...document.querySelectorAll('#dc-root div[style*="hm-orb-breathe"]')].map(o => { const layers = [o, ...o.querySelectorAll('*')].filter(e => (e.getAttribute('style') || '').includes('hm-orb')); return { w: Math.round(o.getBoundingClientRect().width), breathe: getComputedStyle(o).animationName, moving: layers.filter(e => getComputedStyle(e).animationName !== 'none').length, of: layers.length, bg: getComputedStyle(o).backgroundImage, shadow: getComputedStyle(o).boxShadow, blend: [...o.querySelectorAll('div')].filter(e => getComputedStyle(e).mixBlendMode !== 'normal' && getComputedStyle(e).display !== 'none').length }; }));
+  console.log('      every Cue orb on the page:', JSON.stringify(orbs));
+  check('3. EVERY Cue orb on Progress (Muscle map, Weight, Form score) is the shared new orb: all its layers animated, no background / glow box behind it, no texture layer', orbs.length >= 2 && orbs.every(o => o.moving === o.of && o.breathe !== 'none' && o.bg === 'none' && o.shadow === 'none' && o.blend === 0), JSON.stringify(orbs));
+  check('4. The orb beside it is the same small size as that line (about 20px), still MOVING, and has no glow / background behind it', stat && stat.orbW >= 18 && stat.orbW <= 22 && stat.anims >= 3 && stat.shadow === 'none', JSON.stringify(stat));
   await shot('ux_insight_stat');
 
   // 13. segment controls, buttons and scrolling
@@ -244,6 +247,11 @@ const png = (c) => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http:
   const lg8 = await p.evaluate(() => [...document.querySelectorAll('#dc-root div[role="img"][aria-label$=" video"]')].map(e => { const m = e.querySelector('[data-athlt-logged]'); return m ? m.innerText.trim() : ''; }));
   console.log('      logged tiles by workout:', JSON.stringify(lg8));
   check('8. A workout typed in by hand shows a "Logged" tile with a logged icon (not a video frame); the camera ones do not', lg8[2] === 'Logged' && !lg8[0] && !lg8[1] && !lg8[3], JSON.stringify(lg8));
+  const tileEl = (await p.$$('#dc-root div[role="img"][aria-label$=" video"]'))[2];
+  await tileEl.scrollIntoViewIfNeeded();
+  await tileEl.screenshot({ path: path.join(ROOT, '.scratch', 'flow', 'ux_logged_tile_el.png') });
+  const play = await p.evaluate(() => [...document.querySelectorAll('#dc-root div[role="img"][aria-label$=" video"]')].map(e => [...e.children].filter(c => c.querySelector && c.querySelector('svg') && !c.hasAttribute('data-athlt-logged') && getComputedStyle(c).display !== 'none').length));
+  check('8. The Logged tile has NO play icon; camera tiles keep theirs', play[2] === 0 && play[0] === 1 && play[1] === 1, JSON.stringify(play));
   await shot('ux_logged_tile');
   const openAt = msgs.filter(m => m.type === 'openWorkout').length;
   await p.evaluate(() => window.__probe(() => ({ op: [...document.querySelectorAll('#dc-root div[role="img"][aria-label$=" video"]')].map(e => { let n = e; for (let i = 0; i < 6 && n; i++, n = n.parentElement) { if (n.tagName === 'A') return parseFloat(getComputedStyle(n).opacity); } return 1; })[0] })));

@@ -44,6 +44,9 @@ export const hapticMain    = () => fire(() => backend.impactAsync(backend.Impact
 export const hapticSuccess = () => fire(() => backend.notificationAsync(backend.NotificationFeedbackType.Success));
 export const hapticWarning = () => fire(() => backend.notificationAsync(backend.NotificationFeedbackType.Warning));
 export const hapticError   = () => fire(() => backend.notificationAsync(backend.NotificationFeedbackType.Error));
+// Names the post-workout / camera screens use: a normal tap is the lightest tick, a main action (Start, Stop, Done, Continue) is Light.
+export const hapticLight   = hapticSelect;
+export const hapticMedium  = hapticMain;
 
 // ── drop-in for `import * as Haptics from 'expo-haptics'` ──
 export const selectionAsync = async () => { hapticSelect(); };

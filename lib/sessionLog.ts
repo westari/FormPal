@@ -83,6 +83,7 @@ export async function getAllSessions(): Promise<SessionEntry[]> {
       goodReps:    e.goodReps ?? 0,
       pct:         e.pct ?? 0,
       formChecked: e.formChecked ?? true,
+      ...(e.manual ? { manual: true } : {}),
     }));
   } catch {
     return [];
@@ -105,6 +106,20 @@ export async function appendSessions(entries: SessionEntry[], source: string = '
     if (log.length > MAX_LOG_ENTRIES) log.splice(0, log.length - MAX_LOG_ENTRIES);
     await AsyncStorage.setItem(SESSION_LOG_KEY, JSON.stringify(log));
   } catch {}
+}
+
+/** Remove one workout (every exercise saved with this ts) from the log. Returns how many entries went. */
+export async function removeWorkoutSessions(ts: number): Promise<number> {
+  try {
+    const raw = await AsyncStorage.getItem(SESSION_LOG_KEY);
+    if (!raw) return 0;
+    const all = JSON.parse(raw) as { ts?: number }[];
+    const keep = all.filter(e => e.ts !== ts);
+    if (keep.length === all.length) return 0;
+    await AsyncStorage.setItem(SESSION_LOG_KEY, JSON.stringify(keep));
+    console.log(`[SESSION-REMOVE] workout ${ts}: removed ${all.length - keep.length} entries`);
+    return all.length - keep.length;
+  } catch { return 0; }
 }
 
 // ─── Workout grouping ─────────────────────────────────────────────────────────

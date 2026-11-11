@@ -5,36 +5,22 @@
  * with the user's actual current streak (lib/sessionLog.ts's calcStreak()),
  * via DOM text-injection (never editing the design file — see CLAUDE.md).
  */
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { CONSOLE_FORWARD_JS, DC_VIEWPORT_JS, dcScaleFitJs } from '../lib/dcWebviewHelpers';
 import { NO_ZOOM_JS } from '../lib/noZoom';
 import { decideProgressPhotoVariant } from '../lib/postWorkoutFlow';
+import { getAllSessions } from '../lib/sessionLog';
+import { streakInfo, streakPageJs, type StreakInfo } from '../lib/streakInfo';
 
 const STREAK_HTML = require('../assets/app screens/streak.html');
 
-function streakInject(count: number): string {
-  const MAP: Record<string, string> = {
-    'Day 1 streak!': `Day ${count} streak!`,
-  };
-  return dcScaleFitJs('#ffffff') + `
+function streakInject(info: StreakInfo): string {
+  return dcScaleFitJs('#ffffff') + streakPageJs(info) + `
 (function(){
   function post(m){ try{ window.ReactNativeWebView.postMessage(m); }catch(e){} }
-  var MAP = ${JSON.stringify(MAP)};
-  function apply(){
-    var hit=0;
-    var all=document.querySelectorAll('#dc-root div,#dc-root span');
-    for(var i=0;i<all.length;i++){
-      var el=all[i]; if(el.children.length) continue;
-      var t=(el.textContent||'').trim();
-      if(Object.prototype.hasOwnProperty.call(MAP,t)){ el.textContent = MAP[t]; hit++; }
-    }
-    return hit;
-  }
-  if(!apply()){ [100,300,700].forEach(function(d){ setTimeout(apply,d); }); }
-
   document.addEventListener('click', function(e){
     var el = e.target;
     for(var i=0; el && i<5; i++, el=el.parentElement){
@@ -50,7 +36,10 @@ function streakInject(count: number): string {
 export default function StreakScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ count?: string; dest?: string; from?: string }>();
-  const count = parseInt(params.count ?? '1', 10) || 1;
+  const passed = params.from === 'tab' ? 0 : parseInt(params.count ?? '0', 10) || 0;
+  const [info, setInfo] = useState<StreakInfo | null>(null);
+  // the REAL streak, from the saved sessions (the number, today's state, the week row and the words all come from it)
+  useEffect(() => { let on = true; getAllSessions().then(all => { if (on) setInfo(streakInfo(all, Date.now(), passed)); }).catch(() => { if (on) setInfo(streakInfo([], Date.now(), passed)); }); return () => { on = false; }; }, [passed]);
   const dest = params.dest ?? '/(tabs)/';
   const [ready, setReady] = useState(false);
   const webRef = useRef<WebView>(null);
@@ -66,6 +55,7 @@ export default function StreakScreen() {
     }
   };
 
+  if (!info) return <View style={styles.flex} />;
   return (
     <View style={styles.flex}>
       <WebView
@@ -74,7 +64,7 @@ export default function StreakScreen() {
         originWhitelist={['*']}
         style={[styles.web, { opacity: ready ? 1 : 0 }]}
         injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS + NO_ZOOM_JS}
-        injectedJavaScript={CONSOLE_FORWARD_JS + streakInject(count)}
+        injectedJavaScript={CONSOLE_FORWARD_JS + streakInject(info)}
         onMessage={(e) => {
           const m = e.nativeEvent.data;
           if (m === 'ready') { setReady(true); return; }

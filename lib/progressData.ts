@@ -92,9 +92,9 @@ export function buildProgressData(
   extras: { insets?: { top: number; bottom: number; tabCover?: number }; photos?: { id: string; ts: number; pose: 'front' | 'side' | 'back'; thumb: string | null }[] } = {},
 ): ProgressData {
   const standing = computeOverallStanding(tiers);
-  const tier = standing?.tier ?? null;
-  const idx = tier ? tierIndex(tier) : -1;
-  const nextTier = tier ? (idx < TIER_ORDER.length - 1 ? TIER_ORDER[idx + 1] : tier) : 'bronze';
+  const tier = standing?.tier ?? 'bronze'; // nobody is "Unranked": everyone starts at Bronze
+  const idx = tierIndex(tier);
+  const nextTier = idx < TIER_ORDER.length - 1 ? TIER_ORDER[idx + 1] : tier;
   const meta = TIER_META[tier ?? 'bronze'];
 
   // Only muscles that have icon art are listed (the same 11 the native rank grid shows); the
@@ -109,16 +109,15 @@ export function buildProgressData(
     return {
       key: m, icon: null as string | null,
       name: MUSCLE_LABEL[m], tier: info ? info.tier : null,
-      label: info ? cap(info.tier) : 'Unranked',
+      label: info ? cap(info.tier) : 'Bronze',
       pct: info ? Math.round(tierProgress(info) * 100) : toBronze,
       hi: mm.hi, lo: mm.lo, ink: mm.ink,
       _ord: info ? tierIndex(info.tier) * 2 + tierProgress(info) : -1 + toBronzeF / 10,
     };
   }).sort((a, b) => b._ord - a._ord).map(({ _ord, ...rest }) => rest);
 
-  // Weakest ranked muscle = where to focus next (only meaningful once 2+ are ranked).
-  const ranked = muscles.filter(m => m.tier);
-  const weakest = ranked.length >= 2 ? ranked[ranked.length - 1].name : null;
+  // Weakest muscle = where to focus next (the list is sorted strongest first, so the last one), once there is any training.
+  const weakest = sessions.length > 0 && muscles.length > 1 ? muscles[muscles.length - 1].name : null;
 
   const groups = groupIntoWorkouts(sessions); // newest first
   const workouts = groups.slice(0, 30).map(g => {
@@ -151,7 +150,7 @@ export function buildProgressData(
 
   return {
     rank: {
-      has: !!tier, tier, label: tier ? cap(tier) : 'Unranked',
+      has: true, tier, label: cap(tier),
       pct: standing ? Math.round(standing.progress * 100) : 0,
       nextLabel: cap(nextTier), atTop: !!standing?.atTop,
       streak: calcStreak(sessions), hi: meta.hi, lo: meta.lo, ink: meta.ink, emblem: null,

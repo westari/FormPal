@@ -37,6 +37,7 @@ import { muscleIconUri } from '../../lib/muscleIcons';
 import { workoutFrame, workoutFallbackIcon } from '../../lib/workoutThumbs';
 import { openRecap } from '../../lib/openRecap';
 import { LOGGED_TILE_JS } from '../../lib/loggedTile';
+import { WORKOUT_LONGPRESS_JS, askRemoveWorkout } from '../../lib/workoutMenu';
 import { HAPTIC_PAGE_JS, hapticKind } from '../../lib/haptics';
 import { listProgressPhotos, addProgressPhoto, type PhotoPose } from '../../lib/progressPhotos';
 import { uploadProgressPhotoToCloud } from '../../lib/formpalSync';
@@ -51,7 +52,7 @@ const PROGRESS_HTML = require('../../assets/app screens/progress.html');
 const PROGRESS_BUILD = 'progress-3';
 if (__DEV__) console.log(`[progress] build ${PROGRESS_BUILD}`);
 
-const PROGRESS_BEFORE = DC_VIEWPORT_JS + DC_NO_ZOOM_JS + CONSOLE_FORWARD_JS + DC_SETTLE_JS + dcLogicPatchJs(PROGRESS_LOGIC_EXT) + PROGRESS_DOM_JS + HAPTIC_PAGE_JS + LOGGED_TILE_JS;
+const PROGRESS_BEFORE = DC_VIEWPORT_JS + DC_NO_ZOOM_JS + CONSOLE_FORWARD_JS + DC_SETTLE_JS + dcLogicPatchJs(PROGRESS_LOGIC_EXT) + PROGRESS_DOM_JS + HAPTIC_PAGE_JS + LOGGED_TILE_JS + WORKOUT_LONGPRESS_JS;
 
 export default function ProgressScreen() {
   const router = useRouter();
@@ -168,6 +169,9 @@ export default function ProgressScreen() {
         logWeight(msg.weightLb, new Date(y, m - 1, d)).then(() => load()).catch(() => {});
         break;
       }
+      case 'workoutMenu':
+        if (msg.ts != null) askRemoveWorkout(msg.ts, () => { void load(); });
+        break;
       case 'openWorkout':
         if (msg.ts != null) openRecap(router, msg.ts);
         break;

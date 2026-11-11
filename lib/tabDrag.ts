@@ -14,9 +14,9 @@ export const TAB_COUNT = 4;
 /** ESTIMATE: the lens is bigger than the resting highlight, so it stands out of the bar a little, like the system one. */
 export const LENS_SCALE_X = 1.2;
 export const LENS_SCALE_Y = 1.32;
-/** ESTIMATE: springs. The lens lifts with a little bounce, follows the finger, and settles on the tab with a small overshoot. */
-export const LIFT_SPRING = { damping: 14, stiffness: 320, mass: 0.8 } as const;
-export const SETTLE_SPRING = { damping: 15, stiffness: 260, mass: 0.9 } as const;
+/** ESTIMATE: springs. The lens lifts, follows the finger and settles on the tab. Critically damped on purpose: no overshoot, no rocking. */
+export const LIFT_SPRING = { damping: 32, stiffness: 320, mass: 0.8, overshootClamping: true } as const; // critically damped (2*sqrt(k*m) = 32): glides and stops, no rocking
+export const SETTLE_SPRING = { damping: 31, stiffness: 260, mass: 0.9, overshootClamping: true } as const; // critically damped (2*sqrt(k*m) = 30.6): glides to the tab and stops, no rocking
 /** ESTIMATE: how far past the first/last tab the lens may be pulled, and how much of the pull it follows (rubber band). */
 export const RUBBER_MAX = 14;
 export const RUBBER_FACTOR = 0.35;
