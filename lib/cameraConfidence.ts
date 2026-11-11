@@ -6,7 +6,8 @@
  * The old number only looked at the parts the camera COULD see (it read 100 while nothing counted, because the hands had left the frame
  * at the top and the counter never saw the top of the rep). The rules now, identical for every exercise:
  *   - Movement Match HIGH and reps counting      -> 90-100
- *   - Movement Match HIGH, no rep counted for ~5 seconds (or 2 attempts that did not count)
+ *   - A check or an X from the Coach counts like a counted rep: the camera saw the stroke, so confidence stays 90+ (half reps with X)
+ *   - Movement Match HIGH, no rep counted AND no check / X for ~5 seconds (or 2 attempts that got neither)
  *                                                -> below 80 and FALLING (-3 a second, floor 15), never near 100
  *   - Movement Match HIGH and the rep path is cut at the top / bottom (hands or feet leaving the frame)
  *                                                -> capped at 70 straight away
@@ -23,6 +24,8 @@ export interface ConfidenceInputs {
   match: MatchResult;
   /** when the last rep counted (native [REP] or a soft rep), 0 = none yet */
   lastCountAt: number;
+  /** when the Coach last gave a check or an X (0 = never). The Coach only judges strokes the camera SAW, so a judged stroke is proof the camera sees the reps, counted or not. */
+  lastJudgedAt?: number;
   /** attempts (strokes) that did not count since the last counted rep */
   missedSinceCount: number;
 }
@@ -49,11 +52,13 @@ export function createCameraConfidence(opts: { log?: (m: string) => void } = {})
   return {
     update(i) {
       const trying = i.match.trying && i.match.tryingForSec >= MM.minTryingSec;
-      const counting = i.lastCountAt > 0 && i.now - i.lastCountAt <= C.countRecentSec * 1000;
+      // Evidence the camera sees the reps: a counted rep OR a check / X from the Coach (a half rep that gets an X is seen fine).
+      const evidenceAt = Math.max(i.lastCountAt, i.lastJudgedAt ?? 0);
+      const counting = evidenceAt > 0 && i.now - evidenceAt <= C.countRecentSec * 1000;
       // time spent TRYING since the last counted rep (a short pause between presses does not restart the clock)
       const dt = lastNow ? Math.min(1000, Math.max(0, i.now - lastNow)) / 1000 : 0;
       lastNow = i.now;
-      if (i.lastCountAt !== lastCountSeen) { lastCountSeen = i.lastCountAt; tryAcc = 0; }
+      if (evidenceAt !== lastCountSeen) { lastCountSeen = evidenceAt; tryAcc = 0; }
       if (trying) { tryAcc += dt; lastTryingAt = i.now; }
       const notCountingSec = tryAcc;
       const onset = trying && !counting && (tryAcc >= C.stuckAfterSec || i.missedSinceCount >= C.stuckAttempts);

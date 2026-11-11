@@ -83,7 +83,7 @@ function main() {
   // only good reps count
   const half = tierOf([entry('curl', 30, 15, 0)]);
   check('ONLY GOOD REPS COUNT: 30 reps with 15 good = +10%, not +20%', near(pct(half), 10, 0.05), pct(half).toFixed(2));
-  check('rep exercises that cannot judge form count every rep', near(pct(tierOf([{ ts: NOW, exerciseId: 'curl', displayName: 'c', reps: 30, goodReps: 0, pct: 0, formChecked: false }])), 20, 0.05));
+  check('reps whose form cannot be checked (Log a session, rep counter only) count at HALF credit: 30 reps = +10%', near(pct(tierOf([{ ts: NOW, exerciseId: 'curl', displayName: 'c', reps: 30, goodReps: 0, pct: 0, formChecked: false }])), 10, 0.05));
   // helpers get partial credit
   const pu = sessionLog.computeMuscleTiers([entry('pushup', 30, 30, 0)]);
   check('main muscles get full credit, helpers partial (push-up: chest +20%, triceps less, biceps none)', near(pct(pu.chest), 20, 0.05) && pct(pu.triceps) < pct(pu.chest) && pct(pu.triceps) > 0 && !pu.biceps, `chest ${pct(pu.chest).toFixed(1)} triceps ${pct(pu.triceps).toFixed(1)}`);

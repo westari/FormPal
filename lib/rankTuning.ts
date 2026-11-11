@@ -21,8 +21,8 @@
  *   Diamond  -> Master      5,000        +0.02%
  *   Master   -> Champion   10,000        +0.01%
  *
- * Rep exercises that cannot judge form (rep counter only, or typed in by hand in Log a session) have no good/bad, so every
- * rep counts. PLACEHOLDER decision.
+ * Reps whose form cannot be checked (typed in by hand in Log a session, or rep-counter-only exercises) count at HALF credit,
+ * so the camera stays the best way to rank up. Camera reps with good form count in full. (Ari's decision, 2026-11-11.)
  *
  * Run `node scripts/sim-rank-progress.js` for the reps table.
  */
@@ -61,3 +61,6 @@ export const OVERALL_MIN_VOLUME: number = VOLUME_THRESHOLDS.find(([t]) => t === 
  * PLACEHOLDER: ~6.4 years at 18 entries a week (about 0.8 MB of storage).
  */
 export const MAX_LOG_ENTRIES = 6000;
+
+/** Credit for a rep whose form was never checked (Log a session, rep counter only): half of a good camera rep. */
+export const UNJUDGED_REP_CREDIT = 0.5;

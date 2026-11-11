@@ -46,7 +46,7 @@ function run(events, opts = {}) {
     const coach = GCm.createCoach({ log });
     const det = AD.createAttemptDetector({ exerciseId, log: (m) => log(m) });
     const rd = RD.createRepDiagnostic(undefined, exerciseId);
-    const st = { lastCountAt: 0, missed: 0, soft: 0, native: 0, lost: false, lastJudgedAt: -1e12 };
+    const st = { lastCountAt: 0, missed: 0, soft: 0, native: 0, lost: false, lastJudgedAt: 0 };
     const rows = [], verdicts = [];
     // ── old ──
     const counterO = LT.createCounterSignal();
@@ -65,6 +65,7 @@ function run(events, opts = {}) {
         } else if (ev.outcome === 'missed' || ev.outcome === 'rejected') {
           st.missed++;
           const v = coach.verdict({ now, match: mm.result(), source: 'attempt', blocker: ev.blocker, rangeWord: ev.reason, n: ev.n });
+          if (v.show) st.lastJudgedAt = now;
           verdicts.push({ t: now - 1e12, show: v.show, reason: v.reason, src: 'attempt', blocker: ev.blocker, score: mm.result().score });
         }
       }
@@ -81,7 +82,7 @@ function run(events, opts = {}) {
       const m = mm.result();
       det.setPathCut(m.cut);
       counter.setFlags({ diag: !!rd.message(), cue: false });
-      const c = conf.update({ now, visibility: counter.score(now), match: m, lastCountAt: st.lastCountAt, missedSinceCount: st.missed });
+      const c = conf.update({ now, visibility: counter.score(now), match: m, lastCountAt: st.lastCountAt, lastJudgedAt: st.lastJudgedAt > 0 ? st.lastJudgedAt : 0, missedSinceCount: st.missed });
       const rej = det.recentReject(8000);
       const g = guide.decide({
         now, exerciseId, personMissing: st.lost, nativeCue: opts.trackingCue ? opts.trackingCue(now - 1e12) : null, outOfPlaneCue: null, diag: rd.message(),

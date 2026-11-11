@@ -111,5 +111,8 @@ uncounted stroke.
 * **Adapting is off.** The attempt detector used to learn "this person's range" after three short strokes and count them as reps. A half rep
   must always get an X, so it is switched off (`adaptMaxShortFraction: 0`).
 * **The Guide stays silent when the strokes are only short.** The camera sees the whole path fine, so there is no setup fix; the Coach already
-  speaks on every X. Confidence still falls (rule 3).
+  speaks on every X.
+* **A check or an X counts as proof the camera sees the reps** (Ari's answer, 2026-11-11). While the Coach is judging attempts, confidence stays
+  90+. It only falls when the user is clearly trying and gets no counted rep, no check AND no X (hands out of frame, too close...).
+* **Movement Match window stays 10 seconds.**
 * **Reps that cannot be judged** (rep-counter exercises) get no check / X at all, as before.

@@ -1602,7 +1602,7 @@ export default function FormCheckScreen() {
       const m = matchRef.result();
       attemptRef.current.setPathCut(m.cut);
       counterRef.setFlags({ diag: !!d, cue: !!(statsRef.current?.trackingCue || statsRef.current?.outOfPlaneCue) });
-      const conf = confRef.update({ now, visibility: counterRef.score(now), match: m, lastCountAt: lastCountAtRef.current, missedSinceCount: missedSinceCountRef.current });
+      const conf = confRef.update({ now, visibility: counterRef.score(now), match: m, lastCountAt: lastCountAtRef.current, lastJudgedAt: lastJudgedAt.current, missedSinceCount: missedSinceCountRef.current });
       confidenceRef.current = conf.value;
       const rej = attemptRef.current.recentReject(8000);
       const dec = guideEngine.decide({
