@@ -96,16 +96,36 @@ try {
 
 export const isNativeModuleLinked = () => ATHLTCameraNative !== null;
 
+/** A native event listener that can never throw. */
+function safeListen(name: string, callback: (e: any) => void): { remove: () => void } {
+  try { return nativeEmitter ? (nativeEmitter.addListener(name, callback) as any) : { remove: () => {} }; } catch { return { remove: () => {} }; }
+}
+
+/**
+ * Every call into the native module goes through here. A function the INSTALLED native build does not have (new JS on an old
+ * build), a native throw, or a rejected promise all become "skip it and use the fallback" - never an error on screen.
+ */
+export async function callNative<T>(name: string, fallback: T, ...args: any[]): Promise<T> {
+  try {
+    const fn = ATHLTCameraNative ? (ATHLTCameraNative as any)[name] : undefined;
+    if (typeof fn !== 'function') return fallback;
+    const out = await fn.apply(ATHLTCameraNative, args);
+    return (out === undefined ? fallback : out) as T;
+  } catch {
+    return fallback;
+  }
+}
+
 // ─── Session lifecycle ─────────────────────────────────────────────────────────
 
 export async function startSession(): Promise<StartSessionResult> {
   if (!ATHLTCameraNative) return { success: false, error: 'ATHLTCamera native module not linked. Run a dev build.' };
-  return ATHLTCameraNative.startSession();
+  return callNative<StartSessionResult>('startSession', { success: false, error: 'Camera could not start.' });
 }
 
 export async function stopSession(): Promise<{ success: boolean }> {
   if (!ATHLTCameraNative) return { success: false };
-  return ATHLTCameraNative.stopSession();
+  return callNative('stopSession', { success: false });
 }
 
 // ─── Model (no-ops — Vision body pose needs no model) ───────────────────────────
@@ -183,7 +203,7 @@ export type ExerciseType =
 
 export async function setExercise(type: ExerciseType): Promise<void> {
   if (!ATHLTCameraNative) return;
-  return ATHLTCameraNative.setExercise(type);
+  return callNative<void>('setExercise', undefined, type);
 }
 
 // Passes the exercise standard (from constants/exerciseStandards.ts) to the
@@ -192,7 +212,7 @@ export async function setExercise(type: ExerciseType): Promise<void> {
 // Pass null for exercises that have no defined standard (Layer 2 will be inactive).
 export async function setExerciseStandard(standard: Record<string, unknown> | null): Promise<void> {
   if (!ATHLTCameraNative) return;
-  return ATHLTCameraNative.setExerciseStandard(standard !== null ? JSON.stringify(standard) : null);
+  return callNative<void>('setExerciseStandard', undefined, standard !== null ? JSON.stringify(standard) : null);
 }
 
 // Passes the full exercise definition (from constants/exerciseDefinitions.ts) to
@@ -203,47 +223,47 @@ export async function setExerciseStandard(standard: Record<string, unknown> | nu
 // Pass null for exercises not yet in EXERCISE_DEFINITIONS; Swift fallback stays active.
 export async function setExerciseDefinition(definition: Record<string, unknown> | null): Promise<void> {
   if (!ATHLTCameraNative) return;
-  return ATHLTCameraNative.setExerciseDefinition(definition !== null ? JSON.stringify(definition) : null);
+  return callNative<void>('setExerciseDefinition', undefined, definition !== null ? JSON.stringify(definition) : null);
 }
 
 // ─── Skeleton overlay ─────────────────────────────────────────────────────────
 
 export async function setSkeletonVisible(enabled: boolean): Promise<void> {
   if (!ATHLTCameraNative) return;
-  return ATHLTCameraNative.setSkeletonVisible(enabled);
+  return callNative<void>('setSkeletonVisible', undefined, enabled);
 }
 
 // ─── Mode control ─────────────────────────────────────────────────────────────
 
 export async function setMode(mode: 'tracking' | 'idle'): Promise<void> {
   if (!ATHLTCameraNative) return;
-  return ATHLTCameraNative.setMode(mode);
+  return callNative<void>('setMode', undefined, mode);
 }
 
 // ─── Camera flip ──────────────────────────────────────────────────────────────
 
 export async function flipCamera(): Promise<{ position: 'front' | 'back' }> {
   if (!ATHLTCameraNative) return { position: 'back' };
-  return ATHLTCameraNative.flipCamera();
+  return callNative<{ position: 'front' | 'back' }>('flipCamera', { position: 'back' });
 }
 
 // ─── Diagnostic mode ──────────────────────────────────────────────────────────
 
 export async function setDiagnosticMode(enabled: boolean): Promise<void> {
   if (!ATHLTCameraNative) return;
-  return ATHLTCameraNative.setDiagnosticMode(enabled);
+  return callNative<void>('setDiagnosticMode', undefined, enabled);
 }
 
 // ─── Tracking ─────────────────────────────────────────────────────────────────
 
 export async function startTracking(): Promise<void> {
   if (!ATHLTCameraNative) return;
-  return ATHLTCameraNative.startTracking();
+  return callNative<void>('startTracking', undefined);
 }
 
 export async function stopTracking(): Promise<SessionStats> {
   if (!ATHLTCameraNative) return { reps: 0, goodReps: 0, videoUri: null };
-  return ATHLTCameraNative.stopTracking();
+  return callNative<SessionStats>('stopTracking', { reps: 0, goodReps: 0, videoUri: null } as SessionStats);
 }
 
 // ─── Video-file analysis (Phase 2) ─────────────────────────────────────────────
@@ -271,12 +291,7 @@ export async function analyzeVideoFile(
   orientationOverride?: 'up' | 'down' | 'left' | 'right'
 ): Promise<{ success: boolean; frames?: number; reps?: number; goodReps?: number; error?: string }> {
   if (!ATHLTCameraNative) return { success: false, error: 'native module not available' };
-  return ATHLTCameraNative.analyzeVideoFile(
-    uri,
-    exerciseId,
-    definition !== null ? JSON.stringify(definition) : null,
-    orientationOverride ?? null
-  );
+  return callNative('analyzeVideoFile', { success: false, error: 'native module not available' } as any, uri, exerciseId, definition !== null ? JSON.stringify(definition) : null, orientationOverride ?? null);
 }
 
 // ─── Events ───────────────────────────────────────────────────────────────────
@@ -287,42 +302,42 @@ export function addRepListener(
   callback: (rep: RepEvent) => void
 ): EventSubscription {
   if (!nativeEmitter) return { remove: () => {} };
-  return nativeEmitter.addListener('onRepDetected', callback);
+  return safeListen('onRepDetected', callback);
 }
 
 export function addDebugStatsListener(
   callback: (event: DebugStatsEvent) => void
 ): EventSubscription {
   if (!nativeEmitter) return { remove: () => {} };
-  return nativeEmitter.addListener('onDebugStats', callback);
+  return safeListen('onDebugStats', callback);
 }
 
 export function addCameraStateListener(
   callback: (event: CameraStateEvent) => void
 ): EventSubscription {
   if (!nativeEmitter) return { remove: () => {} };
-  return nativeEmitter.addListener('onCameraState', callback);
+  return safeListen('onCameraState', callback);
 }
 
 export function addErrorListener(
   callback: (err: { message: string }) => void
 ): EventSubscription {
   if (!nativeEmitter) return { remove: () => {} };
-  return nativeEmitter.addListener('onError', callback);
+  return safeListen('onError', callback);
 }
 
 export function addSetupStatusListener(
   callback: (event: SetupStatusEvent) => void
 ): EventSubscription {
   if (!nativeEmitter) return { remove: () => {} };
-  return nativeEmitter.addListener('onSetupStatus', callback);
+  return safeListen('onSetupStatus', callback);
 }
 
 export function addCalibrationStatusListener(
   callback: (event: CalibrationStatusEvent) => void
 ): EventSubscription {
   if (!nativeEmitter) return { remove: () => {} };
-  return nativeEmitter.addListener('onCalibrationStatus', callback);
+  return safeListen('onCalibrationStatus', callback);
 }
 
 /** Emitted after each rep (form + planarity values) and after calibration. */
@@ -334,7 +349,7 @@ export function addDebugLogListener(
   callback: (event: DebugLogEvent) => void
 ): EventSubscription {
   if (!nativeEmitter) return { remove: () => {} };
-  return nativeEmitter.addListener('onDebugLog', callback);
+  return safeListen('onDebugLog', callback);
 }
 
 // ─── Module-level debug log buffer ─────────────────────────────────────────────
@@ -349,7 +364,7 @@ export function addDebugLogListener(
 const MAX_DEBUG_LOG_LINES = 4000;
 let debugLogBuffer: string[] = [];
 if (nativeEmitter) {
-  nativeEmitter.addListener('onDebugLog', (e: DebugLogEvent) => {
+  safeListen('onDebugLog', (e: DebugLogEvent) => {
     debugLogBuffer.push(e.message);
     if (debugLogBuffer.length > MAX_DEBUG_LOG_LINES) {
       debugLogBuffer = debugLogBuffer.slice(-MAX_DEBUG_LOG_LINES);

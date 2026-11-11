@@ -40,7 +40,7 @@ import { muscleRanksBaseJs } from '../lib/muscleRanksInject';
 import { allSetsBaseJs } from '../lib/allSetsInject';
 import { postLag } from '../lib/postLag';
 import { HAPTIC_CLICK_JS } from '../lib/hapticClick';
-import { hapticKind, hapticLight } from '../lib/haptics';
+import { hapticKind, hapticSelect } from '../lib/haptics';
 import { NO_ZOOM_JS } from '../lib/noZoom';
 
 export type WarmKind = 'recap' | 'repfeedback' | 'ranks' | 'allsets';
@@ -459,7 +459,7 @@ export default function WarmSurfaces() {
 // page's own buttons used to send.
 const MIN_TAP = 44;
 function GlassChrome({ k, c }: { k: WarmKind; c: Chrome }) {
-  const send = (type: string) => { hapticLight(); handlers[k]?.({ type }); };
+  const send = (type: string) => { hapticSelect(); handlers[k]?.({ type }); };
   const box = (r: Rect, minW: number) => {
     const w = Math.max(minW, r.w + 6), h = Math.max(MIN_TAP, r.h + 6);
     return { position: 'absolute' as const, left: r.l + r.w / 2 - w / 2, top: r.t + r.h / 2 - h / 2, width: w, height: h };

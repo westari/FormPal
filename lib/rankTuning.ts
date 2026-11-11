@@ -13,7 +13,7 @@
  *  - Progress is "decayed volume" (reps, each worth less as it ages). A constant training rate can never climb past
  *    rate x HALF_LIFE / ln2, so the top ranks sit close to that ceiling: only people who keep training hard for a
  *    long time get there, and a casual user's ceiling is simply lower (never too easy).
- *  - The gap between one rank and the next grows at every step (75, 385, 720, 980, 1190, 1350 reps between ranks), so the same 30 reps move the progress bar a lot at Bronze and only a little at Gold or Diamond: fast
+ *  - The gap between one rank and the next grows at every step (150, 460, 720, 980, 1190, 1350 reps between ranks), so the same 30 reps move the progress bar a lot at Bronze and only a little at Gold or Diamond: fast
  *    at the bottom, a slow grind at the top.
  *  - Good form is a second gate: the share of reps with good form must clear a bar that rises with every rank, so
  *    a high rank also means clean reps, not just a lot of them.
@@ -24,9 +24,10 @@ import type { Tier } from './sessionLog';
 export const DECAY_HALF_LIFE_DAYS = 240;
 
 /**
- * 2026-11-11: Bronze moved from 50 to 150 (every higher tier moved up by 100, same gaps). 30 good reps on one muscle from Unranked
- * used to read +60% (Bronze at 50); it now reads +20% (30 of 150). A normal user (3 workouts a week, one 30-rep slot per muscle per
- * workout) reaches the first Bronze in 5 workouts, about 1.7 weeks. See `node scripts/sim-rank-progress.js` for the table.
+ * There is NO "Unranked". Everyone starts at Bronze 0%, so Bronze needs 0 and the first rank-up is Bronze -> Silver. Silver is at
+ * 150 decayed reps (the number the old first rank, Bronze, was at): 30 good reps on one muscle read +20% (30 of 150), and a normal
+ * user (3 workouts a week, one 30-rep slot per muscle per workout) ranks up to Silver in 5 workouts, about 1.7 weeks. Gold and above
+ * are unchanged. See `node scripts/sim-rank-progress.js` for the table.
  *
  * Decayed reps needed for each tier (PLACEHOLDERS). Highest first, as tierFromVolume expects.
  * A user training a muscle 3x a week (30 reps each) reaches Silver in week 2, Gold week 7, Platinum month 4, Diamond
@@ -39,9 +40,16 @@ export const VOLUME_THRESHOLDS: [Tier, number][] = [
   ['diamond',  2310],
   ['platinum', 1330],
   ['gold',      610],
-  ['silver',    225],
-  ['bronze',    150],
+  ['silver',    150],
+  ['bronze',      0],
 ];
+
+/**
+ * A muscle counts toward the OVERALL rank once it has real training: this many decayed reps (Silver's bar). Without it, a muscle
+ * that only gets a few helper reps (abs from push-ups) sits at Bronze for ever and holds the overall rank at Bronze for everyone.
+ * Before any muscle has this much, the overall bar is the average of everything trained, so it moves from the first workout.
+ */
+export const OVERALL_MIN_VOLUME: number = VOLUME_THRESHOLDS.find(([t]) => t === 'silver')![1];
 
 /** Share of judged reps that must be good form for each tier (PLACEHOLDERS), highest first. */
 export const QUALITY_THRESHOLDS: [Tier, number][] = [

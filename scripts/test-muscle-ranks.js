@@ -106,7 +106,7 @@ console.log('--- data (real sessionLog + MuscleTierMap standing) ---');
 for (const [name, sc] of Object.entries(SCENARIOS)) {
   const { payload: p, standingAfter } = sc;
   console.log(`  ${name}: rank=${p.rank.label}->${p.rank.next} ${p.rank.pct}% (+${p.rank.gained}% today)  rows=${p.hits.map(h => h.name + ' ' + h.gain).join(' | ') || '(none)'}`);
-  check(`${name}: rank label is the real standing`, p.rank.label === (standingAfter ? standingAfter.tier[0].toUpperCase() + standingAfter.tier.slice(1) : 'Unranked'));
+  check(`${name}: rank label is the real standing`, p.rank.label === (standingAfter ? standingAfter.tier[0].toUpperCase() + standingAfter.tier.slice(1) : 'Bronze'));
   {
     // ── the page's numbers, recomputed INDEPENDENTLY from the raw tiers ──
     // every muscle's progress is its OWN progress toward ITS next tier (rank-ups count as tier*100 + progress)
@@ -114,23 +114,22 @@ for (const [name, sc] of Object.entries(SCENARIOS)) {
     const worked = data.workedMuscles(sc.entries);
     const credit = Object.fromEntries(worked.map(w => [w.muscle, w.credit]));
     const universe = [...new Set([...Object.keys(sc.tiersAfter), ...worked.map(w => w.muscle)])];
-    // below Bronze: progress toward Bronze from ALL the training the muscle has had (capped at 99%), before and after today
-    const creditOf = (sessions) => Object.fromEntries(data.workedMuscles(sessions).map(w => [w.muscle, w.credit]));
-    const credAll = creditOf(sc.all), credPrior = creditOf(sc.prior);
-    const BRONZE = sessionLog.VOLUME_THRESHOLDS.find(([t]) => t === 'bronze')[1]; // the Bronze bar in reps (150 since 2026-11-11, was 50)
-    const unrA = (m) => Math.min(99, (credAll[m] || 0) / BRONZE * 100), unrB = (m) => Math.min(99, (credPrior[m] || 0) / BRONZE * 100);
+    // there is no Unranked: a muscle with no data is Bronze 0%
+    const unrA = () => 0, unrB = () => 0;
     const progA = (m) => sc.tiersAfter[m] ? data.muscleProgressPct(sc.tiersAfter[m]) : unrA(m);
-    const absA = (m) => sc.tiersAfter[m] ? TIERIDX[sc.tiersAfter[m].tier] * 100 + data.muscleProgressPct(sc.tiersAfter[m]) : unrA(m) - 100;
-    const absB = (m) => sc.tiersBefore[m] ? TIERIDX[sc.tiersBefore[m].tier] * 100 + data.muscleProgressPct(sc.tiersBefore[m]) : unrB(m) - 100;
+    const absA = (m) => sc.tiersAfter[m] ? TIERIDX[sc.tiersAfter[m].tier] * 100 + data.muscleProgressPct(sc.tiersAfter[m]) : unrA(m);
+    const absB = (m) => sc.tiersBefore[m] ? TIERIDX[sc.tiersBefore[m].tier] * 100 + data.muscleProgressPct(sc.tiersBefore[m]) : unrB(m);
     const gain = (m) => Math.min(99.9, Math.max(0, r1(absA(m)) - r1(absB(m))));
     // the overall rank position, recomputed independently: weakest tier * 100 + (average position of the ranked muscles - weakest tier * 100)
     const ovAbs = (tiers) => {
-      const ks = Object.keys(tiers); if (!ks.length) return 0;
+      let ks = Object.keys(tiers); if (!ks.length) return 0;
+      const SIL = sessionLog.VOLUME_THRESHOLDS.find(([t]) => t === 'silver')[1];
+      const est = ks.filter((m) => tiers[m].volume >= SIL); if (est.length) ks = est; // only muscles with real training set the overall rank
       const minIdx = Math.min(...ks.map(m => TIERIDX[tiers[m].tier]));
       const mean = ks.reduce((a, m) => a + TIERIDX[tiers[m].tier] * 100 + data.muscleProgressPct(tiers[m]), 0) / ks.length;
       return minIdx * 100 + Math.max(0, Math.min(99.9, mean - minIdx * 100));
     };
-    const ranked = Object.keys(sc.tiersAfter);
+    const ranked = (() => { const ks = Object.keys(sc.tiersAfter); const SIL = sessionLog.VOLUME_THRESHOLDS.find(([t]) => t === 'silver')[1]; const est = ks.filter((m) => sc.tiersAfter[m].volume >= SIL); return est.length ? est : ks; })();
     const avgA = ranked.length && !(sc.standingAfter && sc.standingAfter.atTop)
       ? r1(ovAbs(sc.tiersAfter) - 100 * Math.min(...ranked.map(m => TIERIDX[sc.tiersAfter[m].tier])))
       : r1(universe.reduce((a, m) => a + progA(m), 0) / universe.length);
@@ -155,7 +154,7 @@ for (const [name, sc] of Object.entries(SCENARIOS)) {
   const sc = build(prior, today);
   const p = sc.payload;
   console.log(`  user report repro: ${p.rank.label} ${p.rank.pctLabel}  today +${p.rank.gained}%  rows=${p.hits.map(h => h.name + ' ' + h.gain).join(' | ')}`);
-  check('REPORT: the tiers are what the report describes (shoulders already above the overall rank)', sc.tiersAfter.shoulders.tier === 'silver' && sc.standingAfter.tier === 'bronze', `${sc.tiersAfter.shoulders.tier} vs overall ${sc.standingAfter.tier}`);
+  check('REPORT: the tiers are what the report describes (shoulders already above the overall rank)', sc.tiersAfter.shoulders.tier === 'silver' && sc.tiersAfter.triceps.tier === 'bronze' && sc.standingAfter.tier === 'silver', `${sc.tiersAfter.shoulders.tier} vs overall ${sc.standingAfter.tier} (triceps only got helper reps, so it does not hold the overall rank back)`);
   { const g = (n) => { const h = p.hits.find(x => x.name === n); return h ? parseFloat(h.gain.replace(/[+%]/g, '')) : null; };
     check('REPORT FIXED: Shoulders and Triceps both show a real gain', g('Shoulders') > 0 && g('Triceps') > 0, p.hits.map(h => h.name + ' ' + h.gain).join(' ')); }
   check('REPORT FIXED: the overall gain is above zero and equals the sum of the rows', parseFloat(p.rank.gained) > 0 && Math.round(parseFloat(p.rank.gained) * 10) === (p.hits.reduce((a, h) => a + Math.round(parseFloat(h.gain.replace(/[+%]/g, '')) * 10), 0)), p.rank.gained);
@@ -178,20 +177,20 @@ for (const [name, sc] of Object.entries(SCENARIOS)) {
   const sc = build(prior, today);
   const bic = sc.payload.hits.find(h => h.name === 'Biceps');
   // 30 reps before (60% toward Bronze), 39 after (78%): the row is +18.0, not today's 9 reps alone (+18 coincides) - use a case that tells them apart below
-  check('below Bronze: biceps (117 of 150 reps ever) is not ranked yet and its row is the gain in ALL-time progress (+18.0%)', !sc.tiersAfter.biceps && bic && bic.gain === '+18.0%', bic && bic.gain);
+  check('first rank: biceps (117 of the 150 reps to Silver) is Bronze 78% and its row is the gain in ALL-time progress (+18.0%)', sc.tiersAfter.biceps.tier === 'bronze' && bic && bic.gain === '+18.0%', bic && bic.gain);
   const big = build([mk(120, NOW - 4 * DAY)], [mk(27, NOW)]); // 120 -> 147 reps: 80% -> 98%
   const bic2 = big.payload.hits.find(h => h.name === 'Biceps');
-  check('below Bronze: 147 of 150 reps shows 98% (never 100% until Bronze is real) - row +18.0%', !big.tiersAfter.biceps && bic2 && bic2.gain === '+18.0%', bic2 && bic2.gain);
+  check('first rank: 147 of 150 reps shows 98% and still Bronze (never 100% until Silver is real) - row +18.0%', big.tiersAfter.biceps.tier === 'bronze' && bic2 && bic2.gain === '+18.0%', bic2 && bic2.gain);
   const cross = build([mk(135, NOW - 4 * DAY)], [mk(90, NOW)]); // crosses Bronze today: a positive, bounded gain
   const bic3 = cross.payload.hits.find(h => h.name === 'Biceps');
-  check('crossing Bronze today gives a positive gain (not a drop from 99% to ~0) and never reads over +99.9%', !!cross.tiersAfter.biceps && bic3 && parseFloat(bic3.gain) > 0 && parseFloat(bic3.gain) <= 99.9, bic3 && bic3.gain);
+  check('crossing Silver today gives a positive gain (not a drop from 99% to ~0) and never reads over +99.9%', !!cross.tiersAfter.biceps && bic3 && parseFloat(bic3.gain) > 0 && parseFloat(bic3.gain) <= 99.9, bic3 && bic3.gain);
 }
 {
   // 30 good reps on ONE muscle from Unranked read +60% (Bronze at 50 reps). Now about +20% (30 of 150).
   const bi = build([], [{ ts: NOW, exerciseId: 'curl', displayName: 'Curl', reps: 30, goodReps: 30, pct: 100, formChecked: true }]);
   const b = bi.payload.hits.find((h) => h.name === 'Biceps');
-  console.log('      30 good bicep curls from Unranked: ' + (b && b.gain));
-  check('30 good reps on one muscle from Unranked = about +20% (was +60%)', !!b && Math.abs(parseFloat(b.gain.replace(/[+%]/g, '')) - 20) <= 0.5, b && b.gain);
+  console.log('      30 good bicep curls from the start (Bronze 0%): ' + (b && b.gain));
+  check('30 good reps on one muscle from Bronze 0% = about +20% (was +60%)', !!b && Math.abs(parseFloat(b.gain.replace(/[+%]/g, '')) - 20) <= 0.5, b && b.gain);
 }
 // ── Per-exercise muscle weights (PLACEHOLDERS, constants/muscleWeights.ts): main muscle most, helpers much less ─────────
 {
@@ -225,7 +224,7 @@ check('rows carry the real Flaticon art', A.hits.every(h => h.icon && h.icon.sta
   // gain really is after - before for that muscle
   const sc = SCENARIOS['shoulders+triceps (bronze)'];
   // before today the shoulders had 40 reps of Bronze's 150 (unranked, 26.7% toward Bronze = about -73.3 on the scale just below Bronze's 0)
-  const exp = 30 / sessionLog.VOLUME_THRESHOLDS.find(([t]) => t === 'bronze')[1] * 100; // 30 shoulder-press reps today, still below Bronze: 30 of the 150-rep bar
+  const exp = 30 / sessionLog.VOLUME_THRESHOLDS.find(([t]) => t === 'silver')[1] * 100; // 30 shoulder-press reps today, still below Bronze: 30 of the 150-rep bar
   const shown = parseFloat(A.hits.find(h => h.name === 'Shoulders').gain.replace(/[+%]/g, ''));
   check('Shoulders +% equals (after - before) progress from the logs', Math.abs(shown - exp) <= 0.51, `shown ${shown} expected ${exp.toFixed(2)}`);
 }
@@ -329,6 +328,17 @@ check('rows carry the real Flaticon art', A.hits.every(h => h.icon && h.icon.sta
     check(`${name}: layout identical at reveal and 2.2s later (nothing shifts)`, JSON.stringify(atReady.rects) === JSON.stringify(later.rects) && atReady.transform === later.transform);
     await page.screenshot({ path: path.join(ROOT, '.scratch', `muscle-${name.replace(/[^a-z0-9]+/gi, '-')}.png`) });
     await page.close();
+  }
+  {
+    // there is no "Unranked": everyone starts at Bronze 0%, and the first rank-up is Bronze -> Silver
+    const empty = data.buildMuscleRanksPayload({ entries: [], tiersBefore: {}, tiersAfter: {}, standingBefore: null, standingAfter: null, labels: MTM.MUSCLE_LABELS, iconFor, emblem: null, history: [] });
+    check('NO UNRANKED: a brand-new user (no training at all) reads Bronze, next Silver, 0%', empty.rank.label === 'Bronze' && empty.rank.next === 'Silver' && empty.rank.has === true && empty.rank.pct === 0, `${empty.rank.label} -> ${empty.rank.next} ${empty.rank.pct}%`);
+    const first = build([], [entry('curl', 30, 30, 0)]);
+    check('NO UNRANKED: the very first workout starts from Bronze 0% (30 good reps on one muscle = +20.0% toward Silver)', first.payload.rank.label === 'Bronze' && first.payload.rank.next === 'Silver' && first.payload.hits.some((h) => h.name === 'Biceps' && h.gain === '+20.0%'), first.payload.hits.map((h) => h.name + ' ' + h.gain).join(' | '));
+    check('NO UNRANKED: the Bronze bar is 0 reps and Silver is the first bar to cross', sessionLog.VOLUME_THRESHOLDS.find(([t]) => t === 'bronze')[1] === 0 && sessionLog.VOLUME_THRESHOLDS.find(([t]) => t === 'silver')[1] === 150);
+    const files = ['lib/muscleRanksData.ts', 'lib/sessionLog.ts', 'lib/rankTuning.ts', 'components/MuscleTierMap.tsx', 'lib/muscleRanksInject.ts', 'lib/recapInject.ts', 'app/recap.tsx'];
+    const hits = files.filter((f) => /unranked/i.test(fs.readFileSync(path.join(__dirname, '..', f), 'utf8').replace(/no "Unranked"|no Unranked|There is no "Unranked"|no .Unranked./gi, '')));
+    check('NO UNRANKED: the word "Unranked" is not a label or state in any rank file', hits.length === 0, hits.join(', '));
   }
   await browser.close();
   console.log(failed ? `\n${failed} FAILED` : '\nall passed');

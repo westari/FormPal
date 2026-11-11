@@ -3,6 +3,8 @@ import {
   View, Text, StyleSheet, Animated, Pressable, ScrollView, Share, Platform, Easing, PanResponder, Image, AppState,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useCameraErrorGuard } from '../components/CameraErrorGuard';
+export { ErrorBoundary } from '../components/CameraErrorGuard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 import { BlurView } from 'expo-blur';
@@ -49,7 +51,7 @@ import { NO_ZOOM_JS } from '../lib/noZoom';
 import { shortCue } from '../lib/shortCue';
 import { createSetupGuide, needsLockout, SETUP_TUNING, type SetupDecision } from '../lib/setupGuide';
 import { createAttemptDetector, type DetectorEvent } from '../lib/attemptDetector';
-import { hapticError, hapticLight, hapticMedium, hapticSelect, hapticWarning } from '../lib/haptics';
+import { hapticError, hapticMain, hapticSelect, hapticWarning } from '../lib/haptics';
 import { capMeterTarget, isFrameHint, showVerdict, showFrameHint, JUDGED_QUIET_MS, meterTarget, createMeterSmoother, trackingIsHigh, NO_PERSON_CUE, createSteadyGate, READY_STEADY_MS, createCounterSignal, READY_COUNTER_WINDOW_MS, READY_COUNTER_MIN_SAMPLES, type CounterSignal } from '../lib/liveTracking';
 import { useAudioSettingsStore } from '../store/audioSettingsStore';
 import { useFormTheme, type FormTheme } from '../lib/activeTheme';
@@ -295,8 +297,8 @@ function CueGlass({ text, ready }: { text: string; ready?: boolean }) {
         {ready
           ? <SymbolView name="checkmark.circle.fill" size={22} tintColor={C.good} type="monochrome" style={{ width: 22, height: 22 }} />
           : <Image source={SPARKLE_DUO} style={s.trackingCueIcon} />}
-        {/* one line, never wrapped: a wrapped line hangs under the icon and looks indented. Long messages shrink to fit. */}
-        <Text style={s.trackingCueText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{text}</Text>
+        {/* the original layout: stars on the left, the cue beside them (a long cue wraps to a second line beside the stars, never under them) */}
+        <Text style={s.trackingCueText} numberOfLines={2}>{text}</Text>
       </View>
     </GlassPanel>
   );
@@ -566,7 +568,7 @@ function RepCounterIntro({ topInset, bottomInset, onContinue }: {
         <Text style={ri.h1}>Some exercises{'\n'}only count reps</Text>
         <Text style={ri.sub}>No form check on this one, just the count. Nothing here affects your rank.</Text>
       </View>
-      <Pressable style={ri.cta} onPress={() => { hapticMedium(); onContinue(); }}>
+      <Pressable style={ri.cta} onPress={() => { hapticMain(); onContinue(); }}>
         <Text style={ri.ctaTxt}>Continue</Text>
       </Pressable>
     </View>
@@ -650,6 +652,7 @@ function TrackingMeter({ target, show, top, onHighChange, counter, counterActive
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function FormCheckScreen() {
   const router = useRouter();
+  useCameraErrorGuard(); // any uncaught error on this screen closes it back to the previous one (never a stuck error page)
   // The screen must not dim or lock while the camera is on (released when this screen unmounts).
   // The screen must never dim or lock while the camera is on. Why the first fix did not work on the phone (the [AWAKE] lines said
   // "held" the whole time, yet the screen dimmed): expo-keep-awake only switches the iOS idle timer off when its FIRST tag is added.
@@ -1165,7 +1168,7 @@ export default function FormCheckScreen() {
       setTimeout(() => setJudgedTick(t => t + 1), JUDGED_QUIET_MS + 50);
       flashAnim.setValue(1);
       Animated.timing(flashAnim, { toValue: 0, duration: 700, useNativeDriver: true }).start();
-      (rep.good ? hapticLight() : hapticWarning()); // rep counted = light tap, rejected (the X) = warning
+      (rep.good ? hapticSelect() : hapticWarning()); // rep counted = light tap, rejected (the X) = warning
       if (repCounterOnly) {
         // Reps only — no ✓/✗ orb, no corrective speech. Just a rep tick + the
         // milestone count announcement, driven by total reps.
@@ -1317,7 +1320,7 @@ export default function FormCheckScreen() {
         setGoodReps(nativeGoodRef.current + softGoodRef.current);
         lastJudgedAt.current = Date.now();
         setFeedback({ good: true, reason: '', seq: ++feedbackSeq.current });
-        hapticLight();
+        hapticSelect();
         const timeSec = startTimestamp.current != null ? (Date.now() - startTimestamp.current) / 1000 : 0;
         repEvents.current.push({ timeSec, good: true, reason: '' });
         continue;
@@ -1698,7 +1701,7 @@ export default function FormCheckScreen() {
           fill) everywhere else — see LiquidGlass.tsx's own header comment. */}
       <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
         <LiquidGlassButton
-          onPress={() => { hapticLight(); void handleBack(); }}
+          onPress={() => { hapticSelect(); void handleBack(); }}
           radius={20}
           colorScheme="dark"
           fallbackColor="rgba(40,41,48,0.55)"
@@ -1736,7 +1739,7 @@ export default function FormCheckScreen() {
             </LiquidGlassButton>
           )}
           <LiquidGlassButton
-            onPress={() => { hapticLight(); handleFlip(); }}
+            onPress={() => { hapticSelect(); handleFlip(); }}
             radius={20}
             colorScheme="dark"
             fallbackColor="rgba(40,41,48,0.55)"
@@ -1867,7 +1870,7 @@ export default function FormCheckScreen() {
           // started, so a tap during setup is a no-op instead of calling
           // those in a state they don't expect.
           <Pressable
-            onPress={isTracking ? () => { hapticMedium(); void handleStop(); } : undefined}
+            onPress={isTracking ? () => { hapticMain(); void handleStop(); } : undefined}
             onPressIn={() => Animated.spring(stopScale, { toValue: 0.88, useNativeDriver: true, speed: 30, bounciness: 0 }).start()}
             onPressOut={() => Animated.spring(stopScale, { toValue: 1, useNativeDriver: true, speed: 14, bounciness: 9 }).start()}
             hitSlop={12}
@@ -2025,10 +2028,10 @@ function SessionLogReview({
           <Text style={r.headerTitle}>SESSION LOG</Text>
           <Text style={r.headerSub}>{reps} reps · {goodReps} good · {log.length} lines</Text>
         </View>
-        <Pressable style={r.shareBtn} onPress={() => { hapticLight(); shareLog(); }}>
+        <Pressable style={r.shareBtn} onPress={() => { hapticSelect(); shareLog(); }}>
           <Text style={r.shareBtnTxt}>Share</Text>
         </Pressable>
-        <Pressable style={r.doneBtn} onPress={() => { hapticMedium(); onDone(); }}>
+        <Pressable style={r.doneBtn} onPress={() => { hapticMain(); onDone(); }}>
           <Text style={r.doneBtnTxt}>Done</Text>
         </Pressable>
       </View>
@@ -2145,7 +2148,7 @@ const s = StyleSheet.create({
   // shadowed text "doesn't feel clean at all." Same GlassPanel surface the
   // setup-success "Ready. Go!" card already uses.
   trackingCueCard:  { alignSelf: 'center', maxWidth: 340 },
-  trackingCueInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingHorizontal: 22, paddingVertical: 16 },
+  trackingCueInner: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 26, paddingVertical: 16 },
   trackingCueIcon:  { width: 22, height: 22 },
   // Messages are now short, framing-only instructions (see
   // lib/repDiagnostics.ts — "Move back", "Hold still", etc.), so a bigger
@@ -2153,7 +2156,7 @@ const s = StyleSheet.create({
   // "the cues need to be a bit bigger".
   trackingCueText: {
     fontFamily: 'PlusJakartaSans_700Bold', fontSize: 24, lineHeight: 28,
-    color: '#fff', letterSpacing: 0.1, flexShrink: 1, textAlign: 'center',
+    color: '#fff', letterSpacing: 0.1, flexShrink: 1,
   },
 
   // Rep count — bare, no frame; own shadow for legibility over the camera.

@@ -22,6 +22,7 @@ const ROOT = path.join(__dirname, '..');
 let failed = 0;
 const check = (n, ok, d) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${d ? '  -> ' + d : ''}`); if (!ok) failed++; };
 const pe = require('../lib/planEdit.ts');
+const { RENAME_ROW_KEY } = require('../lib/editSheetBridge.ts');
 const { buildTrainData } = require('../lib/trainData.ts');
 const { athltSetDataJs } = require('../lib/dcLogicPatch.ts');
 
@@ -52,6 +53,17 @@ console.log('--- lib/planEdit.ts ---');
   check('a name that is not a tracked exercise is ignored, not invented', pe.applyEditRows(plan, 'w1', [...rows(plan.workouts[1]), ['Basket weaving', '3 × 10']]) === null);
   check('no change -> null (nothing to save)', pe.applyEditRows(plan, 'w1', rows(plan.workouts[1])) === null);
   check('unknown workout id -> null', pe.applyEditRows(plan, 'nope', []) === null);
+  {
+    const keep = rows(plan.workouts[1]);
+    const rn = pe.applyEditRows(plan, 'w1', [...keep, [RENAME_ROW_KEY, '  Push Day  ']]);
+    check('RENAME: the name row renames the workout (trimmed) and keeps every exercise as it was', rn && rn.workouts[1].splitLabel === 'Push Day' && rn.workouts[1].exercises === plan.workouts[1].exercises || (rn && rn.workouts[1].splitLabel === 'Push Day' && rn.workouts[1].exercises.every((e, i) => e === plan.workouts[1].exercises[i])), rn && rn.workouts[1].splitLabel);
+    check('RENAME: the other workouts keep their names', rn.workouts[0].splitLabel === 'Lower Body' && rn.workouts[2].splitLabel === 'Full Body');
+    check('RENAME: the name row is never treated as an exercise', rn.workouts[1].exercises.length === plan.workouts[1].exercises.length);
+    check('RENAME: an empty or unchanged name changes nothing (null)', pe.applyEditRows(plan, 'w1', [...keep, [RENAME_ROW_KEY, '   ']]) === null && pe.applyEditRows(plan, 'w1', [...keep, [RENAME_ROW_KEY, 'Upper Body']]) === null);
+    const both = pe.applyEditRows(plan, 'w1', [...keep.filter(r => r[0] !== 'Bicep Curl'), [RENAME_ROW_KEY, 'Arms']]);
+    check('RENAME: a rename together with an exercise change saves both', both.workouts[1].splitLabel === 'Arms' && both.workouts[1].exercises.length === 3);
+    check('RENAME: a very long name is cut to 40 characters', pe.applyEditRows(plan, 'w1', [...keep, [RENAME_ROW_KEY, 'x'.repeat(80)]]).workouts[1].splitLabel.length === 40);
+  }
   const d = pe.applyEditRows(plan, 'w1', [['Push-up', '3 × 12'], ['Push-up', '3 × 12']]);
   check('the same exercise can be added a second time', d && d.workouts[1].exercises.length === 2 && d.workouts[1].exercises[1].exerciseId === 'pushup');
   const ex2 = pe.addableExercises();
@@ -81,6 +93,9 @@ const AS = { __esModule: true, default: { getItem: async (k) => (mem.has(k) ? me
     check('saveWorkoutEdit changes the plan in storage', saved === true && stored.workouts[1].exercises.map(e => e.displayName).join() === 'Push-up,Pull-up,Lunge', stored.workouts[1].exercises.map(e => e.displayName).join());
     check('...and refreshes the plan store the workout screen reads', usePlanStore.getState().plan.workouts[1].exercises.length === 3);
     check('...and goes through the existing savePlan (cloud mirror was called)', cloud.length >= 2);
+    const renamedOk = await saveWorkoutEdit('w2', [['Bodyweight Squat', '3 × 12'], ['Push-up', '3 × 12'], [RENAME_ROW_KEY, 'Leg Day']]);
+    const st2 = await loadPlan();
+    check('RENAME: saved to storage AND the plan store, so every screen (Home, Train, My workouts, the workout) shows it', renamedOk === true && st2.workouts[2].splitLabel === 'Leg Day' && usePlanStore.getState().plan.workouts[2].splitLabel === 'Leg Day');
     check('saving the same thing again changes nothing', (await saveWorkoutEdit('w1', [['Push-up', '3 × 12'], ['Pull-up', '3 × 6'], ['Lunge', '3 × 10']])) === false);
   } catch (e) { check('plan storage test could run', false, e.message.split('\n')[0]); }
   Module._load = function (r) { if (/constants\/api$/.test(r)) return { MYPAL_API_URL: 'http://localhost/none' }; if (r === 'expo-asset') return { Asset: {} }; return prev.apply(this, arguments); };
@@ -177,6 +192,26 @@ const AS = { __esModule: true, default: { getItem: async (k) => (mem.has(k) ? me
     await closeSheet(); await p.waitForTimeout(900);
     const s2 = msgs.filter(m => m.type === 'saveEdit');
     check('Train: tomorrow\'s change is saved to workout w2', s2.length === 2 && s2[1].wid === 'w2' && s2[1].rows.length === 1, JSON.stringify(s2[1]));
+    // RENAME on the real page: the sheet has a "Workout name" box; a new name is saved with the rows
+    await p.evaluate(() => { const r = [...document.querySelectorAll('div[data-scroll]')].find(x => x.style.overflowX === 'auto' && x.children.length === 7); r.scrollLeft = 99999; });
+    await p.waitForTimeout(400);
+    await tapSel(p, editTomorrow);
+    const nb = await p.evaluate(() => { const i = document.querySelector('[data-edit-name] input'); if (!i) return null; const sh = i.closest('div[style*="620px"]'); const sr = sh.getBoundingClientRect(), ir = i.getBoundingClientRect(); return { v: i.value, fs: getComputedStyle(i).fontSize, inside: ir.top >= sr.top && ir.bottom <= sr.bottom && ir.width > 150 }; });
+    check('RENAME Train: the Edit sheet has a "Workout name" box, filled with the name (Full Body), text 16px or more (no iOS zoom), inside the sheet', !!nb && nb.v === 'Full Body' && parseFloat(nb.fs) >= 16 && nb.inside, JSON.stringify(nb));
+    await p.screenshot({ path: path.join(ROOT, '.scratch', 'train-edit-rename.png') });
+    await p.fill('[data-edit-name] input', 'Leg Day');
+    await closeSheet(); await p.waitForTimeout(900);
+    const s3 = msgs.filter(m => m.type === 'saveEdit'), last = s3[s3.length - 1];
+    check('RENAME Train: a rename alone is saved: one saveEdit for that workout, the same exercises plus ONE name row', s3.length === 3 && last.wid === 'w2' && last.rows.length === 3 && last.rows[2][0] === RENAME_ROW_KEY && last.rows[2][1] === 'Leg Day', JSON.stringify(last));
+    plan = pe.applyEditRows(plan, 'w2', last.rows);
+    await push(p); await p.waitForTimeout(600);
+    const tomorrowCard = await p.evaluate(() => { const r = [...document.querySelectorAll('div[data-scroll]')].find(x => x.style.overflowX === 'auto' && x.children.length === 7); return r.children[6].innerText.split(String.fromCharCode(10)).join(' ').trim(); });
+    check('RENAME Train: after the save the card shows the new name', /Leg Day/.test(tomorrowCard) && !/Full Body/.test(tomorrowCard), tomorrowCard.slice(0, 60));
+    await tapSel(p, editTomorrow);
+    check('RENAME Train: reopening the sheet shows the new name in the box', (await p.evaluate(() => document.querySelector('[data-edit-name] input').value)) === 'Leg Day');
+    await p.fill('[data-edit-name] input', '');
+    await closeSheet(); await p.waitForTimeout(800);
+    check('RENAME Train: closing with an empty box (or the same name) saves nothing', msgs.filter(m => m.type === 'saveEdit').length === 3);
     await ctx.close();
   }
 
@@ -243,6 +278,19 @@ const AS = { __esModule: true, default: { getItem: async (k) => (mem.has(k) ? me
     await closeSheet(); await p.waitForTimeout(900);
     const saves2 = msgs.filter(m => m.type === 'saveEdit');
     check('Home: the added exercise is saved to the plan', saves2.length === 2 && saves2[1].rows.map(r => r[0]).join() === 'Push-up,Shoulder Press,Pull-up,Bodyweight Squat', JSON.stringify(saves2.map(x => x.rows && x.rows.length)));
+    // RENAME on Home: same sheet, same box
+    plan = pe.applyEditRows(plan, saves2[1].wid, saves2[1].rows);
+    await p.evaluate(logicJs()); await inject(p); await p.waitForTimeout(700);
+    await tapSel(p, editBtn);
+    const hv = await p.evaluate(() => { const i = document.querySelector('[data-edit-name] input'); return i ? i.value : null; });
+    check('RENAME Home: the sheet has the Workout name box filled with the current name', hv === 'Upper Body', String(hv));
+    await p.fill('[data-edit-name] input', 'Push Day');
+    await closeSheet(); await p.waitForTimeout(900);
+    const saves3 = msgs.filter(m => m.type === 'saveEdit');
+    check('RENAME Home: the new name is posted once, as the last row', saves3.length === 3 && saves3[2].rows[saves3[2].rows.length - 1][0] === RENAME_ROW_KEY && saves3[2].rows[saves3[2].rows.length - 1][1] === 'Push Day', JSON.stringify(saves3[2]));
+    plan = pe.applyEditRows(plan, saves3[2].wid, saves3[2].rows);
+    await p.evaluate(logicJs()); await inject(p); await p.waitForTimeout(700);
+    check('RENAME Home: the hero shows the new name', /^Push Day [0-9]+ min/.test(await hero()), await hero());
     await p.screenshot({ path: path.join(ROOT, '.scratch', 'home-edit-saved.png') });
     await ctx.close();
   }

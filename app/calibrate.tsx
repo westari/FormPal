@@ -20,6 +20,8 @@ import {
   View, Text, StyleSheet, ScrollView, Pressable, Share, ActivityIndicator,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useCameraErrorGuard } from '../components/CameraErrorGuard';
+export { ErrorBoundary } from '../components/CameraErrorGuard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 import GlassButton from '../components/GlassButton';
@@ -134,6 +136,7 @@ type SessionSub = 'setup' | 'recording' | 'reviewing';
 export default function CalibrateScreen() {
   const router  = useRouter();
   useKeepAwake(); // camera is on: no dimming or locking
+  useCameraErrorGuard();
   const insets  = useSafeAreaInsets();
   const params  = useLocalSearchParams<{ exercise?: string }>();
   const notLinked = !isNativeModuleLinked();

@@ -237,9 +237,9 @@ export function tierIndex(t: Tier): number { return TIER_ORDER.indexOf(t); }
 
 // Decay half-life, volume thresholds and quality thresholds: see lib/rankTuning.ts (placeholders, with the reasoning).
 
-function tierFromVolume(v: number): Tier | null {
+function tierFromVolume(v: number): Tier {
   for (const [tier, min] of VOLUME_THRESHOLDS) if (v >= min) return tier;
-  return null; // below even Bronze — not enough real training to rank at all
+  return 'bronze'; // there is no "Unranked": everyone starts at Bronze 0%
 }
 
 function tierFromQuality(q: number): Tier {
@@ -278,14 +278,9 @@ export function tierProgress(info: MuscleTierInfo): number {
   return Math.min(vol, clamp01((info.goodRatio - curQual) / (nextQual - curQual)));
 }
 
-/**
- * Progress toward Bronze (0-0.99) for a muscle that is not ranked yet, from ALL the credit-weighted reps it has ever
- * had (no decay, no "only today"). Capped just under 1 so a muscle never shows 100% until it is actually Bronze.
- * The one implementation every screen uses.
- */
-export function belowBronzeProgress(totalCredit: number): number {
-  const bronze = VOLUME_THRESHOLDS.find(([t]) => t === 'bronze')![1];
-  return Math.max(0, Math.min(0.99, totalCredit / bronze));
+/** Kept so older callers still compile. There is no "Unranked" any more (see rankTuning.ts): always 0, i.e. Bronze 0%. */
+export function belowBronzeProgress(_totalCredit: number): number {
+  return 0; // retired: there is no rank below Bronze (Bronze starts at 0 reps), so a muscle with no training sits at Bronze 0%
 }
 
 /** Credit-weighted reps per muscle over a set of sessions (every rep, judged or not, no decay). */
