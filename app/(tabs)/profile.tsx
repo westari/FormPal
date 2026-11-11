@@ -20,7 +20,8 @@ import { tabBarCover } from '../../lib/tabBarMetrics';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '../../lib/haptics';
+import { HAPTIC_PAGE_JS, hapticKind } from '../../lib/haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CONSOLE_FORWARD_JS, DC_VIEWPORT_JS, DC_NO_ZOOM_JS, DC_SETTLE_JS } from '../../lib/dcWebviewHelpers';
 import { dcLogicPatchJs, athltSetDataJs } from '../../lib/dcLogicPatch';
@@ -48,7 +49,7 @@ const ONBOARDING_KEY = 'formpal_onboarding_complete';
 const LOCATION_KEY   = 'formpal_location';
 const PROFILE_DETAILS_KEY = 'formpal_profile_details';
 
-const PROFILE_BEFORE = DC_VIEWPORT_JS + DC_NO_ZOOM_JS + CONSOLE_FORWARD_JS + DC_SETTLE_JS + dcLogicPatchJs(PROFILE_LOGIC_EXT) + PROFILE_DOM_JS;
+const PROFILE_BEFORE = DC_VIEWPORT_JS + DC_NO_ZOOM_JS + CONSOLE_FORWARD_JS + DC_SETTLE_JS + dcLogicPatchJs(PROFILE_LOGIC_EXT) + PROFILE_DOM_JS + HAPTIC_PAGE_JS;
 
 async function loadDetails(): Promise<ProfileDetails> {
   try { const raw = await AsyncStorage.getItem(PROFILE_DETAILS_KEY); return raw ? JSON.parse(raw) : {}; } catch { return {}; }
@@ -158,6 +159,7 @@ export default function ProfileScreen() {
       case 'ready': plog('page ready +' + (Date.now() - openedAt.current) + 'ms after mount'); lag.mark('ready'); onReady(); break;
       case 'needData': lag.mark('asked'); plog('page asked for data;' + (dataRef.current ? ' sending' : ' not loaded yet')); if (dataRef.current) lag.mark('pushed'); push(); break;
       case 'pageConsole': if (__DEV__) console.log('[profile-page]', msg.msg); break;
+      case 'haptic': hapticKind((msg as any).kind); break;
       case 'save': if (msg.patch) void save(msg.patch); break;
       case 'applyPlan': void applyPlan(); break;
       case 'applyReferralCode': {

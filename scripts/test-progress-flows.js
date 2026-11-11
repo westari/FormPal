@@ -66,7 +66,7 @@ const png = (c) => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http:
     const key = [...sheet.querySelectorAll('div')].find(d => (d.innerText || '').trim() === '5');
     return { open: true, trayPad: tray ? tray.style.paddingBottom : '', keyTop: key ? Math.round(key.getBoundingClientRect().top) : -1, anim: getComputedStyle(sheet).animationName, op: getComputedStyle(sheet).opacity, vis: getComputedStyle(document.body).visibility };
   }));
-  await tapAt(`() => [...document.querySelectorAll('#dc-root a')].find(a => /Log weight/.test(a.innerText))`);
+  await tapAt(`() => [...document.querySelectorAll('#dc-root a')].find(a => /(Log weight|Edit today's weight)/.test(a.innerText))`);
   await p.waitForTimeout(1300);
   const w = (await p.evaluate(() => window.__stop())).filter(r => r.open);
   const keyTops = w.map(r => r.keyTop).filter(v => v > 0);

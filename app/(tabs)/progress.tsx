@@ -25,7 +25,7 @@ import { tabBarCover } from '../../lib/tabBarMetrics';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '../../lib/haptics';
 import { CONSOLE_FORWARD_JS, DC_VIEWPORT_JS, DC_NO_ZOOM_JS, DC_SETTLE_JS } from '../../lib/dcWebviewHelpers';
 import { dcLogicPatchJs, athltSetDataJs } from '../../lib/dcLogicPatch';
 import { PROGRESS_LOGIC_EXT, PROGRESS_DOM_JS } from '../../lib/progressInject';
@@ -36,6 +36,7 @@ import { tierDataUri } from '../../lib/rankImages';
 import { muscleIconUri } from '../../lib/muscleIcons';
 import { workoutFrame, workoutFallbackIcon } from '../../lib/workoutThumbs';
 import { openRecap } from '../../lib/openRecap';
+import { HAPTIC_PAGE_JS, hapticKind } from '../../lib/haptics';
 import { listProgressPhotos, addProgressPhoto, type PhotoPose } from '../../lib/progressPhotos';
 import { uploadProgressPhotoToCloud } from '../../lib/formpalSync';
 import * as ImagePicker from 'expo-image-picker';
@@ -49,7 +50,7 @@ const PROGRESS_HTML = require('../../assets/app screens/progress.html');
 const PROGRESS_BUILD = 'progress-3';
 if (__DEV__) console.log(`[progress] build ${PROGRESS_BUILD}`);
 
-const PROGRESS_BEFORE = DC_VIEWPORT_JS + DC_NO_ZOOM_JS + CONSOLE_FORWARD_JS + DC_SETTLE_JS + dcLogicPatchJs(PROGRESS_LOGIC_EXT) + PROGRESS_DOM_JS;
+const PROGRESS_BEFORE = DC_VIEWPORT_JS + DC_NO_ZOOM_JS + CONSOLE_FORWARD_JS + DC_SETTLE_JS + dcLogicPatchJs(PROGRESS_LOGIC_EXT) + PROGRESS_DOM_JS + HAPTIC_PAGE_JS;
 
 export default function ProgressScreen() {
   const router = useRouter();
@@ -153,6 +154,7 @@ export default function ProgressScreen() {
     switch (msg.type) {
       case 'ready': lag.mark('ready'); onReady(); break;
       case 'pageConsole': if (__DEV__) console.log('[progress-page]', msg.msg); break;
+      case 'haptic': hapticKind((msg as any).kind); break;
       // (the first picture needs the art: until it is in, load() pushes the moment it is, so no half-filled first paint)
       case 'needData': lag.mark('asked'); if (artReady.current) { lag.mark('pushed'); push(); } break;
       case 'logWeight': {

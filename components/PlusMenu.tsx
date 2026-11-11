@@ -13,18 +13,19 @@ import { View, Text, Pressable, StyleSheet, Animated, Easing } from 'react-nativ
 import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { SymbolView } from 'expo-symbols';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '../lib/haptics';
 import { LiquidGlassButton } from './LiquidGlass';
 import CueOrb from './CueOrb';
 import { PLUS_SIZE, TAB_BAR_SIDE } from '../lib/tabBarMetrics';
 
 const BTN = 60;
-const ORB = 76; // the orb's drawing has a halo around the 78% body: this box shows the body at about 60
+const ORB = 60; // the same footprint as a glass button (halo included), so it reads as the same size as the others
 
 // Top to bottom. Cue on top (the assistant, set apart), then the three things you do, the main one nearest the "+".
 export const PLUS_ACTIONS = [
   { id: 'cue',     label: 'Ask Cue',       symbol: null,                                  route: '/cue' },
   { id: 'form',    label: 'Form check',    symbol: 'camera.viewfinder',                   route: '/exercise-picker' },
+  { id: 'create',  label: 'Create workout', symbol: 'plus.rectangle.on.rectangle',        route: '/create-workout' },
   { id: 'log',     label: 'Log session',   symbol: 'square.and.pencil',                   route: '/log-session' },
   { id: 'workout', label: 'Start workout', symbol: 'figure.strengthtraining.traditional', route: '/workout' },
 ] as const;
@@ -59,7 +60,7 @@ export default function PlusMenu({ open, onClose, bottom }: { open: boolean; onC
   if (!mounted) return null;
 
   const go = (route: string) => {
-    Haptics.selectionAsync();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); // an ordinary row press
     onClose();
     router.push(route as any);
   };

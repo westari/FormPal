@@ -9,6 +9,7 @@ import { configureAudioSession } from '../lib/audioFeedback';
 import WarmSurfaces from '../components/WarmSurfaces';
 import DesignPrewarm from '../components/DesignPrewarm';
 import { installDevLogger } from '../lib/devLogger';
+import { installPressHaptics } from '../lib/haptics';
 import {
   useFonts,
   BricolageGrotesque_300Light,
@@ -25,6 +26,7 @@ import {
 } from '@expo-google-fonts/plus-jakarta-sans';
 
 installDevLogger();
+installPressHaptics(); // every normal press gets the Light haptic unless it makes its own (lib/haptics.ts)
 
 // Hold splash until fonts are ready — prevents unstyled-text flash.
 SplashScreen.preventAutoHideAsync();

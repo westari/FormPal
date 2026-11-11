@@ -33,7 +33,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
 import { Asset } from 'expo-asset';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '../../lib/haptics';
 import { DC_VIEWPORT_JS, DC_NO_ZOOM_JS, CONSOLE_FORWARD_JS, DC_SETTLE_JS } from '../../lib/dcWebviewHelpers';
 import { dcLogicPatchJs, athltSetDataJs } from '../../lib/dcLogicPatch';
 import { CUE_ORB_CSS, CUE_ORB_JS } from '../../lib/cueOrb';
@@ -45,6 +45,7 @@ import { getAllSessions } from '../../lib/sessionLog';
 import { askCue } from '../../lib/cueApi';
 import { buildTrainData, type TrainData } from '../../lib/trainData';
 import { ADD_PICKER_JS } from '../../lib/addExercisePicker';
+import { HAPTIC_PAGE_JS, hapticKind } from '../../lib/haptics';
 import { extractTrainImages } from '../../lib/trainTemplate';
 import { tabBarCover } from '../../lib/tabBarMetrics';
 
@@ -333,6 +334,7 @@ export const TRAIN_WEB_INJECT = `
 
   // one search rule + the Add exercise picker (shared with Home): lib/addExercisePicker.ts
   ${ADD_PICKER_JS}
+  ${HAPTIC_PAGE_JS}
 
   // My Workouts: the design's three example cards show the real first three plan workouts.
   function myWorkouts() {
@@ -363,12 +365,7 @@ export const TRAIN_WEB_INJECT = `
     }
     return null;
   }
-  document.addEventListener('pointerdown', function (e) {
-    var el = e.target;
-    for (var i = 0; el && i < 7; i++, el = el.parentElement) {
-      if (el.tagName === 'A' || (el.getAttribute && el.getAttribute('sc-camel-on-click') !== null) || (el.style && el.style.cursor === 'pointer')) { post({ type: 'tap' }); return; }
-    }
-  }, true);
+  // (haptics: one click listener for the whole page, lib/haptics.ts HAPTIC_PAGE_JS, installed with the page)
   document.addEventListener('click', function (ev) {
     var el = ev.target;
     for (var i = 0; el && i < 8; i++, el = el.parentElement) {
@@ -484,10 +481,10 @@ export default function TrainScreen() {
   const armReveal = useCallback(() => {
     if (revealTimer.current) clearTimeout(revealTimer.current);
     revealTimer.current = setTimeout(() => {
-      tlog('revealed by the 4s safety net after load (page never said ready)');
+      tlog('revealed by the 2.5s safety net after load (page never said ready)');
       webRef.current?.injectJavaScript("window.__trainForce=1; try{window.__trainTick&&window.__trainTick()}catch(e){} true;");
       setRevealed(true);
-    }, 4000);
+    }, 2500);
   }, []);
   const fade = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -571,7 +568,7 @@ export default function TrainScreen() {
     try { m = JSON.parse(raw); } catch { return; }
     switch (m.type) {
       case 'pong': return;
-      case 'tap': Haptics.selectionAsync(); return;
+      case 'haptic': hapticKind((m as any).kind); return;
       case 'ready': tlog('page ready (layout + data + logic all in place, page still)'); if (revealTimer.current) clearTimeout(revealTimer.current); setRevealed(true); return;
       case 'fingerprint': tlog('page fingerprint:', m.fp); return;
       case 'notReady': tlog('page NOT ready after 3s, parts:', JSON.stringify((m as any).parts)); return;

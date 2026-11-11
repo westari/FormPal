@@ -10,7 +10,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Pressable, Animated } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '../../lib/haptics';
 import { SymbolView } from 'expo-symbols';
 import { LiquidGlassButton } from '../LiquidGlass';
 import { PJS } from '../../constants/theme';

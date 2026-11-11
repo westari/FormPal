@@ -45,11 +45,17 @@ export function dcLogicPatchJs(extSrc: string): string {
   function announce(){
     if (announced || !patched || !window.__athltData) return;
     announced = true;
-    // two frames: let React commit the real-data render before revealing
-    requestAnimationFrame(function(){ requestAnimationFrame(function(){
+    // two frames: let React commit the real-data render before revealing. A web view that is not on screen (a hidden tab,
+    // e.g. iOS reloading a killed web view in the background) gets NO animation frames, and waiting for them left the
+    // page "not ready" for seconds after the tab was shown; so a short timer is the other way in (first one wins).
+    var fired = false;
+    function fire(){
+      if (fired) return; fired = true;
       window.__athltLogicReady = true;
       post({ type: 'logicReady' });
-    }); });
+    }
+    requestAnimationFrame(function(){ requestAnimationFrame(fire); });
+    setTimeout(fire, 120);
   }
   function tryPatch(){
     var e = entry(); if (!e) return false;

@@ -28,7 +28,7 @@ import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import ViewShot from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '../lib/haptics';
 
 import { Col, FONT, Sp, Sz, W } from '../constants/theme';
 import ScreenBackground from '../components/ScreenBackground';

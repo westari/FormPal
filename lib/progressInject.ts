@@ -23,6 +23,8 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
   var MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   var RANGE_DAYS = [61, 183, 365, 0];
   var DAY = 86400000;
+  // PLACEHOLDER RULE (Ari to confirm): a new weight more than 15% away from the last one asks "Are you sure?" before it is saved.
+  var SANITY_PCT = 0.15;
   function D() { return window.__athltData || {}; }
   function post(m) { try { window.ReactNativeWebView.postMessage(JSON.stringify(m)); } catch (e) {} }
   function pad2(n) { return n < 10 ? '0' + n : '' + n; }
@@ -194,7 +196,10 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
         openWeigh: function (e) {
           e.preventDefault();
           var n = todayParts();
-          self.setState({ weigh: true, wIn: '', dateOpen: false, wYear: n.y, wMonth: n.m, wDay: n.d });
+          // today's weight can be edited after it was logged (only today's entry, never an older one)
+          var tk = keyOf(n.y, n.m, n.d), ex = (D().weight || []).filter(function (x) { return x.d === tk; })[0];
+          window.__athltEditing = !!ex;
+          self.setState({ weigh: true, wIn: ex ? fmt(ex.w) : '', dateOpen: false, wYear: n.y, wMonth: n.m, wDay: n.d });
         },
         wInShow: typed || '', // empty until you type; the page draws a blinking cursor in it
         wInColor: '#111114',
@@ -223,30 +228,48 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
         })(),
         saveWeigh: function (e) {
           e.preventDefault();
-          if (window.__athltDone) return; // the "weight logged" moment is already showing
+          if (window.__athltDone || window.__athltConfirm) return; // a moment is already showing
           var v = parseFloat(typed || '');
           if (!(v > 0) || v > 1500) return;
           v = Math.round(v * 10) / 10;
           var key = keyOf(wy, wm, wd);
-          var d = D();
-          // "since last time" = the newest weigh-in before this date (none: nothing to compare)
-          var before = (d.weight || []).filter(function (x) { return x.d < key; });
+          var all0 = D().weight || [];
+          var before = all0.filter(function (x) { return x.d < key; });
           var prev = before.length ? before[before.length - 1] : null;
-          var hadAny = (d.weight || []).filter(function (x) { return x.d !== key; }).length > 0;
-          d.weight = (d.weight || []).filter(function (x) { return x.d !== key; })
-            .concat([{ d: key, w: v }]).sort(function (a, b) { return a.d < b.d ? -1 : 1; });
-          post({ type: 'logWeight', dateKey: key, weightLb: v });
-          // The graph updates behind; a short "weight logged" moment shows the new number and the change, then the sheet
-          // closes onto the updated graph.
-          window.__athltDone = { v: v, delta: prev ? Math.round((v - prev.w) * 10) / 10 : null, first: !hadAny };
-          var finish = function () {
-            if (!window.__athltDone) return;
-            window.__athltDone = null;
-            self.setState({ weigh: false, logged: true, wIn: '', dateOpen: false });
+          var others = all0.filter(function (x) { return x.d !== key; });
+          var ref = prev || (others.length ? others[others.length - 1] : null); // what "far from last time" is measured against
+          var commit = function () {
+            var d = D();
+            var hadAny = (d.weight || []).filter(function (x) { return x.d !== key; }).length > 0;
+            d.weight = (d.weight || []).filter(function (x) { return x.d !== key; })
+              .concat([{ d: key, w: v }]).sort(function (a, b) { return a.d < b.d ? -1 : 1; });
+            post({ type: 'logWeight', dateKey: key, weightLb: v });
+            if (window.__hapticClaim) window.__hapticClaim('success'); // weight logged: the success haptic replaces the Submit press's
+            // The graph updates behind; a short "weight logged" moment shows the new number and the change, then it
+            // fades away onto the updated graph.
+            window.__athltDone = { v: v, delta: prev ? Math.round((v - prev.w) * 10) / 10 : null, first: !hadAny };
+            var finish = function () {
+              if (!window.__athltDone) return;
+              window.__athltDone = null;
+              window.__athltEditing = false;
+              self.setState({ weigh: false, logged: true, wIn: '', dateOpen: false });
+            };
+            window.__athltDoneEnd = finish;
+            self.setState({ wDoneAt: Date.now() });
+            setTimeout(finish, 2100);
           };
-          window.__athltDoneEnd = finish;
-          self.setState({ wDoneAt: Date.now() });
-          setTimeout(finish, 2100);
+          // far from the last weight: ask first
+          if (ref && Math.abs(v - ref.w) / ref.w > SANITY_PCT) {
+            if (window.__hapticClaim) window.__hapticClaim('warning'); // the warning replaces this press's guessed haptic
+            window.__athltConfirm = {
+              v: v, last: ref.w, diff: Math.round(Math.abs(v - ref.w) * 10) / 10,
+              yes: function () { window.__athltConfirm = null; commit(); },
+              fix: function () { window.__athltConfirm = null; self.setState({ wDoneAt: Date.now() }); },
+            };
+            self.setState({ wDoneAt: Date.now() });
+            return;
+          }
+          commit();
         },
       };
       for (var key2 in out) base[key2] = out[key2];
@@ -286,7 +309,7 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
       var pb = nearest(ofPose, s.cmpB, true);
       var pa = nearest(ofPose.filter(function (p) { return !pb || p.id !== pb.id; }), s.cmpA, false);
       v.cmpALabel = pa ? pa.label : 'No photo'; v.cmpBLabel = pb ? pb.label : 'No photo';
-      v.photoMonths = ofPose.map(function (p) { return p.label; }).concat(['Add photo']);
+      v.photoMonths = ofPose.map(function (p) { return p.label; }); // (no extra "Add photo" tile: the big "Add today's photo" button does that)
       var card3 = allPh.slice(0, 3);
       for (var ci = 0; ci < 3; ci++) {
         v['ppDate' + ci] = card3[ci] ? card3[ci].label : 'No photo yet';
@@ -425,6 +448,8 @@ export const PROGRESS_DOM_JS = String.raw`
     + '@keyframes pg-lg-in{from{opacity:0}to{opacity:1}}@keyframes pg-lg-pop{0%{transform:scale(.5);opacity:0}60%{transform:scale(1.08);opacity:1}100%{transform:scale(1);opacity:1}}'
     + '@keyframes pg-lg-up{from{transform:translateY(14px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes pg-lg-draw{from{stroke-dashoffset:30}to{stroke-dashoffset:0}}'
     + '#dc-root #__athlt_logged{animation:pg-lg-in 240ms ease-out both!important;}'
+    + '#dc-root #__athlt_logged[data-out]{animation:pg-lg-out 340ms ease-in forwards!important;}@keyframes pg-lg-out{from{opacity:1}to{opacity:0}}'
+    + '#dc-root #__athlt_confirm{animation:pg-lg-in 200ms ease-out both!important;}#dc-root #__athlt_confirm .cf-card{animation:pg-lg-up 320ms cubic-bezier(.22,1,.36,1) both!important;}'
     + '#dc-root #__athlt_logged .lg-c{animation:pg-lg-pop 480ms cubic-bezier(.2,.9,.3,1.2) 120ms both!important;}'
     + '#dc-root #__athlt_logged .lg-p{stroke-dasharray:30;animation:pg-lg-draw 360ms ease-out 380ms both!important;}'
     + '#dc-root #__athlt_logged .lg-1{animation:pg-lg-up 420ms cubic-bezier(.22,1,.36,1) 260ms both!important;}'
@@ -573,12 +598,14 @@ export const PROGRESS_DOM_JS = String.raw`
     }
     // Log weight sheet: the title, the small "Last: N lb" under the field, and the "weight logged" moment
     if (sheet) {
-      var ttl = leafWithText('Confirm your weight');
-      if (ttl) setText(ttl, "Enter today's weight");
+      var ttl = leafWithText('Confirm your weight') || leafWithText("Enter today's weight") || leafWithText("Edit today's weight");
+      if (ttl) setText(ttl, window.__athltEditing ? "Edit today's weight" : "Enter today's weight");
       var num = sheet.querySelector('div[style*="font-size: 52px"]');
       var numRow = num && num.parentElement;
       var lastEl = document.getElementById('__athlt_wlast');
-      var wl = (d.weight || []).length ? d.weight[d.weight.length - 1] : null;
+      var nowD0 = new Date(), todayK = nowD0.getFullYear() + '-' + String(nowD0.getMonth() + 1).padStart(2, '0') + '-' + String(nowD0.getDate()).padStart(2, '0');
+      var wlAll = (d.weight || []).filter(function (x) { return x.d !== todayK; });
+      var wl = wlAll.length ? wlAll[wlAll.length - 1] : null; // "Last" never means the entry being edited
       var lastTxt = wl ? 'Last: ' + (Math.round(wl.w * 10) / 10) + ' lb' : '';
       if (numRow && lastTxt) {
         if (!lastEl) {
@@ -608,7 +635,34 @@ export const PROGRESS_DOM_JS = String.raw`
         lg.addEventListener('click', function () { if (window.__athltDoneEnd) window.__athltDoneEnd(); });
         root.appendChild(lg);
       }
-    } else if (lg) lg.remove();
+    } else if (lg && !lg.__out) {
+      // fade away instead of vanishing: the sheet is already closed underneath, so the updated graph shows through
+      lg.__out = true; lg.style.pointerEvents = 'none'; lg.setAttribute('data-out', '1');
+      setTimeout(function () { if (lg.parentNode) lg.remove(); }, 380);
+    }
+    // "Are you sure?" when the new weight is far from the last one
+    var cf = window.__athltConfirm, cg = document.getElementById('__athlt_confirm');
+    if (cf && sheet) {
+      if (!cg) {
+        cg = document.createElement('div');
+        cg.id = '__athlt_confirm';
+        cg.style.cssText = 'position:absolute;inset:0;z-index:95;background:rgba(17,17,20,0.38);display:flex;align-items:flex-end;justify-content:center;padding:0 14px 40px;';
+        cg.innerHTML = '<div class="cf-card" style="width:100%;border-radius:30px;background:#ffffff;padding:26px 22px 20px;text-align:center;box-shadow:0 20px 50px -20px rgba(17,17,20,0.5);">'
+          + '<div style="font-size:22px;font-weight:700;letter-spacing:-0.6px;color:#111114;">Are you sure?</div>'
+          + '<div style="padding-top:8px;font-size:15px;font-weight:500;line-height:1.4;color:#5f5f69;">That\'s ' + cf.diff + ' lb different from last time (' + (Math.round(cf.last * 10) / 10) + ' lb to ' + cf.v + ' lb).</div>'
+          + '<div style="display:flex;gap:10px;padding-top:20px;">'
+          + '<div data-cf="fix" style="flex:1;height:54px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#111114;background:#f1f1f4;cursor:pointer;">Fix</div>'
+          + '<div data-cf="yes" style="flex:1.3;height:54px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#ffffff;background:#111114;cursor:pointer;">Yes, it\'s right</div>'
+          + '</div></div>';
+        cg.addEventListener('click', function (ev) {
+          var b = ev.target && ev.target.closest ? ev.target.closest('[data-cf]') : null;
+          var c = window.__athltConfirm;
+          if (!c) return;
+          if (b) (b.getAttribute('data-cf') === 'yes' ? c.yes : c.fix)(); // (their haptic comes from the page-wide click listener)
+        });
+        root.appendChild(cg);
+      }
+    } else if (cg) cg.remove();
 
     // Date picker: the month chips are a horizontally scrolling row whose last chip is cut off.
     // Make them share the row evenly so every month fits with no scrolling.
@@ -862,6 +916,27 @@ export const PROGRESS_DOM_JS = String.raw`
           // same footer type as the Form Score card: 13.5px / 500 / #3c3c43, 7px from the orb
           goalEl.style.setProperty('font-size', '13.5px'); goalEl.style.setProperty('font-weight', '500'); goalEl.style.setProperty('color', 'rgb(60, 60, 67)');
           if (goalEl.parentElement) goalEl.parentElement.style.setProperty('gap', '7px');
+          // The insight line moves to the TOP of the graph (under the range pills): ordering only, no node is moved
+          var irow = goalEl.parentElement;
+          if (irow && irow.parentElement === wcard) {
+            wcard.style.setProperty('display', 'flex', 'important'); wcard.style.setProperty('flex-direction', 'column', 'important');
+            for (var wk2 = 0; wk2 < wcard.children.length; wk2++) {
+              var kid = wcard.children[wk2];
+              kid.style.setProperty('order', kid === irow ? '1' : String(wk2 === 0 ? 0 : wk2 + 2), 'important');
+            }
+            wcard.children[0].style.setProperty('align-self', 'flex-start', 'important');
+            irow.style.setProperty('margin-top', '12px', 'important');
+            irow.style.setProperty('margin-bottom', '-2px', 'important');
+          }
+        }
+        // the card's black button: "Log weight", or "Edit today's weight" once today's is in
+        var wlink = wcard.querySelector('a');
+        if (wlink) {
+          var tn = null;
+          for (var lc = 0; lc < wlink.childNodes.length; lc++) if (wlink.childNodes[lc].nodeType === 3 && wlink.childNodes[lc].nodeValue.trim() !== '') tn = wlink.childNodes[lc];
+          var nd = new Date(), tk2 = nd.getFullYear() + '-' + String(nd.getMonth() + 1).padStart(2, '0') + '-' + String(nd.getDate()).padStart(2, '0');
+          var hasToday = (d.weight || []).some(function (x) { return x.d === tk2; });
+          if (tn) { var want = hasToday ? "Edit today's weight" : 'Log weight'; if (tn.nodeValue !== want) tn.nodeValue = want; }
         }
       }
     }

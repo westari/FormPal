@@ -9,7 +9,7 @@ import { Asset } from 'expo-asset';
 import { File } from 'expo-file-system';
 import { SymbolView } from 'expo-symbols';
 import { Picker } from '@react-native-picker/picker';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '../lib/haptics';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useVideoPlayer, VideoView } from 'expo-video';
@@ -1652,6 +1652,7 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
     // page becomes visible instead of relying on the one-shot load fire.
     if (inPool && poolActive && htmlKey === 'planReady') {
       webRef.current?.injectJavaScript(RESTART_GRAPH_ANIM_JS);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); // the plan is ready
     }
   }, [poolActive]); // eslint-disable-line react-hooks/exhaustive-deps
 

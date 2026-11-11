@@ -40,6 +40,7 @@ import { CUE_ORB_CSS } from '../../lib/cueOrb';
 import { dcLogicPatchJs, athltSetDataJs } from '../../lib/dcLogicPatch';
 import { EDIT_BRIDGE_JS } from '../../lib/editSheetBridge';
 import { ADD_PICKER_JS } from '../../lib/addExercisePicker';
+import { HAPTIC_PAGE_JS, hapticKind } from '../../lib/haptics';
 import { saveWorkoutEdit } from '../../lib/planEditSave';
 import { addableExercises, type EditRow } from '../../lib/planEdit';
 import { plannedMeta } from '../../lib/trainData';
@@ -570,13 +571,14 @@ export default function HomeScreen() {
         ref={webRef}
         source={HOME_HTML}
         originWhitelist={['*']}
-        injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS + DC_NO_ZOOM_JS + DC_SETTLE_JS + HOME_GUARD_JS + EDIT_BRIDGE_JS + ADD_PICKER_JS + dcLogicPatchJs(HOME_LOGIC_EXT)}
+        injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS + DC_NO_ZOOM_JS + DC_SETTLE_JS + HOME_GUARD_JS + EDIT_BRIDGE_JS + ADD_PICKER_JS + HAPTIC_PAGE_JS + dcLogicPatchJs(HOME_LOGIC_EXT)}
         injectedJavaScript={HOME_SCALE_FIT_JS + HOME_CUE_REAL_JS}
         onLoadStart={() => { setPageLoaded(false); onLoadStart(); }}
         onLoadEnd={() => { setPageLoaded(true); onLoadEnd(); }}
         onMessage={(e) => {
           let msg: { type?: string; ts?: number; text?: string; wid?: string; rows?: EditRow[] };
           try { msg = JSON.parse(e.nativeEvent.data); } catch { return; }
+          if (msg.type === 'haptic') { hapticKind((msg as any).kind); return; }
           if (msg.type === 'ready') { onReady(); return; }
           if (msg.type === 'start') { router.push('/workout' as any); return; }
           if (msg.type === 'cue') { router.push('/cue' as any); return; }

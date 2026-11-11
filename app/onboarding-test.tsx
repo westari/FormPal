@@ -42,7 +42,7 @@ import Svg, {
   Defs, LinearGradient as SvgLinearGradient, Stop,
 } from 'react-native-svg';
 import { WebView } from 'react-native-webview';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '../lib/haptics';
 import AppBackground from '../components/AppBackground';
 import { Col } from '../constants/theme';
 import { BodyMapSide, MuscleRankBackdrop } from '../components/MuscleTierMap';

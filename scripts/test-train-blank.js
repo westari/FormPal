@@ -38,6 +38,7 @@ async function firstOpen(before, hostile) {
   await p.addInitScript(() => { window.ReactNativeWebView = { postMessage: (d) => window.__post(d) }; });
   if (hostile.noTemplate) await p.addInitScript(() => { Object.defineProperty(window, '__trTplText', { set() {}, get() { return undefined; }, configurable: true }); window.fetch = () => Promise.reject(new Error('blocked')); });
   if (hostile.noCentre) await p.addInitScript(() => { const raf = window.requestAnimationFrame.bind(window); let n = 0; window.requestAnimationFrame = (f) => raf((t) => { try { if (document.querySelector('div[data-scroll]') && /centre|offsetLeft/.test(String(f))) return; } catch (e) {} f(t); }); const sl = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollLeft'); Object.defineProperty(Element.prototype, 'scrollLeft', { get() { return sl.get.call(this); }, set(v) { if (window.__allowScroll) sl.set.call(this, v); }, configurable: true }); setTimeout(() => { window.__allowScroll = true; }, 100000); });
+  if (hostile.noRaf) await p.addInitScript(() => { window.requestAnimationFrame = () => 0; }); // a web view that is not on screen (a hidden tab) gets no animation frames
   if (hostile.handed) await p.addInitScript(`window.__trImgs = ${JSON.stringify(IMGS)};`);
   await p.addInitScript(before);
   await p.goto(URL_, { waitUntil: 'commit' });
@@ -54,7 +55,7 @@ async function firstOpen(before, hostile) {
 }
 
 (async () => {
-  for (const [name, hostile] of [['pictures cannot be found', { noTemplate: true }], ['normal', {}]]) {
+  for (const [name, hostile] of [['pictures cannot be found', { noTemplate: true }], ['hidden tab: no animation frames (iOS reloads a killed web view while its tab is hidden)', { noRaf: true }], ['normal', {}]]) {
     if (old) {
       const o = await firstOpen(old.TRAIN_BEFORE, hostile);
       console.log(`      OLD code, ${name}: ready ${o.readyMs == null ? 'NEVER (6s)' : o.readyMs + 'ms'}`);

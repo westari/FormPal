@@ -1,0 +1,78 @@
+#!/usr/bin/env node
+/**
+ * scripts/test-haptics.js
+ * lib/haptics.ts: Apple's standard haptic rules, one haptic per press, nothing doubled, and every screen goes through it.
+ * Run with a recording stand-in for expo-haptics (a phone is needed to FEEL them; this proves which one is asked for, and when).
+ */
+require('./lib/ts-node-loader.js')();
+global.__DEV__ = false;
+const Module = require('module');
+const fs = require('fs'), path = require('path');
+const ROOT = path.join(__dirname, '..');
+let failed = 0;
+const check = (n, ok, d) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${d ? '  -> ' + d : ''}`); if (!ok) failed++; };
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+const calls = [];
+const FAKE = {
+  ImpactFeedbackStyle: { Light: 'Light', Medium: 'Medium', Heavy: 'Heavy', Soft: 'Soft', Rigid: 'Rigid' },
+  NotificationFeedbackType: { Success: 'Success', Warning: 'Warning', Error: 'Error' },
+  selectionAsync: async () => { calls.push('selection'); },
+  impactAsync: async (s) => { calls.push('impact:' + s); },
+  notificationAsync: async (t) => { calls.push('notification:' + t); },
+};
+class FakePressability { configure(c) { this.config = c; } }
+const prev = Module._load;
+Module._load = function (r) {
+  if (r === 'expo-haptics') return FAKE;
+  if (r === 'react-native/Libraries/Pressability/Pressability') return { default: FakePressability };
+  return prev.apply(this, arguments);
+};
+const H = require('../lib/haptics.ts');
+
+(async () => {
+  H.__setHapticBackend(FAKE);
+  const one = async (fn) => { calls.length = 0; fn(); await sleep(80); return calls.join(); };
+  check('selection: tabs, segment controls, pickers, day strip, chips', (await one(() => H.hapticSelect())) === 'selection');
+  check('normal button / card / row press: impact Light', (await one(() => H.hapticLight())) === 'impact:Light');
+  check('main action (Start, Save, Submit, Continue, +): impact Medium', (await one(() => H.hapticMedium())) === 'impact:Medium');
+  check('success moment: notification Success', (await one(() => H.hapticSuccess())) === 'notification:Success');
+  check('warning ("Are you sure?"): notification Warning', (await one(() => H.hapticWarning())) === 'notification:Warning');
+  check('error: notification Error', (await one(() => H.hapticError())) === 'notification:Error');
+  // the expo-haptics look-alike used by older call sites
+  check('drop-in: Haptics.selectionAsync() -> selection, impactAsync(Light) -> Light, impactAsync(Heavy) -> Medium, notificationAsync(Warning) -> Warning',
+    (await one(() => { H.selectionAsync(); })) === 'selection' && (await one(() => { H.impactAsync('Light'); })) === 'impact:Light' && (await one(() => { H.impactAsync('Heavy'); })) === 'impact:Medium' && (await one(() => { H.notificationAsync('Warning'); })) === 'notification:Warning');
+  check('page messages: select / light / medium / success / warning / error map to the right ones', (await one(() => { H.hapticKind('select'); })) === 'selection' && (await one(() => { H.hapticKind('warning'); })) === 'notification:Warning' && (await one(() => { H.hapticKind('nonsense'); })) === '');
+  // never doubled
+  check('never doubled: two haptics in the same press (within 60ms) make ONE', (await one(() => { H.hapticMedium(); H.hapticLight(); H.hapticSelect(); })) === 'impact:Medium');
+  await sleep(80);
+  check('...and a second press later makes its own', (await one(() => { H.hapticLight(); })) === 'impact:Light');
+
+  // every normal press: automatic Light unless the press made its own
+  H.installPressHaptics();
+  const P = new FakePressability();
+  const press = async (handler) => { calls.length = 0; P.configure({ onPress: handler }); P.config.onPress({}); await sleep(80); return calls.join(); };
+  check('a plain press (no haptic of its own) gets the automatic Light', (await press(() => {})) === 'impact:Light');
+  check('a main action that makes its own Medium gets only that Medium (no extra Light)', (await press(() => H.hapticMedium())) === 'impact:Medium');
+  check('a tab press that makes its own selection gets only that selection', (await press(() => { H.selectionAsync(); })) === 'selection');
+  check('a press with no onPress does nothing', (await (async () => { calls.length = 0; P.configure({}); await sleep(80); return calls.join(); })()) === '');
+  H.installPressHaptics();
+  check('installing twice does not wrap twice (still ONE haptic per press)', (await press(() => {})) === 'impact:Light');
+
+  // every screen goes through lib/haptics
+  const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap(e => e.isDirectory() ? (['node_modules', '.scratch', 'scripts', '.git'].includes(e.name) ? [] : walk(path.join(d, e.name))) : [path.join(d, e.name)]);
+  const src = ['app', 'components', 'lib'].flatMap(d => walk(path.join(ROOT, d))).filter(f => /\.(ts|tsx)$/.test(f));
+  const direct = src.filter(f => /from 'expo-haptics'/.test(fs.readFileSync(f, 'utf8')) && !/lib[\\/]haptics\.ts$/.test(f));
+  check('no screen talks to expo-haptics directly (all go through lib/haptics.ts)', direct.length === 0, direct.map(f => path.relative(ROOT, f)).join());
+  const read = (...p) => fs.readFileSync(path.join(ROOT, ...p), 'utf8');
+  check('the app installs the automatic press haptic once at startup', /installPressHaptics\(\)/.test(read('app', '_layout.tsx')));
+  const bar = read('components', 'GlassTabBar.tsx'), menu = read('components', 'PlusMenu.tsx');
+  check('tab bar: switching tabs = selection, the + = Medium', /Haptics\.selectionAsync\(\);\s*\n\s*setMenuOpen\(false\)/.test(bar) && /impactAsync\(Haptics\.ImpactFeedbackStyle\.Medium\); setMenuOpen/.test(bar));
+  check('plus menu: an item press = Light', /impactAsync\(Haptics\.ImpactFeedbackStyle\.Light\)[^\n]*\n\s*onClose\(\)/.test(menu));
+  for (const [f, name] of [[['app', '(tabs)', 'index.tsx'], 'Home'], [['app', '(tabs)', 'train.tsx'], 'Train'], [['app', '(tabs)', 'progress.tsx'], 'Progress'], [['app', '(tabs)', 'profile.tsx'], 'Profile']]) {
+    const t = read(...f);
+    check(`${name}: the page's taps are classified (HAPTIC_PAGE_JS installed) and the screen plays them (hapticKind)`, /HAPTIC_PAGE_JS/.test(t) && /hapticKind\(/.test(t));
+  }
+  check('onboarding: weight/plan/rank screens and buttons go through lib/haptics (plan ready = Success)', /import \* as Haptics from '\.\.\/lib\/haptics'/.test(read('app', 'onboarding.tsx')) && /Success\); \/\/ the plan is ready/.test(read('app', 'onboarding.tsx')));
+  console.log(failed ? `${failed} FAILED` : 'ALL PASSED'); process.exit(failed ? 1 : 0);
+})();

@@ -22,7 +22,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Image, Platform, InteractionManager } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '../../lib/haptics';
 import { SymbolView } from 'expo-symbols';
 import { LiquidGlassButton } from '../LiquidGlass';
 import { PJS } from '../../constants/theme';

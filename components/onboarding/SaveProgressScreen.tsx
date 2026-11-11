@@ -19,7 +19,7 @@
 
 import React, { useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Animated, TextInput, ActivityIndicator } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '../../lib/haptics';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { SymbolView } from 'expo-symbols';
 import { LiquidGlassButton } from '../LiquidGlass';

@@ -34,7 +34,7 @@ check('TAB_NAMES (logged at runtime as [TABS]) matches the registered routes', /
 const bar = read('components', 'GlassTabBar.tsx');
 const tabs = [...bar.matchAll(/\{ name: '(\w+)',\s+label: '(\w+)'/g)].map(m => m[2]);
 check('the bar lists Home, Train, Progress, Profile (and nothing else) in one place', tabs.join() === 'Home,Train,Progress,Profile', tabs.join());
-check('the 4 tabs share ONE Liquid Glass capsule (a single <LiquidGlass> around all four)', (bar.match(/<LiquidGlass /g) || []).length === 1 && /TABS\.map/.test(bar.slice(bar.indexOf('<LiquidGlass '), bar.indexOf('</LiquidGlass>'))));
+check('the 4 tabs share ONE Liquid Glass capsule (one <LiquidGlass> around all four, plus the sliding highlight pill inside it)', (bar.match(/<LiquidGlass /g) || []).length === 2 && /TABS\.map/.test(bar.slice(bar.indexOf('<LiquidGlass '), bar.indexOf('</LiquidGlass>'))));
 check('the + is its own real Liquid Glass button (LiquidGlassButton), outside the capsule', /<LiquidGlassButton[\s\S]*?plus/.test(bar.slice(bar.indexOf('</LiquidGlass>'))) && !/black|#000|#111114['"]\s*,\s*$/m.test(bar.slice(bar.indexOf('<LiquidGlassButton'), bar.indexOf('</LiquidGlassButton>')).replace(/tintColor=\{INK\}/g, '')));
 check('order on screen: capsule, then a gap, then the + (flex row, capsule flex:1, the + last)', bar.indexOf('<LiquidGlass ') < bar.indexOf('<View style={{ width: TAB_BAR_GAP }}') && bar.indexOf('<View style={{ width: TAB_BAR_GAP }}') < bar.indexOf('<LiquidGlassButton'));
 check('no fake surfaces in the bar or the menu (GlassSurface, GlassButton, gradients, blur used as glass)', ![bar, read('components', 'PlusMenu.tsx')].some(t => /GlassSurface|from '.\/GlassButton'|LinearGradient/.test(t)) && !/BlurView/.test(bar));
@@ -55,10 +55,10 @@ for (const f of [['app', '(tabs)', 'index.tsx'], ['app', '(tabs)', 'train.tsx'],
 const menu = read('components', 'PlusMenu.tsx');
 check('opening the + blurs the page behind (BlurView over the page), with NO background colour layer added', /<BlurView /.test(menu) && !/backgroundColor: 'rgba\(255/.test(menu.slice(0, menu.indexOf('const s = StyleSheet'))));
 const actions = [...menu.matchAll(/\{ id: '(\w+)',\s+label: '([^']+)',\s+symbol: ('[^']+'|null)/g)].map(m => `${m[1]}:${m[3] === 'null' ? 'orb' : 'glass'}`);
-check('actions top to bottom: Cue, form check, log, start workout (Cue is not stuck at the bottom)', actions.join() === 'cue:orb,form:glass,log:glass,workout:glass', actions.join());
+check('actions top to bottom: Cue, form check, create workout, log, start workout (Cue is not stuck at the bottom)', actions.join() === 'cue:orb,form:glass,create:glass,log:glass,workout:glass', actions.join());
 check('"Analyze a Video" is gone from the menu', !/analyze/i.test(menu));
 const labels = [...menu.matchAll(/label: '([^']+)'/g)].map(m => m[1]);
-check('short clear names (no "Quick form check")', labels.join() === 'Ask Cue,Form check,Log session,Start workout' && labels.every(l => l.length <= 14), labels.join());
+check('short clear names (no "Quick form check")', labels.join() === 'Ask Cue,Form check,Create workout,Log session,Start workout' && labels.every(l => l.length <= 14), labels.join());
 check('menu labels are regular weight in the system font (no fontFamily, weight 400)', /label: \{[^}]*fontWeight: '400'/.test(menu) && !/label: \{[^}]*fontFamily/.test(menu));
 check('tapping outside fades the menu out smoothly (blur + actions animate back to 0 and are removed only when finished)', /else if \(mounted\)/.test(menu) && /toValue: 0, duration: CLOSE_MS/.test(menu) && /if \(finished\) setMounted\(false\)/.test(menu) && /onPress=\{onClose\}/.test(menu));
 const orb = read('components', 'CueOrb.tsx');
@@ -67,8 +67,14 @@ check('tab labels use the Apple system font (no fontFamily) at the tab bar size 
 check('switching tabs cross-fades instead of cutting (animation fade, 220ms timing)', /animation: 'fade'/.test(layout) && /transitionSpec: \{ animation: 'timing', config: \{ duration: 220 \} \}/.test(layout));
 check('every action button is real Liquid Glass (LiquidGlassButton)', /<LiquidGlassButton[\s\S]*?onPress=\{\(\) => go\(a\.route\)\}/.test(menu));
 check('Cue is only its moving orb: no glass, no border, no background around it', /<CueOrb size=\{ORB\} \/>/.test(menu) && !/borderWidth|borderColor/.test(menu) && /orb:\s+\{ width: BTN, height: BTN, alignItems: 'center', justifyContent: 'center', overflow: 'visible' \}/.test(menu));
-check('the menu opens the real screens (exercise-picker, workout, log-session, cue)', ['/exercise-picker', '/workout', '/log-session', '/cue'].every(r => menu.includes(`route: '${r}'`)));
+check('the menu opens the real screens (exercise-picker, workout, log-session, cue)', ['/exercise-picker', '/create-workout', '/workout', '/log-session', '/cue'].every(r => menu.includes(`route: '${r}'`)));
 check('the + turns into an x while the menu is open (rotates 45 degrees)', /outputRange: \['0deg', '45deg'\]/.test(bar));
+
+check('the + icon is thin (light weight, not semibold)', /name=\{'plus' as any\} size=\{26\} weight="light"/.test(bar) && !/weight="semibold"/.test(bar));
+check('the Cue orb has the same footprint as a glass button (ORB = BTN)', /const BTN = 60;/.test(menu) && /const ORB = 60;/.test(menu));
+check('the bar and + are smaller than before (58 / 64, were 64 / 72), same layout', M.TAB_BAR_H === 58 && M.PLUS_SIZE === 64 && M.PLUS_SIZE > M.TAB_BAR_H);
+check('ONE glass pill slides between tabs on a spring (not a square painted on each tab)', /Animated\.spring\(slide/.test(bar) && /translateX: slide/.test(bar) && (bar.match(/variant="clear"/g) || []).length === 1 && !/itemOn/.test(bar));
+check('the pill starts on the current tab without sliding in from the side (first placement is instant)', /if \(!placed\.current\) \{ slide\.setValue\(idx \* itemW\)/.test(bar));
 
 console.log(failed ? `\n${failed} FAILED` : '\nall passed');
 process.exit(failed ? 1 : 0);
