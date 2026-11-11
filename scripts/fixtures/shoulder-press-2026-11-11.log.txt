@@ -1,0 +1,588 @@
+15:16:38.584 [log] [DEBUG] [METRIC] shoulderPress value=70.5493 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+15:16:38.989 [log] [DEBUG] [METRIC] shoulderPress value=69.4771 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+15:16:39.392 [log] [DEBUG] [METRIC] shoulderPress value=67.9122 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+15:16:39.791 [log] [DEBUG] [METRIC] shoulderPress value=68.2804 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+15:16:39.890 [log] [DEBUG] [SETUP] shoulderPress PASSED — entering ACTIVE
+15:16:40.199 [log] [DEBUG] [METRIC] shoulderPress value=68.7077 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:40.598 [log] [DEBUG] [METRIC] shoulderPress value=62.3714 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:40.797 [log] [DEBUG] [SETTLE] top stable (value=68.604) — rep counting active
+15:16:40.995 [log] [DEBUG] [METRIC] shoulderPress value=67.8620 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:41.403 [log] [DEBUG] [METRIC] shoulderPress value=68.1852 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:41.817 [log] [DEBUG] [METRIC] shoulderPress value=68.4691 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:42.177 [log] [DEBUG] [METRIC] shoulderPress value=67.7077 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:42.590 [log] [DEBUG] [METRIC] shoulderPress value=67.3423 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:42.995 [log] [DEBUG] [METRIC] shoulderPress value=68.2964 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:43.389 [log] [DEBUG] [METRIC] shoulderPress value=76.9880 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=waiting
+15:16:43.789 [log] [DEBUG] [METRIC] shoulderPress value=50.1557 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+15:16:43.789 [log] [DEBUG] [REP-TRACE] shoulderPress angle=50.1557 repMinAngle=33.7721 framesSincePoseGap=39
+15:16:43.890 [log] [DEBUG] [REP-TRACE] shoulderPress angle=72.0573 repMinAngle=33.7721 framesSincePoseGap=40
+15:16:43.992 [log] [DEBUG] [REP-TRACE] shoulderPress angle=82.4661 repMinAngle=33.7721 framesSincePoseGap=41
+15:16:44.094 [log] [DEBUG] [REP-TRACE] shoulderPress angle=84.5545 repMinAngle=33.7721 framesSincePoseGap=42
+15:16:44.096 [log] [DEBUG] [REP] #1 top=68.4 bottom=33.8 thr=55.0 swing=34.6 ROM=ok cue=GOOD
+15:16:44.195 [log] [DEBUG] [METRIC] shoulderPress value=73.9926 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:44.587 [log] [DEBUG] [METRIC] shoulderPress value=71.8004 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:44.999 [log] [DEBUG] [METRIC] shoulderPress value=78.0460 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:45.385 [log] [DEBUG] [METRIC] shoulderPress value=81.7204 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:45.797 [log] [DEBUG] [METRIC] shoulderPress value=76.5639 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:46.200 [log] [DEBUG] [METRIC] shoulderPress value=74.3271 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:46.594 [log] [DEBUG] [METRIC] shoulderPress value=57.1210 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:47.003 [log] [DEBUG] [METRIC] shoulderPress value=83.3774 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:47.391 [log] [DEBUG] [METRIC] shoulderPress value=76.1616 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:47.799 [log] [DEBUG] [METRIC] shoulderPress value=61.5724 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:47.997 [log] [DEBUG] [REP-TRACE] shoulderPress angle=53.6400 repMinAngle=44.4877 framesSincePoseGap=81
+15:16:48.092 [log] [DEBUG] [REP-TRACE] shoulderPress angle=73.9992 repMinAngle=44.4877 framesSincePoseGap=82
+15:16:48.195 [log] [DEBUG] [METRIC] shoulderPress value=82.5124 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+15:16:48.196 [log] [DEBUG] [REP-TRACE] shoulderPress angle=82.5124 repMinAngle=44.4877 framesSincePoseGap=83
+15:16:48.289 [log] [DEBUG] [REP-TRACE] shoulderPress angle=78.2249 repMinAngle=44.4877 framesSincePoseGap=84
+15:16:48.289 [log] [DEBUG] [REP] #2 top=87.1 bottom=44.5 thr=55.0 swing=42.6 ROM=ok cue=GOOD
+15:16:48.591 [log] [DEBUG] [METRIC] shoulderPress value=72.3611 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:48.998 [log] [DEBUG] [METRIC] shoulderPress value=88.4317 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:49.390 [log] [DEBUG] [METRIC] shoulderPress value=56.6367 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:49.793 [log] [DEBUG] [METRIC] shoulderPress value=80.0798 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:50.190 [log] [DEBUG] [METRIC] shoulderPress value=77.1485 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:50.600 [log] [DEBUG] [METRIC] shoulderPress value=77.6895 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:50.897 [log] [DEBUG] [REP-TRACE] shoulderPress angle=52.4930 repMinAngle=46.6605 framesSincePoseGap=105
+15:16:50.992 [log] [DEBUG] [METRIC] shoulderPress value=68.1247 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+15:16:50.992 [log] [DEBUG] [REP-TRACE] shoulderPress angle=68.1247 repMinAngle=46.6605 framesSincePoseGap=105
+15:16:51.094 [log] [DEBUG] [REP-TRACE] shoulderPress angle=83.6742 repMinAngle=46.6605 framesSincePoseGap=105
+15:16:51.194 [log] [DEBUG] [REP-TRACE] shoulderPress angle=88.6014 repMinAngle=46.6605 framesSincePoseGap=105
+15:16:51.195 [log] [DEBUG] [REP] #3 top=88.4 bottom=46.7 thr=55.0 swing=41.8 ROM=ok cue=GOOD
+15:16:51.380 [log] [DEBUG] [METRIC] shoulderPress value=77.4615 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:51.797 [log] [DEBUG] [METRIC] shoulderPress value=79.6549 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:52.192 [log] [DEBUG] [METRIC] shoulderPress value=58.6417 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:52.391 [log] [DEBUG] [REP-TRACE] shoulderPress angle=58.5037 repMinAngle=48.1414 framesSincePoseGap=105
+15:16:52.492 [log] [DEBUG] [REP-TRACE] shoulderPress angle=76.3575 repMinAngle=48.1414 framesSincePoseGap=105
+15:16:52.594 [log] [DEBUG] [METRIC] shoulderPress value=84.1182 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+15:16:52.594 [log] [DEBUG] [REP-TRACE] shoulderPress angle=84.1182 repMinAngle=48.1414 framesSincePoseGap=105
+15:16:52.603 [log] [DEBUG] [REP] #4 top=88.4 bottom=48.1 thr=55.0 swing=40.3 ROM=ok cue=GOOD
+15:16:52.997 [log] [DEBUG] [METRIC] shoulderPress value=77.0820 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:53.395 [log] [DEBUG] [METRIC] shoulderPress value=81.8316 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:53.798 [log] [DEBUG] [METRIC] shoulderPress value=87.3472 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:54.198 [log] [DEBUG] [METRIC] shoulderPress value=77.0087 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:54.596 [log] [DEBUG] [METRIC] shoulderPress value=85.8059 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:55.002 [log] [DEBUG] [METRIC] shoulderPress value=74.5290 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:55.395 [log] [DEBUG] [METRIC] shoulderPress value=78.5742 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:55.805 [log] [DEBUG] [METRIC] shoulderPress value=78.8743 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:56.197 [log] [DEBUG] [METRIC] shoulderPress value=78.1260 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:56.603 [log] [DEBUG] [METRIC] shoulderPress value=73.6109 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:57.008 [log] [DEBUG] [METRIC] shoulderPress value=87.2484 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:57.393 [log] [DEBUG] [METRIC] shoulderPress value=74.0395 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:57.806 [log] [DEBUG] [METRIC] shoulderPress value=80.3644 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:58.205 [log] [DEBUG] [METRIC] shoulderPress value=78.3127 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:58.600 [log] [DEBUG] [METRIC] shoulderPress value=80.0493 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:59.004 [log] [DEBUG] [METRIC] shoulderPress value=66.3608 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:59.394 [log] [DEBUG] [METRIC] shoulderPress value=87.4888 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:16:59.801 [log] [DEBUG] [METRIC] shoulderPress value=75.2215 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:00.204 [log] [DEBUG] [METRIC] shoulderPress value=81.8774 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:00.599 [log] [DEBUG] [METRIC] shoulderPress value=73.3804 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:00.606 [log] [DEBUG] [ACTIVITY] state=suppressed reason=inactivity gap=8.0s
+15:17:00.698 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=8.0s torso=0.245 baseline=0.255 releaseMax=0.293 torsoOk=true metric=84.8 needMetric>=63.0 inStartZone=true resumeFrames=1/15
+15:17:01.002 [log] [DEBUG] [METRIC] shoulderPress value=74.5934 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:01.098 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=8.0s torso=0.235 baseline=0.255 releaseMax=0.293 torsoOk=true metric=75.0 needMetric>=63.0 inStartZone=true resumeFrames=5/15
+15:17:01.395 [log] [DEBUG] [METRIC] shoulderPress value=75.5461 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:01.498 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=8.0s torso=0.236 baseline=0.255 releaseMax=0.293 torsoOk=true metric=75.6 needMetric>=63.0 inStartZone=true resumeFrames=9/15
+15:17:01.803 [log] [DEBUG] [METRIC] shoulderPress value=75.4257 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:01.899 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=8.0s torso=0.238 baseline=0.255 releaseMax=0.293 torsoOk=true metric=72.2 needMetric>=63.0 inStartZone=true resumeFrames=13/15
+15:17:02.103 [log] [DEBUG] [ACTIVITY] state=active reason=returned_to_start_position
+15:17:02.202 [log] [DEBUG] [METRIC] shoulderPress value=76.2725 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:02.202 [log] [DEBUG] [ACTIVITY] state=suppressed reason=inactivity gap=9.6s
+15:17:02.299 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=9.6s torso=0.235 baseline=0.255 releaseMax=0.293 torsoOk=true metric=82.7 needMetric>=63.0 inStartZone=true resumeFrames=1/15
+15:17:02.598 [log] [DEBUG] [METRIC] shoulderPress value=66.7989 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:02.698 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=9.6s torso=0.250 baseline=0.255 releaseMax=0.293 torsoOk=true metric=68.0 needMetric>=63.0 inStartZone=true resumeFrames=5/15
+15:17:03.007 [log] [DEBUG] [METRIC] shoulderPress value=83.9197 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:03.100 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=9.6s torso=0.236 baseline=0.255 releaseMax=0.293 torsoOk=true metric=77.2 needMetric>=63.0 inStartZone=true resumeFrames=9/15
+15:17:03.395 [log] [DEBUG] [METRIC] shoulderPress value=76.2539 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:03.497 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=9.6s torso=0.236 baseline=0.255 releaseMax=0.293 torsoOk=true metric=74.2 needMetric>=63.0 inStartZone=true resumeFrames=13/15
+15:17:03.699 [log] [DEBUG] [ACTIVITY] state=active reason=returned_to_start_position
+15:17:03.801 [log] [DEBUG] [METRIC] shoulderPress value=83.2169 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:03.801 [log] [DEBUG] [ACTIVITY] state=suppressed reason=inactivity gap=11.2s
+15:17:03.898 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=11.2s torso=0.247 baseline=0.255 releaseMax=0.293 torsoOk=true metric=73.6 needMetric>=63.0 inStartZone=true resumeFrames=1/15
+15:17:04.203 [log] [DEBUG] [METRIC] shoulderPress value=77.6053 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:04.299 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=11.2s torso=0.244 baseline=0.255 releaseMax=0.293 torsoOk=true metric=78.5 needMetric>=63.0 inStartZone=true resumeFrames=5/15
+15:17:04.602 [log] [DEBUG] [METRIC] shoulderPress value=81.5189 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:04.699 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=11.2s torso=0.235 baseline=0.255 releaseMax=0.293 torsoOk=true metric=79.2 needMetric>=63.0 inStartZone=true resumeFrames=9/15
+15:17:05.004 [log] [DEBUG] [METRIC] shoulderPress value=72.9252 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:05.101 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=11.2s torso=0.240 baseline=0.255 releaseMax=0.293 torsoOk=true metric=73.3 needMetric>=63.0 inStartZone=true resumeFrames=13/15
+15:17:05.303 [log] [DEBUG] [ACTIVITY] state=active reason=returned_to_start_position
+15:17:05.397 [log] [DEBUG] [METRIC] shoulderPress value=83.1469 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:05.397 [log] [DEBUG] [ACTIVITY] state=suppressed reason=inactivity gap=12.8s
+15:17:05.498 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=12.8s torso=0.248 baseline=0.255 releaseMax=0.293 torsoOk=true metric=73.7 needMetric>=63.0 inStartZone=true resumeFrames=1/15
+15:17:05.798 [log] [DEBUG] [METRIC] shoulderPress value=52.4094 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:05.897 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=12.8s torso=0.238 baseline=0.255 releaseMax=0.293 torsoOk=true metric=67.2 needMetric>=63.0 inStartZone=true resumeFrames=1/15
+15:17:06.196 [log] [DEBUG] [METRIC] shoulderPress value=83.0478 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:06.295 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=12.8s torso=0.238 baseline=0.255 releaseMax=0.293 torsoOk=true metric=80.0 needMetric>=63.0 inStartZone=true resumeFrames=5/15
+15:17:06.596 [log] [DEBUG] [METRIC] shoulderPress value=81.1143 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:06.694 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=12.8s torso=0.238 baseline=0.255 releaseMax=0.293 torsoOk=true metric=80.5 needMetric>=63.0 inStartZone=true resumeFrames=9/15
+15:17:06.996 [log] [DEBUG] [METRIC] shoulderPress value=79.9562 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:07.096 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=12.8s torso=0.240 baseline=0.255 releaseMax=0.293 torsoOk=true metric=73.5 needMetric>=63.0 inStartZone=true resumeFrames=13/15
+15:17:07.299 [log] [DEBUG] [ACTIVITY] state=active reason=returned_to_start_position
+15:17:07.396 [log] [DEBUG] [METRIC] shoulderPress value=79.0032 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:07.396 [log] [DEBUG] [ACTIVITY] state=suppressed reason=inactivity gap=14.8s
+15:17:07.496 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=14.8s torso=0.239 baseline=0.255 releaseMax=0.293 torsoOk=true metric=78.9 needMetric>=63.0 inStartZone=true resumeFrames=1/15
+15:17:07.804 [log] [DEBUG] [METRIC] shoulderPress value=78.2793 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:07.898 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=14.8s torso=0.240 baseline=0.255 releaseMax=0.293 torsoOk=true metric=78.2 needMetric>=63.0 inStartZone=true resumeFrames=5/15
+15:17:08.202 [log] [DEBUG] [METRIC] shoulderPress value=77.9963 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:08.296 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=14.8s torso=0.238 baseline=0.255 releaseMax=0.293 torsoOk=true metric=78.2 needMetric>=63.0 inStartZone=true resumeFrames=9/15
+15:17:08.604 [log] [DEBUG] [METRIC] shoulderPress value=77.9355 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:08.698 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=14.8s torso=0.239 baseline=0.255 releaseMax=0.293 torsoOk=true metric=78.0 needMetric>=63.0 inStartZone=true resumeFrames=13/15
+15:17:08.904 [log] [DEBUG] [ACTIVITY] state=active reason=returned_to_start_position
+15:17:09.001 [log] [DEBUG] [METRIC] shoulderPress value=77.6191 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:09.001 [log] [DEBUG] [ACTIVITY] state=suppressed reason=inactivity gap=16.4s
+15:17:09.096 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=16.4s torso=0.241 baseline=0.255 releaseMax=0.293 torsoOk=true metric=77.5 needMetric>=63.0 inStartZone=true resumeFrames=1/15
+15:17:09.395 [log] [DEBUG] [METRIC] shoulderPress value=77.7000 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:09.497 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=16.4s torso=0.240 baseline=0.255 releaseMax=0.293 torsoOk=true metric=77.9 needMetric>=63.0 inStartZone=true resumeFrames=5/15
+15:17:09.802 [log] [DEBUG] [METRIC] shoulderPress value=76.9024 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:09.898 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=16.4s torso=0.239 baseline=0.255 releaseMax=0.293 torsoOk=true metric=77.2 needMetric>=63.0 inStartZone=true resumeFrames=9/15
+15:17:10.204 [log] [DEBUG] [METRIC] shoulderPress value=77.4970 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:10.296 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=16.4s torso=0.238 baseline=0.255 releaseMax=0.293 torsoOk=true metric=77.6 needMetric>=63.0 inStartZone=true resumeFrames=13/15
+15:17:10.500 [log] [DEBUG] [ACTIVITY] state=active reason=returned_to_start_position
+15:17:10.598 [log] [DEBUG] [METRIC] shoulderPress value=76.4210 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:10.599 [log] [DEBUG] [ACTIVITY] state=suppressed reason=inactivity gap=18.0s
+15:17:10.698 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=18.0s torso=0.242 baseline=0.255 releaseMax=0.293 torsoOk=true metric=76.2 needMetric>=63.0 inStartZone=true resumeFrames=1/15
+15:17:11.007 [log] [DEBUG] [METRIC] shoulderPress value=76.3821 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:11.097 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=18.0s torso=0.241 baseline=0.255 releaseMax=0.293 torsoOk=true metric=78.0 needMetric>=63.0 inStartZone=true resumeFrames=5/15
+15:17:11.396 [log] [DEBUG] [METRIC] shoulderPress value=68.1176 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:11.494 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=18.0s torso=0.254 baseline=0.255 releaseMax=0.293 torsoOk=true metric=46.9 needMetric>=63.0 inStartZone=false resumeFrames=7/15
+15:17:11.796 [log] [DEBUG] [METRIC] shoulderPress value=50.1664 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:11.897 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=18.0s torso=0.244 baseline=0.255 releaseMax=0.293 torsoOk=true metric=72.5 needMetric>=63.0 inStartZone=true resumeFrames=5/15
+15:17:12.196 [log] [DEBUG] [METRIC] shoulderPress value=82.2687 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:12.296 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=18.0s torso=0.237 baseline=0.255 releaseMax=0.293 torsoOk=true metric=81.1 needMetric>=63.0 inStartZone=true resumeFrames=9/15
+15:17:12.597 [log] [DEBUG] [METRIC] shoulderPress value=80.4902 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:12.697 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=18.0s torso=0.240 baseline=0.255 releaseMax=0.293 torsoOk=true metric=81.0 needMetric>=63.0 inStartZone=true resumeFrames=13/15
+15:17:12.900 [log] [DEBUG] [ACTIVITY] state=active reason=returned_to_start_position
+15:17:12.998 [log] [DEBUG] [METRIC] shoulderPress value=71.5107 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:12.998 [log] [DEBUG] [ACTIVITY] state=suppressed reason=inactivity gap=20.4s
+15:17:13.095 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=20.4s torso=0.254 baseline=0.255 releaseMax=0.293 torsoOk=true metric=54.8 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:17:13.398 [log] [DEBUG] [METRIC] shoulderPress value=60.4672 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:13.495 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=20.4s torso=0.248 baseline=0.255 releaseMax=0.293 torsoOk=true metric=74.2 needMetric>=63.0 inStartZone=true resumeFrames=1/15
+15:17:13.803 [log] [DEBUG] [METRIC] shoulderPress value=82.2611 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:13.896 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=20.4s torso=0.237 baseline=0.255 releaseMax=0.293 torsoOk=true metric=79.0 needMetric>=63.0 inStartZone=true resumeFrames=5/15
+15:17:14.199 [log] [DEBUG] [METRIC] shoulderPress value=78.6029 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:14.298 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=20.4s torso=0.236 baseline=0.255 releaseMax=0.293 torsoOk=true metric=77.8 needMetric>=63.0 inStartZone=true resumeFrames=9/15
+15:17:14.605 [log] [DEBUG] [METRIC] shoulderPress value=61.1993 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:14.701 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=20.4s torso=0.256 baseline=0.255 releaseMax=0.293 torsoOk=true metric=47.3 needMetric>=63.0 inStartZone=false resumeFrames=9/15
+15:17:15.009 [log] [DEBUG] [METRIC] shoulderPress value=66.7151 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:15.097 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=20.4s torso=0.245 baseline=0.255 releaseMax=0.293 torsoOk=true metric=80.0 needMetric>=63.0 inStartZone=true resumeFrames=9/15
+15:17:15.394 [log] [DEBUG] [METRIC] shoulderPress value=81.0530 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:15.496 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=20.4s torso=0.238 baseline=0.255 releaseMax=0.293 torsoOk=true metric=81.5 needMetric>=63.0 inStartZone=true resumeFrames=13/15
+15:17:15.704 [log] [DEBUG] [ACTIVITY] state=active reason=returned_to_start_position
+15:17:15.806 [log] [DEBUG] [METRIC] shoulderPress value=81.1252 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:15.807 [log] [DEBUG] [ACTIVITY] state=suppressed reason=inactivity gap=23.2s
+15:17:15.903 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=23.2s torso=0.241 baseline=0.255 releaseMax=0.293 torsoOk=true metric=80.8 needMetric>=63.0 inStartZone=true resumeFrames=1/15
+15:17:16.210 [log] [DEBUG] [METRIC] shoulderPress value=79.7644 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:16.302 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=23.2s torso=0.239 baseline=0.255 releaseMax=0.293 torsoOk=true metric=79.7 needMetric>=63.0 inStartZone=true resumeFrames=5/15
+15:17:16.604 [log] [DEBUG] [METRIC] shoulderPress value=76.8928 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:16.699 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=23.2s torso=0.235 baseline=0.255 releaseMax=0.293 torsoOk=true metric=87.0 needMetric>=63.0 inStartZone=true resumeFrames=9/15
+15:17:17.009 [log] [DEBUG] [METRIC] shoulderPress value=44.7926 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:17.101 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=23.2s torso=0.251 baseline=0.255 releaseMax=0.293 torsoOk=true metric=33.9 needMetric>=63.0 inStartZone=false resumeFrames=7/15
+15:17:17.399 [log] [DEBUG] [METRIC] shoulderPress value=68.7194 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:17.499 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=23.2s torso=0.248 baseline=0.255 releaseMax=0.293 torsoOk=true metric=80.0 needMetric>=63.0 inStartZone=true resumeFrames=7/15
+15:17:17.803 [log] [DEBUG] [METRIC] shoulderPress value=80.6468 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:17.897 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=23.2s torso=0.233 baseline=0.255 releaseMax=0.293 torsoOk=true metric=80.0 needMetric>=63.0 inStartZone=true resumeFrames=11/15
+15:17:18.207 [log] [DEBUG] [METRIC] shoulderPress value=74.9015 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:18.301 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=23.2s torso=0.238 baseline=0.255 releaseMax=0.293 torsoOk=true metric=79.7 needMetric>=63.0 inStartZone=true resumeFrames=15/15
+15:17:18.301 [log] [DEBUG] [ACTIVITY] state=active reason=returned_to_start_position
+15:17:18.400 [log] [DEBUG] [ACTIVITY] state=suppressed reason=inactivity gap=25.8s
+15:17:18.603 [log] [DEBUG] [METRIC] shoulderPress value=78.1317 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:18.699 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=25.8s torso=0.241 baseline=0.255 releaseMax=0.293 torsoOk=true metric=87.3 needMetric>=63.0 inStartZone=true resumeFrames=3/15
+15:17:19.008 [log] [DEBUG] [METRIC] shoulderPress value=58.5451 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:19.102 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=25.8s torso=0.250 baseline=0.255 releaseMax=0.293 torsoOk=true metric=46.2 needMetric>=63.0 inStartZone=false resumeFrames=3/15
+15:17:19.399 [log] [DEBUG] [METRIC] shoulderPress value=80.4031 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:19.500 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=25.8s torso=0.243 baseline=0.255 releaseMax=0.293 torsoOk=true metric=85.3 needMetric>=63.0 inStartZone=true resumeFrames=5/15
+15:17:19.807 [log] [DEBUG] [METRIC] shoulderPress value=77.6718 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:19.901 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=25.8s torso=0.234 baseline=0.255 releaseMax=0.293 torsoOk=true metric=78.6 needMetric>=63.0 inStartZone=true resumeFrames=9/15
+15:17:20.212 [log] [DEBUG] [METRIC] shoulderPress value=77.2982 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:20.303 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=25.8s torso=0.237 baseline=0.255 releaseMax=0.293 torsoOk=true metric=77.4 needMetric>=63.0 inStartZone=true resumeFrames=13/15
+15:17:20.506 [log] [DEBUG] [ACTIVITY] state=active reason=returned_to_start_position
+15:17:20.600 [log] [DEBUG] [METRIC] shoulderPress value=77.2453 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:20.600 [log] [DEBUG] [ACTIVITY] state=suppressed reason=inactivity gap=28.0s
+15:17:20.702 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=28.0s torso=0.238 baseline=0.255 releaseMax=0.293 torsoOk=true metric=77.1 needMetric>=63.0 inStartZone=true resumeFrames=1/15
+15:17:21.008 [log] [DEBUG] [METRIC] shoulderPress value=76.9522 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:21.102 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=28.0s torso=0.238 baseline=0.255 releaseMax=0.293 torsoOk=true metric=76.5 needMetric>=63.0 inStartZone=true resumeFrames=5/15
+15:17:21.401 [log] [DEBUG] [METRIC] shoulderPress value=72.6140 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:21.499 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=28.0s torso=0.241 baseline=0.255 releaseMax=0.293 torsoOk=true metric=72.5 needMetric>=63.0 inStartZone=true resumeFrames=9/15
+15:17:21.804 [log] [DEBUG] [METRIC] shoulderPress value=87.2138 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:21.900 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=28.0s torso=0.237 baseline=0.255 releaseMax=0.293 torsoOk=true metric=75.4 needMetric>=63.0 inStartZone=true resumeFrames=13/15
+15:17:22.210 [log] [DEBUG] [METRIC] shoulderPress value=30.8893 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:22.302 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=28.0s torso=0.249 baseline=0.255 releaseMax=0.293 torsoOk=true metric=47.2 needMetric>=63.0 inStartZone=false resumeFrames=9/15
+15:17:22.607 [log] [DEBUG] [METRIC] shoulderPress value=83.3559 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:22.703 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=28.0s torso=0.232 baseline=0.255 releaseMax=0.293 torsoOk=true metric=78.5 needMetric>=63.0 inStartZone=true resumeFrames=13/15
+15:17:22.908 [log] [DEBUG] [ACTIVITY] state=active reason=returned_to_start_position
+15:17:23.008 [log] [DEBUG] [METRIC] shoulderPress value=79.3983 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:23.008 [log] [DEBUG] [ACTIVITY] state=suppressed reason=inactivity gap=30.4s
+15:17:23.103 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=30.4s torso=0.235 baseline=0.255 releaseMax=0.293 torsoOk=true metric=79.2 needMetric>=63.0 inStartZone=true resumeFrames=1/15
+15:17:23.399 [log] [DEBUG] [METRIC] shoulderPress value=73.5132 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:23.500 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=30.4s torso=0.239 baseline=0.255 releaseMax=0.293 torsoOk=true metric=73.4 needMetric>=63.0 inStartZone=true resumeFrames=5/15
+15:17:23.802 [log] [DEBUG] [METRIC] shoulderPress value=74.0577 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:23.901 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=30.4s torso=0.238 baseline=0.255 releaseMax=0.293 torsoOk=true metric=74.6 needMetric>=63.0 inStartZone=true resumeFrames=9/15
+15:17:24.210 [log] [DEBUG] [METRIC] shoulderPress value=72.9278 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:24.305 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=30.4s torso=0.250 baseline=0.255 releaseMax=0.293 torsoOk=true metric=51.2 needMetric>=63.0 inStartZone=false resumeFrames=11/15
+15:17:24.606 [log] [DEBUG] [METRIC] shoulderPress value=46.9678 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:24.702 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=30.4s torso=0.241 baseline=0.255 releaseMax=0.293 torsoOk=true metric=63.9 needMetric>=63.0 inStartZone=true resumeFrames=9/15
+15:17:25.008 [log] [DEBUG] [METRIC] shoulderPress value=87.6490 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:25.100 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=30.4s torso=0.233 baseline=0.255 releaseMax=0.293 torsoOk=true metric=86.9 needMetric>=63.0 inStartZone=true resumeFrames=13/15
+15:17:25.307 [log] [DEBUG] [ACTIVITY] state=active reason=returned_to_start_position
+15:17:25.397 [log] [DEBUG] [METRIC] shoulderPress value=85.3634 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:25.397 [log] [DEBUG] [ACTIVITY] state=suppressed reason=inactivity gap=32.8s
+15:17:25.500 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=32.8s torso=0.246 baseline=0.255 releaseMax=0.293 torsoOk=true metric=82.1 needMetric>=63.0 inStartZone=true resumeFrames=1/15
+15:17:25.809 [log] [DEBUG] [METRIC] shoulderPress value=67.0212 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:25.905 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=32.8s torso=0.269 baseline=0.255 releaseMax=0.293 torsoOk=true metric=65.3 needMetric>=63.0 inStartZone=true resumeFrames=5/15
+15:17:26.303 [log] [DEBUG] [METRIC] shoulderPress value=71.2265 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:26.303 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=32.8s torso=0.269 baseline=0.255 releaseMax=0.293 torsoOk=true metric=71.2 needMetric>=63.0 inStartZone=true resumeFrames=8/15
+15:17:26.706 [log] [DEBUG] [METRIC] shoulderPress value=71.4644 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:26.706 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=32.8s torso=0.269 baseline=0.255 releaseMax=0.293 torsoOk=true metric=71.5 needMetric>=63.0 inStartZone=true resumeFrames=11/15
+15:17:27.102 [log] [DEBUG] [METRIC] shoulderPress value=71.6384 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:27.102 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=32.8s torso=0.269 baseline=0.255 releaseMax=0.293 torsoOk=true metric=71.6 needMetric>=63.0 inStartZone=true resumeFrames=15/15
+15:17:27.102 [log] [DEBUG] [ACTIVITY] state=active reason=returned_to_start_position
+15:17:27.199 [log] [DEBUG] [ACTIVITY] state=suppressed reason=inactivity gap=34.6s
+15:17:27.499 [log] [DEBUG] [METRIC] shoulderPress value=71.2768 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:27.499 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=34.6s torso=0.269 baseline=0.255 releaseMax=0.293 torsoOk=true metric=71.3 needMetric>=63.0 inStartZone=true resumeFrames=3/15
+15:17:27.903 [log] [DEBUG] [METRIC] shoulderPress value=71.4708 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:27.903 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=34.6s torso=0.269 baseline=0.255 releaseMax=0.293 torsoOk=true metric=71.5 needMetric>=63.0 inStartZone=true resumeFrames=7/15
+15:17:28.384 [log] [DEBUG] [METRIC] shoulderPress value=71.8217 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:28.384 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=34.6s torso=0.269 baseline=0.255 releaseMax=0.293 torsoOk=true metric=71.8 needMetric>=63.0 inStartZone=true resumeFrames=10/15
+15:17:28.807 [log] [DEBUG] [METRIC] shoulderPress value=76.8130 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:28.807 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=34.6s torso=0.291 baseline=0.255 releaseMax=0.293 torsoOk=true metric=76.8 needMetric>=63.0 inStartZone=true resumeFrames=12/15
+15:17:29.100 [log] [DEBUG] [ACTIVITY] state=active reason=returned_to_start_position
+15:17:29.207 [log] [DEBUG] [METRIC] shoulderPress value=77.3672 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:29.207 [log] [DEBUG] [ACTIVITY] state=suppressed reason=inactivity gap=36.6s
+15:17:29.301 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=36.6s torso=0.233 baseline=0.255 releaseMax=0.293 torsoOk=true metric=76.4 needMetric>=63.0 inStartZone=true resumeFrames=1/15
+15:17:29.607 [log] [DEBUG] [METRIC] shoulderPress value=86.2632 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:29.699 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=36.6s torso=0.241 baseline=0.255 releaseMax=0.293 torsoOk=true metric=85.2 needMetric>=63.0 inStartZone=true resumeFrames=5/15
+15:17:30.005 [log] [DEBUG] [METRIC] shoulderPress value=52.2902 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:30.098 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=36.6s torso=0.247 baseline=0.255 releaseMax=0.293 torsoOk=true metric=55.8 needMetric>=63.0 inStartZone=false resumeFrames=3/15
+15:17:30.402 [log] [DEBUG] [METRIC] shoulderPress value=88.3768 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:30.501 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=36.6s torso=0.237 baseline=0.255 releaseMax=0.293 torsoOk=true metric=80.5 needMetric>=63.0 inStartZone=true resumeFrames=7/15
+15:17:30.805 [log] [DEBUG] [METRIC] shoulderPress value=75.7481 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:30.905 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=36.6s torso=0.233 baseline=0.255 releaseMax=0.293 torsoOk=true metric=75.9 needMetric>=63.0 inStartZone=true resumeFrames=11/15
+15:17:31.208 [log] [DEBUG] [METRIC] shoulderPress value=75.6600 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:31.305 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=36.6s torso=0.233 baseline=0.255 releaseMax=0.293 torsoOk=true metric=75.7 needMetric>=63.0 inStartZone=true resumeFrames=15/15
+15:17:31.306 [log] [DEBUG] [ACTIVITY] state=active reason=returned_to_start_position
+15:17:31.403 [log] [DEBUG] [ACTIVITY] state=suppressed reason=inactivity gap=38.8s
+15:17:31.609 [log] [DEBUG] [METRIC] shoulderPress value=73.7700 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:31.704 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=38.8s torso=0.236 baseline=0.255 releaseMax=0.293 torsoOk=true metric=74.4 needMetric>=63.0 inStartZone=true resumeFrames=3/15
+15:17:32.007 [log] [DEBUG] [METRIC] shoulderPress value=73.9004 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:32.105 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=38.8s torso=0.235 baseline=0.255 releaseMax=0.293 torsoOk=true metric=73.3 needMetric>=63.0 inStartZone=true resumeFrames=7/15
+15:17:32.401 [log] [DEBUG] [METRIC] shoulderPress value=73.9255 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:32.503 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=38.8s torso=0.232 baseline=0.255 releaseMax=0.293 torsoOk=true metric=73.8 needMetric>=63.0 inStartZone=true resumeFrames=11/15
+15:17:32.810 [log] [DEBUG] [METRIC] shoulderPress value=73.2318 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:32.901 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=38.8s torso=0.232 baseline=0.255 releaseMax=0.293 torsoOk=true metric=72.8 needMetric>=63.0 inStartZone=true resumeFrames=15/15
+15:17:32.901 [log] [DEBUG] [ACTIVITY] state=active reason=returned_to_start_position
+15:17:33.008 [log] [DEBUG] [ACTIVITY] state=suppressed reason=inactivity gap=40.4s
+15:17:33.209 [log] [DEBUG] [METRIC] shoulderPress value=67.5844 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:33.304 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=40.4s torso=0.225 baseline=0.255 releaseMax=0.293 torsoOk=true metric=69.4 needMetric>=63.0 inStartZone=true resumeFrames=3/15
+15:17:33.610 [log] [DEBUG] [METRIC] shoulderPress value=66.9796 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:33.704 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=40.4s torso=0.229 baseline=0.255 releaseMax=0.293 torsoOk=true metric=67.6 needMetric>=63.0 inStartZone=true resumeFrames=7/15
+15:17:34.014 [log] [DEBUG] [METRIC] shoulderPress value=89.1774 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:34.103 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=40.4s torso=0.224 baseline=0.255 releaseMax=0.293 torsoOk=true metric=67.8 needMetric>=63.0 inStartZone=true resumeFrames=11/15
+15:17:34.401 [log] [DEBUG] [METRIC] shoulderPress value=57.7890 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:34.502 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=40.4s torso=0.230 baseline=0.255 releaseMax=0.293 torsoOk=true metric=74.5 needMetric>=63.0 inStartZone=true resumeFrames=9/15
+15:17:34.809 [log] [DEBUG] [METRIC] shoulderPress value=74.1935 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:34.903 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=40.4s torso=0.232 baseline=0.255 releaseMax=0.293 torsoOk=true metric=76.7 needMetric>=63.0 inStartZone=true resumeFrames=13/15
+15:17:35.112 [log] [DEBUG] [ACTIVITY] state=active reason=returned_to_start_position
+15:17:35.217 [log] [DEBUG] [METRIC] shoulderPress value=72.6116 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:35.217 [log] [DEBUG] [ACTIVITY] state=suppressed reason=inactivity gap=42.6s
+15:17:35.304 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=42.6s torso=0.226 baseline=0.255 releaseMax=0.293 torsoOk=true metric=72.4 needMetric>=63.0 inStartZone=true resumeFrames=1/15
+15:17:35.606 [log] [DEBUG] [METRIC] shoulderPress value=71.8376 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:35.706 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=42.6s torso=0.228 baseline=0.255 releaseMax=0.293 torsoOk=true metric=71.8 needMetric>=63.0 inStartZone=true resumeFrames=5/15
+15:17:36.015 [log] [DEBUG] [METRIC] shoulderPress value=71.3492 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:36.106 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=42.6s torso=0.235 baseline=0.255 releaseMax=0.293 torsoOk=true metric=71.7 needMetric>=63.0 inStartZone=true resumeFrames=9/15
+15:17:36.404 [log] [DEBUG] [METRIC] shoulderPress value=86.1361 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:36.502 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=42.6s torso=0.228 baseline=0.255 releaseMax=0.293 torsoOk=true metric=72.8 needMetric>=63.0 inStartZone=true resumeFrames=13/15
+15:17:36.813 [log] [DEBUG] [METRIC] shoulderPress value=47.0645 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:36.904 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=42.6s torso=0.231 baseline=0.255 releaseMax=0.293 torsoOk=true metric=61.7 needMetric>=63.0 inStartZone=false resumeFrames=9/15
+15:17:37.211 [log] [DEBUG] [METRIC] shoulderPress value=81.9749 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:37.307 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=42.6s torso=0.226 baseline=0.255 releaseMax=0.293 torsoOk=true metric=80.5 needMetric>=63.0 inStartZone=true resumeFrames=13/15
+15:17:37.508 [log] [DEBUG] [ACTIVITY] state=active reason=returned_to_start_position
+15:17:37.605 [log] [DEBUG] [METRIC] shoulderPress value=88.8637 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:37.605 [log] [DEBUG] [ACTIVITY] state=suppressed reason=inactivity gap=45.0s
+15:17:37.702 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=45.0s torso=0.228 baseline=0.255 releaseMax=0.293 torsoOk=true metric=80.7 needMetric>=63.0 inStartZone=true resumeFrames=1/15
+15:17:38.007 [log] [DEBUG] [METRIC] shoulderPress value=55.1496 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:38.105 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=45.0s torso=0.229 baseline=0.255 releaseMax=0.293 torsoOk=true metric=72.1 needMetric>=63.0 inStartZone=true resumeFrames=1/15
+15:17:38.404 [log] [DEBUG] [METRIC] shoulderPress value=80.1653 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:38.504 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=45.0s torso=0.227 baseline=0.255 releaseMax=0.293 torsoOk=true metric=78.1 needMetric>=63.0 inStartZone=true resumeFrames=5/15
+15:17:38.809 [log] [DEBUG] [METRIC] shoulderPress value=80.3135 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:38.906 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=45.0s torso=0.229 baseline=0.255 releaseMax=0.293 torsoOk=true metric=82.5 needMetric>=63.0 inStartZone=true resumeFrames=9/15
+15:17:39.209 [log] [DEBUG] [METRIC] shoulderPress value=79.2850 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:39.305 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=45.0s torso=0.224 baseline=0.255 releaseMax=0.293 torsoOk=true metric=63.3 needMetric>=63.0 inStartZone=true resumeFrames=13/15
+15:17:39.610 [log] [DEBUG] [METRIC] shoulderPress value=76.3578 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:39.707 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=45.0s torso=0.233 baseline=0.255 releaseMax=0.293 torsoOk=true metric=87.3 needMetric>=63.0 inStartZone=true resumeFrames=15/15
+15:17:39.707 [log] [DEBUG] [ACTIVITY] state=active reason=returned_to_start_position
+15:17:39.804 [log] [DEBUG] [ACTIVITY] state=suppressed reason=inactivity gap=47.2s
+15:17:40.014 [log] [DEBUG] [METRIC] shoulderPress value=76.4455 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:40.106 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=47.2s torso=0.224 baseline=0.255 releaseMax=0.293 torsoOk=true metric=87.9 needMetric>=63.0 inStartZone=true resumeFrames=3/15
+15:17:40.403 [log] [DEBUG] [METRIC] shoulderPress value=55.4737 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:40.504 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=47.2s torso=0.237 baseline=0.255 releaseMax=0.293 torsoOk=true metric=56.0 needMetric>=63.0 inStartZone=false resumeFrames=3/15
+15:17:40.806 [log] [DEBUG] [METRIC] shoulderPress value=87.6872 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:40.905 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=47.2s torso=0.224 baseline=0.255 releaseMax=0.293 torsoOk=true metric=78.0 needMetric>=63.0 inStartZone=true resumeFrames=7/15
+15:17:41.214 [log] [DEBUG] [METRIC] shoulderPress value=80.7733 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:41.305 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=47.2s torso=0.233 baseline=0.255 releaseMax=0.293 torsoOk=true metric=87.0 needMetric>=63.0 inStartZone=true resumeFrames=11/15
+15:17:41.610 [log] [DEBUG] [METRIC] shoulderPress value=85.8603 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:41.706 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=47.2s torso=0.261 baseline=0.255 releaseMax=0.293 torsoOk=true metric=80.4 needMetric>=63.0 inStartZone=true resumeFrames=15/15
+15:17:41.706 [log] [DEBUG] [ACTIVITY] state=active reason=returned_to_start_position
+15:17:41.810 [log] [DEBUG] [ACTIVITY] state=suppressed reason=inactivity gap=49.2s
+15:17:42.009 [log] [DEBUG] [METRIC] shoulderPress value=74.3256 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:42.105 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=61.4 needMetric>=63.0 inStartZone=false resumeFrames=1/15
+15:17:42.404 [log] [DEBUG] [METRIC] shoulderPress value=21.4851 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:42.504 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=22.5 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:17:42.811 [log] [DEBUG] [METRIC] shoulderPress value=20.7150 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:42.911 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=22.9 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:17:43.222 [log] [DEBUG] [METRIC] shoulderPress value=20.6739 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:43.510 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=18.4 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:17:43.618 [log] [DEBUG] [METRIC] shoulderPress value=18.2739 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:44.808 [log] [DEBUG] [METRIC] shoulderPress value=15.7489 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:44.809 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=15.7 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:17:45.207 [log] [DEBUG] [METRIC] shoulderPress value=19.5419 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:45.207 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=19.5 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:17:45.615 [log] [DEBUG] [METRIC] shoulderPress value=22.0458 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:45.615 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=22.0 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:17:46.111 [log] [DEBUG] [METRIC] shoulderPress value=26.4664 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:46.111 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=26.5 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:17:46.510 [log] [DEBUG] [METRIC] shoulderPress value=25.1170 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:46.510 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=25.1 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:17:46.922 [log] [DEBUG] [METRIC] shoulderPress value=24.1117 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:46.922 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=24.1 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:17:47.512 [log] [DEBUG] [METRIC] shoulderPress value=27.6057 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:47.513 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=27.6 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:17:47.913 [log] [DEBUG] [METRIC] shoulderPress value=24.8896 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:47.913 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=24.9 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:17:49.406 [log] [DEBUG] [METRIC] shoulderPress value=8.1346 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:49.406 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=8.1 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:17:49.809 [log] [DEBUG] [METRIC] shoulderPress value=7.4317 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:49.809 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=7.4 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:17:51.011 [log] [DEBUG] [METRIC] shoulderPress value=7.3516 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:51.011 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=7.4 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:17:51.711 [log] [DEBUG] [METRIC] shoulderPress value=57.7036 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:51.712 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=57.7 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:17:52.108 [log] [DEBUG] [METRIC] shoulderPress value=58.3938 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:52.109 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=58.4 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:17:52.505 [log] [DEBUG] [METRIC] shoulderPress value=58.1767 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:52.505 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=58.2 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:17:52.911 [log] [DEBUG] [METRIC] shoulderPress value=58.6268 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:52.911 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=58.6 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:17:53.314 [log] [DEBUG] [METRIC] shoulderPress value=58.4460 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:53.314 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=58.4 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:17:53.712 [log] [DEBUG] [METRIC] shoulderPress value=58.4809 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:53.713 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=58.5 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:17:54.124 [log] [DEBUG] [METRIC] shoulderPress value=58.4530 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:54.124 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=58.5 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:17:54.511 [log] [DEBUG] [METRIC] shoulderPress value=58.2781 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:54.512 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=58.3 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:17:54.914 [log] [DEBUG] [METRIC] shoulderPress value=58.6985 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:54.914 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=58.7 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:17:55.313 [log] [DEBUG] [METRIC] shoulderPress value=58.2112 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:55.313 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=58.2 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:17:55.711 [log] [DEBUG] [METRIC] shoulderPress value=58.2677 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:55.711 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=58.3 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:17:56.127 [log] [DEBUG] [METRIC] shoulderPress value=58.1114 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:56.127 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=58.1 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:17:56.505 [log] [DEBUG] [METRIC] shoulderPress value=57.6996 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:56.505 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=57.7 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:17:56.907 [log] [DEBUG] [METRIC] shoulderPress value=57.0171 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:56.907 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=57.0 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:17:57.312 [log] [DEBUG] [METRIC] shoulderPress value=55.5079 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:57.312 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=55.5 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:17:57.713 [log] [DEBUG] [METRIC] shoulderPress value=55.7242 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:57.713 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=55.7 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:17:58.109 [log] [DEBUG] [METRIC] shoulderPress value=56.4233 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:58.109 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=56.4 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:17:58.515 [log] [DEBUG] [METRIC] shoulderPress value=56.9689 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:58.516 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=57.0 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:17:58.911 [log] [DEBUG] [METRIC] shoulderPress value=56.5238 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:58.911 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=56.5 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:17:59.324 [log] [DEBUG] [METRIC] shoulderPress value=55.9570 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:59.324 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=56.0 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:17:59.721 [log] [DEBUG] [METRIC] shoulderPress value=55.1396 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:17:59.721 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=55.1 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:00.113 [log] [DEBUG] [METRIC] shoulderPress value=55.3272 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:00.113 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=55.3 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:00.513 [log] [DEBUG] [METRIC] shoulderPress value=56.1417 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:00.513 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=56.1 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:00.918 [log] [DEBUG] [METRIC] shoulderPress value=55.9404 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:00.918 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=55.9 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:01.316 [log] [DEBUG] [METRIC] shoulderPress value=55.6972 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:01.316 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=55.7 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:01.729 [log] [DEBUG] [METRIC] shoulderPress value=56.0265 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:01.729 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=56.0 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:02.114 [log] [DEBUG] [METRIC] shoulderPress value=52.1760 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:02.114 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=52.2 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:02.513 [log] [DEBUG] [METRIC] shoulderPress value=61.6640 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:02.513 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=61.7 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:02.920 [log] [DEBUG] [METRIC] shoulderPress value=54.9128 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:02.920 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=54.9 needMetric>=63.0 inStartZone=false resumeFrames=2/15
+15:18:03.316 [log] [DEBUG] [METRIC] shoulderPress value=53.0869 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:03.316 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=53.1 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:03.814 [log] [DEBUG] [METRIC] shoulderPress value=14.2083 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:03.815 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=14.2 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:04.806 [log] [DEBUG] [METRIC] shoulderPress value=6.7522 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:04.806 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=6.8 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:05.407 [log] [DEBUG] [METRIC] shoulderPress value=2.9480 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:05.407 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=2.9 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:05.817 [log] [DEBUG] [METRIC] shoulderPress value=4.5572 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:05.817 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=4.6 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:06.218 [log] [DEBUG] [METRIC] shoulderPress value=61.9867 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:06.218 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=62.0 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:06.617 [log] [DEBUG] [METRIC] shoulderPress value=67.5968 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:06.617 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=67.6 needMetric>=63.0 inStartZone=true resumeFrames=3/15
+15:18:07.020 [log] [DEBUG] [METRIC] shoulderPress value=67.1306 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:07.020 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=67.1 needMetric>=63.0 inStartZone=true resumeFrames=7/15
+15:18:07.409 [log] [DEBUG] [METRIC] shoulderPress value=63.8215 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:07.409 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=63.8 needMetric>=63.0 inStartZone=true resumeFrames=11/15
+15:18:07.826 [log] [DEBUG] [METRIC] shoulderPress value=11.4580 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:07.826 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=11.5 needMetric>=63.0 inStartZone=false resumeFrames=9/15
+15:18:08.218 [log] [DEBUG] [METRIC] shoulderPress value=48.0033 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:08.218 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=48.0 needMetric>=63.0 inStartZone=false resumeFrames=5/15
+15:18:08.615 [log] [DEBUG] [METRIC] shoulderPress value=48.5073 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:08.615 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=48.5 needMetric>=63.0 inStartZone=false resumeFrames=1/15
+15:18:09.023 [log] [DEBUG] [METRIC] shoulderPress value=49.3309 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:09.023 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=49.3 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:09.410 [log] [DEBUG] [METRIC] shoulderPress value=60.1553 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:09.410 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=60.2 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:09.917 [log] [DEBUG] [METRIC] shoulderPress value=60.1237 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:09.917 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=60.1 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:10.323 [log] [DEBUG] [METRIC] shoulderPress value=60.6324 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:10.323 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=60.6 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:10.718 [log] [DEBUG] [METRIC] shoulderPress value=11.0370 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:10.718 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=11.0 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:11.127 [log] [DEBUG] [METRIC] shoulderPress value=51.8315 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:11.127 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=51.8 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:11.518 [log] [DEBUG] [METRIC] shoulderPress value=45.0121 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:11.518 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=45.0 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:11.919 [log] [DEBUG] [METRIC] shoulderPress value=37.1029 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:11.919 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=37.1 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:12.322 [log] [DEBUG] [METRIC] shoulderPress value=15.3285 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:12.322 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=15.3 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:12.715 [log] [DEBUG] [METRIC] shoulderPress value=16.2811 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:12.715 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=16.3 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:13.118 [log] [DEBUG] [METRIC] shoulderPress value=30.1557 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:13.118 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=30.2 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:13.518 [log] [DEBUG] [METRIC] shoulderPress value=38.8697 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:13.518 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=38.9 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:13.918 [log] [DEBUG] [METRIC] shoulderPress value=41.8817 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:13.919 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=41.9 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:14.319 [log] [DEBUG] [METRIC] shoulderPress value=44.6821 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:14.319 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=44.7 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:14.718 [log] [DEBUG] [METRIC] shoulderPress value=54.6501 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:14.718 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=54.7 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:15.127 [log] [DEBUG] [METRIC] shoulderPress value=51.9230 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:15.127 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=51.9 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:15.517 [log] [DEBUG] [METRIC] shoulderPress value=51.4332 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:15.517 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=51.4 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:15.915 [log] [DEBUG] [METRIC] shoulderPress value=49.9764 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:15.915 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=50.0 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:16.334 [log] [DEBUG] [METRIC] shoulderPress value=48.0406 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:16.334 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=48.0 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:16.722 [log] [DEBUG] [METRIC] shoulderPress value=45.8861 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:16.722 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=45.9 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:17.122 [log] [DEBUG] [METRIC] shoulderPress value=44.3305 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:17.122 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=44.3 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:17.520 [log] [DEBUG] [METRIC] shoulderPress value=44.7713 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:17.521 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=44.8 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:17.923 [log] [DEBUG] [METRIC] shoulderPress value=45.9506 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:17.923 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=46.0 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:18.313 [log] [DEBUG] [METRIC] shoulderPress value=45.6697 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:18.313 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=45.7 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:18.712 [log] [DEBUG] [METRIC] shoulderPress value=45.5846 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:18.712 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=45.6 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:19.114 [log] [DEBUG] [METRIC] shoulderPress value=44.2283 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:19.114 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=44.2 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:19.517 [log] [DEBUG] [METRIC] shoulderPress value=45.1039 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:19.517 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=45.1 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:19.921 [log] [DEBUG] [METRIC] shoulderPress value=46.1649 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:19.921 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=46.2 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:20.319 [log] [DEBUG] [METRIC] shoulderPress value=47.2559 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:20.319 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=47.3 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:20.726 [log] [DEBUG] [METRIC] shoulderPress value=47.4470 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:20.726 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=47.4 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:21.113 [log] [DEBUG] [METRIC] shoulderPress value=49.7828 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:21.113 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=49.8 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:21.519 [log] [DEBUG] [METRIC] shoulderPress value=45.1246 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:21.519 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=45.1 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:21.928 [log] [DEBUG] [METRIC] shoulderPress value=47.5538 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:21.928 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=47.6 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:22.320 [log] [DEBUG] [METRIC] shoulderPress value=88.1119 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:22.321 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.270 baseline=0.255 releaseMax=0.293 torsoOk=true metric=88.1 needMetric>=63.0 inStartZone=true resumeFrames=2/15
+15:18:22.712 [log] [DEBUG] [METRIC] shoulderPress value=81.0210 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:22.712 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.292 baseline=0.255 releaseMax=0.293 torsoOk=true metric=81.0 needMetric>=63.0 inStartZone=true resumeFrames=1/15
+15:18:23.110 [log] [DEBUG] [METRIC] shoulderPress value=89.6727 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:23.111 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.297 baseline=0.255 releaseMax=0.293 torsoOk=false metric=89.7 needMetric>=63.0 inStartZone=true resumeFrames=0/15
+15:18:23.512 [log] [DEBUG] [METRIC] shoulderPress value=87.7556 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:23.512 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.301 baseline=0.255 releaseMax=0.293 torsoOk=false metric=87.8 needMetric>=63.0 inStartZone=true resumeFrames=0/15
+15:18:23.919 [log] [DEBUG] [METRIC] shoulderPress value=78.3200 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:23.919 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.309 baseline=0.255 releaseMax=0.293 torsoOk=false metric=78.3 needMetric>=63.0 inStartZone=true resumeFrames=0/15
+15:18:24.316 [log] [DEBUG] [METRIC] shoulderPress value=79.7934 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:24.316 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.311 baseline=0.255 releaseMax=0.293 torsoOk=false metric=79.8 needMetric>=63.0 inStartZone=true resumeFrames=0/15
+15:18:24.720 [log] [DEBUG] [METRIC] shoulderPress value=89.0008 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:24.720 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.312 baseline=0.255 releaseMax=0.293 torsoOk=false metric=89.0 needMetric>=63.0 inStartZone=true resumeFrames=0/15
+15:18:25.120 [log] [DEBUG] [METRIC] shoulderPress value=88.9416 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:25.120 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.328 baseline=0.255 releaseMax=0.293 torsoOk=false metric=88.9 needMetric>=63.0 inStartZone=true resumeFrames=0/15
+15:18:25.515 [log] [DEBUG] [METRIC] shoulderPress value=35.3055 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:25.515 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.328 baseline=0.255 releaseMax=0.293 torsoOk=false metric=35.3 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:29.036 [log] [DEBUG] [METRIC] shoulderPress value=17.1586 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:29.036 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.328 baseline=0.255 releaseMax=0.293 torsoOk=false metric=17.2 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:29.512 [log] [DEBUG] [METRIC] shoulderPress value=14.6687 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:29.512 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.328 baseline=0.255 releaseMax=0.293 torsoOk=false metric=14.7 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:32.621 [log] [DEBUG] [METRIC] shoulderPress value=50.5079 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:32.621 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.328 baseline=0.255 releaseMax=0.293 torsoOk=false metric=50.5 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:34.324 [log] [DEBUG] [METRIC] shoulderPress value=26.4353 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:34.325 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.328 baseline=0.255 releaseMax=0.293 torsoOk=false metric=26.4 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:34.718 [log] [DEBUG] [METRIC] shoulderPress value=15.8661 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:34.719 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.328 baseline=0.255 releaseMax=0.293 torsoOk=false metric=15.9 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:35.127 [log] [DEBUG] [METRIC] shoulderPress value=9.3920 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:35.127 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.328 baseline=0.255 releaseMax=0.293 torsoOk=false metric=9.4 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:35.520 [log] [DEBUG] [METRIC] shoulderPress value=4.4788 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:35.520 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.328 baseline=0.255 releaseMax=0.293 torsoOk=false metric=4.5 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:35.923 [log] [DEBUG] [METRIC] shoulderPress value=2.2379 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:35.923 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.328 baseline=0.255 releaseMax=0.293 torsoOk=false metric=2.2 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:36.333 [log] [DEBUG] [METRIC] shoulderPress value=0.9155 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:36.333 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.328 baseline=0.255 releaseMax=0.293 torsoOk=false metric=0.9 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:38.035 [log] [DEBUG] [METRIC] shoulderPress value=8.4009 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:38.035 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.328 baseline=0.255 releaseMax=0.293 torsoOk=false metric=8.4 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:41.413 [log] [DEBUG] [METRIC] shoulderPress value=7.3411 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:41.413 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.328 baseline=0.255 releaseMax=0.293 torsoOk=false metric=7.3 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:41.816 [log] [DEBUG] [METRIC] shoulderPress value=60.0698 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:41.816 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.328 baseline=0.255 releaseMax=0.293 torsoOk=false metric=60.1 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:42.219 [log] [DEBUG] [METRIC] shoulderPress value=74.0060 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:42.219 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.328 baseline=0.255 releaseMax=0.293 torsoOk=false metric=74.0 needMetric>=63.0 inStartZone=true resumeFrames=0/15
+15:18:42.618 [log] [DEBUG] [METRIC] shoulderPress value=74.2904 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:42.618 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.281 baseline=0.255 releaseMax=0.293 torsoOk=true metric=74.3 needMetric>=63.0 inStartZone=true resumeFrames=2/15
+15:18:43.018 [log] [DEBUG] [METRIC] shoulderPress value=7.9878 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:43.019 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.281 baseline=0.255 releaseMax=0.293 torsoOk=true metric=8.0 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:43.415 [log] [DEBUG] [METRIC] shoulderPress value=63.9871 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:43.415 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.281 baseline=0.255 releaseMax=0.293 torsoOk=true metric=64.0 needMetric>=63.0 inStartZone=true resumeFrames=4/15
+15:18:43.824 [log] [DEBUG] [METRIC] shoulderPress value=4.6935 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:43.824 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.281 baseline=0.255 releaseMax=0.293 torsoOk=true metric=4.7 needMetric>=63.0 inStartZone=false resumeFrames=4/15
+15:18:44.227 [log] [DEBUG] [METRIC] shoulderPress value=4.5605 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:44.227 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.281 baseline=0.255 releaseMax=0.293 torsoOk=true metric=4.6 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:44.623 [log] [DEBUG] [METRIC] shoulderPress value=4.0385 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:44.624 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.281 baseline=0.255 releaseMax=0.293 torsoOk=true metric=4.0 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:45.118 [log] [DEBUG] [METRIC] shoulderPress value=4.6780 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:45.119 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.281 baseline=0.255 releaseMax=0.293 torsoOk=true metric=4.7 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:45.621 [log] [DEBUG] [METRIC] shoulderPress value=4.8878 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:45.622 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.281 baseline=0.255 releaseMax=0.293 torsoOk=true metric=4.9 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:46.021 [log] [DEBUG] [METRIC] shoulderPress value=66.8146 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:46.021 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.281 baseline=0.255 releaseMax=0.293 torsoOk=true metric=66.8 needMetric>=63.0 inStartZone=true resumeFrames=2/15
+15:18:46.524 [log] [DEBUG] [METRIC] shoulderPress value=64.9242 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:46.524 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.281 baseline=0.255 releaseMax=0.293 torsoOk=true metric=64.9 needMetric>=63.0 inStartZone=true resumeFrames=3/15
+15:18:46.936 [log] [DEBUG] [METRIC] shoulderPress value=64.2394 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:46.936 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.281 baseline=0.255 releaseMax=0.293 torsoOk=true metric=64.2 needMetric>=63.0 inStartZone=true resumeFrames=7/15
+15:18:47.328 [log] [DEBUG] [METRIC] shoulderPress value=65.2226 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:47.328 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.281 baseline=0.255 releaseMax=0.293 torsoOk=true metric=65.2 needMetric>=63.0 inStartZone=true resumeFrames=7/15
+15:18:47.729 [log] [DEBUG] [METRIC] shoulderPress value=64.6208 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:47.730 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.281 baseline=0.255 releaseMax=0.293 torsoOk=true metric=64.6 needMetric>=63.0 inStartZone=true resumeFrames=5/15
+15:18:48.121 [log] [DEBUG] [METRIC] shoulderPress value=64.3267 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:48.121 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.281 baseline=0.255 releaseMax=0.293 torsoOk=true metric=64.3 needMetric>=63.0 inStartZone=true resumeFrames=9/15
+15:18:48.523 [log] [DEBUG] [METRIC] shoulderPress value=66.2342 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:48.523 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.281 baseline=0.255 releaseMax=0.293 torsoOk=true metric=66.2 needMetric>=63.0 inStartZone=true resumeFrames=9/15
+15:18:48.929 [log] [DEBUG] [METRIC] shoulderPress value=3.2196 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:48.929 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.281 baseline=0.255 releaseMax=0.293 torsoOk=true metric=3.2 needMetric>=63.0 inStartZone=false resumeFrames=5/15
+15:18:49.326 [log] [DEBUG] [METRIC] shoulderPress value=1.9259 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:49.326 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.281 baseline=0.255 releaseMax=0.293 torsoOk=true metric=1.9 needMetric>=63.0 inStartZone=false resumeFrames=1/15
+15:18:49.735 [log] [DEBUG] [METRIC] shoulderPress value=2.8523 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:49.735 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.281 baseline=0.255 releaseMax=0.293 torsoOk=true metric=2.9 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:50.137 [log] [DEBUG] [METRIC] shoulderPress value=5.0121 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:50.137 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.281 baseline=0.255 releaseMax=0.293 torsoOk=true metric=5.0 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:51.528 [log] [DEBUG] [METRIC] shoulderPress value=19.4954 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:51.528 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.281 baseline=0.255 releaseMax=0.293 torsoOk=true metric=19.5 needMetric>=63.0 inStartZone=false resumeFrames=0/15
+15:18:51.917 [log] [DEBUG] [METRIC] shoulderPress value=56.1005 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:18:51.917 [log] [DEBUG] [ACTIVITY] suppressed reason=inactivity gap=49.2s torso=0.281 baseline=0.255 releaseMax=0.293 torsoOk=true metric=56.1 needMetric>=63.0 inStartZone=false resumeFrames=0/15

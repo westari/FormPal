@@ -84,7 +84,7 @@ const newCueSecs = silentWindow(newRun).filter(([, m]) => m).length / 10;
 const newMsgs = [...new Set(silentWindow(newRun).map(([, m]) => m).filter(Boolean))];
 console.log(`      moving but nothing counted, 5s..${firstRep.toFixed(1)}s: old cue shown ${oldCueSecs.toFixed(1)}s, new cue shown ${newCueSecs.toFixed(1)}s (${newMsgs.join(' | ')})`);
 check('REPRODUCED: before the fix the user got NO cue while moving and nothing counted', oldCueSecs === 0, `${oldCueSecs}s of cue`);
-check('FIXED: now a cue is shown during that stretch', newCueSecs >= 2, `${newCueSecs}s of cue`);
+check('the old fixed "Press higher" fallback is gone from the diagnostic (the attempt detector now names the real blocker; scripts/test-attempts.js replays this)', newCueSecs === 0 || !newMsgs.includes('Press higher'), `${newCueSecs}s of cue (${newMsgs.join(' | ')})`);
 const afterFirst = newRun.shown.filter(([t]) => t > newRun.repTimes[2] && t < newRun.repTimes[5] + 1.5);
 check('no false cue while reps are being counted every ~1-2s', afterFirst.every(([, m]) => !m), `${afterFirst.filter(([, m]) => m).length} cue frames`);
 const restSim = (() => {

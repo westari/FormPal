@@ -36,8 +36,14 @@ const check = (name, ok, detail) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${na
 
   // 3. the screen wires it correctly
   const fc = fs.readFileSync(path.join(__dirname, '..', 'app', 'formcheck.tsx'), 'utf8');
-  check('the flash button is ALWAYS on screen (it was hidden unless the front camera was detected); on the back camera a tap flips to the front camera and turns the light on', /onPress=\{handleFlash\}/.test(fc) && !/camPosition === 'front' && \(\s*<LiquidGlassButton\s+onPress=\{\(\) => setFlashOn/.test(fc) && /const handleFlash = useCallback\(\(\) => \{\s*if \(camPosition === 'front'\) \{ setFlashOn\(v => !v\); return; \}\s*setFlashOn\(true\);\s*void flipCamera\(\)/.test(fc));
-  check('the white frame shows only while flashOn AND the front camera is on, under every control', /const flashActive = flashOn && camPosition === 'front'/.test(fc) && /\{flashActive && \(\s*<View pointerEvents="none"/.test(fc) && fc.indexOf('{flashActive && (') < fc.indexOf('style={[s.topBar'));
+  check('the flash button is ALWAYS on screen (it was hidden unless the front camera was detected); on the back camera a tap flips to the front camera and turns the light on', fc.includes('handleFlash(); }}') && fc.includes("if (camPosition === 'front') { setFlashOn(v => !v); return; }") && fc.includes('setFlashOn(true);') && fc.includes('void flipCamera().then(r => { setCamPosition('));
+  check('the ring light shows only while flashOn AND the front camera is on, under every control', /const flashActive = flashOn && camPosition === 'front'/.test(fc) && fc.includes('{flashActive && <RingLight />}') && !/borderLeftWidth: FLASH_FRAME/.test(fc));
+  {
+    const rl = fs.readFileSync(path.join(__dirname, '..', 'components', 'RingLight.tsx'), 'utf8'), sf = fs.readFileSync(path.join(__dirname, '..', 'lib', 'screenFlash.ts'), 'utf8');
+    check('the ring light is four soft gradients on ALL four edges (top, bottom, left, right), untouchable, white fading to clear', (rl.match(/<LinearGradient/g) || []).length === 4 && /pointerEvents="none"/.test(rl) && sf.includes('{ at: 1, a: 0 }') && sf.includes('{ at: 0, a: 1 }'));
+    const depth = +(sf.match(/depth: ([0-9]+)/) || [])[1];
+    check('it is shallow (' + depth + 'pt) so it stays clear of the framing guide, which starts about 44pt in with soft corners only', depth > 0 && depth <= 70, String(depth));
+  }
   check('the camera position comes from the native camera state event', /if \(mounted && e\.position\) setCamPosition\(e\.position\)/.test(fc));
   check('brightness is restored when the flash goes off and when the screen closes', /useEffect\(\(\) => \{ void setFlashBrightness\(flashActive\); \}, \[flashActive\]\)/.test(fc) && /useEffect\(\(\) => \(\) => \{ void setFlashBrightness\(false\); \}, \[\]\)/.test(fc));
   const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));

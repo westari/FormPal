@@ -176,10 +176,12 @@ export function createRepDiagnostic(streamDeadSec: number = STREAM_DEAD_SEC, exe
       if (hi - lo >= MOVE_RANGE_FRACTION * fullRange) {
         // moved through the range, nothing counted, nothing rejected: the camera has been struggling, the engine never
         // saw the start position, or the movement was short
-        msg = unreliableAt && (now() - unreliableAt) / 1000 < 12 ? CANT_SEE_REASON
+        // (the old fixed fallback here said "Press higher" for as long as nothing counted, even while the person WAS pressing
+        // higher; that cue now comes from lib/attemptDetector.ts, which names the real blocker)
+        const specific = unreliableAt && (now() - unreliableAt) / 1000 < 12 ? CANT_SEE_REASON
           : !settleActive && settleWaiting >= 1 ? 'Back to start'
-          : shortMovementReason(exerciseId);
-        return;
+          : null;
+        if (specific) { msg = specific; return; }
       }
     }
 

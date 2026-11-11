@@ -36,5 +36,8 @@ export async function setFlashBrightness(on: boolean): Promise<boolean> {
   }
 }
 
-/** How thick the white frame is on each side, in points (the top stays clear so the top buttons sit over the camera). */
-export const FLASH_FRAME = { side: 38, bottom: 38 };
+/**
+ * The ring light: how far in from the screen edge the glow reaches (points) and its brightness curve (alpha at each fraction of
+ * that depth: solid white at the very edge, clear at the inner end). PLACEHOLDER look values, tuned by eye.
+ */
+export const RING_LIGHT = { depth: 64, stops: [{ at: 0, a: 1 }, { at: 0.3, a: 0.7 }, { at: 0.65, a: 0.28 }, { at: 1, a: 0 }] };

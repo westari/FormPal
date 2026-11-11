@@ -4337,6 +4337,12 @@ export function isRepCounterExercise(id: string): boolean {
     // presses were ignored. 0.1 asks for >= 57.9: still above the new enter threshold (50), so a mid-press reading can
     // never be taken for the rest position. PLACEHOLDER from three logs.
     d.settleAnchorMinFraction = 0.1;
+    // 2026-11-11 log: after the 4th rep the engine's inactivity pause (default 8s without a counted rep) turned counting OFF, and
+    // every time the person returned to the start position it turned ON and OFF again in the same frame (the gap clock was never
+    // reset), so the real reps that followed (dips to 34-47) were never counted for two minutes. A press set has pauses between
+    // reps, so the pause is 30s (what the other exercises with long gaps use). The native resume bug itself is fixed in Swift
+    // (needs the next build). PLACEHOLDER 30 from one log.
+    d.inactivityRepGapSec = 30;
   }
 }
 

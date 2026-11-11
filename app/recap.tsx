@@ -68,6 +68,7 @@ import { EXERCISE_DEFINITIONS } from '../constants/exerciseDefinitions';
 import { Muscle, type ExerciseId } from '../constants/exercises';
 import { computeOverallStanding, MUSCLE_LABELS, MUSCLE_ICON_SOURCES } from '../components/MuscleTierMap';
 import { Asset } from 'expo-asset';
+import { haptic } from '../lib/screenHaptics';
 import { buildMuscleRanksPayload, workedMuscles, type MuscleRanksPayload } from '../lib/muscleRanksData';
 import { tierDataUri } from '../lib/rankImages';
 import { allSetsDataJs, setTilesFor } from '../lib/allSetsInject';
@@ -214,7 +215,10 @@ export default function RecapScreen() {
   }>();
 
   const isWorkoutMode = mode === 'workout';
-  const isHistoryMode = !isWorkoutMode && tsParam != null;
+  // 'logged': a session just saved from Log a session. It opens straight on Today's progress (muscle rows, Bronze -> Silver,
+  // Overall +X%), the same screen a real workout ends on, with the logged exercises counted.
+  const isLoggedMode = mode === 'logged' && tsParam != null;
+  const isHistoryMode = !isWorkoutMode && !isLoggedMode && tsParam != null;
 
   const finishWorkout       = useWorkoutSessionStore(s => s.finishWorkout);
   const abortWorkout        = useWorkoutSessionStore(s => s.abortWorkout);
@@ -249,7 +253,7 @@ export default function RecapScreen() {
         hasFormData: summary.results.some(r => r.completed && r.formChecked),
       };
     }
-    if (isHistoryMode) return null;
+    if (isHistoryMode || isLoggedMode) return null;
     const reps        = parseInt(repsStr ?? '0', 10);
     const goodReps    = parseInt(goodRepsStr ?? '0', 10);
     const formChecked = mode !== 'repCounter';
@@ -277,8 +281,9 @@ export default function RecapScreen() {
   });
   const [loadFailed, setLoadFailed] = useState(false);
   const initialized = useRef(false);
+  const celebrated = useRef(false), rankCelebrated = useRef(false);
   const persistRef = useRef<Promise<unknown>>(Promise.resolve());
-  const [view, setView] = useState<'summary' | 'allsets' | 'ranks'>('summary');
+  const [view, setView] = useState<'summary' | 'allsets' | 'ranks'>(isLoggedMode ? 'ranks' : 'summary');
   // "Finish review" on rep feedback: show the muscle page at once, while that screen is still on top.
   const [finishing, setFinishing] = useState(false);
   useEffect(() => {
@@ -392,6 +397,14 @@ export default function RecapScreen() {
         // persist in the background. The rank effect awaits persistRef so it
         // still reads sessions that include this one.
         if (persistOnMount.current.length > 0) persistRef.current = appendSessions(persistOnMount.current).catch(() => {});
+      } else if (isLoggedMode) {
+        // the entries of the session that was just saved (they all carry the same timestamp)
+        const all = await getAllSessions();
+        const entries = all.filter(e => e.ts === Number(tsParam));
+        if (entries.length === 0) { setLoadFailed(true); return; }
+        const totalReps = entries.reduce((a, e) => a + e.reps, 0);
+        const totalGoodReps = entries.reduce((a, e) => a + e.goodReps, 0);
+        setData({ ts: Number(tsParam), entries, totalReps, totalGoodReps, pct: 0, isHistory: false, hasFormData: false });
       } else if (isHistoryMode) {
         const all    = await getAllSessions();
         const groups = groupIntoWorkouts(all);
@@ -718,7 +731,7 @@ export default function RecapScreen() {
     );
   }
 
-  if (!data || !summaryDataJs) {
+  if (!data || !summaryDataJs || (isLoggedMode && !ranksPayload)) {
     // Explicit ask: never gate the card on the video. The card (WebView)
     // shows as soon as its own real data is ready; the native video fades
     // in independently, whenever IT'S ready, via videoFade above.
@@ -731,6 +744,11 @@ export default function RecapScreen() {
   }
 
   onWebMsg.current = (msg: InMsg) => {
+    // Haptics: Workout complete (a real workout, not a past one opened from history) and a rank up are celebrated once each
+    if (msg.type === 'ready') {
+      if (!isHistoryMode && !celebrated.current) { celebrated.current = true; haptic('success'); }
+      if (view === 'ranks' && ranksPayload?.rank.rankedUp && !rankCelebrated.current) { rankCelebrated.current = true; haptic('success'); }
+    }
     if (__DEV__) console.log('[recap-debug] onMessage:', msg.type, 'current view=', view, 'effectiveView=', effectiveView);
     if (msg.type === 'videoDebug') { if (__DEV__) console.log('[recap-debug] video event:', msg.msg, msg.code); }
     else if (msg.type === 'pageConsole') { if (__DEV__) console.log(`[recap-page:${msg.level}]`, msg.msg); }
@@ -759,7 +777,7 @@ export default function RecapScreen() {
     else if ((msg as any).type === 'openSet') onWebMsg.current({ type: 'viewRepFeedback' });
     else if (msg.type === 'viewAllSets') setView('allsets');
     else if (msg.type === 'closeAllSets') setView('summary');
-    else if (msg.type === 'closeRanks') setView('summary');
+    else if (msg.type === 'closeRanks') { if (isLoggedMode) void handleDoneRanks(); else setView('summary'); }
     else if (msg.type === 'doneRanks') void handleDoneRanks();
   };
 
