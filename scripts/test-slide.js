@@ -30,3 +30,5 @@ check('the native navigator adds NO animation of its own to recap and rep-feedba
 check('no page uses a fade for these changes any more (the only fade left is workout/run, which was asked for)', !/animation: 'fade'/.test(l.replace(/<Stack\.Screen name="workout\/run"[^\n]*\n/, '')));
 console.log(failed ? `\n${failed} FAILED` : '\nall passed');
 process.exit(failed ? 1 : 0);
+check('8: while rep feedback (transparent over the video) is up, the page under it is hidden at once, not after a delay (no Workout complete card flashing behind it)', w.includes("if (coverKind === 'repfeedback') { setBeneathHidden(true); return; }"));
+check('7: the live cue under the check / X uses the same font as the rest of the camera screen (PlusJakartaSans), not Bricolage', (() => { const r = read('components/RepFeedback.tsx'); return r.includes("fontFamily: 'PlusJakartaSans_700Bold'") && !/Bricolage/.test(r); })());

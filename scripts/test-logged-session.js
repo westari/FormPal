@@ -24,6 +24,9 @@ check('recap loads the saved entries for that timestamp and counts them (they ar
 check('it waits for the muscle page data before showing anything (no flash of the Workout complete card)', /\(isLoggedMode && !ranksPayload\)/.test(rc));
 check('Done (and the page\'s back) close it to Home; the logged mode is never treated as a past workout', /isHistoryMode = !isWorkoutMode && !isLoggedMode/.test(rc) && /closeRanks'\) \{ if \(isLoggedMode\) void handleDoneRanks\(\)/.test(rc));
 
+check('15: Save goes straight to Today\'s progress: one replace, no waiting timer and no toast in between (the two-screens flash)', !/setTimeout/.test(ls) && !ls.includes('__dsSaved') && ls.includes("router.replace({ pathname: '/recap' as any, params: { mode: 'logged', ts: String(ts) } });"));
+check('15: the next screen opens on the same light background (no dark flash): the logged mode uses a light root and dark status bar', rc.includes("isLoggedMode ? { backgroundColor: '#f2f2f6' } : null") && rc.includes("isLoggedMode ? 'dark' : 'light'"));
+check('16: app/session-logged.tsx is no longer referenced anywhere', !['app/_layout.tsx', 'app/log-session.tsx', 'app/recap.tsx', 'lib/designScreens.ts'].some((f) => read(f).includes('session-logged')));
 const { buildCatalog, entriesFromPage } = require('../lib/designScreens.ts');
 const { EXERCISE_CATALOG } = require('../constants/exercises.ts');
 const sessionLog = require('../lib/sessionLog.ts');

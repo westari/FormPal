@@ -59,17 +59,17 @@ const CUE_HOLD_SEC        = 3;
 /** The plain reason a too-small movement was not counted, by kind of exercise. */
 export function shortMovementReason(exerciseId: string | undefined): string {
   const id = exerciseId ?? '';
-  if (/press|overhead/i.test(id)) return 'Press higher';
-  if (/raise/i.test(id)) return 'Raise higher';
+  if (/press|overhead/i.test(id)) return 'Go higher';
+  if (/raise/i.test(id)) return 'Go higher';
   if (/squat|lunge|stepup|pushup|dip/i.test(id)) return 'Go lower';
   if (/curl|row|pull/i.test(id)) return 'Pull higher';
-  return 'Bigger movement';
+  return 'Go further';
 }
 /** Where to be, in 2-3 words, while the engine waits for the start position. */
 export function startHint(exerciseId: string | undefined): string {
   return /press|overhead/i.test(exerciseId ?? '') ? 'Hands at shoulders' : 'Get in position';
 }
-export const CANT_SEE_REASON = "Can't see arms";
+export const CANT_SEE_REASON = 'Step back';
 
 export function createRepDiagnostic(streamDeadSec: number = STREAM_DEAD_SEC, exerciseId?: string): RepDiagnostic {
   let startedAt      = 0;
@@ -168,7 +168,7 @@ export function createRepDiagnostic(streamDeadSec: number = STREAM_DEAD_SEC, exe
     //  2. native threw the attempt out ([REP] rejected ...) -> say so;
     //  3. the user clearly moved through most of the range and nothing counted
     //     or got rejected for a while -> say so.
-    if (waitAt && (now() - waitAt) / 1000 < CUE_HOLD_SEC) { msg = 'Lower arms'; return; }
+    if (waitAt && (now() - waitAt) / 1000 < CUE_HOLD_SEC) { msg = startHint(exerciseId); return; }
     if (rejectedAt && (now() - rejectedAt) / 1000 < CUE_HOLD_SEC) { msg = rejectReason || shortMovementReason(exerciseId); return; }
     if (sinceRep >= MOVE_SILENCE_SEC && fullRange > 0 && recent.length >= 3) {
       let lo = Infinity, hi = -Infinity;
@@ -179,7 +179,7 @@ export function createRepDiagnostic(streamDeadSec: number = STREAM_DEAD_SEC, exe
         // (the old fixed fallback here said "Press higher" for as long as nothing counted, even while the person WAS pressing
         // higher; that cue now comes from lib/attemptDetector.ts, which names the real blocker)
         const specific = unreliableAt && (now() - unreliableAt) / 1000 < 12 ? CANT_SEE_REASON
-          : !settleActive && settleWaiting >= 1 ? 'Back to start'
+          : !settleActive && settleWaiting >= 1 ? startHint(exerciseId)
           : null;
         if (specific) { msg = specific; return; }
       }

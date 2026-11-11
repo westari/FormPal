@@ -27,6 +27,12 @@ export function isFrameHint(text: string | null | undefined): boolean {
   const t = text.trim().toLowerCase();
   return FRAME_HINTS.has(t) || /(step back|into frame|in frame|can't see|cannot see)/.test(t);
 }
+/** The number on screen can never contradict the words: while a frame hint ("Step into frame", "Step back") is up it cannot read above this. */
+export const FRAME_HINT_METER_CAP = 35;
+/** The meter target after both caps: the current setup step's cap (setup only) and the frame-hint cap. */
+export function capMeterTarget(target: number, setupCap: number | null, frameHintActive: boolean): number {
+  return Math.min(target, setupCap === null ? 100 : setupCap, frameHintActive ? FRAME_HINT_METER_CAP : 100);
+}
 export const JUDGED_QUIET_MS = 3000;
 export function showVerdict(frameHintNow: string | null | undefined, personDetected: boolean | undefined): boolean {
   return !isFrameHint(frameHintNow) && personDetected !== false;
@@ -115,6 +121,8 @@ export interface CounterSignal {
   atStartPosition(minValue: number, nowMs: number, windowMs: number, minSamples: number): boolean;
   /** Newest metric value, or null. */
   lastValue(): number | null;
+  /** The highest metric value seen in the last `windowMs` (used to see that the top position was really reached), or null. */
+  peak(nowMs: number, windowMs: number): number | null;
   /** True once any metric sample has arrived (without debug logging there are none, and nothing may wait on them). */
   seen(): boolean;
   reset(): void;
@@ -198,6 +206,7 @@ export function createCounterSignal(): CounterSignal {
       return recent.length >= minSamples && recent.every((x) => x.v >= minValue);
     },
     lastValue() { return value; },
+    peak(now, windowMs) { const r = samples.filter((x) => now - x.t <= windowMs); return r.length ? Math.max(...r.map((x) => x.v)) : null; },
     seen() { return sampleAt > 0; },
     reset() { sampleAt = 0; gapAt = 0; unreliableAt = 0; prevGap = null; value = null; samples = []; confQ = 1; flagVal = { diag: 0, cue: 0 }; flagTarget = { diag: 0, cue: 0 }; flagAt = 0; },
   };

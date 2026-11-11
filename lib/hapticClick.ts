@@ -2,10 +2,10 @@
  * lib/hapticClick.ts
  *
  * Page-side script for every WebView screen (the design files): ONE haptic per press, chosen from what was pressed. The page
- * only decides the KIND and posts {type:'haptic', kind}; the native side plays it (lib/screenHaptics.ts), so a press is never
+ * only decides the KIND and posts {type:'haptic', kind}; the native side plays it (lib/haptics.ts), so a press is never
  * doubled. Listens once per click on the document (capture phase), never for typing in an input.
  *
- *   selection  chips, steppers, tabs, bookmarks, calendar days, small icon-only toggles
+ *   select     chips, steppers, tabs, bookmarks, calendar days, small icon-only toggles
  *   medium     main actions: Save workout / Save session / Finish review / Done / Continue / Start / Log / Finish
  *   light      any other button, card or row
  *
@@ -29,14 +29,14 @@ export const HAPTIC_CLICK_JS = String.raw`
   }
   function kindOf(el) {
     var text = (el.textContent || '').replace(/\s+/g, ' ').trim();
-    if (el.hasAttribute('data-ds-chip')) return 'selection';
+    if (el.hasAttribute('data-ds-chip')) return 'select';
     if (el.getAttribute('aria-label') === 'Back') return 'light';
     if (MAIN.test(text)) return 'medium';
-    if (TAB.test(text)) return 'selection';
-    if (/^\d{1,2}$/.test(text)) return 'selection';
+    if (TAB.test(text)) return 'select';
+    if (/^\d{1,2}$/.test(text)) return 'select';
     var r = el.getBoundingClientRect();
-    if (!text && r.width <= 46 && r.height <= 46) return 'selection';
-    if (el.querySelector && el.querySelector('svg') && r.width <= 46 && r.height <= 46) return 'selection';
+    if (!text && r.width <= 46 && r.height <= 46) return 'select';
+    if (el.querySelector && el.querySelector('svg') && r.width <= 46 && r.height <= 46) return 'select';
     return 'light';
   }
   document.addEventListener('click', function (ev) {

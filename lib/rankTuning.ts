@@ -24,19 +24,23 @@ import type { Tier } from './sessionLog';
 export const DECAY_HALF_LIFE_DAYS = 240;
 
 /**
+ * 2026-11-11: Bronze moved from 50 to 150 (every higher tier moved up by 100, same gaps). 30 good reps on one muscle from Unranked
+ * used to read +60% (Bronze at 50); it now reads +20% (30 of 150). A normal user (3 workouts a week, one 30-rep slot per muscle per
+ * workout) reaches the first Bronze in 5 workouts, about 1.7 weeks. See `node scripts/sim-rank-progress.js` for the table.
+ *
  * Decayed reps needed for each tier (PLACEHOLDERS). Highest first, as tierFromVolume expects.
  * A user training a muscle 3x a week (30 reps each) reaches Silver in week 2, Gold week 7, Platinum month 4, Diamond
  * month 8, Master month 16 and can never reach Champion (their ceiling, ~4450, is below it). Training 4x a week with
  * very clean form gets Champion in about 18 months. scripts/sim-rank-progress.js prints the exact table.
  */
 export const VOLUME_THRESHOLDS: [Tier, number][] = [
-  ['champion', 4750],
-  ['master',   3400],
-  ['diamond',  2210],
-  ['platinum', 1230],
-  ['gold',      510],
-  ['silver',    125],
-  ['bronze',     50],
+  ['champion', 4850],
+  ['master',   3500],
+  ['diamond',  2310],
+  ['platinum', 1330],
+  ['gold',      610],
+  ['silver',    225],
+  ['bronze',    150],
 ];
 
 /** Share of judged reps that must be good form for each tier (PLACEHOLDERS), highest first. */

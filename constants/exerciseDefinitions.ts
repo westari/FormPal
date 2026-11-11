@@ -4301,7 +4301,8 @@ export function isRepCounterExercise(id: string): boolean {
     leftJoints:  ['leftShoulder',  'leftElbow'],
     rightJoints: ['rightShoulder', 'rightElbow'],
   };
-  const UPPER = ['leftShoulder', 'rightShoulder', 'leftElbow', 'rightElbow', 'leftWrist', 'rightWrist'];
+  // head (nose), both shoulders, elbows and wrists: the whole upper body must be in frame (a head alone used to pass setup; next native build)
+  const UPPER = ['nose', 'leftShoulder', 'rightShoulder', 'leftElbow', 'rightElbow', 'leftWrist', 'rightWrist'];
   const defs = EXERCISE_DEFINITIONS as Record<string, ExerciseDefinitionDef | undefined>;
   for (const id of ['shoulderPress', 'overheadPress', 'arnoldPress', 'dumbbellShoulderPress', 'machineShoulderPress']) {
     const d = defs[id];

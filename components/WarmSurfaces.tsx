@@ -40,7 +40,7 @@ import { muscleRanksBaseJs } from '../lib/muscleRanksInject';
 import { allSetsBaseJs } from '../lib/allSetsInject';
 import { postLag } from '../lib/postLag';
 import { HAPTIC_CLICK_JS } from '../lib/hapticClick';
-import { haptic, isHapticKind } from '../lib/screenHaptics';
+import { hapticKind, hapticLight } from '../lib/haptics';
 import { NO_ZOOM_JS } from '../lib/noZoom';
 
 export type WarmKind = 'recap' | 'repfeedback' | 'ranks' | 'allsets';
@@ -304,9 +304,12 @@ function Layer({ k }: { k: WarmKind }) {
   const [beneathHidden, setBeneathHidden] = useState(false);
   useEffect(() => {
     if (!coveredByHigher) { setBeneathHidden(false); return; }
+    // Rep feedback is TRANSPARENT (the video shows through it). The page under it must be gone the instant it appears, or the
+    // Workout complete card shows through for a split second. Opaque pages cover what is under them, so those keep the short wait.
+    if (coverKind === 'repfeedback') { setBeneathHidden(true); return; }
     const t = setTimeout(() => setBeneathHidden(true), SLIDE_IN_MS + 80);
     return () => clearTimeout(t);
-  }, [coveredByHigher]);
+  }, [coveredByHigher, coverKind]);
   useLayoutEffect(() => {
     if (wanted) {
       if (!wasShown.current) {
@@ -373,7 +376,7 @@ function Layer({ k }: { k: WarmKind }) {
             set(k, { warm: true } as any);
             return;
           }
-          if (msg.type === 'haptic') { if (isHapticKind(msg.kind)) haptic(msg.kind); return; }
+          if (msg.type === 'haptic') { hapticKind(msg.kind); return; }
           if (msg.type === 'chrome') { set(k, { chrome: { back: msg.back, allSets: msg.allSets } } as any); return; }
           if (msg.type === 'pageError') { if (__DEV__) console.log(`[warm:${k}] PAGE ERROR`, msg.msg); setPageBroken(true); return; }
           if (msg.type === 'pageConsole') { if (__DEV__) console.log(`[warm:${k}:page]`, msg.msg); return; }
@@ -456,7 +459,7 @@ export default function WarmSurfaces() {
 // page's own buttons used to send.
 const MIN_TAP = 44;
 function GlassChrome({ k, c }: { k: WarmKind; c: Chrome }) {
-  const send = (type: string) => { haptic('light'); handlers[k]?.({ type }); };
+  const send = (type: string) => { hapticLight(); handlers[k]?.({ type }); };
   const box = (r: Rect, minW: number) => {
     const w = Math.max(minW, r.w + 6), h = Math.max(MIN_TAP, r.h + 6);
     return { position: 'absolute' as const, left: r.l + r.w / 2 - w / 2, top: r.t + r.h / 2 - h / 2, width: w, height: h };

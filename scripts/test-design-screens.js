@@ -30,7 +30,7 @@ const anchor = (p, src, act = 'click') => p.evaluate((s) => { const a = [...docu
   require('./lib/ts-node-loader.js')();
   const ES = require('../lib/exerciseSearch.ts');
   const pageSearch = new Function(ES.EXERCISE_SEARCH_PAGE_JS + '; return dsSearch;')();
-  const qs = ['g', 'G', 'p', 'pu', 'push', 'press', 'sq', 'squat', 'row', 'bench pr', 'close', 'grip', 'up', 'ro', 'x', '  curl ', 'single leg', 'dead', 'ba', 'bar', 'b', 'l', 'a', 'hqmmer', 'squt', 'pushp', 'bicp', 'deadlft', 'hamer', 'prss', 'gobl'];
+  const qs = ['g', 'G', 'p', 'pu', 'push', 'press', 'sq', 'squat', 'row', 'bench pr', 'close', 'grip', 'up', 'ro', 'x', '  curl ', 'single leg', 'dead', 'ba', 'bar', 'b', 'l', 'a', 'hqmmer', 'squt', 'pushp', 'bicp', 'deadlft', 'hamer', 'prss', 'gobl', 'hqm', 'hqmm', 'cur', 'pxs', 'sqt', 'dea'];
   let diff = 0, mid = 0;
   for (const q of qs) {
     const a = ES.searchExercises(names, q, 999), b = pageSearch(names, q);
@@ -46,7 +46,13 @@ const anchor = (p, src, act = 'click') => p.evaluate((s) => { const a = [...docu
     check('7: "squt" finds the squats, "bicp" finds Bicep Curl, "deadlft" finds Deadlift', ES.searchExercises(names, 'squt', 999).some((n) => /Squat/.test(n)) && ES.searchExercises(names, 'bicp', 999).includes('Bicep Curl') && ES.searchExercises(names, 'deadlft', 999).includes('Deadlift'));
     const cu = ES.searchExercises(names, 'curl', 999), firstTypoIdx = cu.findIndex((n) => ES.matchTier(n, 'curl') === 2);
     check('7: exact and word-start matches always rank before typo matches', firstTypoIdx === -1 || cu.slice(0, firstTypoIdx).every((n) => ES.matchTier(n, 'curl') < 2) && cu.slice(firstTypoIdx).every((n) => ES.matchTier(n, 'curl') === 2), cu.slice(0, 8).join(', '));
-    check('7: short queries are never fuzzy: "g", "gx" and "sqz" show no typo matches (g never shows Squat)', ['g', 'gx', 'sqz', 'xq'].every((q) => ES.searchExercises(names, q, 999).every((n) => ES.matchTier(n, q) < 2)) && !ES.searchExercises(names, 'g', 999).some((n) => /Squat/.test(n) && !/^g|\sg/i.test(n)), '');
+    check('7: 1-2 letter queries are never fuzzy: "g", "gx", "xq" show no typo matches (g never shows Squat)', ['g', 'gx', 'xq', 'sq'].every((q) => ES.searchExercises(names, q, 999).every((n) => ES.matchTier(n, q) < 2)) && !ES.searchExercises(names, 'g', 999).some((n) => /Squat/.test(n) && !/^g|\sg/i.test(n)), '');
+    {
+      const h3 = ES.searchExercises(names, 'hqm', 999);
+      check('12: "hqm" (3 letters, one wrong) already shows Hammer Curl', h3.includes('Hammer Curl'), h3.join(', '));
+      check('12: from 3 letters: "bcp" is NOT forgiven for the wrong first letter / two wrong, but "bicp" and "hqm" are', !ES.searchExercises(names, 'xqm', 999).includes('Hammer Curl') && ES.searchExercises(names, 'bicp', 999).includes('Bicep Curl'));
+      check('12: exact and word-start matches still rank before 3-letter typo matches', (() => { const r = ES.searchExercises(names, 'cur', 999); const first = r.findIndex((n) => ES.matchTier(n, 'cur') === 2); return first === -1 || r.slice(0, first).every((n) => ES.matchTier(n, 'cur') < 2); })());
+    }
     check('7: a nonsense word of 4+ letters far from every name finds nothing', ES.searchExercises(names, 'zzzzqq', 999).length === 0);
   }
   check('14: "g" never finds Bodyweight Squat; "sq" finds the squats starting with Sq or with a later word Sq*', !ES.searchExercises(names, 'g', 999).includes('Bodyweight Squat') && ES.searchExercises(names, 'sq', 999).includes('Bodyweight Squat'));
@@ -131,6 +137,21 @@ const anchor = (p, src, act = 'click') => p.evaluate((s) => { const a = [...docu
     check('page posts ready with no errors', msgs.some((m) => m.type === 'ready') && !logs.some((l) => /pageerror|render error/.test(l)), logs.filter((l) => /error/i.test(l)).slice(0, 2).join(' | '));
     let t = await text(page);
     check('starts empty on Today (nothing picked, no demo Squat / Push-up list, no "Sep 12")', /Today/.test(t) && !/Sep/.test(t) && (await page.evaluate(() => window.__athltCurrent.items.length)) === 0);
+    // 13: the main action is obvious: a clear "Log exercise" button that opens the search
+    const logBtn = await page.evaluate(() => { const b = document.querySelector('[data-ds-log]'); if (!b) return null; const r = b.getBoundingClientRect(); return { text: b.textContent.trim(), w: r.width, h: r.height }; });
+    check('13: a clear "Log exercise" button (a real, tappable size) sits under the search box', !!logBtn && logBtn.text === 'Log exercise' && logBtn.w >= 120 && logBtn.h >= 40, JSON.stringify(logBtn));
+    await page.evaluate(() => document.querySelector('[data-ds-log]').click());
+    await page.waitForTimeout(150);
+    check('13: tapping Log exercise opens the search (the search box is focused)', await page.evaluate(() => document.activeElement && document.activeElement.placeholder === 'Search exercises'));
+    // 14: the "Today" calendar is fully opaque (it was white at 74% with a blur, so the page showed through)
+    await page.evaluate(() => { const d = [...document.querySelectorAll('#dc-root div')].find((x) => x.style.cursor === 'pointer' && /^Today/.test((x.textContent || '').trim())); d.click(); });
+    await page.waitForTimeout(450);
+    const calStyle = await page.evaluate(() => { const p = document.querySelector('div[style*="ls-cal"]'); if (!p) return null; const cs = getComputedStyle(p); return { bg: cs.backgroundColor, bf: cs.backdropFilter || cs.webkitBackdropFilter || 'none' }; });
+    check('14: the calendar is fully opaque white (alpha 1, no blur): nothing shows through it', !!calStyle && (calStyle.bg === 'rgb(255, 255, 255)' || calStyle.bg === 'rgba(255, 255, 255, 1)') && /none/.test(calStyle.bf), JSON.stringify(calStyle));
+    check('14: the calendar heading shows the real month (November 2026), not the frozen September of the design', /November 2026/.test(await text(page)) && !/September 2026/.test(await text(page)));
+    await shot(page, 'log-calendar-open');
+    await page.evaluate(() => { const d = [...document.querySelectorAll('#dc-root div')].find((x) => x.style.cursor === 'pointer' && /^Today/.test((x.textContent || '').trim())); d.click(); });
+    await page.waitForTimeout(250);
     // 15: clear title + helper line, recent and popular chips to tap
     check('8: ONE clear title ("Log an exercise") and no grey helper text under it', /Log an exercise/.test(t) && !/What Did You Do/i.test(t) && !/Pick an exercise you did/.test(t) && !(await page.evaluate(() => !!document.getElementById('__ds_help'))), t.slice(0, 160));
     const chips = await page.evaluate(() => [...document.querySelectorAll('[data-ds-chip]')].map((c) => c.getAttribute('data-ds-chip')));

@@ -12,7 +12,7 @@ import type { WebView } from 'react-native-webview';
 import { EXERCISE_CATALOG } from '../constants/exercises';
 import { getAllSessions, appendSessions, computeMuscleTiers } from '../lib/sessionLog';
 import { computeOverallStanding } from '../components/MuscleTierMap';
-import { haptic } from '../lib/screenHaptics';
+import { hapticError } from '../lib/haptics';
 import DesignScreen, { type DesignMessage } from '../components/DesignScreen';
 import {
   buildCatalog, logSessionBeforeJs, logSessionData, athltSetDataJs, entriesFromPage, recentNames,
@@ -37,14 +37,12 @@ export default function LogSessionScreen() {
     try {
       const { ts, entries } = entriesFromPage({ dayNum: msg.dayNum, year: msg.year, month: msg.month, items: msg.items }, catalog, new Date());
       if (entries.length === 0) { saving.current = false; return; }
-      await appendSessions(entries);
-      webRef.current?.injectJavaScript('window.__dsSaved && window.__dsSaved(); true;');
-      // the SAME after-workout screen a real workout ends on: Today's progress, with these exercises counted
-      setTimeout(() => {
-        router.replace({ pathname: '/recap' as any, params: { mode: 'logged', ts: String(ts) } });
-      }, 650);
+      await appendSessions(entries, 'log-session (Save session pressed)');
+      // ONE clean transition: straight to Today's progress (no toast, no waiting): this screen is replaced, and the next one opens on
+      // the same light background, so nothing flashes in between
+      router.replace({ pathname: '/recap' as any, params: { mode: 'logged', ts: String(ts) } });
     } catch {
-      haptic('error');
+      hapticError();
       saving.current = false;
     }
   }, [catalog, router]);

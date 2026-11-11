@@ -1,0 +1,45 @@
+15:59:38.520 [log] [DEBUG] [METRIC] shoulderPress value=73.2093 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+15:59:41.314 [log] [DEBUG] [METRIC] shoulderPress value=45.5490 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+15:59:41.693 [log] [DEBUG] [METRIC] shoulderPress value=61.2686 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+15:59:42.094 [log] [DEBUG] [METRIC] shoulderPress value=59.9364 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+15:59:42.494 [log] [DEBUG] [METRIC] shoulderPress value=60.4830 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+15:59:42.897 [log] [DEBUG] [METRIC] shoulderPress value=31.5656 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+15:59:43.295 [log] [DEBUG] [METRIC] shoulderPress value=42.3545 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+15:59:43.596 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=36.5862 settleCandidateTop=36.5862 framesSeen=1
+15:59:43.699 [log] [DEBUG] [METRIC] shoulderPress value=35.7519 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:59:43.699 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=35.7519 settleCandidateTop=36.5862 framesSeen=2
+15:59:43.799 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=36.9369 settleCandidateTop=36.9369 framesSeen=3
+15:59:43.902 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=35.5210 settleCandidateTop=36.9369 framesSeen=4
+15:59:44.002 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=35.2695 settleCandidateTop=36.9369 framesSeen=5
+15:59:44.102 [log] [DEBUG] [METRIC] shoulderPress value=36.2235 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:59:44.102 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=36.2235 settleCandidateTop=36.9369 framesSeen=6
+15:59:44.201 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=34.8802 settleCandidateTop=36.9369 framesSeen=7
+15:59:44.307 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=35.3089 settleCandidateTop=36.9369 framesSeen=8
+15:59:44.409 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=41.0733 settleCandidateTop=41.0733 framesSeen=9
+15:59:44.510 [log] [DEBUG] [METRIC] shoulderPress value=60.4054 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:59:44.510 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=60.4054 settleCandidateTop=60.4054 framesSeen=10
+15:59:44.602 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=73.2815 settleCandidateTop=73.2815 framesSeen=11
+15:59:44.707 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=61.4742 settleCandidateTop=73.2815 framesSeen=12
+15:59:44.805 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=78.3350 settleCandidateTop=78.3350 framesSeen=13
+15:59:44.907 [log] [DEBUG] [METRIC] shoulderPress value=76.6977 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:59:44.907 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=76.6977 settleCandidateTop=78.3350 framesSeen=14
+15:59:45.002 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=75.3686 settleCandidateTop=78.3350 framesSeen=15
+15:59:45.105 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=75.1686 settleCandidateTop=78.3350 framesSeen=16
+15:59:45.207 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=73.5627 settleCandidateTop=78.3350 framesSeen=17
+15:59:45.315 [log] [DEBUG] [METRIC] shoulderPress value=72.7107 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:59:45.711 [log] [DEBUG] [METRIC] shoulderPress value=66.7832 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:59:46.111 [log] [DEBUG] [METRIC] shoulderPress value=70.9651 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:59:46.514 [log] [DEBUG] [METRIC] shoulderPress value=71.5889 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:59:46.888 [log] [DEBUG] [METRIC] shoulderPress value=72.0578 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:59:47.298 [log] [DEBUG] [METRIC] shoulderPress value=72.3332 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:59:47.706 [log] [DEBUG] [METRIC] shoulderPress value=62.1779 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:59:48.113 [log] [DEBUG] [METRIC] shoulderPress value=60.2278 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:59:48.193 [log] [DEBUG] [METRIC] shoulderPress value=60.3971 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=waiting
+15:59:48.296 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=59.5288 settleCandidateTop=59.5288 framesSeen=1
+15:59:48.395 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=59.7138 settleCandidateTop=59.7138 framesSeen=2
+15:59:48.499 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=59.4339 settleCandidateTop=59.7138 framesSeen=3
+15:59:48.601 [log] [DEBUG] [METRIC] shoulderPress value=59.0507 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+15:59:48.601 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=59.0507 settleCandidateTop=59.7138 framesSeen=4
+15:59:48.700 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=58.9833 settleCandidateTop=59.7138 framesSeen=5
+15:59:48.803 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=58.7374 settleCandidateTop=59.7138 framesSeen=6
+15:59:48.903 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=59.1942 settleCandidateTop=59.7138 framesSeen=7

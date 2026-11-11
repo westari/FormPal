@@ -102,9 +102,9 @@ const restSim = (() => {
   return bad;
 })();
 check('no cue while just resting in the start position', restSim === 0, `${restSim} cue frames`);
-check('a native [REP-WAIT] line gives the cue "Lower arms"', (() => {
-  const d = NEW.createRepDiagnostic(0.9); let clock = 0; const rn = Date.now; Date.now = () => 1e12 + clock;
-  try { d.feed('[METRIC] x value=60 top=84 rom=55'); clock = 2000; d.feed('[METRIC] x value=88 top=84 rom=55'); d.feed('[REP-WAIT] shoulderPress metric=88.0 is above exit but arms are not back at the start'); return d.message() === 'Lower arms'; }
+check('a native [REP-WAIT] line gives the plain cue "Hands at shoulders"', (() => {
+  const d = NEW.createRepDiagnostic(0.9, 'shoulderPress'); let clock = 0; const rn = Date.now; Date.now = () => 1e12 + clock;
+  try { d.feed('[METRIC] x value=60 top=84 rom=55'); clock = 2000; d.feed('[METRIC] x value=88 top=84 rom=55'); d.feed('[REP-WAIT] shoulderPress metric=88.0 is above exit but arms are not back at the start'); return d.message() === 'Hands at shoulders'; }
   finally { Date.now = rn; }
 })());
 // Every rejected rep says WHY in plain words (never the useless "Rep not counted")
@@ -115,10 +115,10 @@ function reasonFor(exerciseId, rejectLine) {
 }
 const REAL_UNRELIABLE = '[REP] rejected — tracking unreliable for 4/4 frames (100%), not counted | joint conf (min-max over rep): leftShoulder=[0.34-0.50] leftElbow=[0.17-0.59] rightShoulder=[0.43-0.53] rightElbow=[0.21-0.43]';
 const PHANTOM = '[REP] rejected — movement=3.0000 minSwing=8.7000 (start=64.0000 peak=61.0000) required=1.6 movementPastEntry=2 requiredPastEntry=1.6 (phantom)';
-check('a rejected rep for tracking says "Can not see arms" (the real 11-10 line)', reasonFor('shoulderPress', REAL_UNRELIABLE) === "Can't see arms", reasonFor('shoulderPress', REAL_UNRELIABLE));
-check('a too-small shoulder press says Press higher', reasonFor('shoulderPress', PHANTOM) === 'Press higher', reasonFor('shoulderPress', PHANTOM));
+check('a rejected rep for tracking says "Step back" (the real 11-10 line)', reasonFor('shoulderPress', REAL_UNRELIABLE) === 'Step back', reasonFor('shoulderPress', REAL_UNRELIABLE));
+check('a too-small shoulder press says Go higher', reasonFor('shoulderPress', PHANTOM) === 'Go higher', reasonFor('shoulderPress', PHANTOM));
 check('a too-shallow squat / push-up says "Go lower"', reasonFor('squat', PHANTOM) === 'Go lower' && reasonFor('pushup', PHANTOM) === 'Go lower');
-check('a short curl / row says Pull higher; a lateral raise Raise higher', reasonFor('curl', PHANTOM) === 'Pull higher' && reasonFor('bentOverRow', PHANTOM) === 'Pull higher' && reasonFor('lateralRaise', PHANTOM) === 'Raise higher');
+check('a short curl / row says Pull higher; a lateral raise Raise higher', reasonFor('curl', PHANTOM) === 'Pull higher' && reasonFor('bentOverRow', PHANTOM) === 'Pull higher' && reasonFor('lateralRaise', PHANTOM) === 'Go higher');
 check('no exercise ever gets the bare "Rep not counted" any more', ['shoulderPress', 'squat', 'curl', 'lateralRaise', 'unknownThing'].every((id) => !/^Rep not counted$/.test(reasonFor(id, PHANTOM) + '') && !/^Rep not counted$/.test(reasonFor(id, REAL_UNRELIABLE) + '')));
 
 // ── Feedback is 2-3 words, never "Hold still" while moving ────────────────────────────────────────────────────
