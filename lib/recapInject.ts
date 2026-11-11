@@ -225,6 +225,7 @@ export function recapDataJs(opts: {
   var HAS_VIDEO = ${JSON.stringify(hasVideo)};
   console.log('[recap-page] injected JS running, HAS_VIDEO=', HAS_VIDEO);
   var bgTransparent = false;
+  var noVideoNoted = false;
   var sizeWired = false;
   var titleSizeWired = false;
   var cardWidened = false;
@@ -307,6 +308,25 @@ export function recapDataJs(opts: {
         if(rootDiv) rootDiv.style.setProperty('background','transparent','important');
         bgTransparent = true;
         hit++;
+      }
+    }
+    // No video for this workout: the design's placeholder ("Drop replay frame") must never show. Say it plainly instead.
+    if(!HAS_VIDEO && !noVideoNoted){
+      var slot0 = document.getElementById('recap-replay');
+      if(slot0){
+        slot0.style.display = 'none';
+        var wrap0 = slot0.parentElement;
+        if(wrap0){
+          if(getComputedStyle(wrap0).position === 'static') wrap0.style.position = 'relative';
+          if(!wrap0.querySelector('[data-novideo]')){
+            var note = document.createElement('div');
+            note.setAttribute('data-novideo','1');
+            note.textContent = 'No video was saved for this workout';
+            note.style.cssText = 'position:absolute;left:0;right:0;top:0;bottom:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;color:rgba(255,255,255,0.72);font-size:16px;font-weight:600;';
+            wrap0.appendChild(note);
+          }
+        }
+        noVideoNoted = true; hit++;
       }
     }
     var all=document.querySelectorAll('#dc-root div,#dc-root span');

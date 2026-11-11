@@ -99,3 +99,27 @@ export function removeClipFiles(uri: string): void {
     }
   } catch { /* ignore */ }
 }
+
+/**
+ * RECOVERY for a recording the camera did not hand back. The camera writes each clip to the app's temp folder as
+ * athlt_<seconds>.mov; when the native stop call returns "no video" (the recording ended early with an error, or an older
+ * build lost it), the file is often still there. Returns the newest such clip made at or after `sinceMs` that has content,
+ * else null. Never throws.
+ */
+export function recoverRecentClip(sinceMs: number): { uri: string; bytes: number } | null {
+  try {
+    const tmp = new Directory(Paths.cache.parentDirectory.parentDirectory, 'tmp');
+    if (!tmp.exists) return null;
+    let best: { uri: string; bytes: number; t: number } | null = null;
+    for (const item of tmp.list()) {
+      if (!(item instanceof File)) continue;
+      if (!/^athlt_[0-9]+\.mov$/.test(baseName(item.uri))) continue;
+      let t = 0;
+      try { const m = item.info().modificationTime ?? 0; t = m < 1e11 ? m * 1000 : m; } catch { t = 0; }
+      const bytes = item.size ?? 0;
+      if (bytes <= 0 || t < sinceMs) continue;
+      if (!best || t > best.t) best = { uri: item.uri, bytes, t };
+    }
+    return best ? { uri: best.uri, bytes: best.bytes } : null;
+  } catch { return null; }
+}

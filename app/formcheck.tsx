@@ -46,7 +46,7 @@ import { setFlashBrightness } from '../lib/screenFlash';
 import RingLight from '../components/RingLight';
 import { createRepDiagnostic, STREAM_DEAD_SEC_FLOOR } from '../lib/repDiagnostics';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
-import { persistVideo } from '../lib/videoStore';
+import { persistVideo, recoverRecentClip } from '../lib/videoStore';
 import { NO_ZOOM_JS } from '../lib/noZoom';
 import { shortCue } from '../lib/shortCue';
 import { createSetupGuide, needsLockout, SETUP_TUNING, type SetupDecision } from '../lib/setupGuide';
@@ -1247,6 +1247,14 @@ export default function FormCheckScreen() {
     isTrackingRef.current = false;
     const final = await stopTracking();
     postLag('formcheck: native stopTracking returned (recording finished)');
+    // The workout video: what the camera handed back, and a rescue when it handed back nothing (the clip file is often still
+    // in the temp folder). Without a video the Workout complete page has nothing to play, no rep feedback and no thumbnails.
+    console.log('[VIDEO] stop: camera returned ' + (final.videoUri ? 'a clip (' + final.videoUri.split('/').pop() + ')' : 'NO clip') + ', ' + (startTimestamp.current ? Math.round((Date.now() - startTimestamp.current) / 1000) : 0) + 's tracked');
+    if (!final.videoUri && startTimestamp.current) {
+      const rescued = recoverRecentClip(startTimestamp.current - 5000);
+      if (rescued) { final.videoUri = rescued.uri; console.log('[VIDEO] rescued the clip from the temp folder: ' + rescued.uri.split('/').pop() + ' (' + rescued.bytes + ' bytes)'); }
+      else console.log('[VIDEO] no clip file found in the temp folder either: this set has no video (the camera never kept a recording)');
+    }
     sessionStopped.current = true;
     // The camera teardown (captureSession.stopRunning) is slow and nothing after it needs to wait for it: the final
     // numbers and the video file already exist. It runs on the camera's own serial queue, so a later startSession is
