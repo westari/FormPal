@@ -51,6 +51,7 @@ export function createMovementMatch(opts: { now?: () => number; log?: (m: string
   let lastLostAt = 0, lastBackAt = 0;
   let tryStart = 0, lowSince = 0;
   let lastLogAt = 0, lastLogScore = -100, lastLogCut = '';
+  let lastRepAt = 0;
 
   const R = () => Math.max(1e-6, Math.abs(top - rom));
 
@@ -85,6 +86,7 @@ export function createMovementMatch(opts: { now?: () => number; log?: (m: string
     if (m) { addSample(t, parseFloat(m[1])); return; }
     m = /^\[ACTIVITY\] suppressed[^\n]*?metric=([-\d.]+)/.exec(line);
     if (m) { addSample(t, parseFloat(m[1])); return; }
+    if (/^\[REP\] #[0-9]+/.test(line)) { lastRepAt = t; return; }
     if (/^\[TRACK\] person lost/.test(line)) { lastLostAt = t; cuts.push({ t, where: 'frame', weight: 1 }); return; }
     if (/^\[TRACK\] person back/.test(line)) { lastBackAt = t; return; }
   }
@@ -209,7 +211,9 @@ export function createMovementMatch(opts: { now?: () => number; log?: (m: string
     else base = wM * motion + wR * rhythm + wG * range + wP * position;
     const gateAmp = clamp01((spreadR - T.ampGateLowR) / (T.ampGateHighR - T.ampGateLowR));
     const gatePath = clamp01(1 - ((1 - inFrac) - T.outGateFree) / (T.outGateZero - T.outGateFree));
-    const score = Math.round(100 * base * gateAmp * gatePath);
+    let score = Math.round(100 * base * gateAmp * gatePath);
+    // a rep the engine really counted is evidence of this exercise (see repEvidenceFloor)
+    if (lastRepAt && t - lastRepAt <= T.windowSec * 1000 && score < T.repEvidenceFloor) score = T.repEvidenceFloor;
 
     const trying = score >= T.high, notTrying = score < T.low;
     if (trying) { lowSince = 0; if (!tryStart) tryStart = t; }
@@ -231,8 +235,8 @@ export function createMovementMatch(opts: { now?: () => number; log?: (m: string
 
   return {
     feed,
-    noteRep() { /* Movement Match does not need reps; confidence and the Guide do */ },
+    noteRep() { lastRepAt = now(); },
     result,
-    reset() { samples = []; cuts = []; lastLostAt = 0; lastBackAt = 0; tryStart = 0; lowSince = 0; lastLogAt = 0; lastLogScore = -100; lastLogCut = ''; haveDef = false; },
+    reset() { samples = []; cuts = []; lastLostAt = 0; lastBackAt = 0; tryStart = 0; lowSince = 0; lastLogAt = 0; lastLogScore = -100; lastLogCut = ''; lastRepAt = 0; haveDef = false; },
   };
 }

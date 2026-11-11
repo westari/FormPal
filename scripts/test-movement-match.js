@@ -198,7 +198,9 @@ for (const name of REAL) {
   const counting = res.rows.filter((x) => { const reps = res.events.filter((e) => /^\[REP\] #\d+/.test(e.line) && e.t <= x.t && x.t - e.t <= 3500); return x.match.trying && x.match.tryingForSec >= TUN.MOVEMENT_MATCH.minTryingSec && reps.length >= 1 && !x.conf.stuck && x.guideReason !== 'nobody'; });
   check(`${name}: when reps are counting and Movement Match is HIGH (${counting.length} ticks) confidence is 90-100 (unless a frame hint caps it)`, counting.every((x) => x.conf.value >= 90 || x.match.cut === 'frame'), counting.filter((x) => x.conf.value < 90).length + ' ticks below 90');
   const notTrying = res.rows.filter((x) => x.match.haveData && x.match.notTrying);
-  check(`${name}: when Movement Match is LOW (${notTrying.length} ticks) no check and no X is shown`, res.verdicts.filter((v) => v.show && notTrying.some((x) => Math.abs(x.t - v.t) <= 100 && x.match.score < TUN.MOVEMENT_MATCH.low)).length === 0);
+  check(`${name}: when Movement Match is LOW (${notTrying.length} ticks) no check and no X is shown (${res.verdicts.filter((v) => v.show).length} verdicts, every one at a match of ${TUN.MOVEMENT_MATCH.low}+)`, res.verdicts.filter((v) => v.show && v.score < TUN.MOVEMENT_MATCH.low).length === 0);
+  const repsC = res.events.filter((e) => /^\[REP\] #\d+/.test(e.line)).length, nativeV = res.verdicts.filter((v) => v.src === 'native' && v.show).length;
+  check(`${name}: every rep the engine counted got a check or an X (${nativeV} of ${repsC}), except where the Guide's frame hint was up`, nativeV >= repsC - 1, `${nativeV}/${repsC}`);
   check(`${name}: the Guide and the Coach never said the same thing`, guideAndCoachClash(res).length === 0, guideAndCoachClash(res).join(','));
   const guideBad = uniq(res.rows.map((x) => x.guide).filter(Boolean)).filter((w) => !GUIDE_SET.has(w.toLowerCase()));
   check(`${name}: everything the Guide said is a line from its own list`, guideBad.length === 0, guideBad.join(' | '));

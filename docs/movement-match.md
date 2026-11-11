@@ -98,3 +98,18 @@ Every line makes sense to someone who has never used the app: one line, starts w
 `scripts/test-movement-match.js` replays Ari's real logs (Nov 8, 10, 11) and synthetic cases (standing still, grabbing the phone, walking,
 half reps, full reps, hands out of frame at the top, too close) and prints a before / after table of what the Guide, Coach and confidence
 did. It also builds a signature for EVERY exercise in the catalogue and checks the same rules on each, and checks the word lists.
+
+## Addendum: a counted rep is evidence
+
+A rep the engine really counted (or the app counted itself) lifts Movement Match to at least 40 ("unsure", never LOW) for the next 10
+seconds (`repEvidenceFloor`). Without it, the first counted rep after a pause (the window had almost no movement in it yet) was scored LOW and
+got no check (seen in the 2026-11-10 log). It never makes a stroke "HIGH" on its own, so it cannot start a "stuck" verdict or an X for an
+uncounted stroke.
+
+## Decisions made while building (change them if you disagree)
+
+* **Adapting is off.** The attempt detector used to learn "this person's range" after three short strokes and count them as reps. A half rep
+  must always get an X, so it is switched off (`adaptMaxShortFraction: 0`).
+* **The Guide stays silent when the strokes are only short.** The camera sees the whole path fine, so there is no setup fix; the Coach already
+  speaks on every X. Confidence still falls (rule 3).
+* **Reps that cannot be judged** (rep-counter exercises) get no check / X at all, as before.

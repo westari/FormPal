@@ -1174,7 +1174,7 @@ export default function FormCheckScreen() {
       setReps(rep.reps + softRepsRef.current);
       setGoodReps(rep.goodReps + softGoodRef.current);
       lastNativeRep.current = { at: Date.now(), good: rep.good, retracted: false };
-      lastCountAtRef.current = Date.now(); missedSinceCountRef.current = 0; // a rep counted: reps are counting
+      lastCountAtRef.current = Date.now(); missedSinceCountRef.current = 0; matchRef.noteRep(); // a rep counted: reps are counting
       setAttemptCue(null);
       // A rep landed — re-ask the diagnostic rather than force-clearing. If
       // several reps are merging (attempts >> counted) or the legs kicked,
@@ -1357,7 +1357,7 @@ export default function FormCheckScreen() {
       }
       if (ev.outcome === 'soft') {
         softRepsRef.current += 1; softGoodRef.current += 1;
-        lastCountAtRef.current = Date.now(); missedSinceCountRef.current = 0;
+        lastCountAtRef.current = Date.now(); missedSinceCountRef.current = 0; matchRef.noteRep();
         setReps(nativeRepsRef.current + softRepsRef.current);
         setGoodReps(nativeGoodRef.current + softGoodRef.current);
         const cvs = coachRef.verdict({ now: Date.now(), match: matchRef.result(), source: 'soft' });

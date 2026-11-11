@@ -36,6 +36,7 @@ export const MOVEMENT_MATCH = {
   high: 55,                 // >= this = "trying this exercise"
   low: 35,                  // < this = "not trying"
   minTryingSec: 2,          // trying must hold this long before the Coach or a "stuck" verdict trusts it (a single reach is not a set)
+  repEvidenceFloor: 40,     // a rep the engine really counted is evidence of this exercise: for one window after it the score is at least this ("unsure", never LOW), so a counted rep after a pause still gets its check / X
   // path cuts
   cutGapSec: 0.9,           // the samples stop for this long while the value is in the top (or bottom) zone = the camera lost the joints there
   cutLongSec: 2.0,           // a gap this long counts double

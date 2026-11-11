@@ -61,11 +61,11 @@ function run(events, opts = {}) {
         if (ev.outcome === 'soft') {
           st.soft++; st.lastCountAt = now; st.missed = 0;
           const v = coach.verdict({ now, match: mm.result(), source: 'soft' });
-          verdicts.push({ t: now - 1e12, show: v.show, reason: v.reason, src: 'soft' });
+          verdicts.push({ t: now - 1e12, show: v.show, reason: v.reason, src: 'soft', score: mm.result().score });
         } else if (ev.outcome === 'missed' || ev.outcome === 'rejected') {
           st.missed++;
           const v = coach.verdict({ now, match: mm.result(), source: 'attempt', blocker: ev.blocker, rangeWord: ev.reason, n: ev.n });
-          verdicts.push({ t: now - 1e12, show: v.show, reason: v.reason, src: 'attempt', blocker: ev.blocker });
+          verdicts.push({ t: now - 1e12, show: v.show, reason: v.reason, src: 'attempt', blocker: ev.blocker, score: mm.result().score });
         }
       }
     };
@@ -111,7 +111,7 @@ function run(events, opts = {}) {
           st.lastCountAt = getClock(); st.missed = 0; st.native++;
           const good = m[2].trim() === 'GOOD';
           const v = coach.verdict({ now: getClock(), match: mm.result(), source: 'native', good, reason: good ? '' : m[2].trim() });
-          verdicts.push({ t: getClock() - 1e12, show: v.show, reason: v.reason, src: 'native' });
+          verdicts.push({ t: getClock() - 1e12, show: v.show, reason: v.reason, src: 'native', score: mm.result().score });
           // old: a counted rep got a check, a bad one the old reason
           old.x.push({ t: getClock() - 1e12, text: good ? 'CHECK' : 'X ' + m[2].trim(), src: 'native' });
         }
