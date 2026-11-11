@@ -293,7 +293,11 @@ export const MUSCLE_RANKS_DOM_JS = String.raw`
       if (nodes[0].nodeValue !== lead) nodes[0].nodeValue = lead;
       if (nodes[2].nodeValue !== tail) nodes[2].nodeValue = tail;
       gd.style.setProperty('white-space', 'nowrap', 'important');
-      gd.style.setProperty('text-align', 'right', 'important');
+      // UNDER the "Bronze -> Silver" text, on its own line (the row wraps; this div takes the full width)
+      gd.style.setProperty('text-align', 'left', 'important');
+      gd.style.setProperty('flex', '0 0 100%', 'important');
+      gd.style.setProperty('margin-top', '3px', 'important');
+      if (gd.parentElement) gd.parentElement.style.setProperty('flex-wrap', 'wrap', 'important');
       gd.style.setProperty('line-height', '1.25', 'important');
       gainDone = (gd.textContent || '') === lead + (R.atTop ? '' : R.gained) + tail;
       break;
