@@ -224,7 +224,7 @@ check('rows carry the real Flaticon art', A.hits.every(h => h.icon && h.icon.sta
   // gain really is after - before for that muscle
   const sc = SCENARIOS['shoulders+triceps (bronze)'];
   // before today the shoulders had 40 reps of Bronze's 150 (unranked, 26.7% toward Bronze = about -73.3 on the scale just below Bronze's 0)
-  const exp = 30 / sessionLog.VOLUME_THRESHOLDS.find(([t]) => t === 'silver')[1] * 100; // 30 shoulder-press reps today, still below Bronze: 30 of the 150-rep bar
+  const exp = 28 / sessionLog.VOLUME_THRESHOLDS.find(([t]) => t === 'silver')[1] * 100; // only GOOD reps count: 28 of today's 30 // 30 shoulder-press reps today, still below Bronze: 30 of the 150-rep bar
   const shown = parseFloat(A.hits.find(h => h.name === 'Shoulders').gain.replace(/[+%]/g, ''));
   check('Shoulders +% equals (after - before) progress from the logs', Math.abs(shown - exp) <= 0.51, `shown ${shown} expected ${exp.toFixed(2)}`);
 }

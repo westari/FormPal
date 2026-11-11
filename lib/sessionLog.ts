@@ -15,10 +15,10 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getExerciseDef, MuscleGroup, Muscle, muscleCreditParts } from '../constants/exercises';
-import { DECAY_HALF_LIFE_DAYS, VOLUME_THRESHOLDS, QUALITY_THRESHOLDS, MAX_LOG_ENTRIES } from './rankTuning';
+import { VOLUME_THRESHOLDS, MAX_LOG_ENTRIES } from './rankTuning';
 
 // The tunable numbers live in lib/rankTuning.ts (all placeholders); re-exported so every existing import keeps working.
-export { VOLUME_THRESHOLDS, QUALITY_THRESHOLDS };
+export { VOLUME_THRESHOLDS };
 
 export const SESSION_LOG_KEY = 'formpal_session_log';
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -235,25 +235,19 @@ export const TIER_ORDER: Tier[] = ['bronze', 'silver', 'gold', 'platinum', 'diam
 
 export function tierIndex(t: Tier): number { return TIER_ORDER.indexOf(t); }
 
-// Decay half-life, volume thresholds and quality thresholds: see lib/rankTuning.ts (placeholders, with the reasoning).
+// Rank numbers (good reps needed per rank): see lib/rankTuning.ts (placeholders, with the reasoning).
 
 function tierFromVolume(v: number): Tier {
   for (const [tier, min] of VOLUME_THRESHOLDS) if (v >= min) return tier;
   return 'bronze'; // there is no "Unranked": everyone starts at Bronze 0%
 }
 
-function tierFromQuality(q: number): Tier {
-  for (const [tier, min] of QUALITY_THRESHOLDS) if (q >= min) return tier;
-  return 'bronze';
-}
-
 export interface MuscleTierInfo {
-  tier:      Tier; // ACTIVE rank — decays with inactivity (gentle, see DECAY_HALF_LIFE_DAYS), but floors at Bronze rather than disappearing once ever earned
-  peakTier:  Tier; // PEAK rank — the highest tier this muscle has EVER reached, permanent, never decays. Display as a "Peak: X" badge alongside the active tier.
-  volume:    number; // decayed weighted rep count (absolute, not normalized)
-  goodRatio: number; // 0-1 — recency-weighted good/total, same decay applied to both
-  // false = this muscle has NO judged reps (rep-counter exercises only), so goodRatio is a
-  // placeholder 0 and must not gate progress. Omitted = treat as judged (older callers).
+  tier:      Tier; // the rank from this muscle's good-rep total (no fading: resting never lowers it)
+  peakTier:  Tier; // the highest rank ever reached; with no fading it always equals tier (kept for the "Peak" badge code)
+  volume:    number; // good reps x muscle credit, all time, no fading
+  goodRatio: number; // 0-1 good / judged reps over the whole log (information only: it no longer gates a rank)
+  // false = this muscle has NO judged reps (rep-counter exercises only). Information only.
   qualityJudged?: boolean;
 }
 
@@ -261,9 +255,8 @@ const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
 
 /**
  * THE ONE progress-to-the-next-tier number (0-1) for a muscle. Every screen that shows a muscle's % calls this (the
- * after-workout page, the rank map, the overall standing); do not re-implement it. A muscle's progress is whichever
- * is further behind: its volume toward the next tier, or its good-form share toward the next tier's bar. A muscle
- * with no judged reps (rep-counter moves only) has no quality signal, so volume alone decides.
+ * after-workout page, the rank map, the overall standing); do not re-implement it. It is simply the muscle's good reps
+ * inside this rank over the reps this rank needs (REPS_TO_NEXT_RANK), so each good rep is worth a fixed percent per rank.
  */
 export function tierProgress(info: MuscleTierInfo): number {
   const idx = tierIndex(info.tier);
@@ -271,11 +264,7 @@ export function tierProgress(info: MuscleTierInfo): number {
   const next = TIER_ORDER[idx + 1];
   const curVol  = VOLUME_THRESHOLDS.find(([t]) => t === info.tier)![1];
   const nextVol = VOLUME_THRESHOLDS.find(([t]) => t === next)![1];
-  const vol = clamp01((info.volume - curVol) / (nextVol - curVol));
-  if (info.qualityJudged === false) return vol;
-  const curQual  = QUALITY_THRESHOLDS.find(([t]) => t === info.tier)![1];
-  const nextQual = QUALITY_THRESHOLDS.find(([t]) => t === next)![1];
-  return Math.min(vol, clamp01((info.goodRatio - curQual) / (nextQual - curQual)));
+  return clamp01((info.volume - curVol) / (nextVol - curVol));
 }
 
 /** Kept so older callers still compile. There is no "Unranked" any more (see rankTuning.ts): always 0, i.e. Bronze 0%. */
@@ -305,98 +294,26 @@ export function muscleCreditTotals(sessions: SessionEntry[]): Map<Muscle, number
 export type MuscleTiers = Partial<Record<Muscle, MuscleTierInfo>>;
 
 export function computeMuscleTiers(sessions: SessionEntry[]): MuscleTiers {
-  const now    = Date.now();
-  const lambda = Math.LN2 / DECAY_HALF_LIFE_DAYS;
-
-  // Group each session's per-muscle contribution (reps/goodReps scaled by
-  // MuscleCredit weight — see that type's own comment) by muscle,
-  // chronologically. Needed (not just the old single flat pass) so PEAK
-  // tier can be derived below: An exercise's good-rep ratio applies to
-  // every muscle it targets — SessionEntry only tracks form quality per
-  // EXERCISE, not per muscle within it, so this is the honest granularity
-  // available, not an approximation of something more precise we're
-  // choosing not to show.
-  // reps      = training volume, EVERY rep (judged or 'repCounter').
-  // qualReps  = only reps whose form was judged — the denominator for goodRatio.
-  // goodReps  = judged reps that hit good form.
-  // A muscle trained only via rep-counter exercises accrues volume but has
-  // qualReps 0, so its quality gate is simply not applied (see below).
-  const byMuscle = new Map<Muscle, { ts: number; reps: number; qualReps: number; goodReps: number }[]>();
+  // Per muscle: good reps x credit (the rank number), plus judged / good reps for the information-only goodRatio.
+  // An entry whose form was never judged (rep counter only, typed in by hand) has no good or bad: all its reps count.
+  const acc = new Map<Muscle, { vol: number; qual: number; good: number }>();
   for (const s of sessions) {
     const def = getExerciseDef(s.exerciseId);
-    if (!def) continue; // exerciseId missing/unknown — can't attribute muscles
+    if (!def) continue; // exerciseId missing/unknown: can't attribute muscles
     const judged = s.formChecked !== false;
+    const goodReps = judged ? Math.max(0, Math.min(s.goodReps, s.reps)) : s.reps;
     for (const entry of def.muscles) {
       const { muscle: m, weight } = muscleCreditParts(entry);
-      const arr = byMuscle.get(m) ?? [];
-      arr.push({
-        ts: s.ts,
-        reps:     s.reps * weight,
-        qualReps: judged ? s.reps * weight : 0,
-        goodReps: judged ? s.goodReps * weight : 0,
-      });
-      byMuscle.set(m, arr);
+      const a = acc.get(m) ?? { vol: 0, qual: 0, good: 0 };
+      a.vol  += goodReps * weight;
+      if (judged) { a.qual += s.reps * weight; a.good += goodReps * weight; }
+      acc.set(m, a);
     }
   }
-
-  // quality tier from a possibly-absent ratio: null (no judged reps yet) means
-  // "don't gate on quality" — the muscle ranks on volume alone until it has
-  // form-checked training to judge.
-  const gatedTier = (volTier: Tier, ratio: number | null): Tier => {
-    if (ratio === null) return volTier;
-    const qt = tierFromQuality(ratio);
-    return tierIndex(qt) < tierIndex(volTier) ? qt : volTier;
-  };
-
   const out: MuscleTiers = {};
-  for (const [m, entries] of byMuscle) {
-    entries.sort((a, b) => a.ts - b.ts);
-    let vol = 0, qualVol = 0, goodVol = 0;
-    let lastTs = entries[0].ts;
-    let peakTier: Tier | null = null;
-
-    // Walk sessions chronologically. Decayed volume is at a LOCAL MAXIMUM
-    // right after each session (it only shrinks between sessions, never
-    // grows on its own), so evaluating the tier at each session's own
-    // timestamp and tracking the running max gives the true all-time peak
-    // in one forward pass — no need to replay day-by-day. goodRatio doesn't
-    // even need decaying between sessions for this (see DECAY_HALF_LIFE_DAYS'
-    // comment — it's decay-invariant), so this is exact, not approximated.
-    for (const e of entries) {
-      const gapDays = (e.ts - lastTs) / DAY_MS;
-      const decay   = Math.exp(-lambda * gapDays);
-      vol     = vol * decay + e.reps;
-      qualVol = qualVol * decay + e.qualReps;
-      goodVol = goodVol * decay + e.goodReps;
-      lastTs  = e.ts;
-
-      const volTier = tierFromVolume(vol);
-      if (volTier) {
-        const ratio     = qualVol > 0 ? goodVol / qualVol : null;
-        const localTier = gatedTier(volTier, ratio);
-        if (!peakTier || tierIndex(localTier) > tierIndex(peakTier)) peakTier = localTier;
-      }
-    }
-
-    if (!peakTier) continue; // never crossed Bronze, ever — not shown, not fabricated
-
-    // Decay forward from the last session to now for the current/active value.
-    const decayToNow = Math.exp(-lambda * (now - lastTs) / DAY_MS);
-    vol     *= decayToNow;
-    qualVol *= decayToNow;
-    goodVol *= decayToNow;
-    const goodRatio = qualVol > 0 ? goodVol / qualVol : 0;
-
-    // Active tier floors at Bronze once ever earned — a long-enough absence
-    // dulls the rank toward the bottom, it doesn't erase the muscle from
-    // the map entirely. peakTier (above) is the permanent record of how
-    // high it actually got.
-    const rawVolTier  = tierFromVolume(vol);
-    const currentTier = rawVolTier
-      ? gatedTier(rawVolTier, qualVol > 0 ? goodRatio : null)
-      : 'bronze';
-
-    out[m] = { tier: currentTier, peakTier, volume: vol, goodRatio, qualityJudged: qualVol > 0 };
+  for (const [m, a] of acc) {
+    const tier = tierFromVolume(a.vol);
+    out[m] = { tier, peakTier: tier, volume: a.vol, goodRatio: a.qual > 0 ? a.good / a.qual : 0, qualityJudged: a.qual > 0 };
   }
   return out;
 }
