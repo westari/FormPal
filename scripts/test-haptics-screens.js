@@ -31,11 +31,11 @@ const H = require('../lib/haptics.ts');
 
 (async () => {
   // ── Part 1: the mapping ──
-  const FN = { selection: 'hapticSelect', light: 'hapticLight', medium: 'hapticMedium', warning: 'hapticWarning', success: 'hapticSuccess', error: 'hapticError' };
+  const FN = { selection: 'hapticSelect', light: 'hapticSelect', medium: 'hapticMain', warning: 'hapticWarning', success: 'hapticSuccess', error: 'hapticError' };
   const run = (k) => { H.__setHapticBackend(FAKE); calls.length = 0; H[FN[k]](); return calls.join(); };
   check('selection -> selectionAsync', run('selection') === 'selection');
-  check('light -> impactAsync(Light)', run('light') === 'impact:Light');
-  check('medium (Start / Save / Finish / Log) -> impactAsync(Medium)', run('medium') === 'impact:Medium');
+  check('an ordinary tap (hapticSelect) -> selectionAsync', run('light') === 'selection');
+  check('a main action (hapticMain: Start / Save / Finish / Log) -> impactAsync(Light)', run('medium') === 'impact:Light');
   check('rep rejected (X) -> notificationAsync(Warning)', run('warning') === 'notification:Warning');
   check('workout complete / rank up -> notificationAsync(Success)', run('success') === 'notification:Success');
   check('errors -> notificationAsync(Error)', run('error') === 'notification:Error');
@@ -81,16 +81,24 @@ const H = require('../lib/haptics.ts');
   // ── Part 3: native screens call it ──
   const read = (f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8').split('\r\n').join('\n');
   const fc = read('app/formcheck.tsx'), rc = read('app/recap.tsx'), ws = read('components/WarmSurfaces.tsx'), ds = read('components/DesignScreen.tsx');
-  check('camera: rep counted -> Light, rejected (X) -> Warning, one call per rep (lib/haptics.ts)', fc.includes('(rep.good ? hapticLight() : hapticWarning())') && fc.includes("from '../lib/haptics'"));
-  check('camera: a missed attempt (X from the attempt detector) -> Warning; a soft rep -> Light', fc.includes('hapticWarning();\n      }\n    }\n  };') && fc.includes("setFeedback({ good: true, reason: '', seq: ++feedbackSeq.current });\n        hapticLight()"));
-  check('camera: stop = Medium, back = Light, mute and flash = selection, flip = Light', fc.includes('hapticMedium(); void handleStop') && fc.includes('hapticLight(); void handleBack') && fc.includes('hapticSelect(); handleToggleMute') && fc.includes('hapticSelect(); handleFlash') && fc.includes('hapticLight(); handleFlip'));
+  check('camera: rep counted -> Light, rejected (X) -> Warning, one call per rep (lib/haptics.ts)', fc.includes('(rep.good ? hapticSelect() : hapticWarning())') && fc.includes("from '../lib/haptics'"));
+  check('camera: a missed attempt (X from the attempt detector) -> Warning; a soft rep -> Light', fc.includes('hapticWarning();\n      }\n    }\n  };') && fc.includes("setFeedback({ good: true, reason: '', seq: ++feedbackSeq.current });\n        hapticSelect()"));
+  check('camera: stop = Medium, back = Light, mute and flash = selection, flip = Light', fc.includes('hapticMain(); void handleStop') && fc.includes('hapticSelect(); void handleBack') && fc.includes('hapticSelect(); handleToggleMute') && fc.includes('hapticSelect(); handleFlash') && fc.includes('hapticSelect(); handleFlip'));
   check('camera: errors -> Error', (fc.match(/hapticError\(\)/g) || []).length >= 2);
   check('Workout complete (a real workout) and a rank up -> Success, once each', rc.includes('celebrated.current = true; hapticSuccess()') && rc.includes('rankCelebrated.current = true; hapticSuccess()'));
-  check('post-workout pages: the page script is installed on all four and its message plays the haptic; the native back / All sets buttons are Light', ['recap', 'repfeedback', 'ranks', 'allsets'].every((k) => new RegExp(k + ':\\s+`[^`]*HAPTIC_CLICK_JS').test(ws)) && /msg\.type === 'haptic'/.test(ws) && ws.includes('const send = (type: string) => { hapticLight();'));
+  check('post-workout pages: the page script is installed on all four and its message plays the haptic; the native back / All sets buttons are Light', ['recap', 'repfeedback', 'ranks', 'allsets'].every((k) => new RegExp(k + ':\\s+`[^`]*HAPTIC_CLICK_JS').test(ws)) && /msg\.type === 'haptic'/.test(ws) && ws.includes('const send = (type: string) => { hapticSelect();'));
   check('design screens (Create workout, My workouts, Log a session) play the haptic their page asks for, through lib/haptics hapticKind', /msg\.type === 'haptic'/.test(ds) && ds.includes('hapticKind(msg.kind)') && /HAPTIC_CLICK_JS/.test(read('lib/designScreens.ts')));
   check('Create workout and Log a session errors -> Error', read('app/create-workout.tsx').includes('hapticError(); Alert.alert') && read('app/log-session.tsx').includes('hapticError()'));
   check('no screen still imports the old lib/screenHaptics (every screen uses lib/haptics.ts)', ['app/formcheck.tsx', 'app/recap.tsx', 'app/create-workout.tsx', 'app/log-session.tsx', 'components/WarmSurfaces.tsx', 'components/DesignScreen.tsx'].every((f) => !read(f).includes('screenHaptics')));
   check('the page script never doubles: ONE capture listener on the document, installed once', (read('lib/hapticClick.ts').match(/addEventListener\('click'/g) || []).length === 1 && /__hapInstalled/.test(read('lib/hapticClick.ts')));
+  // the crash: formcheck called hapticLight, which lib/haptics no longer exports -> "is not a function" on every Back / flip.
+  {
+    const have = new Set(Object.keys(H));
+    const bad = [];
+    const walk = (d) => { for (const e of fs.readdirSync(path.join(__dirname, '..', d), { withFileTypes: true })) { if (['node_modules', '.scratch', 'ios', 'android'].includes(e.name)) continue; const rel = d + '/' + e.name; if (e.isDirectory()) walk(rel); else if (/[.]tsx?$/.test(e.name)) { const src = read(rel); for (const m of src.matchAll(/import[ ]*[{]([^}]*)[}][ ]*from[ ]*['"][./]*(?:lib[/])?haptics['"]/g)) for (const n of m[1].split(',').map((x) => x.trim().split(/[ ]+as[ ]+/)[0]).filter(Boolean)) if (!have.has(n)) bad.push(rel + ': ' + n); } } };
+    for (const d of ['app', 'components', 'lib']) walk(d);
+    check('every name any file imports from lib/haptics really exists there (a missing one threw "is not a function" on Back)', bad.length === 0, bad.join(' | '));
+  }
   Module._load = orig;
   console.log(failed ? `\n${failed} FAILED` : '\nall passed');
   process.exit(failed ? 1 : 0);

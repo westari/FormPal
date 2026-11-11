@@ -11,7 +11,7 @@ const fs = require('fs');
 const path = require('path');
 let failed = 0;
 const check = (name, ok, detail) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  -> ' + detail : ''}`); if (!ok) failed++; };
-const read = (f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
+const read = (f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8').replace(/\r\n/g, '\n'); // files can be CRLF or LF
 const w = read('components/WarmSurfaces.tsx'), l = read('app/_layout.tsx');
 check('a slide page (rep feedback / muscle page) slides in from the right (translateX from the screen width to 0, ease-out)', /tx\.setValue\(screenW\)[\s\S]{0,200}Animated\.timing\(tx, \{ toValue: 0, duration: SLIDE_IN_MS, easing: Easing\.out\(Easing\.cubic\)/.test(w));
 check('closing slides it back out to the right', /Animated\.timing\(tx, \{ toValue: screenW, duration: SLIDE_OUT_MS/.test(w));
