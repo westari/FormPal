@@ -8,6 +8,7 @@
  */
 import { EXERCISE_CATALOG } from '../constants/exercises';
 import type { Plan, PlannedExercise, Workout } from '../types/plan';
+import { RENAME_ROW_KEY } from './editSheetBridge';
 
 export type EditRow = [string, string];
 
@@ -45,10 +46,16 @@ export function addableExercises(): EditRow[] {
  * catalogue (rest time copied from the workout's other exercises). Rows that are not a tracked exercise are ignored.
  * Returns a NEW plan (the input is not changed), or null if there is nothing to change.
  */
-export function applyEditRows(plan: Plan, workoutId: string, rows: EditRow[]): Plan | null {
+export function applyEditRows(plan: Plan, workoutId: string, allRows: EditRow[]): Plan | null {
   const wi = plan.workouts.findIndex(w => w.id === workoutId);
   if (wi < 0) return null;
   const w = plan.workouts[wi];
+  // The Edit sheet can also rename the workout: the new name travels as one extra row [RENAME_ROW_KEY, name] (so both tabs,
+  // which pass the rows straight through, save it without any change). It is the same name every screen shows (splitLabel).
+  const renameRow = allRows.find(r => r[0] === RENAME_ROW_KEY);
+  const rows = allRows.filter(r => r[0] !== RENAME_ROW_KEY);
+  const newName = renameRow ? String(renameRow[1] ?? '').trim().slice(0, 40) : '';
+  const renamed = newName.length > 0 && newName !== w.splitLabel;
   const pool = [...w.exercises];
   const rest = w.exercises[0]?.restSeconds ?? 60;
   const next: PlannedExercise[] = [];
@@ -65,7 +72,7 @@ export function applyEditRows(plan: Plan, workoutId: string, rows: EditRow[]): P
     });
   }
   const same = next.length === w.exercises.length && next.every((e, i) => e === w.exercises[i]);
-  if (same) return null;
-  const workouts: Workout[] = plan.workouts.map((x, i) => (i === wi ? { ...x, exercises: next } : x));
+  if (same && !renamed) return null;
+  const workouts: Workout[] = plan.workouts.map((x, i) => (i === wi ? { ...x, exercises: next, ...(renamed ? { splitLabel: newName } : null) } : x));
   return { ...plan, workouts };
 }
