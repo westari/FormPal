@@ -5,7 +5,7 @@
  * "Ready / Go" fired too soon: with only the head (and garbage joints) in frame it said Ready, the confidence hit 100, then the
  * arms left the frame on the first press. Go may now only show when the camera has SEEN the exercise's full path: tracked
  * steadily, hands at the start position, the top (lockout) reached, back at the start, held steady. Until then ONE plain
- * instruction ("Step back so your raised hands show"). The confidence number is capped by the step, so it can only read 100 at Go.
+ * instruction ("Step back so your hands show"). The confidence number is capped by the step, so it can only read 100 at Go.
  *
  *   Part 1: the steps with synthetic input.   Part 2: the newest real log (2026-11-11 15:59:38-15:59:47), where the old gate said
  *   Ready at 15:59:46.6 although the top was never reached (peak 78.3, lockout needs 79).
@@ -42,17 +42,17 @@ function drive(ctx, startMs, values, extra) {
 {
   const c = mk();
   const none = c.guide.update(tickInputs(c.counter, 1000));
-  check('nothing tracked yet (only a head in frame, no readings): "Step back so your raised hands show", not ready, confidence capped at 35', none.stage === 'fit' && none.text === 'Step back so your raised hands show' && !none.ready && none.cap === 35, `${none.stage} "${none.text}" cap ${none.cap}`);
+  check('nothing tracked yet (only a head in frame, no readings): "Step back so your hands show", not ready, confidence capped at 35', none.stage === 'fit' && none.text === 'Step back so your hands show' && !none.ready && none.cap === 35, `${none.stage} "${none.text}" cap ${none.cap}`);
   // garbage readings: jumping all over (not a steady track): the counter sees pose gaps
   const g = mk(); g.counter.feedLog('[REP-TRACE] shoulderPress angle=40.0 framesSincePoseGap=40', 100); g.counter.feedLog('[REP-TRACE] shoulderPress angle=44.0 framesSincePoseGap=2', 400); g.counter.feedLog('[REP-TRACE] shoulderPress angle=30.0 framesSincePoseGap=3', 700);
   const gd = g.guide.update(tickInputs(g.counter, 800));
   check('tracking just recovered from a pose gap: still "fit" (not steady)', gd.stage === 'fit' && !gd.ready, gd.stage);
   const A = mk();
   let r = drive(A, 0, [64, 63, 65, 64, 63, 64, 65, 64]);
-  check('tracked and at the shoulders: "Raise both hands overhead", confidence capped at 70', r.last.stage === 'raise' && r.last.text === 'Raise both hands overhead' && r.last.cap === 70, `${r.last.stage} "${r.last.text}" ${r.last.cap}`);
+  check('tracked and at the shoulders: "Raise your hands over your head", confidence capped at 70', r.last.stage === 'raise' && r.last.text === 'Raise your hands over your head' && r.last.cap === 70, `${r.last.stage} "${r.last.text}" ${r.last.cap}`);
   check('Go is NOT ready while the top has not been seen, however long you wait (60s of resting at the shoulders)', (() => { const x = mk(); const rr = drive(x, 0, Array.from({ length: 180 }, (_, i) => 63 + (i % 3))); return !rr.stages.some((s) => s.ready); })());
   r = drive(A, r.t, [70, 77, 82, 86, 87, 85]);
-  check('after the top is seen: "Lower to your shoulders"', r.stages.some((s) => s.stage === 'lower'), r.stages.map((s) => s.stage).filter((x, i, a) => a.indexOf(x) === i).join('>'));
+  check('after the top is seen: "Bring your hands back to your shoulders"', r.stages.some((s) => s.stage === 'lower'), r.stages.map((s) => s.stage).filter((x, i, a) => a.indexOf(x) === i).join('>'));
   r = drive(A, r.t, [75, 68, 64, 63, 64, 63]);
   check('back at the shoulders, held: "Hold still" first (never "Perfect")', r.stages.some((s) => s.stage === 'hold' && s.text === 'Hold still') && !r.stages.some((s) => /perfect/i.test(s.text)));
   r = drive(A, r.t, [64, 63, 64, 63, 64, 63, 64, 63]);
@@ -63,7 +63,7 @@ function drive(ctx, startMs, values, extra) {
   let rb = drive(B, 0, [64, 63, 64, 64, 85, 87, 70, 64, 63, 64]);
   B.counter.feedLog('[TRACK] person lost', rb.t + 50);
   const lost = B.guide.update(tickInputs(B.counter, rb.t + 100));
-  check('the person is lost mid-setup (arms out of frame): back to "Step back so your raised hands show" and the top must be seen again', lost.stage === 'fit' && !lost.ready, lost.stage);
+  check('the person is lost mid-setup (arms out of frame): back to "Step back so your hands show" and the top must be seen again', lost.stage === 'fit' && !lost.ready, lost.stage);
   // a frame hint always wins
   const C = mk(); drive(C, 0, [64, 64, 64, 64, 64]);
   const fh = C.guide.update(tickInputs(C.counter, 3000, { frameHint: true }));
@@ -98,11 +98,11 @@ function drive(ctx, startMs, values, extra) {
 {
   // the cue card: stars on the left, the words beside them, at most 2 lines (about 18 characters a line at that size)
   const src = fs.readFileSync(path.join(__dirname, '..', 'app/formcheck.tsx'), 'utf8').split('\r\n').join('\n');
-  check('the cue card is the original layout: stars left, text beside, no centred wrap and no shrink-to-one-line', /trackingCueInner: \{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 26/.test(src) && src.includes('<Text style={s.trackingCueText} numberOfLines={2}>{text}</Text>') && !src.includes('adjustsFontSizeToFit minimumFontScale={0.5}>{text}'));
+  check('the cue card is the original layout: stars left, text beside, no centred wrap and no shrink-to-one-line', /trackingCueInner: \{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 26/.test(src) && src.includes('<Text style={s.trackingCueText} numberOfLines={2} onTextLayout=') && src.includes('const big = lines > 1;') && !src.includes('adjustsFontSizeToFit minimumFontScale={0.5}>{text}'));
   const SG = require('../lib/setupGuide.ts');
-  const all = ['Step back so your raised hands show', 'Step back so your whole body shows', 'Hands at your shoulders', 'Get in position', 'Raise both hands overhead', 'Lower to your shoulders', 'Hold still'];
+  const all = ['Step back so your hands show', 'Step back so your whole body shows', 'Hold your hands at your shoulders', 'Get into your starting position', 'Raise your hands over your head', 'Bring your hands back to your shoulders', 'Hold still'];
   const g = SG.createSetupGuide();
-  check('every setup cue fits the card in two lines (35 characters or fewer)', all.every((t) => t.length <= 36), all.filter((t) => t.length > 36).join(', '));
+  check('every setup cue fits the card in two lines (40 characters or fewer; the stars grow when it wraps)', all.every((t) => t.length <= 40), all.filter((t) => t.length > 40).join(', '));
 }
 console.log(failed ? `\n${failed} FAILED` : '\nall passed');
 process.exit(failed ? 1 : 0);

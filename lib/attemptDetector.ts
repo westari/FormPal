@@ -36,13 +36,13 @@ export const ATTEMPT_TUNING = {
   stuckAttempts: 3,         // this many attempts in a row with no rep counted -> say the real blocker
   stuckSeconds: 10,         // ...or this long since the last counted rep while attempts keep happening
   cueHoldSec: 4,            // how long a blocker cue stays up
-  adaptMaxShortFraction: 0.6, // adapt only when the lows (or highs) fall short of the line by at most this fraction of the range
+  adaptMaxShortFraction: 0,   // ADAPTING IS OFF (2026-11-11): a half rep must always get an X, never become a counted rep. (Was 0.6.)
   adaptSpreadFraction: 0.25,  // ...and the last attempts agree with each other within this fraction of the range
   adaptMargin: 0.08,          // the adapted line sits this fraction of the range beyond the person's typical extreme
   scoreCountMin: 55,        // an attempt rated at least this counts as a soft rep once adapted
 };
 
-export type Blocker = 'bottom-short' | 'top-short' | 'tracking' | 'paused' | 'angle' | 'light' | 'none';
+export type Blocker = 'bottom-short' | 'top-short' | 'tracking' | 'paused' | 'angle' | 'light' | 'cut' | 'none';
 
 export interface AttemptEvent {
   kind: 'attempt';
@@ -63,6 +63,10 @@ export interface Detector {
   feed(line: string): DetectorEvent[];
   /** the engine's coaching hint about camera angle / framing, if any (stats.outOfPlaneCue) */
   setAngleCue(cue: string | null): void;
+  /** where Movement Match sees the rep path cut off from the camera (hands leaving the frame at the top...) */
+  setPathCut(cut: 'top' | 'bottom' | 'both' | 'frame' | null): void;
+  /** the camera rejected a rep for low joint quality within the last `ms` (and how dark it was) */
+  recentReject(ms: number): { lowQuality: boolean; dark: boolean };
   /** current blocker cue (2-3 words) while it should be on screen, else null */
   cue(): string | null;
   softReps(): number;
@@ -72,21 +76,16 @@ export interface Detector {
   reset(): void;
 }
 
-/** 2-3 word cue per blocker for this exercise family. */
-export function blockerCue(blocker: Blocker, exerciseId: string | undefined): string {
-  const id = exerciseId ?? '';
-  const press = /press|overhead/i.test(id), raise = /raise/i.test(id), squat = /squat|lunge|stepup|dip/i.test(id);
-  const push = /pushup/i.test(id), pull = /curl|row|pull/i.test(id);
-  // Plain body words a first-time user understands at a glance, 2-3 words. "Go higher" / "Go lower" name the END of the movement
-  // that fell short.
+/**
+ * The COACH word for a missed stroke (2-3 plain body words). Only a stroke that stayed SHORT gets one. Anything about the camera
+ * (tracking, angle, light, a cut path, the engine paused) returns '' here: that is the GUIDE's business (lib/guideCoach.ts), never an X.
+ */
+export function blockerCue(blocker: Blocker, _exerciseId: string | undefined): string {
   switch (blocker) {
     case 'bottom-short': return 'Go lower';
     case 'top-short':    return 'Go higher';
-    case 'tracking':     return 'Step back';
-    case 'paused':       return press ? 'Hands to shoulders' : 'Start again';
-    case 'angle':        return 'Turn sideways';
-    case 'light':        return 'More light';
-    default:             return 'Go further';
+    case 'none':         return 'Full movement';
+    default:             return '';
   }
 }
 
@@ -111,6 +110,7 @@ export function createAttemptDetector(opts: { exerciseId?: string; now?: () => n
   let suppressedAt = 0;
   let lastNoPersonAt = 0;
   let angleCue: string | null = null;
+  let pathCut: 'top' | 'bottom' | 'both' | 'frame' | null = null;
   let stuckCue: { text: string; until: number } | null = null;
   let missedLows: number[] = [], missedHighs: number[] = [], missedBlockers: Blocker[] = [];
   let adaptedLine: { enter: number; exit: number } | null = null;
@@ -128,19 +128,26 @@ export function createAttemptDetector(opts: { exerciseId?: string; now?: () => n
 
   function blockerFor(low: number, high: number): Blocker {
     const t = now();
-    if (suppressedAt && t - suppressedAt < 2500) return 'paused';
-    if (lastNoPersonAt && t - lastNoPersonAt < 3000) return 'tracking';
-    if (rejectKind === 'unreliable' && pendingRejectAt && t - pendingRejectAt < 6000) return rejectLightMax < 0.45 ? 'light' : 'tracking';
-    if (angleCue) return 'angle';
     // Which END fell short, as the person sees it: how far the top is under full lockout, and how far the bottom is above the engine's
-    // entry line. For presses a top that is not near lockout is called first ("Go higher"): that is what a beginner can fix.
+    // entry line.
     const lockMin = top * T.lockoutFraction;
     const topDef = Math.max(0, (lockMin - high) / range());
     const bottomDef = Math.max(0, (low - enter) / range());
+    // 1) the camera could not see it (the GUIDE's business: no X, the Guide fixes the setup)
+    if (lastNoPersonAt && t - lastNoPersonAt < 3000) return 'tracking';
+    if (rejectKind === 'unreliable' && pendingRejectAt && t - pendingRejectAt < 6000) return rejectLightMax < 0.45 ? 'light' : 'tracking';
+    if (angleCue) return 'angle';
+    if (pathCut === 'frame') return 'tracking';
+    if ((pathCut === 'top' || pathCut === 'both') && topDef > 0) return 'cut';
+    if ((pathCut === 'bottom' || pathCut === 'both') && bottomDef > 0) return 'cut';
+    // 2) the stroke stayed short (the COACH's business: an X with "Go higher" / "Go lower"). For presses a top that is not near lockout
+    //    is called first: that is what a beginner can fix.
     const press = /press|overhead/i.test(exerciseId ?? '');
     if (press && topDef > 0.08) return 'top-short';
     if (bottomDef > 0 && bottomDef >= topDef) return 'bottom-short';
     if (topDef > 0) return 'top-short';
+    // 3) a full stroke the engine had paused itself for (counted as a soft rep by the app)
+    if (suppressedAt && t - suppressedAt < 2500) return 'paused';
     return 'none';
   }
 
@@ -178,7 +185,7 @@ export function createAttemptDetector(opts: { exerciseId?: string; now?: () => n
       // ADAPT: the same low (or high) again and again, just short of the line -> take that as this person's real range
       // soft rep: (1) a stroke that fully meets the engine's own lines (below enter, back above exit) while the engine had paused
       // itself (its inactivity pause stopped counting real reps in the 2026-11-11 log); or (2) a stroke inside the ADAPTED range.
-      const fullyValid = low.v <= enter && low.v >= enter - 0.8 * range() && high.v >= exit; // a dip far below the person's range is a tracking glitch, not a rep
+      const fullyValid = low.v <= enter && low.v >= Math.min(enter, rom) - 0.8 * range() && high.v >= exit; // a dip far below the person's range is a tracking glitch, not a rep
       const adaptedOk = !!adaptedLine && low.v <= adaptedLine.enter && high.v >= adaptedLine.exit && blocker !== 'paused';
       if (score >= T.scoreCountMin && ((blocker === 'paused' && fullyValid) || adaptedOk)) {
         outcome = 'soft'; soft++; blocker = 'none'; missedInARow = 0; missedLows = []; missedHighs = []; missedBlockers = [];
@@ -232,7 +239,7 @@ export function createAttemptDetector(opts: { exerciseId?: string; now?: () => n
     const R_ = range();
     const dur = (c.high.t - c.start.t) / 1000;
     let why = '';
-    if (c.low.v < enter - T.lowRangeBelowEnter * R_) why = 'the low is far below this exercise\'s path (arms dropped)';
+    if (c.low.v < Math.min(enter, rom) - T.lowRangeBelowEnter * R_) why = 'the low is far below this exercise\'s path (arms dropped)';
     else if (c.high.v < exit - 0.1 * R_) why = 'it never came back up to the start zone';
     else if (c.low.v > enter + T.maxLowAboveEnter * R_) why = 'it stays up near the top (a wiggle, not a stroke)';
     else if (dur < T.minStrokeSec) why = 'too quick to be a rep (a flick)';
@@ -327,6 +334,8 @@ export function createAttemptDetector(opts: { exerciseId?: string; now?: () => n
   return {
     feed,
     setAngleCue(c) { angleCue = c && c.trim() ? c : null; },
+    setPathCut(c) { pathCut = c; },
+    recentReject(ms) { const recent = rejectKind === 'unreliable' && pendingRejectAt > 0 && now() - pendingRejectAt <= ms; return { lowQuality: recent, dark: recent && rejectLightMax < 0.45 }; },
     cue() { const t = now(); if (stuckCue && t < stuckCue.until) return stuckCue.text; return null; },
     softReps() { return soft; },
     recentlyIgnored(ms: number) { return ignoredAt > 0 && now() - ignoredAt <= ms; },
@@ -334,7 +343,7 @@ export function createAttemptDetector(opts: { exerciseId?: string; now?: () => n
     reset() {
       samples = []; lastHigh = lastLow = null; dir = null; ext = null; lastAttemptAt = 0; nAttempts = 0; missedInARow = 0;
       lastRepAt = 0; repCount = 0; soft = 0; pendingRejectAt = 0; rejectKind = ''; suppressedAt = 0; lastNoPersonAt = 0;
-      stuckCue = null; missedLows = []; missedHighs = []; missedBlockers = []; adaptedLine = null; startedAt = 0; pending = []; cand = null; ignoredAt = 0;
+      stuckCue = null; missedLows = []; missedHighs = []; missedBlockers = []; adaptedLine = null; startedAt = 0; pending = []; cand = null; ignoredAt = 0; pathCut = null;
     },
   };
 }

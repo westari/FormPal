@@ -4,11 +4,13 @@
  * The setup steps before "Ready. Go!", written for someone who has never used the app. ONE decision, from the same numbers, so
  * the words, the confidence number and Go can never disagree:
  *
- *   fit    "Step back so your raised hands show"     the camera cannot track you steadily yet (or a frame hint is up)
- *   start  "Hands at your shoulders"            you are tracked, but not in the starting position
- *   raise  "Raise both hands overhead"          (overhead exercises) the camera has not yet SEEN your full lockout
- *   lower  "Lower to your shoulders"            you reached lockout; come back to the start
- *   hold   "Hold still"                         everything is visible; being held steady (the existing steady timer)
+ *   fit    "Step back so your hands show"            the camera cannot track you steadily yet (or a frame hint is up)
+ *   start  "Hold your hands at your shoulders"      you are tracked, but not in the starting position
+ *   raise  "Raise your hands over your head"        (overhead exercises) the camera has not yet SEEN your full reach
+ *   lower  "Bring your hands back to your shoulders" you reached the top; come back to the start
+ *   hold   "Hold still"                              everything is visible; being held steady (the existing steady timer)
+ *
+ * These are THE GUIDE's lines (lib/guideCoach.ts GUIDE_LINES): setup only, never form advice.
  *   ready  Go may show
  *
  * Why the extra "raise" step: in the 2026-11-11 log "Ready / Go" fired with only the head (and garbage joints) in frame, then
@@ -20,6 +22,8 @@
  *
  * ALL NUMBERS ARE PLACEHOLDERS (one real log): lockout fraction, how long the start position must be held.
  */
+import { GUIDE_LINES } from './guideCoach';
+
 export type SetupStage = 'fit' | 'start' | 'raise' | 'lower' | 'hold' | 'ready';
 
 export const SETUP_TUNING = {
@@ -50,7 +54,7 @@ export function createSetupGuide() {
   const T = SETUP_TUNING;
   function update(i: SetupInputs): SetupDecision {
     const lockoutMin = i.topValue * T.lockoutFraction;
-    const fitText = i.handsExercise ? 'Step back so your raised hands show' : 'Step back so your whole body shows';
+    const fitText = i.handsExercise ? GUIDE_LINES.backHands : GUIDE_LINES.backBody;
     if (!i.seen || !i.healthy || i.frameHint) {
       // losing the person mid-setup (arms left the frame) forgets the lockout: it has to be seen again, in frame
       if (i.seen && !i.healthy) { reachedAt = 0; backAtStartSince = 0; }
@@ -59,15 +63,15 @@ export function createSetupGuide() {
     if (i.needsLockout && !reachedAt && i.value !== null && i.value >= lockoutMin) reachedAt = i.now;
     if (i.needsLockout && !reachedAt) {
       return i.atStart
-        ? { stage: 'raise', text: 'Raise both hands overhead', cap: T.capRaise, ready: false }
-        : { stage: 'start', text: i.handsExercise ? 'Hands at your shoulders' : 'Get in position', cap: T.capStart, ready: false };
+        ? { stage: 'raise', text: GUIDE_LINES.raiseHands, cap: T.capRaise, ready: false }
+        : { stage: 'start', text: i.handsExercise ? GUIDE_LINES.handsStart : GUIDE_LINES.startPos, cap: T.capStart, ready: false };
     }
     // back at the rack = the recent peak has come down from lockout (SETUP_TUNING.rackBelowLockout under it) and still reads as the start zone
     const down = !i.needsLockout || (i.value !== null && i.value <= lockoutMin - T.rackBelowLockout);
-    if (!i.atStart || !down) { backAtStartSince = 0; return { stage: 'lower', text: i.needsLockout ? 'Lower to your shoulders' : 'Get in position', cap: T.capLower, ready: false }; }
+    if (!i.atStart || !down) { backAtStartSince = 0; return { stage: 'lower', text: i.needsLockout ? GUIDE_LINES.lowerHands : GUIDE_LINES.startPos, cap: T.capLower, ready: false }; }
     if (!backAtStartSince) backAtStartSince = i.now;
     const held = i.now - backAtStartSince >= (i.needsLockout ? T.holdMsAfterLockout : 0);
-    if (!held || !i.steadyOk) return { stage: 'hold', text: 'Hold still', cap: T.capHold, ready: false };
+    if (!held || !i.steadyOk) return { stage: 'hold', text: GUIDE_LINES.holdStill, cap: T.capHold, ready: false };
     return { stage: 'ready', text: 'Ready', cap: 100, ready: true };
   }
   return { update, reset() { reachedAt = 0; backAtStartSince = 0; }, reached() { return reachedAt > 0; } };
