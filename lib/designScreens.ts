@@ -21,6 +21,7 @@ import { dcLogicPatchJs, athltSetDataJs } from './dcLogicPatch';
 import { NO_ZOOM_JS } from './noZoom';
 import { HAPTIC_CLICK_JS } from './hapticClick';
 import { EXERCISE_SEARCH_PAGE_JS } from './exerciseSearch';
+import { WORKOUT_TEMPLATES, TEMPLATE_NOTE, templateWorkout } from './workoutTemplates';
 
 // ─── shared page-side base ──────────────────────────────────────────────────────
 // Hooks: a screen pushes functions into window.__dsHooks; each runs on every DOM change (idempotent) and may return false
@@ -187,6 +188,9 @@ ${CATALOG_PAGE}
         v.noResults = rankedC.length === 0;
       }
       window.__athltCurrent = { name: s.name || '', items: s.order.map(function (n) { var x = s.data[n]; return { n: n, sets: x.sets, reps: x.reps, load: x.load == null ? null : x.load }; }) };
+      // Save needs 1 or more exercises, nothing else (the design also wanted a typed name: Save stayed grey after adding exercises)
+      var canSave = s.order.length > 0;
+      v.saveBg = canSave ? '#111114' : '#c4c4cc'; v.saveEvents = canSave ? 'auto' : 'none';
       return v;
     }
   };
@@ -196,7 +200,7 @@ export const CREATE_WORKOUT_DOM_JS = String.raw`
 (function () {
   window.__dsHooks.push(function (root) {
     window.__dsLink = function (l) {
-      if (/^save workout$/i.test(l.text)) { var c = window.__athltCurrent; if (c && c.name.trim() && c.items.length) window.__dsPost({ type: 'save', name: c.name.trim(), items: c.items }); return; }
+      if (/^save workout$/i.test(l.text)) { var c = window.__athltCurrent; if (c && c.items.length) window.__dsPost({ type: 'save', name: c.name.trim() || 'My workout', items: c.items }); return; }
       if (/Train\.dc\.html/.test(l.href)) window.__dsPost({ type: 'back' });
     };
     // The empty card said "Search above to add your first one" but had no button, only the search bar. A clear "Add exercise"
@@ -396,12 +400,19 @@ export const MY_WORKOUTS_LOGIC_EXT = String.raw`function (Orig) {
       }
       var v = super.renderVals(), s = this.state, self = this;
       var q = s.query.trim().toLowerCase();
-      v.list = d.workouts
-        .filter(function (w) { return s.tab === 'All' || s.saved[w.id]; })
-        .filter(function (w) { return !q || w.name.toLowerCase().indexOf(q) >= 0 || w.moves.toLowerCase().indexOf(q) >= 0; })
-        .map(function (w) {
+      var tpls = d.templates || [];
+      // All = everything; Mine = the user's own plan workouts + templates they saved; FormPal templates = the ready-made basics only
+      var tab = s.tab === 'Saved' ? 'Mine' : s.tab;
+      window.__athltTab = tab;
+      var all = d.workouts.map(function (w) { return Object.assign({ template: false }, w); }).concat(tpls.map(function (t) { return Object.assign({ template: true }, t); }));
+      var shown = all.filter(function (w) {
+        if (tab === 'Mine') return !w.template || s.saved[w.id];
+        if (tab === 'FormPal templates') return w.template;
+        return true;
+      }).filter(function (w) { return !q || w.name.toLowerCase().indexOf(q) >= 0 || w.moves.toLowerCase().indexOf(q) >= 0; });
+      v.list = shown.map(function (w) {
           var th = THEMES[w.theme % THEMES.length];
-          return { name: w.name, meta: w.meta, moves: w.moves, c: th.c, href: '#open-' + w.id,
+          return { name: w.name, meta: (w.template ? 'Template · ' : '') + w.meta, moves: w.moves, c: th.c, href: '#open-' + w.id,
             bg: 'radial-gradient(80% 70% at 100% 0%, ' + th.a + ' 0%, rgba(255,255,255,0) 70%), radial-gradient(70% 60% at 0% 100%, ' + th.b + ' 0%, rgba(255,255,255,0) 70%), #ffffff',
             fill: s.saved[w.id] ? th.c : '#ffffff',
             toggle: function () {
@@ -410,8 +421,16 @@ export const MY_WORKOUTS_LOGIC_EXT = String.raw`function (Orig) {
               if (window.__dsPost) window.__dsPost({ type: 'saved', ids: Object.keys(nxt).filter(function (k) { return nxt[k]; }) });
             } };
         });
-      v.none = d.workouts.length === 0;
-      v.empty = d.workouts.length > 0 && v.list.length === 0;
+      v.tabs = ['All', 'Mine', 'FormPal templates'].map(function (label) {
+        var on = tab === label;
+        return { label: label, bg: on ? '#111114' : '#ffffff', fg: on ? '#ffffff' : '#111114',
+          sh: on ? '0 8px 16px -8px rgba(17,17,20,0.5)' : 'inset 0 1px 0 #ffffff, 0 6px 14px -8px rgba(40,50,90,0.3)',
+          pick: function () { self.setState({ tab: label }); } };
+      });
+      // the plain "no workouts yet" state is only for an empty Mine tab (templates are always there to browse)
+      v.none = tab === 'Mine' && !q && shown.length === 0;
+      v.empty = !v.none && shown.length === 0;
+      v.emptyText = tab === 'Mine' ? 'Your plan workouts and the templates you save show here.' : 'No workouts match that search.';
       return v;
     }
   };
@@ -426,6 +445,17 @@ export const MY_WORKOUTS_DOM_JS = String.raw`
       if (/Create Workout/i.test(l.href)) { window.__dsPost({ type: 'create' }); return; }
       if (/Train\.dc\.html/.test(l.href)) window.__dsPost({ type: 'back' });
     };
+    // the FormPal templates tab says what they are: ready-made basics for anyone, not tailored to the user
+    var grid = root.querySelector('div[style*="grid-template-columns"]');
+    var note = root.querySelector('[data-ds-note]');
+    var want = window.__athltTab === 'FormPal templates';
+    if (grid && !note) {
+      note = document.createElement('div'); note.setAttribute('data-ds-note', '1');
+      note.style.cssText = 'margin:14px 14px 0;padding:11px 16px;border-radius:18px;background:rgba(17,17,20,0.05);color:#3c3c43;font-size:13px;font-weight:600;line-height:1.35;';
+      note.textContent = ${JSON.stringify(TEMPLATE_NOTE)};
+      grid.parentNode.insertBefore(note, grid);
+    }
+    if (note) note.style.display = want ? 'block' : 'none';
     return !!root.querySelector('input[placeholder="Search your workouts"]');
   });
 })();
@@ -458,7 +488,7 @@ export function workoutFromPage(
     return { exerciseId: c.id, displayName: c.name, targetSets: i.sets, targetReps: i.reps, restSeconds: 60, currentVariationId: c.id };
   });
   return {
-    id: `custom-${now}`, sessionNumber: planLength + 1, splitLabel: payload.name.trim(),
+    id: `custom-${now}`, sessionNumber: planLength + 1, splitLabel: payload.name.trim() || 'My workout',
     rationale: 'Custom workout you built yourself.', exercises, completed: false,
   };
 }
@@ -477,17 +507,20 @@ export function entriesFromPage(
   return { ts, entries };
 }
 
-/** My workouts: the plan's workouts as the page's cards. */
+/** My workouts: the plan's workouts as the page's cards, plus FormPal's ready-made templates (marked template: they are not the user's). */
 export function myWorkoutsData(
   workouts: { id: string; splitLabel: string; exercises: { displayName: string; targetSets: number }[] }[], savedIds: string[],
 ) {
+  const card = (w: { id: string; splitLabel: string; exercises: { displayName: string; targetSets: number }[] }, i: number) => {
+    const sets = w.exercises.reduce((a, e) => a + e.targetSets, 0);
+    const mins = Math.max(5, Math.round(sets * 2.5));
+    return { id: w.id, name: w.splitLabel, meta: `${mins} min`, moves: w.exercises.map(e => e.displayName).join(', '), theme: i };
+  };
+  const templates = WORKOUT_TEMPLATES.map((t, i) => card(templateWorkout(t.id)!, i + 2));
   return {
-    workouts: workouts.map((w, i) => {
-      const sets = w.exercises.reduce((a, e) => a + e.targetSets, 0);
-      const mins = Math.max(5, Math.round(sets * 2.5));
-      return { id: w.id, name: w.splitLabel, meta: `${mins} min`, moves: w.exercises.map(e => e.displayName).join(', '), theme: i };
-    }),
-    saved: savedIds.filter(id => workouts.some(w => w.id === id)),
+    workouts: workouts.map(card),
+    templates,
+    saved: savedIds.filter(id => workouts.some(w => w.id === id) || templates.some(t => t.id === id)),
   };
 }
 

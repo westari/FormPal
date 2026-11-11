@@ -945,7 +945,7 @@ export const PROGRESS_DOM_JS = String.raw`
           if (!slbl) { slbl = document.createElement('div'); slbl.setAttribute('data-athlt-statlbl', '1'); goalEl.appendChild(slbl); }
           setText(slbl, st.small);
           slbl.style.setProperty('font-size', '13px'); slbl.style.setProperty('font-weight', '500');
-          slbl.style.setProperty('color', st.big ? '#6e6e77' : 'rgb(60, 60, 67)');
+          slbl.style.setProperty('color', '#111114'); // black, like the number
           if (irow) {
             irow.style.setProperty('gap', '8px');
             var orb = irow.children[0];

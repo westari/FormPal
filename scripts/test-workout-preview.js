@@ -133,6 +133,18 @@ Module._load = function (r) {
   check('Preview mode (a future day): the workout is shown for THAT day and there is NO Start workout button', /Upper body|Full body/.test(t2) && !/Start workout/.test(t2), t2.slice(0, 80));
   await p2.close();
 
+  // a FormPal template (My workouts): the real catalogue's exercises, startable, with a Save to Mine button
+  params = { template: 'tpl-upper' };
+  const p3 = await shoot(browser, h(Screen), path.join(dir, 'preview-render3.html'));
+  const t3 = await p3.evaluate(() => document.body.innerText.split(String.fromCharCode(10)).join(' | '));
+  check('Template: opens the preview for it ("Upper body", its real exercises) and says it is a ready-made template, not tailored', /Upper body/.test(t3) && /Chest Press/.test(t3) && /FormPal template\. Ready-made basics for anyone\. Not tailored to you\./.test(t3), t3.slice(0, 160));
+  check('Template: has the Start workout button AND a Save to Mine button', /Start workout/.test(t3) && typeof presses['Save to Mine'] === 'function');
+  started.length = 0; nav.pushed.length = 0;
+  presses['Start workout']();
+  check('Template: Start workout starts THAT template and opens the workout run', started.join() === 'tpl-upper' && nav.pushed.includes('/workout/run'), JSON.stringify({ started, pushed: nav.pushed }));
+  await p3.screenshot({ path: path.join(dir, 'preview-template.png') });
+  await p3.close();
+
   // side by side with his screenshot
   const his = fs.readFileSync('C:/Users/arize/AppData/Local/Temp/claude/fbe22b470d4e1b5d/ece828cf-7022-4f78-9e9f-f74a4467dd75/images/5.png').toString('base64');
   const mine = fs.readFileSync(path.join(dir, 'preview-screen.png')).toString('base64');

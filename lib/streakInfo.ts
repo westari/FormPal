@@ -7,6 +7,7 @@
  * Plus the page-side code that writes it into streak.html (the design file itself is never edited).
  */
 import { calcStreak, type SessionEntry } from './sessionLog';
+import { FLAME_PATH, FLAME_VIEWBOX } from './streakFlame';
 
 export interface StreakInfo {
   count: number;
@@ -42,16 +43,31 @@ export function streakInfo(sessions: SessionEntry[], now: number = Date.now(), p
   return { count, trainedToday, week, todayIdx, headline, sub };
 }
 
-/** Page-side: flame number, headline, sub line and the week row (an orange circle with a white check on every streak day). */
+/** Page-side: the flame (vector, no number), headline, sub line and the week row (an orange circle with a white check on every streak day).
+ *  window.__streakApplied becomes true the moment everything is in place, so the screen can reveal the page already correct. */
 export function streakPageJs(info: StreakInfo): string {
   return `(function(){
   var I = ${JSON.stringify(info)};
+  var FLAME = ${JSON.stringify(FLAME_PATH)}, VB = ${JSON.stringify(FLAME_VIEWBOX)};
   function q(sel){ return document.querySelector('#dc-root ' + sel); }
+  function flame(el, id, c0, c1, c2){
+    if (el.hasAttribute('data-vector-flame')) return;
+    el.setAttribute('data-vector-flame', '1');
+    el.style.setProperty('-webkit-mask', 'none', 'important'); el.style.setProperty('mask', 'none', 'important');
+    el.style.setProperty('background', 'none', 'important');
+    el.innerHTML = '<svg width="100%" height="100%" viewBox="' + VB + '" preserveAspectRatio="xMidYMid meet" style="display:block;overflow:visible" shape-rendering="geometricPrecision">'
+      + '<defs><linearGradient id="' + id + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + c0 + '"/>' + (c1 ? '<stop offset="0.45" stop-color="' + c1 + '"/>' : '') + '<stop offset="1" stop-color="' + c2 + '"/></linearGradient></defs>'
+      + '<path d="' + FLAME + '" fill="url(#' + id + ')"/></svg>';
+  }
   function apply(){
     var num = q('div[style*="font-size: 54px"]'), head = q('div[style*="font-size: 29px"]'), sub = q('div[style*="font-size: 16px"]');
     var circles = [].slice.call(document.querySelectorAll('#dc-root div[style*="width: 30px"][style*="height: 30px"]'));
-    if (!num || !head || !sub || circles.length < 7) return false;
-    num.textContent = String(I.count); head.textContent = I.headline; sub.textContent = I.sub;
+    var masks = [].slice.call(document.querySelectorAll('#dc-root div[style*="mask"]'));
+    if (!num || !head || !sub || circles.length < 7 || masks.length < 2) return false;
+    num.style.setProperty('display', 'none', 'important'); // no number inside the flame
+    flame(masks[0], 'sf-out', '#ffd36b', '#ff9a3c', '#ff5a1f');
+    flame(masks[1], 'sf-in', '#fff6d6', null, '#ffe39a');
+    head.textContent = I.headline; sub.textContent = I.sub;
     var CHECK = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M5 12.6 9.8 17.4 19 7.4" stroke="#ffffff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
     for (var i = 0; i < 7; i++) {
       var c = circles[i], on = !!I.week[i], label = c.previousElementSibling;
@@ -61,8 +77,9 @@ export function streakPageJs(info: StreakInfo): string {
       c.innerHTML = on ? CHECK : '';
       if (label) label.style.setProperty('color', i === I.todayIdx ? '#ff6a2b' : on ? '#ff8a3c' : '#9a9aa2', 'important');
     }
+    window.__streakApplied = true;
     return true;
   }
-  if (!apply()) [100, 300, 700, 1200].forEach(function(t){ setTimeout(apply, t); });
+  if (!apply()) { var n = 0, iv = setInterval(function(){ if (apply() || ++n > 80) clearInterval(iv); }, 40); }
 })(); true;`;
 }

@@ -45,13 +45,15 @@ check('the workout flow\'s own count wins if the session is not on disk yet (3, 
     const t = (sel) => (document.querySelector('#dc-root ' + sel) || {}).textContent;
     const cs = [...document.querySelectorAll('#dc-root div[style*="width: 30px"][style*="height: 30px"]')];
     return {
-      flame: t('div[style*="font-size: 54px"]'), head: t('div[style*="font-size: 29px"]'), sub: t('div[style*="font-size: 16px"]'),
+      head: t('div[style*="font-size: 29px"]'), sub: t('div[style*="font-size: 16px"]'),
       days: cs.map(c => ({ on: c.getAttribute('data-streak-day'), bg: getComputedStyle(c).backgroundImage.slice(0, 22), check: !!c.querySelector('svg'), w: Math.round(c.getBoundingClientRect().width) })),
     };
   });
   console.log('      page:', JSON.stringify(r));
   await page.screenshot({ path: path.join(ROOT, '.scratch', 'streak-after.png') });
-  check('flame shows the real streak (2), not the design\'s 1', r.flame === '2', r.flame);
+  const fl = await page.evaluate(() => { const ms = [...document.querySelectorAll('#dc-root div[style*="mask"]')]; const n = document.querySelector('#dc-root div[style*="font-size: 54px"]'); return { svgs: ms.filter(m => m.querySelector('svg path')).length, masksLeft: ms.filter(m => getComputedStyle(m).webkitMaskImage && getComputedStyle(m).webkitMaskImage !== 'none').length, numShown: n ? getComputedStyle(n).display !== 'none' : false, applied: !!window.__streakApplied }; });
+  check('the flame is a vector (two SVG paths, no PNG mask left) and has NO number inside it; the page is fully applied the moment it is revealed', fl.svgs === 2 && fl.masksLeft === 0 && !fl.numShown && fl.applied, JSON.stringify(fl));
+  await page.screenshot({ path: path.join(ROOT, '.scratch', 'streak-flame-crop.png'), clip: { x: 80, y: 190, width: 230, height: 250 } });
   check('words match: "Day 2 streak!" and not "Your streak starts today"', r.head === 'Day 2 streak!' && !/starts today/i.test(r.sub), r.head + ' / ' + r.sub);
   check('exactly the two streak days are orange circles with a white check; the rest are plain grey with no check', r.days.length === 7 && r.days.map(d => d.on).join() === '0,1,1,0,0,0,0' && r.days.every(d => (d.on === '1') === (d.bg.startsWith('linear-gradient') && d.check)), JSON.stringify(r.days));
   await browser.close();

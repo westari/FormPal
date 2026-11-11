@@ -58,7 +58,7 @@ export default function ProgressScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const webRef = useRef<WebView>(null);
-  const { fade, onReady, onLoadStart, onLoadEnd, hide } = useRevealFade(m => { if (__DEV__) console.log('[PROGRESS]', m); });
+  const { fade, revealedRef, onReady, onLoadStart, onLoadEnd, hide } = useRevealFade(m => { if (__DEV__) console.log('[PROGRESS]', m); });
   const dataRef = useRef<ProgressData | null>(null);
   const lag = useRef(createTabLag('progress')).current;
   const artReady = useRef(false);   // the rank emblem + muscle icons are in the data (the first picture needs them)
@@ -147,6 +147,7 @@ export default function ProgressScreen() {
   useEffect(() => { lag.mark('mount'); void prefetch(); }, [prefetch, lag]);
   useFocusEffect(useCallback(() => {
     lag.mark('shown');
+    lag.revisit(revealedRef.current);
     if (firstShown.current) { firstShown.current = false; if (dataRef.current && artReady.current) push(); }
     void prefetch();
   }, [prefetch, push, lag]));

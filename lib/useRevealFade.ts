@@ -14,6 +14,8 @@ import { Animated, Easing } from 'react-native';
 
 export function useRevealFade(onLog?: (msg: string) => void) {
   const [revealed, setRevealed] = useState(false);
+  const revealedRef = useRef(false);
+  revealedRef.current = revealed;
   const fade = useRef(new Animated.Value(0)).current;
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -35,5 +37,5 @@ export function useRevealFade(onLog?: (msg: string) => void) {
   }, [onLog]);
   const hide = useCallback(() => setRevealed(false), []);
 
-  return { fade, revealed, onReady, onLoadStart, onLoadEnd, hide };
+  return { fade, revealed, revealedRef, onReady, onLoadStart, onLoadEnd, hide };
 }

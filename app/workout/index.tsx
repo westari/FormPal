@@ -9,18 +9,20 @@
  * the workout name over "52 min · 8 exercises", one white rounded card per exercise (picture square, name,
  * "4 sets · 8 reps", pencil) and the black "Start workout" pill floating at the bottom. Real data: the plan's workout.
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { SymbolView } from 'expo-symbols';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from '../../lib/haptics';
 import ScreenBackground from '../../components/ScreenBackground';
 import { usePlanStore } from '../../store/planStore';
 import { useWorkoutSessionStore } from '../../store/workoutSessionStore';
 import { workoutMinutes } from '../../lib/trainData';
+import { templateWorkout, SAVED_WORKOUTS_KEY, TEMPLATE_NOTE } from '../../lib/workoutTemplates';
 import { FONT, W, Sp, R, Elev, Col } from '../../constants/theme';
 import type { PlanProfile } from '../../types/plan';
 
@@ -75,12 +77,29 @@ export default function WorkoutPreviewScreen() {
   const insets     = useSafeAreaInsets();
   const getNext    = usePlanStore(st => st.getNextWorkout);
   // a specific workout (?id=...: My workouts, or a future day on Train), else the next workout in the plan
-  const { id, preview } = useLocalSearchParams<{ id?: string; preview?: string }>();
+  const { id, preview, template } = useLocalSearchParams<{ id?: string; preview?: string; template?: string }>();
   const createPlan = usePlanStore(st => st.createPlan);
   const startSess  = useWorkoutSessionStore(st => st.startWorkout);
-  const workout    = (id ? usePlanStore.getState().plan?.workouts.find(w => w.id === id) : null) ?? getNext();
+  // a FormPal template (from My workouts) is built from the real catalogue; it can be started or saved to Mine
+  const workout    = (template ? templateWorkout(template) : null) ?? (id ? usePlanStore.getState().plan?.workouts.find(w => w.id === id) : null) ?? getNext();
   const [creatingTestPlan, setCreatingTestPlan] = useState(false);
   const previewOnly = preview === '1'; // a day that is not today: look, no Start button
+  const isTemplate = !!template && !!workout && workout.id === template;
+  const [savedToMine, setSavedToMine] = useState(false);
+  useEffect(() => {
+    if (!isTemplate) return;
+    AsyncStorage.getItem(SAVED_WORKOUTS_KEY).then(raw => { try { setSavedToMine((raw ? JSON.parse(raw) : []).includes(template)); } catch { /* none saved */ } }).catch(() => {});
+  }, [isTemplate, template]);
+  const toggleSaved = async () => {
+    Haptics.selectionAsync();
+    try {
+      const raw = await AsyncStorage.getItem(SAVED_WORKOUTS_KEY);
+      const ids: string[] = raw ? JSON.parse(raw) : [];
+      const next = ids.includes(template as string) ? ids.filter(x => x !== template) : [...ids, template as string];
+      await AsyncStorage.setItem(SAVED_WORKOUTS_KEY, JSON.stringify(next));
+      setSavedToMine(next.includes(template as string));
+    } catch { /* storage failed: the star stays as it was */ }
+  };
 
   // getNextWorkout is read once at mount (it subscribes to the function reference, not to `plan`), so after createPlan()
   // resolves, router.replace gives this screen a fresh mount that re-reads it.
@@ -132,6 +151,7 @@ export default function WorkoutPreviewScreen() {
         <View style={s.titleBlock}>
           <Text style={s.title} numberOfLines={1}>{workout.splitLabel}</Text>
           <Text style={s.subtitle} numberOfLines={1}>{workoutMinutes(workout)} min · {plural(exCount, 'exercise')}</Text>
+          {isTemplate && <Text style={s.tplNote} numberOfLines={2}>FormPal template. {TEMPLATE_NOTE}</Text>}
         </View>
       </View>
 
@@ -147,7 +167,12 @@ export default function WorkoutPreviewScreen() {
 
       {!previewOnly && (
         <View style={[s.footer, { bottom: footer }]} pointerEvents="box-none">
-          <Pressable style={s.startBtn} onPress={handleStart} accessibilityRole="button" accessibilityLabel="Start workout">
+          {isTemplate && (
+            <Pressable style={s.saveBtn} onPress={toggleSaved} accessibilityRole="button" accessibilityLabel={savedToMine ? 'Saved to Mine' : 'Save to Mine'}>
+              <SymbolView name={savedToMine ? 'bookmark.fill' : 'bookmark'} size={20} tintColor={INK} type="monochrome" style={{ width: 20, height: 20 }} />
+            </Pressable>
+          )}
+          <Pressable style={[s.startBtn, { flex: 1 }]} onPress={handleStart} accessibilityRole="button" accessibilityLabel="Start workout">
             <SymbolView name="play.fill" size={12} tintColor="#ffffff" type="monochrome" style={{ width: 12, height: 12 }} />
             <Text style={s.startTxt}>Start workout</Text>
           </Pressable>
@@ -198,7 +223,9 @@ const s = StyleSheet.create({
   exMeta: { fontFamily: FONT.display, fontSize: 13.5, lineHeight: 17, color: SUB },
   pencil: { width: 16, height: 16, marginLeft: 8 },
 
-  footer: { position: 'absolute', left: 16, right: 16 },
+  footer: { position: 'absolute', left: 16, right: 16, flexDirection: 'row', gap: 10, alignItems: 'center' },
+  saveBtn: { width: 58, height: 58, borderRadius: 29, backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center', boxShadow: '0 10px 22px -10px rgba(40,50,90,0.35), 0 1px 3px rgba(40,50,90,0.1)' } as any,
+  tplNote: { fontFamily: FONT.display, fontSize: 12.5, lineHeight: 16, color: SUB, marginTop: 4 },
   startBtn: {
     height: 58, borderRadius: 29, backgroundColor: INK, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9,
     boxShadow: '0 16px 30px -16px rgba(17,17,20,0.6)',

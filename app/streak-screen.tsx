@@ -28,7 +28,8 @@ function streakInject(info: StreakInfo): string {
       if(t === 'Continue'){ post('advance'); return; }
     }
   }, true);
-  post('ready');
+  // revealed only once the page shows the real streak (never the design's own Day 1 first): wait for it, 2.4s at most
+  (function wait(n){ if (window.__streakApplied || n > 60) post('ready'); else setTimeout(function(){ wait(n + 1); }, 40); })(0);
 })();
 `;
 }

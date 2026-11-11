@@ -12,7 +12,8 @@ import type { WebView } from 'react-native-webview';
 import { EXERCISE_CATALOG } from '../constants/exercises';
 import { getAllSessions, appendSessions, computeMuscleTiers } from '../lib/sessionLog';
 import { computeOverallStanding } from '../components/MuscleTierMap';
-import { hapticError } from '../lib/haptics';
+import { hapticError, hapticSuccess } from '../lib/haptics';
+import SavedCheck from '../components/SavedCheck';
 import DesignScreen, { type DesignMessage } from '../components/DesignScreen';
 import {
   buildCatalog, logSessionBeforeJs, logSessionData, athltSetDataJs, entriesFromPage, recentNames,
@@ -25,6 +26,8 @@ export default function LogSessionScreen() {
   const router = useRouter();
   const webRef = useRef<WebView>(null);
   const saving = useRef(false);
+  // after Save: a short "Session logged" check (success haptic), then Today's progress. Holds the time of the logged session.
+  const [loggedTs, setLoggedTs] = useState<number | null>(null);
   const catalog = useMemo(() => buildCatalog(EXERCISE_CATALOG as any), []);
   // the exercises logged most recently, shown as tappable chips under the search box (loaded once, pushed to the page)
   const [recent, setRecent] = useState<string[]>([]);
@@ -38,9 +41,9 @@ export default function LogSessionScreen() {
       const { ts, entries } = entriesFromPage({ dayNum: msg.dayNum, year: msg.year, month: msg.month, items: msg.items }, catalog, new Date());
       if (entries.length === 0) { saving.current = false; return; }
       await appendSessions(entries, 'log-session (Save session pressed)');
-      // ONE clean transition: straight to Today's progress (no toast, no waiting): this screen is replaced, and the next one opens on
-      // the same light background, so nothing flashes in between
-      router.replace({ pathname: '/recap' as any, params: { mode: 'logged', ts: String(ts) } });
+      console.log('[LOG-SESSION] saved ' + entries.length + ' exercises - showing the Session logged check');
+      hapticSuccess();
+      setLoggedTs(ts); // the check shows on a white screen, then onLoggedDone opens Today's progress
     } catch {
       hapticError();
       saving.current = false;
@@ -52,5 +55,17 @@ export default function LogSessionScreen() {
     else if (m.type === 'save') void save(m);
   }, [router, save]);
 
-  return <DesignScreen name="log-session" source={SOURCE} beforeJs={BEFORE} dataJs={dataJs} onMessage={onMessage} webRef={webRef} />;
+  // the check is white like Today's progress, so the hand-over between them is clean: this screen is replaced
+  const onLoggedDone = useCallback(() => {
+    if (loggedTs == null) return;
+    console.log('[LOG-SESSION] check done - opening the Today progress page');
+    router.replace({ pathname: '/recap' as any, params: { mode: 'logged', ts: String(loggedTs) } });
+  }, [router, loggedTs]);
+
+  return (
+    <>
+      <DesignScreen name="log-session" source={SOURCE} beforeJs={BEFORE} dataJs={dataJs} onMessage={onMessage} webRef={webRef} />
+      {loggedTs != null ? <SavedCheck text="Session logged" onDone={onLoggedDone} /> : null}
+    </>
+  );
 }

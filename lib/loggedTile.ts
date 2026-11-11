@@ -21,7 +21,8 @@ export const LOGGED_TILE_JS = String.raw`
       else if (ch.hasAttribute('data-athlt-hidden-play')) { ch.removeAttribute('data-athlt-hidden-play'); ch.style.removeProperty('display'); }
     }
     if (!on) { if (mine) mine.remove(); return false; }
-    el.style.setProperty('background-image', 'linear-gradient(160deg, #3a4156 0%, #1b1f2b 100%)', 'important');
+    el.style.setProperty('background-image', 'none', 'important');
+    el.style.setProperty('background-color', '#2a2a2e', 'important'); // flat, no gradient
     el.style.setProperty('background-size', 'cover', 'important');
     el.style.setProperty('background-repeat', 'no-repeat', 'important');
     if (mine) return true;
@@ -30,7 +31,7 @@ export const LOGGED_TILE_JS = String.raw`
     mine.setAttribute('data-athlt-logged', '1');
     mine.style.cssText = 'position:absolute;left:0;top:0;right:0;bottom:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;pointer-events:none;';
     // a note with a check badge: "written in by hand"
-    mine.innerHTML = '<svg width="40" height="40" viewBox="0 0 40 40" fill="none"><rect x="8" y="5" width="21" height="27" rx="5" fill="rgba(255,255,255,0.14)" stroke="#ffffff" stroke-width="2"></rect><path d="M13.5 13h10M13.5 18h10M13.5 23h5" stroke="#ffffff" stroke-width="2" stroke-linecap="round"></path><circle cx="29.5" cy="29.5" r="8" fill="#34c759" stroke="#1b1f2b" stroke-width="2.5"></circle><path d="m25.8 29.6 2.5 2.5 4.4-4.9" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></svg>'
+    mine.innerHTML = '<svg width="40" height="40" viewBox="0 0 40 40" fill="none"><rect x="8" y="5" width="21" height="27" rx="5" fill="rgba(255,255,255,0.14)" stroke="#ffffff" stroke-width="2"></rect><path d="M13.5 13h10M13.5 18h10M13.5 23h5" stroke="#ffffff" stroke-width="2" stroke-linecap="round"></path><circle cx="29.5" cy="29.5" r="8" fill="#34c759" stroke="#2a2a2e" stroke-width="2.5"></circle><path d="m25.8 29.6 2.5 2.5 4.4-4.9" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></svg>'
       + '<div style="font-size:11px;font-weight:700;letter-spacing:0.4px;color:#ffffff;background:rgba(255,255,255,0.18);padding:3px 10px;border-radius:999px;">Logged</div>';
     el.appendChild(mine);
     return true;

@@ -26,6 +26,7 @@ import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import LiquidGlass, { LiquidGlassButton } from './LiquidGlass';
 import PlusMenu from './PlusMenu';
 import { TAB_BAR_H, PLUS_SIZE, TAB_BAR_SIDE, TAB_BAR_GAP, tabBarBottom } from '../lib/tabBarMetrics';
+import { tapClock } from '../lib/tabLag';
 import { tabIndexAt, lensLeft, lensStretch, releaseTarget, LENS_SCALE_X, LENS_SCALE_Y, LIFT_SPRING, SETTLE_SPRING } from '../lib/tabDrag';
 
 export const TABS = [
@@ -39,6 +40,9 @@ const INK = '#111114';
 const ITEMS_PAD = 6;
 const PILL_H = TAB_BAR_H - 12;
 const MUTED = '#6e6e77';
+
+let warmedUp = false;
+const WARM_STEP_MS = 110;
 
 export default function GlassTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
@@ -74,6 +78,7 @@ export default function GlassTabBar({ state, navigation }: BottomTabBarProps) {
     const route = state.routes.find(r => r.name === name);
     if (!route) return;
     setMenuOpen(false);
+    if (focusedName !== name) { tapClock.at = Date.now(); tapClock.name = name === 'index' ? 'home' : name; }
     const ev = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
     if (focusedName !== name && !ev.defaultPrevented) navigation.navigate(route.name as never);
   }, [state.routes, navigation, focusedName]);
@@ -126,9 +131,27 @@ export default function GlassTabBar({ state, navigation }: BottomTabBarProps) {
     },
   })).current;
 
-  const lit = hover ?? idx;
   const lensScaleX = Animated.multiply(lift.interpolate({ inputRange: [0, 1], outputRange: [1, LENS_SCALE_X] }), stretch);
   const lensScaleY = lift.interpolate({ inputRange: [0, 1], outputRange: [1, LENS_SCALE_Y] });
+
+  // ONE time per app run: visit the other tabs once, quickly, behind a cover the colour of the pages. A tab's page only starts
+  // loading when its screen is first on screen, so without this every tab's FIRST open waited ~0.4-0.6s for its page to load.
+  // After this, all four pages are loaded and a tab tap only brings an already-drawn page to the front.
+  const [warming, setWarming] = useState(!warmedUp);
+  useEffect(() => {
+    if (warmedUp) return;
+    warmedUp = true;
+    const start = state.routes[state.index]?.name;
+    const others = TABS.map(t => t.name as string).filter(n => n !== start);
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    let finished = false;
+    let t = 350;
+    others.forEach((n) => { const at = t; timers.push(setTimeout(() => { navigation.navigate(n as never); }, at)); t += WARM_STEP_MS; });
+    timers.push(setTimeout(() => { if (start) navigation.navigate(start as never); }, t)); t += 80;
+    timers.push(setTimeout(() => { finished = true; setWarming(false); if (__DEV__) console.log('[TAB-LAG] all tabs loaded once at launch (' + others.length + ' visited behind the cover)'); }, t));
+    timers.push(setTimeout(() => setWarming(false), 3000)); // whatever happens, the cover is never left on
+    return () => { timers.forEach(clearTimeout); if (!finished) warmedUp = false; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const bottom = tabBarBottom(insets.bottom);
 
@@ -147,12 +170,23 @@ export default function GlassTabBar({ state, navigation }: BottomTabBarProps) {
           {/* icons and labels sit ABOVE the lens, so the glass never smears or magnifies them (that blurred the open tab) */}
           <View style={[StyleSheet.absoluteFill, s.items]} pointerEvents="none">
             {TABS.map((t, i) => {
-              const on = lit === i;
+              // The icon and label turn dark ONLY as the lens arrives: two copies (muted, dark) cross-fade by how close the lens
+              // is to this tab (native-driven opacity, so it follows the lens frame by frame, tap or drag).
+              const near = itemW > 0
+                ? slide.interpolate({ inputRange: [(i - 0.85) * itemW, i * itemW, (i + 0.85) * itemW], outputRange: [0, 1, 0], extrapolate: 'clamp' })
+                : new Animated.Value(i === idx ? 1 : 0);
+              const far = Animated.subtract(1, near);
               return (
                 <View key={t.name} style={s.itemHit} accessible accessibilityRole="button" accessibilityLabel={t.label} accessibilityState={{ selected: idx === i }} onAccessibilityTap={() => openTab(t.name)}>
                   <View style={s.item}>
-                    <SymbolView name={(on ? t.on : t.off) as any} size={20} tintColor={on ? INK : MUTED} type="monochrome" style={s.icon} />
-                    <Text style={[s.label, { color: on ? INK : MUTED }]} numberOfLines={1}>{t.label}</Text>
+                    <Animated.View style={[s.layer, { opacity: far }]}>
+                      <SymbolView name={t.off as any} size={20} tintColor={MUTED} type="monochrome" style={s.icon} />
+                      <Text style={[s.label, { color: MUTED }]} numberOfLines={1}>{t.label}</Text>
+                    </Animated.View>
+                    <Animated.View style={[StyleSheet.absoluteFill, s.layer, { opacity: near }]}>
+                      <SymbolView name={t.on as any} size={20} tintColor={INK} type="monochrome" style={s.icon} />
+                      <Text style={[s.label, { color: INK }]} numberOfLines={1}>{t.label}</Text>
+                    </Animated.View>
                   </View>
                 </View>
               );
@@ -174,6 +208,7 @@ export default function GlassTabBar({ state, navigation }: BottomTabBarProps) {
           </Animated.View>
         </LiquidGlassButton>
       </View>
+      {warming && <View style={[StyleSheet.absoluteFill, { backgroundColor: '#eeeef1' }]} pointerEvents="auto" />}
     </View>
   );
 }
@@ -185,7 +220,8 @@ const s = StyleSheet.create({
   pill:    { position: 'absolute', left: ITEMS_PAD, top: 6, height: PILL_H },
   pillGlass: { flex: 1 },
   itemHit: { flex: 1, height: PILL_H },
-  item:    { flex: 1, borderRadius: PILL_H / 2, alignItems: 'center', justifyContent: 'center', gap: 2 },
+  item:    { flex: 1, borderRadius: PILL_H / 2, alignItems: 'center', justifyContent: 'center' },
+  layer:   { alignItems: 'center', justifyContent: 'center', gap: 2 },
   icon:    { width: 22, height: 22 },
   // Apple's own tab bar label: the system font (SF Pro, picked by iOS because no fontFamily is set), 10pt, medium, +0.12 tracking
   label:   { fontSize: 10, fontWeight: '500', letterSpacing: 0.12 },

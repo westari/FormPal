@@ -9,14 +9,15 @@ export const TAB_NAMES = ['index', 'train', 'plus', 'progress', 'profile'] as co
 // The bar itself: Home / Train / Progress / Profile in one real Liquid Glass capsule, the + on its own
 // (components/GlassTabBar.tsx).
 export default function TabLayout() {
-  if (__DEV__) console.log('[TABS] layout mounted, tabs:', TAB_NAMES.join(', '));
+  if (__DEV__) console.log('[TABS] layout mounted, tabs:', TAB_NAMES.join(', '), '| inactive tabs detached natively (web views stay loaded)');
   return (
     <Tabs
       tabBar={(props) => <GlassTabBar {...props} />}
-      // Every tab is built at launch and stays attached behind the open one (detachInactiveScreens off), so tapping a tab only
-      // brings it to the front: no fade, no first-open load. (A fade between tabs also let the dark navigator background
-      // show through for a moment, and could leave a tab half-transparent: the all-black screen.)
-      detachInactiveScreens={false}
+      // Every tab is built at launch and the other tabs are detached natively (the default). NEVER turn detachInactiveScreens off
+      // here: the fallback then hides an inactive tab with display:none, React Native unmounts its web view and the page loads
+      // again on every visit (the log showed "web view load start" on every Train / Profile tap, 0.4-0.6s each). With the native
+      // detach the web view lives on, and a tab tap only brings the already-loaded page back. (components/GlassTabBar.tsx visits
+      // each tab once at launch, behind a cover, so even the first open is instant.)
       screenOptions={{ headerShown: false, lazy: false, animation: 'none', sceneStyle: { backgroundColor: '#eeeef1' } }}
     >
       <Tabs.Screen name="index" />

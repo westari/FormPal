@@ -29,6 +29,7 @@
 import React, { useCallback, useRef, useState, useEffect } from 'react';
 import { View, StyleSheet, Animated, Easing } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { createTabLag } from '../../lib/tabLag';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
@@ -467,6 +468,9 @@ export default function TrainScreen() {
   const insets = useSafeAreaInsets();
   const webRef = useRef<WebView>(null);
   const [revealed, setRevealed] = useState(false);
+  const revealedRef = useRef(false);
+  revealedRef.current = revealed;
+  const trainLag = useRef(createTabLag('train')).current;
   const dataJsRef = useRef<string | null>(null);
   const streakRef = useRef(0);
   const imgsJsRef = useRef<string | null>(null);
@@ -537,6 +541,7 @@ export default function TrainScreen() {
 
   useFocusEffect(useCallback(() => {
     tlog('focused; insets', insets.top, insets.bottom);
+    trainLag.revisit(revealedRef.current);
     let alive = true;
     pushData().catch((e) => { tlog('ERROR loading data:', e && (e as Error).message ? (e as Error).message : String(e)); });
     // Liveness ping: a web view whose content process was killed never answers and stays blank white. Only pinged

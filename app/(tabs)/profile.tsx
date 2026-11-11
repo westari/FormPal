@@ -63,7 +63,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const webRef = useRef<WebView>(null);
   const plog = (m: string) => { if (__DEV__) console.log('[PROFILE]', m); };
-  const { fade, onReady, onLoadStart, onLoadEnd, hide } = useRevealFade(plog);
+  const { fade, revealedRef, onReady, onLoadStart, onLoadEnd, hide } = useRevealFade(plog);
   const openedAt = useRef(Date.now());
   const lag = useRef(createTabLag('profile')).current;
   const firstShown = useRef(true);
@@ -111,6 +111,7 @@ export default function ProfileScreen() {
   useEffect(() => { lag.mark('mount'); void prefetch(false); }, [prefetch, lag]);
   useFocusEffect(useCallback(() => {
     lag.mark('shown');
+    lag.revisit(revealedRef.current);
     if (firstShown.current) { firstShown.current = false; if (dataRef.current) push(); void prefetch(false); return; }
     void prefetch(true);
   }, [prefetch, push, lag]));

@@ -41,6 +41,7 @@ import { dcLogicPatchJs, athltSetDataJs } from '../../lib/dcLogicPatch';
 import { EDIT_BRIDGE_JS } from '../../lib/editSheetBridge';
 import { ADD_PICKER_JS } from '../../lib/addExercisePicker';
 import { HAPTIC_PAGE_JS, hapticKind } from '../../lib/haptics';
+import { createTabLag } from '../../lib/tabLag';
 import { LOGGED_TILE_JS } from '../../lib/loggedTile';
 import { WORKOUT_LONGPRESS_JS, askRemoveWorkout } from '../../lib/workoutMenu';
 import { saveWorkoutEdit } from '../../lib/planEditSave';
@@ -529,12 +530,14 @@ export default function HomeScreen() {
   const [injectJs, setInjectJs] = useState<string | null>(null);
   const [pageLoaded, setPageLoaded] = useState(false);
   const [logicJs, setLogicJs] = useState<string | null>(null);
-  const { fade, onReady, onLoadStart, onLoadEnd, hide } = useRevealFade(m => { if (__DEV__) console.log('[HOME]', m); });
+  const { fade, revealedRef, onReady, onLoadStart, onLoadEnd, hide } = useRevealFade(m => { if (__DEV__) console.log('[HOME]', m); });
   // one picture per recent workout (same code as the Progress tab): a video frame, else its muscle icon
   const [thumbs, setThumbs] = useState<{ thumb: string | null; fallback: string | null; logged?: boolean; ts?: number }[]>([]);
   const [reloadTick, setReloadTick] = useState(0); // bumped after a workout is deleted: the page's data is built again
 
+  const homeLag = useRef(createTabLag('home')).current;
   useFocusEffect(useCallback(() => {
+    homeLag.revisit(revealedRef.current);
     let alive = true;
     Promise.all([loadPlan(), getAllSessions()]).then(async ([plan, sessions]) => {
       setInjectJs(buildHomeInjectJs(plan, sessions, insets.top, insets.bottom));

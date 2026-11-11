@@ -18,13 +18,13 @@ const check = (name, ok, detail) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${na
 const read = (f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8').split('\r\n').join('\n');
 
 const ls = read('app/log-session.tsx'), rc = read('app/recap.tsx');
-check('Log a session routes to /recap with mode "logged" and the saved timestamp, NOT to the old /session-logged filler', /pathname: '\/recap' as any, params: \{ mode: 'logged', ts: String\(ts\) \}/.test(ls) && !/session-logged/.test(ls));
+check('Log a session routes to /recap with mode "logged" and the saved timestamp (after the Session logged check), NOT to the old /session-logged filler', /pathname: '\/recap' as any, params: \{ mode: 'logged', ts: String\(loggedTs\) \}/.test(ls) && !/session-logged/.test(ls));
 check('recap opens the logged mode straight on the muscle page ("Today\'s progress")', /isLoggedMode \? 'ranks' : 'summary'/.test(rc));
 check('recap loads the saved entries for that timestamp and counts them (they are not re-written)', /else if \(isLoggedMode\) \{[\s\S]{0,500}all\.filter\(e => e\.ts === Number\(tsParam\)\)/.test(rc) && !/persistOnMount\.current = entries[\s\S]{0,40}isLoggedMode/.test(rc));
 check('it waits for the muscle page data before showing anything (no flash of the Workout complete card)', /\(isLoggedMode && !ranksPayload\)/.test(rc));
 check('Done (and the page\'s back) close it to Home; the logged mode is never treated as a past workout', /isHistoryMode = !isWorkoutMode && !isLoggedMode/.test(rc) && /closeRanks'\) \{ if \(isLoggedMode\) void handleDoneRanks\(\)/.test(rc));
 
-check('15: Save goes straight to Today\'s progress: one replace, no waiting timer and no toast in between (the two-screens flash)', !/setTimeout/.test(ls) && !ls.includes('__dsSaved') && ls.includes("router.replace({ pathname: '/recap' as any, params: { mode: 'logged', ts: String(ts) } });"));
+check('15: Save shows the short Session logged check (success haptic), THEN one replace to Today's progress; no timer of its own (the check owns the hold)', !/setTimeout/.test(ls) && !ls.includes('__dsSaved') && ls.includes('<SavedCheck text="Session logged" onDone={onLoggedDone} />') && ls.includes('hapticSuccess()') && (ls.match(/router\.replace/g) || []).length === 1);
 check('15: the next screen opens on the same light background (no dark flash): the logged mode uses a light root and dark status bar', rc.includes("isLoggedMode ? { backgroundColor: '#f2f2f6' } : null") && rc.includes("isLoggedMode ? 'dark' : 'light'"));
 check('16: app/session-logged.tsx is no longer referenced anywhere', !['app/_layout.tsx', 'app/log-session.tsx', 'app/recap.tsx', 'lib/designScreens.ts'].some((f) => read(f).includes('session-logged')));
 const { buildCatalog, entriesFromPage } = require('../lib/designScreens.ts');

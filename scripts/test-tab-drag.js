@@ -31,7 +31,7 @@ check('a quick tap on Train opens Train (same gesture, no drag)', D.releaseTarge
 check('the bar uses a PanResponder on a layer above the tabs (the tabs themselves do not take touches)', /PanResponder\.create/.test(bar) && /\{\.\.\.pan\.panHandlers\}/.test(bar) && /<View style=\{\[StyleSheet\.absoluteFill, s\.items\]\} pointerEvents="none">/.test(bar));
 check('touch down: the lens lifts with a spring and glides under the finger', /onPanResponderGrant[\s\S]*Animated\.spring\(lift, \{ toValue: 1, \.\.\.LIFT_SPRING/.test(bar) && /Animated\.spring\(slide, \{ toValue: lensLeft\(L\.startX/.test(bar));
 check('moving: the lens follows the finger (setValue, no lag), stretches with speed, ticks once per new tab', /slide\.setValue\(lensLeft\(x/.test(bar) && /stretch\.setValue\(lensStretch\(g\.vx\)\)/.test(bar) && /if \(i !== L\.hover\) \{ L\.hover = i; setHover\(i\); Haptics\.selectionAsync\(\); \}/.test(bar));
-check('the tab under the lens is the lit one (icon + label go dark as the lens passes)', /const lit = hover \?\? idx/.test(bar) && /const on = lit === i/.test(bar));
+check('icon + label colour follows the LENS position (cross-fade by distance), so a tab goes dark only as the lens arrives, on a tap and on a drag', /slide\.interpolate\(\{ inputRange: \[\(i - 0\.85\)/.test(bar) && /opacity: near/.test(bar) && /opacity: far/.test(bar));
 check('letting go: the lens settles on the tab with a spring, lifts back down, and that tab opens', /onPanResponderRelease[\s\S]*releaseTarget\(/.test(bar) && /Animated\.spring\(lift, \{ toValue: 0, \.\.\.SETTLE_SPRING/.test(bar) && /openTabRef\.current\(TABS\[target\]\.name\)/.test(bar));
 check('the lens is drawn OUTSIDE the glass capsule so it can stand out of the bar while lifted', bar.indexOf('</LiquidGlass>') < bar.indexOf('s.pill') && /variant="clear"/.test(bar));
 check('VoiceOver still works: every tab is an accessible button with its own tap action', /accessibilityRole="button"/.test(bar) && /onAccessibilityTap=\{\(\) => openTab\(t\.name\)\}/.test(bar));
@@ -43,5 +43,11 @@ check('NO wobble: every spring the lens uses is critically damped (damping ratio
   for (let t = 0; t < 3; t += 0.001) { const a = (-k * (x - T) - c * v) / m; v += a * 0.001; x += v * 0.001; maxX = Math.max(maxX, x); }
   check('simulated: the lens settles on the next tab (71 px away) without ever passing it', maxX <= T + 0.01 && Math.abs(x - T) < 0.5, 'max ' + maxX.toFixed(2) + ' end ' + x.toFixed(2));
 }
-check('the open tab icon and label are drawn ABOVE the lens glass (the glass no longer smears them)', bar.indexOf('s.pill') < bar.indexOf('TABS.map') && bar.indexOf('TABS.map') < bar.indexOf('panHandlers'));
+check('the open tab icon and label are drawn ABOVE the lens glass (the glass no longer smears them)', bar.indexOf('s.pill') < bar.indexOf('style={s.itemHit}') && bar.indexOf('style={s.itemHit}') < bar.indexOf('panHandlers'));
+{ // the colour maths from components/GlassTabBar.tsx, on a 71 px tab: Home -> Profile
+  const W = 71, near = (i, x) => Math.max(0, 1 - Math.abs(x - i * W) / (0.85 * W));
+  check('Home -> Profile: when the tap lands the lens is still on Home, so Profile is NOT dark yet (0) and Home still is (1)', near(3, 0) === 0 && near(0, 0) === 1);
+  check('...Profile only starts to darken once the lens is within 0.85 of a tab of it, and is fully dark when the lens is on it', near(3, 3 * W - 0.9 * W) === 0 && near(3, 3 * W - 0.4 * W) > 0.5 && near(3, 3 * W) === 1);
+  check('...the tabs in between (Train, Progress) flash dark only for the moment the lens is on them', near(1, 1 * W) === 1 && near(1, 2 * W) === 0 && near(2, 1 * W) === 0);
+}
 console.log(failed ? `${failed} FAILED` : 'ALL PASSED'); process.exit(failed ? 1 : 0);

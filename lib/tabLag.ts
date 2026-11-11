@@ -8,12 +8,22 @@
  *   [TAB-LAG] profile first open: shown -> ready 412ms | data was ready 38ms BEFORE the tab was shown | page load 3ms after
  *   shown, page asked for data +29ms, data pushed +31ms, ready +412ms
  */
+/** The moment the user last tapped a tab (set by components/GlassTabBar.tsx), so a screen can say how long it took to show. */
+export const tapClock = { at: 0, name: '' };
+
 export function createTabLag(tab: string) {
   const t: Record<string, number> = {};
   let printed = false;
+  let seen = false;
   const now = () => Date.now();
   const log = (msg: string) => { if (__DEV__) console.log(`[TAB-LAG] ${tab} ${msg}`); };
   return {
+    /** Every show after the first: how long after the tap, and whether the page was already on screen (a page that had to load again would say false). */
+    revisit(visible: boolean) {
+      if (!seen) { seen = true; return; }
+      const ms = tapClock.at && tapClock.name === tab ? now() - tapClock.at : null;
+      log(`shown again${ms == null ? '' : ' ' + ms + 'ms after the tap'} | page already visible: ${visible ? 'yes' : 'NO (it is loading again)'}`);
+    },
     /** First time only: later calls are ignored, so "first open" stays the first open. */
     mark(name: 'mount' | 'dataReady' | 'shown' | 'loadStart' | 'loadEnd' | 'asked' | 'pushed' | 'ready') {
       if (t[name] != null) return;
