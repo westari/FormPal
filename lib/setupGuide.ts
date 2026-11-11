@@ -4,7 +4,7 @@
  * The setup steps before "Ready. Go!", written for someone who has never used the app. ONE decision, from the same numbers, so
  * the words, the confidence number and Go can never disagree:
  *
- *   fit    "Step back until your hands fit"     the camera cannot track you steadily yet (or a frame hint is up)
+ *   fit    "Step back so your raised hands show"     the camera cannot track you steadily yet (or a frame hint is up)
  *   start  "Hands at your shoulders"            you are tracked, but not in the starting position
  *   raise  "Raise both hands overhead"          (overhead exercises) the camera has not yet SEEN your full lockout
  *   lower  "Lower to your shoulders"            you reached lockout; come back to the start
@@ -50,7 +50,7 @@ export function createSetupGuide() {
   const T = SETUP_TUNING;
   function update(i: SetupInputs): SetupDecision {
     const lockoutMin = i.topValue * T.lockoutFraction;
-    const fitText = i.handsExercise ? 'Step back until your hands fit' : 'Step back until you fit';
+    const fitText = i.handsExercise ? 'Step back so your raised hands show' : 'Step back so your whole body shows';
     if (!i.seen || !i.healthy || i.frameHint) {
       // losing the person mid-setup (arms left the frame) forgets the lockout: it has to be seen again, in frame
       if (i.seen && !i.healthy) { reachedAt = 0; backAtStartSince = 0; }

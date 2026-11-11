@@ -297,8 +297,8 @@ function CueGlass({ text, ready }: { text: string; ready?: boolean }) {
         {ready
           ? <SymbolView name="checkmark.circle.fill" size={22} tintColor={C.good} type="monochrome" style={{ width: 22, height: 22 }} />
           : <Image source={SPARKLE_DUO} style={s.trackingCueIcon} />}
-        {/* one line, never wrapped: a wrapped line hangs under the icon and looks indented. Long messages shrink to fit. */}
-        <Text style={s.trackingCueText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{text}</Text>
+        {/* the original layout: stars on the left, the cue beside them (a long cue wraps to a second line beside the stars, never under them) */}
+        <Text style={s.trackingCueText} numberOfLines={2}>{text}</Text>
       </View>
     </GlassPanel>
   );
@@ -2148,7 +2148,7 @@ const s = StyleSheet.create({
   // shadowed text "doesn't feel clean at all." Same GlassPanel surface the
   // setup-success "Ready. Go!" card already uses.
   trackingCueCard:  { alignSelf: 'center', maxWidth: 340 },
-  trackingCueInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingHorizontal: 22, paddingVertical: 16 },
+  trackingCueInner: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 26, paddingVertical: 16 },
   trackingCueIcon:  { width: 22, height: 22 },
   // Messages are now short, framing-only instructions (see
   // lib/repDiagnostics.ts — "Move back", "Hold still", etc.), so a bigger
@@ -2156,7 +2156,7 @@ const s = StyleSheet.create({
   // "the cues need to be a bit bigger".
   trackingCueText: {
     fontFamily: 'PlusJakartaSans_700Bold', fontSize: 24, lineHeight: 28,
-    color: '#fff', letterSpacing: 0.1, flexShrink: 1, textAlign: 'center',
+    color: '#fff', letterSpacing: 0.1, flexShrink: 1,
   },
 
   // Rep count — bare, no frame; own shadow for legibility over the camera.
