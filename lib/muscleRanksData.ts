@@ -11,7 +11,7 @@
 import { getExerciseDef, muscleCreditParts, Muscle } from '../constants/exercises';
 import { TIER_META } from '../constants/tierPalette';
 import {
-  TIER_ORDER, VOLUME_THRESHOLDS, tierIndex, tierProgress, belowBronzeProgress, muscleCreditTotals,
+  TIER_ORDER, VOLUME_THRESHOLDS, tierIndex, tierProgress,
   type SessionEntry, type MuscleTiers, type MuscleTierInfo, type Tier,
 } from './sessionLog';
 import { bodyMapPairDataUri } from './bodyMapSvg';
@@ -74,11 +74,10 @@ export function workedMuscles(entries: SessionEntry[]): { muscle: Muscle; credit
  * How far one muscle is toward `target` (the NEXT rank of the overall rank), 0-100:
  *  - ranked at the overall tier: its own progress toward the next tier
  *  - already above the overall tier: 100 (it has nothing left to do for this rank)
- *  - not ranked yet (below Bronze): today's credited reps over Bronze's volume bar
- *    (only known for muscles trained today)
+ *  - no data yet: Bronze 0% (there is no "Unranked")
  */
-function progressToward(info: MuscleTierInfo | undefined, overallTier: Tier | null, todayCredit: number): number {
-  if (!info) return 100 * belowBronzeProgress(todayCredit);
+function progressToward(info: MuscleTierInfo | undefined, overallTier: Tier | null, _todayCredit: number): number {
+  if (!info) return 0;
   if (overallTier && tierIndex(info.tier) > tierIndex(overallTier)) return 100;
   return muscleProgressPct(info);
 }
@@ -120,7 +119,7 @@ export function buildMuscleRanksPayload(opts: {
 
   const tier = standingAfter?.tier ?? null;
   const idx = tier ? tierIndex(tier) : -1;
-  const nextTier: Tier = tier ? (idx < TIER_ORDER.length - 1 ? TIER_ORDER[idx + 1] : tier) : 'bronze';
+  const nextTier: Tier = tier ? (idx < TIER_ORDER.length - 1 ? TIER_ORDER[idx + 1] : tier) : 'silver'; // no rank yet = Bronze, so Silver is next
   const nextLabel = cap(nextTier);
   const meta = TIER_META[tier ?? 'bronze'];
 
@@ -133,17 +132,12 @@ export function buildMuscleRanksPayload(opts: {
   //   OVERALL %       = computeOverallStanding().progress: the average own-progress over every ranked muscle, AFTER today (same on every screen)
   //   HEADER GAIN     = the change in that overall % this workout (one number; the rows keep their own %)
   const universe = new Set<Muscle>([...(Object.keys(tiersAfter) as Muscle[]), ...worked.map(w => w.muscle)]);
-  // Below Bronze: progress toward Bronze from ALL the training the muscle has had (shared belowBronzeProgress, capped
-  // at 99%), after today and before today. These sit on a scale just below Bronze's 0 (-100..-1) so a muscle that
-  // reaches Bronze today shows a continuous, positive gain instead of dropping from 99% to ~0%.
-  const creditAfter = muscleCreditTotals(opts.history ?? entries);
-  const creditToday = muscleCreditTotals(entries);
-  const unrankedAfter = (m: Muscle) => 100 * belowBronzeProgress(creditAfter.get(m) ?? 0);
-  const unrankedBefore = (m: Muscle) => 100 * belowBronzeProgress(Math.max(0, (creditAfter.get(m) ?? 0) - (creditToday.get(m) ?? 0)));
-  const progAfter = (m: Muscle) => (tiersAfter[m] ? muscleProgressPct(tiersAfter[m]!) : unrankedAfter(m));
-  const absAfter = (m: Muscle) => (tiersAfter[m] ? absolute(tiersAfter[m]) : unrankedAfter(m) - 100);
-  const progBefore = (m: Muscle) => (tiersBefore[m] ? muscleProgressPct(tiersBefore[m]!) : unrankedBefore(m));
-  const absBefore = (m: Muscle) => (tiersBefore[m] ? absolute(tiersBefore[m]) : unrankedBefore(m) - 100);
+  // There is no "Unranked": a muscle with no training yet is Bronze 0% (before today), so its first workout shows a real gain
+  // (30 good reps = +20% toward Silver). A muscle missing from a tier map is simply 0.
+  const progAfter = (m: Muscle) => (tiersAfter[m] ? muscleProgressPct(tiersAfter[m]!) : 0);
+  const absAfter = (m: Muscle) => (tiersAfter[m] ? absolute(tiersAfter[m]) : 0);
+  const progBefore = (m: Muscle) => (tiersBefore[m] ? muscleProgressPct(tiersBefore[m]!) : 0);
+  const absBefore = (m: Muscle) => (tiersBefore[m] ? absolute(tiersBefore[m]) : 0);
   const muscles = [...universe];
   const r1 = (n: number) => Math.round(n * 10) / 10;
   const avg = (f: (m: Muscle) => number) => (muscles.length ? muscles.reduce((a, m) => a + f(m), 0) / muscles.length : 0);
@@ -161,8 +155,8 @@ export function buildMuscleRanksPayload(opts: {
   const gainers = worked.filter(w => r1(gainOf(w.muscle)) > 0 && hasArt(w.muscle));
   const withArt = worked.filter(w => hasArt(w.muscle));
   const shown = gainers.length ? gainers : (withArt.length ? withArt : worked).slice(0, 2);
-  // A row never reads more than +99.9%: a muscle that goes from nothing to Bronze in one workout has moved more than one
-  // bar, which would look broken next to a 100% bar.
+  // A row never reads more than +99.9%: a muscle that jumps a whole rank in one workout has moved more than one bar, which would
+  // look broken next to a 100% bar.
   const gains = shown.map(w => Math.min(99.9, r1(gainOf(w.muscle))));
   // The overall gain shown under "Bronze -> Silver" is the SUM of the muscle rows on this page (each row is a 0.1 step, so the
   // sum is done in whole tenths and can never drift from what the rows add up to).
@@ -188,10 +182,10 @@ export function buildMuscleRanksPayload(opts: {
 
   return {
     rank: {
-      has: !!tier,
+      has: true, // everyone has a rank: Bronze 0% to start
       atTop: !!standingAfter?.atTop,
       tier,
-      label: tier ? cap(tier) : 'Unranked',
+      label: tier ? cap(tier) : 'Bronze',
       next: nextLabel,
       pct: afterAvg,
       pctLabel,

@@ -104,7 +104,8 @@ if (require.main === module) {
     let failed = 0;
     const check = (name, ok, detail) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  -> ' + detail : ''}`); if (!ok) failed++; };
     const o = results.Normal.OVERALL || {}, d = results.Dedicated.OVERALL || {}, c = results.Casual.OVERALL || {};
-    check('first Bronze for a normal user in about 1.5-2 weeks (week 2)', o.bronze != null && o.bronze >= 2 && o.bronze <= 2, `week ${o.bronze}`);
+    check('everyone starts at Bronze (there is no Unranked): Bronze from the first workout', o.bronze === 1 && d.bronze === 1 && c.bronze === 1, `week ${o.bronze}`);
+    check('first rank-up (Bronze -> Silver) for a normal user in about 1.5-2 weeks (week 2)', o.silver != null && o.silver >= 2 && o.silver <= 2, `week ${o.silver}`);
     check('first rank up (Bronze -> Silver) for a normal user within about 6 weeks (the weakest muscle sets the overall rank)', o.silver != null && o.silver <= 8, `week ${o.silver}`);
     const gaps = (r) => ['silver', 'gold', 'platinum', 'diamond', 'master', 'champion'].map((t, i, a) => (r[t] == null ? null : r[t] - (i ? r[a[i - 1]] : 0)));
     const gd = gaps(d).filter(g => g != null);

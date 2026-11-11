@@ -35,6 +35,7 @@ import { Muscle } from '../constants/exercises';
 import type { Slug } from 'react-native-body-highlighter';
 import type { MuscleTiers, MuscleTierInfo, Tier } from '../lib/sessionLog';
 import { TIER_ORDER, tierIndex, tierProgress } from '../lib/sessionLog';
+import { OVERALL_MIN_VOLUME } from '../lib/rankTuning';
 import { FRONT_MUSCLE_PATHS, BACK_MUSCLE_PATHS } from './muscleShapePaths';
 import {
   MUSCLE_MAP_FRONT_PATHS, MUSCLE_MAP_BACK_PATHS, MUSCLE_MAP_REGIONS, MUSCLE_MAP_VIEWBOX,
@@ -835,8 +836,11 @@ export interface OverallStanding {
 // Exported so the page shell (app/muscle-ranks.tsx) can pick the same tier
 // to tint MuscleRankBackdrop with, without duplicating the weakest-link logic.
 export function computeOverallStanding(tiers: MuscleTiers): OverallStanding | null {
-  const entries = Object.entries(tiers) as [Muscle, MuscleTierInfo][];
-  if (entries.length === 0) return null;
+  const all = Object.entries(tiers) as [Muscle, MuscleTierInfo][];
+  if (all.length === 0) return null;
+  // Only muscles with real training set the overall rank (see OVERALL_MIN_VOLUME); until one has, every trained muscle counts.
+  const established = all.filter(([, i]) => i.volume >= OVERALL_MIN_VOLUME);
+  const entries = established.length ? established : all;
 
   // Weakest = lowest tier, and within the SAME tier the one furthest from the
   // next tier (lowest progress).
