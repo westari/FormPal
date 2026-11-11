@@ -11,7 +11,30 @@
  *    READY_MIN_PCT), not merely when the native setup hold completed.
  */
 
-export const NO_PERSON_CUE = 'Step back into frame';
+export const NO_PERSON_CUE = 'Step into frame';
+
+/** Texts that mean "the camera cannot see you well enough": the frame hints. Imported lazily by name to keep this file free of cycles. */
+const FRAME_HINTS = new Set(['step into frame', 'move back', "can't see arms", 'step back', 'move closer', 'step into the frame']);
+
+/**
+ * THE rule that keeps the screen from contradicting itself: a frame hint ("Step into frame") and a verdict (a check or an
+ * X) are never shown together.
+ *   - while a frame hint is showing (or no person is detected) a counted rep gets NO check / X
+ *   - for a few seconds after a rep WAS judged, no frame hint is shown (the camera obviously sees the person)
+ */
+export function isFrameHint(text: string | null | undefined): boolean {
+  if (!text) return false;
+  const t = text.trim().toLowerCase();
+  return FRAME_HINTS.has(t) || /(step back|into frame|in frame|can't see|cannot see)/.test(t);
+}
+export const JUDGED_QUIET_MS = 3000;
+export function showVerdict(frameHintNow: string | null | undefined, personDetected: boolean | undefined): boolean {
+  return !isFrameHint(frameHintNow) && personDetected !== false;
+}
+export function showFrameHint(cue: string | null | undefined, msSinceJudged: number): string | null {
+  if (!cue) return null;
+  return isFrameHint(cue) && msSinceJudged < JUDGED_QUIET_MS ? null : cue;
+}
 export const READY_MIN_PCT = 95;
 
 // ── Steady-tracking gate for "Ready. Go!" ───────────────────────────────────

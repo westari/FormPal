@@ -48,9 +48,9 @@ export const MUSCLE_RANKS_LOGIC_EXT = String.raw`function (Orig) {
       v.palNote = d.note;
       v.rankName = R.label;
       v.nextRank = R.next;
-      // The design's "+{{ gained }}% today" now reads "Overall rank <before>% -> <after>%": its number is the AFTER value
+      // The design's "+{{ gained }}% today" now reads "Overall +X%": X is the sum of the muscle rows below it
       // (the text around it is set by the DOM pass below); a top-ranked user has no %.
-      v.gained = R.atTop ? '' : R.pctLabel.replace('%', '');
+      v.gained = R.atTop ? '' : R.gained;
       v.afterLabel = R.pctLabel;
       // Final value from the first paint: the design animates this bar from the
       // "before" value after 700ms, which is a visible layout change.
@@ -277,11 +277,9 @@ export const MUSCLE_RANKS_DOM_JS = String.raw`
     // the OVERALL rank % went up this workout, so the trailing text becomes "% to Gold" (the rank being worked
     // toward). Only that one text node is changed, so the design's own re-render never loses a node it owns.
     // A top-ranked user just sees "+x%".
-    // The design's right-hand text ("+", a span with the number, "% today") becomes two short lines:
-    //   Overall rank
-    //   51.2% -> 51.6%        (a rank-up reads "Overall rank / Ranked up to Silver 3.1%")
-    // so the overall rank is clearly its own number, separate from each muscle's progress below the body map.
-    var lead = R.atTop ? 'Top rank reached' : R.rankedUp ? 'Overall rank' + String.fromCharCode(10) + 'Ranked up to ' + R.label + ' ' : 'Overall rank' + String.fromCharCode(10) + R.beforePct + '% ' + String.fromCharCode(8594) + ' ';
+    // The design's right-hand text ("+", a span with the number, "% today") becomes one line: "Overall +X%", X being the sum of
+    // the muscle row percentages shown on this page, so the rows and the overall always add up.
+    var lead = R.atTop ? 'Top rank reached' : 'Overall +';
     var tail = R.atTop ? '' : '%';
     var gainDone = false, gdivs = root.querySelectorAll('div');
     for (var g = 0; g < gdivs.length; g++) {
@@ -294,27 +292,12 @@ export const MUSCLE_RANKS_DOM_JS = String.raw`
       gd.setAttribute('data-mr-overall', '1');
       if (nodes[0].nodeValue !== lead) nodes[0].nodeValue = lead;
       if (nodes[2].nodeValue !== tail) nodes[2].nodeValue = tail;
-      gd.style.setProperty('white-space', 'pre-line', 'important');
+      gd.style.setProperty('white-space', 'nowrap', 'important');
       gd.style.setProperty('text-align', 'right', 'important');
       gd.style.setProperty('line-height', '1.25', 'important');
-      gainDone = (gd.textContent || '') === lead + (R.atTop ? '' : R.pctLabel.replace('%', '')) + tail;
+      gainDone = (gd.textContent || '') === lead + (R.atTop ? '' : R.gained) + tail;
       break;
     }
-    // A caption above the muscle rows: they are each muscle's OWN progress, not the overall rank.
-    var capHost = chips.length ? chips[0].parentElement : null;
-    if (capHost) {
-      var cap = capHost.querySelector('[data-mr-cap]');
-      if (!cap) {
-        cap = document.createElement('div'); cap.setAttribute('data-mr-cap', '1');
-        cap.style.cssText = 'position:absolute;left:0;right:0;text-align:center;font-size:11px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;color:#8e8e96;pointer-events:none;';
-        cap.textContent = 'Each muscle' + String.fromCharCode(39) + 's own progress';
-        capHost.appendChild(cap);
-      }
-      var firstTop = Infinity;
-      for (var ci = 0; ci < chips.length; ci++) firstTop = Math.min(firstTop, parseFloat(chips[ci].style.top) || 284);
-      cap.style.setProperty('top', (firstTop - 19) + 'px');
-    }
-
     // Final layout = real text in, real image decoded, scaled. Only then reveal.
     var headerOk = !!leafWithText(root, R.pctLabel) && !!leafWithText(root, R.label) && gainDone;
     if (!reported && fitted && imgOk && headerOk && chips.length === d.hits.length && chipsFit) {

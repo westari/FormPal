@@ -187,7 +187,7 @@ const AS = { __esModule: true, default: { getItem: async (k) => (mem.has(k) ? me
     const { EDIT_BRIDGE_JS } = require('../lib/editSheetBridge.ts');
     const helpers = require('../lib/dcWebviewHelpers.ts');
     let plan = mkPlan();
-    const before = helpers.DC_VIEWPORT_JS + helpers.DC_NO_ZOOM_JS + helpers.DC_SETTLE_JS + home.HOME_GUARD_JS + EDIT_BRIDGE_JS + dcLogicPatchJs(home.HOME_LOGIC_EXT);
+    const before = helpers.DC_VIEWPORT_JS + helpers.DC_NO_ZOOM_JS + helpers.DC_SETTLE_JS + home.HOME_GUARD_JS + EDIT_BRIDGE_JS + require('../lib/addExercisePicker.ts').ADD_PICKER_JS + dcLogicPatchJs(home.HOME_LOGIC_EXT);
     const logicJs = () => { const ld = home.buildHomeLogicData(plan); return athltSetDataJs(ld) + '; window.__editWid = ' + JSON.stringify(ld.editWid) + '; true;'; };
     const inject = (p) => p.evaluate(home.buildHomeInjectJs(plan, [], 62, 34) + '; true;');
     const { ctx, p, msgs } = await open('home.html', before, async (p, msgs) => {
@@ -221,6 +221,28 @@ const AS = { __esModule: true, default: { getItem: async (k) => (mem.has(k) ? me
     check('Home: after the save the hero shows the new exercise count (3)', /^Upper Body \d+ min · 3 exercises$/.test(await hero()), await hero());
     await tapSel(p, editBtn);
     check('Home: reopening the sheet lists the saved exercises', /Push-up 3 × 12 Shoulder Press 3 × 10 Pull-up 3 × 6/.test(await sheetRows(p)) && !/Bicep Curl/.test(await sheetRows(p)), (await sheetRows(p)).slice(0, 100));
+    // Home's Add exercise opens the SAME picker as Train (word-start search over the real catalogue)
+    const addH = await p.evaluate(() => { const sh = [...document.querySelectorAll('div')].find(d => d.style.maxHeight === '620px'); const b = [...sh.querySelectorAll('div,a')].filter(e => /^Add exercise$/.test((e.innerText || '').trim()))[0]; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
+    await p.touchscreen.tap(addH.x, addH.y); await p.waitForTimeout(700);
+    const pickerH = () => p.evaluate(() => { const e = document.getElementById('__trpick'); return e ? { open: e.style.display === 'block', rows: [...e.querySelectorAll('[data-pick]')].map(r => r.getAttribute('data-pick')), none: /No exercises match/.test(e.innerText) } : null; });
+    const h0 = await pickerH();
+    check('Home: "Add exercise" opens the picker and adds nothing yet', h0 && h0.open && h0.rows.length === 12 && !/Bodyweight Squat 3 × 10/.test(await sheetRows(p)), JSON.stringify(h0 && h0.rows.slice(0, 3)));
+    const { searchExercises } = require('../lib/exerciseSearch.ts');
+    const names = pe.addableExercises().map(r => r[0]).filter(n => !['Push-up', 'Shoulder Press', 'Pull-up'].includes(n));
+    for (const q of ['g', 'lung', 'push']) {
+      await p.fill('#__trpick input', q); await p.waitForTimeout(200);
+      const got = (await pickerH()).rows.join(); const want = searchExercises(names, q, 12).join();
+      check(`Home picker: search "${q}" gives exactly the shared word-start answer`, got === want && got.length > 0, got.slice(0, 90));
+    }
+    await p.fill('#__trpick input', 'ight'); await p.waitForTimeout(200);
+    check('Home picker: a match in the MIDDLE of a word finds nothing ("ight" does not find Bodyweight Squat)', (await pickerH()).none);
+    await p.fill('#__trpick input', 'bodyweight squat'); await p.waitForTimeout(200);
+    const ph = await p.evaluate(() => { const r = document.querySelector('#__trpick [data-pick]').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
+    await p.touchscreen.tap(ph.x, ph.y); await p.waitForTimeout(700);
+    check('Home: only the tapped exercise is added, the picker closes', /Bodyweight Squat 3 × 10/.test(await sheetRows(p)) && !(await pickerH()).open);
+    await closeSheet(); await p.waitForTimeout(900);
+    const saves2 = msgs.filter(m => m.type === 'saveEdit');
+    check('Home: the added exercise is saved to the plan', saves2.length === 2 && saves2[1].rows.map(r => r[0]).join() === 'Push-up,Shoulder Press,Pull-up,Bodyweight Squat', JSON.stringify(saves2.map(x => x.rows && x.rows.length)));
     await p.screenshot({ path: path.join(ROOT, '.scratch', 'home-edit-saved.png') });
     await ctx.close();
   }

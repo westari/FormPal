@@ -59,13 +59,17 @@ const CUE_HOLD_SEC        = 3;
 /** The plain reason a too-small movement was not counted, by kind of exercise. */
 export function shortMovementReason(exerciseId: string | undefined): string {
   const id = exerciseId ?? '';
-  if (/press|overhead/i.test(id)) return 'Arms not fully up';
-  if (/raise/i.test(id)) return 'Raise your arms higher';
+  if (/press|overhead/i.test(id)) return 'Press higher';
+  if (/raise/i.test(id)) return 'Raise higher';
   if (/squat|lunge|stepup|pushup|dip/i.test(id)) return 'Go lower';
-  if (/curl|row|pull/i.test(id)) return 'Pull all the way up';
+  if (/curl|row|pull/i.test(id)) return 'Pull higher';
   return 'Bigger movement';
 }
-export const CANT_SEE_REASON = "Step back, I can't see your arms";
+/** Where to be, in 2-3 words, while the engine waits for the start position. */
+export function startHint(exerciseId: string | undefined): string {
+  return /press|overhead/i.test(exerciseId ?? '') ? 'Hands at shoulders' : 'Get in position';
+}
+export const CANT_SEE_REASON = "Can't see arms";
 
 export function createRepDiagnostic(streamDeadSec: number = STREAM_DEAD_SEC, exerciseId?: string): RepDiagnostic {
   let startedAt      = 0;
@@ -134,6 +138,14 @@ export function createRepDiagnostic(streamDeadSec: number = STREAM_DEAD_SEC, exe
     recompute();
   }
 
+  // Did the measured value move by a real amount in the last 2 seconds? (a person doing reps, or moving into place)
+  function movedRecently(): boolean {
+    if (fullRange <= 0) return false;
+    let lo = Infinity, hi = -Infinity;
+    for (const p of recent) { if (now() - p.at <= 2000) { if (p.v < lo) lo = p.v; if (p.v > hi) hi = p.v; } }
+    return hi - lo >= 0.1 * fullRange;
+  }
+
   function recompute(): void {
     if (!startedAt) { msg = null; return; }
     const elapsed    = (now() - startedAt) / 1000;
@@ -156,7 +168,7 @@ export function createRepDiagnostic(streamDeadSec: number = STREAM_DEAD_SEC, exe
     //  2. native threw the attempt out ([REP] rejected ...) -> say so;
     //  3. the user clearly moved through most of the range and nothing counted
     //     or got rejected for a while -> say so.
-    if (waitAt && (now() - waitAt) / 1000 < CUE_HOLD_SEC) { msg = 'Lower arms to start'; return; }
+    if (waitAt && (now() - waitAt) / 1000 < CUE_HOLD_SEC) { msg = 'Lower arms'; return; }
     if (rejectedAt && (now() - rejectedAt) / 1000 < CUE_HOLD_SEC) { msg = rejectReason || shortMovementReason(exerciseId); return; }
     if (sinceRep >= MOVE_SILENCE_SEC && fullRange > 0 && recent.length >= 3) {
       let lo = Infinity, hi = -Infinity;
@@ -165,7 +177,7 @@ export function createRepDiagnostic(streamDeadSec: number = STREAM_DEAD_SEC, exe
         // moved through the range, nothing counted, nothing rejected: the camera has been struggling, the engine never
         // saw the start position, or the movement was short
         msg = unreliableAt && (now() - unreliableAt) / 1000 < 12 ? CANT_SEE_REASON
-          : !settleActive && settleWaiting >= 1 ? 'Hands back at your start position'
+          : !settleActive && settleWaiting >= 1 ? 'Back to start'
           : shortMovementReason(exerciseId);
         return;
       }
@@ -179,7 +191,9 @@ export function createRepDiagnostic(streamDeadSec: number = STREAM_DEAD_SEC, exe
     } else if (unreliable >= 2) {
       msg = 'Move back';
     } else if (!settleActive && settleWaiting >= 4) {
-      msg = 'Hold still';
+      // The engine is still waiting for the start position. NEVER "Hold still" while the person is moving (they are doing
+      // reps, or getting into place): only when they have been still for a while, and then say where to be.
+      msg = movedRecently() ? null : startHint(exerciseId);
     } else {
       msg = null;
     }

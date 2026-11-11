@@ -2,6 +2,7 @@
 // No card, no border, no label — just the mark, rendered as a glass sphere
 // would look on iOS 26. Props unchanged: { good, reason, seq, onComplete }.
 
+import { shortCue } from '../lib/shortCue';
 import React, { useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, Animated, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
@@ -164,7 +165,7 @@ export default function RepFeedback({
       <Animated.View style={{ transform: spin ? [{ scale }, { rotate: spin }] : [{ scale }], alignItems: 'center' }}>
         <GlassOrb good={good} goodColor={goodColor} badColor={badColor} />
         {!good && !!reason && (
-          <Text style={rf.cue} numberOfLines={2}>{reason}</Text>
+          <Text style={rf.cue} numberOfLines={2}>{shortCue(reason)}</Text>
         )}
       </Animated.View>
     </Animated.View>

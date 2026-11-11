@@ -25,6 +25,23 @@ const names = cat.map((c) => c.name);
 const lastMsg = (m, t) => [...m].reverse().find((x) => x.type === t);
 const anchor = (p, src, act = 'click') => p.evaluate((s) => { const a = [...document.querySelectorAll('#dc-root a')].find((x) => new RegExp(s, 'i').test(x.textContent)); a.click(); }, src);
 
+// 14: the page-side search text is the SAME rule as lib/exerciseSearch.ts (the one every screen should use)
+{
+  require('./lib/ts-node-loader.js')();
+  const ES = require('../lib/exerciseSearch.ts');
+  const pageSearch = new Function(ES.EXERCISE_SEARCH_PAGE_JS + '; return dsSearch;')();
+  const qs = ['g', 'G', 'p', 'pu', 'push', 'press', 'sq', 'squat', 'row', 'bench pr', 'close', 'grip', 'up', 'ro', 'x', '  curl ', 'single leg', 'dead', 'ba', 'bar', 'b', 'l', 'a'];
+  let diff = 0, mid = 0;
+  for (const q of qs) {
+    const a = ES.searchExercises(names, q, 999), b = pageSearch(names, q);
+    if (JSON.stringify(a) !== JSON.stringify(b)) diff++;
+    const t = q.trim().toLowerCase();
+    if (t && a.some((n) => !(' ' + n.toLowerCase().replace(/[-/_.()]+/g, ' ')).includes(' ' + t))) mid++;
+  }
+  check('14: the page-side search and lib/exerciseSearch.ts give identical answers on ' + qs.length + ' queries', diff === 0, diff + ' differ');
+  check('14: no result is ever a match in the middle of a word', mid === 0, mid + ' bad');
+  check('14: "g" never finds Bodyweight Squat; "sq" finds the squats starting with Sq or with a later word Sq*', !ES.searchExercises(names, 'g', 999).includes('Bodyweight Squat') && ES.searchExercises(names, 'sq', 999).includes('Bodyweight Squat'));
+}
 (async () => {
   // ───────────────────────── Create workout ─────────────────────────
   console.log('--- Create workout ---');
@@ -34,7 +51,22 @@ const anchor = (p, src, act = 'click') => p.evaluate((s) => { const a = [...docu
     check('starts EMPTY (the design\'s demo Squat / Push-up workout is gone)', /No exercises yet/.test(await text(page)) && !/Squat|Push-up/.test(await text(page)));
     const fs = await page.evaluate(() => [...document.querySelectorAll('input')].map((i) => parseFloat(getComputedStyle(i).fontSize)));
     check('every input is at least 16px (no iOS zoom on focus); the 24px title input keeps its size', fs.every((f) => f >= 16) && fs.includes(24), fs.join(','));
+    // 13: a clear "Add exercise" button in the empty card that opens the search
+    const addBtn = await page.evaluate(() => { const b = document.querySelector('[data-ds-add]'); return b ? { text: b.textContent.trim(), w: b.getBoundingClientRect().width, h: b.getBoundingClientRect().height } : null; });
+    check('13: the empty card has an "Add exercise" button (a real, tappable size)', !!addBtn && addBtn.text === 'Add exercise' && addBtn.w >= 120 && addBtn.h >= 40, JSON.stringify(addBtn));
+    check('13: its helper line no longer points "above" at a search bar with no button', /Tap Add exercise to search/.test(await text(page)) && !/Search above/.test(await text(page)));
+    await page.evaluate(() => document.querySelector('[data-ds-add]').click());
+    await page.waitForTimeout(150);
+    check('13: tapping Add exercise opens the search (the search box is focused)', await page.evaluate(() => document.activeElement && document.activeElement.placeholder === 'Search to add an exercise'));
     await shot(page, 'create-empty');
+    // 14: the search rule: starts with first, then a later word starts with it, never mid-word
+    await type(page, 'input[placeholder="Search to add an exercise"]', 'g');
+    const gt = await text(page);
+    const gNames0 = names.filter((n) => gt.includes(n)); const gNames = gNames0.filter((n) => !gNames0.some((o) => o !== n && o.includes(n) && o.length > n.length)); // 'Push-up' inside 'Close-grip Push-up' is not its own row
+    const bad = gNames.filter((n) => !/(^|[\s\-\/])g/i.test(n));
+    check('14: typing "g" shows only names where a word starts with g, and never Bodyweight Squat (g is mid-word there)', !gt.includes('Bodyweight Squat') && bad.length === 0 && gNames.length > 0, gNames.join(', ') + (bad.length ? '  BAD: ' + bad.join(', ') : ''));
+    check('14: names that START with g come first (Goblet Squat before any later-word match)', gt.indexOf('Goblet Squat') > 0 && gNames.filter((n) => !/^g/i.test(n)).every((n) => gt.indexOf(n) > gt.indexOf('Goblet Squat')), gt.slice(0, 260));
+    await type(page, 'input[placeholder="Search to add an exercise"]', '');
     await type(page, 'input[placeholder="Search to add an exercise"]', 'curl');
     const found = await text(page);
     check('search runs over the real catalog (Bicep Curl is a result, demo-only names are not)', /Bicep Curl/.test(found) && !/Goblet squat|Glute bridge/.test(found), found.slice(0, 140));
@@ -87,8 +119,23 @@ const anchor = (p, src, act = 'click') => p.evaluate((s) => { const a = [...docu
     const { browser, page, msgs, logs } = await openDesign('log', DS.logSessionData(cat, now));
     check('page posts ready with no errors', msgs.some((m) => m.type === 'ready') && !logs.some((l) => /pageerror|render error/.test(l)), logs.filter((l) => /error/i.test(l)).slice(0, 2).join(' | '));
     let t = await text(page);
-    check('starts empty on Today (no demo Squat / Push-up, no "Sep 12")', /Today/.test(t) && !/Squat|Push-up|Sep/.test(t));
+    check('starts empty on Today (nothing picked, no demo Squat / Push-up list, no "Sep 12")', /Today/.test(t) && !/Sep/.test(t) && (await page.evaluate(() => window.__athltCurrent.items.length)) === 0);
+    // 15: clear title + helper line, recent and popular chips to tap
+    check('15: the title says what the page is for ("Log an exercise") and a helper line explains it', /Log an exercise/.test(t) && !/What Did You Do/i.test(t) && /Pick an exercise you did/.test(t), t.slice(0, 200));
+    const chips = await page.evaluate(() => [...document.querySelectorAll('[data-ds-chip]')].map((c) => c.getAttribute('data-ds-chip')));
+    check('15: tappable popular exercises sit under the search box right away', chips.length >= 6 && chips.includes('Bodyweight Squat'), chips.join(', '));
+    check('15: they are real catalog exercises', chips.every((n) => names.includes(n)));
+    check('15: a "Popular" label is shown', /popular/i.test(t));
+    await shot(page, 'log-empty');
+    await page.evaluate(() => document.querySelector('[data-ds-chip="Bodyweight Squat"]').click());
+    await page.waitForTimeout(250);
+    const afterChip = await page.evaluate(() => ({ items: window.__athltCurrent.items.map((i) => i.n), chipText: document.querySelector('[data-ds-chip="Bodyweight Squat"]').textContent }));
+    check('15: tapping a chip picks that exercise (it shows in the list below with its sets and reps) and the chip shows a tick', afterChip.items.includes('Bodyweight Squat') && afterChip.chipText.startsWith('\u2713'), JSON.stringify(afterChip));
+    await page.evaluate(() => document.querySelector('[data-ds-chip="Bodyweight Squat"]').click());
+    await page.waitForTimeout(200);
+    check('15: tapping it again un-picks it', !(await page.evaluate(() => window.__athltCurrent.items.map((i) => i.n))).includes('Bodyweight Squat'));
     await type(page, 'input[placeholder="Search exercises"]', 'pu');
+    check('15: the chips hide while searching', await page.evaluate(() => getComputedStyle(document.getElementById('__ds_chips')).display === 'none'));
     await page.waitForTimeout(150);
     const body = await text(page);
     const iPull = body.indexOf('Pull-up'), iPush = body.indexOf('Push-up'), iCable = body.indexOf('Cable Pull-Through');

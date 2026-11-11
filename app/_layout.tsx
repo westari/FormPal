@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import * as FileSystem from 'expo-file-system';
+import { removeClipFiles } from '../lib/videoStore';
 import * as SplashScreen from 'expo-splash-screen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { configureAudioSession } from '../lib/audioFeedback';
@@ -41,7 +41,7 @@ async function pruneOldVideos() {
     const surviving: typeof log = [];
     for (const entry of log) {
       if (entry.ts < cutoff) {
-        await FileSystem.deleteAsync(entry.uri, { idempotent: true });
+        removeClipFiles(entry.uri); // the clip, its permanent copy and every thumbnail made from it
       } else {
         surviving.push(entry);
       }

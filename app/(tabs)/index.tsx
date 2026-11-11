@@ -39,6 +39,7 @@ import { askCue } from '../../lib/cueApi';
 import { CUE_ORB_CSS } from '../../lib/cueOrb';
 import { dcLogicPatchJs, athltSetDataJs } from '../../lib/dcLogicPatch';
 import { EDIT_BRIDGE_JS } from '../../lib/editSheetBridge';
+import { ADD_PICKER_JS } from '../../lib/addExercisePicker';
 import { saveWorkoutEdit } from '../../lib/planEditSave';
 import { addableExercises, type EditRow } from '../../lib/planEdit';
 import { plannedMeta } from '../../lib/trainData';
@@ -491,14 +492,17 @@ export const HOME_LOGIC_EXT = `function (Orig) {
       var v = super.renderVals();
       if (!d) return v;
       if (window.__editBridge) window.__editBridge(this);
+      // "Add exercise" asks which exercise (the same picker as Train, lib/addExercisePicker.ts)
+      window.__trSelf = this;
+      v.addMove = function () { if (window.__trOpenPicker) window.__trOpenPicker(); };
       if (!this.state.adjusted) { v.workoutName = d.workoutName; v.workoutMeta = d.workoutMeta; }
       return v;
     }
   };
 }`;
 
-export interface HomeLogicData { workoutName: string; workoutMeta: string; moves: Record<string, EditRow[]>; extra: EditRow[]; editWid: string | null }
-export function buildHomeLogicData(plan: Plan | null): HomeLogicData {
+export interface HomeLogicData { workoutName: string; workoutMeta: string; moves: Record<string, EditRow[]>; extra: EditRow[]; lib: EditRow[]; libSets: Record<string, string>; tabCover?: number; editWid: string | null }
+export function buildHomeLogicData(plan: Plan | null, tabCover?: number): HomeLogicData {
   const w = plan && plan.workouts.length > 0 ? (plan.workouts[plan.currentWorkoutIndex] ?? plan.workouts[0]) : null;
   const rows: EditRow[] = w ? w.exercises.map(e => [e.displayName, `${e.targetSets} × ${e.targetReps}`] as EditRow) : [];
   return {
@@ -506,6 +510,9 @@ export function buildHomeLogicData(plan: Plan | null): HomeLogicData {
     workoutMeta: w ? plannedMeta(w) : 'Build a plan to get started',
     moves: { 'Full body': rows },   // the sheet falls back to "Full body" for any name
     extra: addableExercises(),
+    lib: addableExercises(),
+    libSets: Object.fromEntries(addableExercises()),
+    tabCover,
     editWid: w ? w.id : null,
   };
 }
@@ -525,7 +532,7 @@ export default function HomeScreen() {
     let alive = true;
     Promise.all([loadPlan(), getAllSessions()]).then(async ([plan, sessions]) => {
       setInjectJs(buildHomeInjectJs(plan, sessions, insets.top, insets.bottom));
-      const ld = buildHomeLogicData(plan);
+      const ld = buildHomeLogicData(plan, tabBarCover(insets.bottom));
       setLogicJs(athltSetDataJs(ld) + '; window.__editWid = ' + JSON.stringify(ld.editWid) + '; true;');
       const groups = groupIntoWorkouts(sessions);
       const tiers = computeMuscleTiers(sessions);
@@ -563,7 +570,7 @@ export default function HomeScreen() {
         ref={webRef}
         source={HOME_HTML}
         originWhitelist={['*']}
-        injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS + DC_NO_ZOOM_JS + DC_SETTLE_JS + HOME_GUARD_JS + EDIT_BRIDGE_JS + dcLogicPatchJs(HOME_LOGIC_EXT)}
+        injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS + DC_NO_ZOOM_JS + DC_SETTLE_JS + HOME_GUARD_JS + EDIT_BRIDGE_JS + ADD_PICKER_JS + dcLogicPatchJs(HOME_LOGIC_EXT)}
         injectedJavaScript={HOME_SCALE_FIT_JS + HOME_CUE_REAL_JS}
         onLoadStart={() => { setPageLoaded(false); onLoadStart(); }}
         onLoadEnd={() => { setPageLoaded(true); onLoadEnd(); }}
@@ -582,7 +589,7 @@ export default function HomeScreen() {
               if (__DEV__) console.log('[HOME] Edit sheet closed:', msg.rows?.length, 'exercises |', saved ? 'saved to the plan' : 'no change to save');
               if (!saved) return;
               const [plan, sessions] = await Promise.all([loadPlan(), getAllSessions()]);
-              const ld = buildHomeLogicData(plan);
+              const ld = buildHomeLogicData(plan, tabBarCover(insets.bottom));
               setLogicJs(athltSetDataJs(ld) + '; window.__editWid = ' + JSON.stringify(ld.editWid) + '; true;');
               setInjectJs(buildHomeInjectJs(plan, sessions, insets.top, insets.bottom));
             }).catch(() => {});

@@ -10,6 +10,7 @@
  * tomorrow, and the calendar strip above it is the same seven days.
  */
 import { EXERCISE_CATALOG } from '../constants/exercises';
+import { searchExercises } from './exerciseSearch';
 import { groupIntoWorkouts, calcStreak, type SessionEntry, type WorkoutGroup } from './sessionLog';
 import { addableExercises } from './planEdit';
 import type { Plan, Workout } from '../types/plan';
@@ -147,15 +148,13 @@ export function buildTrainData(
 }
 
 /**
- * Search over the REAL catalogue, one rule everywhere (Practice Exercises and the Edit sheet's Add exercise picker):
- * names that START with what you typed first, then names that merely contain it, each group A-Z. Nothing typed -> the
- * first `limit` of the list as it comes (most popular first). The page runs the identical code (train.tsx).
+ * Search over the REAL catalogue, one rule everywhere (Practice Exercises, the Edit sheet's Add exercise picker, Create
+ * workout, Log a session): the shared word-start rule in lib/exerciseSearch.ts. Nothing typed -> the first `limit` of the
+ * list as it comes (most popular first). The page runs the same rule as page-side JS (train.tsx).
  */
 export function rankExercises(lib: [string, string][], query: string, limit = 12): [string, string][] {
-  const q = (query || '').trim().toLowerCase();
-  if (!q) return lib.slice(0, limit);
-  const starts: [string, string][] = [], has: [string, string][] = [];
-  for (const x of lib) { const i = x[0].toLowerCase().indexOf(q); if (i === 0) starts.push(x); else if (i > 0) has.push(x); }
-  const az = (a: [string, string], b: [string, string]) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
-  return starts.sort(az).concat(has.sort(az)).slice(0, limit);
+  if (!(query || '').trim()) return lib.slice(0, limit);
+  const byName = new Map<string, [string, string]>();
+  for (const x of lib) if (!byName.has(x[0])) byName.set(x[0], x);
+  return searchExercises(lib.map(x => x[0]), query, limit).map(n => byName.get(n)!);
 }

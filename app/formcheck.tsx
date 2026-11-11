@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, Animated, Pressable, ScrollView, Share, Platform, Easing, PanResponder, Image,
+  View, Text, StyleSheet, Animated, Pressable, ScrollView, Share, Platform, Easing, PanResponder, Image, AppState,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -42,9 +42,11 @@ import { prefetchSoloRecap } from '../lib/recapPrefetch';
 import { postLag, postLagStart } from '../lib/postLag';
 import { setFlashBrightness, FLASH_FRAME } from '../lib/screenFlash';
 import { createRepDiagnostic, STREAM_DEAD_SEC_FLOOR } from '../lib/repDiagnostics';
-import { useKeepAwake } from 'expo-keep-awake';
+import { useKeepAwake, activateKeepAwakeAsync } from 'expo-keep-awake';
+import { persistVideo } from '../lib/videoStore';
 import { NO_ZOOM_JS } from '../lib/noZoom';
-import { meterTarget, createMeterSmoother, trackingIsHigh, NO_PERSON_CUE, createSteadyGate, READY_STEADY_MS, createCounterSignal, READY_COUNTER_WINDOW_MS, READY_COUNTER_MIN_SAMPLES, type CounterSignal } from '../lib/liveTracking';
+import { shortCue } from '../lib/shortCue';
+import { isFrameHint, showVerdict, showFrameHint, JUDGED_QUIET_MS, meterTarget, createMeterSmoother, trackingIsHigh, NO_PERSON_CUE, createSteadyGate, READY_STEADY_MS, createCounterSignal, READY_COUNTER_WINDOW_MS, READY_COUNTER_MIN_SAMPLES, type CounterSignal } from '../lib/liveTracking';
 import { useAudioSettingsStore } from '../store/audioSettingsStore';
 import { useFormTheme, type FormTheme } from '../lib/activeTheme';
 import type { DebugStatsEvent, RepEvent, ExerciseType } from '../modules/athlt-camera/src/index';
@@ -110,7 +112,8 @@ async function logSessionVideo(uri: string) {
   try {
     const raw = await AsyncStorage.getItem(VIDEO_LOG_KEY);
     const log: { uri: string; ts: number }[] = raw ? JSON.parse(raw) : [];
-    log.push({ uri, ts: Date.now() });
+    // keep the clip permanently (the temp folder is emptied by iOS) so "View recap" on an older workout can still play it
+    log.push({ uri: persistVideo(uri), ts: Date.now() });
     await AsyncStorage.setItem(VIDEO_LOG_KEY, JSON.stringify(log));
   } catch {}
 }
@@ -644,7 +647,19 @@ function TrackingMeter({ target, show, top, onHighChange, counter, counterActive
 export default function FormCheckScreen() {
   const router = useRouter();
   // The screen must not dim or lock while the camera is on (released when this screen unmounts).
-  useKeepAwake();
+  useKeepAwake('formcheck');
+  // Belt and braces: the hook alone was not keeping the screen on. Re-assert the lock on mount, every 15s, and whenever the
+  // app comes back to the foreground; the log says whether iOS accepted it.
+  useEffect(() => {
+    let alive = true;
+    const hold = () => activateKeepAwakeAsync('formcheck-hold')
+      .then(() => { if (alive) console.log('[AWAKE] screen lock held (keep-awake active)'); })
+      .catch((e: any) => console.log('[AWAKE] keep-awake FAILED: ' + (e && e.message ? e.message : String(e))));
+    void hold();
+    const id = setInterval(() => { void hold(); }, 15000);
+    const sub = AppState.addEventListener('change', st => { if (st === 'active') void hold(); });
+    return () => { alive = false; clearInterval(id); sub.remove(); };
+  }, []);
   const insets = useSafeAreaInsets();
   // User's unlocked rank colour for the ✓ orb / rep counter / accent glow —
   // resolves to the shipped green/red when "Classic" (or nothing) is selected.
@@ -855,10 +870,11 @@ export default function FormCheckScreen() {
   const counterRef = useRef(createCounterSignal()).current;
   // Shown instead of "Perfect. Hold still" while Go waits for the start position (shoulder press: hands at the shoulders).
   const [startPoseWaiting, setStartPoseWaiting] = useState(false);
-  // Front-camera flash (lib/screenFlash.ts): the button only exists while the FRONT camera is on
+  // Front-camera flash (lib/screenFlash.ts): the button is always shown; the light only turns on for the FRONT camera
   const [camPosition, setCamPosition] = useState<'front' | 'back' | null>(null);
   const [flashOn, setFlashOn] = useState(false);
   const flashActive = flashOn && camPosition === 'front';
+  useEffect(() => { if (camPosition === 'back') setFlashOn(false); }, [camPosition]);
   useEffect(() => { void setFlashBrightness(flashActive); }, [flashActive]);
   useEffect(() => () => { void setFlashBrightness(false); }, []);
 
@@ -872,6 +888,9 @@ export default function FormCheckScreen() {
   // "Why aren't reps counting?" — reads the same [METRIC]/[REP]/rejection
   // stream the counter does and turns a silent 0-rep session into one short
   // on-screen instruction. See lib/repDiagnostics.ts.
+  const statsRef = useRef<DebugStatsEvent | null>(null);
+  const lastJudgedAt = useRef(0);
+  const [judgedTick, setJudgedTick] = useState(0); // re-render once the "just judged" quiet period ends
   const repDiagRef = useRef(createRepDiagnostic(isFloor ? STREAM_DEAD_SEC_FLOOR : undefined, exerciseType));
   const [repDiag, setRepDiag] = useState<string | null>(null);
 
@@ -1093,6 +1112,18 @@ export default function FormCheckScreen() {
       // several reps are merging (attempts >> counted) or the legs kicked,
       // it keeps a "why" on screen instead of going quiet after each merge.
       setRepDiag(repDiagRef.current.message());
+      // Never a check / X while the screen is also saying "step into frame": if the camera cannot see the person well
+      // enough to give a frame hint, it cannot judge the rep either. The rep still counts; only the verdict is withheld.
+      const frameHintNow = repDiagRef.current.message() ?? statsRef.current?.trackingCue ?? null;
+      const verdictOk = showVerdict(frameHintNow, statsRef.current?.personDetected);
+      if (!verdictOk) {
+        console.log(`[CUE] rep counted but NO check/X shown: the frame hint "${frameHintNow ?? 'no person'}" is up (cannot judge what is not seen)`);
+        const timeSecH = startTimestamp.current != null ? (Date.now() - startTimestamp.current) / 1000 : 0;
+        repEvents.current.push({ timeSec: timeSecH, good: rep.good, reason: rep.reason });
+        return;
+      }
+      lastJudgedAt.current = Date.now();
+      setTimeout(() => setJudgedTick(t => t + 1), JUDGED_QUIET_MS + 50);
       flashAnim.setValue(1);
       Animated.timing(flashAnim, { toValue: 0, duration: 700, useNativeDriver: true }).start();
       if (repCounterOnly) {
@@ -1109,6 +1140,7 @@ export default function FormCheckScreen() {
     });
     const dbgSub = addDebugStatsListener((e: DebugStatsEvent) => {
       if (demoOpenRef.current) return;
+      statsRef.current = e;
       setStats(e);
       setReps(e.reps);
       setGoodReps(e.goodReps);
@@ -1209,7 +1241,16 @@ export default function FormCheckScreen() {
     if (pendingNavRef.current) doNavigate(pendingNavRef.current);
   }, [doNavigate]);
 
-  const handleFlip = useCallback(() => void flipCamera(), []);
+  const handleFlip = useCallback(() => {
+    void flipCamera().then(r => { if (r && r.position) setCamPosition(r.position); }).catch(() => {});
+  }, []);
+  // The flash button is always on screen. On the front camera it toggles the white light; on the back camera it flips to the
+  // front camera first (the light only makes sense for your face) and turns the light on.
+  const handleFlash = useCallback(() => {
+    if (camPosition === 'front') { setFlashOn(v => !v); return; }
+    setFlashOn(true);
+    void flipCamera().then(r => { setCamPosition(r && r.position ? r.position : 'front'); }).catch(() => {});
+  }, [camPosition]);
 
   const audioEnabled    = useAudioSettingsStore(st => st.audioEnabled);
   const setAudioEnabled = useAudioSettingsStore(st => st.setAudioEnabled);
@@ -1552,15 +1593,15 @@ export default function FormCheckScreen() {
               size={18} tintColor={C.text} type="monochrome" style={{ width: 18, height: 18 }}
             />
           </LiquidGlassButton>
-          {camPosition === 'front' && (
+          {(
             <LiquidGlassButton
-              onPress={() => setFlashOn(v => !v)}
+              onPress={handleFlash}
               radius={20}
               colorScheme="dark"
               fallbackColor="rgba(40,41,48,0.55)"
               style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
             >
-              <SymbolView name={flashOn ? 'bolt.fill' : 'bolt.slash.fill'} size={18} tintColor={flashOn ? '#FFD60A' : C.text} type="monochrome" style={{ width: 18, height: 18 }} />
+              <SymbolView name={flashActive ? 'bolt.fill' : 'bolt.slash.fill'} size={18} tintColor={flashActive ? '#FFD60A' : C.text} type="monochrome" style={{ width: 18, height: 18 }} />
             </LiquidGlassButton>
           )}
           <LiquidGlassButton
@@ -1624,7 +1665,7 @@ export default function FormCheckScreen() {
       {isTracking && !!stats?.outOfPlaneCue && !isWorkoutHud && (
         <View style={s.outOfPlaneHint} pointerEvents="none">
           <Text style={s.outOfPlaneText}>
-            {stats.outOfPlaneCue}<Image source={SPARKLE_DUO} style={s.cueSparkleImg} />
+            {shortCue(stats.outOfPlaneCue)}<Image source={SPARKLE_DUO} style={s.cueSparkleImg} />
           </Text>
         </View>
       )}
@@ -1643,9 +1684,13 @@ export default function FormCheckScreen() {
           gated off for workouts, which is why reps could silently fail to
           count with zero on-screen explanation. */}
       {isTracking && !stats?.outOfPlaneCue && (() => {
-        const cue = repDiag
+        const rawCue = repDiag
           ?? (isFloor ? null : (stats?.personDetected === false ? NO_PERSON_CUE : (stats?.trackingCue || null)));
-        if (!cue) return null;
+        // a frame hint is never shown right after a rep was judged (a check / X means the camera sees the person)
+        void judgedTick;
+        const gated = showFrameHint(rawCue, Date.now() - lastJudgedAt.current);
+        if (!gated) return null;
+        const cue = shortCue(gated);
         // Redesigned from bare floating text to a contained glass pill —
         // explicit complaint: "I don't like the design of the live cues...
         // it just doesn't feel clean at all." Same GlassPanel treatment

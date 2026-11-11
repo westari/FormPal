@@ -116,6 +116,7 @@ final class ExerciseEngine {
     private var repGateWaitLogged: Bool   = false
     // Kept for log only — the metric value at the moment we crossed enterThreshold.
     private var repEnterValue: Double    = 0
+    private var repEnterTime: Date       = .distantPast   // when the current rep was entered (for def.repMinDurationSec)
 
     // Backward compat: modules that check isSetupComplete still work.
     var isSetupComplete: Bool { enginePhase != .setup }
@@ -1291,6 +1292,7 @@ final class ExerciseEngine {
                 repPhase      = .inRep
                 repMinAngle   = angle
                 repEnterValue = angle
+                repEnterTime  = timestamp
                 resetRepAccumulators()
                 NSLog("[Engine] [%@] Rep entered — metric=%g top=%g (enter=%.4f)",
                       def.id, angle, repTopValue, effectiveEnterThreshold)
@@ -1457,6 +1459,9 @@ final class ExerciseEngine {
                 // out ~0.67 lying down) — see that field's doc comment.
                 if primaryTotalFrames > 0 {
                     let unreliableFraction = Double(primaryUnreliableFrames) / Double(primaryTotalFrames)
+                    // Logged for EVERY rep that reaches this gate (counted or not): the real numbers a sensible cap and a
+                    // stray-rep rule must be set from. Entry-to-exit time and the share of low-confidence frames.
+                    onDebugLog?("[REP-QUALITY] (def.id) entry-to-exit=(String(format: "%.2f", timestamp.timeIntervalSince(repEnterTime)))s unreliable=(primaryUnreliableFrames)/(primaryTotalFrames) ((String(format: "%.0f", unreliableFraction * 100))%) travel=(String(format: "%.1f", repTopValue - repMinAngle))")
                     let reliabilityCap = videoMode
                         ? max(def.repReliabilityMaxUnreliableFraction, Self.VIDEO_RELIABILITY_FLOOR)
                         : def.repReliabilityMaxUnreliableFraction
