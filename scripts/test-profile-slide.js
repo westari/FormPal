@@ -6,10 +6,11 @@
  * blank frame, and finish fully visible. INJECT_FILE=<older profileInject.ts> runs the same against older code.
  */
 const path = require('path');
-const { open } = require(path.join(__dirname, '..', '.scratch', 'tests', 'prof_common.js'));
+const { open } = require('./lib/prof-common.js');
 let failed = 0;
 const check = (n, ok, d) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${d ? '  -> ' + d : ''}`); if (!ok) failed++; };
 (async () => {
+  require('fs').mkdirSync(path.join(__dirname, '..', '.scratch', 'flow'), { recursive: true });
   const { b, p } = await open('full', { rate: 4 });
   await p.waitForTimeout(700);
   await p.evaluate(() => {

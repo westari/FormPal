@@ -10,7 +10,7 @@
  * "4 sets · 8 reps", pencil) and the black "Start workout" pill floating at the bottom. Real data: the plan's workout.
  */
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Modal } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -58,7 +58,26 @@ function PageBackground() {
   );
 }
 
-function ExCard({ name, sets, reps }: { name: string; sets: number; reps: number }) {
+/** One sets or reps row in the edit sheet: label, minus, number, plus. */
+function Stepper({ label, value, min, max, onChange }: { label: string; value: number; min: number; max: number; onChange: (n: number) => void }) {
+  const step = (d: number) => { const n = Math.max(min, Math.min(max, value + d)); if (n !== value) { Haptics.selectionAsync(); onChange(n); } };
+  return (
+    <View style={s.stepRow}>
+      <Text style={s.stepLabel}>{label}</Text>
+      <View style={s.stepCtl}>
+        <Pressable hitSlop={8} onPress={() => step(-1)} style={s.stepBtn} accessibilityRole="button" accessibilityLabel={`Fewer ${label.toLowerCase()}`}>
+          <SymbolView name="minus" size={15} weight="bold" tintColor={INK} type="monochrome" style={{ width: 15, height: 15 }} />
+        </Pressable>
+        <Text style={s.stepVal}>{value}</Text>
+        <Pressable hitSlop={8} onPress={() => step(1)} style={s.stepBtn} accessibilityRole="button" accessibilityLabel={`More ${label.toLowerCase()}`}>
+          <SymbolView name="plus" size={15} weight="bold" tintColor={INK} type="monochrome" style={{ width: 15, height: 15 }} />
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function ExCard({ name, sets, reps, onEdit }: { name: string; sets: number; reps: number; onEdit: () => void }) {
   return (
     <View style={s.card}>
       <LinearGradient colors={['#ffffff', '#fbfbfd']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { borderRadius: 26 }]} />
@@ -67,7 +86,9 @@ function ExCard({ name, sets, reps }: { name: string; sets: number; reps: number
         <Text style={s.exName} numberOfLines={1}>{name}</Text>
         <Text style={s.exMeta} numberOfLines={1}>{plural(sets, 'set')} · {plural(reps, 'rep')}</Text>
       </View>
-      <SymbolView name="pencil" size={16} weight="semibold" tintColor={INK} type="monochrome" style={s.pencil} />
+      <Pressable hitSlop={14} onPress={onEdit} accessibilityRole="button" accessibilityLabel={`Edit sets and reps for ${name}`}>
+        <SymbolView name="pencil" size={16} weight="semibold" tintColor={INK} type="monochrome" style={s.pencil} />
+      </Pressable>
     </View>
   );
 }
@@ -81,7 +102,27 @@ export default function WorkoutPreviewScreen() {
   const createPlan = usePlanStore(st => st.createPlan);
   const startSess  = useWorkoutSessionStore(st => st.startWorkout);
   // a FormPal template (from My workouts) is built from the real catalogue; it can be started or saved to Mine
-  const workout    = (template ? templateWorkout(template) : null) ?? (id ? usePlanStore.getState().plan?.workouts.find(w => w.id === id) : null) ?? getNext();
+  const baseWorkout = (template ? templateWorkout(template) : null) ?? (id ? usePlanStore.getState().plan?.workouts.find(w => w.id === id) : null) ?? getNext();
+  // the pencil: sets and reps changed here. A plan workout is saved to the plan; a template has no plan copy, so its changes
+  // live for this screen (and the workout started from it).
+  const setTargets = usePlanStore(st => st.setExerciseTargets);
+  const [edits, setEdits] = useState<Record<number, { sets: number; reps: number }>>({});
+  const [editing, setEditing] = useState<number | null>(null);
+  const [draft, setDraft] = useState<{ sets: number; reps: number }>({ sets: 3, reps: 10 });
+  const workout = baseWorkout ? { ...baseWorkout, exercises: baseWorkout.exercises.map((e, i) => edits[i] ? { ...e, targetSets: edits[i].sets, targetReps: edits[i].reps } : e) } : baseWorkout;
+  const openEdit = (i: number) => {
+    if (!workout) return;
+    Haptics.selectionAsync();
+    setDraft({ sets: workout.exercises[i].targetSets, reps: workout.exercises[i].targetReps });
+    setEditing(i);
+  };
+  const saveEdit = () => {
+    if (editing == null || !workout) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setEdits(prev => ({ ...prev, [editing]: draft }));
+    if (!template && workout.id) void setTargets(workout.id, editing, draft.sets, draft.reps);
+    setEditing(null);
+  };
   const [creatingTestPlan, setCreatingTestPlan] = useState(false);
   const previewOnly = preview === '1'; // a day that is not today: look, no Start button
   const isTemplate = !!template && !!workout && workout.id === template;
@@ -161,9 +202,22 @@ export default function WorkoutPreviewScreen() {
         showsVerticalScrollIndicator={false}
       >
         {workout.exercises.map((ex, i) => (
-          <ExCard key={ex.exerciseId + ':' + i} name={ex.displayName} sets={ex.targetSets} reps={ex.targetReps} />
+          <ExCard key={ex.exerciseId + ':' + i} name={ex.displayName} sets={ex.targetSets} reps={ex.targetReps} onEdit={() => openEdit(i)} />
         ))}
       </ScrollView>
+
+      <Modal visible={editing != null} transparent animationType="slide" onRequestClose={() => setEditing(null)}>
+        <Pressable style={s.sheetBack} onPress={() => setEditing(null)} accessibilityLabel="Close" />
+        <View style={[s.sheet, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
+          <View style={s.grab} />
+          <Text style={s.sheetTitle} numberOfLines={1}>{editing != null ? workout.exercises[editing]?.displayName : ''}</Text>
+          <Stepper label="Sets" value={draft.sets} min={1} max={10} onChange={n => setDraft(d => ({ ...d, sets: n }))} />
+          <Stepper label="Reps" value={draft.reps} min={1} max={50} onChange={n => setDraft(d => ({ ...d, reps: n }))} />
+          <Pressable style={s.sheetSave} onPress={saveEdit} accessibilityRole="button" accessibilityLabel="Save">
+            <Text style={s.startTxt}>Save</Text>
+          </Pressable>
+        </View>
+      </Modal>
 
       {!previewOnly && (
         <View style={[s.footer, { bottom: footer }]} pointerEvents="box-none">
@@ -223,6 +277,16 @@ const s = StyleSheet.create({
   exMeta: { fontFamily: FONT.display, fontSize: 13.5, lineHeight: 17, color: SUB },
   pencil: { width: 16, height: 16, marginLeft: 8 },
 
+  sheetBack: { flex: 1, backgroundColor: 'rgba(17,17,20,0.35)' },
+  sheet: { backgroundColor: '#ffffff', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingTop: 10 },
+  grab: { alignSelf: 'center', width: 38, height: 5, borderRadius: 3, backgroundColor: '#dcdce1', marginBottom: 16 },
+  sheetTitle: { fontFamily: FONT.displayBlack, fontSize: 20, lineHeight: 24, letterSpacing: -0.5, color: INK, marginBottom: 6 },
+  stepRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 64 },
+  stepLabel: { fontFamily: FONT.displayBold, fontSize: 16, color: INK },
+  stepCtl: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  stepBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#f1f1f4', alignItems: 'center', justifyContent: 'center' },
+  stepVal: { fontFamily: FONT.displayBlack, fontSize: 20, color: INK, minWidth: 48, textAlign: 'center' },
+  sheetSave: { height: 54, borderRadius: 27, backgroundColor: INK, alignItems: 'center', justifyContent: 'center', marginTop: 10 },
   footer: { position: 'absolute', left: 16, right: 16, flexDirection: 'row', gap: 10, alignItems: 'center' },
   saveBtn: { width: 58, height: 58, borderRadius: 29, backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center', boxShadow: '0 10px 22px -10px rgba(40,50,90,0.35), 0 1px 3px rgba(40,50,90,0.1)' } as any,
   tplNote: { fontFamily: FONT.display, fontSize: 12.5, lineHeight: 16, color: SUB, marginTop: 4 },
