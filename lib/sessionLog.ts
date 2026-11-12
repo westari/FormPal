@@ -15,7 +15,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getExerciseDef, MuscleGroup, Muscle, muscleCreditParts } from '../constants/exercises';
-import { VOLUME_THRESHOLDS, MAX_LOG_ENTRIES } from './rankTuning';
+import { VOLUME_THRESHOLDS, MAX_LOG_ENTRIES, UNJUDGED_REP_CREDIT } from './rankTuning';
 
 // The tunable numbers live in lib/rankTuning.ts (all placeholders); re-exported so every existing import keeps working.
 export { VOLUME_THRESHOLDS };
@@ -295,13 +295,13 @@ export type MuscleTiers = Partial<Record<Muscle, MuscleTierInfo>>;
 
 export function computeMuscleTiers(sessions: SessionEntry[]): MuscleTiers {
   // Per muscle: good reps x credit (the rank number), plus judged / good reps for the information-only goodRatio.
-  // An entry whose form was never judged (rep counter only, typed in by hand) has no good or bad: all its reps count.
+  // An entry whose form was never judged (rep counter only, typed in by hand) has no good or bad: its reps count at HALF credit.
   const acc = new Map<Muscle, { vol: number; qual: number; good: number }>();
   for (const s of sessions) {
     const def = getExerciseDef(s.exerciseId);
     if (!def) continue; // exerciseId missing/unknown: can't attribute muscles
     const judged = s.formChecked !== false;
-    const goodReps = judged ? Math.max(0, Math.min(s.goodReps, s.reps)) : s.reps;
+    const goodReps = judged ? Math.max(0, Math.min(s.goodReps, s.reps)) : s.reps * UNJUDGED_REP_CREDIT; // form never checked: half credit
     for (const entry of def.muscles) {
       const { muscle: m, weight } = muscleCreditParts(entry);
       const a = acc.get(m) ?? { vol: 0, qual: 0, good: 0 };

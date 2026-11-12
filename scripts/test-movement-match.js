@@ -121,9 +121,11 @@ for (const [name, parts] of Object.entries(CASES(sigPress))) {
   check('HALF REPS: Movement Match HIGH (they are trying)', r.s.matchMax >= TUN.MOVEMENT_MATCH.high, 'max ' + r.s.matchMax);
   check('HALF REPS: every attempt after the first gets an X (' + r.s.xs.length + ' of ' + attempts + ' attempts), each with "Go higher" or "Go lower"', attempts >= 5 && r.s.xs.length >= attempts - 1 && r.s.xs.every((v) => ['Go higher', 'Go lower'].includes(v.reason)), r.s.xs.map((x) => x.reason).join(','));
   check('HALF REPS: no check is ever shown for a half rep', r.s.checks === 0);
-  const stuck = r.rows.filter((x) => x.conf.stuck);
-  check('HALF REPS: no rep counted for ~5s while trying: confidence falls BELOW 80 and keeps falling', stuck.length > 10 && stuck.every((x) => x.conf.value < 80) && stuck[stuck.length - 1].conf.value < stuck[0].conf.value - 20, stuck.length ? `first ${stuck[0].conf.value} last ${stuck[stuck.length - 1].conf.value}` : 'never stuck');
-  check('HALF REPS: the old confidence stayed high while nothing counted (reproduced)', r.s.oldConfDuringStuck >= 80, 'old max ' + r.s.oldConfDuringStuck);
+  // Ari's answer: if the Coach is judging attempts (X with a reason) the camera IS seeing the reps, so confidence stays 90+.
+  const firstX = r.s.xs.length ? r.s.xs[0].t : 1e12;
+  const afterX = r.rows.filter((x) => x.t >= firstX + 500 && x.match.trying && x.t <= firstX + 25000);
+  check('HALF REPS: the Coach gives an X on each attempt, so confidence stays 90+ (the camera sees the reps) and is never "stuck"', afterX.length > 20 && afterX.every((x) => x.conf.value >= 90 && !x.conf.stuck), afterX.length ? 'min ' + Math.min(...afterX.map((x) => x.conf.value)) : 'no rows');
+  check('HALF REPS: the old confidence also read high there (so nothing got worse)', Math.max(...afterX.map((x) => r.old.conf[r.rows.indexOf(x)].v)) >= 80);
   check('HALF REPS: the Guide stays silent (the camera sees the whole path; the Coach speaks on each X)', r.s.guideSaid.length === 0, r.s.guideSaid.join(' / '));
   check('HALF REPS: the Guide and the Coach never say the same thing', guideAndCoachClash(r).length === 0, guideAndCoachClash(r).join(','));
   const oldClash = uniq(r.old.cue.map((c) => c.text).filter(Boolean)).filter((w) => r.old.x.some((x) => x.text === 'X ' + w));
@@ -175,8 +177,8 @@ for (const name of REAL) {
   console.log('    ' + row(s));
 }
 function stuckRuns(res) {
-  // independent of the module's own "stuck" flag: trying (Movement Match HIGH for 2s+) and no rep counted for 5.5s+
-  const repTimes = res.events.filter((e) => /^\[REP\] #\d+/.test(e.line)).map((e) => e.t).concat(res.verdicts.filter((v) => v.src === 'soft' && v.show).map((v) => v.t));
+  // independent of the module's own "stuck" flag: trying (Movement Match HIGH for 2s+) and no rep counted AND no check / X for 5.5s+
+  const repTimes = res.events.filter((e) => /^\[REP\] #\d+/.test(e.line)).map((e) => e.t).concat(res.verdicts.filter((v) => v.show).map((v) => v.t)); // a counted rep, a check or an X all prove the camera sees the reps
   const out = []; let cur = null;
   for (const x of res.rows) {
     const lastRep = Math.max(-1e9, ...repTimes.filter((t) => t <= x.t));
@@ -192,7 +194,7 @@ for (const name of REAL) {
   const longRuns = runs.filter((r) => r.rows.length >= 15);
   const worst = longRuns.length ? Math.max(...longRuns.flatMap((r) => r.rows.map((x) => x.conf.value))) : null;
   const oldWorst = longRuns.length ? Math.max(...longRuns.flatMap((r) => r.rows.map((x) => res.old.conf[res.rows.indexOf(x)].v))) : null;
-  check(`${name}: while trying with no rep counted (${longRuns.length} stretches, ${longRuns.reduce((a, r) => a + r.rows.length, 0) / 5}s) confidence never reads 80+ (was up to ${oldWorst ?? '-'}, now ${worst ?? '-'})`, worst === null || worst < 80, `new max ${worst}, old max ${oldWorst}`);
+  check(`${name}: while trying with no rep counted and no check / X (${longRuns.length} stretches, ${longRuns.reduce((a, r) => a + r.rows.length, 0) / 5}s) confidence never reads 80+ (was up to ${oldWorst ?? '-'}, now ${worst ?? '-'})`, worst === null || worst < 80, `new max ${worst}, old max ${oldWorst}`);
   const fall = longRuns.filter((r) => r.rows.length >= 40).every((r) => r.rows[r.rows.length - 1].conf.value <= r.rows[0].conf.value);
   check(`${name}: and it keeps falling through a long stretch (not creeping back up)`, fall);
   const counting = res.rows.filter((x) => { const reps = res.events.filter((e) => /^\[REP\] #\d+/.test(e.line) && e.t <= x.t && x.t - e.t <= 3500); return x.match.trying && x.match.tryingForSec >= TUN.MOVEMENT_MATCH.minTryingSec && reps.length >= 1 && !x.conf.stuck && x.guideReason !== 'nobody'; });
@@ -256,8 +258,8 @@ for (const ex of CAT) {
   if (hx.length < 4) fails.push('half: fewer than 4 X (' + hx.length + ')');
   if (hc.length > 0) fails.push('half: a check on a half rep');
   if (hx.some((v) => !COACH_SET.has(v.reason.toLowerCase()))) fails.push('half: X word not a Coach word: ' + uniq(hx.map((v) => v.reason)).join('/'));
-  if (!counted && half.rows.filter((x) => x.conf.stuck).some((x) => x.conf.value >= 80)) fails.push('half: confidence 80+ while stuck');
-  if (!counted && !half.rows.some((x) => x.conf.stuck)) fails.push('half: never stuck although nothing counted');
+  { const fx = hx.length ? hx[0].t : 1e12; const ar = half.rows.filter((x) => x.t >= fx + 500 && x.match.trying && x.t <= fx + 25000);
+    if (ar.some((x) => x.conf.value < 90 || x.conf.stuck)) fails.push('half: confidence under 90 while the Coach is giving X'); }
   if (half.rows.some((x) => x.guide && COACH_SET.has(x.guide.toLowerCase()))) fails.push('half: the Guide said a Coach word');
   // hands (or feet) leaving the frame at the top
   const cut = run([{ kind: 'rest', sec: 2 }, { kind: 'reps', sec: 30, period: 4, cutTop: true, cutLevel: 0.5 }]);
@@ -276,7 +278,7 @@ for (const ex of CAT) {
   const rc = SC.coachLine(romCue);
   if (rc !== null && !COACH_SET.has(rc.toLowerCase())) fails.push('range cue not a Coach word: ' + rc);
   sigRows.push({ id: ex.id, ok: fails.length === 0, fails, top: sig.top, enter: sig.enter, rom: sig.rom, counted });
-  check(`${ex.id.padEnd(24)} still/walk/reach quiet, full reps check + 90+, half reps X + falling, cut path -> ${HANDS_EXERCISES(ex.id) ? 'hands' : 'phone'} line`, fails.length === 0, fails.join(' | '));
+  check(`${ex.id.padEnd(24)} still/walk/reach quiet, full reps check + 90+, half reps X + 90+, cut path -> ${HANDS_EXERCISES(ex.id) ? 'hands' : 'phone'} line`, fails.length === 0, fails.join(' | '));
 }
 check('signature test covered every exercise in the catalogue (' + sigRows.length + ' of ' + CAT.length + ')', sigRows.length === CAT.length);
 
