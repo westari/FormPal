@@ -2,13 +2,12 @@
 /**
  * scripts/test-setup-guide.js
  *
- * "Ready / Go" fired too soon: with only the head (and garbage joints) in frame it said Ready, the confidence hit 100, then the
- * arms left the frame on the first press. Go may now only show when the camera has SEEN the exercise's full path: tracked
- * steadily, hands at the start position, the top (lockout) reached, back at the start, held steady. Until then ONE plain
- * instruction ("Step back so your hands show"). The confidence number is capped by the step, so it can only read 100 at Go.
+ * Ari's phone test 2026-11-12: it NEVER said Ready. He stood far back, fully in frame, arms out, room light on. The log shows native's
+ * setup passing at 22:25:04 ("[SETUP] shoulderPress PASSED - entering ACTIVE"), yet Go never came: the old extra gates (confidence meter
+ * "high", hands at the shoulders, a full reach to the top and back, a held pause) kept it away, and the meter was capped at 35 by the
+ * "fit" step. New rule: Ready when every joint the exercise needs is visible (native's setup passed) and steady for about 1 second.
  *
- *   Part 1: the steps with synthetic input.   Part 2: the newest real log (2026-11-11 15:59:38-15:59:47), where the old gate said
- *   Ready at 15:59:46.6 although the top was never reached (peak 78.3, lockout needs 79).
+ *   Part 1: the setup line.  Part 2: the Ready gate, replayed on the real 2026-11-12 timeline.  Part 3: calm, wording and the cue card.
  */
 require('./lib/ts-node-loader.js')();
 global.__DEV__ = false;
@@ -16,93 +15,69 @@ const fs = require('fs');
 const path = require('path');
 const G = require('../lib/setupGuide.ts');
 const LT = require('../lib/liveTracking.ts');
+const GC = require('../lib/guideCoach.ts');
 let failed = 0;
 const check = (name, ok, detail) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  -> ' + detail : ''}`); if (!ok) failed++; };
+const base = { now: 1000, seen: true, healthy: true, frameHint: false, hintLine: null, handsExercise: true, expectSamples: true };
+const src = fs.readFileSync(path.join(__dirname, '..', 'app/formcheck.tsx'), 'utf8').split('\r\n').join('\n');
 
-const TOP = 84, START_MIN = 57.9;
-const mk = () => ({ guide: G.createSetupGuide(), counter: LT.createCounterSignal() });
-function tickInputs(counter, now, extra = {}) {
-  return Object.assign({
-    now, seen: counter.seen(), healthy: counter.healthy(now, 1200, 3), atStart: counter.atStartPosition(START_MIN, now, 1200, 3),
-    value: counter.peak(now, 700), frameHint: false, steadyOk: true, needsLockout: true, topValue: TOP, handsExercise: true,
-  }, extra);
-}
-// feed metric values 330ms apart; call the guide every 200ms
-function drive(ctx, startMs, values, extra) {
-  let t = startMs; const stages = [];
-  for (const v of values) {
-    ctx.counter.feedLog(`[METRIC] shoulderPress value=${v} enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=setup`, t);
-    for (let k = 0; k < 2; k++) { const d = ctx.guide.update(tickInputs(ctx.counter, t + k * 160, extra)); stages.push(d); }
-    t += 330;
-  }
-  return { t, stages, last: stages[stages.length - 1] };
+// ── Part 1: the setup line ──
+{
+  const g = G.createSetupGuide();
+  const blind = g.update({ ...base, seen: false });
+  check('no readings yet: ONE plain action ("Step back further"), not ready, confidence capped at 35', blind.stage === 'fit' && blind.text === 'Step back further' && !blind.ready && blind.cap === 35, `${blind.stage} "${blind.text}" ${blind.cap}`);
+  const nobody = g.update({ ...base, seen: false, frameHint: true, hintLine: GC.GUIDE_LINES.intoPicture });
+  check('nobody in the picture: "Step into view"', nobody.text === 'Step into view' && !nobody.ready, nobody.text);
+  const gap = g.update({ ...base, healthy: false });
+  check('tracking not steady (pose gap): still "fit"', gap.stage === 'fit' && !gap.ready);
+  const ok = g.update({ ...base });
+  check('everything visible, ARMS OUT, hands NOT at the shoulders: Ready (no start-position or reach-to-the-top wait), confidence may read 100', ok.ready && ok.stage === 'ready' && ok.cap === 100, `${ok.stage} cap ${ok.cap}`);
+  check('without debug logging (no per-frame signal) the guide never blocks Go', g.update({ ...base, seen: false, expectSamples: false }).ready);
+  check('the cap rises with the step: fit < ready', G.SETUP_TUNING.capFit < G.SETUP_TUNING.capReady);
 }
 
-// ── Part 1 ──
+// ── Part 2: the Ready gate ──
 {
-  const c = mk();
-  const none = c.guide.update(tickInputs(c.counter, 1000));
-  check('nothing tracked yet (only a head in frame, no readings): "Step back so your hands show", not ready, confidence capped at 35', none.stage === 'fit' && none.text === 'Step back so your hands show' && !none.ready && none.cap === 35, `${none.stage} "${none.text}" cap ${none.cap}`);
-  // garbage readings: jumping all over (not a steady track): the counter sees pose gaps
-  const g = mk(); g.counter.feedLog('[REP-TRACE] shoulderPress angle=40.0 framesSincePoseGap=40', 100); g.counter.feedLog('[REP-TRACE] shoulderPress angle=44.0 framesSincePoseGap=2', 400); g.counter.feedLog('[REP-TRACE] shoulderPress angle=30.0 framesSincePoseGap=3', 700);
-  const gd = g.guide.update(tickInputs(g.counter, 800));
-  check('tracking just recovered from a pose gap: still "fit" (not steady)', gd.stage === 'fit' && !gd.ready, gd.stage);
-  const A = mk();
-  let r = drive(A, 0, [64, 63, 65, 64, 63, 64, 65, 64]);
-  check('tracked and at the shoulders: "Raise your hands over your head", confidence capped at 70', r.last.stage === 'raise' && r.last.text === 'Raise your hands over your head' && r.last.cap === 70, `${r.last.stage} "${r.last.text}" ${r.last.cap}`);
-  check('Go is NOT ready while the top has not been seen, however long you wait (60s of resting at the shoulders)', (() => { const x = mk(); const rr = drive(x, 0, Array.from({ length: 180 }, (_, i) => 63 + (i % 3))); return !rr.stages.some((s) => s.ready); })());
-  r = drive(A, r.t, [70, 77, 82, 86, 87, 85]);
-  check('after the top is seen: "Bring your hands back to your shoulders"', r.stages.some((s) => s.stage === 'lower'), r.stages.map((s) => s.stage).filter((x, i, a) => a.indexOf(x) === i).join('>'));
-  r = drive(A, r.t, [75, 68, 64, 63, 64, 63]);
-  check('back at the shoulders, held: "Hold still" first (never "Perfect")', r.stages.some((s) => s.stage === 'hold' && s.text === 'Hold still') && !r.stages.some((s) => /perfect/i.test(s.text)));
-  r = drive(A, r.t, [64, 63, 64, 63, 64, 63, 64, 63]);
-  check('then Ready (and only then confidence may read 100)', r.last.ready && r.last.stage === 'ready' && r.last.cap === 100, `${r.last.stage} cap ${r.last.cap}`);
-  check('every step cap rises with the steps: fit < start < raise < lower < hold < ready', G.SETUP_TUNING.capFit < G.SETUP_TUNING.capStart && G.SETUP_TUNING.capStart < G.SETUP_TUNING.capRaise && G.SETUP_TUNING.capRaise < G.SETUP_TUNING.capLower && G.SETUP_TUNING.capLower < G.SETUP_TUNING.capHold && G.SETUP_TUNING.capHold < 100);
-  // arms leave the frame mid-setup: the lockout has to be seen again
-  const B = mk();
-  let rb = drive(B, 0, [64, 63, 64, 64, 85, 87, 70, 64, 63, 64]);
-  B.counter.feedLog('[TRACK] person lost', rb.t + 50);
-  const lost = B.guide.update(tickInputs(B.counter, rb.t + 100));
-  check('the person is lost mid-setup (arms out of frame): back to "Step back so your hands show" and the top must be seen again', lost.stage === 'fit' && !lost.ready, lost.stage);
-  // a frame hint always wins
-  const C = mk(); drive(C, 0, [64, 64, 64, 64, 64]);
-  const fh = C.guide.update(tickInputs(C.counter, 3000, { frameHint: true }));
-  check('a "Step into frame" hint is never shown together with "Hold still" / Ready: the guide says fit', fh.stage === 'fit' && !fh.ready);
-  check('wording for squats and other non-overhead exercises: no lockout step, "Step back so your whole body shows"', (() => { const x = mk(); const d = x.guide.update(Object.assign(tickInputs(x.counter, 100), { needsLockout: false, handsExercise: false })); return d.text === 'Step back so your whole body shows'; })());
+  check('Ready needs about 1 second of steady tracking (placeholder), not 3.5s', LT.READY_STEADY_MS === 1000, String(LT.READY_STEADY_MS));
+  // the real timeline (2026-11-12, 22:25:02.032 hold restarted, native PASSED at 22:25:04.114, about 2.1s later)
+  const gate = LT.createSteadyGate();
+  let t = 0, passedAt = 0;
+  for (let k = 0; k < 21; k++) { gate.feed(true, t, k === 20); if (k === 20) passedAt = t; t += 100; }
+  const goAt = (() => { for (let ms = passedAt; ms < passedAt + 5000; ms += 50) if (gate.steadyMs(ms) >= LT.READY_STEADY_MS) return ms; return null; })();
+  check('REAL TIMELINE: native passed after 2.1s of hold; Ready follows within 1s of that (the old gate never came)', goAt !== null && goAt - passedAt <= 1000, `Go at +${goAt === null ? 'never' : (goAt - passedAt) + 'ms'} after the pass`);
+  const gate2 = LT.createSteadyGate(); gate2.feed(true, 0, false); gate2.feed(false, 100, false);
+  check('a frame with a joint missing restarts the steady count', gate2.steadyMs(200) === 0);
+  const a = src.indexOf("// \"Ready. Go!\" (Ari's rule, 2026-11-12)"), b = src.indexOf('}, [readyPending, steadyGate]);');
+  const eff = a >= 0 && b > a ? src.slice(a, b) : '';
+  check("the Ready gate waits ONLY for native's pass and the steady time: no meter-high, hands-at-start, reach-to-the-top or guide-step wait", eff.length > 200 && !/meterHigh|atStartPosition|guideRef|healthy\(/.test(eff) && /steadyGate\.steadyMs/.test(eff));
+  check('the setup line the user sees goes through the calm filter', src.includes('setupCalm.feed(now, dec.text)'));
 }
 
-// ── Part 2: the real log ──
+// ── Part 3: calm, words, cue card ──
 {
-  const lines = fs.readFileSync(path.join(__dirname, 'fixtures', 'setup-2026-11-11.log.txt'), 'utf8').split(/\r?\n/);
-  const first = 0;
-  const rows = [];
-  for (let i = first; i < lines.length; i++) { const m = /^(\d\d):(\d\d):(\d\d\.\d+) .*?(\[(?:METRIC|SETTLE-TRACE|REP-TRACE)\].*)$/.exec(lines[i] || ''); if (m) rows.push({ t: (+m[1] * 3600 + +m[2] * 60 + parseFloat(m[3])) * 1000, text: m[4] }); }
-  if (rows.length < 20) { console.log('  (the live log has moved on: using the saved copy of that setup instead)'); }
-  const useRows = rows.length >= 20 ? rows : null;
-  if (useRows) {
-    const c = mk(); const t0 = useRows[0].t; const stages = []; let oldReadyAt = (new Date(2026, 0, 1).getTime() * 0) + (15 * 3600 + 59 * 60 + 46.610) * 1000;
-    let peak = 0, lastStage = '';
-    for (const r of useRows) {
-      if (r.t > oldReadyAt + 1500) break;
-      c.counter.feedLog(r.text, r.t);
-      const v = /(?:value|angle)=([-\d.]+)/.exec(r.text); if (v) peak = Math.max(peak, +v[1]);
-      const d = c.guide.update(tickInputs(c.counter, r.t, { steadyOk: r.t - t0 >= 3500 }));
-      stages.push({ at: (r.t - t0) / 1000, ...d });
-      if (d.stage !== lastStage) { console.log(`      +${((r.t - t0) / 1000).toFixed(1)}s  ${d.stage}: "${d.text}" (confidence cap ${d.cap})`); lastStage = d.stage; }
-    }
-    console.log(`      the old gate said Ready at 15:59:46.6 (+${((oldReadyAt - t0) / 1000).toFixed(1)}s); the highest reading in that setup was ${peak.toFixed(1)} (lockout needs ${(TOP * G.SETUP_TUNING.lockoutFraction).toFixed(1)})`);
-    check('REAL LOG: at the moment the old gate said Ready/Go, the new guide is NOT ready (the top was never reached)', !stages.some((s) => s.ready), stages[stages.length - 1] && stages[stages.length - 1].stage);
-    check('REAL LOG: the confidence cap never let the number reach 100 during that setup', stages.every((s) => s.cap < 100));
-  } else check('REAL LOG replay skipped (log rotated)', true);
+  const c = GC.createCalmLine(); const seen = []; let last = null;
+  // Ari's 1-second flash: different lines alternating every 200ms
+  const wanted = ['A', 'B', 'A', 'B', 'C', 'B', 'A', 'B', 'C', 'A'];
+  for (let i = 0; i < 40; i++) { const s = c.feed(i * 200, wanted[i % wanted.length]); if (s !== last) { seen.push({ t: i * 200, s }); last = s; } }
+  check('CALM: lines alternating every 200ms never reach the screen as a flash (changes at least 2.5s apart)', seen.every((x, i) => i < 2 || x.t - seen[i - 1].t >= 2500), seen.map((x) => `${x.s}@${x.t}`).join(' '));
+  const c2 = GC.createCalmLine(); c2.feed(0, 'X'); c2.feed(500, 'X');
+  let v = null; for (let t = 600; t <= 2400; t += 100) v = c2.feed(t, 'Y');
+  check('CALM: a line stays at least 2.5s even when a different reason appears', v === 'X', String(v));
+  for (let t = 2500; t <= 4200; t += 100) v = c2.feed(t, 'Y');
+  check('CALM: a new reason that holds ~1.5s replaces it', v === 'Y', String(v));
+  const c3 = GC.createCalmLine(); c3.feed(0, 'Z'); const blip = c3.feed(100, null);
+  check('CALM: a one-frame blip never shows', blip === null);
 }
 {
-  // the cue card: stars on the left, the words beside them, at most 2 lines (about 18 characters a line at that size)
-  const src = fs.readFileSync(path.join(__dirname, '..', 'app/formcheck.tsx'), 'utf8').split('\r\n').join('\n');
-  check('the cue card is the original layout: stars left, text beside, no centred wrap and no shrink-to-one-line', /trackingCueInner: \{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 26/.test(src) && src.includes('<Text style={s.trackingCueText} numberOfLines={2} onTextLayout=') && src.includes('const big = lines > 1;') && !src.includes('adjustsFontSizeToFit minimumFontScale={0.5}>{text}'));
-  const SG = require('../lib/setupGuide.ts');
-  const all = ['Step back so your hands show', 'Step back so your whole body shows', 'Hold your hands at your shoulders', 'Get into your starting position', 'Raise your hands over your head', 'Bring your hands back to your shoulders', 'Hold still'];
-  const g = SG.createSetupGuide();
-  check('every setup cue fits the card in two lines (40 characters or fewer; the stars grow when it wraps)', all.every((t) => t.length <= 40), all.filter((t) => t.length > 40).join(', '));
+  const L = GC.GUIDE_LINES;
+  const lines = [...new Set(GC.GUIDE_WORDS)].filter((x) => x !== 'Ready. Go!');
+  const bad = /so your|shoulders|bring your|show\b|picture|position/i;
+  check('every Guide line is ONE simple physical action (no "so your hands show", no "Bring your hands back to your shoulders")', lines.every((t) => !bad.test(t)), lines.filter((t) => bad.test(t)).join(' | '));
+  check('the lines Ari named exist word for word: Step back further / Raise your hands overhead / Lower your hands', L.backHands === 'Step back further' && L.raiseHands === 'Raise your hands overhead' && L.lowerHands === 'Lower your hands');
+  check('every line starts with a capital letter and has 2-6 words (a beginner reads it at a glance)', lines.every((t) => /^[A-Z]/.test(t) && t.split(' ').length >= 2 && t.split(' ').length <= 6), lines.filter((t) => !/^[A-Z]/.test(t) || t.split(' ').length > 6).join(' | '));
+  check('every Guide line fits the card in two lines (35 characters or fewer)', lines.every((t) => t.length <= 35), lines.filter((t) => t.length > 35).join(' | '));
+  const i0 = src.indexOf('trackingCueText: {');
+  check('the cue card: stars keep their ORIGINAL size (22), text centred beside them, max 2 lines, fixed width so it never clips', /const icon = 22;/.test(src) && !src.includes('big ? { width: 34') && /textAlign: 'center'/.test(src.slice(i0, i0 + 250)) && src.includes("trackingCueCard:  { alignSelf: 'center', width: '88%'") && src.includes('numberOfLines={2} adjustsFontSizeToFit'));
 }
 console.log(failed ? `\n${failed} FAILED` : '\nall passed');
 process.exit(failed ? 1 : 0);

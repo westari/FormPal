@@ -56,9 +56,10 @@ const WORKOUT = ['squat', 'pushup', 'bentOverRow', 'shoulderPress', 'hammerCurl'
     for (const row of prog.muscles) if (tiersAfter[row.key] && row.pct !== Math.round(data.muscleProgressPct(tiersAfter[row.key]))) failsOf.rows.push(`${w}: ${row.key} progress-tab ${row.pct} vs shared ${Math.round(data.muscleProgressPct(tiersAfter[row.key]))}`);
     // header = how far the OVERALL rank % moved (one number), never a sum; rows keep their own % and stay under +100
     const absOf = (st) => (st ? sessionLog.tierIndex(st.tier) * 100 + st.progress * 100 : 0);
-    // "Overall +X%" is exactly the sum of the muscle rows on the page
-    const wantGain = payload.hits.reduce((acc, h) => acc + Math.round(parseFloat(h.gain.replace(/[+%]/g, '')) * 10), 0) / 10;
-    if (Math.abs(parseFloat(payload.rank.gained) - wantGain) > 0.001) failsOf.total.push(`${w}: Overall +${payload.rank.gained} vs rows sum ${wantGain}`);
+    // "Overall +X%" = how far the OVERALL rank (the average of every muscle) really moved: a small number, never the sum of the rows
+    const r1c = (n) => Math.round(n * 10) / 10;
+    const wantGain = Math.max(0, Math.round(r1c(absOf(stA)) * 10) - Math.round(r1c(absOf(stB)) * 10)) / 10;
+    if (Math.abs(parseFloat(payload.rank.gained) - wantGain) > 0.001) failsOf.total.push(`${w}: Overall +${payload.rank.gained} vs the overall rank's own move ${wantGain}`);
     if (payload.hits.some(h => parseFloat(h.gain.replace(/[+%]/g, '')) > 99.9)) failsOf.total.push(`${w}: a row is over +99.9%`);
     // below Bronze: the Progress tab and the shared helper agree (all the training, capped at 99%)
     const creditAll = sessionLog.muscleCreditTotals(after);

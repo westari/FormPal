@@ -129,6 +129,11 @@ public class ATHLTCameraModule: Module {
     // The clip being recorded now, and the last one that finished (even when it ended early with an error): stopTracking hands back
     // a finished clip whose file exists instead of "no video" (2026-11-11: a recording that ended early lost the whole video).
     private var currentClipURL: URL?
+    // Screen keep-awake keeper (3rd report of the screen dimming and the phone locking while the camera is open). While a session runs, the
+    // idle timer is switched off again every 4 seconds and whenever the app becomes active, and the state is logged as [AWAKE] native.
+    private var awakeTimer: Timer?
+    private var awakeTicks = 0
+    private var awakeObserver: NSObjectProtocol?
     private var lastFinishedClipURL: URL?
 
     // MARK: – Module definition ─────────────────────────────────────────────────
@@ -151,7 +156,7 @@ public class ATHLTCameraModule: Module {
                 if let mov = self.movieOutput, mov.isRecording { mov.stopRecording() }
 
                 self.videoOutput?.setSampleBufferDelegate(nil, queue: nil)
-                // idle timer: owned by expo-keep-awake (JS); never switched off here
+                self.stopAwakeKeeper() // idle timer is expo-keep-awake's: never switched off here
                 self.captureSession?.stopRunning()
                 self.captureSession  = nil
                 self.videoOutput     = nil
@@ -783,10 +788,45 @@ public class ATHLTCameraModule: Module {
         NSLog("[GymCamera] session configured (%@), running: %@",
               position == .front ? "front" : "back", session.isRunning ? "YES" : "NO")
         // the screen must never dim or lock while the camera is open (the JS keep-awake alone was not enough)
-        DispatchQueue.main.async { UIApplication.shared.isIdleTimerDisabled = true }
+        self.startAwakeKeeper()
         sendEvent("onCameraState", ["running": session.isRunning,
                                     "position": position == .front ? "front" : "back"])
         promise.resolve(["success": session.isRunning])
+    }
+
+    // MARK: – screen keep-awake keeper ──────────────────────────────────────────────────
+
+    private func startAwakeKeeper() {
+        DispatchQueue.main.async {
+            self.awakeTimer?.invalidate()
+            self.awakeTicks = 0
+            let assertAwake = { [weak self] (why: String) in
+                guard let self = self else { return }
+                UIApplication.shared.isIdleTimerDisabled = false   // off then on: re-applies it even if iOS thinks it is already on
+                UIApplication.shared.isIdleTimerDisabled = true
+                self.awakeTicks += 1
+                if why != "tick" || self.awakeTicks % 5 == 1 {
+                    let st = UIApplication.shared.applicationState
+                    let stText = st == .active ? "active" : (st == .inactive ? "inactive" : "background")
+                    let disabled = UIApplication.shared.isIdleTimerDisabled
+                    let bright = String(format: "%.2f", Double(UIScreen.main.brightness))
+                    let lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
+                    let msg = "[AWAKE] native: idle timer disabled = \(disabled) (\(why)), app state \(stText), brightness \(bright), low power \(lowPower)"
+                    self.sendEvent("onDebugLog", ["message": msg])
+                }
+            }
+            assertAwake("session started")
+            self.awakeTimer = Timer.scheduledTimer(withTimeInterval: 4, repeats: true) { _ in assertAwake("tick") }
+            if let o = self.awakeObserver { NotificationCenter.default.removeObserver(o) }
+            self.awakeObserver = NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in assertAwake("app became active") }
+        }
+    }
+
+    private func stopAwakeKeeper() {
+        DispatchQueue.main.async {
+            self.awakeTimer?.invalidate(); self.awakeTimer = nil
+            if let o = self.awakeObserver { NotificationCenter.default.removeObserver(o); self.awakeObserver = nil }
+        }
     }
 
     // MARK: – flipCamera ───────────────────────────────────────────────────────

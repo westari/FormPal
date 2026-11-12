@@ -38,6 +38,12 @@ export async function setFlashBrightness(on: boolean): Promise<boolean> {
 
 /**
  * The ring light: how far in from the screen edge the glow reaches (points) and its brightness curve (alpha at each fraction of
- * that depth: solid white at the very edge, clear at the inner end). PLACEHOLDER look values, tuned by eye.
+ * that depth: SOLID white for the first half, then fading to clear at the inner end). PLACEHOLDER look values, tuned by eye.
+ * Ari's phone test 2026-11-12: "too weak in a dark room", so it is much deeper and stays solid white for longer than before
+ * (was depth 64, solid only at the very edge). The sides stay shallow so the middle (the body and the framing guide) is never covered.
  */
-export const RING_LIGHT = { depth: 64, stops: [{ at: 0, a: 1 }, { at: 0.3, a: 0.7 }, { at: 0.65, a: 0.28 }, { at: 1, a: 0 }] };
+export const RING_LIGHT = {
+  depth: 96,            // sides (left / right)
+  depthTopBottom: 150,  // top and bottom (the body is not there, so it can reach further in)
+  stops: [{ at: 0, a: 1 }, { at: 0.5, a: 1 }, { at: 0.78, a: 0.55 }, { at: 1, a: 0 }],
+};

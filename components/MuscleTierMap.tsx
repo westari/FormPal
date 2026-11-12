@@ -35,7 +35,6 @@ import { Muscle } from '../constants/exercises';
 import type { Slug } from 'react-native-body-highlighter';
 import type { MuscleTiers, MuscleTierInfo, Tier } from '../lib/sessionLog';
 import { TIER_ORDER, tierIndex, tierProgress } from '../lib/sessionLog';
-import { OVERALL_MIN_VOLUME } from '../lib/rankTuning';
 import { FRONT_MUSCLE_PATHS, BACK_MUSCLE_PATHS } from './muscleShapePaths';
 import {
   MUSCLE_MAP_FRONT_PATHS, MUSCLE_MAP_BACK_PATHS, MUSCLE_MAP_REGIONS, MUSCLE_MAP_VIEWBOX,
@@ -816,47 +815,34 @@ const bd = StyleSheet.create({
   blob: { position: 'absolute' },
 });
 
-// ─── Overall standing — the weakest-link muscle sets the headline tier, ───
-// consistent with the per-muscle mechanic itself (volume tier vs quality
-// tier, take the lower). Progress toward the next tier is the min of volume
-// progress and quality progress — whichever stat is further behind is what's
-// actually holding that muscle back.
+// ─── Overall standing: the AVERAGE of every muscle's rank (Ari, 2026-11-12) ─────
+// Each muscle's position is tier * 100 + its own progress (0-100) toward its next tier: Bronze 0% = 0, Bronze 50% = 50, Silver 0% = 100...
+// The overall position is the MEAN of that over EVERY muscle on the rank map (an untrained muscle is Bronze 0%, it counts as 0), and it
+// is read the same way a muscle is: the tier is the whole hundreds, the % is what is left over. So "mostly Bronze plus a couple of Silver"
+// is still Bronze overall, and getting a whole overall rank up takes the average muscle crossing the same bar a muscle has to cross.
+// It never goes down because of a workout, and a workout moves it only a little (one muscle's gain divided by the number of muscles).
 export interface OverallStanding {
-  muscle:   Muscle;   // the weakest-link muscle: it sets the headline TIER
+  muscle:   Muscle;   // the weakest muscle (information only: the tier is the AVERAGE of every muscle)
   tier:     Tier;
-  // THE overall rank % (0-1), the same number on every screen. The tier is the weakest link, but the % is the AVERAGE
-  // position of every tracked muscle (tier * 100 + its own progress), measured from the start of the overall tier. So
-  // training ANY muscle moves it, it never goes down because of a workout (the old "average of each muscle's own
-  // progress" dropped whenever one muscle ranked up and its own bar reset to 0), and it only resets when the overall
-  // tier itself goes up. Kept just under 100% until the weakest muscle really crosses.
+  // THE overall rank % (0-1), the same number on every screen: what is left of the average muscle position after the whole tiers.
   progress: number;
   atTop:    boolean;
 }
 
 // Exported so the page shell (app/muscle-ranks.tsx) can pick the same tier
-// to tint MuscleRankBackdrop with, without duplicating the weakest-link logic.
+// to tint MuscleRankBackdrop with, without duplicating the average here.
 export function computeOverallStanding(tiers: MuscleTiers): OverallStanding | null {
-  const all = Object.entries(tiers) as [Muscle, MuscleTierInfo][];
-  if (all.length === 0) return null;
-  // Only muscles with real training set the overall rank (see OVERALL_MIN_VOLUME); until one has, every trained muscle counts.
-  const established = all.filter(([, i]) => i.volume >= OVERALL_MIN_VOLUME);
-  const entries = established.length ? established : all;
-
-  // Weakest = lowest tier, and within the SAME tier the one furthest from the
-  // next tier (lowest progress).
-  let weakest = entries[0];
-  for (const e of entries) {
-    const ti = tierIndex(e[1].tier), wi = tierIndex(weakest[1].tier);
-    if (ti < wi || (ti === wi && tierProgress(e[1]) < tierProgress(weakest[1]))) weakest = e;
-  }
-  const [muscle, info] = weakest;
-  const idx = tierIndex(info.tier);
-  if (idx === TIER_ORDER.length - 1) {
-    return { muscle, tier: info.tier, progress: 1, atTop: true };
-  }
-  const meanAbs = entries.reduce((a, [, i]) => a + tierIndex(i.tier) * 100 + tierProgress(i) * 100, 0) / entries.length;
-  const progress = Math.max(0, Math.min(0.999, (meanAbs - idx * 100) / 100));
-  return { muscle, tier: info.tier, progress, atTop: false };
+  if (Object.keys(tiers).length === 0) return null;
+  const top = TIER_ORDER.length - 1;
+  const pos = (m: Muscle) => { const i = tiers[m]; return i ? tierIndex(i.tier) * 100 + tierProgress(i) * 100 : 0; };
+  let weakest = MUSCLE_DISPLAY_ORDER[0];
+  let sum = 0;
+  for (const m of MUSCLE_DISPLAY_ORDER) { sum += pos(m); if (pos(m) < pos(weakest)) weakest = m; }
+  const mean = sum / MUSCLE_DISPLAY_ORDER.length;
+  const idx = Math.max(0, Math.min(top, Math.floor(mean / 100)));
+  if (idx === top) return { muscle: weakest, tier: TIER_ORDER[top], progress: 1, atTop: true };
+  const progress = Math.max(0, Math.min(0.999, (mean - idx * 100) / 100));
+  return { muscle: weakest, tier: TIER_ORDER[idx], progress, atTop: false };
 }
 
 // The highest PEAK tier ever reached, across every tracked muscle — a

@@ -50,7 +50,7 @@ export const READY_MIN_PCT = 95;
 // a single break for a while: every setup frame trackable, and no gap in the frame stream.
 // PLACEHOLDERS (not measured, set from reasoning): do a few starts and send the [READY-GATE] log
 // lines, then the real values get set from those numbers.
-export const READY_STEADY_MS = 3500;   // PLACEHOLDER: native hold is 2000ms, so this adds ~1.5s of steady tracking
+export const READY_STEADY_MS = 1000;   // PLACEHOLDER (Ari 2026-11-12): every joint visible and steady for about 1 second, then Go (was 3500)
 export const READY_MAX_GAP_MS = 400;   // PLACEHOLDER: setup frames arrive every ~100ms; a longer silence counts as a break
 
 export interface SteadyGate {

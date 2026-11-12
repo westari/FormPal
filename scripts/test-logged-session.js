@@ -47,7 +47,7 @@ const names = p.hits.map((h) => h.name);
 check('the logged exercises are counted: Push-up gives Chest / Triceps / Shoulders rows, Bicep Curl gives a Biceps row', ['Chest', 'Triceps', 'Biceps'].every((n) => names.includes(n)), names.join(', '));
 check('every row is a real gain above zero', p.hits.every((h) => parseFloat(h.gain.replace(/[+%]/g, '')) > 0));
 check('there is a "Bronze -> Silver" style rank row', !!p.rank.label && !!p.rank.next, `${p.rank.label} -> ${p.rank.next}`);
-check('"Overall +X%" equals the sum of the rows exactly', Math.round(parseFloat(p.rank.gained) * 10) === p.hits.reduce((a, h) => a + Math.round(parseFloat(h.gain.replace(/[+%]/g, '')) * 10), 0), p.rank.gained);
+check('"Overall +X%" is the small move of the overall rank (the average of every muscle), not the sum of the rows', parseFloat(p.rank.gained) > 0 && parseFloat(p.rank.gained) < p.hits.reduce((a, h) => a + parseFloat(h.gain.replace(/[+%]/g, '')), 0), p.rank.gained);
 check('the entries carry one timestamp (that is how the screen finds them again) and are manual (no form judged)', entries.every((e) => e.ts === ts && e.formChecked === false));
 console.log(failed ? `\n${failed} FAILED` : '\nall passed');
 process.exit(failed ? 1 : 0);

@@ -51,6 +51,42 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8').replace(/\r\n/g,
     Module._load = orig;
   }
 
+  // 1b. a clip the camera made but the app never logged is adopted into the video log (the Nov 11 workout that has "no clip logged")
+  {
+    const now = Date.now();
+    const meta = { 'file:///c/tmp/athlt_7.mov': [now - 3600000, 8000], 'file:///c/tmp/athlt_8.mov': [now - 7200000, 6000] };
+    const store = {};
+    class File {
+      constructor(u, n) { this.uri = n ? u.uri + '/' + n : (typeof u === 'string' ? u : u.uri); }
+      get size() { return (meta[this.uri] || [0, 0])[1]; }
+      get exists() { return !!meta[this.uri]; }
+      info() { return { modificationTime: (meta[this.uri] || [0, 0])[0] }; }
+      copy(d) { meta[d.uri] = meta[this.uri]; }
+    }
+    class Directory {
+      constructor(p, n) { this.uri = (typeof p === 'string' ? p : p.uri) + (n ? '/' + n : ''); }
+      get exists() { return true; }
+      create() {}
+      get parentDirectory() { return new Directory(this.uri.split('/').slice(0, -1).join('/')); }
+      list() { return Object.keys(meta).filter((k) => k.startsWith(this.uri + '/')).map((k) => new File(k)); }
+    }
+    const orig = Module._load;
+    Module._load = function (req) {
+      if (req === 'expo-file-system') return { File, Directory, Paths: { cache: new Directory('file:///c/Library/Caches'), document: new Directory('file:///c/Documents') } };
+      if (req === '@react-native-async-storage/async-storage') return { __esModule: true, default: { getItem: async (k) => store[k] ?? null, setItem: async (k, v) => { store[k] = v; } } };
+      return orig.apply(this, arguments);
+    };
+    for (const m of ['../lib/videoStore.ts', '../lib/sessionVideo.ts']) delete require.cache[require.resolve(m)];
+    const sv = require('../lib/sessionVideo.ts');
+    store.formpal_video_log = JSON.stringify([{ uri: 'file:///c/tmp/athlt_8.mov', ts: now - 7200000 + 2000 }]); // athlt_8 is already logged, athlt_7 is not
+    const got = await sv.findSessionVideoUri(now - 3600000 + 3000, 0);
+    const log = JSON.parse(store.formpal_video_log);
+    check('orphan: a clip in the temp folder that was never logged is adopted into the video log with the time it finished', log.length === 2 && log.some((e) => /athlt_7\.mov$/.test(e.uri) && Math.abs(e.ts - (now - 3600000)) < 1000), JSON.stringify(log));
+    check('orphan: the adopted clip is copied to the permanent folder and the workout that finished then finds it (no flat icon thumbnail)', !!got && got.includes('/session-videos/') && got.endsWith('athlt_7.mov'), String(got));
+    check('orphan: a clip that was already logged is not added twice', log.filter((e) => /athlt_8\.mov$/.test(e.uri)).length === 1);
+    Module._load = orig;
+  }
+
   // 2. the stop code
   const fc = read('app/formcheck.tsx');
   const stop = fc.slice(fc.indexOf('const handleStop = useCallback'), fc.indexOf('const handleReviewDone'));
@@ -58,6 +94,7 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8').replace(/\r\n/g,
   check('stop: with no clip from the camera it looks for the file itself, and says what it found', stop.includes('recoverRecentClip(startTimestamp.current - 5000)') && stop.includes('[VIDEO] rescued the clip') && stop.includes('[VIDEO] no clip file found'));
   check('stop: the rescue happens BEFORE the clip is logged and handed to the recap (hasVideo is decided after it)', stop.indexOf('recoverRecentClip') < stop.indexOf('logSessionVideo(final.videoUri)') && stop.indexOf('recoverRecentClip') < stop.indexOf('hasVideo: !!navParams.videoUri'));
   check('stop: the clip is copied into the permanent documents folder the moment it exists', fc.includes('persistVideo(uri)'));
+  check('stop: a path the camera returned whose file is missing is treated as no video and rescued the same way', stop.includes('the camera returned a path but the file is not there'));
   check('stop: the clip travels to the recap as videoUri (not dropped)', /videoUri: final\.videoUri \?\? ''/.test(stop));
 
   // 3. the page, with and without a video

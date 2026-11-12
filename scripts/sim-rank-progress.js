@@ -59,11 +59,11 @@ function main() {
   }
   console.log('   rank       workouts   good reps   at 3 workouts/week');
   for (const t of TIERS) console.log(`   ${cap(t).padEnd(10)} ${String(reached[t] == null ? '-' : reached[t]).padStart(8)}   ${String(reached[t] == null ? '-' : (reached[t] - 0) * 30 - (t === 'bronze' ? 30 : 0)).padStart(9)}   ${reached[t] == null ? '-' : (reached[t] / 3 <= 1 ? '<1 week' : (reached[t] / 3 / 4.345 < 3 ? (reached[t] / 3).toFixed(1) + ' weeks' : (reached[t] / 3 / 4.345).toFixed(1) + ' months'))}`);
-  console.log('\n4. Overall rank: built from the muscles, not a rep count (the weakest muscle with real training sets the rank)');
+  console.log('\n4. Overall rank: the AVERAGE of every muscle rank (an untrained muscle is Bronze 0%), read the same way a muscle is');
   const ov = (entries) => MTM.computeOverallStanding(sessionLog.computeMuscleTiers(entries));
   const o1 = ov([curl(30, 0)]), o2 = ov([curl(150, 0), entry('pushup', 30, 30, 0)]);
   console.log(`   30 curls only:                 ${cap(o1.tier)} ${(o1.progress * 100).toFixed(1)}%`);
-  console.log(`   150 curls + 30 push-ups:       ${cap(o2.tier)} ${(o2.progress * 100).toFixed(1)}%  (biceps is Silver; chest/triceps/shoulders are not established yet, so Silver stands)`);
+  console.log(`   150 curls + 30 push-ups:       ${cap(o2.tier)} ${(o2.progress * 100).toFixed(1)}%  (biceps is Silver but ten other muscles are Bronze, so the average is still Bronze)`);
 
   if (!process.argv.includes('--check')) return;
   let failed = 0;
@@ -89,7 +89,24 @@ function main() {
   check('main muscles get full credit, helpers partial (push-up: chest +20%, triceps less, biceps none)', near(pct(pu.chest), 20, 0.05) && pct(pu.triceps) < pct(pu.chest) && pct(pu.triceps) > 0 && !pu.biceps, `chest ${pct(pu.chest).toFixed(1)} triceps ${pct(pu.triceps).toFixed(1)}`);
   check('a rank-up carries the extra reps over (160 good reps = Silver + 10 reps toward Gold)', tierOf([curl(160, 0)]).tier === 'silver' && near(pct(tierOf([curl(160, 0)])), (10 / 500) * 100, 0.05));
   check('Champion is 19,350 good reps in total and never quick', starts.champion === 19350 && reached.champion > 600, String(reached.champion));
-  check('the overall rank is built from the muscles, not a rep count: a muscle with only helper reps does not hold it back', o2.tier === 'silver');
+  check('the overall rank is the AVERAGE of every muscle: mostly Bronze plus one Silver is still Bronze overall', o2.tier === 'bronze' && o2.progress > 0);
+  {
+    // the overall rank = the AVERAGE of all 11 muscles on the rank map (tier * 100 + progress), tier = whole hundreds, % = the rest
+    const tierOfV = (v) => tuning.VOLUME_THRESHOLDS.filter(([, t]) => v >= t).pop()[0];
+    const info = (v) => ({ tier: tierOfV(v), peakTier: tierOfV(v), volume: v, goodRatio: 1, qualityJudged: true });
+    const order = MTM.MUSCLE_DISPLAY_ORDER, N = order.length;
+    const tiers = (vols) => Object.fromEntries(order.map((m, i) => [m, info(vols[i] || 0)]));
+    const silver = starts.silver;
+    const twoSilver = MTM.computeOverallStanding(tiers([silver, silver]));
+    check('mostly Bronze plus a couple of Silver = Bronze overall (' + N + ' muscles, 2 at Silver: ' + (twoSilver.progress * 100).toFixed(1) + '%)', twoSilver.tier === 'bronze' && near(twoSilver.progress * 100, 200 / N, 0.05));
+    const allSilver = MTM.computeOverallStanding(tiers(Array(N).fill(silver)));
+    check('every muscle at Silver = Silver overall, 0%', allSilver.tier === 'silver' && near(allSilver.progress * 100, 0, 0.05));
+    const onlyTwo = MTM.computeOverallStanding({ [order[0]]: info(silver), [order[1]]: info(silver) });
+    check('muscles with NO training count too (Bronze 0%): two Silver muscles and nine untrained are not "Silver" overall', onlyTwo.tier === 'bronze');
+    const fresh = MTM.computeOverallStanding(tiers([30 * 0]));
+    const one = MTM.computeOverallStanding(tiers([30]));
+    check('one muscle at +20% (30 good reps at Bronze) moves the overall by 20 / ' + N + ' = ' + (20 / N).toFixed(1) + '% (small)', near((one.progress - fresh.progress) * 100, 20 / N, 0.05), ((one.progress - fresh.progress) * 100).toFixed(2));
+  }
   console.log(failed ? `\n${failed} FAILED` : '\nall passed');
   process.exit(failed ? 1 : 0);
 }

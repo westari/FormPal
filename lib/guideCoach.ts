@@ -15,22 +15,23 @@ import { COACH_WORDS, coachLine } from './shortCue';
 import type { MatchResult } from './movementMatch';
 
 // ── THE GUIDE's words (setup only) ──────────────────────────────────────────────────────────────────────────────────
+// Each line = ONE simple physical action a first-time user understands at once (no "so your hands show").
 export const GUIDE_LINES = {
-  intoPicture:  'Step into the picture',
-  backHands:    'Step back so your hands show',
-  backBody:     'Step back so your whole body shows',
-  closer:       'Step closer to the phone',
+  intoPicture:  'Step into view',
+  backHands:    'Step back further',
+  backBody:     'Step back further',
+  closer:       'Step closer',
   phoneBack:    'Move your phone back',
   handsInView:  'Keep your hands in view',
   bodyInView:   'Keep your whole body in view',
-  sideways:     'Stand sideways to the phone',
+  sideways:     'Turn sideways to the phone',
   facePhone:    'Face the phone',
   moreLight:    'Find more light',
   chestHeight:  'Put your phone at chest height',
-  handsStart:   'Hold your hands at your shoulders',
-  startPos:     'Get into your starting position',
-  raiseHands:   'Raise your hands over your head',
-  lowerHands:   'Bring your hands back to your shoulders',
+  handsStart:   'Lower your hands',
+  startPos:     'Get ready to start',
+  raiseHands:   'Raise your hands overhead',
+  lowerHands:   'Lower your hands',
   holdStill:    'Hold still',
   ready:        'Ready. Go!',
 } as const;
@@ -117,13 +118,38 @@ export function guideForReason(r: WhyCannotCount, i: GuideInputs): string | null
   }
 }
 
+/**
+ * A calm line. What the Guide WANTS to say can change every 200ms; what the user SEES must not flicker (Ari's phone test: 3 different
+ * lines in about 1 second). Rules (lib/coachTuning.ts GUIDE): a line stays at least minShowSec; a different line (or nothing) only takes
+ * its place after it has been wanted, without a break, for changeConfirmSec. The text is never changed mid-way, so it cannot be cut off.
+ */
+export interface CalmLine { feed(now: number, wanted: string | null): string | null; reset(): void }
+export function createCalmLine(): CalmLine {
+  let shown: string | null = null, shownSince = 0;
+  let cand: string | null = null, candSince = 0;
+  return {
+    feed(now, wanted) {
+      if (wanted === shown) { cand = null; return shown; }
+      if (shown === null) {                       // nothing is up: a new line must still be wanted for the confirm time, so a one-frame blip never shows
+        if (wanted !== cand) { cand = wanted; candSince = now; }
+        if (wanted !== null && now - candSince >= G.firstShowConfirmSec * 1000) { shown = wanted; shownSince = now; cand = null; }
+        return shown;
+      }
+      if (wanted !== cand) { cand = wanted; candSince = now; }
+      if (now - shownSince >= G.minShowSec * 1000 && now - candSince >= G.changeConfirmSec * 1000) { shown = wanted; shownSince = now; cand = null; }
+      return shown;
+    },
+    reset() { shown = null; shownSince = 0; cand = null; candSince = 0; },
+  };
+}
+
 export interface Guide {
   decide(i: GuideInputs): GuideDecision;
   reset(): void;
 }
 
 export function createGuide(opts: { log?: (m: string) => void } = {}): Guide {
-  let cur: { line: string; since: number; prio: number } | null = null;
+  const calm = createCalmLine();
   let lastLogLine = '', lastLogAt = 0;
   const log = (now: number, line: string | null, why: string) => {
     if (!opts.log) return;
@@ -144,15 +170,15 @@ export function createGuide(opts: { log?: (m: string) => void } = {}): Guide {
         const hint = guideLine(i.nativeCue, i.exerciseId) ?? guideLine(i.outOfPlaneCue, i.exerciseId) ?? guideLine(i.diag, i.exerciseId);
         if (hint) { line = hint; why = `the camera says "${i.nativeCue || i.outOfPlaneCue || i.diag}"`; reason = 'hint'; prio = 1; }
       }
-      // a line stays up a few seconds before a weaker one may replace it (no flicker)
-      if (cur && line !== cur.line && i.now - cur.since < G.holdSec * 1000 && prio <= cur.prio && line !== null) { line = cur.line; why = 'holding the last line'; }
-      if (line) { if (!cur || cur.line !== line) cur = { line, since: i.now, prio }; else cur.prio = Math.max(cur.prio, prio); }
-      else if (cur && i.now - cur.since >= G.holdSec * 1000) cur = null;
-      else if (cur && prio === 0) { line = null; cur = null; }
+      // calm: a line stays up at least minShowSec and only changes when the new reason has held for changeConfirmSec
+      const wantedLine = line;
+      line = calm.feed(i.now, wantedLine);
+      if (line !== wantedLine) why = line ? 'holding the last line (calm: a line stays up a few seconds)' : why;
+      void prio;
       log(i.now, line, why);
       return { line, why, reason };
     },
-    reset() { cur = null; lastLogLine = ''; lastLogAt = 0; },
+    reset() { calm.reset(); lastLogLine = ''; lastLogAt = 0; },
   };
 }
 
