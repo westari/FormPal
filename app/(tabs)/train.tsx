@@ -37,6 +37,7 @@ import { Asset } from 'expo-asset';
 import * as Haptics from '../../lib/haptics';
 import { DC_VIEWPORT_JS, DC_NO_ZOOM_JS, CONSOLE_FORWARD_JS, DC_SETTLE_JS } from '../../lib/dcWebviewHelpers';
 import { dcLogicPatchJs, athltSetDataJs } from '../../lib/dcLogicPatch';
+import { TAB_HEADER_JS } from '../../lib/tabHeader';
 import { CUE_ORB_CSS, CUE_ORB_JS } from '../../lib/cueOrb';
 import { EDIT_BRIDGE_JS } from '../../lib/editSheetBridge';
 import { saveWorkoutEdit } from '../../lib/planEditSave';
@@ -186,15 +187,8 @@ export const TRAIN_WEB_INJECT = `
   function header() {
     var d = D(), S = window.__dcCanvasScale;
     if (!d || !S) return false;
-    var h = document.querySelector('[data-train-header]');
-    if (!h) {
-      var all = document.querySelectorAll('div');
-      for (var i = 0; i < all.length; i++) if (all[i].style.paddingTop === '62px') { h = all[i]; break; }
-      if (!h) return false;
-      h.setAttribute('data-train-header', '1');
-    }
-    h.style.setProperty('padding-top', (62 + d.insets.top / S) + 'px', 'important');
-    return true;
+    // the same header as Home, Progress and Profile (lib/tabHeader.ts): title, date line, position
+    return !!window.__fpHeader('Train', d.insets.top);
   }
 
   // The Edit and Edit-with-Cue sheets sit 8px above the canvas bottom, under the real tab bar: lifted above it. A
@@ -406,7 +400,7 @@ export const TRAIN_WEB_INJECT = `
     return 'cards=' + (r ? r.children.length : 0)
       + ' quickStart=' + has('Quick Start') + ' myWorkouts=' + has('My Workouts') + ' practice=' + has('Practice Exercises')
       + ' oldHero=' + (document.querySelectorAll('[data-glass]').length ? 1 : 0)
-      + ' title=' + ((document.querySelector('[data-train-header] div') || {}).textContent || '').trim();
+      + ' title=' + ((document.querySelector('[data-fp-title]') || {}).textContent || '').trim();
   }
 
   var reported = false, diagSent = false, lastAsk = 0, deb, done = { fit: false, header: false, sheets: false, my: false, img: false };
@@ -453,7 +447,7 @@ export const TRAIN_WEB_INJECT = `
 true;
 `;
 
-export const TRAIN_BEFORE = DC_VIEWPORT_JS + DC_NO_ZOOM_JS + CONSOLE_FORWARD_JS + DC_SETTLE_JS + CUE_ORB_JS + EDIT_BRIDGE_JS
+export const TRAIN_BEFORE = DC_VIEWPORT_JS + DC_NO_ZOOM_JS + CONSOLE_FORWARD_JS + DC_SETTLE_JS + TAB_HEADER_JS + CUE_ORB_JS + EDIT_BRIDGE_JS
   + dcLogicPatchJs(TRAIN_LOGIC_EXT) + TRAIN_WEB_INJECT + HOME_CUE_REAL_JS;
 
 // FNV-1a over the file text: a second, independent fingerprint next to the asset's md5.
@@ -533,9 +527,12 @@ export default function TrainScreen() {
       tlog('ERROR building train data:', e && (e as Error).stack ? (e as Error).stack : String(e));
       td = buildTrainData(null, sessions, ins);
     }
-    dataJsRef.current = athltSetDataJs(td);
+    const js = athltSetDataJs(td);
     streakRef.current = td.streak;
-    webRef.current?.injectJavaScript(dataJsRef.current);
+    // same data as the page already has: send nothing (re-sending it on every tab visit made the page redraw: a small glitch)
+    if (js === dataJsRef.current) { tlog('data unchanged, not pushed again'); return; }
+    dataJsRef.current = js;
+    webRef.current?.injectJavaScript(js);
     tlog('data pushed to page; today =', td.days[5]?.name, '| streak', td.streak, '| my workouts', td.myWorkouts.length);
   }, [insets.top, insets.bottom]);
 

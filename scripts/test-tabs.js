@@ -59,7 +59,7 @@ check('actions top to bottom: Cue, form check, create workout, log, start workou
 check('"Analyze a Video" is gone from the menu', !/analyze/i.test(menu));
 const labels = [...menu.matchAll(/label: '([^']+)'/g)].map(m => m[1]);
 check('short clear names (no "Quick form check")', labels.join() === 'Ask Cue,Form check,Create workout,Log session,Start workout' && labels.every(l => l.length <= 14), labels.join());
-check('menu labels are regular weight in the system font (no fontFamily, weight 400)', /label: \{[^}]*fontWeight: '400'/.test(menu) && !/label: \{[^}]*fontFamily/.test(menu));
+check('menu labels are a bit bigger (19pt, was 17) and a bit thicker (semibold 600, was 400), in the system font (no fontFamily)', /label: \{[^}]*fontSize: 19,[^}]*fontWeight: '600'/.test(menu) && !/label: \{[^}]*fontFamily/.test(menu));
 check('tapping outside fades the menu out smoothly (blur + actions animate back to 0 and are removed only when finished)', /else if \(mounted\)/.test(menu) && /toValue: 0, duration: CLOSE_MS/.test(menu) && /if \(finished\) setMounted\(false\)/.test(menu) && /onPress=\{onClose\}/.test(menu));
 const orb = read('components', 'CueOrb.tsx');
 check('the Cue orb in the menu animates like the other orbs (drifting glow + core, wobble, breathing, native driven)', (orb.match(/useDrift\(/g) || []).length >= 3 && /useNativeDriver: true/.test(orb) && !/useNativeDriver: false/.test(orb) && /CUE_ORB_ANIMATED_LAYERS/.test(orb) && require('../components/CueOrb.tsx').CUE_ORB_ANIMATED_LAYERS.length >= 4, String(require('../components/CueOrb.tsx').CUE_ORB_ANIMATED_LAYERS));

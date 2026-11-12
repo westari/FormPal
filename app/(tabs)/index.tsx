@@ -48,6 +48,7 @@ import { saveWorkoutEdit } from '../../lib/planEditSave';
 import { addableExercises, type EditRow } from '../../lib/planEdit';
 import { plannedMeta } from '../../lib/trainData';
 import { tabBarCover } from '../../lib/tabBarMetrics';
+import { TAB_HEADER_JS } from '../../lib/tabHeader';
 
 const HOME_HTML = require('../../assets/app screens/home.html');
 const HOME_BUILD = 'home-5';
@@ -245,7 +246,7 @@ export function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[], i
     formPct: `${g.pct}%`,
   }));
 
-  return `(function(){
+  return TAB_HEADER_JS + `(function(){
     function post(m){ try{ window.ReactNativeWebView.postMessage(JSON.stringify(m)); }catch(e){} }
     var MAP = ${JSON.stringify(map)};
     // BUG FOUND ("clear cutoff — colored background then blank white on
@@ -258,19 +259,9 @@ export function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[], i
     // the header itself, not an external native gap.
     var INSET_TOP = ${insetTop};
     function pushHeaderDown(){
-      var scale = window.__dcCanvasScale;
-      if(!scale) return false;
-      // this injection runs on every focus: the header is remembered after its first offset (its padding
-      // is no longer the design's 62px by then)
-      var header = document.querySelector('[data-home-header]');
-      if(!header){
-        var all = document.querySelectorAll('div');
-        for (var i=0;i<all.length;i++){ if (all[i].style.paddingTop === '62px') { header = all[i]; break; } }
-        if(!header) return false;
-        header.setAttribute('data-home-header', '1');
-      }
-      header.style.setProperty('padding-top', (62 + INSET_TOP/scale) + 'px', 'important');
-      return true;
+      // the same header as Train, Progress and Profile (lib/tabHeader.ts): title, date line, position
+      if(!window.__dcCanvasScale) return false;
+      return !!window.__fpHeader('Home', INSET_TOP);
     }
     var DONE = { header: false, sheet: false, text: false, recent: false };
     DONE.header = pushHeaderDown();

@@ -25,7 +25,7 @@ const dayKey = (d: Date) => d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 +
 export function streakInfo(sessions: SessionEntry[], now: number = Date.now(), passedCount = 0): StreakInfo {
   const today = new Date(now); today.setHours(0, 0, 0, 0);
   const has = new Set(sessions.map(s => dayKey(new Date(s.ts))));
-  let count = calcStreak(sessions);
+  let count = calcStreak(sessions, now);
   let trainedToday = has.has(dayKey(today));
   if (passedCount > count) { count = passedCount; trainedToday = true; }
   // the streak's days, walking back from today (or from yesterday while today is still to do)

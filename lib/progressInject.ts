@@ -386,8 +386,9 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
       var realDays = Object.keys(byDay).map(Number).sort(function (a, b) { return a - b; }).map(function (t) { return { ts: t, pct: mean(byDay[t]) }; });
       if (realDays.length) {
         var pcts = realDays.map(function (f) { return f.pct; });
-        var minV = Math.floor((Math.min.apply(null, pcts) - 4) / 5) * 5, maxV = Math.ceil((Math.max.apply(null, pcts) + 4) / 5) * 5;
-        if (maxV <= minV) maxV = minV + 5;
+        // a form score is a percentage: the chart never labels an axis above 100% or below 0%
+        var minV = Math.max(0, Math.floor((Math.min.apply(null, pcts) - 4) / 5) * 5), maxV = Math.min(100, Math.ceil((Math.max.apply(null, pcts) + 4) / 5) * 5);
+        if (maxV <= minV) { if (minV + 5 <= 100) maxV = minV + 5; else minV = maxV - 5; }
         var yOf = function (p) { return Math.round(170 - ((p - minV) / (maxV - minV)) * 140); };
         var t0 = realDays[0].ts, t1 = realDays[realDays.length - 1].ts;
         var rpts = realDays.map(function (f) {
@@ -470,7 +471,23 @@ export const PROGRESS_DOM_JS = String.raw`
     + '#dc-root #__athlt_logged .lg-1{animation:pg-lg-up 420ms cubic-bezier(.22,1,.36,1) 260ms both!important;}'
     + '#dc-root #__athlt_logged .lg-2{animation:pg-lg-up 420ms cubic-bezier(.22,1,.36,1) 360ms both!important;}'
     + '#dc-root #__athlt_logged .lg-3{animation:pg-lg-up 420ms cubic-bezier(.22,1,.36,1) 460ms both!important;}'
+    // While a page is being scrolled the Cue orbs (3 on this page, 5 looping layers each) hold still: they kept repainting under the
+    // scrolling page, which is what made the Muscle Map (and every other long page here) stutter. They start again 180ms after the
+    // finger stops.
+    + 'html[data-scrolling] #dc-root *:not([style*="pg-in"]){animation-play-state:paused!important;-webkit-animation-play-state:paused!important;}'
     + 'html:not([data-pready]) body{visibility:hidden!important;}';
+
+  // scroll events do not bubble, so the listener is a capturing one on the document
+  if (!window.__scrollPauseOn) {
+    window.__scrollPauseOn = true;
+    var spT = null;
+    document.addEventListener('scroll', function () {
+      var h = document.documentElement;
+      if (h && !h.hasAttribute('data-scrolling')) h.setAttribute('data-scrolling', '1');
+      clearTimeout(spT);
+      spT = setTimeout(function () { var e = document.documentElement; if (e) e.removeAttribute('data-scrolling'); }, 180);
+    }, true);
+  }
 
   function ensureCss() {
     if (document.getElementById('__prog_css')) return;
@@ -589,6 +606,7 @@ export const PROGRESS_DOM_JS = String.raw`
     // overlay) is lifted above it.
     var S = (window.innerHeight || 844) / 844;
     var ins = d.insets || { top: 0, bottom: 0 };
+    if (window.__fpHeader) window.__fpHeader('Progress', ins.top); // the same header on all four tabs (lib/tabHeader.ts)
     var cover = ins.tabCover != null ? ins.tabCover : ins.bottom + 49; // the floating tab bar (lib/tabBarMetrics.ts)
     var tb = (cover + 16) / S;
     window.__athltTb = Math.round(tb + 8);

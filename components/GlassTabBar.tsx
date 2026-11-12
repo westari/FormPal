@@ -29,10 +29,13 @@ import { TAB_BAR_H, PLUS_SIZE, TAB_BAR_SIDE, TAB_BAR_GAP, tabBarBottom } from '.
 import { tapClock } from '../lib/tabLag';
 import { tabIndexAt, lensLeft, lensStretch, releaseTarget, LENS_SCALE_X, LENS_SCALE_Y, LIFT_SPRING, SETTLE_SPRING } from '../lib/tabDrag';
 
+// ONE-LINE SWITCH: true = the new Train (dumbbell) and Progress (bars) icons; false = the previous ones (strength figure, line chart).
+const NEW_TAB_ICONS = true;
+
 export const TABS = [
   { name: 'index',    label: 'Home',     on: 'house.fill',                           off: 'house' },
-  { name: 'train',    label: 'Train',    on: 'figure.strengthtraining.traditional',  off: 'figure.strengthtraining.traditional' },
-  { name: 'progress', label: 'Progress', on: 'chart.line.uptrend.xyaxis',            off: 'chart.line.uptrend.xyaxis' },
+  { name: 'train',    label: 'Train',    ...(NEW_TAB_ICONS ? { on: 'dumbbell.fill',   off: 'dumbbell' }  : { on: 'figure.strengthtraining.traditional', off: 'figure.strengthtraining.traditional' }) },
+  { name: 'progress', label: 'Progress', ...(NEW_TAB_ICONS ? { on: 'chart.bar.fill',   off: 'chart.bar' } : { on: 'chart.line.uptrend.xyaxis',           off: 'chart.line.uptrend.xyaxis' }) },
   { name: 'profile',  label: 'Profile',  on: 'person.fill',                          off: 'person' },
 ] as const;
 

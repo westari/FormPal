@@ -28,6 +28,7 @@ import { WebView } from 'react-native-webview';
 import * as Haptics from '../../lib/haptics';
 import { CONSOLE_FORWARD_JS, DC_VIEWPORT_JS, DC_NO_ZOOM_JS, DC_SETTLE_JS } from '../../lib/dcWebviewHelpers';
 import { dcLogicPatchJs, athltSetDataJs } from '../../lib/dcLogicPatch';
+import { TAB_HEADER_JS } from '../../lib/tabHeader';
 import { PROGRESS_LOGIC_EXT, PROGRESS_DOM_JS } from '../../lib/progressInject';
 import { getAllSessions, computeMuscleTiers, TIER_ORDER } from '../../lib/sessionLog';
 import { getWeightLog, logWeight } from '../../lib/weightLog';
@@ -52,7 +53,7 @@ const PROGRESS_HTML = require('../../assets/app screens/progress.html');
 const PROGRESS_BUILD = 'progress-3';
 if (__DEV__) console.log(`[progress] build ${PROGRESS_BUILD}`);
 
-const PROGRESS_BEFORE = DC_VIEWPORT_JS + DC_NO_ZOOM_JS + CONSOLE_FORWARD_JS + DC_SETTLE_JS + dcLogicPatchJs(PROGRESS_LOGIC_EXT) + PROGRESS_DOM_JS + HAPTIC_PAGE_JS + LOGGED_TILE_JS + WORKOUT_LONGPRESS_JS;
+const PROGRESS_BEFORE = DC_VIEWPORT_JS + DC_NO_ZOOM_JS + CONSOLE_FORWARD_JS + DC_SETTLE_JS + TAB_HEADER_JS + dcLogicPatchJs(PROGRESS_LOGIC_EXT) + PROGRESS_DOM_JS + HAPTIC_PAGE_JS + LOGGED_TILE_JS + WORKOUT_LONGPRESS_JS;
 
 export default function ProgressScreen() {
   const router = useRouter();
@@ -67,8 +68,15 @@ export default function ProgressScreen() {
   const photosRef = useRef<{ id: string; uri: string }[]>([]);
   const [viewing, setViewing] = useState<string | null>(null); // file uri of the photo shown full screen
 
-  const push = useCallback(() => {
-    if (dataRef.current) webRef.current?.injectJavaScript(athltSetDataJs(dataRef.current));
+  // The page is only given data that is DIFFERENT from what it already shows. Handing it the same data again on every tab visit
+  // made the page redraw (the small glitch when opening this tab); a page that has just (re)loaded is always given it (force).
+  const lastPushed = useRef('');
+  const push = useCallback((force?: boolean) => {
+    if (!dataRef.current) return;
+    const js = athltSetDataJs(dataRef.current);
+    if (!force && js === lastPushed.current) return;
+    lastPushed.current = js;
+    webRef.current?.injectJavaScript(js);
   }, []);
 
   const load = useCallback(async () => {
@@ -130,8 +138,7 @@ export default function ProgressScreen() {
       await addProgressPhoto(uri, pose);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       void uploadProgressPhotoToCloud(uri, 'recurring').catch(() => {});
-      await load();
-      webRef.current?.injectJavaScript(`window.__athltToast && window.__athltToast('Photo saved'); true;`);
+      await load(); // (nothing is shown after a photo: the new picture appearing in the list is the confirmation)
     } catch (e) {
       Alert.alert("Couldn't save photo", 'Something went wrong saving the photo to your phone. Please try again.');
     }
@@ -148,7 +155,7 @@ export default function ProgressScreen() {
   useFocusEffect(useCallback(() => {
     lag.mark('shown');
     lag.revisit(revealedRef.current);
-    if (firstShown.current) { firstShown.current = false; if (dataRef.current && artReady.current) push(); }
+    if (firstShown.current) { firstShown.current = false; if (dataRef.current && artReady.current) push(true); }
     void prefetch();
   }, [prefetch, push, lag]));
 
@@ -160,7 +167,7 @@ export default function ProgressScreen() {
       case 'pageConsole': if (__DEV__) console.log('[progress-page]', msg.msg); break;
       case 'haptic': hapticKind((msg as any).kind); break;
       // (the first picture needs the art: until it is in, load() pushes the moment it is, so no half-filled first paint)
-      case 'needData': lag.mark('asked'); if (artReady.current) { lag.mark('pushed'); push(); } break;
+      case 'needData': lag.mark('asked'); if (artReady.current) { lag.mark('pushed'); push(true); } break;
       case 'logWeight': {
         // The page already updated its own chart + closed the sheet instantly;
         // this just persists it, then re-syncs from storage.
@@ -200,7 +207,7 @@ export default function ProgressScreen() {
         originWhitelist={['*']}
         injectedJavaScriptBeforeContentLoaded={PROGRESS_BEFORE}
         onMessage={(e) => onMessage(e.nativeEvent.data)}
-        onLoadStart={() => { lag.mark('loadStart'); onLoadStart(); }}
+        onLoadStart={() => { lag.mark('loadStart'); lastPushed.current = ''; onLoadStart(); }}
         onLoadEnd={() => { lag.mark('loadEnd'); onLoadEnd(); }}
         style={styles.web}
         scrollEnabled

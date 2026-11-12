@@ -6,7 +6,7 @@ const profileData = loadTs('lib/profileData.ts', { '@react-native-async-storage/
 const helpers = loadLib('lib/dcWebviewHelpers.ts');
 const patch = loadLib('lib/dcLogicPatch.ts');
 const inject = loadLib(process.env.INJECT_FILE || 'lib/profileInject.ts');
-const BEFORE = helpers.DC_VIEWPORT_JS + helpers.CONSOLE_FORWARD_JS + helpers.DC_SETTLE_JS + patch.dcLogicPatchJs(inject.PROFILE_LOGIC_EXT) + inject.PROFILE_DOM_JS;
+const BEFORE = helpers.DC_VIEWPORT_JS + helpers.CONSOLE_FORWARD_JS + helpers.DC_SETTLE_JS + loadLib('lib/tabHeader.ts').TAB_HEADER_JS + patch.dcLogicPatchJs(inject.PROFILE_LOGIC_EXT) + inject.PROFILE_DOM_JS;
 const DAY = 86400000;
 function sessions(kind) {
   if (kind === 'empty') return [];
@@ -19,11 +19,11 @@ function data(kind, seed = 1) {
   return profileData.buildProfileData({ seedVersion: seed, name: kind === 'empty' ? 'Athlete' : 'Ari', email: 'ari@example.com', sessions: ss, streak: sessionLog.calcStreak(ss),
     planProfile: kind === 'empty' ? null : { goal: 'toned', experience: 'intermediate', daysPerWeek: 4, location: 'gym' }, planGeneratedAt: Date.now() - 30 * DAY,
     location: 'home', latestWeightLb: kind === 'empty' ? null : 182.4, details: kind === 'empty' ? {} : { age: '27', height: `5'11"`, sex: 'Male' },
-    audio: { enabled: true, voiceFrequency: 'correctionsOnly' }, appVersion: 'FormPal 1.0.0 (7)', insets: { top: 59, bottom: 34 } });
+    audio: { enabled: true, voiceFrequency: 'correctionsOnly' }, appVersion: 'FormPal 1.0.0 (7)', insets: { top: 62, bottom: 34 } });
 }
-async function open(kind, { rate = 1 } = {}) {
+async function open(kind, { rate = 1, width = 393, height = 852 } = {}) {
   const b = await chromium.launch();
-  const p = await b.newPage({ viewport: { width: 393, height: 852 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
+  const p = await b.newPage({ viewport: { width, height }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
   if (rate > 1) { const c = await p.context().newCDPSession(p); await c.send('Emulation.setCPUThrottlingRate', { rate }); }
   const msgs = [];
   await p.exposeFunction('__rnPost', m => { try { msgs.push(JSON.parse(m)); } catch { msgs.push(m); } });

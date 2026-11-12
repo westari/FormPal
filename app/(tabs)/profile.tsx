@@ -25,6 +25,7 @@ import { HAPTIC_PAGE_JS, hapticKind } from '../../lib/haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CONSOLE_FORWARD_JS, DC_VIEWPORT_JS, DC_NO_ZOOM_JS, DC_SETTLE_JS } from '../../lib/dcWebviewHelpers';
 import { dcLogicPatchJs, athltSetDataJs } from '../../lib/dcLogicPatch';
+import { TAB_HEADER_JS } from '../../lib/tabHeader';
 import { PROFILE_LOGIC_EXT, PROFILE_DOM_JS } from '../../lib/profileInject';
 import { buildProfileData, GOAL_IDS, PLACE_IDS, type ProfileData, type ProfileDetails } from '../../lib/profileData';
 import { getAllSessions, calcStreak, computeMuscleTiers } from '../../lib/sessionLog';
@@ -49,7 +50,7 @@ const ONBOARDING_KEY = 'formpal_onboarding_complete';
 const LOCATION_KEY   = 'formpal_location';
 const PROFILE_DETAILS_KEY = 'formpal_profile_details';
 
-const PROFILE_BEFORE = DC_VIEWPORT_JS + DC_NO_ZOOM_JS + CONSOLE_FORWARD_JS + DC_SETTLE_JS + dcLogicPatchJs(PROFILE_LOGIC_EXT) + PROFILE_DOM_JS + HAPTIC_PAGE_JS;
+const PROFILE_BEFORE = DC_VIEWPORT_JS + DC_NO_ZOOM_JS + CONSOLE_FORWARD_JS + DC_SETTLE_JS + TAB_HEADER_JS + dcLogicPatchJs(PROFILE_LOGIC_EXT) + PROFILE_DOM_JS + HAPTIC_PAGE_JS;
 
 async function loadDetails(): Promise<ProfileDetails> {
   try { const raw = await AsyncStorage.getItem(PROFILE_DETAILS_KEY); return raw ? JSON.parse(raw) : {}; } catch { return {}; }
@@ -71,8 +72,15 @@ export default function ProfileScreen() {
   const dataRef = useRef<ProfileData | null>(null);
   const seedRef = useRef(0);
 
-  const push = useCallback(() => {
-    if (dataRef.current) webRef.current?.injectJavaScript(athltSetDataJs(dataRef.current));
+  // The page is only given data that is DIFFERENT from what it already shows (the same data again on every tab visit made the page
+  // redraw: a small glitch); a page that has just (re)loaded or asked for data is always given it (force).
+  const lastPushed = useRef('');
+  const push = useCallback((force?: boolean) => {
+    if (!dataRef.current) return;
+    const js = athltSetDataJs(dataRef.current);
+    if (!force && js === lastPushed.current) return;
+    lastPushed.current = js;
+    webRef.current?.injectJavaScript(js);
   }, []);
 
   const load = useCallback(async (reseed: boolean) => {
@@ -112,7 +120,7 @@ export default function ProfileScreen() {
   useFocusEffect(useCallback(() => {
     lag.mark('shown');
     lag.revisit(revealedRef.current);
-    if (firstShown.current) { firstShown.current = false; if (dataRef.current) push(); void prefetch(false); return; }
+    if (firstShown.current) { firstShown.current = false; if (dataRef.current) push(true); void prefetch(false); return; }
     void prefetch(true);
   }, [prefetch, push, lag]));
 
@@ -158,7 +166,7 @@ export default function ProfileScreen() {
     try { msg = JSON.parse(raw); } catch { return; }
     switch (msg.type) {
       case 'ready': plog('page ready +' + (Date.now() - openedAt.current) + 'ms after mount'); lag.mark('ready'); onReady(); break;
-      case 'needData': lag.mark('asked'); plog('page asked for data;' + (dataRef.current ? ' sending' : ' not loaded yet')); if (dataRef.current) lag.mark('pushed'); push(); break;
+      case 'needData': lag.mark('asked'); plog('page asked for data;' + (dataRef.current ? ' sending' : ' not loaded yet')); if (dataRef.current) lag.mark('pushed'); push(true); break;
       case 'pageConsole': if (__DEV__) console.log('[profile-page]', msg.msg); break;
       case 'haptic': hapticKind((msg as any).kind); break;
       case 'save': if (msg.patch) void save(msg.patch); break;
@@ -221,7 +229,7 @@ export default function ProfileScreen() {
         originWhitelist={['*']}
         injectedJavaScriptBeforeContentLoaded={PROFILE_BEFORE}
         onMessage={(e) => onMessage(e.nativeEvent.data)}
-        onLoadStart={() => { lag.mark('loadStart'); plog('web view load start +' + (Date.now() - openedAt.current) + 'ms after mount'); onLoadStart(); }}
+        onLoadStart={() => { lastPushed.current = ''; lag.mark('loadStart'); plog('web view load start +' + (Date.now() - openedAt.current) + 'ms after mount'); onLoadStart(); }}
         onLoadEnd={() => { lag.mark('loadEnd'); plog('web view load end'); onLoadEnd(); }}
         style={styles.web}
         scrollEnabled

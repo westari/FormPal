@@ -36,7 +36,7 @@ async function openProgress(data, opts = {}) {
   page.on('console', (m) => { logs.push(m.type() + ': ' + m.text()); });
   page.on('pageerror', (e) => logs.push('pageerror: ' + e.message));
   await page.addInitScript(() => { window.ReactNativeWebView = { postMessage: (d) => window.__post(d) }; });
-  await page.addInitScript(H.DC_VIEWPORT_JS + H.DC_NO_ZOOM_JS + H.CONSOLE_FORWARD_JS + H.DC_SETTLE_JS + dcLogicPatchJs(PROGRESS_LOGIC_EXT) + PROGRESS_DOM_JS);
+  await page.addInitScript(H.DC_VIEWPORT_JS + H.DC_NO_ZOOM_JS + H.CONSOLE_FORWARD_JS + H.DC_SETTLE_JS + require('../../lib/tabHeader.ts').TAB_HEADER_JS + dcLogicPatchJs(PROGRESS_LOGIC_EXT) + PROGRESS_DOM_JS);
   await page.goto(pathToFileURL(path.join(ROOT, 'assets', 'app screens', 'progress.html')).href, { waitUntil: 'load' });
   await page.waitForTimeout(1200);
   await page.evaluate(athltSetDataJs(data));

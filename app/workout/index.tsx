@@ -101,7 +101,7 @@ export default function WorkoutPreviewScreen() {
   const { id, preview, template } = useLocalSearchParams<{ id?: string; preview?: string; template?: string }>();
   const createPlan = usePlanStore(st => st.createPlan);
   const startSess  = useWorkoutSessionStore(st => st.startWorkout);
-  // a FormPal template (from My workouts) is built from the real catalogue; it can be started or saved to Mine
+  // a FormPal template (from My workouts) is built from the real catalogue; it can be started or saved (bookmarked)
   const baseWorkout = (template ? templateWorkout(template) : null) ?? (id ? usePlanStore.getState().plan?.workouts.find(w => w.id === id) : null) ?? getNext();
   // the pencil: sets and reps changed here. A plan workout is saved to the plan; a template has no plan copy, so its changes
   // live for this screen (and the workout started from it).
@@ -222,7 +222,7 @@ export default function WorkoutPreviewScreen() {
       {!previewOnly && (
         <View style={[s.footer, { bottom: footer }]} pointerEvents="box-none">
           {isTemplate && (
-            <Pressable style={s.saveBtn} onPress={toggleSaved} accessibilityRole="button" accessibilityLabel={savedToMine ? 'Saved to Mine' : 'Save to Mine'}>
+            <Pressable style={s.saveBtn} onPress={toggleSaved} accessibilityRole="button" accessibilityLabel={savedToMine ? 'Template saved' : 'Save template'}>
               <SymbolView name={savedToMine ? 'bookmark.fill' : 'bookmark'} size={20} tintColor={INK} type="monochrome" style={{ width: 20, height: 20 }} />
             </Pressable>
           )}

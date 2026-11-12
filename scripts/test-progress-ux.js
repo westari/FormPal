@@ -247,12 +247,14 @@ const png = (c) => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http:
   check('16. A workout with no video still shows the muscle icon tile (never a black box)', rows.length >= 4 && /linear-gradient|data:image/.test((await p.evaluate(() => document.querySelectorAll('#dc-root div[role="img"][aria-label$=" video"]')[3].style.backgroundImage))) , '');
   const lg8 = await p.evaluate(() => [...document.querySelectorAll('#dc-root div[role="img"][aria-label$=" video"]')].map(e => { const m = e.querySelector('[data-athlt-logged]'); return m ? m.innerText.trim() : ''; }));
   console.log('      logged tiles by workout:', JSON.stringify(lg8));
-  check('8. A workout typed in by hand shows a "Logged" tile with a logged icon (not a video frame); the camera ones do not', lg8[2] === 'Logged' && !lg8[0] && !lg8[1] && !lg8[3], JSON.stringify(lg8));
+  check('8. A workout typed in by hand shows a "Session logged" tile with a logged icon (not a video frame); the camera ones do not', lg8[2] === 'Session logged' && !lg8[0] && !lg8[1] && !lg8[3], JSON.stringify(lg8));
   const tileEl = (await p.$$('#dc-root div[role="img"][aria-label$=" video"]'))[2];
   await tileEl.scrollIntoViewIfNeeded();
   await tileEl.screenshot({ path: path.join(ROOT, '.scratch', 'flow', 'ux_logged_tile_el.png') });
   const tileBg = await p.evaluate(() => { const e = document.querySelectorAll('#dc-root div[role="img"][aria-label$=" video"]')[2]; const cs = getComputedStyle(e); return { image: cs.backgroundImage, color: cs.backgroundColor }; });
   check('6. The Logged tile is a flat dark colour: NO gradient and no blue', tileBg.image === 'none' && /^rgb\(4\d, 4\d, 4\d\)$/.test(tileBg.color), JSON.stringify(tileBg));
+  const inner = await p.evaluate(() => { const e = document.querySelectorAll('#dc-root div[role="img"][aria-label$=" video"]')[2]; return [...e.querySelectorAll('*')].filter(x => /gradient/.test(getComputedStyle(x).backgroundImage)).length; });
+  check('4. Session logged tile: no gradient anywhere inside it either (the design shade over the name is gone)', inner === 0, String(inner));
   const play = await p.evaluate(() => [...document.querySelectorAll('#dc-root div[role="img"][aria-label$=" video"]')].map(e => [...e.children].filter(c => c.querySelector && c.querySelector('svg') && !c.hasAttribute('data-athlt-logged') && getComputedStyle(c).display !== 'none').length));
   check('8. The Logged tile has NO play icon; camera tiles keep theirs', play[2] === 0 && play[0] === 1 && play[1] === 1, JSON.stringify(play));
   await shot('ux_logged_tile');

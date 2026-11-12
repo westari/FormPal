@@ -99,7 +99,7 @@ const s = StyleSheet.create({
   col:   { position: 'absolute', alignItems: 'flex-end', gap: 14 },
   row:   { flexDirection: 'row', alignItems: 'center', gap: 14 },
   // regular weight, the system font (SF Pro): no fontFamily, so iOS picks it
-  label: { fontSize: 17, fontWeight: '400', color: '#111114', letterSpacing: -0.4 },
+  label: { fontSize: 19, fontWeight: '600', color: '#111114', letterSpacing: -0.4 },
   btn:   { width: BTN, height: BTN, alignItems: 'center', justifyContent: 'center' },
   // same footprint as a glass button, so the column lines up; the orb needs no frame
   orb:   { width: BTN, height: BTN, alignItems: 'center', justifyContent: 'center', overflow: 'visible' },

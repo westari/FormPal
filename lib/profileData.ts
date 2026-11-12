@@ -41,6 +41,12 @@ export interface ProfileData {
   goalIdx: number;
   placeIdx: number;
   days: boolean[];
+  /** which of the three were really chosen/stored; when not, the page shows "Not set" (the numbers above are only the picker's starting point) */
+  goalSet: boolean;
+  placeSet: boolean;
+  daysSet: boolean;
+  /** the plan's real days per week (null with no plan), shown as "3 days a week" while no weekdays are chosen */
+  planDays: number | null;
   weight: number | null;
   units: 0 | 1;
   pinned: number[] | null;
@@ -122,9 +128,10 @@ export function buildProfileData(i: {
     since: sinceLabel(sinceTs), streak: i.streak, workouts: groups,
     det: {
       age: i.details.age ?? '', height: i.details.height ?? '', sex: i.details.sex ?? '',
-      experience: EXPERIENCE_LABELS[i.planProfile?.experience ?? 'beginner'] ?? 'Beginner',
+      experience: i.planProfile?.experience ? (EXPERIENCE_LABELS[i.planProfile.experience] ?? '') : '', // no plan: not set (the page says "Not set")
     },
     goalIdx, placeIdx, days,
+    goalSet: !!i.planProfile?.goal, placeSet: !!i.location, daysSet: !!i.details.days, planDays: i.planProfile?.daysPerWeek ?? null,
     weight: i.latestWeightLb,
     units: i.details.units ?? 0,
     pinned: i.details.pinned ?? null,

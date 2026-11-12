@@ -139,12 +139,12 @@ export function scoredSessions(sessions: SessionEntry[]): SessionEntry[] {
 // session logged first thing this morning doesn't read as streak-broken
 // before the user has had a chance to train today). Single source of truth —
 // previously duplicated as a local function in app/(tabs)/progress.tsx.
-export function calcStreak(sessions: SessionEntry[]): number {
+export function calcStreak(sessions: SessionEntry[], now: number = Date.now()): number {
   if (sessions.length === 0) return 0;
   const daySet = new Set(sessions.map(s => {
     const d = new Date(s.ts); d.setHours(0, 0, 0, 0); return d.getTime();
   }));
-  const todayMs = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); })();
+  const todayMs = (() => { const d = new Date(now); d.setHours(0, 0, 0, 0); return d.getTime(); })();
   const startDay = daySet.has(todayMs) ? todayMs : todayMs - DAY_MS;
   if (!daySet.has(startDay)) return 0;
   let streak = 0; let check = startDay;

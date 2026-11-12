@@ -117,9 +117,13 @@ async function openTab(browser, { width = 402, height = 874, insets = INS, datas
   const same = await openTab(wk, { width: 390, height: 844, insets: { top: 0, bottom: 0 } });
   await same.p.screenshot({ path: path.join(ROOT, '.scratch', 'train-tab-390.png') });
   const tabRects = await same.p.evaluate(RECTS);
-  const diffs = Object.keys(rawRects).map(k => { const a = rawRects[k], b = tabRects[k]; return a && b ? Math.max(...a.map((v, i) => Math.abs(v - b[i]))) : 999; });
+  // The shared tab header (lib/tabHeader.ts: title + date line, the same on all four tabs) is a little taller than the design's own title row,
+  // so everything under it moves down by ONE amount. Nothing else may change: same x, same size, and the same shift for every block.
+  const below = Object.keys(rawRects).filter(k => k !== 'title');
+  const shift = below.map(k => { const a = rawRects[k], b = tabRects[k]; return a && b ? b[1] - a[1] : 999; });
+  const other = below.map(k => { const a = rawRects[k], b = tabRects[k]; return a && b ? Math.max(Math.abs(a[0] - b[0]), Math.abs(a[2] - b[2]), Math.abs(a[3] - b[3])) : 999; });
   console.log('      file :', JSON.stringify(rawRects)); console.log('      tab  :', JSON.stringify(tabRects));
-  check('geometry equals the bare design file (title, calendar strip, Today card, Quick Start, My Workouts, Practice): max difference ' + Math.max(...diffs).toFixed(1) + 'px', Math.max(...diffs) <= 1.5, JSON.stringify(Object.fromEntries(Object.keys(rawRects).map((k, i) => [k, diffs[i]]))));
+  check('geometry equals the bare design file (calendar strip, Today card, Quick Start, My Workouts, Practice): same x / width / height, all shifted down by the SAME amount (' + shift[0].toFixed(1) + 'px, the date line)', Math.max(...other) <= 1.5 && Math.max(...shift) - Math.min(...shift) <= 1.5 && shift[0] > 0 && shift[0] < 30, JSON.stringify({ shift, other }));
   await same.ctx.close();
 
   // ── the tab on a real phone (402x874, top inset 62, bottom 34) ──
@@ -139,7 +143,7 @@ async function openTab(browser, { width = 402, height = 874, insets = INS, datas
     const nums = [...document.querySelectorAll('div')].filter(d => /^\d{1,2}$/.test(txt(d)) && d.style.fontSize === '17px').map(txt);
     const bar = [...document.querySelectorAll('div')].filter(d => d.style.right === '88px' && d.style.bottom === '22px');
     const fab = [...document.querySelectorAll('div')].filter(d => d.style.right === '14px' && d.style.bottom === '22px' && d.style.width === '64px');
-    const hdr = document.querySelector('[data-train-header]');
+    const hdr = document.querySelector('[data-fp-header]');
     const S = window.__dcCanvasScale;
     const title = [...document.querySelectorAll('div')].find(d => d.style.fontSize === '30px' && txt(d) === 'Train');
     const sheets = [...document.querySelectorAll('div')].filter(d => d.style.maxHeight === '620px' || (d.style.height === '520px' && d.style.position === 'absolute')).map(d => { const r = d.getBoundingClientRect(), cs = getComputedStyle(d); return { top: Math.round(r.top), vis: cs.visibility, pe: cs.pointerEvents }; });

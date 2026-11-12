@@ -2,8 +2,8 @@
 /**
  * scripts/test-progress-map.js
  *
- * Progress tab muscle map (rank card + Muscle Map page) drawn like the after-workout screen's map: dark body outline
- * on top, every muscle with its own thin outline, tier colours on ranked muscles. Real progress.html + real injection.
+ * Progress tab muscle map (rank card + Muscle Map page): the CLEAN drawing (lib/bodyMapSvg.ts plain) it had before 5017668 made it busy:
+ * soft silhouette, white seams between muscles, tier colours on ranked muscles, no dark outlines. Real progress.html + real injection.
  * Screenshots: .scratch/progress-map-card.png, .scratch/progress-map-page.png
  */
 const path = require('path');
@@ -29,9 +29,10 @@ const check = (name, ok, detail) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${na
     });
   });
   check('rank card shows both figures', info.length === 2, JSON.stringify(info));
-  check('body outline is the LAST layer (nothing covers it): dark #454B5C, 1.6px, no fill', info.every((i) => i.lastFill === 'none' && i.lastStroke === '#454B5C' && i.lastW === '1.6'), JSON.stringify(info[0]));
-  check('every muscle has its own thin outline (#69708A, 0.9px), like the after-workout map', info.every((i) => i.midStroke === '#69708A' && i.midW === '0.9' && i.n > 20), `${info[0].n} paths`);
-  check('outlines keep their pixel width at any figure size (non-scaling)', info.every((i) => i.ns === 'non-scaling-stroke'));
+  // the clean look it had before the busy outlined drawing (git 5017668): soft silhouette, muscles separated by a thin white seam
+  check('clean map: NO dark body-outline layer on top (the last layer is a muscle, not a dark outline)', info.every((i) => i.lastFill !== 'none' && i.lastStroke === '#ffffff'), JSON.stringify(info[0]));
+  check('clean map: muscles have a thin white seam, not dark per-muscle outlines', info.every((i) => i.midStroke === '#ffffff' && i.midW === '0.9' && i.n > 20), `${info[0].n} paths`);
+  check('clean map: no #454B5C / #69708A strokes anywhere', await page.evaluate(() => !/#454B5C|#69708A/i.test(document.querySelector('div[aria-label="Body map space"]').innerHTML)));
   // tier colour reaches the figure
   const fills = await page.evaluate(() => [...new Set([...document.querySelector('div[aria-label="Body map space"]').querySelectorAll('path')].map((p) => p.getAttribute('fill')))]);
   check('ranked muscles are tier-coloured (more than the neutral grey)', fills.filter((f) => f && f !== 'none' && f !== '#E3E4EA' && f !== '#F1F2F6').length >= 3, fills.join(' '));

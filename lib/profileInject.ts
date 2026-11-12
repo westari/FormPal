@@ -133,6 +133,10 @@ export const PROFILE_LOGIC_EXT = String.raw`function (Orig) {
       var groups = v.groups.map(function (g) {
         var rows = g.rows.filter(function (r) { return HIDDEN_ROWS.indexOf(r.label) < 0; }).map(function (r, i) {
           if (r.label === 'Weight') r.value = hasWeight ? (kg ? Math.round(s.weight / 2.2046) + ' kg' : s.weight + ' lb') : 'Not set';
+          // a value that was never chosen is "Not set", never the design's or a default's (the page only has the picker's starting point)
+          else if (r.label === 'Goal' && !d.goalSet && s.goal === d.goalIdx) r.value = 'Not set';
+          else if (r.label === 'Where you train' && !d.placeSet && s.place === d.placeIdx) r.value = 'Not set';
+          else if (r.label === 'Training days' && !d.daysSet && JSON.stringify(s.days) === JSON.stringify(d.days)) r.value = d.planDays ? d.planDays + (d.planDays === 1 ? ' day a week' : ' days a week') : 'Not set';
           else if (r.label === 'Audio coaching') { r.value = d.audioLabel; r.tap = function () { post({ type: 'nav', to: 'audio' }); }; }
           r.line = i === 0 ? 'none' : '1px solid rgba(17,17,20,0.07)';
           return r;
@@ -245,6 +249,8 @@ export const PROFILE_DOM_JS = String.raw`
     // No reward system exists yet: no "$10 off" / "free month" promises on the banner or the code screen.
     var sub1 = leafWithText('Get $10 off for each friend. More rewards inside.') || document.querySelector('#dc-root [data-ref-sub]');
     if (sub1) { sub1.setAttribute('data-ref-sub', '1'); if (sub1.textContent !== 'Invite friends to FormPal') sub1.textContent = 'Invite friends to FormPal'; }
+    var ttl = leafWithText('Refer a friend, get $10') || document.querySelector('#dc-root [data-ref-title]');
+    if (ttl) { ttl.setAttribute('data-ref-title', '1'); if (ttl.textContent !== 'Refer a friend') ttl.textContent = 'Refer a friend'; }
     var sub2 = leafWithText('Enter it to get a free month.') || document.querySelector('#dc-root [data-ref-sub2]');
     if (sub2) { sub2.setAttribute('data-ref-sub2', '1'); if (sub2.textContent !== 'Enter it below.') sub2.textContent = 'Enter it below.'; }
     // Referral page: the design's demo link and "1 of 6" become the user's real code and friend count.
@@ -290,6 +296,7 @@ export const PROFILE_DOM_JS = String.raw`
       // item scrolls clear of it, and the member-card sheet's content sits above it.
       var S = (window.innerHeight || 844) / 844;
       var ins = d.insets || { top: 0, bottom: 0 };
+      if (window.__fpHeader) window.__fpHeader('Profile', ins.top); // the same header on all four tabs (lib/tabHeader.ts)
       var cover = ins.tabCover != null ? ins.tabCover : ins.bottom + 49; // the floating tab bar (lib/tabBarMetrics.ts)
       var tb = (cover + 16) / S;
       var scrollers = root.querySelectorAll('div[data-scroll]');

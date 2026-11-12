@@ -16,7 +16,7 @@ const plan = { id: 'p', profile: { goal: 'general', experience: 'beginner', days
   workouts: [{ id: 'w', splitLabel: 'Upper Body', exercises: [{}, {}, {}, {}] }] };
 const sessions = Array.from({ length: 3 }, (_, i) => ({ ts: now - i * 86400000, exerciseId: 'shoulderPress', displayName: 'Shoulder Press', reps: 10, goodReps: 8, pct: 80, formChecked: true }));
 
-async function openHome({ inject = true, height = 844 } = {}) {
+async function openHome({ inject = true, height = 844, inset = 47 } = {}) {
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 390, height }, deviceScaleFactor: 3 });
   const msgs = [];
@@ -26,7 +26,7 @@ async function openHome({ inject = true, height = 844 } = {}) {
   await page.waitForTimeout(1800);
   if (inject) {
     await page.evaluate(home.HOME_SCALE_FIT_JS);
-    await page.evaluate(home.buildHomeInjectJs(plan, sessions, 47, 34));
+    await page.evaluate(home.buildHomeInjectJs(plan, sessions, inset, 34));
     await page.waitForTimeout(1500);
   }
   return { browser, page, msgs, home };

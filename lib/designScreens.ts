@@ -400,16 +400,25 @@ export const MY_WORKOUTS_LOGIC_EXT = String.raw`function (Orig) {
       }
       var v = super.renderVals(), s = this.state, self = this;
       var q = s.query.trim().toLowerCase();
-      var tpls = d.templates || [];
-      // All = everything; Mine = the user's own plan workouts + templates they saved; FormPal templates = the ready-made basics only
-      var tab = s.tab === 'Saved' ? 'Mine' : s.tab;
+      // Three clear sections: Created by you (workouts the user made), Made for you (their plan's workouts, tailored to them) and
+      // FormPal templates (ready-made basics for anyone). The tabs pick one section or show All; a bookmarked card floats to the top.
+      var tab = ['Created by you', 'Made for you', 'FormPal templates'].indexOf(s.tab) >= 0 ? s.tab : 'All';
       window.__athltTab = tab;
-      var all = d.workouts.map(function (w) { return Object.assign({ template: false }, w); }).concat(tpls.map(function (t) { return Object.assign({ template: true }, t); }));
-      var shown = all.filter(function (w) {
-        if (tab === 'Mine') return !w.template || s.saved[w.id];
-        if (tab === 'FormPal templates') return w.template;
-        return true;
-      }).filter(function (w) { return !q || w.name.toLowerCase().indexOf(q) >= 0 || w.moves.toLowerCase().indexOf(q) >= 0; });
+      var secs = [
+        { label: 'Created by you', note: 'Workouts you made yourself.', empty: 'Nothing yet. Tap Create workout to make your own.', items: d.created || [], template: false },
+        { label: 'Made for you', note: 'From your plan, tailored to you.', empty: 'Your plan workouts show here once you have a plan.', items: d.made || [], template: false },
+        { label: 'FormPal templates', note: d.templateNote || '', empty: '', items: d.templates || [], template: true }
+      ];
+      var sections = [], shown = [];
+      secs.forEach(function (sec) {
+        if (tab !== 'All' && tab !== sec.label) return;
+        var items = sec.items.filter(function (w) { return !q || w.name.toLowerCase().indexOf(q) >= 0 || w.moves.toLowerCase().indexOf(q) >= 0; });
+        if (q && !items.length) return;
+        items = items.filter(function (w) { return s.saved[w.id]; }).concat(items.filter(function (w) { return !s.saved[w.id]; }));
+        sections.push({ label: sec.label, note: sec.note, empty: items.length ? '' : sec.empty, count: items.length });
+        items.forEach(function (w) { shown.push(Object.assign({ template: sec.template }, w)); });
+      });
+      window.__athltSections = sections;
       v.list = shown.map(function (w) {
           var th = THEMES[w.theme % THEMES.length];
           return { name: w.name, meta: (w.template ? 'Template · ' : '') + w.meta, moves: w.moves, c: th.c, href: '#open-' + w.id,
@@ -421,16 +430,16 @@ export const MY_WORKOUTS_LOGIC_EXT = String.raw`function (Orig) {
               if (window.__dsPost) window.__dsPost({ type: 'saved', ids: Object.keys(nxt).filter(function (k) { return nxt[k]; }) });
             } };
         });
-      v.tabs = ['All', 'Mine', 'FormPal templates'].map(function (label) {
+      v.tabs = ['All', 'Created by you', 'Made for you', 'FormPal templates'].map(function (label) {
         var on = tab === label;
         return { label: label, bg: on ? '#111114' : '#ffffff', fg: on ? '#ffffff' : '#111114',
           sh: on ? '0 8px 16px -8px rgba(17,17,20,0.5)' : 'inset 0 1px 0 #ffffff, 0 6px 14px -8px rgba(40,50,90,0.3)',
           pick: function () { self.setState({ tab: label }); } };
       });
-      // the plain "no workouts yet" state is only for an empty Mine tab (templates are always there to browse)
-      v.none = tab === 'Mine' && !q && shown.length === 0;
-      v.empty = !v.none && shown.length === 0;
-      v.emptyText = tab === 'Mine' ? 'Your plan workouts and the templates you save show here.' : 'No workouts match that search.';
+      // an empty section says so under its own heading; the design's own empty state is only for a search with no match
+      v.none = false;
+      v.empty = shown.length === 0 && sections.every(function (x) { return !x.empty; });
+      v.emptyText = 'No workouts match that search.';
       return v;
     }
   };
@@ -445,17 +454,46 @@ export const MY_WORKOUTS_DOM_JS = String.raw`
       if (/Create Workout/i.test(l.href)) { window.__dsPost({ type: 'create' }); return; }
       if (/Train\.dc\.html/.test(l.href)) window.__dsPost({ type: 'back' });
     };
-    // the FormPal templates tab says what they are: ready-made basics for anyone, not tailored to the user
-    var grid = root.querySelector('div[style*="grid-template-columns"]');
-    var note = root.querySelector('[data-ds-note]');
-    var want = window.__athltTab === 'FormPal templates';
-    if (grid && !note) {
-      note = document.createElement('div'); note.setAttribute('data-ds-note', '1');
-      note.style.cssText = 'margin:14px 14px 0;padding:11px 16px;border-radius:18px;background:rgba(17,17,20,0.05);color:#3c3c43;font-size:13px;font-weight:600;line-height:1.35;';
-      note.textContent = ${JSON.stringify(TEMPLATE_NOTE)};
-      grid.parentNode.insertBefore(note, grid);
+    // four tabs do not fit on one screen width: one line each, the row scrolls sideways
+    var tabEls = [].filter.call(root.querySelectorAll('div'), function (e) { return e.style.height === '36px' && /^(All|Created by you|Made for you|FormPal templates)$/.test((e.textContent || '').trim()); });
+    tabEls.forEach(function (e) { e.style.setProperty('white-space', 'nowrap'); e.style.setProperty('flex', 'none'); });
+    if (tabEls.length) {
+      var row = tabEls[0].parentElement;
+      row.style.setProperty('overflow-x', 'auto'); row.style.setProperty('scrollbar-width', 'none'); row.style.setProperty('-webkit-overflow-scrolling', 'touch'); row.style.setProperty('padding-bottom', '14px'); row.style.setProperty('margin-bottom', '-14px');
     }
-    if (note) note.style.display = want ? 'block' : 'none';
+    // Section headings live INSIDE the card grid (full width), put back in order after every redraw: a heading, then its cards, and
+    // under a heading with no cards a short line saying what goes there.
+    var grid = root.querySelector('div[style*="grid-template-columns"]');
+    var secs = window.__athltSections;
+    if (grid && secs) {
+      var cards = [].filter.call(grid.children, function (c) { return !c.hasAttribute('data-ds-sec'); });
+      var oldSecs = {}; [].forEach.call(grid.querySelectorAll('[data-ds-sec]'), function (h) { oldSecs[h.getAttribute('data-ds-sec')] = h; });
+      var want = [], at = 0, keep = {};
+      secs.forEach(function (sec) {
+        var h = oldSecs[sec.label];
+        if (!h) {
+          h = document.createElement('div'); h.setAttribute('data-ds-sec', sec.label);
+          h.style.cssText = 'grid-column:1 / -1;padding:14px 4px 0;';
+          h.innerHTML = '<div data-t style="font-size:17px;font-weight:700;letter-spacing:-0.4px;color:#111114;"></div><div data-n style="margin-top:3px;font-size:13px;font-weight:500;line-height:1.35;color:#6e6e77;"></div><div data-e style="margin-top:8px;padding:14px 16px;border-radius:18px;background:rgba(17,17,20,0.05);font-size:13.5px;font-weight:600;color:#3c3c43;"></div>';
+        }
+        keep[sec.label] = true;
+        var tEl = h.querySelector('[data-t]'), nEl = h.querySelector('[data-n]'), eEl = h.querySelector('[data-e]');
+        if (tEl.textContent !== sec.label) tEl.textContent = sec.label;
+        if (nEl.textContent !== sec.note) nEl.textContent = sec.note;
+        nEl.style.display = sec.note ? 'block' : 'none';
+        if (eEl.textContent !== sec.empty) eEl.textContent = sec.empty;
+        eEl.style.display = sec.empty ? 'block' : 'none';
+        want.push(h);
+        for (var k = 0; k < sec.count && at < cards.length; k++) want.push(cards[at++]);
+      });
+      Object.keys(oldSecs).forEach(function (k) { if (!keep[k]) oldSecs[k].remove(); });
+      // walk the grid and move only what is out of place (so a settled page makes no change at all)
+      var ref = grid.firstElementChild;
+      want.forEach(function (node) {
+        if (ref === node) { ref = ref.nextElementSibling; return; }
+        grid.insertBefore(node, ref);
+      });
+    }
     return !!root.querySelector('input[placeholder="Search your workouts"]');
   });
 })();
@@ -507,7 +545,11 @@ export function entriesFromPage(
   return { ts, entries };
 }
 
-/** My workouts: the plan's workouts as the page's cards, plus FormPal's ready-made templates (marked template: they are not the user's). */
+/**
+ * My workouts: three sections as the page's cards. Created by you = the workouts made in Create workout (ids custom-...), Made for you =
+ * the plan's own workouts (the plan repeats its few workouts across weeks, so each one is listed ONCE), FormPal templates = the ready-made
+ * basics (marked template: they are not the user's).
+ */
 export function myWorkoutsData(
   workouts: { id: string; splitLabel: string; exercises: { displayName: string; targetSets: number }[] }[], savedIds: string[],
 ) {
@@ -516,12 +558,19 @@ export function myWorkoutsData(
     const mins = Math.max(5, Math.round(sets * 2.5));
     return { id: w.id, name: w.splitLabel, meta: `${mins} min`, moves: w.exercises.map(e => e.displayName).join(', '), theme: i };
   };
+  const isCreated = (w: { id: string }) => String(w.id).startsWith('custom-');
+  const seen = new Set<string>();
+  const madeRaw = workouts.filter(w => {
+    if (isCreated(w)) return false;
+    const key = w.splitLabel + '|' + w.exercises.map(e => e.displayName).join(',');
+    if (seen.has(key)) return false;
+    seen.add(key); return true;
+  });
+  const created = workouts.filter(isCreated).reverse().map(card); // newest first
+  const made = madeRaw.map(card);
   const templates = WORKOUT_TEMPLATES.map((t, i) => card(templateWorkout(t.id)!, i + 2));
-  return {
-    workouts: workouts.map(card),
-    templates,
-    saved: savedIds.filter(id => workouts.some(w => w.id === id) || templates.some(t => t.id === id)),
-  };
+  const all = [...created, ...made, ...templates];
+  return { created, made, templates, templateNote: TEMPLATE_NOTE, saved: savedIds.filter(id => all.some(c => c.id === id)) };
 }
 
 /** Exercises most people start with; the Log a session screen shows them under the search box (names from the catalog). */

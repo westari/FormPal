@@ -228,49 +228,67 @@ const anchor = (p, src, act = 'click') => p.evaluate((s) => { const a = [...docu
   // ───────────────────────── My workouts ─────────────────────────
   console.log('--- My workouts ---');
   {
+    const TPL = ['Beginner full body', 'Upper body', 'Lower body', 'Push', 'Pull', 'Core'];
     const wk = [
       { id: 'a1', splitLabel: 'Upper Body', exercises: [{ displayName: 'Push-up', targetSets: 3 }, { displayName: 'Bicep Curl', targetSets: 3 }] },
       { id: 'b2', splitLabel: 'Leg Day', exercises: [{ displayName: 'Bodyweight Squat', targetSets: 4 }, { displayName: 'Lunge', targetSets: 3 }] },
-      { id: 'c3', splitLabel: 'Arms and Chest', exercises: [{ displayName: 'Push-up', targetSets: 4 }] },
+      { id: 'a1-again', splitLabel: 'Upper Body', exercises: [{ displayName: 'Push-up', targetSets: 3 }, { displayName: 'Bicep Curl', targetSets: 3 }] }, // the plan repeats it
+      { id: 'custom-1', splitLabel: 'Arms and Chest', exercises: [{ displayName: 'Push-up', targetSets: 4 }] },
     ];
-    const { browser, page, msgs, logs } = await openDesign('my', DS.myWorkoutsData(wk, ['b2']));
+    const data = DS.myWorkoutsData(wk, ['b2']);
+    check('data: Created by you = the custom workout only; Made for you = the plan, each workout once; 6 templates',
+      data.created.length === 1 && data.created[0].name === 'Arms and Chest' && data.made.map((m) => m.name).join() === 'Upper Body,Leg Day' && data.templates.length === 6, JSON.stringify([data.created.length, data.made.map((m) => m.name), data.templates.length]));
+    const { browser, page, msgs, logs } = await openDesign('my', data);
     check('page posts ready with no JS errors', msgs.some((m) => m.type === 'ready') && !logs.some((l) => /pageerror|render error/.test(l)));
     let t = await text(page);
-    check('shows YOUR plan\'s workouts (no Push Day / Quick Core / Pull Day / Full Body Fast demo cards)', /Upper Body/.test(t) && /Leg Day/.test(t) && /Arms and Chest/.test(t) && !/Quick Core|Push Day|Pull Day|Full Body Fast/.test(t), t.slice(0, 160));
-    check('there are three tabs: All / Mine / FormPal templates', /All\s*Mine\s*FormPal templates/.test(t), t.slice(0, 80));
-    check('All also lists the FormPal templates, each labelled Template (6 of them)', ['Beginner full body', 'Upper body', 'Lower body', 'Push', 'Pull', 'Core'].every((n) => t.includes(n)) && (t.match(/Template · /g) || []).length === 6, (t.match(/Template · /g) || []).length + ' labelled');
+    const heads = async () => page.evaluate(() => [...document.querySelectorAll('#dc-root [data-ds-sec]')].map((h) => h.getAttribute('data-ds-sec')));
+    const order = async () => page.evaluate(() => [...document.querySelector('#dc-root div[style*="grid-template-columns"]').children].map((c) => c.hasAttribute('data-ds-sec') ? '## ' + c.getAttribute('data-ds-sec') : (c.innerText || '').split('\n')[0].trim()));
+    check('there is no "Mine" any more; the tabs are All / Created by you / Made for you / FormPal templates', !/Mine/.test(t) && /All\s*Created by you\s*Made for you\s*FormPal templates/.test(t), t.slice(0, 120));
+    check('All shows three headed sections in order: Created by you, Made for you, FormPal templates', (await heads()).join('|') === 'Created by you|Made for you|FormPal templates', (await heads()).join('|'));
+    const ord = await order();
+    const iC = ord.indexOf('## Created by you'), iM = ord.indexOf('## Made for you'), iT = ord.indexOf('## FormPal templates');
+    check('each card sits under ITS heading: Arms and Chest under Created; Leg Day + Upper Body under Made; the 6 templates under FormPal templates',
+      ord[iC + 1] === 'Arms and Chest' && iM === iC + 2 && ord.slice(iM + 1, iT).sort().join() === ['Leg Day', 'Upper Body'].sort().join() && TPL.every((n) => ord.slice(iT + 1).some((x) => x === n)), JSON.stringify(ord));
+    check('a bookmarked workout floats to the top of its section (Leg Day was bookmarked, so it is before Upper Body)', ord[iM + 1] === 'Leg Day', JSON.stringify(ord));
+    check('the plan repeated workout is listed once (Upper Body appears once in Made for you)', ord.filter((x) => x === 'Upper Body').length === 1, JSON.stringify(ord));
+    check('the templates section says what they are: ready-made basics for anyone, not tailored to you', /Ready-made basics for anyone\. Not tailored to you\./.test(t));
+    check('Made for you says it is tailored to the user', /From your plan, tailored to you\./.test(t));
+    check('templates are labelled Template (6 of them)', (t.match(/Template · /g) || []).length === 6, (t.match(/Template · /g) || []).length + ' labelled');
     check('each card shows a real estimated length (3+3 sets -> 15 min; 4+3 -> 18 min)', /Upper Body\s*15 min/.test(t) && /Leg Day\s*18 min/.test(t), t.match(/Upper Body \d+ min/)?.[0]);
     await shot(page, 'my-all');
-    await page.evaluate(() => document.querySelectorAll('#dc-root div[aria-label="Save"]')[0].click());
+    await page.evaluate(() => [...document.querySelectorAll('#dc-root div[aria-label="Save"]')].find((e) => /Upper Body/.test(e.closest('div[style*="border-radius: 26px"]').innerText)).click());
     await page.waitForTimeout(150);
     const sm = lastMsg(msgs, 'saved');
-    check('tapping a bookmark posts the new saved list (a1 + b2) so the app can keep it', sm && sm.ids.slice().sort().join() === 'a1,b2', JSON.stringify(sm));
-    await clickText(page, /^Mine$/);
+    check('tapping a bookmark posts the new saved list so the app can keep it', sm && sm.ids.includes('b2') && sm.ids.length === 2, JSON.stringify(sm));
+    await clickText(page, /^Created by you$/);
     await page.waitForTimeout(200);
     t = await text(page);
-    check('the Mine tab lists the user own workouts (all three) and no ready-made template', /Upper Body/.test(t) && /Leg Day/.test(t) && /Arms and Chest/.test(t) && !/Template · /.test(t) && !/Beginner full body/.test(t), t.slice(0, 200));
-    await shot(page, 'my-mine');
+    check('the Created by you tab shows only that section: the custom workout, nothing else', (await heads()).join('|') === 'Created by you' && /Arms and Chest/.test(t) && !/Leg Day|Beginner full body/.test(t), t.slice(0, 200));
+    await clickText(page, /^Made for you$/);
+    await page.waitForTimeout(200);
+    t = await text(page);
+    check('the Made for you tab shows only the plan workouts', (await heads()).join('|') === 'Made for you' && /Leg Day/.test(t) && /Upper Body/.test(t) && !/Arms and Chest|Beginner full body/.test(t), t.slice(0, 200));
+    await shot(page, 'my-made');
     await clickText(page, /^FormPal templates$/);
     await page.waitForTimeout(200);
     t = await text(page);
-    check('the FormPal templates tab lists only the 6 templates, none of the user own', ['Beginner full body', 'Upper body', 'Lower body', 'Push', 'Pull', 'Core'].every((n) => t.includes(n)) && !/Leg Day|Arms and Chest/.test(t), t.slice(0, 200));
-    check('...and says what they are: ready-made basics for anyone, not tailored to you', /Ready-made basics for anyone\. Not tailored to you\./.test(t), t.slice(0, 160));
+    check('the FormPal templates tab lists only the 6 templates', (await heads()).join('|') === 'FormPal templates' && TPL.every((n) => t.includes(n)) && !/Leg Day|Arms and Chest/.test(t), t.slice(0, 200));
     await shot(page, 'my-templates');
     await page.evaluate(() => document.querySelectorAll('#dc-root div[aria-label="Save"]')[0].click());
     await page.waitForTimeout(150);
     const sm2 = lastMsg(msgs, 'saved');
-    check('bookmarking a template saves it to Mine (its id is posted with the saved list)', sm2 && sm2.ids.some((i) => /^tpl-/.test(i)), JSON.stringify(sm2));
-    await clickText(page, /^Mine$/);
-    await page.waitForTimeout(200);
-    t = await text(page);
-    check('...and it now shows under Mine, still labelled Template', /Beginner full body/.test(t) && (t.match(/Template · /g) || []).length === 1, t.slice(0, 200));
+    check('bookmarking a template adds its id to the saved list', sm2 && sm2.ids.some((i) => /^tpl-/.test(i)), JSON.stringify(sm2));
     await page.evaluate(() => { const a = [...document.querySelectorAll('#dc-root a')].find((x) => /Beginner full body/.test(x.textContent)); a.click(); });
     const tm = lastMsg(msgs, 'openWorkout');
     check('tapping a template posts its template id (the app opens the preview for it)', tm && /^tpl-beginner-full$/.test(tm.id), JSON.stringify(tm));
     await clickText(page, /^All$/);
     await type(page, 'input[placeholder="Search your workouts"]', 'lunge');
     t = await text(page);
-    check('search matches workout names AND their exercises (lunge -> Leg Day, never Arms and Chest)', /Leg Day/.test(t) && !/Arms and Chest/.test(t));
+    const hs = await heads();
+    check('search matches workout names AND their exercises (lunge -> Leg Day, never Arms and Chest); sections with no match are dropped', /Leg Day/.test(t) && !/Arms and Chest/.test(t) && !hs.includes('Created by you'), hs.join('|'));
+    await type(page, 'input[placeholder="Search your workouts"]', 'zzzz');
+    t = await text(page);
+    check('a search with no match shows the design empty line', /No workouts match that search/.test(t), t.slice(0, 120));
     await type(page, 'input[placeholder="Search your workouts"]', '');
     await page.evaluate(() => { const a = [...document.querySelectorAll('#dc-root a')].find((x) => /Leg Day/.test(x.textContent)); a.click(); });
     const om = lastMsg(msgs, 'openWorkout');
@@ -282,11 +300,7 @@ const anchor = (p, src, act = 'click') => p.evaluate((s) => { const a = [...docu
     await browser.close();
     const e = await openDesign('my', DS.myWorkoutsData([], []));
     const te = await text(e.page);
-    check('with no workouts of your own, All still offers the templates to browse', /Beginner full body/.test(te) && !/Leg Day/.test(te), te.slice(0, 120));
-    await clickText(e.page, /^Mine$/);
-    await e.page.waitForTimeout(200);
-    const te2 = await text(e.page);
-    check('...and an empty Mine tab shows the design own empty state (create one)', /Create/i.test(te2) && !/Beginner full body/.test(te2), te2.slice(0, 120));
+    check('with no workouts of your own, All shows the headings, an empty line under Created by you and Made for you, and the templates', /Beginner full body/.test(te) && /Nothing yet\. Tap Create workout/.test(te) && /Your plan workouts show here/.test(te) && !/Leg Day/.test(te), te.slice(0, 200));
     await shot(e.page, 'my-empty');
     await e.browser.close();
   }

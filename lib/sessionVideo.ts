@@ -120,7 +120,13 @@ export async function getSessionThumbnail(sessionTs: number, timeMs: number = 0,
 
   await keepVideosSafe();
   const entries = await entriesFor(sessionTs, prevSessionTs);
-  if (!entries.length) { log('no clip logged for workout', sessionTs); return null; } // not remembered: the clip may be logged a moment later
+  if (!entries.length) {
+    // say how close the nearest logged clip is, so a log shows whether the clip was never logged or just filed outside this workout's window
+    const all = await loadVideoLog();
+    const near = all.reduce<VideoLogEntry | null>((best, e) => (!best || Math.abs(e.ts - sessionTs) < Math.abs(best.ts - sessionTs) ? e : best), null);
+    log('no clip logged for workout', sessionTs, near ? `| nearest logged clip ${near.ts} is ${Math.round((near.ts - sessionTs) / 1000)}s from it (window: ${Math.round(prevSessionTs / 1000)}s..+5s)` : '| the video log is empty');
+    return null;
+  } // not remembered: the clip may be logged a moment later
 
   for (const entry of entries) {
     // a picture saved earlier (works even when the clip file is gone)
