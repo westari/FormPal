@@ -27,6 +27,7 @@ import LiquidGlass, { LiquidGlassButton } from './LiquidGlass';
 import PlusMenu from './PlusMenu';
 import { TAB_BAR_H, PLUS_SIZE, TAB_BAR_SIDE, TAB_BAR_GAP, tabBarBottom } from '../lib/tabBarMetrics';
 import { tapClock } from '../lib/tabLag';
+import { markLaunchSettled } from '../lib/launchGate';
 import { tabIndexAt, lensLeft, lensStretch, releaseTarget, LENS_SCALE_X, LENS_SCALE_Y, LIFT_SPRING, SETTLE_SPRING } from '../lib/tabDrag';
 
 // ONE-LINE SWITCH: true = the new Train (dumbbell) and Progress (bars) icons; false = the previous ones (strength figure, line chart).
@@ -44,8 +45,9 @@ const ITEMS_PAD = 6;
 const PILL_H = TAB_BAR_H - 12;
 const MUTED = '#6e6e77';
 
-let warmedUp = false;
-const WARM_STEP_MS = 110;
+const WARM_STEP_MS = 90;
+const WARM_FIRST_MS = 60;
+const SETTLE_AFTER_MS = 1800; // the hidden pages (recap, design warm-ups) may start this long after the tabs were visited
 
 export default function GlassTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
@@ -137,23 +139,24 @@ export default function GlassTabBar({ state, navigation }: BottomTabBarProps) {
   const lensScaleX = Animated.multiply(lift.interpolate({ inputRange: [0, 1], outputRange: [1, LENS_SCALE_X] }), stretch);
   const lensScaleY = lift.interpolate({ inputRange: [0, 1], outputRange: [1, LENS_SCALE_Y] });
 
-  // ONE time per app run: visit the other tabs once, quickly, behind a cover the colour of the pages. A tab's page only starts
-  // loading when its screen is first on screen, so without this every tab's FIRST open waited ~0.4-0.6s for its page to load.
-  // After this, all four pages are loaded and a tab tap only brings an already-drawn page to the front.
-  const [warming, setWarming] = useState(!warmedUp);
+  // Every time the tab bar is built (app launch, AND again each time the tabs come back after a workout recap, which rebuilds
+  // the whole tabs screen): visit the other tabs once, quickly, behind a cover the colour of the pages. A tab's page only starts
+  // loading when its screen is first on screen. It used to run once per app run only, so after a workout all four pages
+  // reloaded unseen and the first Train / Progress tap showed a blank page for 1-2 seconds (log: "progress first open: shown ->
+  // ready 1656ms"). The cover is up for well under a second; the pages finish loading behind it.
+  const [warming, setWarming] = useState(true);
   useEffect(() => {
-    if (warmedUp) return;
-    warmedUp = true;
+    const t0 = Date.now();
     const start = state.routes[state.index]?.name;
     const others = TABS.map(t => t.name as string).filter(n => n !== start);
     const timers: ReturnType<typeof setTimeout>[] = [];
-    let finished = false;
-    let t = 350;
+    let t = WARM_FIRST_MS;
     others.forEach((n) => { const at = t; timers.push(setTimeout(() => { navigation.navigate(n as never); }, at)); t += WARM_STEP_MS; });
-    timers.push(setTimeout(() => { if (start) navigation.navigate(start as never); }, t)); t += 80;
-    timers.push(setTimeout(() => { finished = true; setWarming(false); if (__DEV__) console.log('[TAB-LAG] all tabs loaded once at launch (' + others.length + ' visited behind the cover)'); }, t));
-    timers.push(setTimeout(() => setWarming(false), 3000)); // whatever happens, the cover is never left on
-    return () => { timers.forEach(clearTimeout); if (!finished) warmedUp = false; };
+    timers.push(setTimeout(() => { if (start) navigation.navigate(start as never); }, t)); t += 60;
+    timers.push(setTimeout(() => { setWarming(false); if (__DEV__) console.log('[TAB-LAG] cover lifted ' + (Date.now() - t0) + 'ms after the tab bar mounted (' + others.length + ' tabs visited behind it; planned ' + t + 'ms)'); }, t));
+    timers.push(setTimeout(markLaunchSettled, t + SETTLE_AFTER_MS)); // now the big hidden pages may load
+    timers.push(setTimeout(() => setWarming(false), 1500)); // whatever happens, the cover is never left on
+    return () => { timers.forEach(clearTimeout); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const bottom = tabBarBottom(insets.bottom);

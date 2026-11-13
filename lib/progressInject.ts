@@ -1107,10 +1107,10 @@ export const PROGRESS_DOM_JS = String.raw`
     var vidBoxes = root.querySelectorAll('div[role="img"][aria-label$=" video"]');
     var listBoxes = root.querySelectorAll('div[style*="width: 74px"][style*="height: 92px"]');
     var setThumb = function (el, w) {
-      var sig = w.logged ? 'L' : w.thumb ? 'v' + w.thumb.length : w.fallback ? 'f' + w.fallback.length : '';
+      var sig = w.logged ? 'L' + (w.body ? w.body.length : 0) : w.thumb ? 'v' + w.thumb.length : w.fallback ? 'f' + w.fallback.length : '';
       if (!sig || el.__thumb === sig) return;
       el.__thumb = sig;
-      if (window.__paintLogged) window.__paintLogged(el, !!w.logged);
+      if (window.__paintLogged) window.__paintLogged(el, !!w.logged, w.body);
       if (w.logged) return; // typed in by hand: a "Logged" tile, never a camera frame
       if (w.thumb) {
         el.style.setProperty('background-image', 'url(' + w.thumb + ')', 'important');

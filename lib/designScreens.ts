@@ -21,6 +21,7 @@ import { dcLogicPatchJs, athltSetDataJs } from './dcLogicPatch';
 import { NO_ZOOM_JS } from './noZoom';
 import { HAPTIC_CLICK_JS } from './hapticClick';
 import { EXERCISE_SEARCH_PAGE_JS } from './exerciseSearch';
+import { CUE_ORB_JS } from './cueOrb';
 import { WORKOUT_TEMPLATES, TEMPLATE_NOTE, templateWorkout } from './workoutTemplates';
 
 // ─── shared page-side base ──────────────────────────────────────────────────────
@@ -401,13 +402,13 @@ export const MY_WORKOUTS_LOGIC_EXT = String.raw`function (Orig) {
       var v = super.renderVals(), s = this.state, self = this;
       var q = s.query.trim().toLowerCase();
       // Three clear sections: Created by you (workouts the user made), Made for you (their plan's workouts, tailored to them) and
-      // FormPal templates (ready-made basics for anyone). The tabs pick one section or show All; a bookmarked card floats to the top.
-      var tab = ['Created by you', 'Made for you', 'FormPal templates'].indexOf(s.tab) >= 0 ? s.tab : 'All';
+      // Templates (ready-made basics for anyone). The tabs pick one section or show All; a bookmarked card floats to the top.
+      var tab = ['Created by you', 'Made for you', 'Templates'].indexOf(s.tab) >= 0 ? s.tab : 'All';
       window.__athltTab = tab;
       var secs = [
         { label: 'Created by you', note: 'Workouts you made yourself.', empty: 'Nothing yet. Tap Create workout to make your own.', items: d.created || [], template: false },
         { label: 'Made for you', note: 'From your plan, tailored to you.', empty: 'Your plan workouts show here once you have a plan.', items: d.made || [], template: false },
-        { label: 'FormPal templates', note: d.templateNote || '', empty: '', items: d.templates || [], template: true }
+        { label: 'Templates', note: d.templateNote || '', empty: '', items: d.templates || [], template: true }
       ];
       var sections = [], shown = [];
       secs.forEach(function (sec) {
@@ -430,7 +431,7 @@ export const MY_WORKOUTS_LOGIC_EXT = String.raw`function (Orig) {
               if (window.__dsPost) window.__dsPost({ type: 'saved', ids: Object.keys(nxt).filter(function (k) { return nxt[k]; }) });
             } };
         });
-      v.tabs = ['All', 'Created by you', 'Made for you', 'FormPal templates'].map(function (label) {
+      v.tabs = ['All', 'Created by you', 'Made for you', 'Templates'].map(function (label) {
         var on = tab === label;
         return { label: label, bg: on ? '#111114' : '#ffffff', fg: on ? '#ffffff' : '#111114',
           sh: on ? '0 8px 16px -8px rgba(17,17,20,0.5)' : 'inset 0 1px 0 #ffffff, 0 6px 14px -8px rgba(40,50,90,0.3)',
@@ -454,12 +455,15 @@ export const MY_WORKOUTS_DOM_JS = String.raw`
       if (/Create Workout/i.test(l.href)) { window.__dsPost({ type: 'create' }); return; }
       if (/Train\.dc\.html/.test(l.href)) window.__dsPost({ type: 'back' });
     };
-    // four tabs do not fit on one screen width: one line each, the row scrolls sideways
-    var tabEls = [].filter.call(root.querySelectorAll('div'), function (e) { return e.style.height === '36px' && /^(All|Created by you|Made for you|FormPal templates)$/.test((e.textContent || '').trim()); });
-    tabEls.forEach(function (e) { e.style.setProperty('white-space', 'nowrap'); e.style.setProperty('flex', 'none'); });
+    // four tabs on one line, smaller than the design's so they all fit the screen width with no sideways scrolling
+    var tabEls = [].filter.call(root.querySelectorAll('div'), function (e) { return /^(All|Created by you|Made for you|Templates)$/.test((e.textContent || '').trim()) && e.style.borderRadius === '999px' && e.style.height; });
+    tabEls.forEach(function (e) {
+      e.style.setProperty('white-space', 'nowrap'); e.style.setProperty('flex', 'none');
+      e.style.setProperty('height', '34px'); e.style.setProperty('padding', '0 10px'); e.style.setProperty('font-size', '12.5px');
+    });
     if (tabEls.length) {
       var row = tabEls[0].parentElement;
-      row.style.setProperty('overflow-x', 'auto'); row.style.setProperty('scrollbar-width', 'none'); row.style.setProperty('-webkit-overflow-scrolling', 'touch'); row.style.setProperty('padding-bottom', '14px'); row.style.setProperty('margin-bottom', '-14px');
+      row.style.setProperty('gap', '5px'); row.style.setProperty('padding-left', '14px'); row.style.setProperty('padding-right', '14px');
     }
     // Section headings live INSIDE the card grid (full width), put back in order after every redraw: a heading, then its cards, and
     // under a heading with no cards a short line saying what goes there.
@@ -500,7 +504,8 @@ export const MY_WORKOUTS_DOM_JS = String.raw`
 true;`;
 
 // ─── before-content-loaded bundles ──────────────────────────────────────────────
-const COMMON = DC_VIEWPORT_JS + NO_ZOOM_JS + CONSOLE_FORWARD_JS + DC_SETTLE_JS + HAPTIC_CLICK_JS;
+// CUE_ORB_JS: the ONE shared Cue orb (lib/cueOrb.ts) instead of the design file's own textured one
+const COMMON = DC_VIEWPORT_JS + NO_ZOOM_JS + CONSOLE_FORWARD_JS + DC_SETTLE_JS + HAPTIC_CLICK_JS + CUE_ORB_JS;
 export const createWorkoutBeforeJs = () => COMMON + dcLogicPatchJs(CREATE_WORKOUT_LOGIC_EXT) + DS_BASE_JS + CREATE_WORKOUT_DOM_JS;
 export const logSessionBeforeJs   = () => COMMON + dcLogicPatchJs(LOG_SESSION_LOGIC_EXT) + DS_BASE_JS + LOG_SESSION_DOM_JS;
 export const myWorkoutsBeforeJs   = () => COMMON + dcLogicPatchJs(MY_WORKOUTS_LOGIC_EXT) + DS_BASE_JS + MY_WORKOUTS_DOM_JS;
@@ -547,7 +552,7 @@ export function entriesFromPage(
 
 /**
  * My workouts: three sections as the page's cards. Created by you = the workouts made in Create workout (ids custom-...), Made for you =
- * the plan's own workouts (the plan repeats its few workouts across weeks, so each one is listed ONCE), FormPal templates = the ready-made
+ * the plan's own workouts (the plan repeats its few workouts across weeks, so each one is listed ONCE), Templates = the ready-made
  * basics (marked template: they are not the user's).
  */
 export function myWorkoutsData(

@@ -87,7 +87,7 @@ const railOf = `[...document.querySelectorAll('div[data-scroll]')].find(x => x.s
     const info = await p.evaluate(() => { const i = document.querySelector('input[placeholder^="Search"]'); return { fs: parseFloat(getComputedStyle(i).fontSize), meta: document.querySelector('meta[name=viewport]').content }; });
     check('the search input is 16px (iOS does not zoom a 16px input)', info.fs >= 16, info.fs + 'px');
     check('the viewport scale is locked', /maximum-scale=1/.test(info.meta) && /user-scalable=no/.test(info.meta));
-    const canvas = () => p.evaluate(`(() => { const r = [...document.querySelectorAll('div')].find(d => d.style.width === '390px' && d.style.height === '844px'); const b = r.getBoundingClientRect(); return { w: Math.round(b.width), S: window.__dcCanvasScale }; })()`);
+    const canvas = () => p.evaluate(`(() => { const r = [...document.querySelectorAll('div')].find(d => d.style.width === '390px' && (d.style.height === '844px' || d.hasAttribute('data-tr-canvas'))); const b = r.getBoundingClientRect(); return { w: Math.round(b.width), S: window.__dcCanvasScale }; })()`);
     const before = await canvas();
     await p.evaluate(() => { const i = document.querySelector('input[placeholder^="Search"]'); i.scrollIntoView({ block: 'center' }); });
     await p.setViewportSize({ width: 402, height: 874 - 336 }); await p.waitForTimeout(900);

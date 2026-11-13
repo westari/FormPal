@@ -49,6 +49,9 @@ import { addableExercises, type EditRow } from '../../lib/planEdit';
 import { plannedMeta } from '../../lib/trainData';
 import { tabBarCover } from '../../lib/tabBarMetrics';
 import { TAB_HEADER_JS } from '../../lib/tabHeader';
+import CalendarSheet from '../../components/CalendarSheet';
+import { loggedBodySvg } from '../../lib/bodyMapSvg';
+import { workedMuscles } from '../../lib/muscleRanksData';
 
 const HOME_HTML = require('../../assets/app screens/home.html');
 const HOME_BUILD = 'home-5';
@@ -261,7 +264,21 @@ export function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[], i
     function pushHeaderDown(){
       // the same header as Train, Progress and Profile (lib/tabHeader.ts): title, date line, position
       if(!window.__dcCanvasScale) return false;
-      return !!window.__fpHeader('Home', INSET_TOP);
+      return !!window.__fpHeader('Home', INSET_TOP, { live: true });
+    }
+    // tapping the fire chip (flame + streak number) opens the streak screen, same as the pill on Train
+    if (!window.__homeStreakTap) {
+      window.__homeStreakTap = true;
+      document.addEventListener('click', function(ev){
+        var el = ev.target;
+        for (var i = 0; el && i < 6; i++, el = el.parentElement) {
+          if (el.style && el.style.borderRadius === '999px' && el.style.height === '40px') {
+            var kids = el.querySelectorAll('div'), hit = false;
+            for (var k = 0; k < kids.length; k++) { if (kids[k].style && kids[k].style.color === 'rgb(242, 112, 28)') { hit = true; break; } }
+            if (hit) { ev.preventDefault(); ev.stopPropagation(); post({ type: 'streak' }); return; }
+          }
+        }
+      }, true);
     }
     var DONE = { header: false, sheet: false, text: false, recent: false };
     DONE.header = pushHeaderDown();
@@ -431,10 +448,10 @@ export function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[], i
       var boxes = document.querySelectorAll('div[role="img"][aria-label$=" video"]');
       for (var i = 0; i < boxes.length && i < list.length; i++) {
         var w = list[i], el = boxes[i];
-        var sig = w.logged ? 'L' : w.thumb ? 'v' + w.thumb.length : w.fallback ? 'f' + w.fallback.length : '';
+        var sig = w.logged ? 'L' + (w.body ? w.body.length : 0) : w.thumb ? 'v' + w.thumb.length : w.fallback ? 'f' + w.fallback.length : '';
         if (!sig || el.__thumb === sig) continue;
         el.__thumb = sig;
-        if (window.__paintLogged) window.__paintLogged(el, !!w.logged);
+        if (window.__paintLogged) window.__paintLogged(el, !!w.logged, w.body);
         if (w.logged) continue; // typed in by hand: the "Logged" tile, not a video frame
         if (w.thumb) {
           el.style.setProperty('background-image', 'url(' + w.thumb + ')', 'important');
@@ -523,7 +540,9 @@ export default function HomeScreen() {
   const [logicJs, setLogicJs] = useState<string | null>(null);
   const { fade, revealedRef, onReady, onLoadStart, onLoadEnd, hide } = useRevealFade(m => { if (__DEV__) console.log('[HOME]', m); });
   // one picture per recent workout (same code as the Progress tab): a video frame, else its muscle icon
-  const [thumbs, setThumbs] = useState<{ thumb: string | null; fallback: string | null; logged?: boolean; ts?: number }[]>([]);
+  const [thumbs, setThumbs] = useState<{ thumb: string | null; fallback: string | null; logged?: boolean; body?: string | null; ts?: number }[]>([]);
+  const [calOpen, setCalOpen] = useState(false);          // the full calendar (tap the date)
+  const [workoutTimes, setWorkoutTimes] = useState<number[]>([]); // every saved workout's time, for the calendar's dots
   const [reloadTick, setReloadTick] = useState(0); // bumped after a workout is deleted: the page's data is built again
 
   const homeLag = useRef(createTabLag('home')).current;
@@ -532,6 +551,7 @@ export default function HomeScreen() {
     let alive = true;
     Promise.all([loadPlan(), getAllSessions()]).then(async ([plan, sessions]) => {
       setInjectJs(buildHomeInjectJs(plan, sessions, insets.top, insets.bottom));
+      setWorkoutTimes(sessions.map(x => x.ts));
       const ld = buildHomeLogicData(plan, tabBarCover(insets.bottom));
       setLogicJs(athltSetDataJs(ld) + '; window.__editWid = ' + JSON.stringify(ld.editWid) + '; true;');
       const groups = groupIntoWorkouts(sessions);
@@ -539,9 +559,11 @@ export default function HomeScreen() {
       const recent = groups.slice(0, 3);
       const icons = await Promise.all(recent.map(g => { const m = primaryMuscle(g.entries); return workoutFallbackIcon(m, m ? tiers[m as keyof typeof tiers]?.tier : null); }));
       const loggedBy = recent.map(g => g.entries.every(isManualEntry)); // typed in by hand: a "Logged" tile, no video lookup
-      if (alive) setThumbs(recent.map((g, i) => ({ thumb: null, fallback: icons[i], logged: loggedBy[i], ts: g.ts })));
+      // a typed-in session's tile: a small body with the muscles that session trained lit in their rank colours
+      const bodies = recent.map((g, i) => (loggedBy[i] ? loggedBodySvg(workedMuscles(g.entries).map(w => w.muscle), tiers) : null));
+      if (alive) setThumbs(recent.map((g, i) => ({ thumb: null, fallback: icons[i], logged: loggedBy[i], body: bodies[i], ts: g.ts })));
       const frames = await Promise.all(recent.map((g, i) => (loggedBy[i] ? Promise.resolve(null) : workoutFrame(g.ts, groups[i + 1]?.ts ?? 0))));
-      if (alive) setThumbs(recent.map((g, i) => ({ thumb: frames[i], fallback: icons[i], logged: loggedBy[i], ts: g.ts })));
+      if (alive) setThumbs(recent.map((g, i) => ({ thumb: frames[i], fallback: icons[i], logged: loggedBy[i], body: bodies[i], ts: g.ts })));
     }).catch(() => {});
     return () => { alive = false; };
   }, [reloadTick]));
@@ -584,6 +606,8 @@ export default function HomeScreen() {
           if (msg.type === 'ready') { onReady(); return; }
           if (msg.type === 'start') { router.push('/workout' as any); return; }
           if (msg.type === 'cue') { router.push('/cue' as any); return; }
+          if (msg.type === 'calendar') { setCalOpen(true); return; }
+          if (msg.type === 'streak') { router.push({ pathname: '/streak-screen', params: { from: 'tab', dest: '/(tabs)' } } as any); return; }
           if (msg.type === 'progress') { router.push('/(tabs)/progress' as any); return; }
           if (msg.type === 'recap' && msg.ts != null) { openRecap(router, msg.ts); return; }
           if (msg.type === 'homeCueSend' && msg.text) { void handleHomeCueSend(msg.text); return; }
@@ -620,6 +644,7 @@ export default function HomeScreen() {
         cacheEnabled={false}
       />
       </Animated.View>
+      <CalendarSheet open={calOpen} onClose={() => setCalOpen(false)} timestamps={workoutTimes} />
     </View>
   );
 }

@@ -19,7 +19,7 @@ import CueOrb from './CueOrb';
 import { PLUS_SIZE, TAB_BAR_SIDE } from '../lib/tabBarMetrics';
 
 const BTN = 60;
-const ORB = 48; // the orb itself (no halo): about the size of the glyph circles around it, centred in the same 60 box
+const ORB = 42; // the orb itself (no halo): about the size of the glyph circles around it, centred in the same 60 box
 
 // Top to bottom. Cue on top (the assistant, set apart), then the three things you do, the main one nearest the "+".
 export const PLUS_ACTIONS = [
@@ -27,7 +27,7 @@ export const PLUS_ACTIONS = [
   { id: 'form',    label: 'Form check',    symbol: 'camera.viewfinder',                   route: '/exercise-picker' },
   { id: 'create',  label: 'Create workout', symbol: 'plus.rectangle.on.rectangle',        route: '/create-workout' },
   { id: 'log',     label: 'Log session',   symbol: 'square.and.pencil',                   route: '/log-session' },
-  { id: 'workout', label: 'Start workout', symbol: 'figure.strengthtraining.traditional', route: '/workout' },
+  { id: 'workout', label: 'Start workout', symbol: 'play.fill',                           route: '/workout' },
 ] as const;
 
 const OPEN_MS = 240, CLOSE_MS = 200;

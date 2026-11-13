@@ -27,6 +27,7 @@
  * deactivate() hides it but keeps its state (e.g. recap while rep feedback is
  * on top); release() throws the instance away and re-warms a fresh one.
  */
+import { useLaunchSettled } from '../lib/launchGate';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Animated, Easing, useWindowDimensions } from 'react-native';
 import { SymbolView } from 'expo-symbols';
@@ -434,6 +435,8 @@ function Layer({ k }: { k: WarmKind }) {
 
 export default function WarmSurfaces() {
   const want = useWarm((s) => s.want);
+  const activeNow = useWarm((s) => s.active);
+  const settled = useLaunchSettled(); // the tabs load first (lib/launchGate.ts)
   // Raised above the navigator only while some page is actually showing;
   // otherwise the whole layer sits BEHIND it (negative zIndex) and nothing in
   // it can show through or take a touch.
@@ -447,7 +450,7 @@ export default function WarmSurfaces() {
   }, [anyShown]);
   return (
     <View style={[StyleSheet.absoluteFill, { zIndex: raised ? HOST_Z_RAISED : HOST_Z_HIDDEN }]} pointerEvents={raised ? 'box-none' : 'none'}>
-      {KINDS.map((k) => (want[k] ? <Layer key={k} k={k} /> : null))}
+      {KINDS.map((k) => (want[k] && (settled || activeNow[k]) ? <Layer key={k} k={k} /> : null))}
     </View>
   );
 }

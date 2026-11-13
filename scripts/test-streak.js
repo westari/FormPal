@@ -52,7 +52,20 @@ check('the workout flow\'s own count wins if the session is not on disk yet (3, 
   console.log('      page:', JSON.stringify(r));
   await page.screenshot({ path: path.join(ROOT, '.scratch', 'streak-after.png') });
   const fl = await page.evaluate(() => { const ms = [...document.querySelectorAll('#dc-root div[style*="mask"]')]; const n = document.querySelector('#dc-root div[style*="font-size: 54px"]'); return { svgs: ms.filter(m => m.querySelector('svg path')).length, masksLeft: ms.filter(m => getComputedStyle(m).webkitMaskImage && getComputedStyle(m).webkitMaskImage !== 'none').length, numShown: n ? getComputedStyle(n).display !== 'none' : false, applied: !!window.__streakApplied }; });
-  check('the flame is a vector (two SVG paths, no PNG mask left) and has NO number inside it; the page is fully applied the moment it is revealed', fl.svgs === 2 && fl.masksLeft === 0 && !fl.numShown && fl.applied, JSON.stringify(fl));
+  check('the flame is a vector (two SVG paths, no PNG mask left), the design\'s own sticker number is hidden; the page is fully applied the moment it is revealed', fl.svgs === 2 && fl.masksLeft === 0 && !fl.numShown && fl.applied, JSON.stringify(fl));
+  // 5 + 6: the flame is alive, and the number sits inside it
+  const live = await page.evaluate(async () => {
+    const out = document.querySelector('[data-vector-flame="out"]'), inn = document.querySelector('[data-vector-flame="in"]'), n = document.querySelector('[data-streak-num]');
+    const tf = () => [getComputedStyle(out).transform, getComputedStyle(inn).transform];
+    const a = tf(); await new Promise(r => setTimeout(r, 700)); const b = tf(); await new Promise(r => setTimeout(r, 700)); const c = tf();
+    const ri = inn.getBoundingClientRect(), tr = document.createRange(); tr.selectNodeContents(n); const rn = tr.getBoundingClientRect();
+    return { a, b, c, anim: [getComputedStyle(out).animationName, getComputedStyle(inn).animationName], iter: getComputedStyle(out).animationIterationCount,
+      num: n.textContent, inside: n.parentElement === inn, ncolor: getComputedStyle(n).color,
+      within: rn.left >= ri.left - 1 && rn.right <= ri.right + 1 && rn.top >= ri.top && rn.bottom <= ri.bottom, fits: rn.width < ri.width * 0.8 };
+  });
+  check('5: the fire is animated (outer + inner flame run an endless animation and their transforms change over time)', live.anim[0] === 'sk-live-out' && live.anim[1] === 'sk-live-in' && live.iter === 'infinite' && (live.a[0] !== live.b[0] || live.b[0] !== live.c[0]) && (live.a[1] !== live.b[1] || live.b[1] !== live.c[1]), JSON.stringify(live.anim) + ' ' + live.a.join(' / ') + ' -> ' + live.c.join(' / '));
+  check('6: the streak number (2) is inside the flame, inside the cream belly, with room around it, and moves with the inner flame', live.num === '2' && live.inside && live.within && live.fits, JSON.stringify({ n: live.num, inside: live.inside, within: live.within, fits: live.fits }));
+  check('6: the number is deep orange on cream (readable), not white on the orange', live.ncolor === 'rgb(232, 89, 12)', live.ncolor);
   await page.screenshot({ path: path.join(ROOT, '.scratch', 'streak-flame-crop.png'), clip: { x: 80, y: 190, width: 230, height: 250 } });
   check('words match: "Day 2 streak!" and not "Your streak starts today"', r.head === 'Day 2 streak!' && !/starts today/i.test(r.sub), r.head + ' / ' + r.sub);
   check('exactly the two streak days are orange circles with a white check; the rest are plain grey with no check', r.days.length === 7 && r.days.map(d => d.on).join() === '0,1,1,0,0,0,0' && r.days.every(d => (d.on === '1') === (d.bg.startsWith('linear-gradient') && d.check)), JSON.stringify(r.days));

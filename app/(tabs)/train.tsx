@@ -156,8 +156,10 @@ export const TRAIN_WEB_INJECT = `
 
   // The design is a fixed 390x844 canvas (no id): scaled to the real screen height, like the Home tab.
   function canvas() {
+    var marked = document.querySelector('[data-tr-canvas]'); // found once, then remembered (its height changes while the keyboard is up)
+    if (marked) return marked;
     var all = document.querySelectorAll('div');
-    for (var i = 0; i < all.length; i++) if (all[i].style.width === '390px' && all[i].style.height === '844px') return all[i];
+    for (var i = 0; i < all.length; i++) if (all[i].style.width === '390px' && all[i].style.height === '844px') { all[i].setAttribute('data-tr-canvas', '1'); return all[i]; }
     return null;
   }
   function fit() {
@@ -174,6 +176,13 @@ export const TRAIN_WEB_INJECT = `
     root.style.setProperty('margin', '0 auto', 'important');
     root.style.setProperty('transform-origin', 'top center', 'important');
     root.style.setProperty('transform', 'scale(' + S + ')', 'important');
+    // The keyboard shortens the visible area but the canvas stays at the locked scale, so the page used to stay 844 tall with its lower
+    // part hidden behind the keyboard: the Practice Exercises search box and its results looked cut off and could not be scrolled up
+    // into view. While the keyboard is up the canvas is as tall as what is really visible (so its own scroller can scroll the search
+    // box above the keyboard); with it down it is the full 844 again.
+    var vis = window.innerHeight || 0;
+    var wantH = (window.__trLock && vis && vis < window.__trLock - 80) ? Math.round(vis / S * 100) / 100 : 844;
+    if (root.style.height !== wantH + 'px') root.style.setProperty('height', wantH + 'px', 'important');
     document.documentElement.style.setProperty('margin', '0', 'important');
     document.documentElement.style.setProperty('overflow', 'hidden', 'important');
     document.body.style.setProperty('margin', '0', 'important');
@@ -440,6 +449,12 @@ export const TRAIN_WEB_INJECT = `
   function schedule() { ensureCss(); clearTimeout(deb); deb = setTimeout(tick, 60); }
   try { new MutationObserver(schedule).observe(document, { childList: true, subtree: true }); } catch (e) {}
   window.addEventListener('resize', schedule);
+  // a tapped search box is brought above the keyboard (after the page has resized for it)
+  document.addEventListener('focusin', function (e) {
+    var t = e.target;
+    if (!t || t.tagName !== 'INPUT') return;
+    [320, 700].forEach(function (ms) { setTimeout(function () { try { if (document.activeElement === t) t.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (err) {} }, ms); });
+  }, true);
   window.__trainTick = tick;
   setInterval(tick, 400);
   tick();

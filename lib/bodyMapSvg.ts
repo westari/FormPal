@@ -102,3 +102,20 @@ export function bodyMapPairSvg(worked: Muscle[]): string {
 export function bodyMapPairDataUri(worked: Muscle[]): string {
   return 'data:image/svg+xml;utf8,' + encodeURIComponent(bodyMapPairSvg(worked));
 }
+
+/**
+ * The small body on a "Session logged" tile: ONE side of the body (the side with more of the session's muscles on it, front on a
+ * tie), the muscles that session trained lit in their current rank colour (bronze when not ranked yet), every other muscle neutral.
+ * `worked` is the muscles of the session (lib/muscleRanksData.ts workedMuscles); `tiers` the current ranks.
+ */
+export function loggedBodySvg(worked: Muscle[], tiers: MuscleTiers): string {
+  const lit: MuscleTiers = {};
+  let front = 0, back = 0;
+  for (const m of worked) {
+    const region = MUSCLE_MAP_REGIONS[m];
+    if (!region) continue;
+    lit[m] = tiers[m] ?? { tier: 'bronze', peakTier: 'bronze', volume: 0, goodRatio: 0 };
+    if (region.side === 'front') front++; else back++;
+  }
+  return bodyMapSvg(lit, back > front ? 'back' : 'front');
+}

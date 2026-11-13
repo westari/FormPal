@@ -13,8 +13,9 @@ import {
   type SessionEntry, type MuscleTiers, type Tier,
 } from './sessionLog';
 import { computeOverallStanding, MUSCLE_DISPLAY_ORDER } from '../components/MuscleTierMap';
-import { bodyMapSvg } from './bodyMapSvg'; // the clean map (soft silhouette, no per-muscle lines). The busier outlined drawing is lib/progressBodyMap.ts, not used.
+import { bodyMapSvg, loggedBodySvg } from './bodyMapSvg'; // the clean map (soft silhouette, no per-muscle lines). The busier outlined drawing is lib/progressBodyMap.ts, not used.
 import type { WeightEntry } from './weightLog';
+import { workedMuscles } from './muscleRanksData';
 
 export const MUSCLE_LABEL: Record<Muscle, string> = {
   [Muscle.Chest]: 'Chest', [Muscle.Shoulders]: 'Shoulders', [Muscle.RearDelts]: 'Rear delts',
@@ -38,7 +39,7 @@ export interface ProgressData {
   weight: { d: string; w: number }[];
   form: { ts: number; pct: number }[];
   bests: { name: string; value: string; unit: string; kind: 'streak' | 'form' | 'reps' }[];
-  workouts: { ts: number; name: string; when: string; form: string; formPct: number | null; reps: number; sets: number; thumb: string | null; muscle: string | null; fallback: string | null; logged: boolean }[];
+  workouts: { ts: number; name: string; when: string; form: string; formPct: number | null; reps: number; sets: number; thumb: string | null; muscle: string | null; fallback: string | null; logged: boolean; body: string | null }[];
   hasSessions: boolean;
   insets: { top: number; bottom: number; tabCover?: number };
   photos: PhotoView[];
@@ -134,6 +135,8 @@ export function buildProgressData(
       muscle: primaryMuscle(g.entries), fallback: null as string | null,
       // typed in by hand (Log a session): shown as a "Logged" tile, never as a camera workout
       logged: g.entries.every(isManualEntry),
+      // the small lit body on that "Session logged" tile (only built for typed-in sessions)
+      body: g.entries.every(isManualEntry) ? loggedBodySvg(workedMuscles(g.entries).map(w => w.muscle), tiers) : null,
     };
   });
 

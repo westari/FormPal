@@ -9,21 +9,24 @@
 import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { WebView } from 'react-native-webview';
+import { useLaunchSettled } from '../lib/launchGate';
 
 const FILES = [
   require('../assets/app screens/createworkout.html'),
   require('../assets/app screens/myworkouts.html'),
   require('../assets/app screens/logsessionv2.html'),
 ];
-const START_DELAY_MS = 2500;
+const START_DELAY_MS = 2500; // after the launch gate opens (the four tabs load first: lib/launchGate.ts)
 const EACH_MS = 1800;
 
 export default function DesignPrewarm() {
   const [i, setI] = useState(-1);
+  const settled = useLaunchSettled();
   useEffect(() => {
+    if (!settled) return;
     const t = setTimeout(() => setI(0), START_DELAY_MS);
     return () => clearTimeout(t);
-  }, []);
+  }, [settled]);
   useEffect(() => {
     if (i < 0 || i >= FILES.length) return;
     const t = setTimeout(() => setI(i + 1), EACH_MS);

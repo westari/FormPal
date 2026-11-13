@@ -43,7 +43,7 @@ export function streakInfo(sessions: SessionEntry[], now: number = Date.now(), p
   return { count, trainedToday, week, todayIdx, headline, sub };
 }
 
-/** Page-side: the flame (vector, no number), headline, sub line and the week row (an orange circle with a white check on every streak day).
+/** Page-side: the flame (vector, gently animated, the streak number inside it), headline, sub line and the week row (an orange circle with a white check on every streak day).
  *  window.__streakApplied becomes true the moment everything is in place, so the screen can reveal the page already correct. */
 export function streakPageJs(info: StreakInfo): string {
   return `(function(){
@@ -64,9 +64,42 @@ export function streakPageJs(info: StreakInfo): string {
     var circles = [].slice.call(document.querySelectorAll('#dc-root div[style*="width: 30px"][style*="height: 30px"]'));
     var masks = [].slice.call(document.querySelectorAll('#dc-root div[style*="mask"]'));
     if (!num || !head || !sub || circles.length < 7 || masks.length < 2) return false;
-    num.style.setProperty('display', 'none', 'important'); // no number inside the flame
+    num.style.setProperty('display', 'none', 'important'); // the design's own white number sat on the flame like a sticker: replaced by the one below
     flame(masks[0], 'sf-out', '#ffd36b', '#ff9a3c', '#ff5a1f');
     flame(masks[1], 'sf-in', '#fff6d6', null, '#ffe39a');
+    // a gentle living flame: the outer flame sways and breathes slowly, the inner one flickers a little faster, both from the base
+    if (!document.getElementById('sk-live')) {
+      var st = document.createElement('style'); st.id = 'sk-live';
+      st.textContent = '@keyframes sk-live-out { 0%,100% { transform: scale(1,1) skewX(0deg); } 30% { transform: scale(1.03,1.055) skewX(-1.6deg); } 60% { transform: scale(0.985,1.02) skewX(1.3deg); } }'
+        + '@keyframes sk-live-in { 0%,100% { transform: scale(1,1) skewX(0deg); } 25% { transform: scale(0.97,1.07) skewX(2deg); } 55% { transform: scale(1.04,0.97) skewX(-1.8deg); } 80% { transform: scale(0.99,1.04) skewX(1deg); } }';
+      document.head.appendChild(st);
+    }
+    masks[0].setAttribute('data-vector-flame', 'out'); masks[1].setAttribute('data-vector-flame', 'in');
+    // The page-fit code switches EVERY animation inside the page off (#dc-root * { animation: none !important }), which is why the fire sat
+    // still. An inline !important beats that, so the flame's own sway goes on here, and so do the design's endless sparkles and embers.
+    var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!still) {
+      var live = function (el, v) { if (el.style.getPropertyValue('animation') !== v) { el.style.setProperty('animation', v, 'important'); el.style.setProperty('will-change', 'transform'); } };
+      masks[0].style.setProperty('transform-origin', '50% 92%'); live(masks[0], 'sk-live-out 3.4s ease-in-out 0.9s infinite');
+      masks[1].style.setProperty('transform-origin', '50% 96%'); live(masks[1], 'sk-live-in 2.2s ease-in-out 1.1s infinite');
+      var all = document.querySelectorAll('#dc-root div[style*="infinite"]');
+      for (var ai = 0; ai < all.length; ai++) {
+        var el = all[ai];
+        if (el === masks[0] || el === masks[1]) continue;
+        var orig = el.getAttribute('data-sk-anim');
+        if (!orig) { orig = el.style.animation || el.style.webkitAnimation; if (!orig) continue; el.setAttribute('data-sk-anim', orig); }
+        live(el, orig);
+      }
+    }
+    // the streak number sits INSIDE the cream belly of the flame, deep orange on cream (readable), and moves with the inner flame
+    var digits = String(I.count).length, fsz = digits <= 2 ? 46 : digits === 3 ? 34 : 26;
+    var nEl = masks[1].querySelector('[data-streak-num]');
+    if (!nEl) {
+      nEl = document.createElement('div'); nEl.setAttribute('data-streak-num', '1');
+      masks[1].appendChild(nEl);
+    }
+    nEl.style.cssText = 'position:absolute;left:0;right:0;top:63%;transform:translateY(-50%);text-align:center;font-weight:800;line-height:1;letter-spacing:-1.5px;color:#e8590c;font-size:' + fsz + 'px;pointer-events:none;';
+    if (nEl.textContent !== String(I.count)) nEl.textContent = String(I.count);
     head.textContent = I.headline; sub.textContent = I.sub;
     var CHECK = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M5 12.6 9.8 17.4 19 7.4" stroke="#ffffff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
     for (var i = 0; i < 7; i++) {

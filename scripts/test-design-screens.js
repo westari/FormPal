@@ -243,11 +243,13 @@ const anchor = (p, src, act = 'click') => p.evaluate((s) => { const a = [...docu
     let t = await text(page);
     const heads = async () => page.evaluate(() => [...document.querySelectorAll('#dc-root [data-ds-sec]')].map((h) => h.getAttribute('data-ds-sec')));
     const order = async () => page.evaluate(() => [...document.querySelector('#dc-root div[style*="grid-template-columns"]').children].map((c) => c.hasAttribute('data-ds-sec') ? '## ' + c.getAttribute('data-ds-sec') : (c.innerText || '').split('\n')[0].trim()));
-    check('there is no "Mine" any more; the tabs are All / Created by you / Made for you / FormPal templates', !/Mine/.test(t) && /All\s*Created by you\s*Made for you\s*FormPal templates/.test(t), t.slice(0, 120));
-    check('All shows three headed sections in order: Created by you, Made for you, FormPal templates', (await heads()).join('|') === 'Created by you|Made for you|FormPal templates', (await heads()).join('|'));
+    check('there is no "Mine" any more; the tabs are All / Created by you / Made for you / Templates', !/Mine/.test(t) && /All\s*Created by you\s*Made for you\s*Templates/.test(t), t.slice(0, 120));
+    const fit = await page.evaluate(() => { const e = [...document.querySelectorAll('#dc-root div')].find((d) => (d.textContent || '').trim() === 'Made for you' && d.style.borderRadius === '999px'); const row = e.parentElement; const kids = [...row.children]; return { sw: row.scrollWidth, cw: row.clientWidth, last: kids[kids.length - 1].getBoundingClientRect().right, vw: innerWidth, h: e.getBoundingClientRect().height, font: getComputedStyle(e).fontSize, n: kids.length, overflowX: getComputedStyle(row).overflowX }; });
+    check('11: the four tabs (All / Created by you / Made for you / Templates) all fit on one screen width with no sideways scrolling', fit.n === 4 && fit.sw <= fit.cw && fit.last <= fit.vw - 12 && fit.overflowX !== 'auto', JSON.stringify(fit));
+    check('All shows three headed sections in order: Created by you, Made for you, Templates', (await heads()).join('|') === 'Created by you|Made for you|Templates', (await heads()).join('|'));
     const ord = await order();
-    const iC = ord.indexOf('## Created by you'), iM = ord.indexOf('## Made for you'), iT = ord.indexOf('## FormPal templates');
-    check('each card sits under ITS heading: Arms and Chest under Created; Leg Day + Upper Body under Made; the 6 templates under FormPal templates',
+    const iC = ord.indexOf('## Created by you'), iM = ord.indexOf('## Made for you'), iT = ord.indexOf('## Templates');
+    check('each card sits under ITS heading: Arms and Chest under Created; Leg Day + Upper Body under Made; the 6 templates under Templates',
       ord[iC + 1] === 'Arms and Chest' && iM === iC + 2 && ord.slice(iM + 1, iT).sort().join() === ['Leg Day', 'Upper Body'].sort().join() && TPL.every((n) => ord.slice(iT + 1).some((x) => x === n)), JSON.stringify(ord));
     check('a bookmarked workout floats to the top of its section (Leg Day was bookmarked, so it is before Upper Body)', ord[iM + 1] === 'Leg Day', JSON.stringify(ord));
     check('the plan repeated workout is listed once (Upper Body appears once in Made for you)', ord.filter((x) => x === 'Upper Body').length === 1, JSON.stringify(ord));
@@ -269,10 +271,10 @@ const anchor = (p, src, act = 'click') => p.evaluate((s) => { const a = [...docu
     t = await text(page);
     check('the Made for you tab shows only the plan workouts', (await heads()).join('|') === 'Made for you' && /Leg Day/.test(t) && /Upper Body/.test(t) && !/Arms and Chest|Beginner full body/.test(t), t.slice(0, 200));
     await shot(page, 'my-made');
-    await clickText(page, /^FormPal templates$/);
+    await clickText(page, /^Templates$/);
     await page.waitForTimeout(200);
     t = await text(page);
-    check('the FormPal templates tab lists only the 6 templates', (await heads()).join('|') === 'FormPal templates' && TPL.every((n) => t.includes(n)) && !/Leg Day|Arms and Chest/.test(t), t.slice(0, 200));
+    check('the Templates tab lists only the 6 templates', (await heads()).join('|') === 'Templates' && TPL.every((n) => t.includes(n)) && !/Leg Day|Arms and Chest/.test(t), t.slice(0, 200));
     await shot(page, 'my-templates');
     await page.evaluate(() => document.querySelectorAll('#dc-root div[aria-label="Save"]')[0].click());
     await page.waitForTimeout(150);
