@@ -30,6 +30,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Animated, Easing, useWindowDimensions } from 'react-native';
 import { SymbolView } from 'expo-symbols';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LiquidGlassButton } from './LiquidGlass';
 import { WebView } from 'react-native-webview';
@@ -54,6 +55,10 @@ const SLIDE_IN_MS = 320, SLIDE_OUT_MS = 260;
 // plain fade: no sideways motion at all, and the page under it stays put.
 export const FADES: PerKindLite<boolean> = { recap: true, allsets: true, ranks: true, repfeedback: true };
 export const FADE_IN_MS = 220, FADE_OUT_MS = 160;
+// Today's progress (the 'ranks' page): a white wash sweeps UP the screen, and when it covers everything the page starts to FILL UP (reps count up, bars
+// slide forward, muscles light up one after another, ~1.5 s, a tap skips). Wash + fill is about 2 seconds in all. The numbers themselves are
+// drawn by the page (lib/muscleRanksInject.ts __mrArm / __mrPlay / __mrSkip).
+export const WASH_MS = 700, WASH_PLAY_MS = 380;
 // How far the page underneath moves left while another slides over it (a third of the screen, like a normal iOS push).
 const PARALLAX = 0.3;
 // The sliding value of every layer, so a page can follow the one covering it.
@@ -297,6 +302,17 @@ function Layer({ k }: { k: WarmKind }) {
   const underShift = coverTx ? coverTx.interpolate({ inputRange: [0, screenW], outputRange: [-screenW * PARALLAX, 0], extrapolate: 'clamp' }) : noShift;
   const [shown, setShown] = useState(false);
   const wasShown = useRef(false);
+  // the white wash over Today's progress (only the 'ranks' page has one)
+  const { height: screenH } = useWindowDimensions();
+  const wash = useRef(new Animated.Value(0)).current;
+  const [washOn, setWashOn] = useState(false);
+  const startWash = () => {
+    setWashOn(true); wash.setValue(0);
+    ref.current?.injectJavaScript('window.__mrArm && window.__mrArm(true); true;');   // empty numbers first (a second visit re-arms)
+    Animated.timing(wash, { toValue: 1, duration: WASH_MS, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }).start(() => setWashOn(false));
+    setTimeout(() => ref.current?.injectJavaScript('window.__mrPlay && window.__mrPlay(); true;'), WASH_PLAY_MS);
+    if (__DEV__) console.log('[warm:ranks] white wash + fill-up started');
+  };
   const wanted = layerShouldShow(visible, coveredByHigher, wasShown.current);
   // While a page above it has fully slid in, a page beneath is kept in place (so closing the top one is
   // instant) but made invisible: the top page can be transparent over a video, and the beneath page's
@@ -314,6 +330,7 @@ function Layer({ k }: { k: WarmKind }) {
     if (wanted) {
       if (!wasShown.current) {
         wasShown.current = true;
+        if (k === 'ranks') startWash();
         if (coveredByHigher) {
           // Another page is already on top of it (Finish review: the muscle page opens underneath the rep
           // feedback page while that one slides away): in place at once, no slide of its own.
@@ -383,6 +400,8 @@ function Layer({ k }: { k: WarmKind }) {
           if (msg.type === 'ready') {
             if (__DEV__) console.log(`[warm:${k}] ready`);
             set(k, { revealed: true } as any);
+            // Today's progress waits EMPTY until the wash covers the screen, so the numbers fill up while you watch
+            if (k === 'ranks') ref.current?.injectJavaScript('window.__mrArm && window.__mrArm(); true;');
           }
           noteWarmMessage(k, msg);
           handlers[k]?.(msg);
@@ -412,6 +431,14 @@ function Layer({ k }: { k: WarmKind }) {
       />
       </Animated.View>
       {shown && overlay ? <View style={StyleSheet.absoluteFill} pointerEvents="box-none">{overlay}</View> : null}
+      {k === 'ranks' && washOn ? (
+        <Animated.View
+          pointerEvents="none"
+          style={{ position: 'absolute', left: 0, right: 0, top: 0, height: screenH * 1.5, transform: [{ translateY: wash.interpolate({ inputRange: [0, 1], outputRange: [screenH, -screenH * 1.5] }) }] }}
+        >
+          <LinearGradient colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.94)', '#ffffff']} locations={[0, 0.2, 0.32]} style={StyleSheet.absoluteFill} />
+        </Animated.View>
+      ) : null}
       {shown && pageBroken && k !== 'recap' ? (
         <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
           <LiquidGlassButton

@@ -64,7 +64,7 @@ function run(events, opts = {}) {
           verdicts.push({ t: now - 1e12, show: v.show, reason: v.reason, src: 'soft', score: mm.result().score });
         } else if (ev.outcome === 'missed' || ev.outcome === 'rejected') {
           st.missed++;
-          const v = coach.verdict({ now, match: mm.result(), source: 'attempt', blocker: ev.blocker, rangeWord: ev.reason, n: ev.n });
+          const v = coach.verdict({ now, match: mm.result(), source: 'attempt', blocker: ev.blocker, rangeWord: ev.reason, n: ev.n, strokeR: ev.strokeR });
           if (v.show) st.lastJudgedAt = now;
           verdicts.push({ t: now - 1e12, show: v.show, reason: v.reason, src: 'attempt', blocker: ev.blocker, score: mm.result().score });
         }

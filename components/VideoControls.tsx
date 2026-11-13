@@ -14,6 +14,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { SymbolView } from 'expo-symbols';
+import { LiquidGlassButton, GLASS_SUPPORTED } from './LiquidGlass';
 import type { VideoPlayer } from 'expo-video';
 
 const VIDEO_CONTROLS_BUILD = 'vc-8';
@@ -92,28 +93,34 @@ export default function VideoControls({
   );
 }
 
-// BUG FOUND (repeatedly, across 3 rounds of tint/fallback-color tweaks
-// to LiquidGlass — "still looks the same, ugly, white, small"): real
-// Apple Liquid Glass is a genuine system material Claude can't fully
-// control the look of (tintColor only nudges it, and Apple's own
-// material can stay bright/light regardless), and the fallback render
-// apparently wasn't landing as intended either. Rather than keep tuning
-// a material that isn't behaving predictably, these buttons now use
-// expo-blur's BlurView (already a project dependency) with an explicit
-// dark overlay on top — fully self-contained, same look every time,
-// regardless of Liquid Glass's own availability or behavior. This is a
-// deliberate departure from the "use @callstack/liquid-glass for glass"
-// default — flagging it plainly since it's a real change, not hiding it.
+// REAL Apple Liquid Glass (components/LiquidGlass.tsx, the same material family as the tab bar), the same button GlassChrome uses for the
+// back and All sets buttons (components/WarmSurfaces.tsx). Ari 2026-11-13: "make them real Liquid Glass like the tab bar". Before, these were
+// a BlurView with a dark overlay on purpose (an old note says the glass looked wrong in earlier rounds); that fake is now only the fallback
+// for a build whose native module has no glass (GLASS_SUPPORTED false), where a flat grey disc would look worse than a blur.
 function ControlButton({
   onPress, icon, size, iconSize,
 }: { onPress: () => void; icon: 'gobackward.10' | 'goforward.10' | 'play.fill' | 'pause.fill'; size: number; iconSize: number }) {
+  const symbol = <SymbolView name={icon} size={iconSize} tintColor="#ffffff" type="monochrome" style={{ width: iconSize, height: iconSize }} />;
+  if (GLASS_SUPPORTED) {
+    return (
+      <LiquidGlassButton
+        onPress={onPress}
+        radius={size / 2}
+        variant="regular"
+        colorScheme="dark"
+        containerStyle={{ width: size, height: size }}
+        hitSlop={8}
+        style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}
+      >
+        {symbol}
+      </LiquidGlassButton>
+    );
+  }
   return (
     <Pressable onPress={onPress} hitSlop={8} style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden' }}>
       <BlurView tint="dark" intensity={80} style={StyleSheet.absoluteFill} />
       <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.38)' }]} />
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <SymbolView name={icon} size={iconSize} tintColor="#ffffff" type="monochrome" style={{ width: iconSize, height: iconSize }} />
-      </View>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>{symbol}</View>
     </Pressable>
   );
 }

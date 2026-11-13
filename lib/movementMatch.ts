@@ -26,6 +26,8 @@ export interface MatchResult {
   cut: PathCut;               // where the path is cut off from the camera, if it is
   topCuts: number; bottomCuts: number; frameCuts: number;
   tryingForSec: number;       // how long it has been HIGH without a break
+  /** the path moved in the last ~2.5 s. The 10 s score remembers reps after the user stops; this does not. Stuck / Guide / Coach use it so a rest is never read as "trying". */
+  movingNow: boolean;
 }
 
 export interface MovementMatch {
@@ -148,7 +150,7 @@ export function createMovementMatch(opts: { now?: () => number; log?: (m: string
   const empty = (t: number, cs: ReturnType<typeof cutState>, n: number): MatchResult => ({
     score: 0, trying: false, notTrying: true, haveData: false,
     parts: { motion: 0, rhythm: null, range: 0, position: 0 }, spreadR: 0, inBandFrac: 0, periodSec: null, samples: n,
-    cut: cs.cut, topCuts: cs.top, bottomCuts: cs.bottom, frameCuts: cs.frame, tryingForSec: 0,
+    cut: cs.cut, topCuts: cs.top, bottomCuts: cs.bottom, frameCuts: cs.frame, tryingForSec: 0, movingNow: false,
   });
 
   function result(): MatchResult {
@@ -224,6 +226,10 @@ export function createMovementMatch(opts: { now?: () => number; log?: (m: string
       spreadR, inBandFrac: inFrac, periodSec, samples: win.length,
       cut: cs.cut, topCuts: cs.top, bottomCuts: cs.bottom, frameCuts: cs.frame,
       tryingForSec: tryStart ? (t - tryStart) / 1000 : 0,
+      movingNow: (() => {
+        const rec = samples.filter(p => t - p.t <= T.moveNowSec * 1000).map(p => p.v).sort((a, b) => a - b);
+        return rec.length >= 3 && (pct(rec, 0.75) - pct(rec, 0.25)) >= T.moveNowIqrR * r;
+      })(),
     };
     // [MOVE-MATCH]: when it moves by logDelta or every logEverySec
     if (opts.log && (Math.abs(score - lastLogScore) >= T.logDelta || (res.cut ?? '') !== lastLogCut || t - lastLogAt >= T.logEverySec * 1000)) {

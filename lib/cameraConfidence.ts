@@ -59,7 +59,8 @@ export function createCameraConfidence(opts: { log?: (m: string) => void } = {})
       const dt = lastNow ? Math.min(1000, Math.max(0, i.now - lastNow)) / 1000 : 0;
       lastNow = i.now;
       if (evidenceAt !== lastCountSeen) { lastCountSeen = evidenceAt; tryAcc = 0; }
-      if (trying) { tryAcc += dt; lastTryingAt = i.now; }
+      // Only time spent MOVING counts: the 10 s score still reads HIGH for a few seconds after the user stops, and a rest is not "stuck".
+      if (trying) { lastTryingAt = i.now; if (i.match.movingNow !== false || i.match.cut) tryAcc += dt; }
       const notCountingSec = tryAcc;
       const onset = trying && !counting && (tryAcc >= C.stuckAfterSec || i.missedSinceCount >= C.stuckAttempts);
       if (counting) stuckSince = 0;

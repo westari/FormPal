@@ -41,13 +41,14 @@ function bodyMapParts(tiers: MuscleTiers, side: 'front' | 'back', outlined = fal
   const table = side === 'front' ? MUSCLE_MAP_FRONT_PATHS : MUSCLE_MAP_BACK_PATHS;
   // fragment id -> fill colour, for muscles ranked on THIS side
   const fillById: Record<string, string> = {};
+  const muscleById: Record<string, string> = {};   // fragment id -> muscle name (only for the lit ones): the page lights them one by one
   for (const m of Object.keys(MUSCLE_MAP_REGIONS) as Muscle[]) {
     const region = MUSCLE_MAP_REGIONS[m]!;
     if (region.side !== side) continue;
     const info = tiers[m];
     if (!info) continue;
     const meta = TIER_META[info.tier];
-    for (const id of region.ids) fillById[id] = muscleFill(meta.lo, meta.ink);
+    for (const id of region.ids) { fillById[id] = muscleFill(meta.lo, meta.ink); muscleById[id] = m; }
   }
   const parts: string[] = [];
   const silhouette = table.silhouette;
@@ -68,7 +69,8 @@ function bodyMapParts(tiers: MuscleTiers, side: 'front' | 'back', outlined = fal
     // blue-grey, thinner than the body outline); plain maps keep the white seam.
     const mStroke = outlined ? MUSCLE_OUTLINE_STROKE : '#ffffff';
     const mWidth = outlined ? MUSCLE_OUTLINE_WIDTH : 0.9;
-    parts.push(`<path d="${table[id]}" fill="${fill}" stroke="${mStroke}" stroke-width="${mWidth}" stroke-linejoin="round"/>`);
+    const dm = muscleById[id] ? ` data-m="${muscleById[id]}"` : '';
+    parts.push(`<path d="${table[id]}" fill="${fill}"${dm} stroke="${mStroke}" stroke-width="${mWidth}" stroke-linejoin="round"/>`);
   }
   if (silhouette && outlined) {
     parts.push(`<path d="${silhouette}" fill="none" stroke="${OUTLINE_STROKE}" stroke-width="${OUTLINE_WIDTH}" stroke-linejoin="round"/>`);
@@ -86,9 +88,10 @@ const vb = (side: 'front' | 'back') => MUSCLE_MAP_VIEWBOX[side].split(' ').map(N
 // <img src>), with only the given muscles coloured (bronze — "muscles you just
 // trained") and everything else neutral. Same path data / region table as the
 // Progress tab and the native MuscleTierMap, so it's the app's real body map.
-export function bodyMapPairSvg(worked: Muscle[]): string {
+export function bodyMapPairSvg(worked: Muscle[], tierOf?: MuscleTiers): string {
   const tiers: MuscleTiers = {};
-  for (const m of worked) tiers[m] = { tier: 'bronze', peakTier: 'bronze', volume: 0, goodRatio: 0 };
+  // trained muscles are bright in THEIR OWN rank colour when the ranks are given (else bronze); every other muscle stays grey
+  for (const m of worked) tiers[m] = { tier: tierOf?.[m]?.tier ?? 'bronze', peakTier: 'bronze', volume: 0, goodRatio: 0 };
   const [, , fw, fh] = vb('front');
   const [, , bw, bh] = vb('back');
   const gap = 56;
@@ -99,6 +102,6 @@ export function bodyMapPairSvg(worked: Muscle[]): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${fig('front', 0, fw, fh)}${fig('back', fw + gap, bw, bh)}</svg>`;
 }
 
-export function bodyMapPairDataUri(worked: Muscle[]): string {
-  return 'data:image/svg+xml;utf8,' + encodeURIComponent(bodyMapPairSvg(worked));
+export function bodyMapPairDataUri(worked: Muscle[], tierOf?: MuscleTiers): string {
+  return 'data:image/svg+xml;utf8,' + encodeURIComponent(bodyMapPairSvg(worked, tierOf));
 }

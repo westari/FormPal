@@ -57,6 +57,9 @@ try {
 
 export const GLASS_SUPPORTED =
   Platform.OS === 'ios' && nativeGlassSupported && NativeLiquidGlassView != null;
+// One line per app start so a log shows whether this build really draws Liquid Glass (a build made with an older Xcode reports false and
+// every glass button falls back to a flat surface; the fix is then a new build, not code).
+if (typeof __DEV__ !== 'undefined' && __DEV__) console.log('[GLASS] real Liquid Glass: ' + (GLASS_SUPPORTED ? 'ON' : 'OFF') + ' (native module present: ' + (NativeLiquidGlassView != null) + ', system says supported: ' + nativeGlassSupported + ')');
 
 export type LiquidGlassVariant = 'regular' | 'clear' | 'none';
 export type LiquidGlassColorScheme = 'auto' | 'light' | 'dark' | 'system';

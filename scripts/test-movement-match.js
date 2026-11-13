@@ -311,7 +311,7 @@ console.log('\n--- 5. wiring in app/formcheck.tsx ---');
   check('Movement Match is fed every log line and everything resets at Go', fc.includes('matchRef.feed(e.message);') && fc.includes('matchRef.reset(); confRef.reset(); guideEngine.reset(); coachRef.reset();'));
   check('the 200ms tick wires match -> path cut -> confidence -> Guide', fc.includes('attemptRef.current.setPathCut(m.cut);') && fc.includes('const conf = confRef.update(') && fc.includes('guideEngine.decide('));
   check('the four log tags are produced by the pieces the screen uses ([MOVE-MATCH] [GUIDE] [COACH] [CONFIDENCE])', ['[MOVE-MATCH]', '[GUIDE]', '[COACH]', '[CONFIDENCE]'].every((t) => ['lib/movementMatch.ts', 'lib/guideCoach.ts', 'lib/cameraConfidence.ts'].some((f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8').includes(t))));
-  check('the cue card keeps the old layout: stars left (original size), centred text beside them, two lines at most', fc.includes('const icon = 22;') && fc.includes('numberOfLines={2} adjustsFontSizeToFit'));
+  check('the cue card keeps the old layout: stars left (original size), centred text beside them, two lines at most', fc.includes('const icon = 22;') && fc.includes('numberOfLines={2}') && !fc.includes('adjustsFontSizeToFit') && fc.includes("trackingCueCard:  { alignSelf: 'center', maxWidth: 340, minWidth: 230 }"));
   check('all numbers live in ONE tuning file and are labelled placeholders', fs.readFileSync(path.join(__dirname, '..', 'lib/coachTuning.ts'), 'utf8').includes('ALL NUMBERS ARE PLACEHOLDERS'));
 }
 

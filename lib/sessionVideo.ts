@@ -36,6 +36,7 @@ const VIDEO_LOG_KEY = 'formpal_video_log';
 // videos logged after the previous workout ended and up to its own end (never more than 3 hours back).
 const MATCH_TOLERANCE_MS = 5000;
 const MAX_WORKOUT_MS = 3 * 60 * 60 * 1000;
+const ADOPT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 type VideoLogEntry = { uri: string; ts: number };
 
@@ -65,7 +66,10 @@ const nameOf = (uri: string) => (uri.split('?')[0].split('/').pop() || '').trim(
 async function adoptOrphanClips(entries: VideoLogEntry[]): Promise<void> {
   try {
     const known = new Set(entries.map(e => nameOf(e.uri)));
-    const orphans = listTempClips().filter(c => !known.has(nameOf(c.uri)) && c.t > 0);
+    // Only clips from the last 30 days: the 30-day clean-up (app/_layout.tsx) would delete older ones at once, and the 2026-11-13 log shows the
+    // first version copying 19 clips from July to October (about 240 MB) into the permanent folder for nothing.
+    const horizon = Date.now() - ADOPT_MAX_AGE_MS;
+    const orphans = listTempClips().filter(c => !known.has(nameOf(c.uri)) && c.t > horizon);
     if (!orphans.length) return;
     const next = entries.slice();
     for (const c of orphans) {

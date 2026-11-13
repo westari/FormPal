@@ -131,8 +131,9 @@ check('strokes that did NOT reach the line are not counted (lows of 61-68 stay m
   const det = AD.createAttemptDetector({ exerciseId: 'shoulderPress', now: () => clock });
   const evs = [];
   const feedV = (v) => { clock += 330; evs.push(...det.feed(`[METRIC] shoulderPress value=${v} enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top`)); };
-  try { for (let rep = 0; rep < 6; rep++) for (const v of [86, 84, 80, 76, 74, 75, 80, 84, 86, 87]) feedV(v); } finally { Date.now = realNow; }
-  check('a tiny wiggle at the top is not an attempt, so nothing is adapted and no wrong cue is shown', !evs.some((e) => e.kind === 'adapt') && !evs.some((e) => e.kind === 'stuck'));
+  try { for (let rep = 0; rep < 6; rep++) for (const v of [86, 85, 83, 81, 80, 81, 83, 85, 86, 87]) feedV(v); } finally { Date.now = realNow; }
+  // (2026-11-13: the old wiggle swung 86 to 74 = 0.45 of the range, the same size as Ari's deliberate half reps, which must now get an X; a real wiggle is under 0.3 of the range)
+  check('a tiny wiggle at the top (7 degrees, under a third of the range) is not an attempt, so nothing is adapted and no wrong cue is shown', !evs.some((e) => e.kind === 'adapt') && !evs.some((e) => e.kind === 'stuck'));
 }
 // ── every attempt gets a check or an X with a plain reason (half reps included) ────────────────────────────────
 function feedSeq(det, values, startAt, stepMs = 330) {

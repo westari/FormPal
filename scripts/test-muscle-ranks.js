@@ -33,6 +33,9 @@ let failed = 0;
 const check = (name, ok, detail) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  -> ' + detail : ''}`); if (!ok) failed++; };
 
 const DAY = 24 * 60 * 60 * 1000;
+// A row's % gain, recomputed from its bar (the rows now say reps; the bar moved by exactly the old % gain): barTo - barFrom
+const gp = (h) => Math.round((h.barTo - h.barFrom) * 10) / 10;
+const ROWTXT = /^\+\d+ reps? · (\d+ to [A-Z][a-z]+|Top rank)$/;
 const TIERIDX = { bronze: 0, silver: 1, gold: 2, platinum: 3, diamond: 4, master: 5, champion: 6 };
 const NOW = Date.now();
 const entry = (id, reps, good, daysAgo, ts) => ({
@@ -92,8 +95,8 @@ SCENARIOS['many muscles (full body)'] = build(
 {
   const sc = build([entry('romanianDeadlift', 60, 55, 10)], [entry('romanianDeadlift', 30, 27, 0)]);
   sc.payload.hits = [
-    { name: 'Hamstrings', gain: '+30.0%', icon: iconFor('hamstrings') },
-    { name: 'Rear Delts', gain: '+30.0%', icon: iconFor('shoulders') },
+    { name: 'Hamstrings', gain: '+30 reps · 100 to Silver', icon: iconFor('hamstrings'), muscle: 'hamstrings', reps: 30, toNext: 100, nextLabel: 'Silver', barFrom: 20, barTo: 40 },
+    { name: 'Rear Delts', gain: '+30 reps · 100 to Silver', icon: iconFor('shoulders'), muscle: 'rearDelts', reps: 30, toNext: 100, nextLabel: 'Silver', barFrom: 20, barTo: 40 },
   ];
   sc.synthetic = true; // rows overridden by hand for a layout stress test
   sc.payload.note = 'Layout stress test.';
@@ -131,15 +134,15 @@ for (const [name, sc] of Object.entries(SCENARIOS)) {
     const overallGain = r1(Math.max(0, r1(ovAbs(sc.tiersAfter)) - r1(ovAbs(sc.tiersBefore)))); // how far the OVERALL rank % moved this workout
     // header: ONLY the newest number
     check(`${name}: the header shows ONLY the newest % (${avgA}%), no "old -> new"`, p.rank.pctLabel === `${avgA.toFixed(1)}%` && !/→/.test(p.rank.pctLabel) && p.rank.pct === avgA, p.rank.pctLabel);
-    if (!sc.synthetic) check(`${name}: "Overall +X%" is how much the overall rank (the average of every muscle) really moved (+${p.rank.gained}%), NOT the sum of the rows (${p.hits.map(h => h.gain).join(' + ')})`, Math.abs(parseFloat(p.rank.gained) - overallGain) <= 0.11 && (p.hits.length < 2 || parseFloat(p.rank.gained) < p.hits.reduce((a, h) => a + parseFloat(h.gain.replace(/[+%]/g, '')), 0)), `${p.rank.gained} vs ${overallGain}`);
+    if (!sc.synthetic) check(`${name}: "Overall +X%" is how much the overall rank (the average of every muscle) really moved (+${p.rank.gained}%), NOT the sum of the rows (${p.hits.map(h => h.gain).join(' + ')})`, Math.abs(parseFloat(p.rank.gained) - overallGain) <= 0.11 && (p.hits.length < 2 || parseFloat(p.rank.gained) < p.hits.reduce((a, h) => a + gp(h), 0)), `${p.rank.gained} vs ${overallGain}`);
     check(`${name}: the overall gain is never negative and has one decimal`, parseFloat(p.rank.gained) >= 0 && /^\d+\.\d$/.test(p.rank.gained), p.rank.gained);
-    const rowsOk = p.hits.every((h, i) => Math.abs(parseFloat(h.gain.replace(/[+%]/g, '')) - r1(gain(worked[i].muscle))) <= 0.11);
+    const rowsOk = p.hits.every((h, i) => Math.abs(gp(h) - r1(gain(worked[i].muscle))) <= 0.11);
     if (!sc.synthetic) check(`${name}: each ROW = that muscle's own progress after - before`, rowsOk);
-    if (!sc.synthetic && sc.entries.some(e => e.reps > 0)) check(`${name}: a workout GIVES a gain (every shown muscle > +0.0%)`, p.hits.length > 0 && p.hits.every(h => parseFloat(h.gain.replace(/[+%]/g, '')) > 0), p.hits.map(h => h.gain).join(','));
-    check(`${name}: every number on the page has exactly one decimal`, /^\d+\.\d$/.test(p.rank.gained) && /^\d+\.\d%$|^Top rank$/.test(p.rank.pctLabel) && p.hits.every(h => /^\+\d+\.\d%$/.test(h.gain)), `${p.rank.pctLabel} | ${p.rank.gained} | ${p.hits.map(h => h.gain).join(',')}`);
+    if (!sc.synthetic && sc.entries.some(e => e.reps > 0)) check(`${name}: a workout GIVES a gain (every shown muscle > +0.0%)`, p.hits.length > 0 && p.hits.every(h => gp(h) > 0), p.hits.map(h => h.gain).join(','));
+    check(`${name}: every number on the page has exactly one decimal`, /^\d+\.\d$/.test(p.rank.gained) && /^\d+\.\d%$|^Top rank$/.test(p.rank.pctLabel) && p.hits.every(h => ROWTXT.test(h.gain)), `${p.rank.pctLabel} | ${p.rank.gained} | ${p.hits.map(h => h.gain).join(',')}`);
     if (!sc.synthetic) check(`${name}: the note is plain coach words (no maths, no arrows, no "total gained")`, !/Total gained|average of|=|→|\+\d/.test(p.note) && p.note.length < 190 && /moved up|Nice work|top rank/.test(p.note), p.note);
   }
-  check(`${name}: every row has a real muscle name + a +N% gain (no bare "+%")`, p.hits.every(h => h.name && /^\+\d+(\.\d)?%$/.test(h.gain)));
+  check(`${name}: every row has a real muscle name + "+N reps · M to Gold" (whole reps)`, p.hits.every(h => h.name && ROWTXT.test(h.gain)));
 }
 // ── user's report: "Bronze 53.2% -> 53.2%", Shoulders +0.0%, Triceps +0.0% right after a workout ──
 // Shoulders/triceps were already past the overall (weakest-link) tier, so they were capped at 100 before AND after.
@@ -150,9 +153,9 @@ for (const [name, sc] of Object.entries(SCENARIOS)) {
   const p = sc.payload;
   console.log(`  user report repro: ${p.rank.label} ${p.rank.pctLabel}  today +${p.rank.gained}%  rows=${p.hits.map(h => h.name + ' ' + h.gain).join(' | ')}`);
   check('REPORT: the tiers are what the report describes (shoulders already above the overall rank)', sc.tiersAfter.shoulders.tier === 'silver' && sc.tiersAfter.triceps.tier === 'bronze' && sc.standingAfter.tier === 'bronze', `${sc.tiersAfter.shoulders.tier} vs overall ${sc.standingAfter.tier} (the overall is the AVERAGE of every muscle: one Silver muscle among eleven is still Bronze overall)`);
-  { const g = (n) => { const h = p.hits.find(x => x.name === n); return h ? parseFloat(h.gain.replace(/[+%]/g, '')) : null; };
+  { const g = (n) => { const h = p.hits.find(x => x.name === n); return h ? gp(h) : null; };
     check('REPORT FIXED: Shoulders and Triceps both show a real gain', g('Shoulders') > 0 && g('Triceps') > 0, p.hits.map(h => h.name + ' ' + h.gain).join(' ')); }
-  check('REPORT FIXED: the overall gain is above zero and SMALLER than the sum of the rows (it is the move of the average of every muscle)', parseFloat(p.rank.gained) > 0 && parseFloat(p.rank.gained) < (p.hits.reduce((a, h) => a + parseFloat(h.gain.replace(/[+%]/g, '')), 0)), p.rank.gained);
+  check('REPORT FIXED: the overall gain is above zero and SMALLER than the sum of the rows (it is the move of the average of every muscle)', parseFloat(p.rank.gained) > 0 && parseFloat(p.rank.gained) < (p.hits.reduce((a, h) => a + gp(h), 0)), p.rank.gained);
 }
 {
   // the user's rule: ONE header number = how far the OVERALL rank % went up (not a sum of the rows)
@@ -163,7 +166,7 @@ for (const [name, sc] of Object.entries(SCENARIOS)) {
     standingBefore: { tier: 'bronze', progress: 0.5, atTop: false }, standingAfter: { tier: 'bronze', progress: 0.512, atTop: false },
     labels: { shoulders: 'Shoulders', triceps: 'Triceps' }, iconFor: () => null, emblem: null,
   });
-  check(`HEADER: "Overall +${p.rank.gained}%" is the sum of the rows (${p.hits.map(h => h.gain).join(' + ')}), not the % the overall bar moved`, Math.round(parseFloat(p.rank.gained) * 10) === (p.hits.reduce((a, h) => a + Math.round(parseFloat(h.gain.replace(/[+%]/g, '')) * 10), 0)) && p.rank.next === 'Silver' && p.hits.length === 2, p.rank.gained);
+  check(`HEADER: "+${p.rank.gained}% today" is how far the OVERALL rank % moved (50.0% to 51.2% = +1.2), not a sum of rows`, p.rank.gained === '1.2' && p.rank.next === 'Silver' && p.hits.length === 2, p.rank.gained);
 }
 {
   // below Bronze counts ALL the training, capped at 99% until Bronze is real
@@ -172,20 +175,20 @@ for (const [name, sc] of Object.entries(SCENARIOS)) {
   const sc = build(prior, today);
   const bic = sc.payload.hits.find(h => h.name === 'Biceps');
   // 30 reps before (60% toward Bronze), 39 after (78%): the row is +18.0, not today's 9 reps alone (+18 coincides) - use a case that tells them apart below
-  check('first rank: biceps (117 of the 150 reps to Silver) is Bronze 78% and its row is the gain in ALL-time progress (+18.0%)', sc.tiersAfter.biceps.tier === 'bronze' && bic && bic.gain === '+18.0%', bic && bic.gain);
+  check('first rank: biceps (117 of the 150 reps to Silver) is Bronze 78%: the row says +27 reps with 33 to go, and its bar moved +18.0%', sc.tiersAfter.biceps.tier === 'bronze' && bic && gp(bic) === 18 && bic.reps === 27 && bic.toNext === 33 && /33 to Silver/.test(bic.gain), bic && bic.gain);
   const big = build([mk(120, NOW - 4 * DAY)], [mk(27, NOW)]); // 120 -> 147 reps: 80% -> 98%
   const bic2 = big.payload.hits.find(h => h.name === 'Biceps');
-  check('first rank: 147 of 150 reps shows 98% and still Bronze (never 100% until Silver is real) - row +18.0%', big.tiersAfter.biceps.tier === 'bronze' && bic2 && bic2.gain === '+18.0%', bic2 && bic2.gain);
+  check('first rank: 147 of 150 reps shows 98% and still Bronze (never 100% until Silver is real) - row +18.0%', big.tiersAfter.biceps.tier === 'bronze' && bic2 && gp(bic2) === 18 && bic2.toNext === 3, bic2 && bic2.gain);
   const cross = build([mk(135, NOW - 4 * DAY)], [mk(90, NOW)]); // crosses Bronze today: a positive, bounded gain
   const bic3 = cross.payload.hits.find(h => h.name === 'Biceps');
-  check('crossing Silver today gives a positive gain (not a drop from 99% to ~0) and never reads over +99.9%', !!cross.tiersAfter.biceps && bic3 && parseFloat(bic3.gain) > 0 && parseFloat(bic3.gain) <= 99.9, bic3 && bic3.gain);
+  check('crossing Silver today gives a positive gain (not a drop from 99% to ~0) and never reads over +99.9%', !!cross.tiersAfter.biceps && bic3 && gp(bic3) > 0 && bic3.reps > 0 && gp(bic3) <= 99.9, bic3 && bic3.gain);
 }
 {
   // 30 good reps on ONE muscle from Unranked read +60% (Bronze at 50 reps). Now about +20% (30 of 150).
   const bi = build([], [{ ts: NOW, exerciseId: 'curl', displayName: 'Curl', reps: 30, goodReps: 30, pct: 100, formChecked: true }]);
   const b = bi.payload.hits.find((h) => h.name === 'Biceps');
   console.log('      30 good bicep curls from the start (Bronze 0%): ' + (b && b.gain));
-  check('30 good reps on one muscle from Bronze 0% = about +20% (was +60%)', !!b && Math.abs(parseFloat(b.gain.replace(/[+%]/g, '')) - 20) <= 0.5, b && b.gain);
+  check('30 good reps on one muscle from Bronze 0% = about +20% (was +60%)', !!b && Math.abs(gp(b) - 20) <= 0.5, b && b.gain);
 }
 // ── Per-exercise muscle weights (PLACEHOLDERS, constants/muscleWeights.ts): main muscle most, helpers much less ─────────
 {
@@ -199,15 +202,15 @@ for (const [name, sc] of Object.entries(SCENARIOS)) {
   check('push-up: chest highest, triceps less, shoulders less, biceps none', credit('pushup', 'chest') === 1 && credit('pushup', 'triceps') < 1 && credit('pushup', 'shoulders') < 1 && credit('pushup', 'triceps') > 0 && credit('pushup', 'biceps') === 0, ['chest', 'triceps', 'shoulders', 'biceps'].map((m) => m + ' ' + credit('pushup', m)).join(', '));
   // through the real rank maths: a push-up workout, a fresh user (all bronze, so the rows are comparable)
   const pu = build([], [entry('pushup', 20, 18, 0)]);
-  const g = (n) => { const h = pu.payload.hits.find((x) => x.name === n); return h ? parseFloat(h.gain.replace(/[+%]/g, '')) : 0; };
+  const g = (n) => { const h = pu.payload.hits.find((x) => x.name === n); return h ? gp(h) : 0; };
   console.log('      push-up x20 through the rank maths: ' + pu.payload.hits.map((h) => h.name + ' ' + h.gain).join(' | ') + '   Overall +' + pu.payload.rank.gained + '%');
   check('push-up workout: Chest gains the most, then Triceps, then Shoulders; Biceps has no row', g('Chest') > g('Triceps') && g('Triceps') > g('Shoulders') && g('Shoulders') > 0 && !pu.payload.hits.some((h) => h.name === 'Biceps'), pu.payload.hits.map((h) => h.name + ' ' + h.gain).join(' '));
   check('the rows no longer all show the same number', new Set(pu.payload.hits.map((h) => h.gain)).size === pu.payload.hits.length, pu.payload.hits.map((h) => h.gain).join(' '));
   const sp = build([], [entry('shoulderPress', 30, 28, 0)]);
-  const gs = (n) => { const h = sp.payload.hits.find((x) => x.name === n); return h ? parseFloat(h.gain.replace(/[+%]/g, '')) : 0; };
+  const gs = (n) => { const h = sp.payload.hits.find((x) => x.name === n); return h ? gp(h) : 0; };
   check('shoulder press: Shoulders gain clearly more than Triceps (placeholder weights 1.0 vs 0.4)', gs('Shoulders') > gs('Triceps') && gs('Triceps') > 0, sp.payload.hits.map((h) => h.name + ' ' + h.gain).join(' '));
   for (const [nm, sc] of Object.entries({ 'push-up': pu, 'shoulder press': sp })) {
-    const sum = sc.payload.hits.reduce((a, h) => a + parseFloat(h.gain.replace(/[+%]/g, '')), 0);
+    const sum = sc.payload.hits.reduce((a, h) => a + gp(h), 0);
     check(nm + ': Overall +X% is the small move of the overall rank, not the sum of the rows (' + sc.payload.hits.map((h) => h.gain).join(' + ') + ' vs +' + sc.payload.rank.gained + ')', parseFloat(sc.payload.rank.gained) > 0 && parseFloat(sc.payload.rank.gained) < sum / 2, sc.payload.rank.gained);
   }
 }
@@ -220,8 +223,8 @@ check('rows carry the real Flaticon art', A.hits.every(h => h.icon && h.icon.sta
   const sc = SCENARIOS['shoulders+triceps (bronze)'];
   // before today the shoulders had 40 reps of Bronze's 150 (unranked, 26.7% toward Bronze = about -73.3 on the scale just below Bronze's 0)
   const exp = 28 / sessionLog.VOLUME_THRESHOLDS.find(([t]) => t === 'silver')[1] * 100; // only GOOD reps count: 28 of today's 30 // 30 shoulder-press reps today, still below Bronze: 30 of the 150-rep bar
-  const shown = parseFloat(A.hits.find(h => h.name === 'Shoulders').gain.replace(/[+%]/g, ''));
-  check('Shoulders +% equals (after - before) progress from the logs', Math.abs(shown - exp) <= 0.51, `shown ${shown} expected ${exp.toFixed(2)}`);
+  const shown = gp(A.hits.find(h => h.name === 'Shoulders')); const shownReps = A.hits.find(h => h.name === 'Shoulders').reps;
+  check('Shoulders: the bar moved (after - before) progress from the logs, and the row says +28 reps (the good ones)', Math.abs(shown - exp) <= 0.51 && shownReps === 28, `bar ${shown} expected ${exp.toFixed(2)}, reps ${shownReps}`);
 }
 {
   // body map: only the worked muscles are coloured
@@ -285,13 +288,14 @@ check('rows carry the real Flaticon art', A.hits.every(h => h.icon && h.icon.sta
 
     const txt = atReady.text.replace(/\s+/g, ' ');
     check(`${name}: header shows real rank + % + where it is heading`, txt.includes(p.rank.label) && txt.includes(p.rank.pctLabel), `${p.rank.label} ${p.rank.pctLabel}`);
-    const overallText = p.rank.atTop ? 'Top rank reached' : `Overall +${p.rank.gained}%`;
-    check(`${name}: "${p.rank.label} -> ${p.rank.next}" row + "${overallText}"`, txt.includes(p.rank.next) && txt.includes(overallText), txt.match(/Overall[^A-Z]*/)?.[0]);
-    check(`${name}: the "Each muscle's own progress" text and the old "Overall rank x% → y%" line are GONE`, !/own progress/i.test(txt) && !/Overall rank/i.test(txt) && !/→ ?\d/.test(txt.replace(p.rank.label + ' → ' + p.rank.next, '')), txt.match(/Overall[^A-Z]*/)?.[0]);
+    const overallText = p.rank.atTop ? 'Top rank reached' : `+${p.rank.gained}% today`;
+    check(`${name}: OVERALL has its own section: "Overall rank: ${p.rank.label}" and "${overallText}"`, txt.includes('Overall rank: ' + p.rank.label) && txt.includes(overallText), txt.match(/Overall rank[^A-Z]*[A-Za-z]*/)?.[0]);
+    check(`${name}: the old "Each muscle's own progress" text is gone and the section has NO "Bronze → Silver" arrow row any more`, !/own progress/i.test(txt) && !/→/.test(txt) && !new RegExp(p.rank.label + ' ?→').test(txt));
+    check(`${name}: the one small line under the overall bar: "The average of all ${p.rank.count} muscles. Train the gray ones to raise it."`, p.rank.atTop || txt.includes('The average of all ' + p.rank.count + ' muscles. Train the gray ones to raise it.'));
     const pos = await page.evaluate(() => { const gd = document.querySelector('[data-mr-overall]'); if (!gd) return null; const r = gd.getBoundingClientRect(); const grp = gd.parentElement.firstElementChild.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, grpTop: grp.top, grpBottom: grp.bottom, grpRight: grp.right }; });
-    if (!p.rank.atTop) check(`${name}: "Overall +X%" is on the far RIGHT of the same row as "${p.rank.label} -> ${p.rank.next}" (same line, to the right of it, right edge at the card edge)`, !!pos && pos.top < pos.grpBottom && pos.bottom > pos.grpTop && pos.left >= pos.grpRight - 1 && pos.right > 330, JSON.stringify(pos));
-    check(`${name}: muscle rows = ${p.hits.map(h => h.name + ' ' + h.gain).join(', ') || 'none'}`,
-      p.hits.every(h => txt.includes(h.name) && txt.includes(h.gain)));
+    if (!p.rank.atTop) check(`${name}: "+X% today" is on the far RIGHT of the same row as "Overall rank: ${p.rank.label}"`, !!pos && pos.top < pos.grpBottom && pos.bottom > pos.grpTop && pos.left >= pos.grpRight - 1 && pos.right > 330, JSON.stringify(pos));
+    check(`${name}: muscle rows = ${p.hits.slice(0, 6).map(h => h.name + ' ' + h.gain).join(', ') || 'none'}`,
+      p.hits.slice(0, 6).every(h => txt.includes(h.name) && txt.includes(h.gain)));
     const placeholders = ['Bronze II', 'Bronze III', '+14% today', 'Quads', 'Glutes', '+6%', '+5%', '72%'];
     const bad = placeholders.filter(x => txt.includes(x) && !(p.hits.some(h => h.name === x || h.gain === x) || p.rank.label + p.rank.next + p.rank.pct + '%' === 'x'));
     // 'Quads'/'Glutes' etc may legitimately be a real row; anything else from the design's demo must be gone
@@ -317,7 +321,7 @@ check('rows carry the real Flaticon art', A.hits.every(h => h.icon && h.icon.sta
       });
       check(`${name}: ${p.hits.length} muscles -> ${lay.n} rows on screen (every muscle that gained), ${lay.rows} compact line(s), no overlaps`, lay.n === p.hits.length && lay.overlaps === 0, JSON.stringify(lay));
       check(`${name}: the card stays the same size (${lay.cardH}px, design 360) and the rows sit inside it below the body map`, lay.cardH === 360 && lay.bottom <= lay.cardPx && lay.top >= lay.imgBottom - 2, JSON.stringify(lay));
-      check(`${name}: the overall is ONE line ("Overall +${p.rank.gained}%") and nothing else sums the rows`, txt.includes(`Overall +${p.rank.gained}%`) && !/% today/.test(txt) && !/own progress/i.test(txt), txt.match(/Overall[^A-Z]*/)?.[0]);
+      check(`${name}: the overall is its own section ("+${p.rank.gained}% today" once), not a row among the muscles`, txt.includes(`+${p.rank.gained}% today`) && !/Overall [+]/.test(txt) && !/own progress/i.test(txt), txt.match(/Overall[^A-Z]*/)?.[0]);
     }
     check(`${name}: real body map image, decoded, visible`, atReady.imgSrc === p.bodyMap && atReady.imgW > 0 && atReady.imgVis === 'visible');
     check(`${name}: layout identical at reveal and 2.2s later (nothing shifts)`, JSON.stringify(atReady.rects) === JSON.stringify(later.rects) && atReady.transform === later.transform);
@@ -329,7 +333,7 @@ check('rows carry the real Flaticon art', A.hits.every(h => h.icon && h.icon.sta
     const empty = data.buildMuscleRanksPayload({ entries: [], tiersBefore: {}, tiersAfter: {}, standingBefore: null, standingAfter: null, labels: MTM.MUSCLE_LABELS, iconFor, emblem: null, history: [] });
     check('NO UNRANKED: a brand-new user (no training at all) reads Bronze, next Silver, 0%', empty.rank.label === 'Bronze' && empty.rank.next === 'Silver' && empty.rank.has === true && empty.rank.pct === 0, `${empty.rank.label} -> ${empty.rank.next} ${empty.rank.pct}%`);
     const first = build([], [entry('curl', 30, 30, 0)]);
-    check('NO UNRANKED: the very first workout starts from Bronze 0% (30 good reps on one muscle = +20.0% toward Silver)', first.payload.rank.label === 'Bronze' && first.payload.rank.next === 'Silver' && first.payload.hits.some((h) => h.name === 'Biceps' && h.gain === '+20.0%'), first.payload.hits.map((h) => h.name + ' ' + h.gain).join(' | '));
+    check('NO UNRANKED: the very first workout starts from Bronze 0% (30 good reps on one muscle = +20.0% toward Silver)', first.payload.rank.label === 'Bronze' && first.payload.rank.next === 'Silver' && first.payload.hits.some((h) => h.name === 'Biceps' && gp(h) === 20 && h.reps === 30 && h.toNext === 120), first.payload.hits.map((h) => h.name + ' ' + h.gain).join(' | '));
     check('NO UNRANKED: the Bronze bar is 0 reps and Silver is the first bar to cross', sessionLog.VOLUME_THRESHOLDS.find(([t]) => t === 'bronze')[1] === 0 && sessionLog.VOLUME_THRESHOLDS.find(([t]) => t === 'silver')[1] === 150);
     const files = ['lib/muscleRanksData.ts', 'lib/sessionLog.ts', 'lib/rankTuning.ts', 'components/MuscleTierMap.tsx', 'lib/muscleRanksInject.ts', 'lib/recapInject.ts', 'app/recap.tsx'];
     const hits = files.filter((f) => /unranked/i.test(fs.readFileSync(path.join(__dirname, '..', f), 'utf8').replace(/no "Unranked"|no Unranked|There is no "Unranked"|no .Unranked./gi, '')));
