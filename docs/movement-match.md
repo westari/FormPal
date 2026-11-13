@@ -116,3 +116,10 @@ uncounted stroke.
   90+. It only falls when the user is clearly trying and gets no counted rep, no check AND no X (hands out of frame, too close...).
 * **Movement Match window stays 10 seconds.**
 * **Reps that cannot be judged** (rep-counter exercises) get no check / X at all, as before.
+
+## Update 2026-11-12 (phone test)
+
+* **Ready** (before the set): every joint the exercise needs is clearly visible (the camera's setup hold passed) and the body is steady for about 1 second. No rehearsal rep, no "hands at the shoulders" wait, no full reach to the top. If the hands leave the frame at the top later, the Guide handles it during the set ("Keep your hands in view").
+* **The Guide is calm:** a line stays up at least 2.5 seconds, a different line (or none) only replaces it after it has been wanted for about 1.5 seconds without a break, and a line is always shown whole.
+* **One physical action per line** a first-time user understands at once: Step into view, Step back further, Step closer, Move your phone back, Keep your hands in view, Keep your whole body in view, Turn sideways to the phone, Face the phone, Find more light, Put your phone at chest height, Raise your hands overhead, Lower your hands, Hold still.
+* **Cue card:** stars keep their original size; text is centred beside them; fixed width, two lines at most.

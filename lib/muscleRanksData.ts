@@ -39,7 +39,7 @@ export function muscleGainPct(before: MuscleTierInfo | undefined, after: MuscleT
 export interface StandingLike { tier: Tier; progress: number; atTop: boolean; muscle?: Muscle }
 
 function standingAbs(s: StandingLike | null): number {
-  return s ? tierIndex(s.tier) * 100 + s.progress * 100 : 0;
+  return s ? tierIndex(s.tier) * 100 + (s.atTop ? 100 : s.progress * 100) : 0;
 }
 
 // Every number on the muscle page is shown to ONE decimal, always, so the
@@ -158,9 +158,10 @@ export function buildMuscleRanksPayload(opts: {
   // A row never reads more than +99.9%: a muscle that jumps a whole rank in one workout has moved more than one bar, which would
   // look broken next to a 100% bar.
   const gains = shown.map(w => Math.min(99.9, r1(gainOf(w.muscle))));
-  // The overall gain shown under "Bronze -> Silver" is the SUM of the muscle rows on this page (each row is a 0.1 step, so the
-  // sum is done in whole tenths and can never drift from what the rows add up to).
-  const rowsSumTenths = gains.reduce((a, g) => a + Math.round(g * 10), 0);
+  // The overall gain shown under "Bronze -> Silver" is how much the OVERALL rank really moved this workout (Ari, 2026-11-12): the overall
+  // is the AVERAGE of every muscle's rank, so it moves by only a little (a muscle's gain divided by the number of muscles). It is NOT the
+  // sum of the rows any more; the muscle rows keep their own %. Measured on the same scale as the overall: tier * 100 + progress.
+  const overallGainTenths = Math.max(0, Math.round(r1(standingAbs(standingAfter)) * 10) - Math.round(r1(standingAbs(standingBefore)) * 10));
 
   // Header: ONLY the newest number (no "old -> new").
   const pctLabel = standingAfter?.atTop ? 'Top rank' : `${fmt1(afterAvg)}%`;
@@ -189,7 +190,7 @@ export function buildMuscleRanksPayload(opts: {
       next: nextLabel,
       pct: afterAvg,
       pctLabel,
-      gained: fmt1(rowsSumTenths / 10), // = the sum of the rows below, exactly
+      gained: fmt1(overallGainTenths / 10), // how much the overall rank (the average of every muscle) really moved
       beforePct: fmt1(standingBefore && !standingBefore.atTop ? standingBefore.progress * 100 : 0),
       rankedUp,
       hi: meta.hi, lo: meta.lo, ink: meta.ink,

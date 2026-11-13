@@ -63,7 +63,9 @@ export const CONFIDENCE = {
 };
 
 export const GUIDE = {
-  holdSec: 4,               // a Guide line stays this long before it may change
+  minShowSec: 2.5,          // a Guide line stays up at least this long
+  changeConfirmSec: 1.5,    // a different line (or none) must be wanted this long, without a break, before it replaces the one shown
+  firstShowConfirmSec: 0.4, // a line shows after being wanted this long (so a one-frame blip never flashes)
   minTryingSec: 2,          // Movement Match must have been HIGH this long before a stuck diagnosis is trusted
   logEverySec: 4,
 };

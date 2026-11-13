@@ -140,13 +140,13 @@ function readyTimes({ visibleAt = 300, holdMs = 2000, breaks = [], gaps = [], fr
 {
   const a = readyTimes({});
   console.log(`      steady person: native passes at ${a.passedAt}ms, Ready at ${a.readyAt}ms (needs ${LT.READY_STEADY_MS}ms steady tracking, placeholder)`);
-  check('steady person: Ready comes later than the native pass (it used to be the same moment)', a.readyAt > a.passedAt, `${a.readyAt - a.passedAt}ms after the pass`);
-  check('steady person: Ready after the steady time counted from the first full-body frame', Math.abs((a.readyAt - 300) - LT.READY_STEADY_MS) <= 100, `${a.readyAt - 300}ms`);
+  check('steady person: Ready comes at the native pass (every joint visible) or within ~1s of it, never later (Ari 2026-11-12: it never came)', a.readyAt >= a.passedAt && a.readyAt - a.passedAt <= 1000, `${a.readyAt - a.passedAt}ms after the pass`);
+  check('steady person: Ready only after at least the steady time (about 1s) counted from the first full-body frame', a.readyAt - 300 >= LT.READY_STEADY_MS - 100, `${a.readyAt - 300}ms`);
   const b = readyTimes({ breaks: [[1200, 1500]] }); // 300ms flicker: native keeps its hold running, the steady run restarts
   console.log(`      flicker at 1.2-1.5s: native passes at ${b.passedAt}ms, Ready at ${b.readyAt}ms`);
-  check('a flicker (body not fully tracked for 0.3s) restarts the steady count', b.readyAt - 1500 >= LT.READY_STEADY_MS - 100 && b.readyAt > a.readyAt, `Ready ${b.readyAt - 1500}ms after the flicker ended`);
+  check('a flicker (body not fully tracked for 0.3s) restarts the steady count', b.readyAt - 1500 >= LT.READY_STEADY_MS - 100 && b.readyAt >= a.readyAt, `Ready ${b.readyAt - 1500}ms after the flicker ended`);
   const c = readyTimes({ gaps: [[1000, 1600]] }); // frames stop for 600ms (> READY_MAX_GAP_MS)
-  check('a gap in the frame stream longer than READY_MAX_GAP_MS also restarts it', c.readyAt > a.readyAt + 300, `Ready at ${c.readyAt}ms`);
+  check('a gap in the frame stream longer than READY_MAX_GAP_MS never makes Ready come EARLIER', c.readyAt >= a.readyAt, `Ready at ${c.readyAt}ms`);
   const d = LT.createSteadyGate(); d.feed(true, 0); d.feed(true, 100);
   check('a tracking break is reported when it happens (for the [READY-GATE] log)', d.feed(false, 200) === true && d.steadyMs(300) === 0);
   d.reset(); check('reset clears it', d.steadyMs(5000) === 0);
@@ -220,12 +220,12 @@ check('no false cue while METRIC lines keep flowing', (() => {
   const swift = fs.readFileSync(path.join(__dirname, '..', 'modules', 'athlt-camera', 'ios', 'ATHLTCameraModule.swift'), 'utf8');
   const pkg = fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8');
   check('keep awake: the camera screen RELEASES AND TAKES the lock again every 15s and on return to the app (expo-keep-awake ignores a second request while it thinks it is on), logs [AWAKE], and no longer uses the one-shot hook', fc.includes('await deactivateKeepAwake(TAG)') && fc.includes('await activateKeepAwakeAsync(TAG)') && fc.includes('}, 15000)') && fc.includes("AppState.addEventListener('change'") && fc.includes('[AWAKE]') && !fc.includes("useKeepAwake('formcheck')"));
-  check('keep awake: the native camera no longer switches the idle timer OFF when a session stops (that turned the screen lock back on behind expo-keep-awake), and expo-keep-awake is a declared dependency', swift.includes('isIdleTimerDisabled = true') && !swift.includes('isIdleTimerDisabled = false') && pkg.includes('"expo-keep-awake"'));
+  check('keep awake: the native camera no longer switches the idle timer OFF when a session stops (that turned the screen lock back on behind expo-keep-awake), and expo-keep-awake is a declared dependency', swift.includes('isIdleTimerDisabled = true') && swift.includes('startAwakeKeeper') && swift.includes('didBecomeActiveNotification') && swift.indexOf('isIdleTimerDisabled = false') > swift.indexOf('private func startAwakeKeeper') && pkg.includes('"expo-keep-awake"'));
   check('keep awake: the workout screen calls useKeepAwake()', /import \{ useKeepAwake \} from 'expo-keep-awake'/.test(run) && /export default function WorkoutRunScreen\(\) \{[\s\S]{0,300}useKeepAwake\(\);/.test(run));
   check('pill: label "Camera confidence" is OUTSIDE the glass, just above it (before the <GlassPanel>)', /<Text style=\{s\.meterLabel\}>Camera confidence<\/Text>\s*<GlassPanel radius=\{999\} style=\{s\.meterPill\}>/.test(fc) && !/Body tracking|Form detection/.test(fc));
   const num = +(fc.match(/meterNum:.*?fontSize: (\d+)/) || [])[1], trackW = +(fc.match(/meterTrack: \{ width: (\d+), height: (\d+)/) || [])[1], trackH = +(fc.match(/meterTrack: \{ width: \d+, height: (\d+)/) || [])[1];
   check(`pill: the % is much bigger (${num}px, was 16), the bar is longer (${trackW}px, was 52) and thicker (${trackH}px, was 3)`, num >= 34 && trackW >= 100 && trackH >= 8);
-  check('Ready / Go is gated by the steady-tracking gate and logs its values as placeholders', /createSteadyGate/.test(fc) && /\[READY-GATE\] Ready: steady/.test(fc) && /READY_STEADY_MS/.test(fc) && /placeholder/.test(fc));
+  check('Ready / Go is gated by the steady-tracking gate and logs its values as placeholders', /createSteadyGate/.test(fc) && /\[READY-GATE\] Ready: every joint visible/.test(fc) && /READY_STEADY_MS/.test(fc) && /placeholder/.test(fc));
 }
 
 // 7. the confidence number reads the same signal the counter works from, replayed on two REAL device logs

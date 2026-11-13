@@ -160,6 +160,7 @@ for (const [name, parts] of Object.entries(CASES(sigPress))) {
 // ── 3. Ari's real logs ───────────────────────────────────────────────────────────────────────────────────────────────
 console.log('\n--- 3. real logs replayed (shoulder press) ---');
 const parse = (l) => { const m = /^(\d\d):(\d\d):(\d\d\.\d+) \S+ \[DEBUG\] (.*)$/.exec(l) || /^(\d\d):(\d\d):(\d\d\.\d+) \S+ (.*)$/.exec(l); return m ? { t: (+m[1] * 3600 + +m[2] * 60 + parseFloat(m[3])) * 1000, line: m[4] } : null; };
+const GC_WORDS = new Set(GUIDE_WORDS);
 const REAL = ['2026-11-08', '2026-11-10', '2026-11-11', '2026-11-11b'];
 const realResults = {};
 for (const name of REAL) {
@@ -188,6 +189,20 @@ function stuckRuns(res) {
     if (isStuck) { if (!cur) { cur = { from: x.t, rows: [] }; out.push(cur); } cur.rows.push(x); } else cur = null;
   }
   return out;
+}
+// CALM GUIDE (Ari 2026-11-12): a line stays at least 2.5s; never 3 different lines in about a second; never cut off (always a whole line)
+{
+  const all = [...Object.entries(R).map(([n, r]) => [n, r.rows]), ...REAL.map((n) => [n, realResults[n].rows])];
+  const bad = [];
+  for (const [n, rows] of all) {
+    let last = null, since = 0;
+    for (const x of rows) {
+      if (x.guide !== last) { if (last !== null && x.t - since < 2500 - 1 && x.guide !== null) bad.push(n + ': "' + last + '" -> "' + x.guide + '" after ' + (x.t - since) + 'ms'); last = x.guide; since = x.t; }
+    }
+    const lines = rows.map((x) => x.guide).filter(Boolean);
+    if (lines.some((l) => !GC_WORDS.has(l))) bad.push(n + ': a Guide line that is not a whole Guide line: ' + lines.find((l) => !GC_WORDS.has(l)));
+  }
+  check('CALM GUIDE: in every synthetic case and real log a line stays at least 2.5s before another replaces it, and every line is a whole Guide line', bad.length === 0, bad.slice(0, 3).join(' | '));
 }
 for (const name of REAL) {
   const res = realResults[name], runs = stuckRuns(res);
@@ -296,7 +311,7 @@ console.log('\n--- 5. wiring in app/formcheck.tsx ---');
   check('Movement Match is fed every log line and everything resets at Go', fc.includes('matchRef.feed(e.message);') && fc.includes('matchRef.reset(); confRef.reset(); guideEngine.reset(); coachRef.reset();'));
   check('the 200ms tick wires match -> path cut -> confidence -> Guide', fc.includes('attemptRef.current.setPathCut(m.cut);') && fc.includes('const conf = confRef.update(') && fc.includes('guideEngine.decide('));
   check('the four log tags are produced by the pieces the screen uses ([MOVE-MATCH] [GUIDE] [COACH] [CONFIDENCE])', ['[MOVE-MATCH]', '[GUIDE]', '[COACH]', '[CONFIDENCE]'].every((t) => ['lib/movementMatch.ts', 'lib/guideCoach.ts', 'lib/cameraConfidence.ts'].some((f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8').includes(t))));
-  check('the cue card keeps the old layout and grows its stars when a line wraps to two lines', fc.includes('const big = lines > 1;') && fc.includes('onTextLayout'));
+  check('the cue card keeps the old layout: stars left (original size), centred text beside them, two lines at most', fc.includes('const icon = 22;') && fc.includes('numberOfLines={2} adjustsFontSizeToFit'));
   check('all numbers live in ONE tuning file and are labelled placeholders', fs.readFileSync(path.join(__dirname, '..', 'lib/coachTuning.ts'), 'utf8').includes('ALL NUMBERS ARE PLACEHOLDERS'));
 }
 

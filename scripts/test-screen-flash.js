@@ -42,7 +42,9 @@ const check = (name, ok, detail) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${na
     const rl = fs.readFileSync(path.join(__dirname, '..', 'components', 'RingLight.tsx'), 'utf8'), sf = fs.readFileSync(path.join(__dirname, '..', 'lib', 'screenFlash.ts'), 'utf8');
     check('the ring light is four soft gradients on ALL four edges (top, bottom, left, right), untouchable, white fading to clear', (rl.match(/<LinearGradient/g) || []).length === 4 && /pointerEvents="none"/.test(rl) && sf.includes('{ at: 1, a: 0 }') && sf.includes('{ at: 0, a: 1 }'));
     const depth = +(sf.match(/depth: ([0-9]+)/) || [])[1];
-    check('it is shallow (' + depth + 'pt) so it stays clear of the framing guide, which starts about 44pt in with soft corners only', depth > 0 && depth <= 70, String(depth));
+    const dv = +(sf.match(/depthTopBottom: ([0-9]+)/) || [])[1];
+    check('it is MUCH stronger than before (was 64pt deep, solid only at the very edge): sides ' + depth + 'pt, top/bottom ' + dv + 'pt, solid white for the first half', depth >= 90 && dv >= 130 && sf.includes('{ at: 0.5, a: 1 }'), depth + '/' + dv);
+    check('...yet the middle stays clear: the two side glows together cover under 55% of a 390pt screen, and the top/bottom ones are where the body is not', 2 * depth < 0.55 * 390 && dv <= 170, String(2 * depth));
   }
   check('the camera position comes from the native camera state event', /if \(mounted && e\.position\) setCamPosition\(e\.position\)/.test(fc));
   check('brightness is restored when the flash goes off and when the screen closes', /useEffect\(\(\) => \{ void setFlashBrightness\(flashActive\); \}, \[flashActive\]\)/.test(fc) && /useEffect\(\(\) => \(\) => \{ void setFlashBrightness\(false\); \}, \[\]\)/.test(fc));

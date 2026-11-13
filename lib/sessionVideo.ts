@@ -18,7 +18,7 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { resolveVideoUri, persistVideo, persistThumb, savedThumb, isPermanent, removeClipFiles } from './videoStore';
+import { resolveVideoUri, persistVideo, persistThumb, savedThumb, isPermanent, removeClipFiles, listTempClips } from './videoStore';
 
 // require() inside try/catch on purpose: expo-video-thumbnails reads its native module at IMPORT time, which throws
 // synchronously on a build that has not been rebuilt with it linked in, and a plain top-level import would crash the app at
@@ -55,12 +55,37 @@ async function loadVideoLog(): Promise<VideoLogEntry[]> {
   return cachedLog;
 }
 
+const nameOf = (uri: string) => (uri.split('?')[0].split('/').pop() || '').trim();
+
+/**
+ * A clip the camera recorded but the app never logged (the native stop returned "no video", or the app was killed before the log was
+ * written) still sits in the temp folder as athlt_<seconds>.mov. Adopt each one: copy it to the permanent folder and add it to the
+ * video log with the time it was finished, so the workout it belongs to finds it. Never throws; logs [VIDEO].
+ */
+async function adoptOrphanClips(entries: VideoLogEntry[]): Promise<void> {
+  try {
+    const known = new Set(entries.map(e => nameOf(e.uri)));
+    const orphans = listTempClips().filter(c => !known.has(nameOf(c.uri)) && c.t > 0);
+    if (!orphans.length) return;
+    const next = entries.slice();
+    for (const c of orphans) {
+      const kept = persistVideo(c.uri);
+      next.push({ uri: kept, ts: c.t });
+      console.log('[VIDEO] adopted a clip the camera made but the app never logged: ' + nameOf(c.uri) + ' (' + c.bytes + ' bytes, finished ' + new Date(c.t).toISOString() + ')');
+    }
+    await AsyncStorage.setItem(VIDEO_LOG_KEY, JSON.stringify(next));
+    cachedRaw = undefined;
+    entries.splice(0, entries.length, ...next);
+  } catch (e) { console.log("[VIDEO] adopt failed: " + String(e)); }
+}
+
 let keeping: Promise<void> | null = null;
 /** Copy every logged clip that still sits outside the permanent folder into it (once; clips already kept are skipped). */
 export function keepVideosSafe(): Promise<void> {
   if (keeping) return keeping;
   keeping = (async () => {
     const entries = await loadVideoLog();
+    await adoptOrphanClips(entries);
     for (const e of entries) {
       try {
         if (isPermanent(e.uri)) continue;

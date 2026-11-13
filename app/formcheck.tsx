@@ -46,13 +46,13 @@ import { setFlashBrightness } from '../lib/screenFlash';
 import RingLight from '../components/RingLight';
 import { createRepDiagnostic, STREAM_DEAD_SEC_FLOOR } from '../lib/repDiagnostics';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
-import { persistVideo, recoverRecentClip } from '../lib/videoStore';
+import { persistVideo, recoverRecentClip, fileExists } from '../lib/videoStore';
 import { NO_ZOOM_JS } from '../lib/noZoom';
 import { shortCue } from '../lib/shortCue';
 import { createMovementMatch } from '../lib/movementMatch';
 import { createCameraConfidence } from '../lib/cameraConfidence';
-import { createGuide, createCoach, guideLine, GUIDE_LINES, handsMatter } from '../lib/guideCoach';
-import { createSetupGuide, needsLockout, SETUP_TUNING, type SetupDecision } from '../lib/setupGuide';
+import { createGuide, createCoach, createCalmLine, guideLine, GUIDE_LINES, handsMatter } from '../lib/guideCoach';
+import { createSetupGuide, SETUP_TUNING, type SetupDecision } from '../lib/setupGuide';
 import { createAttemptDetector, type DetectorEvent } from '../lib/attemptDetector';
 import { hapticError, hapticMain, hapticSelect, hapticWarning } from '../lib/haptics';
 import { capMeterTarget, isFrameHint, showVerdict, showFrameHint, JUDGED_QUIET_MS, meterTarget, createMeterSmoother, trackingIsHigh, NO_PERSON_CUE, createSteadyGate, READY_STEADY_MS, createCounterSignal, READY_COUNTER_WINDOW_MS, READY_COUNTER_MIN_SAMPLES, type CounterSignal } from '../lib/liveTracking';
@@ -294,18 +294,17 @@ const gp = StyleSheet.create({
 // bit") and live cues ("Rep not counted", "Step back into frame") both render
 // through this one component, so they can never look different from each other.
 function CueGlass({ text, ready }: { text: string; ready?: boolean }) {
-  // The Guide is one line. When a line cannot fit on one line it wraps beside the stars and the stars grow to match the two lines.
-  const [lines, setLines] = useState(1);
-  const big = lines > 1;
-  const icon = big ? 34 : 22;
+  // The Guide is one line. A line that cannot fit wraps to a second line BESIDE the stars; the text is centred and the stars keep
+  // their original size (Ari's phone test: bigger stars looked wrong). The card has a fixed width, so a changing line never resizes
+  // it mid-way (which is what cut "...your shoulders" off); if a line is still too long the type shrinks a little instead of clipping.
+  const icon = 22;
   return (
     <GlassPanel radius={999} style={s.trackingCueCard}>
       <View style={s.trackingCueInner}>
         {ready
           ? <SymbolView name="checkmark.circle.fill" size={icon} tintColor={C.good} type="monochrome" style={{ width: icon, height: icon }} />
-          : <Image source={SPARKLE_DUO} style={[s.trackingCueIcon, big ? { width: 34, height: 34 } : null]} />}
-        {/* the original layout: stars on the left, the cue beside them (a long cue wraps to a second line beside the stars, never under them) */}
-        <Text style={s.trackingCueText} numberOfLines={2} onTextLayout={(e) => { const n = e.nativeEvent.lines.length; setLines((p) => (p === n ? p : n)); }}>{text}</Text>
+          : <Image source={SPARKLE_DUO} style={s.trackingCueIcon} />}
+        <Text style={s.trackingCueText} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.7}>{text}</Text>
       </View>
     </GlassPanel>
   );
@@ -680,7 +679,11 @@ export default function FormCheckScreen() {
     };
     void hold();
     const id = setInterval(() => { void hold(); }, 15000);
-    const sub = AppState.addEventListener('change', st => { if (st === 'active') void hold(); });
+    // every app state change is logged: when the screen dims-and-locks the app goes inactive / background, so the NEXT log shows exactly when
+    // (and how long after the last [AWAKE] line) it happened. [AWAKE] lines also come from the native camera on a new build.
+    let lastState = AppState.currentState;
+    console.log('[AWAKE] camera screen open, app state ' + lastState + ', keep-awake held every 15s');
+    const sub = AppState.addEventListener('change', st => { console.log('[AWAKE] app state ' + lastState + ' -> ' + st + (st === 'active' ? ' (back on screen, lock re-applied)' : ' (the screen locked or the app was covered: this is NOT the keep-awake failing silently, check the lines just before)')); lastState = st; if (st === 'active') void hold(); });
     return () => { alive = false; clearInterval(id); sub.remove(); void deactivateKeepAwake(TAG); };
   }, []);
   const insets = useSafeAreaInsets();
@@ -899,6 +902,9 @@ export default function FormCheckScreen() {
   const setupGuideRef = useRef(createSetupGuide());
   const guideRef = useRef<SetupDecision | null>(null);
   const [guide, setGuide] = useState<SetupDecision | null>(null);
+  const setupCalm = useRef(createCalmLine()).current;     // keeps the setup line calm (no flicker)
+  const lastSetupShown = useRef<string | null>(null);
+  const [setupShown, setSetupShown] = useState<string | null>(null);
   // Shown instead of "Perfect. Hold still" while Go waits for the start position (shoulder press: hands at the shoulders).
   const [startPoseWaiting, setStartPoseWaiting] = useState(false);
   // Front-camera flash (lib/screenFlash.ts): the button is always shown; the light only turns on for the FRONT camera
@@ -1288,6 +1294,8 @@ export default function FormCheckScreen() {
     // The workout video: what the camera handed back, and a rescue when it handed back nothing (the clip file is often still
     // in the temp folder). Without a video the Workout complete page has nothing to play, no rep feedback and no thumbnails.
     console.log('[VIDEO] stop: camera returned ' + (final.videoUri ? 'a clip (' + final.videoUri.split('/').pop() + ')' : 'NO clip') + ', ' + (startTimestamp.current ? Math.round((Date.now() - startTimestamp.current) / 1000) : 0) + 's tracked');
+    // a path the camera handed back whose file is not there (or is empty) is as good as no video: rescue it the same way
+    if (final.videoUri && !fileExists(final.videoUri)) { console.log('[VIDEO] the camera returned a path but the file is not there: ' + final.videoUri.split('/').pop()); final.videoUri = ''; }
     if (!final.videoUri && startTimestamp.current) {
       const rescued = recoverRecentClip(startTimestamp.current - 5000);
       if (rescued) { final.videoUri = rescued.uri; console.log('[VIDEO] rescued the clip from the temp folder: ' + rescued.uri.split('/').pop() + ' (' + rescued.bytes + ' bytes)'); }
@@ -1495,27 +1503,24 @@ export default function FormCheckScreen() {
   // per-frame signal, so the guide stays off and the old behaviour applies (it can never block Go).
   useEffect(() => {
     if (phase !== 'setup' || !DEBUG_LOG_ENABLED || repCounterOnly) { guideRef.current = null; setGuide(null); return; }
-    setupGuideRef.current.reset();
+    setupGuideRef.current.reset(); setupCalm.reset(); lastSetupShown.current = null; setSetupShown(null);
     const id = setInterval(() => {
       const now = Date.now();
-      const d = EXERCISE_DEFINITIONS[exerciseType] as any;
-      const frac = d && typeof d.settleAnchorMinFraction === 'number' ? d.settleAnchorMinFraction : null;
-      const startMin = frac !== null ? d.goodROMThreshold + (d.topAngle - d.goodROMThreshold) * frac : null;
-      const seen = counterRef.seen();
+      const hintLine = guideLine(setupHintRef.current, exerciseType);
+      const frameHint = statsRef.current?.personDetected === false || isFrameHint(setupHintRef.current);
       const dec = setupGuideRef.current.update({
-        now, seen,
+        now, seen: counterRef.seen(),
         healthy: counterRef.healthy(now, 1200, 3),
-        atStart: startMin === null ? true : counterRef.atStartPosition(startMin, now, 1200, 3),
-        value: counterRef.peak(now, 700),
-        frameHint: statsRef.current?.personDetected === false || isFrameHint(setupHintRef.current),
-        steadyOk: steadyGate.steadyMs(now) >= READY_STEADY_MS,
-        needsLockout: needsLockout(exerciseType) && !!d,
-        topValue: d ? d.topAngle : 0,
-        handsExercise: needsLockout(exerciseType) || /raise|curl/i.test(exerciseType),
+        frameHint, hintLine,
+        handsExercise: handsMatter(exerciseType),
+        expectSamples: DEBUG_LOG_ENABLED,
       });
       if (dec.stage !== guideRef.current?.stage) console.log(`[SETUP-GUIDE] ${dec.stage}: "${dec.text}" (confidence cap ${dec.cap}, placeholder numbers)`);
       guideRef.current = dec;
       setGuide(prev => (prev && prev.stage === dec.stage && prev.text === dec.text ? prev : dec));
+      // the line the user SEES is calm: it stays up at least 2.5s and only changes when the new reason has held ~1.5s (never 3 lines in a second)
+      const shown = setupCalm.feed(now, dec.text);
+      if (shown !== lastSetupShown.current) { lastSetupShown.current = shown; console.log('[GUIDE] setup line now "' + shown + '" (wanted "' + dec.text + '")'); setSetupShown(shown); }
     }, 200);
     return () => clearInterval(id);
   }, [phase, exerciseType, repCounterOnly, counterRef, steadyGate]);
@@ -1538,44 +1543,21 @@ export default function FormCheckScreen() {
   // screen); it only reports back when the DISPLAYED number crosses into/out
   // of "high".
   const [meterHigh, setMeterHigh] = useState(false);
-  // Show/speak "Ready. Go!" only once tracking is actually high.
-  // ...AND the full body has been tracked steadily for READY_STEADY_MS (placeholder value, logged below).
+  // "Ready. Go!" (Ari's rule, 2026-11-12): every joint the exercise needs is clearly visible (native's setup hold passed) and the body has been
+  // steady for about 1 second. No rehearsal rep, no "hands at the shoulders" wait, no confidence-meter wait: the 2026-11-12 log shows the
+  // native setup passing at 22:25:04 while the old extra gates (meter high, hands at the start, full reach seen) held Go back for ever.
+  // If the hands leave the frame at the top later, the Guide handles it during the set.
   useEffect(() => {
-    if (!readyPending || !meterHigh) return;
+    if (!readyPending) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const tryGo = () => {
       const steady = steadyGate.steadyMs(Date.now());
       if (steady < READY_STEADY_MS) {
-        console.log(`[READY-GATE] waiting: steady ${steady}ms of ${READY_STEADY_MS}ms needed (placeholder), meter high`);
-        timer = setTimeout(tryGo, Math.max(100, Math.min(400, READY_STEADY_MS - steady)));
+        console.log(`[READY-GATE] waiting: steady ${steady}ms of ${READY_STEADY_MS}ms needed (placeholder)`);
+        timer = setTimeout(tryGo, Math.max(100, Math.min(300, READY_STEADY_MS - steady)));
         return;
       }
-      // The counter must really see you: metric samples arriving, no pose gap, and (when the exercise has a start
-      // position) the arms IN it. Skipped when no samples exist at all (debug logging off), so it can never deadlock.
-      if (counterRef.seen()) {
-        const now = Date.now();
-        const healthy = counterRef.healthy(now, READY_COUNTER_WINDOW_MS, READY_COUNTER_MIN_SAMPLES);
-        const d = EXERCISE_DEFINITIONS[exerciseType] as any;
-        const frac = d && typeof d.settleAnchorMinFraction === 'number' ? d.settleAnchorMinFraction : null;
-        const startMin = frac !== null ? d.goodROMThreshold + (d.topAngle - d.goodROMThreshold) * frac : null;
-        const inStart = startMin === null || counterRef.atStartPosition(startMin, now, READY_COUNTER_WINDOW_MS, READY_COUNTER_MIN_SAMPLES);
-        if (!healthy || !inStart) {
-          console.log(`[READY-GATE] waiting: counter ${healthy ? 'sees you' : 'cannot see you steadily (pose gap or too few samples)'}; ` +
-            (startMin === null ? 'no start position needed' : `metric ${counterRef.lastValue()?.toFixed(1)} ${inStart ? 'is' : 'is NOT'} at the start position (need >= ${startMin.toFixed(1)}) (placeholder)`));
-          setStartPoseWaiting(healthy && !inStart);
-          timer = setTimeout(tryGo, 250);
-          return;
-        }
-      }
-      // The setup guide (full path seen: lockout reached and back, tracking continuous) must say ready, or Go does not show.
-      if (guideRef.current && !guideRef.current.ready) {
-        console.log(`[READY-GATE] waiting: setup step "${guideRef.current.stage}" (${guideRef.current.text})`);
-        setStartPoseWaiting(false);
-        timer = setTimeout(tryGo, 250);
-        return;
-      }
-      setStartPoseWaiting(false);
-      console.log(`[READY-GATE] Ready: steady ${steady}ms >= ${READY_STEADY_MS}ms (placeholder), meter high, counter sees you`);
+      console.log(`[READY-GATE] Ready: every joint visible (native setup passed) and steady ${steady}ms >= ${READY_STEADY_MS}ms (placeholder)`);
       setReadyPending(false);
       const go = announceReadyRef.current;
       announceReadyRef.current = null;
@@ -1583,7 +1565,7 @@ export default function FormCheckScreen() {
     };
     tryGo();
     return () => { if (timer) clearTimeout(timer); };
-  }, [readyPending, meterHigh, steadyGate, counterRef, exerciseType]);
+  }, [readyPending, steadyGate]);
 
   // Re-ask the "can't see you" diagnostic on a fast timer while tracking.
   // It used to only be re-evaluated on log lines and the ~1/sec debug-stats
@@ -1723,9 +1705,7 @@ export default function FormCheckScreen() {
               {/* Same glass pill as the live cues AFTER you're in place (CueGlass),
                   so a message looks identical before and after setup. */}
               <CueGlass text={guide
-                ? (guide.stage === 'ready' ? GUIDE_LINES.holdStill : guide.text)
-                : startPoseWaiting
-                ? GUIDE_LINES.handsStart
+                ? (setupShown ?? (guide.stage === 'ready' ? GUIDE_LINES.holdStill : guide.text))
                 : (guideLine(setupHint, exerciseType) ?? (setupHint || SETUP_INFO[exerciseType].title))} />
             </View>
           )}
@@ -2183,7 +2163,7 @@ const s = StyleSheet.create({
   // Contained glass pill now — explicit complaint: bare floating drop-
   // shadowed text "doesn't feel clean at all." Same GlassPanel surface the
   // setup-success "Ready. Go!" card already uses.
-  trackingCueCard:  { alignSelf: 'center', maxWidth: 340 },
+  trackingCueCard:  { alignSelf: 'center', width: '88%', maxWidth: 340 },
   trackingCueInner: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 26, paddingVertical: 16 },
   trackingCueIcon:  { width: 22, height: 22 },
   // Messages are now short, framing-only instructions (see
@@ -2192,7 +2172,7 @@ const s = StyleSheet.create({
   // "the cues need to be a bit bigger".
   trackingCueText: {
     fontFamily: 'PlusJakartaSans_700Bold', fontSize: 24, lineHeight: 28,
-    color: '#fff', letterSpacing: 0.1, flexShrink: 1,
+    color: '#fff', letterSpacing: 0.1, flexShrink: 1, flex: 1, textAlign: 'center',
   },
 
   // Rep count — bare, no frame; own shadow for legibility over the camera.
