@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, Animated, Pressable, ScrollView, Share, Platform, Easing, PanResponder, Image, AppState,
+  View, Text, StyleSheet, Animated, Pressable, ScrollView, Share, Platform, Easing, PanResponder, Image, AppState, useWindowDimensions,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useCameraErrorGuard } from '../components/CameraErrorGuard';
@@ -12,7 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Circle } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { WebView } from 'react-native-webview';
-import { LiquidGlassButton } from '../components/LiquidGlass';
+import LiquidGlass, { LiquidGlassButton, GLASS_SUPPORTED } from '../components/LiquidGlass';
 import RepFeedback from '../components/RepFeedback';
 import {
   ATHLTCameraView,
@@ -26,6 +26,7 @@ import {
   setExerciseDefinition,
   setExerciseStandard,
   addRepListener,
+  addAttemptMissedListener,
   addDebugStatsListener,
   addCameraStateListener,
   addErrorListener,
@@ -354,12 +355,15 @@ function PositioningGuide({
   // clearHud side margin is a fixed 30px now (matching the real design file
   // exactly), not a percentage — a plain, predictable number instead of
   // something that quietly scales with screen width.
+  // The framing box never starts above the Camera confidence block (top bar + label + pill, measured from the safe area), whatever the phone's height
+  const { height: guideH } = useWindowDimensions();
+  const soloTop = (pct: number) => Math.max(guideH * pct, hudInsets.top + SOLO_METER_BOTTOM + 8);
   const rect = box === 'floor'
     // Floor exercises (phone raised on a chair, angled down): the body sits as
     // a wide band across the middle. A real framed target with clear dark
     // margins top and bottom — NOT the whole screen (that guides nothing).
-    ? { top: clearHud ? hudInsets.top + 160 : '22%', bottom: clearHud ? DRAWER_PEEK_HEIGHT + 70 : '16%', side: clearHud ? 30 : '4%'  }
-    : { top: clearHud ? hudInsets.top + 160 : '16%', bottom: clearHud ? DRAWER_PEEK_HEIGHT + 70 : '7%',  side: clearHud ? 30 : '5%'  };
+    ? { top: clearHud ? hudInsets.top + HUD_GUIDE_TOP : soloTop(0.22), bottom: clearHud ? DRAWER_PEEK_HEIGHT + 70 : '16%', side: clearHud ? 30 : '4%'  }
+    : { top: clearHud ? hudInsets.top + HUD_GUIDE_TOP : soloTop(0.16), bottom: clearHud ? DRAWER_PEEK_HEIGHT + 70 : '7%',  side: clearHud ? 30 : '5%'  };
 
   // Subtle breathe while waiting (0.86 -> 1 opacity); locks solid on ready.
   const pulse = useRef(new Animated.Value(1)).current;
@@ -439,6 +443,23 @@ function RepCounter({
 // corner. The mirrored (right) notch reuses this exact path via a scaleX
 // flip instead of a second hand-derived formula, so there's only one arc to
 // get right, not two.
+// ── Workout HUD layout (all offsets from the TOP SAFE AREA, so they hold on every iPhone) ──
+const HUD_SEG_TOP = 56;                 // the set bars, right under the top bar buttons
+const HUD_PILL_TOP = 78;                // the "Set 1 of 3 / Next:" glass pill
+const HUD_ROW_TOP = 134;                // ONE row: timer capsule + Camera confidence capsule (the pill ends at about 126)
+const HUD_ROW_H = 40;
+const HUD_TIMER_W = 80, HUD_ROW_GAP = 8, HUD_METER_W = 206;
+const SOLO_METER_BOTTOM = 56 + 91;     // solo form check: the big Camera confidence block sits at 56 and is about 91 high
+const HUD_GUIDE_TOP = HUD_ROW_TOP + HUD_ROW_H + 10;   // the framing box starts below the row (was 160, which sat UNDER the row)
+const hudRowLeft = (screenW: number) => Math.max(8, Math.round((screenW - (HUD_TIMER_W + HUD_ROW_GAP + HUD_METER_W)) / 2));
+const hudMeterLeft = (screenW: number) => hudRowLeft(screenW) + HUD_TIMER_W + HUD_ROW_GAP;
+
+/** Real Liquid Glass where the build has it; the same blur glass every other pill here uses where it does not (never a flat white card). */
+function HudGlass({ radius, style, children }: { radius: number; style?: any; children?: React.ReactNode }) {
+  if (GLASS_SUPPORTED) return <LiquidGlass radius={radius} variant="regular" colorScheme="dark" style={style}>{children}</LiquidGlass>;
+  return <GlassPanel radius={radius} style={style}>{children}</GlassPanel>;
+}
+
 const NOTCH_PATH = 'M0 0 L16 0 L16 16 A16 16 0 0 0 0 0 Z';
 function ScoreNotch({ side }: { side: 'left' | 'right' }) {
   return (
@@ -465,45 +486,34 @@ function WorkoutHud({
   repsIntoSet: number; targetReps: number; completedSets: number; targetSets: number; nextLabel: string; elapsedSec: number;
 }) {
   const insets = useSafeAreaInsets();
+  const { width: screenW } = useWindowDimensions();
   const m = Math.floor(elapsedSec / 60);
   const sec = elapsedSec % 60;
 
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFillObject}>
-      {/* Scorecard — built to the real design file exactly (assets/app
-          screens/inworkout.html), not a hand-sketched recreation: a plain
-          light-grey pill (Set X of Y / Next, no inner white chip — that was
-          never in the real design), with the timer tab hanging below it on
-          a scaleX-mirrored notch pair (see ScoreNotch). Sits below the
-          segment row (swapped order, per explicit request). */}
-      <View style={[wh.pillRow, { top: insets.top + 80 }]}>
-        <View style={wh.scoreWrap}>
-          <View style={wh.scorePill}>
+      {/* Scorecard, now REAL Liquid Glass (Ari 2026-11-15: the white panel must be glass). Layout, top to bottom, none of it overlapping on any
+          iPhone (everything is measured from the top safe area, never from the screen height): the segment bars, this pill, then ONE row holding
+          the timer capsule and the Camera confidence capsule (see HUD_ROW_TOP and TrackingMeter compact). The guide box starts below that row. */}
+      <View style={[wh.pillRow, { top: insets.top + HUD_PILL_TOP }]}>
+        <HudGlass radius={999} style={wh.scorePill}>
+          <View style={wh.scoreInner}>
             <Text style={wh.scoreSetTxt}>Set {completedSets + 1} of {targetSets}</Text>
             <Text style={wh.scoreNextTxt}>Next: {nextLabel}</Text>
           </View>
-          {/* A normal (non-absolute) flex child, centered by scoreWrap's own
-              alignItems — not position:'absolute' + left:'50%'. That
-              percentage was resolving against the wrong width (the auto-
-              sized pill's intrinsic width isn't settled when an absolute
-              sibling's percentage position gets computed), which is what
-              put the tab visibly off-center. Plain flexbox centering has
-              no such ambiguity. */}
-          <View style={wh.scoreTab}>
-            <ScoreNotch side="left" />
-            <ScoreNotch side="right" />
-            <View style={wh.scoreTimeChip}>
-              <Text style={wh.scoreTimeTxt}>{m}:{String(sec).padStart(2, '0')}</Text>
-            </View>
-          </View>
-        </View>
+        </HudGlass>
+      </View>
+      <View style={[wh.timerCapsuleWrap, { top: insets.top + HUD_ROW_TOP, left: hudRowLeft(screenW) }]}>
+        <HudGlass radius={999} style={wh.timerCapsule}>
+          <Text style={wh.scoreTimeTxt}>{m}:{String(sec).padStart(2, '0')}</Text>
+        </HudGlass>
       </View>
 
       {/* Segment progress — one bar per set; the current set's bar fills
           proportionally, earlier sets are fully filled, later ones empty.
           Now sits ABOVE the scorecard (swapped order, per explicit
           request), right under the top bar. */}
-      <View style={[wh.segRow, { top: insets.top + 56 }]}>
+      <View style={[wh.segRow, { top: insets.top + HUD_SEG_TOP }]}>
         {Array.from({ length: targetSets }).map((_, i) => {
           const fillPct = i < completedSets ? 100 : i === completedSets ? Math.round((repsIntoSet / targetReps) * 100) : 0;
           const isCurrent = i === completedSets;
@@ -604,8 +614,10 @@ const ri = StyleSheet.create({
 // createMeterSmoother in lib/liveTracking.ts — in its own state, so its ticks
 // never re-render the whole camera screen. Always mounted (renders nothing when
 // !show) so the "is it high yet" report that gates "Ready. Go!" keeps working.
-function TrackingMeter({ target, show, top, onHighChange, counter, counterActive, flags, confidence }: {
+function TrackingMeter({ target, show, top, left, compact, onHighChange, counter, counterActive, flags, confidence }: {
   target: number; show: boolean; top: number; onHighChange: (high: boolean) => void;
+  /** workout HUD: a compact capsule in the row under the scorecard (left = its x), instead of the big label + pill */
+  left?: number; compact?: boolean;
   counter: CounterSignal; counterActive: boolean; flags: { diag: boolean; cue: boolean };
   /** the live CAMERA CONFIDENCE (lib/cameraConfidence.ts), or null before tracking has produced one */
   confidence: { current: number | null };
@@ -641,6 +653,21 @@ function TrackingMeter({ target, show, top, onHighChange, counter, counterActive
   }, [smoother, onHighChange, counter, confidence]);
   if (!show) return null;
   const level = display >= 95 ? C.good : display <= 35 ? C.warn : '#FFFFFF';
+  if (compact) {
+    return (
+      <View pointerEvents="none" style={{ position: 'absolute', top, left: left ?? 0, width: HUD_METER_W, height: HUD_ROW_H }}>
+        <HudGlass radius={999} style={{ width: HUD_METER_W, height: HUD_ROW_H }}>
+          <View style={s.meterCompactRow}>
+            <Text style={s.meterCompactLabel}>Camera</Text>
+            <Text style={s.meterCompactNum}>{display}<Text style={s.meterCompactPct}>%</Text></Text>
+            <View style={s.meterCompactTrack}>
+              <View style={[s.meterFill, { width: `${display}%`, backgroundColor: level }]} />
+            </View>
+          </View>
+        </HudGlass>
+      </View>
+    );
+  }
   return (
     <View pointerEvents="none" style={[s.cameraLockWrap, { top }]}>
       {/* how well the camera sees your whole body: the label sits OUTSIDE the glass, just above it */}
@@ -687,6 +714,7 @@ export default function FormCheckScreen() {
     return () => { alive = false; clearInterval(id); sub.remove(); void deactivateKeepAwake(TAG); };
   }, []);
   const insets = useSafeAreaInsets();
+  const { width: screenW } = useWindowDimensions();
   // User's unlocked rank colour for the ✓ orb / rep counter / accent glow —
   // resolves to the shipped green/red when "Classic" (or nothing) is selected.
   const theme = useFormTheme();
@@ -1229,6 +1257,21 @@ export default function FormCheckScreen() {
         ? (Date.now() - startTimestamp.current) / 1000 : 0;
       repEvents.current.push({ timeSec, good: rep.good, reason: rep.reason });
     });
+    // A half rep, from the ENGINE (it sees every frame, so it knows which end was short). Same verdict path as a counted rep: one event, one X.
+    // An older native build never sends this, so nothing shows for half reps there.
+    const missSub = addAttemptMissedListener((ev) => {
+      if (demoOpenRef.current || repCounterOnly) return;
+      missedSinceCountRef.current += 1;
+      console.log('[ATTEMPT-MISSED] from the engine: ' + ev.reason + ' reached=' + ev.reached.toFixed(1) + ' needed=' + ev.needed.toFixed(1));
+      const hint = repDiagRef.current.message() ?? statsRef.current?.trackingCue ?? null;
+      if (!showVerdict(hint, statsRef.current?.personDetected)) { console.log('[CUE] missed attempt but NO X shown: the frame hint "' + (hint ?? 'no person') + '" is up'); return; }
+      const cv = coachRef.verdict({ now: Date.now(), match: matchRef.result(), source: 'missed', missedReason: ev.reason });
+      if (cv.show !== 'x') return;
+      lastJudgedAt.current = Date.now();
+      setTimeout(() => setJudgedTick(t => t + 1), JUDGED_QUIET_MS + 50);
+      setFeedback({ good: false, reason: cv.reason, seq: ++feedbackSeq.current });
+      hapticWarning();
+    });
     const dbgSub = addDebugStatsListener((e: DebugStatsEvent) => {
       if (demoOpenRef.current) return;
       statsRef.current = e;
@@ -1243,7 +1286,7 @@ export default function FormCheckScreen() {
       const d = repDiagRef.current.message();
       setRepDiag(prev => (prev === d ? prev : d));
     });
-    return () => { repSub.remove(); dbgSub.remove(); };
+    return () => { repSub.remove(); missSub.remove(); dbgSub.remove(); };
   }, [phase]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
@@ -1345,59 +1388,9 @@ export default function FormCheckScreen() {
     if (pendingNavRef.current) doNavigate(pendingNavRef.current);
   }, [doNavigate]);
 
-  // What the attempt detector found. A missed attempt gets an X with its reason (never silent); an attempt the detector counts
-  // itself (the engine had paused, or the person's real range is just short of the line) gets a check and counts as a rep.
-  onAttemptRef.current = (evs: DetectorEvent[]) => {
-    if (demoOpenRef.current) return;
-    for (const ev of evs) {
-      // (no "Range set" / stuck cue lines any more: a stuck set is the Guide's job, picked from WHY it cannot count, lib/guideCoach.ts)
-      if (ev.kind === 'adapt' || ev.kind === 'stuck') continue;
-      if (ev.kind === 'ignored') {
-        // A movement that is not the exercise (reaching for the phone, fumbling). If the engine counted a rep at that moment, take it
-        // back: no check, and the count goes down again. Never an X for it either.
-        const lr = lastNativeRep.current;
-        if (ev.retract && lr && !lr.retracted && Date.now() - lr.at < 3000) {
-          lr.retracted = true;
-          softRepsRef.current -= 1; if (lr.good) softGoodRef.current -= 1;
-          setReps(nativeRepsRef.current + softRepsRef.current);
-          setGoodReps(nativeGoodRef.current + softGoodRef.current);
-          setFeedback(null);
-          repEvents.current.pop();
-          console.log('[CUE] took back a counted rep: the movement was not the exercise path (' + ev.why + ')');
-        }
-        continue;
-      }
-      if (ev.outcome === 'soft') {
-        softRepsRef.current += 1; softGoodRef.current += 1;
-        lastCountAtRef.current = Date.now(); missedSinceCountRef.current = 0; matchRef.noteRep();
-        setReps(nativeRepsRef.current + softRepsRef.current);
-        setGoodReps(nativeGoodRef.current + softGoodRef.current);
-        const cvs = coachRef.verdict({ now: Date.now(), match: matchRef.result(), source: 'soft' });
-        if (cvs.show) {
-          lastJudgedAt.current = Date.now();
-          setFeedback({ good: true, reason: '', seq: ++feedbackSeq.current });
-          hapticSelect();
-        }
-        const timeSec = startTimestamp.current != null ? (Date.now() - startTimestamp.current) / 1000 : 0;
-        repEvents.current.push({ timeSec, good: true, reason: '' });
-        continue;
-      }
-      if (ev.outcome === 'missed' || ev.outcome === 'rejected') {
-        missedSinceCountRef.current += 1;
-        // THE COACH: an X only for a stroke that stayed SHORT ("Go higher" / "Go lower"), and only when Movement Match says the user is trying.
-        // A stroke the camera could not see (tracking, angle, light, a cut path) is never an X: that is the Guide's job.
-        const hint = repDiagRef.current.message() ?? statsRef.current?.trackingCue ?? null;
-        if (!showVerdict(ev.outcome === 'rejected' ? null : hint, statsRef.current?.personDetected)) continue; // frame hint up: no verdict
-        const cva = coachRef.verdict({ now: Date.now(), match: matchRef.result(), source: 'attempt', blocker: ev.blocker, rangeWord: ev.reason, n: ev.n, strokeR: ev.strokeR });
-        if (cva.show !== 'x') continue;
-        if (Date.now() - lastAttemptX.current < 1200) continue; // one X per stroke
-        lastAttemptX.current = Date.now();
-        lastJudgedAt.current = Date.now();
-        setFeedback({ good: false, reason: cva.reason, seq: ++feedbackSeq.current });
-        hapticWarning();
-      }
-    }
-  };
+  // ONE JUDGE (Ari 2026-11-15): the JS attempt detector no longer shows an X, adds a soft rep or takes a counted rep back. It only feeds Movement
+  // Match and the log. A check or X comes ONLY from native events: onRepDetected (a counted rep) and onAttemptMissed (a half rep, new native build).
+  onAttemptRef.current = (_evs: DetectorEvent[]) => { /* nothing on screen */ };
 
   const handleFlip = useCallback(() => {
     void flipCamera().then(r => { if (r && r.position) setCamPosition(r.position); }).catch(() => {});
@@ -1818,7 +1811,9 @@ export default function FormCheckScreen() {
       <TrackingMeter
         target={cameraLockTarget}
         show={stopButtonActive}
-        top={insets.top + 56}
+        top={hudActive ? insets.top + HUD_ROW_TOP : insets.top + 56}
+        left={hudMeterLeft(screenW)}
+        compact={hudActive}
         onHighChange={setMeterHigh}
         counter={counterRef}
         counterActive={isTracking}
@@ -2140,6 +2135,12 @@ const s = StyleSheet.create({
   meterRow:   { flexDirection: 'row', alignItems: 'center', gap: 14 },
   meterTrack: { width: 110, height: 9, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.22)', overflow: 'hidden' },
   meterFill:  { height: 9, borderRadius: 5 },
+  // the compact Camera confidence capsule in the workout HUD row
+  meterCompactRow:   { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 14 },
+  meterCompactLabel: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 12.5, color: 'rgba(255,255,255,0.9)', letterSpacing: 0.1 },
+  meterCompactNum:   { fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 20, color: '#fff', letterSpacing: -0.4, fontVariant: ['tabular-nums'] },
+  meterCompactPct:   { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 12, color: 'rgba(255,255,255,0.8)' },
+  meterCompactTrack: { width: 52, height: 7, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.22)', overflow: 'hidden' },
   meterLabel: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 16, lineHeight: 21, color: '#FFFFFF', letterSpacing: 0.2, marginBottom: 6, textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
   meterNum:   { fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 38, lineHeight: 44, color: '#fff', letterSpacing: -1, fontVariant: ['tabular-nums'] },
   meterPct:   { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 20, color: 'rgba(255,255,255,0.75)' },
@@ -2264,6 +2265,9 @@ const wh = StyleSheet.create({
   counterTotal: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 26, letterSpacing: -0.6, color: 'rgba(255,255,255,0.8)' },
 
   pillRow: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  scoreInner: { flexDirection: 'row', alignItems: 'center', gap: 18, paddingVertical: 13, paddingLeft: 22, paddingRight: 26 },
+  timerCapsuleWrap: { position: 'absolute', width: HUD_TIMER_W, height: HUD_ROW_H },
+  timerCapsule: { width: HUD_TIMER_W, height: HUD_ROW_H, alignItems: 'center', justifyContent: 'center' },
 
   // ── Scorecard — matches assets/app screens/inworkout.html's real markup
   // (px values, colors, radii) directly, not a recreation from memory. ──────
@@ -2274,15 +2278,10 @@ const wh = StyleSheet.create({
   // "more white stuff around it" meant more PADDING (a rounder, bubblier
   // pill with more breathing room around the text), not a stroke. Reverted
   // the border; paddingVertical bumped up instead (was 5).
-  scorePill: {
-    flexDirection: 'row', alignItems: 'center', gap: 18,
-    backgroundColor: '#f2f2f5', borderRadius: 999,
-    paddingVertical: 14, paddingLeft: 22, paddingRight: 28,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 14,
-    elevation: 8,
-  },
-  scoreSetTxt:  { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 16, color: '#111114', letterSpacing: -0.2 },
-  scoreNextTxt: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 15.5, color: '#111114', letterSpacing: -0.2 },
+  // the scorecard is real Liquid Glass now (HudGlass), so it has no fill of its own and its text is white
+  scorePill: { alignSelf: 'center' },
+  scoreSetTxt:  { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 16, color: '#ffffff', letterSpacing: -0.2 },
+  scoreNextTxt: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 15.5, color: 'rgba(255,255,255,0.86)', letterSpacing: -0.2 },
   // The hanging timer tab — square top corners (butts against the pill
   // above it), rounded bottom corners. ScoreNotch patches the two top
   // corners into a smooth concave curve. marginTop:-1 pulls it up flush
@@ -2304,7 +2303,7 @@ const wh = StyleSheet.create({
   // 700Bold loaded (see app/_layout.tsx's useFonts list) — 700 is the
   // closest real weight rather than naming one that isn't actually loaded.
   scoreTimeTxt: {
-    fontFamily: 'PlusJakartaSans_700Bold', fontSize: 16, color: '#111114', letterSpacing: -0.3,
+    fontFamily: 'PlusJakartaSans_700Bold', fontSize: 16, color: '#ffffff', letterSpacing: -0.3,
     fontVariant: ['tabular-nums'],
   },
 

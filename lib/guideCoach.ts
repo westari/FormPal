@@ -17,7 +17,8 @@ import type { MatchResult } from './movementMatch';
 // ── THE GUIDE's words (setup only) ──────────────────────────────────────────────────────────────────────────────────
 // Each line = ONE simple physical action a first-time user understands at once (no "so your hands show").
 export const GUIDE_LINES = {
-  intoPicture:  'Step into view',
+  intoPicture:  'Step into view',   // ONLY when nobody is in the picture
+  backUp:       'Back up',          // too close (Ari 2026-11-15)
   backHands:    'Step back further',
   backBody:     'Step back further',
   closer:       'Step closer',
@@ -54,6 +55,7 @@ export function guideLine(text: string | null | undefined, exerciseId?: string):
   const hands = handsMatter(exerciseId);
   if (/step into|get in frame|get back in frame|no person|into the frame|in the picture/.test(t)) return GUIDE_LINES.intoPicture;
   if (/closer|too far/.test(t)) return GUIDE_LINES.closer;
+  if (/too close|back up/.test(t)) return GUIDE_LINES.backUp;
   if (/phone back|too close|move back|step back|back up|tracking lost|can't see|cannot see|loses you|losing you/.test(t)) return hands ? GUIDE_LINES.backHands : GUIDE_LINES.backBody;
   if (/side-on|sideways|turn side/.test(t)) return GUIDE_LINES.sideways;
   if (/face (the )?(camera|phone)|face camera/.test(t)) return GUIDE_LINES.facePhone;
@@ -171,6 +173,7 @@ export function tipOrder(base: string, exerciseId?: string): string[] {
   const general = hands ? [L.handsInView, L.backHands, L.phoneBack, L.moreLight, L.chestHeight] : [L.bodyInView, L.backBody, L.phoneBack, L.moreLight, L.chestHeight];
   const special: Record<string, string[]> = {
     [L.intoPicture]: [L.intoPicture, L.backHands, L.moreLight],
+    [L.backUp]: [L.backUp, L.backHands, L.phoneBack, L.moreLight],
     [L.sideways]: [L.sideways, L.facePhone, L.bodyInView],
     [L.facePhone]: [L.facePhone, L.sideways, L.bodyInView],
     [L.moreLight]: [L.moreLight, L.chestHeight, L.backHands],
@@ -189,6 +192,7 @@ export function createGuide(opts: { log?: (m: string) => void } = {}): Guide {
   const calm = createCalmLine();
   let lastLogLine = '', lastLogAt = 0;
   let ep = { key: '', since: 0, idx: 0, seen: 0, base: '' };
+  let seenAt = 0;
   const log = (now: number, line: string | null, why: string) => {
     if (!opts.log) return;
     const key = line ?? '';
@@ -199,7 +203,14 @@ export function createGuide(opts: { log?: (m: string) => void } = {}): Guide {
   return {
     decide(i) {
       let line: string | null = null, why = 'nothing to fix', reason: GuideDecision['reason'] = 'none', prio = 0;
-      if (i.personMissing) { line = GUIDE_LINES.intoPicture; why = 'the camera finds nobody in the picture'; reason = 'nobody'; prio = 3; }
+      if (!i.personMissing) seenAt = i.now;
+      // nobody in the picture: "Step into view" only if they were never seen; someone who WAS in the picture a moment ago and is now lost is too close
+      if (i.personMissing) {
+        const wasThere = seenAt > 0 && i.now - seenAt < 10000;
+        line = wasThere ? GUIDE_LINES.backUp : GUIDE_LINES.intoPicture;
+        why = wasThere ? 'the person was in the picture a moment ago and is now lost: too close' : 'the camera finds nobody in the picture';
+        reason = 'nobody'; prio = 3;
+      }
       else if (i.stuck && (i.match.movingNow !== false || i.match.cut)) {   // (a cut path has no recent samples, so it cannot show "moving")
         const r = whyCannotCount(i);
         line = guideForReason(r, i); reason = r; prio = 2;
@@ -225,31 +236,34 @@ export function createGuide(opts: { log?: (m: string) => void } = {}): Guide {
       log(i.now, line, why);
       return { line, why, reason };
     },
-    reset() { calm.reset(); ep = { key: '', since: 0, idx: 0, seen: 0, base: '' }; lastLogLine = ''; lastLogAt = 0; },
+    reset() { seenAt = 0; calm.reset(); ep = { key: '', since: 0, idx: 0, seen: 0, base: '' }; lastLogLine = ''; lastLogAt = 0; },
   };
 }
 
 // ── THE COACH ───────────────────────────────────────────────────────────────────────────────────────────────────────
-/** A missed attempt that is about the camera (not the user's range) is never an X: it is the Guide's business. */
-export function blockerIsRange(b: string | undefined): boolean { return b === 'bottom-short' || b === 'top-short' || b === 'none' || b === undefined; }
+// ONE JUDGE (Ari 2026-11-15): the Coach shows a check or X ONLY from NATIVE events: a rep the engine counted (onRepDetected: a check, or an X with
+// its form reason) or a stroke the engine saw start like a rep and not count (onAttemptMissed: X "Go higher" / "Go lower"). The JS attempt
+// detector (lib/attemptDetector.ts) no longer judges anything. Exactly one verdict per native event, never two for one rep.
 
 export interface CoachInput {
   now: number;
   match: MatchResult;
-  /** 'native' = the engine counted a rep (good or with a form fault); 'soft' = the app counted it; 'attempt' = a stroke that did not count */
-  source: 'native' | 'soft' | 'attempt';
+  /** 'native' = the engine counted a rep (good or with a form fault); 'missed' = the engine saw a stroke start like a rep and not count */
+  source: 'native' | 'missed';
   good?: boolean;
-  /** the form reason (native) */
+  /** native rep: the form reason. */
   reason?: string;
-  /** attempts: why it did not count (lib/attemptDetector.ts Blocker) */
-  blocker?: string;
-  /** attempts: the range word the detector found for this stroke ("Go higher" / "Go lower") */
-  rangeWord?: string;
-  n?: number;
-  /** attempts: the stroke size in rep spans (R = |top - rom|); a tiny one is a wiggle, never a half rep */
-  strokeR?: number;
+  /** missed: which end was short, as the engine reported it ('short_top' | 'short_bottom') */
+  missedReason?: string;
 }
 export interface CoachVerdict { show: 'check' | 'x' | null; reason: string; why: string }
+
+/** The X word for a missed stroke: the top was short -> "Go higher", the bottom was short -> "Go lower". */
+export function missedWord(reason: string | undefined): string | null {
+  if (reason === 'short_top') return 'Go higher';
+  if (reason === 'short_bottom') return 'Go lower';
+  return null;
+}
 
 export interface Coach {
   verdict(i: CoachInput): CoachVerdict;
@@ -267,18 +281,13 @@ export function createCoach(opts: { log?: (m: string) => void } = {}): Coach {
     verdict(i) {
       const lowMatch = i.match.haveData && i.match.notTrying;
       if (lowMatch) return out(i, { show: null, reason: '', why: 'Movement Match is LOW (not trying this exercise), so no check and no X' });
-      // a counted rep ALWAYS gets its check (even 1 second after another verdict); only an X for a missed stroke waits so two verdicts never stack
-      if (i.source === 'attempt' && i.now - lastAt < K.oneVerdictPerSec * 1000) return out(i, { show: null, reason: '', why: 'a verdict was just shown' });
-      if (i.source === 'attempt') {
-        if (i.strokeR !== undefined && i.strokeR < K.minAttemptStrokeR) return out(i, { show: null, reason: '', why: 'the stroke was tiny (' + i.strokeR.toFixed(2) + 'R), a wiggle and not a half rep' });
-        // a half rep dips the 10 s score, so HIGH is not needed when the stroke itself is a real size; LOW (not trying) always blocks
-        const bigStroke = i.strokeR !== undefined && i.strokeR >= K.minAttemptStrokeR && i.match.score >= K.attemptMinMatch;
-        if (!i.match.trying && !bigStroke) return out(i, { show: null, reason: '', why: 'Movement Match is not HIGH yet for this stroke' });
-        if (!blockerIsRange(i.blocker)) return out(i, { show: null, reason: '', why: `the stroke did not count because of the camera (${i.blocker}); that is the Guide's job` });
-        const word = coachLine(i.rangeWord) ?? (i.blocker === 'top-short' ? 'Go higher' : i.blocker === 'bottom-short' ? 'Go lower' : 'Full movement');
-        return out(i, { show: 'x', reason: word, why: `attempt ${i.n ?? ''} stayed short (${i.blocker ?? 'range'})` });
+      if (i.source === 'missed') {
+        // a missed stroke never stacks on a verdict that was just shown (a counted rep always gets its own)
+        if (i.now - lastAt < K.oneVerdictPerSec * 1000) return out(i, { show: null, reason: '', why: 'a verdict was just shown' });
+        const word = missedWord(i.missedReason);
+        if (!word) return out(i, { show: null, reason: '', why: `unknown missed-stroke reason (${i.missedReason ?? 'none'})` });
+        return out(i, { show: 'x', reason: word, why: `the engine saw a stroke start like a rep and not count (${i.missedReason})` });
       }
-      if (i.source === 'soft') return out(i, { show: 'check', reason: '', why: 'the app counted a full stroke the engine had paused for' });
       if (i.good) return out(i, { show: 'check', reason: '', why: 'a rep counted with good form' });
       const word = coachLine(i.reason) ?? 'Full movement';
       return out(i, { show: 'x', reason: word, why: `a rep counted but the form check failed (${i.reason ?? 'no reason given'})` });

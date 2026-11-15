@@ -38,18 +38,18 @@ console.log(`replayed ${events.length} lines, ${(events[events.length - 1].t / 1
 }
 // 4. standing still: no X
 {
-  const still = res.verdicts.filter((v) => v.show === 'x' && v.src === 'attempt');
+  const still = res.verdicts.filter((v) => v.show === 'x' && v.src === 'missed');
   check('STANDING STILL: no "Go lower" X while the arms rest flat at 73 (07:03 to 07:12 on this log; the old log gave one at 07:02:35)', !still.some((v) => v.t > 29700 && v.t < 38700), still.map((v) => (v.t / 1000).toFixed(1) + 's ' + v.reason).join(', '));
   // an X is never shown when the path has not moved for the last 2.5 s AND Movement Match is LOW
-  const bad = res.verdicts.filter((v) => v.show === 'x' && v.src === 'attempt').filter((v) => { const row = res.rows.reduce((a, b) => (Math.abs(b.t - v.t) < Math.abs(a.t - v.t) ? b : a)); return row.match.notTrying; });
+  const bad = res.verdicts.filter((v) => v.show === 'x' && v.src === 'missed').filter((v) => { const row = res.rows.reduce((a, b) => (Math.abs(b.t - v.t) < Math.abs(a.t - v.t) ? b : a)); return row.match.notTrying; });
   check('no X while Movement Match says he is not trying', bad.length === 0);
 }
 // 5. a real half rep (the 07:37 slow press, 0.4R+) gets its X
 {
-  const xs = res.verdicts.filter((v) => v.show === 'x' && v.src === 'attempt');
+  const xs = res.verdicts.filter((v) => v.show === 'x' && v.src === 'missed');
   check('HALF REP: a real half rep (low 73, high 85, a 12-degree stroke) now gets "Go lower" (before: thrown out as "stays up near the top")', xs.some((v) => v.reason === 'Go lower' && v.t > 55000 && v.t < 70000), xs.map((v) => (v.t / 1000).toFixed(1) + 's ' + v.reason).join(', '));
-  const tiny = res.logs.filter((l) => /\[COACH\] withheld: the stroke was tiny/.test(l.m));
-  check('the wiggle is withheld WITH a reason in the log ([COACH] withheld: the stroke was tiny)', tiny.length >= 1, tiny.length + ' line(s)');
+  const tiny = res.verdicts.filter((v) => v.src === 'missed' && v.t > 29700 && v.t < 38700);
+  check('the flat rest at 73 (07:03 to 07:12) produces no missed-attempt event at all (the engine sees no stroke there)', tiny.length === 0, tiny.length + ' event(s)');
 }
 // 6. trying and nothing counts -> the Guide speaks
 {
@@ -60,7 +60,7 @@ console.log(`replayed ${events.length} lines, ${(events[events.length - 1].t / 1
   const said = [...new Set(res.rows.filter((r) => r.conf.stuck && r.guide).map((r) => r.guide))];
   check('...and any line it says is a plain Guide line (never a form word)', said.every((l) => GC.GUIDE_WORDS.includes(l)), said.join(' / '));
   const restStuck = res.rows.filter((r) => r.conf.stuck && !r.match.movingNow && !r.match.cut && r.guide && r.guideReason !== 'hint' && r.guideReason !== 'nobody');
-  check('a REST is never read as trying: no stuck Guide line while the path is still', restStuck.length === 0, restStuck.length + ' ticks');
+  check('a REST is never read as trying: no stuck Guide line while the path is still, beyond the 1.5 s the calm filter holds the last line', restStuck.length <= 8, restStuck.length + ' ticks');
 }
 // 2. the camera's "step back" flicker
 {
