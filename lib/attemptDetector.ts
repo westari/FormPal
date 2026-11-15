@@ -28,7 +28,7 @@ export const ATTEMPT_TUNING = {
   swingHysteresis: 0.22,    // a turn is real when the value moved this fraction of the exercise's full range
   minStrokeFraction: 0.3,   // a low-to-high stroke (and the drop before it) must cover at least this much of the full range to be an attempt
   minStrokeSec: 0.5,        // a real stroke (down and up) takes at least this long; a flick is not a rep
-  maxLowAboveEnter: 0.75,   // a stroke whose low stays further above the entry line than this (fraction of the range) is a wiggle at the top
+  maxLowAboveEnter: 0.95,   // a stroke whose low stays further above the entry line than this (fraction of the range) is a wiggle at the top. (Was 0.75; the 2026-11-13 log: Ari's deliberate half reps bottomed at 62-73 with the line at 50 and were thrown out)
   lowRangeBelowEnter: 0.7,  // a low further under the entry line than this (fraction of the range) is not this exercise's path (arms dropped to the side)
   lockoutFraction: 0.94,    // for the "Go higher" side: the top reading counts as full when it reaches this fraction of the top value
   minPeriodSec: 1.0,        // two attempts closer than this are one wobble
@@ -49,6 +49,8 @@ export interface AttemptEvent {
   n: number;
   score: number;
   low: number; high: number; periodSec: number;
+  /** the stroke size in rep spans: (high - low) / R */
+  strokeR: number;
   outcome: 'counted' | 'rejected' | 'missed' | 'soft';
   blocker: Blocker;
   /** 2-3 words for the X shown on screen for a missed attempt (never silent) */
@@ -155,7 +157,7 @@ export function createAttemptDetector(opts: { exerciseId?: string; now?: () => n
   // finished the stroke, so deciding at once would call every counted rep "missed".
   interface Pending { low: Pt; high: Pt; at: number; period: number; repSeen: boolean }
   let pending: Pending[] = [];
-  const RESOLVE_MS = 1500;
+  const RESOLVE_MS = 600;   // was 1500: the engine's [REP] line arrives at the low, BEFORE the stroke's peak has stalled (0.9s), so waiting longer only made an X late
   function flush(): DetectorEvent[] {
     const t = now(); const out: DetectorEvent[] = [];
     while (pending.length && t - pending[0].at >= RESOLVE_MS) out.push(...resolve(pending.shift()!));
@@ -214,7 +216,7 @@ export function createAttemptDetector(opts: { exerciseId?: string; now?: () => n
       // the engine threw it out: say which end fell short (or that it could not see you), same words as a missed one
       if (outcome === 'rejected') blocker = blockerFor(low.v, high.v);
     }
-    const ev: AttemptEvent = { kind: 'attempt', n: nAttempts, score, low: low.v, high: high.v, periodSec: period, outcome, blocker, reason: outcome === 'missed' || outcome === 'rejected' ? blockerCue(blocker === 'none' ? 'bottom-short' : blocker, exerciseId) : '' };
+    const ev: AttemptEvent = { kind: 'attempt', n: nAttempts, score, low: low.v, high: high.v, periodSec: period, strokeR: stroke, outcome, blocker, reason: outcome === 'missed' || outcome === 'rejected' ? blockerCue(blocker === 'none' ? 'bottom-short' : blocker, exerciseId) : '' };
     out.push(ev);
     opts.log?.(`[ATTEMPT] #${nAttempts} score=${score} low=${low.v.toFixed(1)} high=${high.v.toFixed(1)} period=${period.toFixed(1)}s outcome=${outcome} blocker=${blocker} (enter=${enter} exit=${exit}${adaptedLine ? ` adapted=${adaptedLine.enter.toFixed(1)}/${adaptedLine.exit.toFixed(1)}` : ''})`);
 
@@ -237,7 +239,11 @@ export function createAttemptDetector(opts: { exerciseId?: string; now?: () => n
   // side) is IGNORED: no attempt, no X, and a rep the engine counted at that moment gets no check.
   function finishStroke(c: { start: Pt; low: Pt; high: Pt }, t: number): DetectorEvent[] {
     const R_ = range();
-    const dur = (c.high.t - c.start.t) / 1000;
+    // The stroke's length is its rise (low to peak) and the drop before it. c.start is the time of the LAST peak, which can be many seconds
+    // back when the arms rested before this stroke; the old code counted that rest as part of the stroke and threw real half reps out
+    // as "too slow" (2026-11-13 log: 12.4 s). The drop is taken as at most 2x the rise.
+    const rise = (c.high.t - c.low.t) / 1000, drop = Math.min((c.low.t - c.start.t) / 1000, 2 * rise + 0.5);
+    const dur = rise + Math.max(0, drop);
     let why = '';
     if (c.low.v < Math.min(enter, rom) - T.lowRangeBelowEnter * R_) why = 'the low is far below this exercise\'s path (arms dropped)';
     else if (c.high.v < exit - 0.1 * R_) why = 'it never came back up to the start zone';

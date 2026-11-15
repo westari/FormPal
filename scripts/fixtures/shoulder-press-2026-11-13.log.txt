@@ -1,0 +1,1340 @@
+01:06:17.671 [log] [AWAKE] camera screen open, app state active, keep-awake held every 15s
+01:06:17.680 [log] [AWAKE] screen lock re-applied (released and taken again), the screen cannot dim
+01:06:18.044 [log] [DEBUG] [UNIV-DBG] reset() called
+01:06:18.046 [log] [DEF-LOOKUP] id=shoulderPress found=yes overrides=none
+01:06:18.046 [log] [DEBUG] [UNIV] relevant joints: leftElbow, leftShoulder, rightElbow, rightShoulder
+01:06:18.048 [log] [DEBUG] [UNIV] relevant joints: leftElbow, leftShoulder, rightElbow, rightShoulder
+01:06:18.048 [log] [DEBUG] [DEF-LOAD] loaded 'shoulderPress' from JSON: repMetric=bestSide formChecks=4 cameraSetup=ok calibration=ok source=JSON
+01:06:18.048 [log] [DEBUG] [STD-LOAD] received standard for 'shoulderPress': peak=65.0 start=65.0 minRange=0.0 staticChecks=0 reviewed=false
+01:06:18.048 [log] [DEBUG] [STD] ⚠ 'shoulderPress' standard NOT YET HUMAN-REVIEWED — verify numbers on-device
+01:06:18.048 [log] [DEBUG] [STD] standard loaded: peak≤65.0°  start≥65.0°  minRange≥0.0°
+01:06:18.251 [log] [SETUP-GUIDE] fit: "Step back further" (confidence cap 35, placeholder numbers)
+01:06:18.901 [log] [GUIDE] setup line now "Step into view" (wanted "Step into view")
+01:06:18.953 [log] [DEBUG] [METRIC] shoulderPress value=40.5869 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+01:06:18.954 [log] [DEBUG] [SETUP] shoulderPress rep metric trackable — starting 2.0s hold at timestamp=1794531978.9527888
+01:06:19.024 [log] [READY-GATE] steady run broken (body not fully tracked or frames stopped) — counting again from zero
+01:06:31.300 [log] [DEBUG] [METRIC] shoulderPress value=77.7913 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+01:06:31.300 [log] [DEBUG] [SETUP] shoulderPress rep metric trackable — starting 2.0s hold at timestamp=1794531991.299983
+01:06:31.384 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.0839 holdProgress=0.04 start=1794531991.299983 now=1794531991.3839002
+01:06:31.487 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.1865 holdProgress=0.09 start=1794531991.299983 now=1794531991.486445
+01:06:31.588 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.2883 holdProgress=0.14 start=1794531991.299983 now=1794531991.588286
+01:06:31.688 [log] [DEBUG] [METRIC] shoulderPress value=71.5876 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+01:06:31.688 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.3861 holdProgress=0.19 start=1794531991.299983 now=1794531991.6860561
+01:06:31.788 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.4886 holdProgress=0.24 start=1794531991.299983 now=1794531991.788566
+01:06:31.888 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.5881 holdProgress=0.29 start=1794531991.299983 now=1794531991.888087
+01:06:31.988 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.6882 holdProgress=0.34 start=1794531991.299983 now=1794531991.9881601
+01:06:32.088 [log] [DEBUG] [METRIC] shoulderPress value=52.4365 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+01:06:32.088 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.7882 holdProgress=0.39 start=1794531991.299983 now=1794531992.0881538
+01:06:32.186 [log] [SETUP-GUIDE] ready: "Hold still" (confidence cap 100, placeholder numbers)
+01:06:32.193 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.8878 holdProgress=0.44 start=1794531991.299983 now=1794531992.18783
+01:06:32.280 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.9805 holdProgress=0.49 start=1794531991.299983 now=1794531992.280462
+01:06:32.386 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.0866 holdProgress=0.54 start=1794531991.299983 now=1794531992.386596
+01:06:32.485 [log] [DEBUG] [METRIC] shoulderPress value=52.2066 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+01:06:32.485 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.1848 holdProgress=0.59 start=1794531991.299983 now=1794531992.484809
+01:06:32.584 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.2846 holdProgress=0.64 start=1794531991.299983 now=1794531992.584558
+01:06:32.686 [log] [AWAKE] screen lock re-applied (released and taken again), the screen cannot dim
+01:06:32.686 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.3867 holdProgress=0.69 start=1794531991.299983 now=1794531992.686677
+01:06:32.786 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.4859 holdProgress=0.74 start=1794531991.299983 now=1794531992.785903
+01:06:32.881 [log] [DEBUG] [METRIC] shoulderPress value=52.0914 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+01:06:32.881 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.5814 holdProgress=0.79 start=1794531991.299983 now=1794531992.881345
+01:06:32.985 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.6856 holdProgress=0.84 start=1794531991.299983 now=1794531992.98555
+01:06:33.087 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.7877 holdProgress=0.89 start=1794531991.299983 now=1794531993.087655
+01:06:33.184 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.8847 holdProgress=0.94 start=1794531991.299983 now=1794531993.184689
+01:06:33.284 [log] [DEBUG] [METRIC] shoulderPress value=52.3594 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+01:06:33.284 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.9839 holdProgress=0.99 start=1794531991.299983 now=1794531993.28388
+01:06:33.386 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=2.0863 holdProgress=1.00 start=1794531991.299983 now=1794531993.386244
+01:06:33.386 [log] [DEBUG] [SETUP] shoulderPress PASSED — entering ACTIVE
+01:06:33.386 [log] [READY-GATE] native setup passed; steady so far 2086ms, need 1000ms (placeholder)
+01:06:33.394 [log] [READY-GATE] Ready: every joint visible (native setup passed) and steady 2093ms >= 1000ms (placeholder)
+01:06:33.574 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=51.8196 settleCandidateTop=51.8196 framesSeen=1
+01:06:33.669 [log] [DEBUG] [METRIC] shoulderPress value=51.4708 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:33.669 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=51.4708 settleCandidateTop=51.8196 framesSeen=2
+01:06:33.769 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=52.3936 settleCandidateTop=52.3936 framesSeen=3
+01:06:33.895 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=51.8871 settleCandidateTop=52.3936 framesSeen=4
+01:06:33.978 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=51.9179 settleCandidateTop=52.3936 framesSeen=5
+01:06:34.084 [log] [DEBUG] [METRIC] shoulderPress value=52.0636 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:34.084 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=52.0636 settleCandidateTop=52.3936 framesSeen=6
+01:06:34.084 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=30 ts_epoch=1794531994
+01:06:34.185 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=50.9401 settleCandidateTop=52.3936 framesSeen=7
+01:06:34.287 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=48.6288 settleCandidateTop=52.3936 framesSeen=8
+01:06:34.287 [log] [DEBUG] [SETTLE] rejected — candidate=52.394 required>=57.900 — not a genuine starting position for this exercise, still waiting
+01:06:34.388 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=48.9017 settleCandidateTop=52.3936 framesSeen=9
+01:06:34.493 [log] [DEBUG] [METRIC] shoulderPress value=50.7615 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:34.494 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=50.7615 settleCandidateTop=52.3936 framesSeen=10
+01:06:34.590 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=52.1290 settleCandidateTop=52.3936 framesSeen=11
+01:06:34.692 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=53.1397 settleCandidateTop=53.1397 framesSeen=12
+01:06:34.791 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=52.8326 settleCandidateTop=53.1397 framesSeen=13
+01:06:34.891 [log] [DEBUG] [METRIC] shoulderPress value=54.5935 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:34.892 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=54.5935 settleCandidateTop=54.5935 framesSeen=14
+01:06:34.915 [log] [DEBUG] [UNIV-DBG] reset() called
+01:06:34.979 [log] [DEBUG] [METRIC] shoulderPress value=53.2784 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=waiting
+01:06:35.087 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=51.4134 settleCandidateTop=51.4134 framesSeen=1
+01:06:35.122 [log] [CONFIDENCE] 100 (the camera sees 100) match=0 counting=no (PLACEHOLDER numbers)
+01:06:35.122 [log] [GUIDE] says nothing (nothing to fix)
+01:06:35.188 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=50.4359 settleCandidateTop=51.4134 framesSeen=2
+01:06:35.290 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=51.7524 settleCandidateTop=51.7524 framesSeen=3
+01:06:35.391 [log] [DEBUG] [METRIC] shoulderPress value=49.9774 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:35.391 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=49.9774 settleCandidateTop=51.7524 framesSeen=4
+01:06:35.391 [log] [DEBUG] [SETTLE] rejected — candidate=51.752 required>=57.900 — not a genuine starting position for this exercise, still waiting
+01:06:35.492 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=49.1747 settleCandidateTop=51.7524 framesSeen=5
+01:06:35.592 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=50.4888 settleCandidateTop=51.7524 framesSeen=6
+01:06:35.694 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=50.2049 settleCandidateTop=51.7524 framesSeen=7
+01:06:35.797 [log] [DEBUG] [METRIC] shoulderPress value=49.4876 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:35.797 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=49.4876 settleCandidateTop=51.7524 framesSeen=8
+01:06:35.891 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=48.0014 settleCandidateTop=51.7524 framesSeen=9
+01:06:35.988 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=47.4359 settleCandidateTop=51.7524 framesSeen=10
+01:06:36.089 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=48.4379 settleCandidateTop=51.7524 framesSeen=11
+01:06:36.191 [log] [DEBUG] [METRIC] shoulderPress value=47.8460 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:36.191 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=47.8460 settleCandidateTop=51.7524 framesSeen=12
+01:06:36.289 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=49.5947 settleCandidateTop=51.7524 framesSeen=13
+01:06:36.380 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=50.0833 settleCandidateTop=51.7524 framesSeen=14
+01:06:36.485 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=50.4293 settleCandidateTop=51.7524 framesSeen=15
+01:06:36.588 [log] [DEBUG] [METRIC] shoulderPress value=49.7215 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:36.588 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=49.7215 settleCandidateTop=51.7524 framesSeen=16
+01:06:36.588 [log] [DEBUG] [SETTLE] rejected — candidate=51.752 required>=57.900 — not a genuine starting position for this exercise, still waiting
+01:06:36.691 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=48.5769 settleCandidateTop=51.7524 framesSeen=17
+01:06:36.793 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=49.2727 settleCandidateTop=51.7524 framesSeen=18
+01:06:36.891 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=49.0411 settleCandidateTop=51.7524 framesSeen=19
+01:06:36.989 [log] [DEBUG] [METRIC] shoulderPress value=50.0615 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:36.989 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=50.0615 settleCandidateTop=51.7524 framesSeen=20
+01:06:37.092 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=49.6236 settleCandidateTop=51.7524 framesSeen=21
+01:06:37.171 [log] [MOVE-MATCH] score=0 not trying (motion 0, rhythm n/a, range 12, position 70) spread=0.10R onPath=100% period=n/a cut=none (top 0, bottom 0, frame 0) samples=6 (PLACEHOLDER numbers)
+01:06:37.171 [log] [CONFIDENCE] 100 (the camera sees 100) match=0 counting=no (PLACEHOLDER numbers)
+01:06:37.191 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=48.6008 settleCandidateTop=51.7524 framesSeen=22
+01:06:37.298 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=49.1253 settleCandidateTop=51.7524 framesSeen=23
+01:06:37.396 [log] [DEBUG] [METRIC] shoulderPress value=50.5513 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:37.396 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=50.5513 settleCandidateTop=51.7524 framesSeen=24
+01:06:37.492 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=50.5387 settleCandidateTop=51.7524 framesSeen=25
+01:06:37.595 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=49.3276 settleCandidateTop=51.7524 framesSeen=26
+01:06:37.595 [log] [DEBUG] [SETTLE] rejected — candidate=51.752 required>=57.900 — not a genuine starting position for this exercise, still waiting
+01:06:37.696 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=49.0299 settleCandidateTop=51.7524 framesSeen=27
+01:06:37.794 [log] [DEBUG] [METRIC] shoulderPress value=50.1594 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:37.794 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=50.1594 settleCandidateTop=51.7524 framesSeen=28
+01:06:37.894 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=51.2388 settleCandidateTop=51.7524 framesSeen=29
+01:06:37.894 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=30 ts_epoch=1794531998
+01:06:37.992 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=50.6219 settleCandidateTop=51.7524 framesSeen=30
+01:06:38.082 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=50.0976 settleCandidateTop=51.7524 framesSeen=31
+01:06:38.170 [log] [CONFIDENCE] 92 (the camera sees 92) match=0 counting=no (PLACEHOLDER numbers)
+01:06:38.190 [log] [DEBUG] [METRIC] shoulderPress value=50.4803 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:38.190 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=50.4803 settleCandidateTop=51.7524 framesSeen=32
+01:06:38.287 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=50.4991 settleCandidateTop=51.7524 framesSeen=33
+01:06:38.370 [log] [CONFIDENCE] 86 (the camera sees 86) match=0 counting=no (PLACEHOLDER numbers)
+01:06:38.384 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=50.7635 settleCandidateTop=51.7524 framesSeen=34
+01:06:38.491 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=50.8797 settleCandidateTop=51.7524 framesSeen=35
+01:06:38.570 [log] [CONFIDENCE] 82 (the camera sees 82) match=0 counting=no (PLACEHOLDER numbers)
+01:06:38.571 [log] [GUIDE] says "Step back further" because the camera says "Step back into frame"
+01:06:38.594 [log] [DEBUG] [METRIC] shoulderPress value=50.2752 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:38.594 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=50.2752 settleCandidateTop=51.7524 framesSeen=36
+01:06:38.690 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=49.2378 settleCandidateTop=51.7524 framesSeen=37
+01:06:38.690 [log] [DEBUG] [SETTLE] rejected — candidate=51.752 required>=57.900 — not a genuine starting position for this exercise, still waiting
+01:06:38.787 [log] [CONFIDENCE] 66 (the camera sees 66) match=0 counting=no (PLACEHOLDER numbers)
+01:06:38.790 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=49.2125 settleCandidateTop=51.7524 framesSeen=38
+01:06:38.890 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=50.2111 settleCandidateTop=51.7524 framesSeen=39
+01:06:38.983 [log] [DEBUG] [METRIC] shoulderPress value=48.9483 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:38.983 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=48.9483 settleCandidateTop=51.7524 framesSeen=40
+01:06:38.991 [log] [CONFIDENCE] 55 (the camera sees 55) match=0 counting=no (PLACEHOLDER numbers)
+01:06:39.088 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=50.5664 settleCandidateTop=51.7524 framesSeen=41
+01:06:39.186 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=50.4368 settleCandidateTop=51.7524 framesSeen=42
+01:06:39.204 [log] [CONFIDENCE] 48 (the camera sees 48) match=0 counting=no (PLACEHOLDER numbers)
+01:06:39.292 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=50.4684 settleCandidateTop=51.7524 framesSeen=43
+01:06:39.394 [log] [DEBUG] [METRIC] shoulderPress value=49.5460 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:39.394 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=49.5460 settleCandidateTop=51.7524 framesSeen=44
+01:06:39.420 [log] [CONFIDENCE] 44 (the camera sees 44) match=0 counting=no (PLACEHOLDER numbers)
+01:06:39.489 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=49.8786 settleCandidateTop=51.7524 framesSeen=45
+01:06:39.591 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=51.1136 settleCandidateTop=51.7524 framesSeen=46
+01:06:39.621 [log] [CONFIDENCE] 41 (the camera sees 41) match=0 counting=no (PLACEHOLDER numbers)
+01:06:39.695 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=49.5356 settleCandidateTop=51.7524 framesSeen=47
+01:06:39.695 [log] [DEBUG] [SETTLE] rejected — candidate=51.752 required>=57.900 — not a genuine starting position for this exercise, still waiting
+01:06:39.778 [log] [DEBUG] [METRIC] shoulderPress value=49.4393 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:39.778 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=49.4393 settleCandidateTop=51.7524 framesSeen=48
+01:06:39.821 [log] [CONFIDENCE] 39 (the camera sees 39) match=0 counting=no (PLACEHOLDER numbers)
+01:06:39.898 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=49.9992 settleCandidateTop=51.7524 framesSeen=49
+01:06:39.990 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=50.8926 settleCandidateTop=51.7524 framesSeen=50
+01:06:40.021 [log] [CONFIDENCE] 37 (the camera sees 37) match=0 counting=no (PLACEHOLDER numbers)
+01:06:40.095 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=50.5344 settleCandidateTop=51.7524 framesSeen=51
+01:06:40.193 [log] [DEBUG] [METRIC] shoulderPress value=51.3064 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:40.193 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=51.3064 settleCandidateTop=51.7524 framesSeen=52
+01:06:40.237 [log] [MOVE-MATCH] score=0 not trying (motion 0, rhythm 0, range 10, position 70) spread=0.08R onPath=100% period=n/a cut=none (top 0, bottom 0, frame 0) samples=14 (PLACEHOLDER numbers)
+01:06:40.289 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=50.7694 settleCandidateTop=51.7524 framesSeen=53
+01:06:40.395 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=50.5745 settleCandidateTop=51.7524 framesSeen=54
+01:06:40.454 [log] [CONFIDENCE] 36 (the camera sees 36) match=0 counting=no (PLACEHOLDER numbers)
+01:06:40.498 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=49.8944 settleCandidateTop=51.7524 framesSeen=55
+01:06:40.598 [log] [DEBUG] [METRIC] shoulderPress value=50.3227 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:40.598 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=50.3227 settleCandidateTop=51.7524 framesSeen=56
+01:06:40.693 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=50.9103 settleCandidateTop=51.7524 framesSeen=57
+01:06:40.798 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=50.4164 settleCandidateTop=51.7524 framesSeen=58
+01:06:40.854 [log] [CONFIDENCE] 35 (the camera sees 35) match=0 counting=no (PLACEHOLDER numbers)
+01:06:40.899 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=50.2098 settleCandidateTop=51.7524 framesSeen=59
+01:06:40.899 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=60 ts_epoch=1794532001
+01:06:40.993 [log] [DEBUG] [METRIC] shoulderPress value=48.6329 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:40.993 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=48.6329 settleCandidateTop=51.7524 framesSeen=60
+01:06:40.993 [log] [DEBUG] [SETTLE] rejected — candidate=51.752 required>=57.900 — not a genuine starting position for this exercise, still waiting
+01:06:41.092 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=48.0155 settleCandidateTop=51.7524 framesSeen=61
+01:06:41.194 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=47.4037 settleCandidateTop=51.7524 framesSeen=62
+01:06:41.271 [log] [CONFIDENCE] 44 (the camera sees 44) match=0 counting=no (PLACEHOLDER numbers)
+01:06:41.293 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=46.8876 settleCandidateTop=51.7524 framesSeen=63
+01:06:41.397 [log] [DEBUG] [METRIC] shoulderPress value=45.1664 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:41.398 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=45.1664 settleCandidateTop=51.7524 framesSeen=64
+01:06:41.488 [log] [CONFIDENCE] 64 (the camera sees 64) match=0 counting=no (PLACEHOLDER numbers)
+01:06:41.491 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=44.5414 settleCandidateTop=51.7524 framesSeen=65
+01:06:41.592 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=45.0601 settleCandidateTop=51.7524 framesSeen=66
+01:06:41.688 [log] [CONFIDENCE] 76 (the camera sees 76) match=0 counting=no (PLACEHOLDER numbers)
+01:06:41.693 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=44.8150 settleCandidateTop=51.7524 framesSeen=67
+01:06:41.793 [log] [DEBUG] [METRIC] shoulderPress value=46.5063 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:41.793 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=46.5063 settleCandidateTop=51.7524 framesSeen=68
+01:06:41.888 [log] [CONFIDENCE] 84 (the camera sees 84) match=0 counting=no (PLACEHOLDER numbers)
+01:06:41.891 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=45.6221 settleCandidateTop=51.7524 framesSeen=69
+01:06:41.990 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=46.1714 settleCandidateTop=51.7524 framesSeen=70
+01:06:42.091 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=46.1813 settleCandidateTop=51.7524 framesSeen=71
+01:06:42.091 [log] [DEBUG] [SETTLE] rejected — candidate=51.752 required>=57.900 — not a genuine starting position for this exercise, still waiting
+01:06:42.104 [log] [CONFIDENCE] 89 (the camera sees 89) match=0 counting=no (PLACEHOLDER numbers)
+01:06:42.191 [log] [DEBUG] [METRIC] shoulderPress value=46.0647 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:42.191 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=46.0647 settleCandidateTop=51.7524 framesSeen=72
+01:06:42.291 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=45.3898 settleCandidateTop=51.7524 framesSeen=73
+01:06:42.304 [log] [CONFIDENCE] 93 (the camera sees 93) match=0 counting=no (PLACEHOLDER numbers)
+01:06:42.389 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=45.9071 settleCandidateTop=51.7524 framesSeen=74
+01:06:42.491 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=57.7269 settleCandidateTop=57.7269 framesSeen=75
+01:06:42.504 [log] [CONFIDENCE] 95 (the camera sees 95) match=0 counting=no (PLACEHOLDER numbers)
+01:06:42.593 [log] [DEBUG] [METRIC] shoulderPress value=45.3041 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:42.593 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=45.3041 settleCandidateTop=57.7269 framesSeen=76
+01:06:42.691 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=44.4923 settleCandidateTop=57.7269 framesSeen=77
+01:06:42.704 [log] [CONFIDENCE] 97 (the camera sees 97) match=1 counting=no (PLACEHOLDER numbers)
+01:06:42.704 [log] [GUIDE] says "Step back further" because holding the last line (calm: a line stays up a few seconds)
+01:06:42.793 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=44.0562 settleCandidateTop=57.7269 framesSeen=78
+01:06:42.892 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=41.6821 settleCandidateTop=57.7269 framesSeen=79
+01:06:42.904 [log] [CONFIDENCE] 98 (the camera sees 98) match=1 counting=no (PLACEHOLDER numbers)
+01:06:42.990 [log] [DEBUG] [METRIC] shoulderPress value=41.9283 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:42.990 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=41.9283 settleCandidateTop=57.7269 framesSeen=80
+01:06:43.091 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=42.4341 settleCandidateTop=57.7269 framesSeen=81
+01:06:43.091 [log] [DEBUG] [SETTLE] rejected — candidate=57.727 required>=57.900 — not a genuine starting position for this exercise, still waiting
+01:06:43.104 [log] [CONFIDENCE] 99 (the camera sees 99) match=4 counting=no (PLACEHOLDER numbers)
+01:06:43.104 [log] [GUIDE] says nothing (nothing to fix)
+01:06:43.193 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=43.3839 settleCandidateTop=57.7269 framesSeen=82
+01:06:43.293 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=41.8491 settleCandidateTop=57.7269 framesSeen=83
+01:06:43.304 [log] [MOVE-MATCH] score=2 not trying (motion 20, rhythm 0, range 21, position 70) spread=0.17R onPath=100% period=n/a cut=none (top 0, bottom 0, frame 0) samples=21 (PLACEHOLDER numbers)
+01:06:43.395 [log] [DEBUG] [METRIC] shoulderPress value=42.0239 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:43.395 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=42.0239 settleCandidateTop=57.7269 framesSeen=84
+01:06:43.492 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=41.2201 settleCandidateTop=57.7269 framesSeen=85
+01:06:43.595 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=43.1483 settleCandidateTop=57.7269 framesSeen=86
+01:06:43.699 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=44.6423 settleCandidateTop=57.7269 framesSeen=87
+01:06:43.721 [log] [CONFIDENCE] 100 (the camera sees 100) match=8 counting=no (PLACEHOLDER numbers)
+01:06:43.802 [log] [DEBUG] [METRIC] shoulderPress value=45.7598 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:43.802 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=45.7598 settleCandidateTop=57.7269 framesSeen=88
+01:06:43.896 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=47.1605 settleCandidateTop=57.7269 framesSeen=89
+01:06:43.896 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=90 ts_epoch=1794532004
+01:06:43.985 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=47.9603 settleCandidateTop=57.7269 framesSeen=90
+01:06:44.096 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=50.7872 settleCandidateTop=57.7269 framesSeen=91
+01:06:44.198 [log] [DEBUG] [METRIC] shoulderPress value=52.0971 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:44.198 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=52.0971 settleCandidateTop=57.7269 framesSeen=92
+01:06:44.295 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=53.7767 settleCandidateTop=57.7269 framesSeen=93
+01:06:44.394 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=56.1511 settleCandidateTop=57.7269 framesSeen=94
+01:06:44.495 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=56.2769 settleCandidateTop=57.7269 framesSeen=95
+01:06:44.601 [log] [DEBUG] [METRIC] shoulderPress value=54.0132 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:44.601 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=54.0132 settleCandidateTop=57.7269 framesSeen=96
+01:06:44.694 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=54.9146 settleCandidateTop=57.7269 framesSeen=97
+01:06:44.796 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=51.2162 settleCandidateTop=57.7269 framesSeen=98
+01:06:44.901 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=54.3908 settleCandidateTop=57.7269 framesSeen=99
+01:06:44.938 [log] [MOVE-MATCH] score=12 not trying (motion 40, rhythm 0, range 30, position 70) spread=0.24R onPath=100% period=n/a cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:06:44.995 [log] [DEBUG] [METRIC] shoulderPress value=54.8839 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:44.995 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=54.8839 settleCandidateTop=57.7269 framesSeen=100
+01:06:45.092 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=57.3656 settleCandidateTop=57.7269 framesSeen=101
+01:06:45.198 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=57.5191 settleCandidateTop=57.7269 framesSeen=102
+01:06:45.300 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=56.5074 settleCandidateTop=57.7269 framesSeen=103
+01:06:45.395 [log] [DEBUG] [METRIC] shoulderPress value=56.3883 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:45.395 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=56.3883 settleCandidateTop=57.7269 framesSeen=104
+01:06:45.495 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=56.7759 settleCandidateTop=57.7269 framesSeen=105
+01:06:45.599 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=55.6296 settleCandidateTop=57.7269 framesSeen=106
+01:06:45.700 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=55.9120 settleCandidateTop=57.7269 framesSeen=107
+01:06:45.755 [log] [CONFIDENCE] 100 (the camera sees 100) match=17 counting=no (PLACEHOLDER numbers)
+01:06:45.800 [log] [DEBUG] [METRIC] shoulderPress value=56.0942 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:45.800 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=56.0942 settleCandidateTop=57.7269 framesSeen=108
+01:06:45.896 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=55.7158 settleCandidateTop=57.7269 framesSeen=109
+01:06:45.956 [log] [MOVE-MATCH] score=25 not trying (motion 25, rhythm 0, range 43, position 70) spread=0.34R onPath=100% period=5.5s cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:06:45.988 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=54.3550 settleCandidateTop=57.7269 framesSeen=110
+01:06:46.100 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=53.4890 settleCandidateTop=57.7269 framesSeen=111
+01:06:46.201 [log] [DEBUG] [METRIC] shoulderPress value=53.5945 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:46.201 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=53.5945 settleCandidateTop=57.7269 framesSeen=112
+01:06:46.291 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=54.1319 settleCandidateTop=57.7269 framesSeen=113
+01:06:46.355 [log] [CONFIDENCE] 87 (the camera sees 87) match=22 counting=no (PLACEHOLDER numbers)
+01:06:46.392 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=54.0435 settleCandidateTop=57.7269 framesSeen=114
+01:06:46.491 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=54.8716 settleCandidateTop=57.7269 framesSeen=115
+01:06:46.556 [log] [CONFIDENCE] 78 (the camera sees 78) match=21 counting=no (PLACEHOLDER numbers)
+01:06:46.592 [log] [DEBUG] [METRIC] shoulderPress value=54.5627 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:46.593 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=54.5627 settleCandidateTop=57.7269 framesSeen=116
+01:06:46.692 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=54.4576 settleCandidateTop=57.7269 framesSeen=117
+01:06:46.755 [log] [CONFIDENCE] 72 (the camera sees 72) match=23 counting=no (PLACEHOLDER numbers)
+01:06:46.755 [log] [GUIDE] says "Lower your hands" because the camera says "Hands at shoulders"
+01:06:46.785 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=54.9868 settleCandidateTop=57.7269 framesSeen=118
+01:06:46.887 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=55.3053 settleCandidateTop=57.7269 framesSeen=119
+01:06:46.887 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=120 ts_epoch=1794532007
+01:06:46.972 [log] [CONFIDENCE] 68 (the camera sees 68) match=25 counting=no (PLACEHOLDER numbers)
+01:06:46.989 [log] [DEBUG] [METRIC] shoulderPress value=54.8527 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:46.990 [log] [ATTEMPT] ignored low=42.0 high=56.1 dur=10.4s: too slow to be a rep (not the exercise path, no check or X)
+01:06:46.990 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=54.8527 settleCandidateTop=57.7269 framesSeen=120
+01:06:47.091 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=55.0793 settleCandidateTop=57.7269 framesSeen=121
+01:06:47.172 [log] [CONFIDENCE] 65 (the camera sees 65) match=27 counting=no (PLACEHOLDER numbers)
+01:06:47.196 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=54.9769 settleCandidateTop=57.7269 framesSeen=122
+01:06:47.297 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=55.1639 settleCandidateTop=57.7269 framesSeen=123
+01:06:47.372 [log] [CONFIDENCE] 63 (the camera sees 63) match=25 counting=no (PLACEHOLDER numbers)
+01:06:47.397 [log] [DEBUG] [METRIC] shoulderPress value=55.0345 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:47.397 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=55.0345 settleCandidateTop=57.7269 framesSeen=124
+01:06:47.496 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=55.3437 settleCandidateTop=57.7269 framesSeen=125
+01:06:47.572 [log] [CONFIDENCE] 54 (the camera sees 54) match=24 counting=no (PLACEHOLDER numbers)
+01:06:47.598 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=55.6972 settleCandidateTop=57.7269 framesSeen=126
+01:06:47.690 [log] [AWAKE] screen lock re-applied (released and taken again), the screen cannot dim
+01:06:47.698 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=54.7464 settleCandidateTop=57.7269 framesSeen=127
+01:06:47.772 [log] [CONFIDENCE] 48 (the camera sees 48) match=23 counting=no (PLACEHOLDER numbers)
+01:06:47.804 [log] [DEBUG] [METRIC] shoulderPress value=55.3421 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:47.805 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=55.3421 settleCandidateTop=57.7269 framesSeen=128
+01:06:47.849 [log] [PROFILE] web view load start +347948ms after mount
+01:06:47.875 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=55.3463 settleCandidateTop=57.7269 framesSeen=129
+01:06:47.882 [log] [PROFILE] page asked for data; sending
+01:06:47.972 [log] [CONFIDENCE] 43 (the camera sees 43) match=27 counting=no (PLACEHOLDER numbers)
+01:06:47.992 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=54.7734 settleCandidateTop=57.7269 framesSeen=130
+01:06:48.041 [log] [PROFILE] web view load end
+01:06:48.081 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=54.7075 settleCandidateTop=57.7269 framesSeen=131
+01:06:48.172 [log] [CONFIDENCE] 41 (the camera sees 41) match=30 counting=no (PLACEHOLDER numbers)
+01:06:48.191 [log] [DEBUG] [METRIC] shoulderPress value=54.3975 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:48.191 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=54.3975 settleCandidateTop=57.7269 framesSeen=132
+01:06:48.293 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=54.7125 settleCandidateTop=57.7269 framesSeen=133
+01:06:48.384 [log] [PROFILE] page ready +348483ms after mount
+01:06:48.390 [log] [CONFIDENCE] 38 (the camera sees 38) match=28 counting=no (PLACEHOLDER numbers)
+01:06:48.402 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=54.4748 settleCandidateTop=57.7269 framesSeen=134
+01:06:48.492 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=54.5194 settleCandidateTop=57.7269 framesSeen=135
+01:06:48.595 [log] [DEBUG] [METRIC] shoulderPress value=54.0746 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:48.595 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=54.0746 settleCandidateTop=57.7269 framesSeen=136
+01:06:48.606 [log] [CONFIDENCE] 37 (the camera sees 37) match=26 counting=no (PLACEHOLDER numbers)
+01:06:48.695 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=53.8874 settleCandidateTop=57.7269 framesSeen=137
+01:06:48.795 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=53.2646 settleCandidateTop=57.7269 framesSeen=138
+01:06:48.822 [log] [CONFIDENCE] 36 (the camera sees 36) match=25 counting=no (PLACEHOLDER numbers)
+01:06:48.900 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=53.6184 settleCandidateTop=57.7269 framesSeen=139
+01:06:48.992 [log] [DEBUG] [METRIC] shoulderPress value=53.2570 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:48.992 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=53.2570 settleCandidateTop=57.7269 framesSeen=140
+01:06:49.022 [log] [MOVE-MATCH] score=24 not trying (motion 25, rhythm 0, range 42, position 70) spread=0.33R onPath=100% period=5.8s cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:06:49.094 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=52.8946 settleCandidateTop=57.7269 framesSeen=141
+01:06:49.197 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=54.9694 settleCandidateTop=57.7269 framesSeen=142
+01:06:49.298 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=56.0855 settleCandidateTop=57.7269 framesSeen=143
+01:06:49.401 [log] [DEBUG] [METRIC] shoulderPress value=57.7802 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:49.402 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=57.7802 settleCandidateTop=57.7802 framesSeen=144
+01:06:49.422 [log] [CONFIDENCE] 49 (the camera sees 49) match=30 counting=no (PLACEHOLDER numbers)
+01:06:49.422 [log] [GUIDE] says "Step back further" because the camera says "Step back into frame"
+01:06:49.492 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=55.0038 settleCandidateTop=57.7802 framesSeen=145
+01:06:49.593 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=54.5634 settleCandidateTop=57.7802 framesSeen=146
+01:06:49.622 [log] [CONFIDENCE] 57 (the camera sees 57) match=28 counting=no (PLACEHOLDER numbers)
+01:06:49.693 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=53.1638 settleCandidateTop=57.7802 framesSeen=147
+01:06:49.795 [log] [DEBUG] [METRIC] shoulderPress value=52.0934 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:49.796 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=52.0934 settleCandidateTop=57.7802 framesSeen=148
+01:06:49.822 [log] [CONFIDENCE] 63 (the camera sees 63) match=26 counting=no (PLACEHOLDER numbers)
+01:06:49.893 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=46.6685 settleCandidateTop=57.7802 framesSeen=149
+01:06:49.893 [log] [DEBUG] [SETTLE] rejected — candidate=57.780 required>=57.900 — not a genuine starting position for this exercise, still waiting
+01:06:49.893 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=150 ts_epoch=1794532010
+01:06:49.988 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=48.6743 settleCandidateTop=57.7802 framesSeen=150
+01:06:50.022 [log] [CONFIDENCE] 67 (the camera sees 67) match=29 counting=no (PLACEHOLDER numbers)
+01:06:50.096 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=49.2280 settleCandidateTop=57.7802 framesSeen=151
+01:06:50.199 [log] [DEBUG] [METRIC] shoulderPress value=47.8212 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:50.200 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=47.8212 settleCandidateTop=57.7802 framesSeen=152
+01:06:50.222 [log] [MOVE-MATCH] score=37 unsure (motion 57, rhythm 0, range 46, position 70) spread=0.37R onPath=100% period=n/a cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:06:50.223 [log] [CONFIDENCE] 70 (the camera sees 70) match=37 counting=no (PLACEHOLDER numbers)
+01:06:50.295 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=50.8560 settleCandidateTop=57.7802 framesSeen=153
+01:06:50.397 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=50.2675 settleCandidateTop=57.7802 framesSeen=154
+01:06:50.423 [log] [CONFIDENCE] 71 (the camera sees 71) match=37 counting=no (PLACEHOLDER numbers)
+01:06:50.500 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=50.6670 settleCandidateTop=57.7802 framesSeen=155
+01:06:50.596 [log] [DEBUG] [METRIC] shoulderPress value=51.1088 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:50.596 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=51.1088 settleCandidateTop=57.7802 framesSeen=156
+01:06:50.623 [log] [CONFIDENCE] 73 (the camera sees 73) match=31 counting=no (PLACEHOLDER numbers)
+01:06:50.695 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=50.8599 settleCandidateTop=57.7802 framesSeen=157
+01:06:50.798 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=51.8178 settleCandidateTop=57.7802 framesSeen=158
+01:06:50.839 [log] [MOVE-MATCH] score=26 not trying (motion 26, rhythm 0, range 43, position 70) spread=0.34R onPath=100% period=n/a cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:06:50.900 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=51.2617 settleCandidateTop=57.7802 framesSeen=159
+01:06:50.991 [log] [DEBUG] [METRIC] shoulderPress value=51.3723 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:50.991 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=51.3723 settleCandidateTop=57.7802 framesSeen=160
+01:06:51.039 [log] [CONFIDENCE] 74 (the camera sees 74) match=28 counting=no (PLACEHOLDER numbers)
+01:06:51.094 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=52.2147 settleCandidateTop=57.7802 framesSeen=161
+01:06:51.195 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=51.8141 settleCandidateTop=57.7802 framesSeen=162
+01:06:51.302 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=52.8643 settleCandidateTop=57.7802 framesSeen=163
+01:06:51.402 [log] [DEBUG] [METRIC] shoulderPress value=53.7093 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:51.402 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=53.7093 settleCandidateTop=57.7802 framesSeen=164
+01:06:51.498 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=54.5100 settleCandidateTop=57.7802 framesSeen=165
+01:06:51.599 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=53.9031 settleCandidateTop=57.7802 framesSeen=166
+01:06:51.639 [log] [CONFIDENCE] 83 (the camera sees 83) match=31 counting=no (PLACEHOLDER numbers)
+01:06:51.695 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=53.9779 settleCandidateTop=57.7802 framesSeen=167
+01:06:51.793 [log] [DEBUG] [METRIC] shoulderPress value=55.9243 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:51.794 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=55.9243 settleCandidateTop=57.7802 framesSeen=168
+01:06:51.856 [log] [CONFIDENCE] 89 (the camera sees 89) match=28 counting=no (PLACEHOLDER numbers)
+01:06:51.892 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=55.5157 settleCandidateTop=57.7802 framesSeen=169
+01:06:51.989 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=56.5414 settleCandidateTop=57.7802 framesSeen=170
+01:06:52.073 [log] [CONFIDENCE] 93 (the camera sees 93) match=28 counting=no (PLACEHOLDER numbers)
+01:06:52.073 [log] [GUIDE] says nothing (nothing to fix)
+01:06:52.093 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=56.9641 settleCandidateTop=57.7802 framesSeen=171
+01:06:52.193 [log] [DEBUG] [METRIC] shoulderPress value=56.1203 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:52.194 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=56.1203 settleCandidateTop=57.7802 framesSeen=172
+01:06:52.290 [log] [CONFIDENCE] 95 (the camera sees 95) match=28 counting=no (PLACEHOLDER numbers)
+01:06:52.294 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=57.7344 settleCandidateTop=57.7802 framesSeen=173
+01:06:52.395 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=55.4320 settleCandidateTop=57.7802 framesSeen=174
+01:06:52.490 [log] [CONFIDENCE] 97 (the camera sees 97) match=29 counting=no (PLACEHOLDER numbers)
+01:06:52.498 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=55.0237 settleCandidateTop=57.7802 framesSeen=175
+01:06:52.598 [log] [DEBUG] [METRIC] shoulderPress value=55.1430 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:52.598 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=55.1430 settleCandidateTop=57.7802 framesSeen=176
+01:06:52.692 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=55.4184 settleCandidateTop=57.7802 framesSeen=177
+01:06:52.706 [log] [CONFIDENCE] 98 (the camera sees 98) match=35 counting=no (PLACEHOLDER numbers)
+01:06:52.794 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=53.9336 settleCandidateTop=57.7802 framesSeen=178
+01:06:52.897 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=55.8391 settleCandidateTop=57.7802 framesSeen=179
+01:06:52.897 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=180 ts_epoch=1794532013
+01:06:52.923 [log] [CONFIDENCE] 99 (the camera sees 99) match=19 counting=no (PLACEHOLDER numbers)
+01:06:52.993 [log] [DEBUG] [METRIC] shoulderPress value=52.6243 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:52.993 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=52.6243 settleCandidateTop=57.7802 framesSeen=180
+01:06:53.093 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=47.6113 settleCandidateTop=57.7802 framesSeen=181
+01:06:53.093 [log] [DEBUG] [SETTLE] rejected — candidate=57.780 required>=57.900 — not a genuine starting position for this exercise, still waiting
+01:06:53.123 [log] [MOVE-MATCH] score=14 not trying (motion 42, rhythm 0, range 32, position 70) spread=0.25R onPath=100% period=3.0s cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:06:53.198 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=61.7524 settleCandidateTop=61.7524 framesSeen=182
+01:06:53.296 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=66.6130 settleCandidateTop=66.6130 framesSeen=183
+01:06:53.401 [log] [DEBUG] [METRIC] shoulderPress value=70.1522 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:53.401 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=70.1522 settleCandidateTop=70.1522 framesSeen=184
+01:06:53.497 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=77.0280 settleCandidateTop=77.0280 framesSeen=185
+01:06:53.523 [log] [CONFIDENCE] 100 (the camera sees 100) match=12 counting=no (PLACEHOLDER numbers)
+01:06:53.596 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=84.9282 settleCandidateTop=84.9282 framesSeen=186
+01:06:53.701 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=83.6199 settleCandidateTop=84.9282 framesSeen=187
+01:06:53.796 [log] [DEBUG] [METRIC] shoulderPress value=61.9939 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:53.796 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=61.9939 settleCandidateTop=84.9282 framesSeen=188
+01:06:53.894 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=48.3655 settleCandidateTop=84.9282 framesSeen=189
+01:06:53.894 [log] [DEBUG] [SETTLE] resynced on first real rep attempt (top≈84.928 framesSeen=189) — rep counting active
+01:06:53.991 [log] [DEBUG] [REP-TRACE] shoulderPress angle=42.7483 repMinAngle=48.3655 framesSincePoseGap=105
+01:06:54.098 [log] [DEBUG] [REP-TRACE] shoulderPress angle=59.1159 repMinAngle=42.7483 framesSincePoseGap=105
+01:06:54.197 [log] [DEBUG] [METRIC] shoulderPress value=80.3251 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+01:06:54.197 [log] [DEBUG] [REP-TRACE] shoulderPress angle=80.3251 repMinAngle=42.7483 framesSincePoseGap=105
+01:06:54.297 [log] [DEBUG] [REP-TRACE] shoulderPress angle=85.0351 repMinAngle=42.7483 framesSincePoseGap=105
+01:06:54.297 [log] [DEBUG] [UNIV-DBG] rep #1: buffer=193 frames windowStart_epoch=1794532006 repEnd_epoch=1794532014 window=79 frames
+01:06:54.298 [log] [DEBUG] [STD] rep #1 ref: peak=42.7° start=84.9°  (standard: peak≤65.0° start≥65.0°)
+01:06:54.299 [log] [DEBUG] [UNIV] rep #1: CALIBRATING (1/3 good)  range=42.180  dur=0.60s  jerk=23859.16279
+01:06:54.299 [log] [DEBUG] [REP] #1 top=84.9 bottom=42.7 thr=55.0 swing=42.2 ROM=ok cue=GOOD
+01:06:54.299 [log] [DEBUG] [CALIB] rep 1  min=42.7 max=84.9 range=42.2 dur=0.60s  → COUNTED (rom=OK, cue=GOOD)  [thr in use: enter=50 exit=58 goodROM=55 top=84]
+01:06:54.299 [log] [MOVE-MATCH] score=40 unsure (motion 100, rhythm 74, range 22, position 100) spread=0.17R onPath=100% period=1.0s cut=none (top 0, bottom 0, frame 0) samples=27 (PLACEHOLDER numbers)
+01:06:54.299 [log] [COACH] CHECK because a rep counted with good form (match 40)
+01:06:54.309 [log] [DEBUG] [REP #1] GOOD ✓  peak=42.7°
+  (no form checks)
+  planarity=PASS  n/a
+  cue=GOOD
+01:06:54.309 [log] [DEBUG] [COMPARE] shoulderPress rep#1  2D=42.7°  boneGated=42.7°  blazePose3D=91.5°  | lElb(z=-0.20 v=1.00) rElb(z=-0.20 v=1.00) lWri(z=-0.34 v=0.99) rWri(z=-0.31 v=0.99) | AV=9ms BP=23ms
+01:06:54.585 [log] [DEBUG] [METRIC] shoulderPress value=67.8858 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:54.999 [log] [DEBUG] [METRIC] shoulderPress value=83.5486 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:55.023 [log] [MOVE-MATCH] score=82 TRYING (motion 100, rhythm 65, range 71, position 100) spread=0.57R onPath=100% period=1.3s cut=none (top 0, bottom 0, frame 0) samples=27 (PLACEHOLDER numbers)
+01:06:55.386 [log] [DEBUG] [METRIC] shoulderPress value=40.5058 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+01:06:55.387 [log] [DEBUG] [REP-TRACE] shoulderPress angle=40.5058 repMinAngle=44.1043 framesSincePoseGap=105
+01:06:55.423 [log] [CONFIDENCE] 94 (the camera sees 94) match=84 counting=yes (PLACEHOLDER numbers)
+01:06:55.487 [log] [DEBUG] [REP-TRACE] shoulderPress angle=55.2088 repMinAngle=40.5058 framesSincePoseGap=105
+01:06:55.592 [log] [DEBUG] [REP-TRACE] shoulderPress angle=72.2055 repMinAngle=40.5058 framesSincePoseGap=105
+01:06:55.640 [log] [CONFIDENCE] 96 (the camera sees 96) match=86 counting=yes (PLACEHOLDER numbers)
+01:06:55.687 [log] [DEBUG] [REP-TRACE] shoulderPress angle=88.0980 repMinAngle=40.5058 framesSincePoseGap=105
+01:06:55.796 [log] [DEBUG] [METRIC] shoulderPress value=79.9232 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+01:06:55.796 [log] [DEBUG] [REP-TRACE] shoulderPress angle=79.9232 repMinAngle=40.5058 framesSincePoseGap=105
+01:06:55.796 [log] [DEBUG] [UNIV-DBG] rep #2: buffer=208 frames windowStart_epoch=1794532008 repEnd_epoch=1794532016 window=80 frames
+01:06:55.796 [log] [DEBUG] [STD] rep #2 ref: peak=40.5° start=85.0°  (standard: peak≤65.0° start≥65.0°)
+01:06:55.806 [log] [DEBUG] [UNIV] rep #2: CALIBRATING (2/3 good)  range=47.592  dur=1.39s  jerk=10737.73628
+01:06:55.806 [log] [DEBUG] [REP] #2 top=84.9 bottom=40.5 thr=55.0 swing=44.4 ROM=ok cue=GOOD
+01:06:55.806 [log] [DEBUG] [CALIB] rep 2  min=40.5 max=84.9 range=44.4 dur=1.39s  → COUNTED (rom=OK, cue=GOOD)  [thr in use: enter=50 exit=58 goodROM=55 top=84]
+01:06:55.806 [log] [COACH] CHECK because a rep counted with good form (match 86)
+01:06:55.806 [log] [DEBUG] [REP #2] GOOD ✓  peak=40.5°
+  (no form checks)
+  planarity=PASS  n/a
+  cue=GOOD
+01:06:55.807 [log] [DEBUG] [COMPARE] shoulderPress rep#2  2D=40.5°  boneGated=40.5°  blazePose3D=85.5°  | lElb(z=-0.22 v=1.00) rElb(z=-0.21 v=1.00) lWri(z=-0.38 v=1.00) rWri(z=-0.34 v=0.98) | AV=9ms BP=22ms
+01:06:55.872 [log] [CONFIDENCE] 97 (the camera sees 97) match=90 counting=yes (PLACEHOLDER numbers)
+01:06:55.889 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=210 ts_epoch=1794532016
+01:06:56.074 [log] [GUIDE] says nothing (nothing to fix)
+01:06:56.197 [log] [DEBUG] [METRIC] shoulderPress value=71.9214 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:56.290 [log] [MOVE-MATCH] score=96 TRYING (motion 100, rhythm 83, range 100, position 100) spread=0.82R onPath=100% period=1.3s cut=none (top 0, bottom 0, frame 0) samples=29 (PLACEHOLDER numbers)
+01:06:56.290 [log] [CONFIDENCE] 100 (the camera sees 100) match=96 counting=yes (PLACEHOLDER numbers)
+01:06:56.594 [log] [DEBUG] [METRIC] shoulderPress value=63.3636 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:56.805 [log] [DEBUG] [REP-TRACE] shoulderPress angle=51.5481 repMinAngle=47.5382 framesSincePoseGap=105
+01:06:56.889 [log] [DEBUG] [REP-TRACE] shoulderPress angle=71.1937 repMinAngle=47.5382 framesSincePoseGap=105
+01:06:56.890 [log] [CONFIDENCE] 94 (the camera sees 94) match=95 counting=yes (PLACEHOLDER numbers)
+01:06:56.990 [log] [DEBUG] [METRIC] shoulderPress value=85.6583 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+01:06:56.990 [log] [DEBUG] [REP-TRACE] shoulderPress angle=85.6583 repMinAngle=47.5382 framesSincePoseGap=105
+01:06:57.090 [log] [CONFIDENCE] 97 (the camera sees 97) match=96 counting=yes (PLACEHOLDER numbers)
+01:06:57.093 [log] [DEBUG] [REP-TRACE] shoulderPress angle=83.4998 repMinAngle=47.5382 framesSincePoseGap=105
+01:06:57.093 [log] [DEBUG] [UNIV-DBG] rep #3: buffer=221 frames windowStart_epoch=1794532009 repEnd_epoch=1794532017 window=80 frames
+01:06:57.093 [log] [DEBUG] [STD] rep #3 ref: peak=47.5° start=88.1°  (standard: peak≤65.0° start≥65.0°)
+01:06:57.093 [log] [DEBUG] [UNIV] rep #3: CALIBRATING (3/3 good)  range=40.560  dur=1.30s  jerk=12840.19082
+01:06:57.093 [log] [DEBUG] [UNIV] ─── BASELINE SET ───
+01:06:57.093 [log] [DEBUG] [UNIV] range=43.444  dur=1.10s  jerk=15812.36330
+01:06:57.093 [log] [DEBUG] [UNIV] anchors: leftShoulder, rightShoulder
+01:06:57.093 [log] [DEBUG] [STD] ─── BASELINE vs STANDARD ('shoulderPress') ───
+01:06:57.093 [log] [DEBUG] [STD] avg peak=43.6° (standard: ≤65.0°)  avg start=86.0° (standard: ≥65.0°)
+01:06:57.093 [log] [DEBUG] [STD] peak ROM ✓ (43.6° ≤ 65.0°)
+01:06:57.093 [log] [DEBUG] [STD] start position ✓ (86.0° ≥ 65.0°)
+01:06:57.093 [log] [DEBUG] [STD] baseline meets standard ✓ — relative (Layer 1) signals are the active floor
+01:06:57.093 [log] [DEBUG] [STD] ⚠ verify these numbers on-device before trusting cues (reviewed=false)
+01:06:57.094 [log] [DEBUG] [UNIV] flagging begins next rep
+01:06:57.094 [log] [DEBUG] [REP] #3 top=84.9 bottom=47.5 thr=55.0 swing=37.4 ROM=ok cue=GOOD
+01:06:57.094 [log] [DEBUG] [CALIB] rep 3  min=47.5 max=84.9 range=37.4 dur=1.30s  → COUNTED (rom=OK, cue=GOOD)  [thr in use: enter=50 exit=58 goodROM=55 top=84]
+01:06:57.094 [log] [COACH] CHECK because a rep counted with good form (match 96)
+01:06:57.094 [log] [DEBUG] [REP #3] GOOD ✓  peak=47.5°
+  (no form checks)
+  planarity=PASS  n/a
+  cue=GOOD
+01:06:57.094 [log] [DEBUG] [COMPARE] shoulderPress rep#3  2D=47.5°  boneGated=47.5°  blazePose3D=89.5°  | lElb(z=-0.22 v=1.00) rElb(z=-0.20 v=1.00) lWri(z=-0.37 v=1.00) rWri(z=-0.31 v=0.99) | AV=10ms BP=18ms
+01:06:57.386 [log] [DEBUG] [METRIC] shoulderPress value=70.1987 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:57.507 [log] [CONFIDENCE] 100 (the camera sees 100) match=98 counting=yes (PLACEHOLDER numbers)
+01:06:57.801 [log] [DEBUG] [METRIC] shoulderPress value=85.2527 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:58.192 [log] [DEBUG] [METRIC] shoulderPress value=65.0836 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:58.194 [log] [ATTEMPT] #1 score=95 low=40.5 high=79.9 period=0.0s outcome=counted blocker=none (enter=50 exit=58)
+01:06:58.603 [log] [DEBUG] [METRIC] shoulderPress value=72.6592 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:58.894 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=240 ts_epoch=1794532019
+01:06:59.000 [log] [DEBUG] [METRIC] shoulderPress value=71.2673 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:59.341 [log] [MOVE-MATCH] score=96 TRYING (motion 100, rhythm 84, range 100, position 100) spread=0.91R onPath=100% period=1.5s cut=none (top 0, bottom 0, frame 0) samples=31 (PLACEHOLDER numbers)
+01:06:59.406 [log] [DEBUG] [METRIC] shoulderPress value=78.3308 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:59.541 [log] [CONFIDENCE] 100 (the camera sees 100) match=95 counting=yes (PLACEHOLDER numbers)
+01:06:59.802 [log] [DEBUG] [METRIC] shoulderPress value=88.5751 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:06:59.802 [log] [ATTEMPT] #2 score=91 low=63.4 high=85.7 period=1.6s outcome=counted blocker=none (enter=50 exit=58)
+01:07:00.141 [log] [GUIDE] says nothing (nothing to fix)
+01:07:00.189 [log] [DEBUG] [METRIC] shoulderPress value=69.5973 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:00.602 [log] [DEBUG] [METRIC] shoulderPress value=80.7930 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:01.003 [log] [DEBUG] [METRIC] shoulderPress value=71.2269 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:01.401 [log] [DEBUG] [METRIC] shoulderPress value=72.7025 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:01.558 [log] [CONFIDENCE] 100 (the camera sees 100) match=87 counting=yes (PLACEHOLDER numbers)
+01:07:01.758 [log] [MOVE-MATCH] score=85 TRYING (motion 100, rhythm 40, range 100, position 100) spread=0.90R onPath=100% period=1.3s cut=none (top 0, bottom 0, frame 0) samples=31 (PLACEHOLDER numbers)
+01:07:01.805 [log] [DEBUG] [METRIC] shoulderPress value=74.0926 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:01.900 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=270 ts_epoch=1794532022
+01:07:02.201 [log] [DEBUG] [METRIC] shoulderPress value=73.8212 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:02.603 [log] [DEBUG] [METRIC] shoulderPress value=73.8864 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:02.604 [log] [ATTEMPT] #3 score=64 low=70.2 high=80.8 period=2.8s outcome=missed blocker=bottom-short (enter=50 exit=58)
+01:07:02.604 [log] [COACH] X "Go lower" because attempt 3 stayed short (bottom-short) (match 87)
+01:07:02.691 [log] [AWAKE] screen lock re-applied (released and taken again), the screen cannot dim
+01:07:02.998 [log] [DEBUG] [METRIC] shoulderPress value=74.3600 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:03.396 [log] [DEBUG] [METRIC] shoulderPress value=75.2423 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:03.558 [log] [CONFIDENCE] 100 (the camera sees 100) match=83 counting=yes (PLACEHOLDER numbers)
+01:07:03.803 [log] [DEBUG] [METRIC] shoulderPress value=74.3857 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:04.158 [log] [MOVE-MATCH] score=69 TRYING (motion 100, rhythm 29, range 57, position 100) spread=0.45R onPath=100% period=2.8s cut=none (top 0, bottom 0, frame 0) samples=29 (PLACEHOLDER numbers)
+01:07:04.159 [log] [GUIDE] says nothing (nothing to fix)
+01:07:04.201 [log] [DEBUG] [METRIC] shoulderPress value=73.4987 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:04.601 [log] [DEBUG] [METRIC] shoulderPress value=73.4584 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:04.902 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=300 ts_epoch=1794532025
+01:07:05.003 [log] [DEBUG] [METRIC] shoulderPress value=73.6625 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:05.408 [log] [DEBUG] [METRIC] shoulderPress value=73.6026 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:05.559 [log] [MOVE-MATCH] score=53 unsure (motion 100, rhythm 33, range 44, position 100) spread=0.35R onPath=100% period=2.0s cut=none (top 0, bottom 0, frame 0) samples=28 (PLACEHOLDER numbers)
+01:07:05.559 [log] [CONFIDENCE] 100 (the camera sees 100) match=53 counting=yes (PLACEHOLDER numbers)
+01:07:05.775 [log] [MOVE-MATCH] score=40 unsure (motion 100, rhythm 35, range 34, position 100) spread=0.27R onPath=100% period=2.0s cut=none (top 0, bottom 0, frame 0) samples=27 (PLACEHOLDER numbers)
+01:07:05.802 [log] [DEBUG] [METRIC] shoulderPress value=73.5836 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:06.203 [log] [DEBUG] [METRIC] shoulderPress value=73.3748 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:06.375 [log] [MOVE-MATCH] score=68 TRYING (motion 100, rhythm 32, range 50, position 100) spread=0.40R onPath=100% period=2.0s cut=none (top 0, bottom 0, frame 0) samples=27 (PLACEHOLDER numbers)
+01:07:06.575 [log] [MOVE-MATCH] score=40 unsure (motion 100, rhythm 28, range 37, position 100) spread=0.30R onPath=100% period=2.0s cut=none (top 0, bottom 0, frame 0) samples=27 (PLACEHOLDER numbers)
+01:07:06.601 [log] [DEBUG] [METRIC] shoulderPress value=73.6551 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:07.002 [log] [DEBUG] [METRIC] shoulderPress value=73.2210 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:07.225 [log] [MOVE-MATCH] score=11 not trying (motion 84, rhythm 0, range 26, position 100) spread=0.21R onPath=100% period=n/a cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:07:07.405 [log] [DEBUG] [METRIC] shoulderPress value=73.1953 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:07.642 [log] [MOVE-MATCH] score=21 not trying (motion 71, rhythm 0, range 33, position 100) spread=0.26R onPath=100% period=n/a cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:07:07.642 [log] [CONFIDENCE] 100 (the camera sees 100) match=21 counting=yes (PLACEHOLDER numbers)
+01:07:07.802 [log] [DEBUG] [METRIC] shoulderPress value=72.9505 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:07.842 [log] [MOVE-MATCH] score=3 not trying (motion 96, rhythm 0, range 21, position 100) spread=0.16R onPath=100% period=n/a cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:07:07.898 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=330 ts_epoch=1794532028
+01:07:08.203 [log] [DEBUG] [METRIC] shoulderPress value=73.2476 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:08.242 [log] [GUIDE] says nothing (nothing to fix)
+01:07:08.604 [log] [DEBUG] [METRIC] shoulderPress value=73.3681 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:09.006 [log] [DEBUG] [METRIC] shoulderPress value=73.2665 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:09.408 [log] [DEBUG] [METRIC] shoulderPress value=73.3725 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:09.659 [log] [CONFIDENCE] 100 (the camera sees 100) match=0 counting=no (PLACEHOLDER numbers)
+01:07:09.802 [log] [DEBUG] [METRIC] shoulderPress value=73.7090 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:10.205 [log] [DEBUG] [METRIC] shoulderPress value=73.4933 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:10.609 [log] [DEBUG] [METRIC] shoulderPress value=74.3914 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:10.876 [log] [MOVE-MATCH] score=0 not trying (motion 0, rhythm 0, range 5, position 100) spread=0.04R onPath=100% period=n/a cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:07:10.899 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=330 ts_epoch=1794532031
+01:07:11.003 [log] [DEBUG] [METRIC] shoulderPress value=74.3433 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:11.407 [log] [DEBUG] [METRIC] shoulderPress value=74.1166 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:11.676 [log] [CONFIDENCE] 100 (the camera sees 100) match=0 counting=no (PLACEHOLDER numbers)
+01:07:11.805 [log] [DEBUG] [METRIC] shoulderPress value=75.9623 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:12.204 [log] [DEBUG] [METRIC] shoulderPress value=83.3729 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:12.276 [log] [GUIDE] says nothing (nothing to fix)
+01:07:12.607 [log] [DEBUG] [METRIC] shoulderPress value=73.0265 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:13.001 [log] [DEBUG] [METRIC] shoulderPress value=82.1688 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:13.405 [log] [DEBUG] [METRIC] shoulderPress value=77.8042 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:13.677 [log] [CONFIDENCE] 100 (the camera sees 100) match=1 counting=no (PLACEHOLDER numbers)
+01:07:13.805 [log] [DEBUG] [METRIC] shoulderPress value=66.0155 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:13.877 [log] [MOVE-MATCH] score=3 not trying (motion 26, rhythm 0, range 21, position 100) spread=0.17R onPath=100% period=n/a cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:07:13.901 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=331 ts_epoch=1794532034
+01:07:14.097 [log] [DEBUG] [REP-TRACE] shoulderPress angle=64.2033 repMinAngle=42.4213 framesSincePoseGap=105
+01:07:14.097 [log] [ATTEMPT] ignored low=71.2 high=82.2 dur=12.4s: too slow to be a rep (not the exercise path, no check or X)
+01:07:14.201 [log] [DEBUG] [METRIC] shoulderPress value=77.2361 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+01:07:14.201 [log] [DEBUG] [REP-TRACE] shoulderPress angle=77.2361 repMinAngle=42.4213 framesSincePoseGap=105
+01:07:14.298 [log] [DEBUG] [REP-TRACE] shoulderPress angle=85.6966 repMinAngle=42.4213 framesSincePoseGap=105
+01:07:14.298 [log] [DEBUG] [UNIV-DBG] rep #4: buffer=303 frames windowStart_epoch=1794532032 repEnd_epoch=1794532034 window=27 frames
+01:07:14.298 [log] [DEBUG] [UNIV] rep #4 | range=47.154 baseline=43.444 ratio=1.09
+01:07:14.298 [log] [DEBUG] [UNIV] rep #4 | dur=1.40s baseline=1.10s ratio=1.27
+01:07:14.298 [log] [DEBUG] [UNIV] rep #4 | jerk=10703.83366 baseline=15812.36330 ratio=0.68
+01:07:14.299 [log] [DEBUG] [UNIV] rep #4 | symmetry n/a (low confidence)
+01:07:14.299 [log] [DEBUG] [UNIV] rep #4 | anchors stable
+01:07:14.299 [log] [DEBUG] [UNIV] rep #4 | → CONSISTENT ✓
+01:07:14.299 [log] [DEBUG] [REP] #4 top=89.6 bottom=42.4 thr=55.0 swing=47.2 ROM=ok cue=GOOD
+01:07:14.299 [log] [DEBUG] [CALIB] rep 4  min=42.4 max=89.6 range=47.2 dur=1.40s  → COUNTED (rom=OK, cue=GOOD)  [thr in use: enter=50 exit=58 goodROM=55 top=84]
+01:07:14.299 [log] [MOVE-MATCH] score=40 unsure (motion 52, rhythm 0, range 19, position 100) spread=0.15R onPath=100% period=n/a cut=none (top 0, bottom 0, frame 0) samples=26 (PLACEHOLDER numbers)
+01:07:14.299 [log] [COACH] CHECK because a rep counted with good form (match 40)
+01:07:14.299 [log] [DEBUG] [REP #4] GOOD ✓  peak=42.4°
+  (no form checks)
+  planarity=PASS  n/a
+  cue=GOOD
+01:07:14.299 [log] [DEBUG] [COMPARE] shoulderPress rep#4  2D=42.4°  boneGated=42.4°  blazePose3D=93.4°  | lElb(z=-0.21 v=1.00) rElb(z=-0.24 v=1.00) lWri(z=-0.36 v=0.98) rWri(z=-0.35 v=0.98) | AV=10ms BP=22ms
+01:07:14.592 [log] [DEBUG] [METRIC] shoulderPress value=72.5443 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:15.003 [log] [DEBUG] [METRIC] shoulderPress value=73.8728 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:15.395 [log] [DEBUG] [METRIC] shoulderPress value=85.6743 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:15.760 [log] [CONFIDENCE] 100 (the camera sees 100) match=40 counting=yes (PLACEHOLDER numbers)
+01:07:15.804 [log] [DEBUG] [METRIC] shoulderPress value=70.4255 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:16.201 [log] [DEBUG] [METRIC] shoulderPress value=73.6665 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:16.360 [log] [GUIDE] says nothing (nothing to fix)
+01:07:16.606 [log] [DEBUG] [METRIC] shoulderPress value=76.3346 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:16.906 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=330 ts_epoch=1794532037
+01:07:16.907 [log] [ATTEMPT] #4 score=49 low=66.0 high=77.2 period=14.4s outcome=counted blocker=none (enter=50 exit=58)
+01:07:17.005 [log] [DEBUG] [METRIC] shoulderPress value=68.2331 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:17.361 [log] [MOVE-MATCH] score=40 unsure (motion 87, rhythm 43, range 33, position 100) spread=0.27R onPath=100% period=3.3s cut=none (top 0, bottom 0, frame 0) samples=26 (PLACEHOLDER numbers)
+01:07:17.395 [log] [DEBUG] [METRIC] shoulderPress value=79.2536 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:17.694 [log] [AWAKE] screen lock re-applied (released and taken again), the screen cannot dim
+01:07:17.778 [log] [CONFIDENCE] 100 (the camera sees 100) match=40 counting=yes (PLACEHOLDER numbers)
+01:07:17.800 [log] [DEBUG] [METRIC] shoulderPress value=74.0842 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:18.199 [log] [DEBUG] [METRIC] shoulderPress value=74.4694 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:18.609 [log] [DEBUG] [METRIC] shoulderPress value=74.8176 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:19.013 [log] [DEBUG] [METRIC] shoulderPress value=75.0956 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:19.406 [log] [DEBUG] [METRIC] shoulderPress value=74.7649 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:19.807 [log] [DEBUG] [METRIC] shoulderPress value=75.0721 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:19.861 [log] [CONFIDENCE] 100 (the camera sees 100) match=40 counting=yes (PLACEHOLDER numbers)
+01:07:19.899 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=330 ts_epoch=1794532040
+01:07:20.205 [log] [DEBUG] [METRIC] shoulderPress value=74.7697 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:20.461 [log] [MOVE-MATCH] score=40 unsure (motion 100, rhythm 0, range 30, position 100) spread=0.24R onPath=100% period=n/a cut=none (top 0, bottom 0, frame 0) samples=26 (PLACEHOLDER numbers)
+01:07:20.461 [log] [GUIDE] says nothing (nothing to fix)
+01:07:20.603 [log] [DEBUG] [METRIC] shoulderPress value=74.9511 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:21.006 [log] [DEBUG] [METRIC] shoulderPress value=74.5958 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:21.403 [log] [DEBUG] [METRIC] shoulderPress value=74.7770 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:21.808 [log] [DEBUG] [METRIC] shoulderPress value=75.2456 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:21.861 [log] [CONFIDENCE] 100 (the camera sees 100) match=40 counting=no (PLACEHOLDER numbers)
+01:07:22.203 [log] [DEBUG] [METRIC] shoulderPress value=81.3106 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:22.606 [log] [DEBUG] [METRIC] shoulderPress value=65.9642 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:22.907 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=330 ts_epoch=1794532043
+01:07:23.004 [log] [DEBUG] [METRIC] shoulderPress value=74.2300 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:23.408 [log] [DEBUG] [METRIC] shoulderPress value=83.7894 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:23.462 [log] [MOVE-MATCH] score=40 unsure (motion 100, rhythm 17, range 33, position 100) spread=0.26R onPath=100% period=2.0s cut=none (top 0, bottom 0, frame 0) samples=26 (PLACEHOLDER numbers)
+01:07:23.807 [log] [DEBUG] [METRIC] shoulderPress value=70.2844 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:23.878 [log] [CONFIDENCE] 100 (the camera sees 100) match=40 counting=no (PLACEHOLDER numbers)
+01:07:24.200 [log] [DEBUG] [METRIC] shoulderPress value=74.2643 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:24.495 [log] [MOVE-MATCH] score=22 not trying (motion 82, rhythm 0, range 32, position 100) spread=0.26R onPath=100% period=n/a cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:07:24.495 [log] [GUIDE] says nothing (nothing to fix)
+01:07:24.602 [log] [DEBUG] [METRIC] shoulderPress value=72.1882 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:25.010 [log] [DEBUG] [METRIC] shoulderPress value=74.3072 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:25.128 [log] [MOVE-MATCH] score=12 not trying (motion 100, rhythm 0, range 26, position 100) spread=0.21R onPath=100% period=n/a cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:07:25.329 [log] [MOVE-MATCH] score=23 not trying (motion 100, rhythm 0, range 32, position 100) spread=0.26R onPath=100% period=n/a cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:07:25.404 [log] [DEBUG] [METRIC] shoulderPress value=77.9912 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:25.745 [log] [MOVE-MATCH] score=7 not trying (motion 39, rhythm 0, range 25, position 100) spread=0.20R onPath=100% period=n/a cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:07:25.807 [log] [DEBUG] [METRIC] shoulderPress value=67.5520 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:25.903 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=330 ts_epoch=1794532046
+01:07:25.946 [log] [CONFIDENCE] 100 (the camera sees 100) match=10 counting=no (PLACEHOLDER numbers)
+01:07:26.203 [log] [DEBUG] [METRIC] shoulderPress value=75.7570 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:26.615 [log] [DEBUG] [METRIC] shoulderPress value=74.2958 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:27.009 [log] [DEBUG] [METRIC] shoulderPress value=83.4279 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:27.146 [log] [MOVE-MATCH] score=22 not trying (motion 98, rhythm 0, range 31, position 100) spread=0.25R onPath=100% period=n/a cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:07:27.345 [log] [MOVE-MATCH] score=9 not trying (motion 100, rhythm 0, range 24, position 100) spread=0.19R onPath=100% period=n/a cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:07:27.409 [log] [DEBUG] [METRIC] shoulderPress value=82.8218 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:27.746 [log] [MOVE-MATCH] score=22 not trying (motion 65, rhythm 0, range 33, position 100) spread=0.27R onPath=100% period=n/a cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:07:27.802 [log] [DEBUG] [METRIC] shoulderPress value=73.8434 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:27.962 [log] [MOVE-MATCH] score=37 unsure (motion 100, rhythm 0, range 39, position 100) spread=0.31R onPath=100% period=n/a cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:07:27.963 [log] [CONFIDENCE] 100 (the camera sees 100) match=37 counting=no (PLACEHOLDER numbers)
+01:07:28.204 [log] [DEBUG] [METRIC] shoulderPress value=74.0341 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:28.363 [log] [MOVE-MATCH] score=25 not trying (motion 100, rhythm 0, range 33, position 100) spread=0.26R onPath=100% period=n/a cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:07:28.562 [log] [GUIDE] says nothing (nothing to fix)
+01:07:28.609 [log] [DEBUG] [METRIC] shoulderPress value=75.0137 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:28.904 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=330 ts_epoch=1794532049
+01:07:28.963 [log] [MOVE-MATCH] score=37 unsure (motion 100, rhythm 0, range 39, position 100) spread=0.31R onPath=100% period=n/a cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:07:29.002 [log] [DEBUG] [METRIC] shoulderPress value=74.1956 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:29.363 [log] [MOVE-MATCH] score=25 not trying (motion 100, rhythm 0, range 33, position 100) spread=0.26R onPath=100% period=n/a cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:07:29.408 [log] [DEBUG] [METRIC] shoulderPress value=74.9551 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:29.812 [log] [DEBUG] [METRIC] shoulderPress value=74.0275 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:29.963 [log] [MOVE-MATCH] score=37 unsure (motion 100, rhythm 0, range 39, position 100) spread=0.31R onPath=100% period=n/a cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:07:29.963 [log] [CONFIDENCE] 100 (the camera sees 100) match=37 counting=no (PLACEHOLDER numbers)
+01:07:30.202 [log] [DEBUG] [METRIC] shoulderPress value=82.3141 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:30.563 [log] [MOVE-MATCH] score=22 not trying (motion 100, rhythm 32, range 30, position 100) spread=0.24R onPath=100% period=3.3s cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:07:30.609 [log] [DEBUG] [METRIC] shoulderPress value=61.1049 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:30.763 [log] [MOVE-MATCH] score=53 unsure (motion 64, rhythm 40, range 46, position 100) spread=0.37R onPath=100% period=5.0s cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:07:31.004 [log] [DEBUG] [METRIC] shoulderPress value=72.8267 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:31.363 [log] [MOVE-MATCH] score=42 unsure (motion 100, rhythm 23, range 40, position 100) spread=0.32R onPath=100% period=5.0s cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:07:31.404 [log] [DEBUG] [METRIC] shoulderPress value=79.5397 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:31.705 [log] [DEBUG] [REP-TRACE] shoulderPress angle=40.1281 repMinAngle=42.4983 framesSincePoseGap=105
+01:07:31.763 [log] [MOVE-MATCH] score=68 TRYING (motion 100, rhythm 34, range 50, position 100) spread=0.40R onPath=100% period=1.0s cut=none (top 0, bottom 0, frame 0) samples=26 (PLACEHOLDER numbers)
+01:07:31.810 [log] [DEBUG] [METRIC] shoulderPress value=63.4505 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+01:07:31.810 [log] [DEBUG] [REP-TRACE] shoulderPress angle=63.4505 repMinAngle=40.1281 framesSincePoseGap=105
+01:07:31.904 [log] [DEBUG] [REP-TRACE] shoulderPress angle=84.2584 repMinAngle=40.1281 framesSincePoseGap=105
+01:07:31.904 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=330 ts_epoch=1794532052
+01:07:31.963 [log] [CONFIDENCE] 100 (the camera sees 100) match=71 counting=no (PLACEHOLDER numbers)
+01:07:32.004 [log] [DEBUG] [REP-TRACE] shoulderPress angle=88.7900 repMinAngle=40.1281 framesSincePoseGap=105
+01:07:32.004 [log] [DEBUG] [UNIV-DBG] rep #5: buffer=300 frames windowStart_epoch=1794532049 repEnd_epoch=1794532052 window=27 frames
+01:07:32.004 [log] [DEBUG] [UNIV] rep #5 | range=45.954 baseline=43.444 ratio=1.06
+01:07:32.004 [log] [DEBUG] [UNIV] rep #5 | dur=1.10s baseline=1.10s ratio=1.00
+01:07:32.004 [log] [DEBUG] [UNIV] rep #5 | jerk=16908.34621 baseline=15812.36330 ratio=1.07
+01:07:32.004 [log] [DEBUG] [UNIV] rep #5 | symmetry n/a (low confidence)
+01:07:32.004 [log] [DEBUG] [UNIV] rep #5 | anchors stable
+01:07:32.004 [log] [DEBUG] [UNIV] rep #5 | → CONSISTENT ✓
+01:07:32.004 [log] [DEBUG] [REP] #5 top=90.0 bottom=40.1 thr=55.0 swing=49.8 ROM=ok cue=GOOD
+01:07:32.004 [log] [DEBUG] [CALIB] rep 5  min=40.1 max=90 range=49.8 dur=1.10s  → COUNTED (rom=OK, cue=GOOD)  [thr in use: enter=50 exit=58 goodROM=55 top=84]
+01:07:32.005 [log] [COACH] CHECK because a rep counted with good form (match 65)
+01:07:32.005 [log] [DEBUG] [REP #5] GOOD ✓  peak=40.1°
+  (no form checks)
+  planarity=PASS  n/a
+  cue=GOOD
+01:07:32.005 [log] [DEBUG] [COMPARE] shoulderPress rep#5  2D=40.1°  boneGated=40.1°  blazePose3D=96.0°  | lElb(z=-0.12 v=1.00) rElb(z=-0.14 v=1.00) lWri(z=-0.29 v=0.98) rWri(z=-0.24 v=0.99) | AV=9ms BP=23ms
+01:07:32.194 [log] [DEBUG] [METRIC] shoulderPress value=73.0665 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:32.563 [log] [GUIDE] says nothing (nothing to fix)
+01:07:32.608 [log] [DEBUG] [METRIC] shoulderPress value=79.1184 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:32.696 [log] [AWAKE] screen lock re-applied (released and taken again), the screen cannot dim
+01:07:32.985 [log] [DEBUG] [METRIC] shoulderPress value=54.4637 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:33.407 [log] [DEBUG] [METRIC] shoulderPress value=80.6529 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:33.809 [log] [DEBUG] [METRIC] shoulderPress value=74.3702 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:34.013 [log] [CONFIDENCE] 100 (the camera sees 100) match=68 counting=yes (PLACEHOLDER numbers)
+01:07:34.203 [log] [DEBUG] [METRIC] shoulderPress value=80.9444 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:34.607 [log] [DEBUG] [METRIC] shoulderPress value=72.9200 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:34.607 [log] [ATTEMPT] #5 score=71 low=63.5 high=84.3 period=17.6s outcome=counted blocker=none (enter=50 exit=58)
+01:07:34.663 [log] [MOVE-MATCH] score=55 TRYING (motion 100, rhythm 10, range 47, position 100) spread=0.37R onPath=100% period=1.3s cut=none (top 0, bottom 0, frame 0) samples=27 (PLACEHOLDER numbers)
+01:07:34.910 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=330 ts_epoch=1794532055
+01:07:35.013 [log] [DEBUG] [METRIC] shoulderPress value=77.8389 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:35.064 [log] [MOVE-MATCH] score=69 TRYING (motion 100, rhythm 25, range 59, position 100) spread=0.47R onPath=100% period=5.0s cut=none (top 0, bottom 0, frame 0) samples=27 (PLACEHOLDER numbers)
+01:07:35.407 [log] [DEBUG] [METRIC] shoulderPress value=89.6586 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:35.810 [log] [DEBUG] [METRIC] shoulderPress value=85.1559 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:36.064 [log] [CONFIDENCE] 100 (the camera sees 100) match=72 counting=yes (PLACEHOLDER numbers)
+01:07:36.209 [log] [DEBUG] [METRIC] shoulderPress value=85.0597 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:36.264 [log] [CONFIDENCE] 92 (the camera sees 92) match=75 counting=yes (PLACEHOLDER numbers)
+01:07:36.464 [log] [CONFIDENCE] 90 (trying and reps are counting, so 90+ (the camera sees 86)) match=72 counting=yes (PLACEHOLDER numbers)
+01:07:36.602 [log] [DEBUG] [METRIC] shoulderPress value=84.6032 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:36.664 [log] [GUIDE] says "Step back further" because the camera says "Step back into frame"
+01:07:37.006 [log] [DEBUG] [METRIC] shoulderPress value=77.3572 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:37.006 [log] [ATTEMPT] ignored low=73.1 high=85.2 dur=3.8s: it stays up near the top (a wiggle, not a stroke) (not the exercise path, no check or X)
+01:07:37.081 [log] [MOVE-MATCH] score=79 TRYING (motion 100, rhythm 39, range 81, position 100) spread=0.65R onPath=100% period=1.3s cut=none (top 0, bottom 0, frame 0) samples=27 (PLACEHOLDER numbers)
+01:07:37.400 [log] [DEBUG] [METRIC] shoulderPress value=69.9008 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:37.714 [log] [CONFIDENCE] 90 (the camera sees 90) match=74 counting=yes (PLACEHOLDER numbers)
+01:07:37.804 [log] [DEBUG] [METRIC] shoulderPress value=67.0380 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:37.904 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=330 ts_epoch=1794532058
+01:07:37.914 [log] [CONFIDENCE] 93 (the camera sees 93) match=73 counting=yes (PLACEHOLDER numbers)
+01:07:38.114 [log] [CONFIDENCE] 95 (the camera sees 95) match=72 counting=yes (PLACEHOLDER numbers)
+01:07:38.204 [log] [DEBUG] [METRIC] shoulderPress value=64.0997 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:38.314 [log] [CONFIDENCE] 97 (the camera sees 97) match=72 counting=yes (PLACEHOLDER numbers)
+01:07:38.514 [log] [CONFIDENCE] 98 (the camera sees 98) match=73 counting=yes (PLACEHOLDER numbers)
+01:07:38.610 [log] [DEBUG] [METRIC] shoulderPress value=63.2387 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:38.714 [log] [CONFIDENCE] 99 (the camera sees 99) match=77 counting=yes (PLACEHOLDER numbers)
+01:07:39.012 [log] [DEBUG] [METRIC] shoulderPress value=64.2694 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:39.114 [log] [CONFIDENCE] 78 (trying (match 81) but no rep counted for 6s / 0 attempts, so it cannot read high (falling 3/s)) match=81 counting=no (PLACEHOLDER numbers)
+01:07:39.314 [log] [CONFIDENCE] 77 (trying (match 72) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=72 counting=no (PLACEHOLDER numbers)
+01:07:39.314 [log] [GUIDE] says nothing (no rep counts but the camera sees the whole path, so only the Coach speaks (each X))
+01:07:39.404 [log] [DEBUG] [METRIC] shoulderPress value=62.3785 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:39.531 [log] [CONFIDENCE] 77 (trying (match 74) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=74 counting=no (PLACEHOLDER numbers)
+01:07:39.748 [log] [CONFIDENCE] 76 (trying (match 81) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=81 counting=no (PLACEHOLDER numbers)
+01:07:39.806 [log] [DEBUG] [METRIC] shoulderPress value=85.5947 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:39.948 [log] [CONFIDENCE] 76 (trying (match 77) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=77 counting=no (PLACEHOLDER numbers)
+01:07:40.148 [log] [MOVE-MATCH] score=80 TRYING (motion 100, rhythm 26, range 94, position 100) spread=0.75R onPath=100% period=1.0s cut=none (top 0, bottom 0, frame 0) samples=27 (PLACEHOLDER numbers)
+01:07:40.148 [log] [CONFIDENCE] 75 (trying (match 80) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=80 counting=no (PLACEHOLDER numbers)
+01:07:40.205 [log] [DEBUG] [METRIC] shoulderPress value=73.6893 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:40.348 [log] [CONFIDENCE] 74 (trying (match 73) but no rep counted for 8s / 0 attempts, so it cannot read high (falling 3/s)) match=73 counting=no (PLACEHOLDER numbers)
+01:07:40.607 [log] [DEBUG] [METRIC] shoulderPress value=69.7240 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:40.748 [log] [CONFIDENCE] 73 (trying (match 77) but no rep counted for 8s / 0 attempts, so it cannot read high (falling 3/s)) match=77 counting=no (PLACEHOLDER numbers)
+01:07:40.911 [log] [DEBUG] [REP-TRACE] shoulderPress angle=58.5480 repMinAngle=39.0710 framesSincePoseGap=105
+01:07:40.911 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=330 ts_epoch=1794532061
+01:07:40.948 [log] [CONFIDENCE] 73 (trying (match 79) but no rep counted for 8s / 0 attempts, so it cannot read high (falling 3/s)) match=79 counting=no (PLACEHOLDER numbers)
+01:07:41.013 [log] [DEBUG] [METRIC] shoulderPress value=80.8137 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+01:07:41.013 [log] [DEBUG] [REP-TRACE] shoulderPress angle=80.8137 repMinAngle=39.0710 framesSincePoseGap=105
+01:07:41.101 [log] [DEBUG] [REP-TRACE] shoulderPress angle=86.2241 repMinAngle=39.0710 framesSincePoseGap=105
+01:07:41.101 [log] [DEBUG] [UNIV-DBG] rep #6: buffer=301 frames windowStart_epoch=1794532058 repEnd_epoch=1794532061 window=27 frames
+01:07:41.101 [log] [DEBUG] [UNIV] rep #6 | range=50.559 baseline=43.444 ratio=1.16
+01:07:41.101 [log] [DEBUG] [UNIV] rep #6 | dur=0.51s baseline=1.10s ratio=0.46 ← OFF
+01:07:41.101 [log] [DEBUG] [UNIV] rep #6 | jerk=33561.33459 baseline=15812.36330 ratio=2.12 ← SPIKE
+01:07:41.101 [log] [DEBUG] [UNIV] rep #6 | symmetry n/a (low confidence)
+01:07:41.101 [log] [DEBUG] [UNIV] rep #6 | anchors stable
+01:07:41.101 [log] [DEBUG] [UNIV] rep #6 | → SWINGING — control the weight
+01:07:41.101 [log] [DEBUG] [REP] #6 verdict overridden — was GOOD, swing detected → SWINGING — control the weight
+01:07:41.101 [log] [DEBUG] [REP] #6 top=90.0 bottom=39.1 thr=55.0 swing=50.9 ROM=ok cue=SWINGING — control the weight
+01:07:41.101 [log] [DEBUG] [CALIB] rep 6  min=39.1 max=90 range=50.9 dur=0.51s  → COUNTED (rom=OK, cue=SWINGING — control the weight)  [thr in use: enter=50 exit=58 goodROM=55 top=84]
+01:07:41.102 [log] [COACH] X "Too much swing" because a rep counted but the form check failed (SWINGING — control the weight) (match 79)
+01:07:41.102 [log] [DEBUG] [REP #6] BAD ✗  peak=39.1°
+  (no form checks)
+  planarity=PASS  n/a
+  cue=SWINGING — control the weight
+01:07:41.102 [log] [DEBUG] [COMPARE] shoulderPress rep#6  2D=39.1°  boneGated=39.1°  blazePose3D=94.6°  | lElb(z=-0.13 v=1.00) rElb(z=-0.17 v=1.00) lWri(z=-0.28 v=1.00) rWri(z=-0.24 v=1.00) | AV=8ms BP=20ms
+01:07:41.148 [log] [CONFIDENCE] 94 (the camera sees 94) match=80 counting=yes (PLACEHOLDER numbers)
+01:07:41.401 [log] [DEBUG] [METRIC] shoulderPress value=76.1858 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:41.548 [log] [CONFIDENCE] 100 (the camera sees 100) match=80 counting=yes (PLACEHOLDER numbers)
+01:07:41.803 [log] [DEBUG] [METRIC] shoulderPress value=78.7072 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:42.210 [log] [DEBUG] [METRIC] shoulderPress value=78.8965 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:42.615 [log] [DEBUG] [METRIC] shoulderPress value=78.5480 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:43.013 [log] [DEBUG] [METRIC] shoulderPress value=78.9763 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:43.182 [log] [MOVE-MATCH] score=72 TRYING (motion 100, rhythm 0, range 90, position 100) spread=0.72R onPath=100% period=4.5s cut=none (top 0, bottom 0, frame 0) samples=26 (PLACEHOLDER numbers)
+01:07:43.387 [log] [GUIDE] says nothing (nothing to fix)
+01:07:43.408 [log] [DEBUG] [METRIC] shoulderPress value=79.5763 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:43.582 [log] [CONFIDENCE] 100 (the camera sees 100) match=72 counting=yes (PLACEHOLDER numbers)
+01:07:43.806 [log] [DEBUG] [METRIC] shoulderPress value=80.3419 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:43.806 [log] [ATTEMPT] #6 score=63 low=63.2 high=80.8 period=9.2s outcome=counted blocker=none (enter=50 exit=58)
+01:07:43.907 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=330 ts_epoch=1794532064
+01:07:44.205 [log] [DEBUG] [METRIC] shoulderPress value=89.5972 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:44.613 [log] [DEBUG] [METRIC] shoulderPress value=62.0752 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:45.012 [log] [DEBUG] [METRIC] shoulderPress value=86.7936 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:45.413 [log] [DEBUG] [METRIC] shoulderPress value=79.0694 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:45.632 [log] [CONFIDENCE] 100 (the camera sees 100) match=72 counting=yes (PLACEHOLDER numbers)
+01:07:45.815 [log] [DEBUG] [METRIC] shoulderPress value=86.2688 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:46.213 [log] [DEBUG] [METRIC] shoulderPress value=63.7338 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:46.249 [log] [MOVE-MATCH] score=75 TRYING (motion 100, rhythm 13, range 90, position 100) spread=0.72R onPath=100% period=1.5s cut=none (top 0, bottom 0, frame 0) samples=26 (PLACEHOLDER numbers)
+01:07:46.619 [log] [DEBUG] [METRIC] shoulderPress value=78.9389 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:46.915 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=330 ts_epoch=1794532067
+01:07:47.009 [log] [DEBUG] [METRIC] shoulderPress value=79.7850 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:47.415 [log] [DEBUG] [METRIC] shoulderPress value=54.7189 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:47.466 [log] [GUIDE] says nothing (nothing to fix)
+01:07:47.611 [log] [DEBUG] [REP-TRACE] shoulderPress angle=65.7582 repMinAngle=44.3431 framesSincePoseGap=105
+01:07:47.666 [log] [CONFIDENCE] 94 (the camera sees 94) match=78 counting=yes (PLACEHOLDER numbers)
+01:07:47.707 [log] [AWAKE] screen lock re-applied (released and taken again), the screen cannot dim
+01:07:47.710 [log] [DEBUG] [REP-TRACE] shoulderPress angle=73.2827 repMinAngle=44.3431 framesSincePoseGap=105
+01:07:47.808 [log] [DEBUG] [METRIC] shoulderPress value=84.8416 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+01:07:47.808 [log] [DEBUG] [REP-TRACE] shoulderPress angle=84.8416 repMinAngle=44.3431 framesSincePoseGap=105
+01:07:47.808 [log] [DEBUG] [UNIV-DBG] rep #7: buffer=308 frames windowStart_epoch=1794532065 repEnd_epoch=1794532068 window=27 frames
+01:07:47.808 [log] [DEBUG] [UNIV] rep #7 | range=42.408 baseline=43.444 ratio=0.98
+01:07:47.808 [log] [DEBUG] [UNIV] rep #7 | dur=0.61s baseline=1.10s ratio=0.55 ← OFF
+01:07:47.808 [log] [DEBUG] [UNIV] rep #7 | jerk=16363.51451 baseline=15812.36330 ratio=1.03
+01:07:47.808 [log] [DEBUG] [UNIV] rep #7 | symmetry n/a (low confidence)
+01:07:47.808 [log] [DEBUG] [UNIV] rep #7 | anchors stable
+01:07:47.808 [log] [DEBUG] [UNIV] rep #7 | → RUSHING — rep faster than your baseline
+01:07:47.808 [log] [DEBUG] [REP] #7 top=90.0 bottom=44.3 thr=55.0 swing=45.6 ROM=ok cue=GOOD
+01:07:47.808 [log] [DEBUG] [CALIB] rep 7  min=44.3 max=90 range=45.6 dur=0.61s  → COUNTED (rom=OK, cue=GOOD)  [thr in use: enter=50 exit=58 goodROM=55 top=84]
+01:07:47.816 [log] [COACH] CHECK because a rep counted with good form (match 79)
+01:07:47.817 [log] [DEBUG] [REP #7] GOOD ✓  peak=44.3°
+  (no form checks)
+  planarity=PASS  n/a
+  cue=GOOD
+01:07:47.817 [log] [DEBUG] [COMPARE] shoulderPress rep#7  2D=44.3°  boneGated=44.3°  blazePose3D=102.4°  | lElb(z=+0.01 v=0.99) rElb(z=+0.00 v=0.99) lWri(z=-0.12 v=0.95) rWri(z=-0.10 v=0.97) | AV=10ms BP=22ms
+01:07:48.190 [log] [DEBUG] [METRIC] shoulderPress value=77.3301 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:48.299 [log] [CONFIDENCE] 100 (the camera sees 100) match=74 counting=yes (PLACEHOLDER numbers)
+01:07:48.605 [log] [DEBUG] [METRIC] shoulderPress value=76.6973 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:49.006 [log] [DEBUG] [METRIC] shoulderPress value=81.5527 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:49.349 [log] [MOVE-MATCH] score=76 TRYING (motion 100, rhythm 26, range 82, position 100) spread=0.65R onPath=100% period=5.3s cut=none (top 0, bottom 0, frame 0) samples=27 (PLACEHOLDER numbers)
+01:07:49.414 [log] [DEBUG] [METRIC] shoulderPress value=62.2713 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:49.610 [log] [DEBUG] [REP-TRACE] shoulderPress angle=46.6012 repMinAngle=43.9851 framesSincePoseGap=105
+01:07:49.714 [log] [DEBUG] [REP-TRACE] shoulderPress angle=66.8002 repMinAngle=43.9851 framesSincePoseGap=105
+01:07:49.749 [log] [CONFIDENCE] 94 (the camera sees 94) match=69 counting=yes (PLACEHOLDER numbers)
+01:07:49.803 [log] [DEBUG] [METRIC] shoulderPress value=83.9642 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+01:07:49.803 [log] [DEBUG] [REP-TRACE] shoulderPress angle=83.9642 repMinAngle=43.9851 framesSincePoseGap=105
+01:07:49.903 [log] [DEBUG] [REP-TRACE] shoulderPress angle=87.5226 repMinAngle=43.9851 framesSincePoseGap=105
+01:07:49.904 [log] [DEBUG] [UNIV-DBG] rep #8: buffer=329 frames windowStart_epoch=1794532067 repEnd_epoch=1794532070 window=27 frames
+01:07:49.904 [log] [DEBUG] [UNIV] rep #8 | range=44.460 baseline=43.444 ratio=1.02
+01:07:49.904 [log] [DEBUG] [UNIV] rep #8 | dur=0.60s baseline=1.10s ratio=0.54 ← OFF
+01:07:49.904 [log] [DEBUG] [UNIV] rep #8 | jerk=24224.88575 baseline=15812.36330 ratio=1.53
+01:07:49.904 [log] [DEBUG] [UNIV] rep #8 | symmetry n/a (low confidence)
+01:07:49.904 [log] [DEBUG] [UNIV] rep #8 | anchors stable
+01:07:49.904 [log] [DEBUG] [UNIV] rep #8 | → RUSHING — rep faster than your baseline
+01:07:49.904 [log] [DEBUG] [REP] #8 top=90.0 bottom=44.0 thr=55.0 swing=46.0 ROM=ok cue=GOOD
+01:07:49.904 [log] [DEBUG] [CALIB] rep 8  min=44 max=90 range=46 dur=0.60s  → COUNTED (rom=OK, cue=GOOD)  [thr in use: enter=50 exit=58 goodROM=55 top=84]
+01:07:49.904 [log] [COACH] CHECK because a rep counted with good form (match 70)
+01:07:49.905 [log] [DEBUG] [REP #8] GOOD ✓  peak=44.0°
+  (no form checks)
+  planarity=PASS  n/a
+  cue=GOOD
+01:07:49.905 [log] [DEBUG] [COMPARE] shoulderPress rep#8  2D=44.0°  boneGated=44.0°  blazePose3D=101.5°  | lElb(z=+0.09 v=0.98) rElb(z=+0.14 v=0.99) lWri(z=-0.07 v=0.98) rWri(z=-0.02 v=0.99) | AV=8ms BP=19ms
+01:07:49.905 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=330 ts_epoch=1794532070
+01:07:50.197 [log] [DEBUG] [METRIC] shoulderPress value=75.7451 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:50.197 [log] [ATTEMPT] #7 score=84 low=65.8 high=84.8 period=6.4s outcome=counted blocker=none (enter=50 exit=58)
+01:07:50.205 [log] [CONFIDENCE] 100 (the camera sees 100) match=67 counting=yes (PLACEHOLDER numbers)
+01:07:50.612 [log] [DEBUG] [METRIC] shoulderPress value=81.2657 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:50.999 [log] [DEBUG] [METRIC] shoulderPress value=73.0523 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:51.411 [log] [DEBUG] [METRIC] shoulderPress value=80.2767 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:51.466 [log] [GUIDE] says nothing (nothing to fix)
+01:07:51.816 [log] [DEBUG] [METRIC] shoulderPress value=71.3482 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:52.208 [log] [DEBUG] [METRIC] shoulderPress value=89.7400 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:52.267 [log] [CONFIDENCE] 100 (the camera sees 100) match=69 counting=yes (PLACEHOLDER numbers)
+01:07:52.467 [log] [MOVE-MATCH] score=67 TRYING (motion 100, rhythm 0, range 73, position 100) spread=0.59R onPath=100% period=2.0s cut=none (top 0, bottom 0, frame 0) samples=28 (PLACEHOLDER numbers)
+01:07:52.616 [log] [DEBUG] [METRIC] shoulderPress value=66.0920 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:52.617 [log] [ATTEMPT] #8 score=90 low=62.3 high=84.0 period=2.4s outcome=counted blocker=none (enter=50 exit=58)
+01:07:52.867 [log] [MOVE-MATCH] score=78 TRYING (motion 100, rhythm 41, range 75, position 100) spread=0.60R onPath=100% period=5.0s cut=none (top 0, bottom 0, frame 0) samples=28 (PLACEHOLDER numbers)
+01:07:52.912 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=330 ts_epoch=1794532073
+01:07:53.004 [log] [DEBUG] [METRIC] shoulderPress value=76.0222 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:53.267 [log] [MOVE-MATCH] score=68 TRYING (motion 100, rhythm 8, range 72, position 100) spread=0.57R onPath=100% period=5.0s cut=none (top 0, bottom 0, frame 0) samples=28 (PLACEHOLDER numbers)
+01:07:53.416 [log] [DEBUG] [METRIC] shoulderPress value=75.0509 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:53.815 [log] [DEBUG] [METRIC] shoulderPress value=76.3867 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:54.213 [log] [DEBUG] [METRIC] shoulderPress value=75.2555 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:54.284 [log] [CONFIDENCE] 100 (the camera sees 100) match=67 counting=yes (PLACEHOLDER numbers)
+01:07:54.617 [log] [DEBUG] [METRIC] shoulderPress value=73.6864 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:54.887 [log] [MOVE-MATCH] score=80 TRYING (motion 100, rhythm 62, range 65, position 100) spread=0.52R onPath=100% period=5.3s cut=none (top 0, bottom 0, frame 0) samples=28 (PLACEHOLDER numbers)
+01:07:55.016 [log] [DEBUG] [METRIC] shoulderPress value=79.6931 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:55.413 [log] [DEBUG] [METRIC] shoulderPress value=73.4924 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:55.500 [log] [MOVE-MATCH] score=70 TRYING (motion 100, rhythm 42, range 50, position 100) spread=0.40R onPath=100% period=2.3s cut=none (top 0, bottom 0, frame 0) samples=28 (PLACEHOLDER numbers)
+01:07:55.501 [log] [GUIDE] says nothing (nothing to fix)
+01:07:55.823 [log] [DEBUG] [METRIC] shoulderPress value=73.2238 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:55.911 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=330 ts_epoch=1794532076
+01:07:56.210 [log] [DEBUG] [METRIC] shoulderPress value=73.0828 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:56.318 [log] [CONFIDENCE] 100 (the camera sees 100) match=72 counting=yes (PLACEHOLDER numbers)
+01:07:56.534 [log] [MOVE-MATCH] score=54 unsure (motion 100, rhythm 42, range 43, position 100) spread=0.35R onPath=100% period=2.0s cut=none (top 0, bottom 0, frame 0) samples=28 (PLACEHOLDER numbers)
+01:07:56.614 [log] [DEBUG] [METRIC] shoulderPress value=72.9249 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:56.951 [log] [MOVE-MATCH] score=68 TRYING (motion 100, rhythm 39, range 49, position 100) spread=0.39R onPath=100% period=2.3s cut=none (top 0, bottom 0, frame 0) samples=28 (PLACEHOLDER numbers)
+01:07:56.951 [log] [CONFIDENCE] 78 (trying (match 68) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=68 counting=no (PLACEHOLDER numbers)
+01:07:57.005 [log] [DEBUG] [METRIC] shoulderPress value=76.5654 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:57.151 [log] [CONFIDENCE] 77 (trying (match 62) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=62 counting=no (PLACEHOLDER numbers)
+01:07:57.351 [log] [CONFIDENCE] 77 (trying (match 74) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=74 counting=no (PLACEHOLDER numbers)
+01:07:57.409 [log] [DEBUG] [METRIC] shoulderPress value=73.7602 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:57.551 [log] [MOVE-MATCH] score=48 unsure (motion 100, rhythm 32, range 42, position 100) spread=0.33R onPath=100% period=3.3s cut=none (top 0, bottom 0, frame 0) samples=28 (PLACEHOLDER numbers)
+01:07:57.551 [log] [CONFIDENCE] 76 (trying (match 48) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=48 counting=no (PLACEHOLDER numbers)
+01:07:57.751 [log] [CONFIDENCE] 76 (trying (match 40) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=40 counting=no (PLACEHOLDER numbers)
+01:07:57.814 [log] [DEBUG] [METRIC] shoulderPress value=89.8436 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:57.951 [log] [CONFIDENCE] 75 (trying (match 41) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=41 counting=no (PLACEHOLDER numbers)
+01:07:58.151 [log] [CONFIDENCE] 74 (trying (match 40) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=40 counting=no (PLACEHOLDER numbers)
+01:07:58.214 [log] [DEBUG] [METRIC] shoulderPress value=76.5333 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:58.551 [log] [CONFIDENCE] 73 (trying (match 49) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=49 counting=no (PLACEHOLDER numbers)
+01:07:58.613 [log] [DEBUG] [METRIC] shoulderPress value=75.9501 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:58.768 [log] [CONFIDENCE] 73 (trying (match 40) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=40 counting=no (PLACEHOLDER numbers)
+01:07:58.916 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=330 ts_epoch=1794532079
+01:07:59.018 [log] [DEBUG] [METRIC] shoulderPress value=76.6722 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:59.415 [log] [DEBUG] [METRIC] shoulderPress value=75.7776 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:59.568 [log] [GUIDE] says nothing (no rep counts but the camera sees the whole path, so only the Coach speaks (each X))
+01:07:59.816 [log] [DEBUG] [METRIC] shoulderPress value=75.6205 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:07:59.968 [log] [MOVE-MATCH] score=14 not trying (motion 100, rhythm 32, range 26, position 100) spread=0.21R onPath=100% period=5.8s cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:07:59.968 [log] [CONFIDENCE] 69 (trying (match 14) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=14 counting=no (PLACEHOLDER numbers)
+01:08:00.168 [log] [CONFIDENCE] 68 (trying (match 22) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=22 counting=no (PLACEHOLDER numbers)
+01:08:00.215 [log] [DEBUG] [METRIC] shoulderPress value=75.6872 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:08:00.368 [log] [MOVE-MATCH] score=26 not trying (motion 93, rhythm 41, range 32, position 100) spread=0.25R onPath=100% period=5.8s cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:08:00.368 [log] [CONFIDENCE] 68 (trying (match 26) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=26 counting=no (PLACEHOLDER numbers)
+01:08:00.568 [log] [CONFIDENCE] 67 (trying (match 30) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=30 counting=no (PLACEHOLDER numbers)
+01:08:00.609 [log] [DEBUG] [METRIC] shoulderPress value=76.1633 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:08:00.768 [log] [MOVE-MATCH] score=16 not trying (motion 92, rhythm 0, range 28, position 100) spread=0.23R onPath=100% period=n/a cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:08:00.768 [log] [CONFIDENCE] 67 (trying (match 16) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=16 counting=no (PLACEHOLDER numbers)
+01:08:00.968 [log] [CONFIDENCE] 66 (trying (match 14) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=14 counting=no (PLACEHOLDER numbers)
+01:08:01.017 [log] [DEBUG] [METRIC] shoulderPress value=75.9292 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:08:01.168 [log] [MOVE-MATCH] score=4 not trying (motion 100, rhythm 0, range 21, position 100) spread=0.17R onPath=100% period=n/a cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:08:01.168 [log] [CONFIDENCE] 65 (trying (match 4) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=4 counting=no (PLACEHOLDER numbers)
+01:08:01.368 [log] [MOVE-MATCH] score=21 not trying (motion 93, rhythm 65, range 28, position 100) spread=0.23R onPath=100% period=5.8s cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:08:01.368 [log] [CONFIDENCE] 65 (trying (match 21) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=21 counting=no (PLACEHOLDER numbers)
+01:08:01.415 [log] [DEBUG] [METRIC] shoulderPress value=76.7258 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:08:01.568 [log] [CONFIDENCE] 64 (trying (match 19) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=19 counting=no (PLACEHOLDER numbers)
+01:08:01.768 [log] [CONFIDENCE] 64 (trying (match 17) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=17 counting=no (PLACEHOLDER numbers)
+01:08:01.815 [log] [DEBUG] [METRIC] shoulderPress value=76.5860 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:08:01.911 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=330 ts_epoch=1794532082
+01:08:01.968 [log] [MOVE-MATCH] score=6 not trying (motion 100, rhythm 0, range 22, position 100) spread=0.18R onPath=100% period=n/a cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:08:01.968 [log] [CONFIDENCE] 63 (trying (match 6) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=6 counting=no (PLACEHOLDER numbers)
+01:08:02.168 [log] [CONFIDENCE] 62 (trying (match 3) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=3 counting=no (PLACEHOLDER numbers)
+01:08:02.214 [log] [DEBUG] [METRIC] shoulderPress value=76.4401 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:08:02.368 [log] [CONFIDENCE] 62 (trying (match 4) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=4 counting=no (PLACEHOLDER numbers)
+01:08:02.568 [log] [CONFIDENCE] 61 (trying (match 0) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=0 counting=no (PLACEHOLDER numbers)
+01:08:02.613 [log] [DEBUG] [METRIC] shoulderPress value=76.4186 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:08:02.702 [log] [AWAKE] screen lock re-applied (released and taken again), the screen cannot dim
+01:08:03.018 [log] [DEBUG] [METRIC] shoulderPress value=80.4730 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:08:03.168 [log] [CONFIDENCE] 59 (trying (match 2) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=2 counting=no (PLACEHOLDER numbers)
+01:08:03.369 [log] [CONFIDENCE] 59 (trying (match 7) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=7 counting=no (PLACEHOLDER numbers)
+01:08:03.413 [log] [DEBUG] [METRIC] shoulderPress value=71.5477 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:08:03.568 [log] [GUIDE] says nothing (no rep counts but the camera sees the whole path, so only the Coach speaks (each X))
+01:08:03.769 [log] [CONFIDENCE] 58 (trying (match 2) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=2 counting=no (PLACEHOLDER numbers)
+01:08:03.816 [log] [DEBUG] [METRIC] shoulderPress value=87.6173 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:08:03.969 [log] [CONFIDENCE] 57 (trying (match 13) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=13 counting=no (PLACEHOLDER numbers)
+01:08:04.169 [log] [CONFIDENCE] 56 (trying (match 11) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=11 counting=no (PLACEHOLDER numbers)
+01:08:04.214 [log] [DEBUG] [METRIC] shoulderPress value=79.7068 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:08:04.369 [log] [CONFIDENCE] 56 (trying (match 14) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=14 counting=no (PLACEHOLDER numbers)
+01:08:04.569 [log] [CONFIDENCE] 55 (trying (match 15) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=15 counting=no (PLACEHOLDER numbers)
+01:08:04.612 [log] [DEBUG] [METRIC] shoulderPress value=82.3778 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:08:04.769 [log] [MOVE-MATCH] score=30 not trying (motion 62, rhythm 0, range 39, position 100) spread=0.31R onPath=100% period=n/a cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:08:04.769 [log] [CONFIDENCE] 55 (trying (match 30) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=30 counting=no (PLACEHOLDER numbers)
+01:08:04.914 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=330 ts_epoch=1794532085
+01:08:05.017 [log] [DEBUG] [METRIC] shoulderPress value=77.5489 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:08:05.169 [log] [CONFIDENCE] 53 (trying (match 26) but no rep counted for 7s / 0 attempts, so it cannot read high (falling 3/s)) match=26 counting=no (PLACEHOLDER numbers)
+01:08:05.369 [log] [CONFIDENCE] 100 (the camera sees 100) match=30 counting=no (PLACEHOLDER numbers)
+01:08:05.417 [log] [DEBUG] [METRIC] shoulderPress value=74.9395 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:08:05.569 [log] [MOVE-MATCH] score=40 unsure (motion 100, rhythm 97, range 34, position 100) spread=0.27R onPath=100% period=6.0s cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:08:05.785 [log] [MOVE-MATCH] score=22 not trying (motion 92, rhythm 0, range 32, position 100) spread=0.26R onPath=100% period=n/a cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:08:05.810 [log] [DEBUG] [METRIC] shoulderPress value=73.7779 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:08:05.811 [log] [ATTEMPT] ignored low=71.3 high=82.4 dur=12.4s: too slow to be a rep (not the exercise path, no check or X)
+01:08:06.212 [log] [DEBUG] [METRIC] shoulderPress value=73.8609 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:08:06.618 [log] [DEBUG] [METRIC] shoulderPress value=73.7606 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:08:07.016 [log] [DEBUG] [METRIC] shoulderPress value=74.0069 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:08:07.417 [log] [DEBUG] [METRIC] shoulderPress value=73.0531 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:08:07.452 [log] [CONFIDENCE] 100 (the camera sees 100) match=21 counting=no (PLACEHOLDER numbers)
+01:08:07.652 [log] [GUIDE] says nothing (nothing to fix)
+01:08:07.825 [log] [DEBUG] [METRIC] shoulderPress value=74.1730 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:08:07.914 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=330 ts_epoch=1794532088
+01:08:08.217 [log] [DEBUG] [METRIC] shoulderPress value=68.4611 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:08:08.469 [log] [MOVE-MATCH] score=9 not trying (motion 28, rhythm 0, range 27, position 100) spread=0.21R onPath=100% period=n/a cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:08:08.620 [log] [DEBUG] [METRIC] shoulderPress value=68.9284 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:08:08.686 [log] [MOVE-MATCH] score=19 not trying (motion 44, rhythm 0, range 33, position 100) spread=0.27R onPath=100% period=n/a cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:08:09.013 [log] [DEBUG] [METRIC] shoulderPress value=68.0744 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:08:09.086 [log] [MOVE-MATCH] score=31 not trying (motion 51, rhythm 0, range 40, position 100) spread=0.32R onPath=100% period=5.8s cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:08:09.419 [log] [DEBUG] [METRIC] shoulderPress value=67.1192 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:08:09.486 [log] [MOVE-MATCH] score=42 unsure (motion 30, rhythm 0, range 49, position 100) spread=0.40R onPath=100% period=6.0s cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:08:09.486 [log] [CONFIDENCE] 100 (the camera sees 100) match=42 counting=no (PLACEHOLDER numbers)
+01:08:09.819 [log] [DEBUG] [METRIC] shoulderPress value=62.3844 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:08:10.214 [log] [DEBUG] [METRIC] shoulderPress value=62.2799 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:08:10.336 [log] [MOVE-MATCH] score=52 unsure (motion 63, rhythm 0, range 53, position 100) spread=0.43R onPath=100% period=n/a cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:08:10.621 [log] [DEBUG] [METRIC] shoulderPress value=72.9650 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:08:10.920 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=330 ts_epoch=1794532091
+01:08:11.023 [log] [DEBUG] [METRIC] shoulderPress value=45.9712 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+01:08:11.112 [log] [DEBUG] [REP-TRACE] shoulderPress angle=24.6693 repMinAngle=45.9712 framesSincePoseGap=105
+01:08:11.153 [log] [MOVE-MATCH] score=91 TRYING (motion 100, rhythm 100, range 71, position 100) spread=0.57R onPath=100% period=1.0s cut=none (top 0, bottom 0, frame 0) samples=25 (PLACEHOLDER numbers)
+01:08:11.216 [log] [DEBUG] [REP-TRACE] shoulderPress angle=17.6277 repMinAngle=24.6693 framesSincePoseGap=105
+01:08:11.318 [log] [DEBUG] [REP-TRACE] shoulderPress angle=11.4757 repMinAngle=17.6277 framesSincePoseGap=105
+01:08:11.419 [log] [DEBUG] [METRIC] shoulderPress value=6.7769 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+01:08:11.419 [log] [DEBUG] [REP-TRACE] shoulderPress angle=6.7769 repMinAngle=11.4757 framesSincePoseGap=105
+01:08:11.514 [log] [DEBUG] [REP-TRACE] shoulderPress angle=3.3963 repMinAngle=6.7769 framesSincePoseGap=105
+01:08:11.553 [log] [CONFIDENCE] 100 (the camera sees 100) match=86 counting=no (PLACEHOLDER numbers)
+01:08:11.615 [log] [DEBUG] [REP-TRACE] shoulderPress angle=2.4867 repMinAngle=3.3963 framesSincePoseGap=105
+01:08:11.719 [log] [DEBUG] [REP-TRACE] shoulderPress angle=0.6958 repMinAngle=2.4867 framesSincePoseGap=105
+01:08:11.753 [log] [MOVE-MATCH] score=67 TRYING (motion 78, rhythm 77, range 70, position 96) spread=0.56R onPath=93% period=1.5s cut=none (top 0, bottom 0, frame 0) samples=29 (PLACEHOLDER numbers)
+01:08:11.753 [log] [GUIDE] says nothing (nothing to fix)
+01:08:11.826 [log] [DEBUG] [METRIC] shoulderPress value=0.8781 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+01:08:11.826 [log] [DEBUG] [REP-TRACE] shoulderPress angle=0.8781 repMinAngle=0.6958 framesSincePoseGap=105
+01:08:11.915 [log] [DEBUG] [REP-TRACE] shoulderPress angle=3.3738 repMinAngle=0.6958 framesSincePoseGap=105
+01:08:11.953 [log] [MOVE-MATCH] score=48 unsure (motion 70, rhythm 66, range 57, position 95) spread=0.46R onPath=90% period=1.8s cut=none (top 0, bottom 0, frame 0) samples=29 (PLACEHOLDER numbers)
+01:08:12.017 [log] [DEBUG] [REP-TRACE] shoulderPress angle=3.4649 repMinAngle=0.6958 framesSincePoseGap=105
+01:08:12.114 [log] [DEBUG] [REP-TRACE] shoulderPress angle=4.0063 repMinAngle=0.6958 framesSincePoseGap=105
+01:08:12.153 [log] [MOVE-MATCH] score=37 unsure (motion 86, rhythm 54, range 60, position 94) spread=0.48R onPath=88% period=1.8s cut=none (top 0, bottom 0, frame 0) samples=30 (PLACEHOLDER numbers)
+01:08:12.153 [log] [CONFIDENCE] 92 (the camera sees 92) match=37 counting=no (PLACEHOLDER numbers)
+01:08:12.210 [log] [DEBUG] [METRIC] shoulderPress value=4.3386 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+01:08:12.210 [log] [DEBUG] [REP-TRACE] shoulderPress angle=4.3386 repMinAngle=0.6958 framesSincePoseGap=105
+01:08:12.312 [log] [DEBUG] [REP-TRACE] shoulderPress angle=6.4426 repMinAngle=0.6958 framesSincePoseGap=105
+01:08:12.370 [log] [CONFIDENCE] 86 (the camera sees 86) match=39 counting=no (PLACEHOLDER numbers)
+01:08:12.412 [log] [DEBUG] [REP-TRACE] shoulderPress angle=5.1575 repMinAngle=0.6958 framesSincePoseGap=105
+01:08:12.587 [log] [MOVE-MATCH] score=24 not trying (motion 100, rhythm 0, range 78, position 93) spread=0.63R onPath=85% period=n/a cut=none (top 0, bottom 0, frame 0) samples=32 (PLACEHOLDER numbers)
+01:08:12.587 [log] [CONFIDENCE] 82 (the camera sees 82) match=24 counting=no (PLACEHOLDER numbers)
+01:08:12.587 [log] [GUIDE] says "Step back further" because the camera says "Step back into frame"
+01:08:12.787 [log] [CONFIDENCE] 80 (the camera sees 80) match=21 counting=no (PLACEHOLDER numbers)
+01:08:12.987 [log] [CONFIDENCE] 65 (the camera sees 65) match=18 counting=no (PLACEHOLDER numbers)
+01:08:13.021 [log] [POST-LAG] +0ms START Stop pressed (formcheck)
+01:08:13.118 [log] [POST-LAG] +97ms (d97ms) formcheck: native stopTracking returned (recording finished)
+01:08:13.118 [log] [VIDEO] stop: camera returned a clip (athlt_1794531994.mov), 98s tracked
+01:08:13.120 [log] [warm:recap] prefetched before navigation (solo)
+01:08:13.301 [log] [warm:recap] injecting data (epoch 1)
+01:08:13.442 [log] [warm:recap:page] [recap-page] injected JS running, HAS_VIDEO= true
+01:08:13.442 [log] [warm:recap:page] [recap-page] sizeWired applied, ovLabel= true ovBody= true
+01:08:13.447 [log] [warm:recap] ready
+01:08:13.611 [log] [DEBUG] [UNIV-DBG] reset() called
+01:08:13.611 [log] [POST-LAG] +590ms (d493ms) formcheck: camera teardown finished in the background (492ms, no longer blocks navigation)
+01:08:17.705 [log] [AWAKE] screen lock re-applied (released and taken again), the screen cannot dim
+01:08:24.974 [log] [warm:recap] prefetched before navigation (solo)
+01:08:25.015 [log] [recap-debug] repEvents exerciseId= shoulderPress
+01:08:25.016 [log] [recap-debug] repEvent 0 good= true reason= "GOOD" -> what= "Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."
+01:08:25.016 [log] [recap-debug] repEvent 1 good= true reason= "GOOD" -> what= "Same full press again. Keep your body still and press it all the way up like that."
+01:08:25.016 [log] [recap-debug] repEvent 2 good= true reason= "GOOD" -> what= "That's the one. Straight arms overhead, no lean. Stay right there."
+01:08:25.016 [log] [recap-debug] repEvent 3 good= true reason= "GOOD" -> what= "Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."
+01:08:25.016 [log] [recap-debug] repEvent 4 good= true reason= "GOOD" -> what= "Same full press again. Keep your body still and press it all the way up like that."
+01:08:25.016 [log] [recap-debug] repEvent 5 good= false reason= "SWINGING — control the weight" -> what= "The weight swung instead of moving smoothly. Keep it steady and under control."
+01:08:25.017 [log] [recap-debug] repEvent 6 good= true reason= "GOOD" -> what= "That's the one. Straight arms overhead, no lean. Stay right there."
+01:08:25.017 [log] [recap-debug] repEvent 7 good= true reason= "GOOD" -> what= "Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."
+01:08:25.039 [log] [recap-debug] RecapScreen MOUNTED
+01:08:25.040 [log] [POST-LAG] +12018ms (d11428ms) recap: screen mounted (first render done)
+01:08:25.041 [log] [POST-LAG] +12020ms (d2ms) recap: rank payload start
+01:08:25.050 [log] [warm:recap] fade IN (220ms, no sideways motion)
+01:08:25.051 [log] [warm:recap] VISIBLE 19ms after the screen asked for it
+01:08:25.052 [log] [POST-LAG] +12030ms (d10ms) recap page VISIBLE (19ms after the screen asked)
+01:08:25.059 [log] [POST-LAG] +12038ms (d8ms) recap: mounting the All sets page (idle)
+01:08:25.067 [log] [SESSION-WRITE] source=recap-camera entries=1 new=1 :: Shoulder Press x8
+01:08:25.068 [log] [POST-LAG] +12047ms (d9ms) recap: stored sessions read
+01:08:25.068 [log] [POST-LAG] +12047ms (d0ms) recap: tiers + standing computed
+01:08:25.070 [log] [POST-LAG] +12049ms (d2ms) recap: icons + emblem ready
+01:08:25.070 [log] [recap] muscle page data ready
+01:08:25.070 [log] [POST-LAG] +12049ms (d0ms) recap: muscle page payload built
+01:08:25.180 [log] [recap-debug] videoPlayer statusChange: readyToPlay
+01:08:25.183 [log] [recap-debug] videoPlayer playingChange: true currentTime= 0 duration= 98.155
+01:08:25.199 [log] [recap] all-sets thumbnail OK at 19.406s in 157ms 640x1137
+01:08:25.348 [log] [warm:allsets] warm (epoch 1)
+01:08:25.350 [log] [warm:allsets] injecting data (epoch 1)
+01:08:25.359 [log] [warm:allsets] ready
+01:08:25.434 [log] [warm:ranks] warm (epoch 1)
+01:08:25.438 [log] [warm:ranks] injecting data (epoch 1)
+01:08:25.439 [log] [warm:repfeedback] warm (epoch 1)
+01:08:25.442 [log] [warm:repfeedback] injecting data (epoch 1)
+01:08:25.448 [log] [warm:repfeedback:page] [rep-feedback-page] injected JS running, HAS_VIDEO= true reps= 8
+01:08:25.448 [log] [warm:repfeedback:page] [rep-feedback-page] old controls wiring: speedBtn= true fullscreenBtn= true
+01:08:25.449 [log] [warm:repfeedback:page] [rep-feedback-page] bodyEl found via sparkle-icon selector: true
+01:08:25.449 [log] [warm:repfeedback:page] [rep-feedback-page] track fillEl found= true thumbEl found= true
+01:08:25.450 [log] [warm:repfeedback:page] [rep-feedback-page] prev button found and wired
+01:08:25.450 [log] [warm:repfeedback:page] [rep-feedback-page] next button found and wired
+01:08:25.453 [log] [warm:repfeedback:page] [rep-feedback-page] card play/pause button found and wired
+01:08:25.454 [log] [warm:repfeedback:page] [rep-feedback-page] show(0) -> idx=0 rep= {"timeSec":19.406,"good":true,"what":"Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."} bodyEl found= true bodyEl.textContent after set= "Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."
+01:08:25.454 [log] [warm:repfeedback:page] [rep-feedback-page] ready, posting to RN
+01:08:25.454 [log] [warm:repfeedback] ready
+01:08:25.457 [log] [warm:repfeedback:page] [rep-feedback-page] card rect (immediate): {"x":-0.9312795996665955,"y":559.1943359375,"width":403.862548828125,"height":314.8056640625,"top":559.1943359375,"bottom":874} display= block visibility= visible opacity= 1 zIndex= 4 transform= none
+01:08:25.457 [log] [warm:repfeedback:page] [rep-feedback-page] bodyEl rect (immediate): {"x":19.779621124267578,"y":673.104248046875,"width":362.44073486328125,"height":90.0924072265625} text= "Arms fully overhead, steady. You pressed your arms straight "
+01:08:25.464 [log] [warm:ranks:page] [ranks] body map shown, outline layers=2 natural=263x216 drawn=280x224
+01:08:25.464 [log] [warm:ranks] ready
+01:08:25.500 [log] [warm:repfeedback:page] [rep-feedback-page] prev button found and wired
+01:08:25.752 [log] [warm:repfeedback:page] [rep-feedback-page] card rect (+300ms): {"x":-0.9312795996665955,"y":559.1943359375,"width":403.862548828125,"height":314.8056640625,"top":559.1943359375,"bottom":874} display= block visibility= visible opacity= 1 zIndex= 4 transform= none
+01:08:25.752 [log] [warm:repfeedback:page] [rep-feedback-page] bodyEl rect (+300ms): {"x":19.779621124267578,"y":673.104248046875,"width":362.44073486328125,"height":90.0924072265625} text= "Arms fully overhead, steady. You pressed your arms straight "
+01:08:30.735 [log] [recap-debug] onMessage: viewRepFeedback current view= summary effectiveView= summary
+01:08:30.735 [log] [recap-debug] router.push(/rep-feedback)
+01:08:30.786 [log] [rep-feedback-debug] parsed reps from route param: [{"timeSec":19.406,"good":true,"what":"Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."},{"timeSec":20.903,"good":true,"what":"Same full press again. Keep your body still and press it all the way up like that."},{"timeSec":22.191,"good":true,"what":"That's the one. Straight arms overhead, no lean. Stay right there."},{"timeSec":39.396,"good":true,"what":"Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."},{"timeSec":57.102,"good":true,"what":"Same full press again. Keep your body still and press it all the way up like that."},{"timeSec":66.199,"good":false,"what":"The weight swung instead of moving smoothly. Keep it steady and under control."},{"timeSec":72.914,"good":true,"what":"That's the one. Straight arms overhead, no lean. Stay right there."},{"timeSec":75.002,"good":true,"what":"Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."}]
+01:08:30.795 [log] [rep-feedback-debug] MOUNT, params: {"exerciseName":"Shoulder Press","videoUri":"file:///private/var/mobile/Containers/Data/Application/21A729A3-2DE5-462C-B480-DDDF69AD467A/tmp/athlt_1794531994.mov","repEventsLen":1019}
+01:08:30.795 [log] [POST-LAG] +17774ms (d5725ms) rep feedback: screen mounted
+01:08:30.805 [log] [warm:repfeedback] fade IN (220ms, no sideways motion)
+01:08:30.808 [log] [warm:repfeedback] VISIBLE 15ms after the screen asked for it
+01:08:30.808 [log] [POST-LAG] +17787ms (d13ms) repfeedback page VISIBLE (16ms after the screen asked)
+01:08:30.816 [log] [recap-debug] videoPlayer playingChange: false currentTime= 5.617689958 duration= 98.155
+01:08:30.863 [log] [rep-feedback-debug] videoPlayer statusChange: readyToPlay
+01:08:30.866 [log] [warm:repfeedback:page] [rep-feedback-page] real duration received: 98.155
+01:08:30.870 [log] [rep-feedback-debug] videoPlayer playingChange: true currentTime= 0 duration= 98.155
+01:08:34.088 [log] [warm:repfeedback:page] [rep-feedback-page] NEXT tapped, idx before= 0
+01:08:34.088 [log] [warm:repfeedback:page] [rep-feedback-page] show(1) -> idx=1 rep= {"timeSec":20.903,"good":true,"what":"Same full press again. Keep your body still and press it all the way up like that."} bodyEl found= true bodyEl.textContent after set= "Same full press again. Keep your body still and press it all the way up like that."
+01:08:34.089 [log] [rep-feedback-debug] onMessage: seek
+01:08:34.090 [log] [rep-feedback-debug] seek message received, timeSec= 20.903 - videoPlayer.currentTime immediately after = 3.215369458
+01:08:35.232 [log] [rep-feedback-debug] onMessage: openSpeedMenu
+01:08:36.028 [log] [rep-feedback-debug] speed picked 2
+01:08:37.214 [log] [rep-feedback-debug] onMessage: openSpeedMenu
+01:08:37.862 [log] [rep-feedback-debug] speed picked 1.5
+01:08:39.347 [log] [rep-feedback-debug] onMessage: openSpeedMenu
+01:08:40.245 [log] [rep-feedback-debug] speed picked 0.5
+01:08:54.705 [log] [rep-feedback-debug] onMessage: openAllSets
+01:08:54.741 [log] [rep-feedback-debug] UNMOUNT
+01:08:54.757 [log] [warm:recap] hidden -> parked off-screen, opacity 0, behind navigator
+01:08:54.758 [log] [warm:repfeedback] slide OUT -> parked off-screen, opacity 0, behind navigator
+01:08:54.766 [log] [warm:allsets] fade IN (220ms, no sideways motion)
+01:08:54.769 [log] [warm:allsets] VISIBLE 11ms after the screen asked for it
+01:08:54.769 [log] [POST-LAG] +41748ms (d23961ms) allsets page VISIBLE (12ms after the screen asked)
+01:08:54.772 [log] [recap-debug] onMessage: tileRect current view= allsets effectiveView= allsets
+01:08:55.334 [log] [warm:repfeedback] warm (epoch 2)
+01:08:56.403 [log] [recap-debug] onMessage: closeAllSets current view= allsets effectiveView= allsets
+01:08:56.421 [log] [warm:recap] fade IN (220ms, no sideways motion)
+01:08:56.424 [log] [warm:allsets] slide OUT -> parked off-screen, opacity 0, behind navigator
+01:08:56.425 [log] [warm:recap] VISIBLE 16ms after the screen asked for it
+01:08:56.426 [log] [POST-LAG] +43404ms (d1656ms) recap page VISIBLE (16ms after the screen asked)
+01:08:56.439 [log] [recap-debug] videoPlayer playingChange: true currentTime= 5.650552708 duration= 98.155
+01:08:58.518 [log] [recap-debug] onMessage: viewRepFeedback current view= summary effectiveView= summary
+01:08:58.518 [log] [recap-debug] router.push(/rep-feedback)
+01:08:58.562 [log] [rep-feedback-debug] parsed reps from route param: [{"timeSec":19.406,"good":true,"what":"Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."},{"timeSec":20.903,"good":true,"what":"Same full press again. Keep your body still and press it all the way up like that."},{"timeSec":22.191,"good":true,"what":"That's the one. Straight arms overhead, no lean. Stay right there."},{"timeSec":39.396,"good":true,"what":"Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."},{"timeSec":57.102,"good":true,"what":"Same full press again. Keep your body still and press it all the way up like that."},{"timeSec":66.199,"good":false,"what":"The weight swung instead of moving smoothly. Keep it steady and under control."},{"timeSec":72.914,"good":true,"what":"That's the one. Straight arms overhead, no lean. Stay right there."},{"timeSec":75.002,"good":true,"what":"Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."}]
+01:08:58.573 [log] [rep-feedback-debug] MOUNT, params: {"exerciseName":"Shoulder Press","videoUri":"file:///private/var/mobile/Containers/Data/Application/21A729A3-2DE5-462C-B480-DDDF69AD467A/tmp/athlt_1794531994.mov","repEventsLen":1019}
+01:08:58.573 [log] [POST-LAG] +45552ms (d2148ms) rep feedback: screen mounted
+01:08:58.583 [log] [warm:repfeedback] injecting data (epoch 2)
+01:08:58.583 [log] [warm:repfeedback] activated, waiting for ready (card not shown yet)
+01:08:58.588 [log] [warm:recap] hidden -> parked off-screen, opacity 0, behind navigator
+01:08:58.591 [log] [recap-debug] videoPlayer playingChange: false currentTime= 7.803388791 duration= 98.155
+01:08:58.593 [log] [warm:repfeedback:page] [rep-feedback-page] injected JS running, HAS_VIDEO= true reps= 8
+01:08:58.593 [log] [warm:repfeedback:page] [rep-feedback-page] old controls wiring: speedBtn= true fullscreenBtn= true
+01:08:58.593 [log] [warm:repfeedback:page] [rep-feedback-page] bodyEl found via sparkle-icon selector: true
+01:08:58.593 [log] [warm:repfeedback:page] [rep-feedback-page] track fillEl found= true thumbEl found= true
+01:08:58.593 [log] [warm:repfeedback:page] [rep-feedback-page] prev button found and wired
+01:08:58.620 [log] [warm:repfeedback:page] [rep-feedback-page] next button found and wired
+01:08:58.621 [log] [warm:repfeedback:page] [rep-feedback-page] card play/pause button found and wired
+01:08:58.621 [log] [warm:repfeedback:page] [rep-feedback-page] show(0) -> idx=0 rep= {"timeSec":19.406,"good":true,"what":"Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."} bodyEl found= true bodyEl.textContent after set= "Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."
+01:08:58.622 [log] [warm:repfeedback:page] [rep-feedback-page] ready, posting to RN
+01:08:58.622 [log] [warm:repfeedback] ready
+01:08:58.622 [log] [rep-feedback-debug] onMessage: ready
+01:08:58.622 [log] [warm:repfeedback:page] [rep-feedback-page] card rect (immediate): {"x":-0.9312795996665955,"y":559.1943359375,"width":403.862548828125,"height":314.8056640625,"top":559.1943359375,"bottom":874} display= block visibility= visible opacity= 1 zIndex= 4 transform= none
+01:08:58.622 [log] [warm:repfeedback:page] [rep-feedback-page] bodyEl rect (immediate): {"x":19.779621124267578,"y":673.104248046875,"width":362.44073486328125,"height":90.0924072265625} text= "Arms fully overhead, steady. You pressed your arms straight "
+01:08:58.634 [log] [warm:repfeedback] fade IN (220ms, no sideways motion)
+01:08:58.636 [log] [warm:repfeedback] VISIBLE 68ms after the screen asked for it
+01:08:58.636 [log] [POST-LAG] +45615ms (d63ms) repfeedback page VISIBLE (68ms after the screen asked)
+01:08:58.644 [log] [rep-feedback-debug] videoPlayer statusChange: readyToPlay
+01:08:58.648 [log] [warm:repfeedback:page] [rep-feedback-page] real duration received: 98.155
+01:08:58.648 [log] [warm:repfeedback:page] [rep-feedback-page] prev button found and wired
+01:08:58.648 [log] [warm:repfeedback:page] [rep-feedback-page] real duration received: 98.155
+01:08:58.650 [log] [rep-feedback-debug] videoPlayer playingChange: true currentTime= 0 duration= 98.155
+01:08:58.897 [log] [warm:repfeedback:page] [rep-feedback-page] card rect (+300ms): {"x":-0.9312795996665955,"y":559.1943359375,"width":403.862548828125,"height":314.8056640625,"top":559.1943359375,"bottom":874} display= block visibility= visible opacity= 1 zIndex= 4 transform= none
+01:08:58.897 [log] [warm:repfeedback:page] [rep-feedback-page] bodyEl rect (+300ms): {"x":19.779621124267578,"y":673.104248046875,"width":362.44073486328125,"height":90.0924072265625} text= "Arms fully overhead, steady. You pressed your arms straight "
+01:09:00.840 [log] [warm:repfeedback:page] [rep-feedback-page] show(1) -> idx=1 rep= {"timeSec":20.903,"good":true,"what":"Same full press again. Keep your body still and press it all the way up like that."} bodyEl found= true bodyEl.textContent after set= "Same full press again. Keep your body still and press it all the way up like that."
+01:09:00.840 [log] [rep-feedback-debug] onMessage: seek
+01:09:00.842 [log] [rep-feedback-debug] seek message received, timeSec= 20.903 - videoPlayer.currentTime immediately after = 2.186452625
+01:09:01.184 [log] [warm:repfeedback:page] [rep-feedback-page] show(2) -> idx=2 rep= {"timeSec":22.191,"good":true,"what":"That's the one. Straight arms overhead, no lean. Stay right there."} bodyEl found= true bodyEl.textContent after set= "That's the one. Straight arms overhead, no lean. Stay right there."
+01:09:01.184 [log] [rep-feedback-debug] onMessage: seek
+01:09:01.184 [log] [rep-feedback-debug] seek message received, timeSec= 22.191 - videoPlayer.currentTime immediately after = 21.228993625
+01:09:01.381 [log] [warm:repfeedback:page] [rep-feedback-page] show(3) -> idx=3 rep= {"timeSec":39.396,"good":true,"what":"Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."} bodyEl found= true bodyEl.textContent after set= "Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."
+01:09:01.382 [log] [rep-feedback-debug] onMessage: seek
+01:09:01.383 [log] [rep-feedback-debug] seek message received, timeSec= 39.396 - videoPlayer.currentTime immediately after = 22.368811
+01:09:01.633 [log] [warm:repfeedback:page] [rep-feedback-page] show(4) -> idx=4 rep= {"timeSec":57.102,"good":true,"what":"Same full press again. Keep your body still and press it all the way up like that."} bodyEl found= true bodyEl.textContent after set= "Same full press again. Keep your body still and press it all the way up like that."
+01:09:01.634 [log] [rep-feedback-debug] onMessage: seek
+01:09:01.635 [log] [rep-feedback-debug] seek message received, timeSec= 57.102 - videoPlayer.currentTime immediately after = 39.634918708
+01:09:02.068 [log] [warm:repfeedback:page] [rep-feedback-page] show(5) -> idx=5 rep= {"timeSec":66.199,"good":false,"what":"The weight swung instead of moving smoothly. Keep it steady and under control."} bodyEl found= true bodyEl.textContent after set= "The weight swung instead of moving smoothly. Keep it steady and under control."
+01:09:02.068 [log] [rep-feedback-debug] onMessage: seek
+01:09:02.069 [log] [rep-feedback-debug] seek message received, timeSec= 66.199 - videoPlayer.currentTime immediately after = 57.523007208
+01:09:15.469 [log] [warm:repfeedback:page] [rep-feedback-page] show(6) -> idx=6 rep= {"timeSec":72.914,"good":true,"what":"That's the one. Straight arms overhead, no lean. Stay right there."} bodyEl found= true bodyEl.textContent after set= "That's the one. Straight arms overhead, no lean. Stay right there."
+01:09:15.470 [log] [rep-feedback-debug] onMessage: seek
+01:09:15.471 [log] [rep-feedback-debug] seek message received, timeSec= 72.914 - videoPlayer.currentTime immediately after = 79.578433667
+01:09:15.987 [log] [warm:repfeedback:page] [rep-feedback-page] show(7) -> idx=7 rep= {"timeSec":75.002,"good":true,"what":"Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."} bodyEl found= true bodyEl.textContent after set= "Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."
+01:09:15.988 [log] [rep-feedback-debug] onMessage: seek
+01:09:15.988 [log] [rep-feedback-debug] seek message received, timeSec= 75.002 - videoPlayer.currentTime immediately after = 73.416041083
+01:09:16.466 [log] [rep-feedback-debug] onMessage: finishReview
+01:09:16.466 [log] [POST-LAG] +63445ms (d17830ms) rep feedback: Finish review tapped
+01:09:16.467 [log] [POST-LAG] +63445ms (d0ms) recap: finish review -> switching to the muscle page
+01:09:16.477 [log] [warm:repfeedback] slide OUT -> parked off-screen, opacity 0, behind navigator
+01:09:16.496 [log] [warm:ranks] fade IN (220ms, no sideways motion)
+01:09:16.499 [log] [rep-feedback-debug] UNMOUNT
+01:09:16.500 [log] [warm:ranks] VISIBLE 23ms after the screen asked for it
+01:09:16.500 [log] [POST-LAG] +63479ms (d34ms) ranks page VISIBLE (24ms after the screen asked)
+01:09:17.112 [log] [warm:repfeedback] warm (epoch 3)
+01:11:04.842 [log] [recap-debug] onMessage: doneRanks current view= ranks effectiveView= ranks
+01:11:04.870 [log] [TABS] layout mounted, tabs: index, train, plus, progress, profile | inactive tabs detached natively (web views stay loaded)
+01:11:04.904 [log] [recap-debug] RecapScreen UNMOUNTED
+01:11:04.910 [log] [TRAIN] mounted train-4
+01:11:04.911 [log] [TRAIN] html file: name traintab.html | md5 6e71acbc | uri ?unstable_path=.%2Fassets%2Fapp%20screens/traintab.html?platform=ios&hash=6e71acbc518f4149c049ed6b4eb39908
+01:11:04.913 [log] [TAB-LAG] progress mounted (data prefetch starts now)
+01:11:04.915 [log] [TAB-LAG] profile mounted (data prefetch starts now)
+01:11:04.940 [log] [TRAIN] rendered; container 402x874
+01:11:04.958 [log] [TAB-LAG] progress data ready 46ms after mount (before the tab was shown)
+01:11:05.812 [log] [THUMB] clip already gone, cannot keep it 1792077924973
+01:11:05.815 [log] [THUMB] clip already gone, cannot keep it 1792083593529
+01:11:05.817 [log] [THUMB] clip already gone, cannot keep it 1792084165893
+01:11:05.818 [log] [THUMB] clip already gone, cannot keep it 1792085299368
+01:11:05.819 [log] [THUMB] clip already gone, cannot keep it 1792085666550
+01:11:05.821 [log] [THUMB] clip already gone, cannot keep it 1792529944169
+01:11:05.822 [log] [THUMB] clip already gone, cannot keep it 1792530369264
+01:11:05.824 [log] [THUMB] clip already gone, cannot keep it 1792531380575
+01:11:05.825 [log] [THUMB] clip already gone, cannot keep it 1792534282867
+01:11:05.826 [log] [THUMB] clip already gone, cannot keep it 1792537389976
+01:11:05.828 [log] [THUMB] clip already gone, cannot keep it 1792538138796
+01:11:05.829 [log] [THUMB] clip already gone, cannot keep it 1792538830445
+01:11:05.830 [log] [THUMB] clip already gone, cannot keep it 1792607678012
+01:11:05.832 [log] [THUMB] clip already gone, cannot keep it 1792609032807
+01:11:05.833 [log] [THUMB] clip already gone, cannot keep it 1792610036637
+01:11:05.835 [log] [THUMB] clip already gone, cannot keep it 1792611199684
+01:11:05.836 [log] [THUMB] clip already gone, cannot keep it 1792706592679
+01:11:05.838 [log] [THUMB] clip already gone, cannot keep it 1792943409440
+01:11:05.839 [log] [THUMB] clip already gone, cannot keep it 1792943477819
+01:11:05.841 [log] [THUMB] clip already gone, cannot keep it 1793562362803
+01:11:05.842 [log] [THUMB] clip already gone, cannot keep it 1793565085549
+01:11:05.844 [log] [THUMB] clip already gone, cannot keep it 1793649685649
+01:11:05.845 [log] [THUMB] clip already gone, cannot keep it 1793651336103
+01:11:05.847 [log] [THUMB] clip already gone, cannot keep it 1793721086555
+01:11:05.848 [log] [THUMB] clip already gone, cannot keep it 1793721137332
+01:11:05.849 [log] [THUMB] clip already gone, cannot keep it 1793723526676
+01:11:05.851 [log] [THUMB] clip already gone, cannot keep it 1793723568725
+01:11:05.852 [log] [THUMB] clip already gone, cannot keep it 1793724307566
+01:11:05.854 [log] [THUMB] clip already gone, cannot keep it 1793744661268
+01:11:05.856 [log] [THUMB] clip already gone, cannot keep it 1793919900492
+01:11:05.857 [log] [THUMB] clip already gone, cannot keep it 1793920145227
+01:11:05.859 [log] [THUMB] clip already gone, cannot keep it 1793921943401
+01:11:05.860 [log] [THUMB] clip already gone, cannot keep it 1793923975496
+01:11:05.861 [log] [THUMB] clip already gone, cannot keep it 1794167843217
+01:11:05.863 [log] [THUMB] clip already gone, cannot keep it 1794349832025
+01:11:05.865 [log] [TAB-LAG] profile data ready 951ms after mount (before the tab was shown)
+01:11:05.866 [log] [warm:recap] warm (epoch 2)
+01:11:05.896 [log] [TRAIN] html images: flame ok, 4 photos
+01:11:05.932 [log] [TRAIN] html file: size 450139 chars | fnv e448ea90
+01:11:05.935 [log] [THUMB] made a picture for workout 1794532105013 at 1000
+01:11:05.937 [log] [THUMB] made a picture for workout 1794532105013 at 1000
+01:11:06.664 [log] [THUMB] clip already gone, cannot keep it 1792077924973
+01:11:06.665 [log] [THUMB] clip already gone, cannot keep it 1792083593529
+01:11:06.667 [log] [THUMB] clip already gone, cannot keep it 1792084165893
+01:11:06.668 [log] [THUMB] clip already gone, cannot keep it 1792085299368
+01:11:06.670 [log] [THUMB] clip already gone, cannot keep it 1792085666550
+01:11:06.672 [log] [THUMB] clip already gone, cannot keep it 1792529944169
+01:11:06.673 [log] [THUMB] clip already gone, cannot keep it 1792530369264
+01:11:06.675 [log] [THUMB] clip already gone, cannot keep it 1792531380575
+01:11:06.676 [log] [THUMB] clip already gone, cannot keep it 1792534282867
+01:11:06.678 [log] [THUMB] clip already gone, cannot keep it 1792537389976
+01:11:06.679 [log] [THUMB] clip already gone, cannot keep it 1792538138796
+01:11:06.681 [log] [THUMB] clip already gone, cannot keep it 1792538830445
+01:11:06.682 [log] [THUMB] clip already gone, cannot keep it 1792607678012
+01:11:06.684 [log] [THUMB] clip already gone, cannot keep it 1792609032807
+01:11:06.685 [log] [THUMB] clip already gone, cannot keep it 1792610036637
+01:11:06.687 [log] [THUMB] clip already gone, cannot keep it 1792611199684
+01:11:06.688 [log] [THUMB] clip already gone, cannot keep it 1792706592679
+01:11:06.689 [log] [THUMB] clip already gone, cannot keep it 1792943409440
+01:11:06.691 [log] [THUMB] clip already gone, cannot keep it 1792943477819
+01:11:06.693 [log] [THUMB] clip already gone, cannot keep it 1793562362803
+01:11:06.694 [log] [THUMB] clip already gone, cannot keep it 1793565085549
+01:11:06.696 [log] [THUMB] clip already gone, cannot keep it 1793649685649
+01:11:06.697 [log] [THUMB] clip already gone, cannot keep it 1793651336103
+01:11:06.698 [log] [THUMB] clip already gone, cannot keep it 1793721086555
+01:11:06.700 [log] [THUMB] clip already gone, cannot keep it 1793721137332
+01:11:06.701 [log] [THUMB] clip already gone, cannot keep it 1793723526676
+01:11:06.703 [log] [THUMB] clip already gone, cannot keep it 1793723568725
+01:11:06.704 [log] [THUMB] clip already gone, cannot keep it 1793724307566
+01:11:06.705 [log] [THUMB] clip already gone, cannot keep it 1793744661268
+01:11:06.707 [log] [THUMB] clip already gone, cannot keep it 1793919900492
+01:11:06.708 [log] [THUMB] clip already gone, cannot keep it 1793920145227
+01:11:06.710 [log] [THUMB] clip already gone, cannot keep it 1793921943401
+01:11:06.712 [log] [THUMB] clip already gone, cannot keep it 1793923975496
+01:11:06.713 [log] [THUMB] clip already gone, cannot keep it 1794167843217
+01:11:06.714 [log] [THUMB] clip already gone, cannot keep it 1794349832025
+01:11:06.723 [log] [THUMB] clip file is gone for workout 1794349833313
+01:11:06.727 [log] [THUMB] clip file is gone for workout 1793923976716
+01:11:06.729 [log] [THUMB] clip file is gone for workout 1793921944474
+01:11:06.732 [log] [THUMB] clip file is gone for workout 1793920145846
+01:11:06.734 [log] [THUMB] clip file is gone for workout 1793919916365
+01:11:06.737 [log] [THUMB] clip file is gone for workout 1793744662253
+01:11:06.739 [log] [THUMB] clip file is gone for workout 1793724308690
+01:11:06.742 [log] [THUMB] clip file is gone for workout 1793723569135
+01:11:06.745 [log] [THUMB] clip file is gone for workout 1793723527690
+01:11:06.747 [log] [THUMB] clip file is gone for workout 1793721138056
+01:11:06.750 [log] [THUMB] clip file is gone for workout 1793721087511
+01:11:06.752 [log] [THUMB] clip file is gone for workout 1793651337215
+01:11:06.755 [log] [THUMB] clip file is gone for workout 1793649742758
+01:11:06.757 [log] [THUMB] clip file is gone for workout 1793565086253
+01:11:06.760 [log] [THUMB] clip file is gone for workout 1793562364013
+01:11:06.763 [log] [THUMB] clip file is gone for workout 1792943478451
+01:11:06.765 [log] [THUMB] clip file is gone for workout 1792943410423
+01:11:06.768 [log] [THUMB] clip file is gone for workout 1792706593536
+01:11:06.770 [log] [THUMB] clip file is gone for workout 1792611254751
+01:11:06.773 [log] [THUMB] clip file is gone for workout 1792611254751
+01:11:06.775 [log] [THUMB] clip file is gone for workout 1792611254751
+01:11:06.778 [log] [THUMB] clip file is gone for workout 1792611254751
+01:11:07.479 [log] [THUMB] clip already gone, cannot keep it 1792077924973
+01:11:07.481 [log] [THUMB] clip already gone, cannot keep it 1792083593529
+01:11:07.482 [log] [THUMB] clip already gone, cannot keep it 1792084165893
+01:11:07.484 [log] [THUMB] clip already gone, cannot keep it 1792085299368
+01:11:07.485 [log] [THUMB] clip already gone, cannot keep it 1792085666550
+01:11:07.487 [log] [THUMB] clip already gone, cannot keep it 1792529944169
+01:11:07.489 [log] [THUMB] clip already gone, cannot keep it 1792530369264
+01:11:07.491 [log] [THUMB] clip already gone, cannot keep it 1792531380575
+01:11:07.492 [log] [THUMB] clip already gone, cannot keep it 1792534282867
+01:11:07.493 [log] [THUMB] clip already gone, cannot keep it 1792537389976
+01:11:07.495 [log] [THUMB] clip already gone, cannot keep it 1792538138796
+01:11:07.496 [log] [THUMB] clip already gone, cannot keep it 1792538830445
+01:11:07.498 [log] [THUMB] clip already gone, cannot keep it 1792607678012
+01:11:07.499 [log] [THUMB] clip already gone, cannot keep it 1792609032807
+01:11:07.500 [log] [THUMB] clip already gone, cannot keep it 1792610036637
+01:11:07.502 [log] [THUMB] clip already gone, cannot keep it 1792611199684
+01:11:07.503 [log] [THUMB] clip already gone, cannot keep it 1792706592679
+01:11:07.505 [log] [THUMB] clip already gone, cannot keep it 1792943409440
+01:11:07.506 [log] [THUMB] clip already gone, cannot keep it 1792943477819
+01:11:07.507 [log] [THUMB] clip already gone, cannot keep it 1793562362803
+01:11:07.510 [log] [THUMB] clip already gone, cannot keep it 1793565085549
+01:11:07.511 [log] [THUMB] clip already gone, cannot keep it 1793649685649
+01:11:07.512 [log] [THUMB] clip already gone, cannot keep it 1793651336103
+01:11:07.514 [log] [THUMB] clip already gone, cannot keep it 1793721086555
+01:11:07.515 [log] [THUMB] clip already gone, cannot keep it 1793721137332
+01:11:07.517 [log] [THUMB] clip already gone, cannot keep it 1793723526676
+01:11:07.518 [log] [THUMB] clip already gone, cannot keep it 1793723568725
+01:11:07.520 [log] [THUMB] clip already gone, cannot keep it 1793724307566
+01:11:07.521 [log] [THUMB] clip already gone, cannot keep it 1793744661268
+01:11:07.523 [log] [THUMB] clip already gone, cannot keep it 1793919900492
+01:11:07.524 [log] [THUMB] clip already gone, cannot keep it 1793920145227
+01:11:07.525 [log] [THUMB] clip already gone, cannot keep it 1793921943401
+01:11:07.527 [log] [THUMB] clip already gone, cannot keep it 1793923975496
+01:11:07.528 [log] [THUMB] clip already gone, cannot keep it 1794167843217
+01:11:07.530 [log] [THUMB] clip already gone, cannot keep it 1794349832025
+01:11:07.534 [log] [THUMB] clip file is gone for workout 1794349833313
+01:11:07.537 [log] [THUMB] clip file is gone for workout 1793923976716
+01:11:07.539 [log] [THUMB] clip file is gone for workout 1793921944474
+01:11:07.542 [log] [THUMB] clip file is gone for workout 1793920145846
+01:11:07.544 [log] [THUMB] clip file is gone for workout 1793919916365
+01:11:07.547 [log] [THUMB] clip file is gone for workout 1793744662253
+01:11:07.550 [log] [THUMB] clip file is gone for workout 1793724308690
+01:11:07.553 [log] [THUMB] clip file is gone for workout 1793723569135
+01:11:07.555 [log] [THUMB] clip file is gone for workout 1793723527690
+01:11:07.557 [log] [THUMB] clip file is gone for workout 1793721138056
+01:11:07.560 [log] [THUMB] clip file is gone for workout 1793721087511
+01:11:07.562 [log] [THUMB] clip file is gone for workout 1793651337215
+01:11:07.565 [log] [THUMB] clip file is gone for workout 1793649742758
+01:11:07.568 [log] [THUMB] clip file is gone for workout 1793565086253
+01:11:07.570 [log] [THUMB] clip file is gone for workout 1793562364013
+01:11:07.573 [log] [THUMB] clip file is gone for workout 1792943478451
+01:11:07.575 [log] [THUMB] clip file is gone for workout 1792943410423
+01:11:07.578 [log] [THUMB] clip file is gone for workout 1792706593536
+01:11:07.580 [log] [THUMB] clip file is gone for workout 1792611254751
+01:11:07.583 [log] [THUMB] clip file is gone for workout 1792611254751
+01:11:07.586 [log] [THUMB] clip file is gone for workout 1792611254751
+01:11:07.588 [log] [THUMB] clip file is gone for workout 1792611254751
+01:11:21.735 [log] [TRAIN] focused; insets 62 34
+01:11:21.737 [log] [TRAIN] data loaded: plan 17 workouts | sessions 117
+01:11:21.740 [log] [TRAIN] data pushed to page; today = Upper Body | streak 3 | my workouts 3
+01:11:21.863 [log] [TRAIN] web view load start
+01:11:21.899 [log] [TRAIN] page asked for data; sending
+01:11:21.995 [log] [TRAIN] web view load end #1
+01:11:22.058 [log] [TRAIN] reloading web view: iOS killed the web view process
+01:11:22.058 [log] [TRAIN] reloading web view: iOS killed the web view process
+01:11:22.181 [log] [TRAIN] web view load start
+01:11:22.181 [log] [TRAIN] web view load start
+01:11:22.224 [log] [PROFILE] web view load start +429830ms after mount
+01:11:22.236 [log] [TRAIN] page asked for data; sending
+01:11:22.277 [log] [TRAIN] page asked for data; sending
+01:11:22.306 [log] [PROFILE] page asked for data; sending
+01:11:22.312 [log] [TRAIN] web view load end #2
+01:11:22.392 [log] [TRAIN] page ready (layout + data + logic all in place, page still)
+01:11:22.396 [log] [TRAIN] page fingerprint: cards=7 quickStart=1 myWorkouts=1 practice=1 oldHero=0 title=Train
+01:11:22.448 [log] [TRAIN] web view load end #2
+01:11:22.596 [log] [PROFILE] web view load end
+01:11:22.642 [log] [TRAIN] page ready (layout + data + logic all in place, page still)
+01:11:22.642 [log] [TRAIN] page fingerprint: cards=7 quickStart=1 myWorkouts=1 practice=1 oldHero=0 title=Train
+01:11:22.860 [log] [TRAIN] page ready (layout + data + logic all in place, page still)
+01:11:22.864 [log] [TRAIN] page fingerprint: cards=7 quickStart=1 myWorkouts=1 practice=1 oldHero=0 title=Train
+01:11:23.348 [log] [PROFILE] page ready +430954ms after mount
+01:11:25.115 [log] [TRAIN] focused; insets 62 34
+01:11:25.115 [log] [TAB-LAG] train shown again 3410ms after the tap | page already visible: yes
+01:11:25.118 [log] [TRAIN] data loaded: plan 17 workouts | sessions 117
+01:11:25.120 [log] [TRAIN] data unchanged, not pushed again
+01:11:25.732 [log] [TAB-LAG] home shown again 28ms after the tap | page already visible: yes

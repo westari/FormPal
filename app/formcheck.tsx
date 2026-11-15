@@ -51,7 +51,7 @@ import { NO_ZOOM_JS } from '../lib/noZoom';
 import { shortCue } from '../lib/shortCue';
 import { createMovementMatch } from '../lib/movementMatch';
 import { createCameraConfidence } from '../lib/cameraConfidence';
-import { createGuide, createCoach, createCalmLine, guideLine, GUIDE_LINES, handsMatter } from '../lib/guideCoach';
+import { createGuide, createCoach, createCalmLine, createCueHold, guideLine, GUIDE_LINES, handsMatter } from '../lib/guideCoach';
 import { createSetupGuide, SETUP_TUNING, type SetupDecision } from '../lib/setupGuide';
 import { createAttemptDetector, type DetectorEvent } from '../lib/attemptDetector';
 import { hapticError, hapticMain, hapticSelect, hapticWarning } from '../lib/haptics';
@@ -304,7 +304,7 @@ function CueGlass({ text, ready }: { text: string; ready?: boolean }) {
         {ready
           ? <SymbolView name="checkmark.circle.fill" size={icon} tintColor={C.good} type="monochrome" style={{ width: icon, height: icon }} />
           : <Image source={SPARKLE_DUO} style={s.trackingCueIcon} />}
-        <Text style={s.trackingCueText} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.7}>{text}</Text>
+        <Text style={s.trackingCueText} numberOfLines={2}>{text}</Text>
       </View>
     </GlassPanel>
   );
@@ -939,6 +939,10 @@ export default function FormCheckScreen() {
   const lastCountAtRef = useRef(0);                      // when the last rep counted (native or soft)
   const missedSinceCountRef = useRef(0);                 // attempts that did not count since then
   const [guideTrack, setGuideTrack] = useState<string | null>(null); // the Guide's line while tracking
+  // The camera's own "Step back into frame" / no-person signal can flicker on and off while the user stands still (2026-11-13 log: the
+  // number fell 100 -> 35 -> 100 and the Guide said "Step back further" with no movement). It only counts once it has held GUIDE.cuePersistSec.
+  const frameCueHold = useRef(createCueHold()).current;
+  const [frameCueHeld, setFrameCueHeld] = useState(false);
   const softRepsRef = useRef(0);          // reps the detector counted itself (engine paused / adapted range); negative = a counted rep it took back
   const softGoodRef = useRef(0);          // the same, for good reps
   const lastNativeRep = useRef<{ at: number; good: boolean; retracted: boolean } | null>(null);
@@ -1384,7 +1388,7 @@ export default function FormCheckScreen() {
         // A stroke the camera could not see (tracking, angle, light, a cut path) is never an X: that is the Guide's job.
         const hint = repDiagRef.current.message() ?? statsRef.current?.trackingCue ?? null;
         if (!showVerdict(ev.outcome === 'rejected' ? null : hint, statsRef.current?.personDetected)) continue; // frame hint up: no verdict
-        const cva = coachRef.verdict({ now: Date.now(), match: matchRef.result(), source: 'attempt', blocker: ev.blocker, rangeWord: ev.reason, n: ev.n });
+        const cva = coachRef.verdict({ now: Date.now(), match: matchRef.result(), source: 'attempt', blocker: ev.blocker, rangeWord: ev.reason, n: ev.n, strokeR: ev.strokeR });
         if (cva.show !== 'x') continue;
         if (Date.now() - lastAttemptX.current < 1200) continue; // one X per stroke
         lastAttemptX.current = Date.now();
@@ -1535,7 +1539,7 @@ export default function FormCheckScreen() {
   });
   // ONE story for the new user: the number can only read high when the words say you are set. While setting up it is capped by
   // the current step; while a "step back / can't see" hint is showing it can never read above 35.
-  const frameHintActive = isTracking && (isFrameHint(repDiag) || (!isFloor && (stats?.personDetected === false || isFrameHint(stats?.trackingCue))));
+  const frameHintActive = isTracking && (isFrameHint(repDiag) || (!isFloor && frameCueHeld));
   const cameraLockTarget = capMeterTarget(cameraLockTargetRaw, phase === 'setup' && guide ? guide.cap : null, frameHintActive);
   // The number glides to the target (and ignores one-frame flickers of it):
   // see createMeterSmoother in lib/liveTracking.ts. The counting lives in
@@ -1587,9 +1591,13 @@ export default function FormCheckScreen() {
       const conf = confRef.update({ now, visibility: counterRef.score(now), match: m, lastCountAt: lastCountAtRef.current, lastJudgedAt: lastJudgedAt.current, missedSinceCount: missedSinceCountRef.current });
       confidenceRef.current = conf.value;
       const rej = attemptRef.current.recentReject(8000);
+      const rawCue = isFloor ? null : (statsRef.current?.trackingCue || null);
+      const noPersonNow = statsRef.current?.personDetected === false;
+      const cueHeld = frameCueHold.feed(now, (!!rawCue && isFrameHint(rawCue)) || noPersonNow);
+      setFrameCueHeld(prev => (prev === cueHeld ? prev : cueHeld));
       const dec = guideEngine.decide({
-        now, exerciseId: exerciseType, personMissing: statsRef.current?.personDetected === false,
-        nativeCue: isFloor ? null : (statsRef.current?.trackingCue || null), outOfPlaneCue: statsRef.current?.outOfPlaneCue || null, diag: d,
+        now, exerciseId: exerciseType, personMissing: noPersonNow && cueHeld,
+        nativeCue: cueHeld || !isFrameHint(rawCue) ? rawCue : null, outOfPlaneCue: statsRef.current?.outOfPlaneCue || null, diag: d,
         match: m, stuck: conf.stuck, rejectedLowQuality: rej.lowQuality, rejectedDark: rej.dark, facing,
       });
       // a plain framing hint is not shown right after a rep was judged (the camera obviously sees the person); a real "cannot count" fix always is
@@ -1734,8 +1742,13 @@ export default function FormCheckScreen() {
       {/* Ready → tracking */}
       {phase === 'setup-done' && (
         <View style={s.setupDoneOverlay} pointerEvents="none">
-          {/* same glass pill component as every other cue, so it can't look different */}
-          <CueGlass text="Ready. Go!" ready />
+          {/* the original Ready card (big green check, green text), restored on Ari's request 2026-11-13 */}
+          <GlassPanel radius={999} style={s.setupSuccessCard}>
+            <View style={s.setupSuccessInner}>
+              <SymbolView name="checkmark.circle.fill" size={40} tintColor={C.good} type="monochrome" style={{ width: 40, height: 40 }} />
+              <Text style={s.setupSuccessText}>Ready. Go!</Text>
+            </View>
+          </GlassPanel>
         </View>
       )}
 
@@ -2163,8 +2176,10 @@ const s = StyleSheet.create({
   // Contained glass pill now — explicit complaint: bare floating drop-
   // shadowed text "doesn't feel clean at all." Same GlassPanel surface the
   // setup-success "Ready. Go!" card already uses.
-  trackingCueCard:  { alignSelf: 'center', width: '88%', maxWidth: 340 },
-  trackingCueInner: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 26, paddingVertical: 16 },
+  // Content-sized (like it always was) with a minimum width. A fixed '88%' width + flex:1 text collapsed to ZERO width inside the setup panel
+  // (its parent has no width of its own), which is how the setup Guide showed only the stars (Ari's phone test, 2026-11-13).
+  trackingCueCard:  { alignSelf: 'center', maxWidth: 340, minWidth: 230 },
+  trackingCueInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingHorizontal: 26, paddingVertical: 16 },
   trackingCueIcon:  { width: 22, height: 22 },
   // Messages are now short, framing-only instructions (see
   // lib/repDiagnostics.ts — "Move back", "Hold still", etc.), so a bigger
@@ -2172,7 +2187,7 @@ const s = StyleSheet.create({
   // "the cues need to be a bit bigger".
   trackingCueText: {
     fontFamily: 'PlusJakartaSans_700Bold', fontSize: 24, lineHeight: 28,
-    color: '#fff', letterSpacing: 0.1, flexShrink: 1, flex: 1, textAlign: 'center',
+    color: '#fff', letterSpacing: 0.1, flexShrink: 1, textAlign: 'center',
   },
 
   // Rep count — bare, no frame; own shadow for legibility over the camera.

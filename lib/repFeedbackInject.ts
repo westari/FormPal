@@ -155,6 +155,7 @@ export function repFeedbackDataJs(opts: {
   var dragging = false;
   var closeWired=false, finishWired=false, cornerSwapped=false;
   var finishBtnEl = null;
+  var summaryLocked = false;
   var built = false, readyPosted = false;
 
   // BUG FOUND (confirmed from device logs this round): stripping only
@@ -243,7 +244,7 @@ export function repFeedbackDataJs(opts: {
     }
     // Explicit ask: "say 'next rep' until the final rep, then 'finish
     // review'" — relabeled every time the shown rep changes.
-    if(finishBtnEl){ finishBtnEl.textContent = (idx < REPS.length - 1) ? 'Next rep' : 'Finish review'; }
+    if(finishBtnEl){ finishBtnEl.textContent = (idx < REPS.length - 1) ? 'Next rep' : 'Finish'; }
   }
 
   function build(){
@@ -501,6 +502,23 @@ export function repFeedbackDataJs(opts: {
     // specific sub-view of a different screen.
     var allSets=document.querySelector('#dc-root a[href="Form Review.dc.html"]');
     if(allSets && !allSets.__wired){ allSets.__wired=true; allSets.addEventListener('click', function(ev){ ev.preventDefault(); post({type:'openAllSets'}); }, true); }
+    // The Summary pill is NOT a button here (Ari, 2026-11-13: it turned black when pressed and did nothing): no press, no press colour.
+    if(!summaryLocked){
+      var sp = document.querySelectorAll('#dc-root span');
+      for(var si=0; si<sp.length; si++){
+        if((sp[si].textContent||'').trim()==='Summary'){
+          var pill = sp[si].closest('div');
+          if(pill){
+            pill.style.setProperty('pointer-events','none','important');
+            pill.style.setProperty('-webkit-tap-highlight-color','transparent','important');
+            pill.style.setProperty('-webkit-user-select','none','important');
+            pill.style.setProperty('cursor','default','important');
+            summaryLocked = true;
+          }
+          break;
+        }
+      }
+    }
     return hit;
   }
 

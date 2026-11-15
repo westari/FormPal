@@ -54,7 +54,7 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8').replace(/\r\n/g,
   // 1b. a clip the camera made but the app never logged is adopted into the video log (the Nov 11 workout that has "no clip logged")
   {
     const now = Date.now();
-    const meta = { 'file:///c/tmp/athlt_7.mov': [now - 3600000, 8000], 'file:///c/tmp/athlt_8.mov': [now - 7200000, 6000] };
+    const meta = { 'file:///c/tmp/athlt_7.mov': [now - 3600000, 8000], 'file:///c/tmp/athlt_8.mov': [now - 7200000, 6000], 'file:///c/tmp/athlt_9.mov': [now - 40 * 86400000, 90000] };
     const store = {};
     class File {
       constructor(u, n) { this.uri = n ? u.uri + '/' + n : (typeof u === 'string' ? u : u.uri); }
@@ -83,6 +83,7 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8').replace(/\r\n/g,
     const log = JSON.parse(store.formpal_video_log);
     check('orphan: a clip in the temp folder that was never logged is adopted into the video log with the time it finished', log.length === 2 && log.some((e) => /athlt_7\.mov$/.test(e.uri) && Math.abs(e.ts - (now - 3600000)) < 1000), JSON.stringify(log));
     check('orphan: the adopted clip is copied to the permanent folder and the workout that finished then finds it (no flat icon thumbnail)', !!got && got.includes('/session-videos/') && got.endsWith('athlt_7.mov'), String(got));
+    check('orphan: a clip older than 30 days is NOT adopted (the 2026-11-13 log copied 19 old clips, about 240 MB, for nothing)', !log.some((e) => /athlt_9.mov$/.test(e.uri)) && !Object.keys(meta).some((k) => k.includes('session-videos') && k.endsWith('athlt_9.mov')), JSON.stringify(log.map((e) => e.uri)));
     check('orphan: a clip that was already logged is not added twice', log.filter((e) => /athlt_8\.mov$/.test(e.uri)).length === 1);
     Module._load = orig;
   }

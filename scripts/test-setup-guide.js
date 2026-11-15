@@ -77,7 +77,7 @@ const src = fs.readFileSync(path.join(__dirname, '..', 'app/formcheck.tsx'), 'ut
   check('every line starts with a capital letter and has 2-6 words (a beginner reads it at a glance)', lines.every((t) => /^[A-Z]/.test(t) && t.split(' ').length >= 2 && t.split(' ').length <= 6), lines.filter((t) => !/^[A-Z]/.test(t) || t.split(' ').length > 6).join(' | '));
   check('every Guide line fits the card in two lines (35 characters or fewer)', lines.every((t) => t.length <= 35), lines.filter((t) => t.length > 35).join(' | '));
   const i0 = src.indexOf('trackingCueText: {');
-  check('the cue card: stars keep their ORIGINAL size (22), text centred beside them, max 2 lines, fixed width so it never clips', /const icon = 22;/.test(src) && !src.includes('big ? { width: 34') && /textAlign: 'center'/.test(src.slice(i0, i0 + 250)) && src.includes("trackingCueCard:  { alignSelf: 'center', width: '88%'") && src.includes('numberOfLines={2} adjustsFontSizeToFit'));
+  check('the cue card: stars keep their ORIGINAL size (22), text centred beside them, max 2 lines; content-sized, NO fixed percent width and no flex:1 text (that collapsed the text to nothing inside the setup panel: stars only)', /const icon = 22;/.test(src) && !src.includes('big ? { width: 34') && /textAlign: 'center'/.test(src.slice(i0, i0 + 250)) && !/flex: 1/.test(src.slice(i0, i0 + 250)) && src.includes("trackingCueCard:  { alignSelf: 'center', maxWidth: 340, minWidth: 230 }") && !src.includes("width: '88%'") && src.includes('numberOfLines={2}>{text}'));
 }
 console.log(failed ? `\n${failed} FAILED` : '\nall passed');
 process.exit(failed ? 1 : 0);

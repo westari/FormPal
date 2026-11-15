@@ -123,3 +123,14 @@ uncounted stroke.
 * **The Guide is calm:** a line stays up at least 2.5 seconds, a different line (or none) only replaces it after it has been wanted for about 1.5 seconds without a break, and a line is always shown whole.
 * **One physical action per line** a first-time user understands at once: Step into view, Step back further, Step closer, Move your phone back, Keep your hands in view, Keep your whole body in view, Turn sideways to the phone, Face the phone, Find more light, Put your phone at chest height, Raise your hands overhead, Lower your hands, Hold still.
 * **Cue card:** stars keep their original size; text is centred beside them; fixed width, two lines at most.
+
+## Update 2026-11-13 (Ari's phone test, log scripts/fixtures/shoulder-press-2026-11-13.log.txt)
+
+- The phone still ran the OLD Oct 8 native build (no `[AWAKE] native`, no `[REP-QUALITY]` lines). Movement Match works on it: the log has 78 `[MOVE-MATCH]` lines and the score reads TRYING while he presses. The same JS runs on both builds.
+- **Setup Guide showed only stars:** the card had a fixed 88% width and flex:1 text; inside the setup panel (no width of its own) the text collapsed to nothing. Back to a content-sized card with a minimum width.
+- **The camera's own "step back / no person" signal flickers** while he stands still (the number fell 100 to 35 to 100 and the Guide said "Step back further"). It now only counts after it has held `GUIDE.cuePersistSec` (1.5 s), for the words AND the number (`createCueHold`).
+- **Movement Match remembers 10 s, so after he stops it still read TRYING for ~5 s.** New `movingNow` (the middle half of the last 2.5 s of the path spreads at least 0.2 rep spans): stuck time only counts while moving, and a rest is never "stuck".
+- **Coach:** a counted rep always gets its check (the one-verdict-per-1.2 s wait is for missed-stroke X's only); an X for a missed stroke needs the stroke to be at least `minAttemptStrokeR` (0.4 rep spans, so a 0.37R wiggle after the reps is no X) and no longer needs the 10 s score to be HIGH when the stroke itself is that big (a half rep dips the score), but LOW (not trying) still blocks.
+- **Attempt detector:** a stroke's length no longer includes the rest before it (the 2026-11-13 log threw real half reps out as "too slow, 12.4 s"); the low may sit up to 0.95 of the range above the entry line (was 0.75); outcomes resolve after 0.6 s (was 1.5 s) so an X is not late.
+- **Guide when trying and nothing counts:** it used to stay silent for "range-only"; it now says "Keep your hands in view" / "Keep your whole body in view" (the one honest nudge when no exact cause is known).
+- Proof: `scripts/test-guide-coach-1113.js` replays this log.

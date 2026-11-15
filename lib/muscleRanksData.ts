@@ -92,10 +92,22 @@ export interface MuscleRanksPayload {
     rankedUp: boolean;      // the overall rank itself went up (the % then starts over in the new rank)
     hi: string; lo: string; ink: string;
     emblem: string | null;
+    count: number;          // how many muscles the overall rank averages (11): "The average of all 11 muscles"
+    pctNum: number; beforePctNum: number; gainedNum: number; // the same three numbers as numbers, for the fill-up animation
   };
   note: string;
-  hits: { name: string; gain: string; icon: string | null }[];
-  bodyMap: string;          // data: URI, only worked muscles coloured
+  /** One row per muscle that gained: "+7 reps · 113 to Gold" with a bar. Reps = good reps x muscle credit (what the rank counts). */
+  hits: {
+    name: string; gain: string; icon: string | null;
+    muscle: string;
+    reps: number;           // reps gained today (whole number, at least 1 when the muscle gained)
+    toNext: number | null;  // reps still needed for this muscle's NEXT rank (null = top rank)
+    nextLabel: string;      // "Gold" (empty at the top)
+    barFrom: number; barTo: number; // this muscle's bar before / after today, 0-100 (a rank-up starts again from 0)
+  }[];
+  bodyMap: string;          // data: URI: trained muscles bright (their own rank colour), untrained grey
+  /** muscle keys lit on the body: before today, and after (the page lights today's new ones one after another) */
+  lit: { before: string[]; after: string[] };
 }
 
 export function buildMuscleRanksPayload(opts: {
@@ -111,6 +123,8 @@ export function buildMuscleRanksPayload(opts: {
   /** The whole log INCLUDING this workout. Needed for muscles still below Bronze: their progress counts all the
    *  training they have ever had, not just today's. Defaults to this workout alone. */
   history?: SessionEntry[];
+  /** how many muscles the overall rank averages (components/MuscleTierMap MUSCLE_DISPLAY_ORDER); default 11 */
+  muscleCount?: number;
 }): MuscleRanksPayload {
   const { entries, tiersBefore, tiersAfter, standingBefore, standingAfter, labels, iconFor, emblem } = opts;
   const worked = workedMuscles(entries);
@@ -163,6 +177,29 @@ export function buildMuscleRanksPayload(opts: {
   // sum of the rows any more; the muscle rows keep their own %. Measured on the same scale as the overall: tier * 100 + progress.
   const overallGainTenths = Math.max(0, Math.round(r1(standingAbs(standingAfter)) * 10) - Math.round(r1(standingAbs(standingBefore)) * 10));
 
+  // ── The rows, in REPS (Ari 2026-11-13): "Shoulders  +7 reps · 113 to Gold" and a bar. The math is untouched: reps = the muscle's good-rep
+  // volume after minus before (good reps x credit, logged reps at half), the bar is the same tierProgress the % used.
+  const volumeOf = (t: Tier) => VOLUME_THRESHOLDS.find(([x]) => x === t)![1];
+  const nextTierOf = (t: Tier): Tier | null => { const i = tierIndex(t); return i < TIER_ORDER.length - 1 ? TIER_ORDER[i + 1] : null; };
+  const rows = shown.map((w, i) => {
+    const m = w.muscle, a = tiersAfter[m], b = tiersBefore[m];
+    const reps = gains[i] > 0 ? Math.max(1, Math.round((a?.volume ?? 0) - (b?.volume ?? 0))) : 0;
+    const nt = nextTierOf(a?.tier ?? 'bronze');
+    const toNext = nt ? Math.max(0, Math.ceil(volumeOf(nt) - (a?.volume ?? 0) - 1e-9)) : null;
+    const sameTier = !!b && !!a && b.tier === a.tier;
+    const barTo = a ? (nt ? r1(muscleProgressPct(a)) : 100) : 0;
+    const barFrom = sameTier && b ? (nt ? r1(muscleProgressPct(b)) : 100) : (b && !a ? r1(muscleProgressPct(b)) : 0);
+    const nextLabel = nt ? cap(nt) : '';
+    const repsText = `+${reps} ${reps === 1 ? 'rep' : 'reps'}`;
+    const gain = toNext === null ? `${repsText} · Top rank` : `${repsText} · ${toNext} to ${nextLabel}`;
+    return { muscle: m, reps, toNext, nextLabel, barFrom: Math.min(barFrom, barTo), barTo, gain };
+  });
+  // The body: a muscle with ANY good reps is bright (in its own rank colour), every other muscle is grey: the user SEES why the overall
+  // average moves slowly. Today's new ones are lit one after another by the page.
+  const trainedAfter = (Object.keys(tiersAfter) as Muscle[]).filter(m => (tiersAfter[m]?.volume ?? 0) > 0);
+  const litAfter = [...new Set<Muscle>([...trainedAfter, ...shown.map(w => w.muscle)])];
+  const litBefore = (Object.keys(tiersBefore) as Muscle[]).filter(m => (tiersBefore[m]?.volume ?? 0) > 0);
+
   // Header: ONLY the newest number (no "old -> new").
   const pctLabel = standingAfter?.atTop ? 'Top rank' : `${fmt1(afterAvg)}%`;
 
@@ -195,14 +232,21 @@ export function buildMuscleRanksPayload(opts: {
       rankedUp,
       hi: meta.hi, lo: meta.lo, ink: meta.ink,
       emblem,
+      count: opts.muscleCount ?? 11,
+      pctNum: afterAvg,
+      beforePctNum: standingBefore && !standingBefore.atTop ? r1(standingBefore.progress * 100) : 0,
+      gainedNum: overallGainTenths / 10,
     },
     note: explain,
     hits: shown.map((w, i) => ({
       name: name(w.muscle),
-      gain: formatGain(gains[i]),
+      gain: rows[i].gain,
       icon: iconFor(w.muscle),
+      muscle: String(w.muscle),
+      reps: rows[i].reps, toNext: rows[i].toNext, nextLabel: rows[i].nextLabel, barFrom: rows[i].barFrom, barTo: rows[i].barTo,
     })),
-    bodyMap: bodyMapPairDataUri(worked.map(w => w.muscle)),
+    bodyMap: bodyMapPairDataUri(litAfter, tiersAfter),
+    lit: { before: litBefore.map(String), after: litAfter.map(String) },
   };
 }
 

@@ -114,7 +114,9 @@ export function guideForReason(r: WhyCannotCount, i: GuideInputs): string | null
     case 'dark':        return GUIDE_LINES.moreLight;
     case 'low-quality': return hands ? GUIDE_LINES.handsInView : GUIDE_LINES.bodyInView;
     case 'angle':       return i.facing === 'camera' ? GUIDE_LINES.facePhone : GUIDE_LINES.sideways;
-    default:            return null;   // range-only / unknown: nothing the camera setup can fix, so the Guide stays silent
+    // range-only / unknown: no single setup cause is known, but the user IS trying and nothing counts, so the Guide must still speak
+    // (Ari 2026-11-13: 10 s of trying and the Guide said nothing). The one honest nudge: make sure the camera sees the moving joints.
+    default:            return hands ? GUIDE_LINES.handsInView : GUIDE_LINES.bodyInView;
   }
 }
 
@@ -143,6 +145,22 @@ export function createCalmLine(): CalmLine {
   };
 }
 
+/**
+ * A signal that only counts once it has held for `holdSec` without a break. The camera's own "step back / no person" signal flickers on and
+ * off while the user stands still; the words and the confidence number only react to it once it has persisted (GUIDE.cuePersistSec).
+ */
+export function createCueHold(holdSec: number = G.cuePersistSec) {
+  let since = 0;
+  return {
+    feed(now: number, active: boolean): boolean {
+      if (!active) { since = 0; return false; }
+      if (!since) since = now;
+      return now - since >= holdSec * 1000;
+    },
+    reset() { since = 0; },
+  };
+}
+
 export interface Guide {
   decide(i: GuideInputs): GuideDecision;
   reset(): void;
@@ -162,10 +180,10 @@ export function createGuide(opts: { log?: (m: string) => void } = {}): Guide {
     decide(i) {
       let line: string | null = null, why = 'nothing to fix', reason: GuideDecision['reason'] = 'none', prio = 0;
       if (i.personMissing) { line = GUIDE_LINES.intoPicture; why = 'the camera finds nobody in the picture'; reason = 'nobody'; prio = 3; }
-      else if (i.stuck) {
+      else if (i.stuck && (i.match.movingNow !== false || i.match.cut)) {   // (a cut path has no recent samples, so it cannot show "moving")
         const r = whyCannotCount(i);
         line = guideForReason(r, i); reason = r; prio = 2;
-        why = line ? `you are trying but no rep counts: ${r}` : (r === 'range-only' ? 'no rep counts but the camera sees the whole path, so only the Coach speaks (each X)' : 'no rep counts and no setup fix is known');
+        why = `you are trying but no rep counts: ${r === 'range-only' || r === 'unknown' ? 'no exact cause found, general framing nudge' : r}`;
       } else {
         const hint = guideLine(i.nativeCue, i.exerciseId) ?? guideLine(i.outOfPlaneCue, i.exerciseId) ?? guideLine(i.diag, i.exerciseId);
         if (hint) { line = hint; why = `the camera says "${i.nativeCue || i.outOfPlaneCue || i.diag}"`; reason = 'hint'; prio = 1; }
@@ -199,6 +217,8 @@ export interface CoachInput {
   /** attempts: the range word the detector found for this stroke ("Go higher" / "Go lower") */
   rangeWord?: string;
   n?: number;
+  /** attempts: the stroke size in rep spans (R = |top - rom|); a tiny one is a wiggle, never a half rep */
+  strokeR?: number;
 }
 export interface CoachVerdict { show: 'check' | 'x' | null; reason: string; why: string }
 
@@ -218,9 +238,13 @@ export function createCoach(opts: { log?: (m: string) => void } = {}): Coach {
     verdict(i) {
       const lowMatch = i.match.haveData && i.match.notTrying;
       if (lowMatch) return out(i, { show: null, reason: '', why: 'Movement Match is LOW (not trying this exercise), so no check and no X' });
-      if (i.now - lastAt < K.oneVerdictPerSec * 1000) return out(i, { show: null, reason: '', why: 'a verdict was just shown' });
+      // a counted rep ALWAYS gets its check (even 1 second after another verdict); only an X for a missed stroke waits so two verdicts never stack
+      if (i.source === 'attempt' && i.now - lastAt < K.oneVerdictPerSec * 1000) return out(i, { show: null, reason: '', why: 'a verdict was just shown' });
       if (i.source === 'attempt') {
-        if (!i.match.trying) return out(i, { show: null, reason: '', why: 'Movement Match is not HIGH yet for this stroke' });
+        if (i.strokeR !== undefined && i.strokeR < K.minAttemptStrokeR) return out(i, { show: null, reason: '', why: 'the stroke was tiny (' + i.strokeR.toFixed(2) + 'R), a wiggle and not a half rep' });
+        // a half rep dips the 10 s score, so HIGH is not needed when the stroke itself is a real size; LOW (not trying) always blocks
+        const bigStroke = i.strokeR !== undefined && i.strokeR >= K.minAttemptStrokeR && i.match.score >= K.attemptMinMatch;
+        if (!i.match.trying && !bigStroke) return out(i, { show: null, reason: '', why: 'Movement Match is not HIGH yet for this stroke' });
         if (!blockerIsRange(i.blocker)) return out(i, { show: null, reason: '', why: `the stroke did not count because of the camera (${i.blocker}); that is the Guide's job` });
         const word = coachLine(i.rangeWord) ?? (i.blocker === 'top-short' ? 'Go higher' : i.blocker === 'bottom-short' ? 'Go lower' : 'Full movement');
         return out(i, { show: 'x', reason: word, why: `attempt ${i.n ?? ''} stayed short (${i.blocker ?? 'range'})` });

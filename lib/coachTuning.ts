@@ -36,6 +36,8 @@ export const MOVEMENT_MATCH = {
   high: 55,                 // >= this = "trying this exercise"
   low: 35,                  // < this = "not trying"
   minTryingSec: 2,          // trying must hold this long before the Coach or a "stuck" verdict trusts it (a single reach is not a set)
+  moveNowSec: 2.5,          // PLACEHOLDER: "moving right now" looks only at this many recent seconds (the 10 s score still remembers reps after you stop)
+  moveNowIqrR: 0.2,         // PLACEHOLDER: ...and the middle half of those readings must spread at least this many rep spans (a rest with a spike does not count)
   repEvidenceFloor: 40,     // a rep the engine really counted is evidence of this exercise: for one window after it the score is at least this ("unsure", never LOW), so a counted rep after a pause still gets its check / X
   // path cuts
   cutGapSec: 0.9,           // the samples stop for this long while the value is in the top (or bottom) zone = the camera lost the joints there
@@ -67,10 +69,13 @@ export const GUIDE = {
   changeConfirmSec: 1.5,    // a different line (or none) must be wanted this long, without a break, before it replaces the one shown
   firstShowConfirmSec: 0.4, // a line shows after being wanted this long (so a one-frame blip never flashes)
   minTryingSec: 2,          // Movement Match must have been HIGH this long before a stuck diagnosis is trusted
+  cuePersistSec: 1.5,       // the camera's own "step back / no person" signal must hold this long before the words or the number react (it flickers while you stand still)
   logEverySec: 4,
 };
 
 export const COACH = {
   minMatchForVerdict: 55,   // no check / X unless Movement Match is at least this (HIGH)
-  oneVerdictPerSec: 1.2,    // never two verdicts closer than this
+  oneVerdictPerSec: 1.2,    // an X for a missed stroke never comes closer than this after another verdict (a counted rep always gets its check)
+  minAttemptStrokeR: 0.4,   // PLACEHOLDER: a stroke smaller than this many rep spans (R) is a wiggle, not a half rep: no X (Ari: standing still got "Go lower")
+  attemptMinMatch: 35,      // an X for a missed stroke needs Movement Match at least this (not LOW); HIGH is no longer needed when the stroke itself is big (a half rep dips the score)
 };

@@ -165,7 +165,7 @@ export default function RepFeedback({
       <Animated.View style={{ transform: spin ? [{ scale }, { rotate: spin }] : [{ scale }], alignItems: 'center' }}>
         <GlassOrb good={good} goodColor={goodColor} badColor={badColor} />
         {!good && !!reason && (
-          <Text style={rf.cue} numberOfLines={2}>{shortCue(reason)}</Text>
+          <View style={rf.cuePill}><Text style={rf.cue} numberOfLines={2}>{shortCue(reason)}</Text></View>
         )}
       </Animated.View>
     </Animated.View>
@@ -174,16 +174,26 @@ export default function RepFeedback({
 
 const rf = StyleSheet.create({
   overlay: { alignItems: 'center', justifyContent: 'center' },
-  cue: {
+  // The reason sits on a dark pill so it reads on ANY background (a bright wall, a window, a light shirt): white text on near-black.
+  cuePill: {
     marginTop: 20,
-    maxWidth: 300,
+    maxWidth: 320,
+    paddingHorizontal: 22,
+    paddingVertical: 11,
+    borderRadius: 999,
+    borderCurve: 'continuous',
+    backgroundColor: 'rgba(10,10,14,0.78)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
+  },
+  cue: {
     fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 24,
+    fontSize: 25,
     color: '#fff',
     textAlign: 'center',
-    lineHeight: 29,
-    textShadowColor: 'rgba(0,0,0,0.55)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 12,
+    lineHeight: 30,
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
 });

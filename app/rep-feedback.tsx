@@ -54,6 +54,7 @@ import { warmPrepare, warmActivate, warmDeactivate, warmRelease, warmSetBg, warm
 import { repFeedbackSignal } from '../lib/repFeedbackSignal';
 
 import { postLag } from '../lib/postLag';
+import { hapticFinish } from '../lib/haptics';
 
 const SPEEDS = [0.5, 1, 1.5, 2];
 
@@ -255,6 +256,7 @@ export default function RepFeedbackScreen() {
     else if (msg.type === 'openAllSets') { repFeedbackSignal.openAllSets = true; router.back(); }
     else if (msg.type === 'finishReview') {
       postLag('rep feedback: Finish review tapped');
+      hapticFinish(); // the one strong haptic in the app: Heavy impact + Success
       // No waiting for the back transition: the muscle page is put on screen underneath right now and this
       // page slides away over it (see recap.tsx's onFinishReview and WarmSurfaces' in-place show).
       repFeedbackSignal.finishedReview = true;
