@@ -12,6 +12,7 @@
  * Features the app doesn't have yet (reminders, Apple Health, membership,
  * referrals, support messaging) are hidden rather than shown as placeholders.
  */
+import { markTabReady, markTabLoading } from '../../lib/tabReady';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, Alert, Share, Animated } from 'react-native';
 import { useRevealFade } from '../../lib/useRevealFade';
@@ -165,7 +166,7 @@ export default function ProfileScreen() {
     let msg: { type?: string; to?: string; patch?: Record<string, any>; msg?: string };
     try { msg = JSON.parse(raw); } catch { return; }
     switch (msg.type) {
-      case 'ready': plog('page ready +' + (Date.now() - openedAt.current) + 'ms after mount'); lag.mark('ready'); onReady(); break;
+      case 'ready': plog('page ready +' + (Date.now() - openedAt.current) + 'ms after mount'); lag.mark('ready'); markTabReady('profile'); onReady(); break;
       case 'needData': lag.mark('asked'); plog('page asked for data;' + (dataRef.current ? ' sending' : ' not loaded yet')); if (dataRef.current) lag.mark('pushed'); push(true); break;
       case 'pageConsole': if (__DEV__) console.log('[profile-page]', msg.msg); break;
       case 'haptic': hapticKind((msg as any).kind); break;
@@ -224,7 +225,7 @@ export default function ProfileScreen() {
       <Animated.View style={{ flex: 1, opacity: fade }}>
       <WebView
         ref={webRef}
-        onContentProcessDidTerminate={() => { hide(); webRef.current?.reload(); }} /* iOS killed the page's process while it was hidden: load it again at once instead of showing a blank screen */
+        onContentProcessDidTerminate={() => { markTabLoading('profile'); hide(); webRef.current?.reload(); }} /* iOS killed the page's process while it was hidden: load it again at once instead of showing a blank screen */
         source={PROFILE_HTML}
         originWhitelist={['*']}
         injectedJavaScriptBeforeContentLoaded={PROFILE_BEFORE}

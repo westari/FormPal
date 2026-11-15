@@ -28,6 +28,18 @@ const check = (n, ok, d) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${d ? ' 
   await p.mouse.click(numPt.x, numPt.y); await p.waitForTimeout(200);
   check('7d: tapping the streak number posts "streak"', types().includes('streak'));
   h.msgs.length = 0;
+  // the arrow: a down chevron that turns up while the calendar is open
+  {
+    const rot = () => h.page.evaluate(() => document.querySelector('[data-fp-cal]').style.transform);
+    const path0 = await h.page.evaluate(() => document.querySelector('[data-fp-cal] svg path').getAttribute('d'));
+    check('5: a simple down-arrow (chevron) sits next to the date, not a calendar picture', path0 === 'M6 9.5l6 6 6-6' && !(await h.page.evaluate(() => !!document.querySelector('[data-fp-cal] rect'))));
+    const m0 = h.msgs.length; await click('[data-fp-title]');
+    const post = h.msgs.slice(m0).find((m) => m.type === 'calendar');
+    check('5: tapping reports where the date block ends and where the arrow is (so the card can attach to it)', console.log('      post', JSON.stringify(post)) || post && post.top > 60 && post.top < 300 && post.cx > 60 && post.cx < 390, JSON.stringify(post));
+    await h.page.evaluate(() => window.__fpChevron(true)); const up = await rot();
+    await h.page.evaluate(() => window.__fpChevron(false)); const down = await rot();
+    check('5: open flips the arrow up (180 degrees); closed puts it back down', up === 'rotate(180deg)' && down === 'rotate(0deg)', up + ' / ' + down);
+  }
   // other pills do not open the streak screen
   await click('[data-fp-header] ~ * div[style*="border-radius: 999px"]').catch(() => {});
   check('other taps near the header do not post "streak"', !types().includes('streak'), types().join(','));
@@ -43,6 +55,9 @@ const check = (n, ok, d) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${d ? ' 
   const oct = monthGrid(2026, 9, tr, now).flat();
   check('calendar: October 2026 starts on a Thursday (4 blank cells before day 1)', oct.findIndex((c) => c.day === 1) === 4 && oct.filter((c) => c.trained).map((c) => c.day).join() === '30');
   const src = fs.readFileSync(path.join(__dirname, '..', 'app', '(tabs)', 'index.tsx'), 'utf8');
-  check('app: Home shows the calendar sheet on "calendar" and opens the streak screen on "streak"', /msg\.type === 'calendar'\) \{ setCalOpen\(true\)/.test(src) && /msg\.type === 'streak'\) \{ router\.push\(\{ pathname: '\/streak-screen'/.test(src));
+  check('app: Home toggles the calendar on "calendar" (taps again close it) and opens the streak screen on "streak"', /msg\.type === 'calendar'\) \{[\s\S]*?setCalOpen\(o => !o\)/.test(src) && /msg\.type === 'streak'\) \{ router\.push\(\{ pathname: '\/streak-screen'/.test(src));
+  const cal = fs.readFileSync(path.join(__dirname, '..', 'components', 'CalendarSheet.tsx'), 'utf8');
+  check('5: the calendar is a real Liquid Glass card dropped DOWN from the header at the arrow (not a Modal sheet from the bottom)', /<LiquidGlass radius=\{28\}/.test(cal) && !/<Modal/.test(cal) && /transformOrigin/.test(cal) && /anchor\.top/.test(cal) && /anchor\.cx/.test(cal));
+  check('5: the arrow flips with the calendar (page-side __fpChevron is called when it opens and closes)', /__fpChevron && window\.__fpChevron\(\$\{calOpen\}\)/.test(src));
   console.log(failed ? `${failed} FAILED` : 'ALL PASSED'); process.exit(failed ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

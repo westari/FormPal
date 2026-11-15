@@ -39,7 +39,16 @@ export interface SessionEntry {
   formChecked?: boolean;
   // true = typed in by hand in Log a session (never recorded with the camera). Older hand-logged entries have no flag: see isManualEntry.
   manual?: boolean;
+  // 'practice' = a form check (a practice set of one exercise, not a workout). Practice entries never show in Recent / Past workouts, never
+  // count toward the streak or the workout calendar, and have their own "Form checks" list in Progress. Missing = a workout (every older entry).
+  kind?: 'workout' | 'practice';
 }
+
+export function isPractice(e: SessionEntry): boolean { return e.kind === 'practice'; }
+/** The entries that are workouts (everything except form-check practice). */
+export function workoutSessions(sessions: SessionEntry[]): SessionEntry[] { return sessions.filter(e => !isPractice(e)); }
+/** The form-check practice entries only. */
+export function practiceSessions(sessions: SessionEntry[]): SessionEntry[] { return sessions.filter(isPractice); }
 
 /** A session the user typed in (new entries carry manual: true; older ones are recognised by the way they were written: no form judged, no good reps, no score). */
 export function isManualEntry(e: SessionEntry): boolean {
@@ -139,7 +148,8 @@ export function scoredSessions(sessions: SessionEntry[]): SessionEntry[] {
 // session logged first thing this morning doesn't read as streak-broken
 // before the user has had a chance to train today). Single source of truth —
 // previously duplicated as a local function in app/(tabs)/progress.tsx.
-export function calcStreak(sessions: SessionEntry[], now: number = Date.now()): number {
+export function calcStreak(all: SessionEntry[], now: number = Date.now()): number {
+  const sessions = workoutSessions(all); // practice (form checks) never count toward a streak
   if (sessions.length === 0) return 0;
   const daySet = new Set(sessions.map(s => {
     const d = new Date(s.ts); d.setHours(0, 0, 0, 0); return d.getTime();

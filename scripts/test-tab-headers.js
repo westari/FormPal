@@ -54,17 +54,30 @@ async function trainMeasure() {
   const pf = await openProfile('full', { width: 390, height: 844 }); await pf.p.waitForTimeout(1500); res.Profile = await pf.p.evaluate(MEASURE); await pf.p.screenshot({ path: path.join(OUT, 'final-profile.png'), clip: { x: 0, y: 0, width: 393, height: 260 } }); await pf.b.close();
   res.Train = await trainMeasure();
   for (const k of Object.keys(res)) console.log('      ' + k + ': ' + JSON.stringify(res[k] && { y: +res[k].ty.toFixed(1), x: +res[k].tx.toFixed(1), size: res[k].size, tf: res[k].tf }));
+  { // 4: every day of the year at the Home width: the date stays 30px (long or short month), never wraps, never under the chip
+    const h2 = await openHome({ inset: 62 }); const pg = h2.page; const bad = []; let shortN = 0, longN = 0;
+    for (let d = 0; d < 366; d += 1) {
+      const when = Date.UTC(2026, 0, 1 + d, 12);
+      const m = await pg.evaluate((t) => { window.__fpNow = t; window.__fpHeader('Home', 62, { live: true }); const el = document.querySelector('[data-fp-title]'); const row = el.closest('[data-fp-header]'); const chip = [...row.children].filter((c) => c !== el.parentElement && getComputedStyle(c).display !== 'none')[0]; return { text: [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.nodeValue).join(''), size: parseFloat(el.style.fontSize), over: el.getBoundingClientRect().right > chip.getBoundingClientRect().left - 2, wide: el.scrollWidth > el.clientWidth + 1 }; }, when);
+      if (/[A-Z][a-z]{2} \d/.test(m.text) && !/(May) /.test(m.text)) shortN++; else longN++;
+      if (m.size !== 30 || m.over || m.wide) bad.push(new Date(when).toISOString().slice(0, 10) + ' ' + JSON.stringify(m));
+    }
+    console.log('      all 366 days: long month ' + longN + ', shortened ' + shortN + ', problems ' + bad.length);
+    check('4: on every day of the year the date is 30px, on one line and clear of the streak chip', bad.length === 0, bad.slice(0, 3).join(' | '));
+    await h2.browser.close();
+  }
   const names = Object.keys(res), vals = names.map(k => res[k]);
   const DATE = /^(Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday), [A-Z][a-z]+ \d{1,2}$/;
   check('all four pages have the shared header', vals.every(Boolean));
   if (vals.every(Boolean)) {
     check('1: no date line under the title on any page', vals.every(v => !v.anyDate));
-    check('2: Home title is the live date ("Thursday, November 12" style)', DATE.test(res.Home.title) && res.Home.title === new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }), res.Home.title);
+    check('2: Home title is the live date ("Thursday, November 12" style)', DATE.test(res.Home.title) && [false, true].some((sh) => res.Home.title === new Date().toLocaleDateString('en-US', { weekday: 'long', month: sh ? 'short' : 'long', day: 'numeric' })), res.Home.title);
     check('2: Train / Progress / Profile keep their titles', ['Train', 'Progress', 'Profile'].every(k => res[k].title === k), ['Train', 'Progress', 'Profile'].map(k => res[k].title).join(' | '));
-    check('2: Home has the small grey calendar icon beside the date; the others do not', res.Home.cal && !res.Train.cal && !res.Progress.cal && !res.Profile.cal);
+    check('5: Home has the small grey down-arrow beside the date; the others do not', res.Home.cal && !res.Train.cal && !res.Progress.cal && !res.Profile.cal);
     check('same title font, weight, letter spacing, colour on all four', new Set(vals.map(v => v.tf)).size === 1, vals[0].tf);
+    check('4: the Home date is the SAME 30px as the Train / Progress / Profile titles (long month, or the month shortened to fit)', res.Home.size === 30, res.Home.size + 'px: ' + res.Home.title);
     check('Train / Progress / Profile are the full 30px', ['Train', 'Progress', 'Profile'].every(k => res[k].size === 30), ['Train', 'Progress', 'Profile'].map(k => res[k].size).join(' | '));
-    check('Home date is as big as fits (18..30px), never wraps or runs under the streak chip', res.Home.size >= 18 && res.Home.size <= 30 && !res.Home.wide && !res.Home.overlap, res.Home.size + 'px');
+    check('Home date never wraps or runs under the streak chip', !res.Home.wide && !res.Home.overlap, res.Home.size + 'px');
     check('same title position (left edge and vertical centre, within 0.5px)', vals.every(v => Math.abs(v.tx - vals[0].tx) < 0.5 && Math.abs(v.cy - vals[0].cy) < 0.5), vals.map(v => `${v.tx.toFixed(1)},${v.cy.toFixed(1)}`).join(' | '));
     check('the title is clear of the notch (inset 62): top is below 62 + 62', vals.every(v => v.ty >= 124 - 0.5), vals[0].ty.toFixed(1));
     check('the right-hand control is centred on the title', vals.every(v => v.rightMid == null || Math.abs(v.rightMid - v.blockMid) < 2), vals.map(v => `${v.rightMid && v.rightMid.toFixed(1)}/${v.blockMid.toFixed(1)}`).join(' | '));

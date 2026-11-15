@@ -24,17 +24,8 @@ import { useWorkoutSessionStore } from '../../store/workoutSessionStore';
 import { workoutMinutes } from '../../lib/trainData';
 import { templateWorkout, SAVED_WORKOUTS_KEY, TEMPLATE_NOTE } from '../../lib/workoutTemplates';
 import { FONT, W, Sp, R, Elev, Col } from '../../constants/theme';
-import type { PlanProfile } from '../../types/plan';
 
-// TEMP, pre-auth: there's no real account/onboarding-profile flow feeding createPlan() yet, so "no workout scheduled" can be
-// the only state this screen reaches on a fresh install. This lets it be tested end-to-end; remove once real profile
-// creation exists and PlanProfile is coming from an actual user, not a hardcoded stand-in.
-const TEST_PROFILE: PlanProfile = {
-  goal:        'general',
-  experience:  'beginner',
-  daysPerWeek: 4,
-  location:    'home',
-};
+const STARTER_TEMPLATE_ID = 'tpl-beginner-full'; // what Start workout opens when there is no plan workout at all
 
 const INK = '#111114';
 const SUB = '#5f5f69';
@@ -96,13 +87,21 @@ function ExCard({ name, sets, reps, onEdit }: { name: string; sets: number; reps
 export default function WorkoutPreviewScreen() {
   const router     = useRouter();
   const insets     = useSafeAreaInsets();
-  const getNext    = usePlanStore(st => st.getNextWorkout);
+  const plan       = usePlanStore(st => st.plan);
+  const planLoaded = usePlanStore(st => st.isLoaded);
   // a specific workout (?id=...: My workouts, or a future day on Train), else the next workout in the plan
   const { id, preview, template } = useLocalSearchParams<{ id?: string; preview?: string; template?: string }>();
-  const createPlan = usePlanStore(st => st.createPlan);
+  // The plan store is only filled when something loads it. Nothing did at app start, so the first "Start workout" read an EMPTY store and
+  // showed the old no-plan message even with a full plan saved. It is loaded here (and at app start) now.
+  useEffect(() => { if (!usePlanStore.getState().isLoaded) void usePlanStore.getState().loadFromStorage(); }, []);
   const startSess  = useWorkoutSessionStore(st => st.startWorkout);
   // a FormPal template (from My workouts) is built from the real catalogue; it can be started or saved (bookmarked)
-  const baseWorkout = (template ? templateWorkout(template) : null) ?? (id ? usePlanStore.getState().plan?.workouts.find(w => w.id === id) : null) ?? getNext();
+  // Start workout ALWAYS opens a real workout: the one asked for, else the plan's next workout, else a starter workout from Templates.
+  const nextPlanned = plan ? (plan.workouts[plan.currentWorkoutIndex] ?? null) : null;
+  const asked = (template ? templateWorkout(template) : null) ?? (id ? plan?.workouts.find(w => w.id === id) : null) ?? nextPlanned;
+  const starter = !asked && planLoaded ? templateWorkout(STARTER_TEMPLATE_ID) : null;
+  const baseWorkout = asked ?? starter;
+  const tplId = template ?? (starter ? starter.id : undefined);
   // the pencil: sets and reps changed here. A plan workout is saved to the plan; a template has no plan copy, so its changes
   // live for this screen (and the workout started from it).
   const setTargets = usePlanStore(st => st.setExerciseTargets);
@@ -120,56 +119,33 @@ export default function WorkoutPreviewScreen() {
     if (editing == null || !workout) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setEdits(prev => ({ ...prev, [editing]: draft }));
-    if (!template && workout.id) void setTargets(workout.id, editing, draft.sets, draft.reps);
+    if (!tplId && workout.id) void setTargets(workout.id, editing, draft.sets, draft.reps);
     setEditing(null);
   };
-  const [creatingTestPlan, setCreatingTestPlan] = useState(false);
   const previewOnly = preview === '1'; // a day that is not today: look, no Start button
-  const isTemplate = !!template && !!workout && workout.id === template;
+  const isTemplate = !!tplId && !!workout && workout.id === tplId;
   const [savedToMine, setSavedToMine] = useState(false);
   useEffect(() => {
     if (!isTemplate) return;
-    AsyncStorage.getItem(SAVED_WORKOUTS_KEY).then(raw => { try { setSavedToMine((raw ? JSON.parse(raw) : []).includes(template)); } catch { /* none saved */ } }).catch(() => {});
-  }, [isTemplate, template]);
+    AsyncStorage.getItem(SAVED_WORKOUTS_KEY).then(raw => { try { setSavedToMine((raw ? JSON.parse(raw) : []).includes(tplId)); } catch { /* none saved */ } }).catch(() => {});
+  }, [isTemplate, tplId]);
   const toggleSaved = async () => {
     Haptics.selectionAsync();
     try {
       const raw = await AsyncStorage.getItem(SAVED_WORKOUTS_KEY);
       const ids: string[] = raw ? JSON.parse(raw) : [];
-      const next = ids.includes(template as string) ? ids.filter(x => x !== template) : [...ids, template as string];
+      const next = ids.includes(tplId as string) ? ids.filter(x => x !== tplId) : [...ids, tplId as string];
       await AsyncStorage.setItem(SAVED_WORKOUTS_KEY, JSON.stringify(next));
-      setSavedToMine(next.includes(template as string));
+      setSavedToMine(next.includes(tplId as string));
     } catch { /* storage failed: the star stays as it was */ }
   };
 
-  // getNextWorkout is read once at mount (it subscribes to the function reference, not to `plan`), so after createPlan()
-  // resolves, router.replace gives this screen a fresh mount that re-reads it.
-  const handleGenerateTestPlan = async () => {
-    setCreatingTestPlan(true);
-    try {
-      await createPlan(TEST_PROFILE);
-      router.replace('/workout' as any);
-    } finally {
-      setCreatingTestPlan(false);
-    }
-  };
-
+  // (loading the saved plan: a blank page of the same colour, never a message)
   if (!workout) {
     return (
-      <ScreenBackground>
-        <View style={[s.center, { paddingTop: insets.top }]}>
-          <Text style={s.noWorkout}>No workout scheduled.</Text>
-          <Text style={s.noWorkoutSub}>
-            There's no account/profile system yet, so no real plan exists to pull from.
-          </Text>
-          <Pressable onPress={handleGenerateTestPlan} disabled={creatingTestPlan} style={s.testPlanBtn}>
-            {creatingTestPlan ? <ActivityIndicator color="#fff" /> : <Text style={s.testPlanBtnTxt}>Generate a Test Plan</Text>}
-          </Pressable>
-          <Pressable onPress={() => router.back()} style={s.backBtn}>
-            <Text style={s.backBtnTxt}>Go back</Text>
-          </Pressable>
-        </View>
-      </ScreenBackground>
+      <View style={s.root}>
+        <PageBackground />
+      </View>
     );
   }
 

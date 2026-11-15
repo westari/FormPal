@@ -21,6 +21,7 @@
  *   the scope of this pass; flagged rather than silently left as fake data
  *   masquerading as real.
  */
+import { markTabReady, markTabLoading } from '../../lib/tabReady';
 import React, { useCallback, useRef, useState } from 'react';
 import { View, StyleSheet, Animated } from 'react-native';
 import { useRevealFade } from '../../lib/useRevealFade';
@@ -29,7 +30,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
 import { loadPlan } from '../../lib/planStorage';
-import { getAllSessions, calcStreak, groupIntoWorkouts, scoredSessions, computeMuscleTiers, isManualEntry, type SessionEntry } from '../../lib/sessionLog';
+import { getAllSessions, workoutSessions, calcStreak, groupIntoWorkouts, scoredSessions, computeMuscleTiers, isManualEntry, type SessionEntry } from '../../lib/sessionLog';
 import { primaryMuscle } from '../../lib/progressData';
 import { workoutFrame, workoutFallbackIcon } from '../../lib/workoutThumbs';
 import { openRecap } from '../../lib/openRecap';
@@ -50,8 +51,6 @@ import { plannedMeta } from '../../lib/trainData';
 import { tabBarCover } from '../../lib/tabBarMetrics';
 import { TAB_HEADER_JS } from '../../lib/tabHeader';
 import CalendarSheet from '../../components/CalendarSheet';
-import { loggedBodySvg } from '../../lib/bodyMapSvg';
-import { workedMuscles } from '../../lib/muscleRanksData';
 
 const HOME_HTML = require('../../assets/app screens/home.html');
 const HOME_BUILD = 'home-5';
@@ -196,6 +195,8 @@ true;
 const HIDE_FAKE_CHROME_CSS = `
   div[style*="right: 88px"][style*="bottom: 22px"][style*="height: 64px"] { display: none !important; }
   div[style*="right: 14px"][style*="bottom: 22px"][style*="width: 64px"][style*="height: 64px"] { display: none !important; }
+  /* the workout name in the Today card has overflow hidden and a tight line (1.1): the tail of a "y" ("My workout") was cut off. The box grows 6px down and moves back up 6px, so nothing shifts. */
+  div[style*="max-width: 236px"][style*="text-overflow: ellipsis"] { padding-bottom: 6px !important; margin-bottom: -6px !important; }
   /* no grey highlight box around whatever was tapped, no text selection / callout */
   * { -webkit-tap-highlight-color: rgba(0,0,0,0) !important; -webkit-touch-callout: none !important; -webkit-user-select: none !important; user-select: none !important; }
   a { outline: none !important; }
@@ -222,7 +223,8 @@ export const HOME_GUARD_JS = `(function(){
   try { new MutationObserver(function(){ add(); }).observe(document, { childList: true, subtree: true }); } catch (e) {}
 })(); true;`;
 
-export function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[], insetTop: number, insetBottom: number): string {
+export function buildHomeInjectJs(plan: Plan | null, allSessions: SessionEntry[], insetTop: number, insetBottom: number): string {
+  const sessions = workoutSessions(allSessions); // form-check practice is not a workout: not in Recent workouts, not in the streak
   const workoutGroups = groupIntoWorkouts(sessions);
   const streak = calcStreak(sessions);
   const scored = scoredSessions(sessions);
@@ -448,10 +450,10 @@ export function buildHomeInjectJs(plan: Plan | null, sessions: SessionEntry[], i
       var boxes = document.querySelectorAll('div[role="img"][aria-label$=" video"]');
       for (var i = 0; i < boxes.length && i < list.length; i++) {
         var w = list[i], el = boxes[i];
-        var sig = w.logged ? 'L' + (w.body ? w.body.length : 0) : w.thumb ? 'v' + w.thumb.length : w.fallback ? 'f' + w.fallback.length : '';
+        var sig = w.logged ? 'L' : w.thumb ? 'v' + w.thumb.length : w.fallback ? 'f' + w.fallback.length : '';
         if (!sig || el.__thumb === sig) continue;
         el.__thumb = sig;
-        if (window.__paintLogged) window.__paintLogged(el, !!w.logged, w.body);
+        if (window.__paintLogged) window.__paintLogged(el, !!w.logged);
         if (w.logged) continue; // typed in by hand: the "Logged" tile, not a video frame
         if (w.thumb) {
           el.style.setProperty('background-image', 'url(' + w.thumb + ')', 'important');
@@ -540,16 +542,22 @@ export default function HomeScreen() {
   const [logicJs, setLogicJs] = useState<string | null>(null);
   const { fade, revealedRef, onReady, onLoadStart, onLoadEnd, hide } = useRevealFade(m => { if (__DEV__) console.log('[HOME]', m); });
   // one picture per recent workout (same code as the Progress tab): a video frame, else its muscle icon
-  const [thumbs, setThumbs] = useState<{ thumb: string | null; fallback: string | null; logged?: boolean; body?: string | null; ts?: number }[]>([]);
-  const [calOpen, setCalOpen] = useState(false);          // the full calendar (tap the date)
+  const [thumbs, setThumbs] = useState<{ thumb: string | null; fallback: string | null; logged?: boolean; ts?: number }[]>([]);
+  const [calOpen, setCalOpen] = useState(false);          // the calendar dropped down from the date (tap the date or its arrow)
+  const [calAnchor, setCalAnchor] = useState<{ top: number; cx: number } | null>(null);
   const [workoutTimes, setWorkoutTimes] = useState<number[]>([]); // every saved workout's time, for the calendar's dots
-  const [reloadTick, setReloadTick] = useState(0); // bumped after a workout is deleted: the page's data is built again
+  const [reloadTick, setReloadTick] = useState(0);
+  // the date's arrow points up while the calendar is dropped down
+  React.useEffect(() => { webRef.current?.injectJavaScript(`window.__fpChevron && window.__fpChevron(${calOpen}); true;`); }, [calOpen]);
+  // leaving Home closes it
+  useFocusEffect(useCallback(() => () => setCalOpen(false), [])); // bumped after a workout is deleted: the page's data is built again
 
   const homeLag = useRef(createTabLag('home')).current;
   useFocusEffect(useCallback(() => {
     homeLag.revisit(revealedRef.current);
     let alive = true;
-    Promise.all([loadPlan(), getAllSessions()]).then(async ([plan, sessions]) => {
+    Promise.all([loadPlan(), getAllSessions()]).then(async ([plan, allSessions]) => {
+      const sessions = workoutSessions(allSessions);
       setInjectJs(buildHomeInjectJs(plan, sessions, insets.top, insets.bottom));
       setWorkoutTimes(sessions.map(x => x.ts));
       const ld = buildHomeLogicData(plan, tabBarCover(insets.bottom));
@@ -559,11 +567,9 @@ export default function HomeScreen() {
       const recent = groups.slice(0, 3);
       const icons = await Promise.all(recent.map(g => { const m = primaryMuscle(g.entries); return workoutFallbackIcon(m, m ? tiers[m as keyof typeof tiers]?.tier : null); }));
       const loggedBy = recent.map(g => g.entries.every(isManualEntry)); // typed in by hand: a "Logged" tile, no video lookup
-      // a typed-in session's tile: a small body with the muscles that session trained lit in their rank colours
-      const bodies = recent.map((g, i) => (loggedBy[i] ? loggedBodySvg(workedMuscles(g.entries).map(w => w.muscle), tiers) : null));
-      if (alive) setThumbs(recent.map((g, i) => ({ thumb: null, fallback: icons[i], logged: loggedBy[i], body: bodies[i], ts: g.ts })));
+      if (alive) setThumbs(recent.map((g, i) => ({ thumb: null, fallback: icons[i], logged: loggedBy[i], ts: g.ts })));
       const frames = await Promise.all(recent.map((g, i) => (loggedBy[i] ? Promise.resolve(null) : workoutFrame(g.ts, groups[i + 1]?.ts ?? 0))));
-      if (alive) setThumbs(recent.map((g, i) => ({ thumb: frames[i], fallback: icons[i], logged: loggedBy[i], body: bodies[i], ts: g.ts })));
+      if (alive) setThumbs(recent.map((g, i) => ({ thumb: frames[i], fallback: icons[i], logged: loggedBy[i], ts: g.ts })));
     }).catch(() => {});
     return () => { alive = false; };
   }, [reloadTick]));
@@ -591,7 +597,7 @@ export default function HomeScreen() {
       <Animated.View style={{ flex: 1, opacity: fade }}>
       <WebView
         ref={webRef}
-        onContentProcessDidTerminate={() => { hide(); webRef.current?.reload(); }} /* iOS killed the page's process while it was hidden: load it again at once instead of showing a blank screen */
+        onContentProcessDidTerminate={() => { markTabLoading('index'); hide(); webRef.current?.reload(); }} /* iOS killed the page's process while it was hidden: load it again at once instead of showing a blank screen */
         source={HOME_HTML}
         originWhitelist={['*']}
         injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS + DC_NO_ZOOM_JS + DC_SETTLE_JS + HOME_GUARD_JS + EDIT_BRIDGE_JS + ADD_PICKER_JS + HAPTIC_PAGE_JS + LOGGED_TILE_JS + WORKOUT_LONGPRESS_JS + dcLogicPatchJs(HOME_LOGIC_EXT)}
@@ -603,10 +609,10 @@ export default function HomeScreen() {
           try { msg = JSON.parse(e.nativeEvent.data); } catch { return; }
           if (msg.type === 'haptic') { hapticKind((msg as any).kind); return; }
           if (msg.type === 'workoutMenu' && msg.ts != null) { askRemoveWorkout(msg.ts, () => setReloadTick(t => t + 1)); return; }
-          if (msg.type === 'ready') { onReady(); return; }
+          if (msg.type === 'ready') { markTabReady('index'); onReady(); return; }
           if (msg.type === 'start') { router.push('/workout' as any); return; }
           if (msg.type === 'cue') { router.push('/cue' as any); return; }
-          if (msg.type === 'calendar') { setCalOpen(true); return; }
+          if (msg.type === 'calendar') { if (typeof (msg as any).top === 'number') setCalAnchor({ top: (msg as any).top, cx: typeof (msg as any).cx === 'number' ? (msg as any).cx : 60 }); setCalOpen(o => !o); return; }
           if (msg.type === 'streak') { router.push({ pathname: '/streak-screen', params: { from: 'tab', dest: '/(tabs)' } } as any); return; }
           if (msg.type === 'progress') { router.push('/(tabs)/progress' as any); return; }
           if (msg.type === 'recap' && msg.ts != null) { openRecap(router, msg.ts); return; }
@@ -644,7 +650,7 @@ export default function HomeScreen() {
         cacheEnabled={false}
       />
       </Animated.View>
-      <CalendarSheet open={calOpen} onClose={() => setCalOpen(false)} timestamps={workoutTimes} />
+      <CalendarSheet open={calOpen} onClose={() => setCalOpen(false)} timestamps={workoutTimes} anchor={calAnchor} />
     </View>
   );
 }

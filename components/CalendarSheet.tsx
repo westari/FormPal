@@ -1,88 +1,114 @@
 /**
  * components/CalendarSheet.tsx
  *
- * Home's full calendar: opens when the date at the top of Home is tapped. A white sheet with one month at a time (arrows go
- * to the previous / next month), today ringed, and a dot under every day you trained (from the saved workouts). Tap the dim
- * area or Done to close. The month maths is in lib/calendarMonth.ts.
+ * Home's calendar. It drops DOWN from the header, attached to the little arrow beside the date (not a sheet from the bottom):
+ * a real Liquid Glass card under the date that grows out of the arrow (scale + fade from the arrow's x), one month at a time
+ * (small arrows go to the previous / next month), today in a dark circle, a dot under every day you trained. Tap the arrow again
+ * (the page reports it) or the dim area below to close. The month maths is in lib/calendarMonth.ts.
+ * `anchor` is where the page says the date block ends (top, screen points) and where its arrow is (cx).
  */
-import React, { useEffect, useMemo, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Easing, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SymbolView } from 'expo-symbols';
+import LiquidGlass from './LiquidGlass';
 import { monthGrid, trainedDays, MONTH_NAMES, WEEKDAY_LETTERS } from '../lib/calendarMonth';
 
 const INK = '#111114';
-const MUTED = '#6e6e77';
+const MUTED = '#7b7b85';
 const ACCENT = '#f2701c';
+const SIDE = 14;
 
-export default function CalendarSheet({ open, onClose, timestamps }: { open: boolean; onClose: () => void; timestamps: number[] }) {
-  const insets = useSafeAreaInsets();
+export interface CalendarAnchor { top: number; cx: number }
+
+export default function CalendarSheet({ open, onClose, timestamps, anchor }: { open: boolean; onClose: () => void; timestamps: number[]; anchor: CalendarAnchor | null }) {
+  const { width } = useWindowDimensions();
   const now = new Date();
   const [ym, setYm] = useState({ y: now.getFullYear(), m: now.getMonth() });
-  useEffect(() => { if (open) { const n = new Date(); setYm({ y: n.getFullYear(), m: n.getMonth() }); } }, [open]);
+  const [mounted, setMounted] = useState(open);
+  const prog = useRef(new Animated.Value(open ? 1 : 0)).current;
+  useEffect(() => {
+    if (open) {
+      const n = new Date(); setYm({ y: n.getFullYear(), m: n.getMonth() });
+      setMounted(true);
+      Animated.timing(prog, { toValue: 1, duration: 260, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    } else {
+      Animated.timing(prog, { toValue: 0, duration: 180, easing: Easing.in(Easing.quad), useNativeDriver: true }).start(({ finished }) => { if (finished) setMounted(false); });
+    }
+  }, [open, prog]);
   const trained = useMemo(() => trainedDays(timestamps), [timestamps]);
   const weeks = useMemo(() => monthGrid(ym.y, ym.m, trained, new Date()), [ym, trained]);
   const step = (d: number) => setYm((c) => { const t = new Date(c.y, c.m + d, 1); return { y: t.getFullYear(), m: t.getMonth() }; });
   const monthCount = weeks.flat().filter((c) => c.trained).length;
+  if (!mounted || !anchor) return null;
+
+  const top = anchor.top + 6;
+  const cardW = width - SIDE * 2;
+  const originX = Math.max(0, Math.min(cardW, anchor.cx - SIDE)); // the card grows out of the arrow
+  const scale = prog.interpolate({ inputRange: [0, 1], outputRange: [0.86, 1] });
+  const slide = prog.interpolate({ inputRange: [0, 1], outputRange: [-14, 0] });
 
   return (
-    <Modal visible={open} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
-      <Pressable style={s.dim} onPress={onClose} accessibilityLabel="Close calendar" />
-      <View style={[s.sheet, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]} pointerEvents="box-none">
-        <View style={s.grab} />
-        <View style={s.head}>
-          <Pressable onPress={() => step(-1)} hitSlop={14} style={s.arrow} accessibilityLabel="Previous month">
-            <SymbolView name={'chevron.left' as any} size={18} weight="semibold" tintColor={INK} type="monochrome" style={s.sym} />
-          </Pressable>
-          <View style={s.titleWrap}>
-            <Text style={s.title}>{MONTH_NAMES[ym.m]} {ym.y}</Text>
-            <Text style={s.sub}>{monthCount === 0 ? 'No workouts this month' : monthCount + (monthCount === 1 ? ' day trained' : ' days trained')}</Text>
+    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+      {/* the area below the card: a tap closes (the header above stays tappable, so the arrow itself closes it too) */}
+      <Animated.View style={[s.dim, { top, opacity: prog }]}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close calendar" />
+      </Animated.View>
+      <Animated.View style={[s.card, { top, left: SIDE, width: cardW, opacity: prog, transform: [{ translateY: slide }, { scale }], transformOrigin: `${originX}px 0px` } as any]} testID="calendar-drop">
+        <LiquidGlass radius={28} variant="regular" colorScheme="light" fallbackColor="rgba(255,255,255,0.9)" style={StyleSheet.absoluteFill} />
+        <View style={s.inner}>
+          <View style={s.head}>
+            <View>
+              <Text style={s.title}>{MONTH_NAMES[ym.m]} {ym.y}</Text>
+              <Text style={s.sub}>{monthCount === 0 ? 'No workouts this month' : monthCount + (monthCount === 1 ? ' day trained' : ' days trained')}</Text>
+            </View>
+            <View style={s.arrows}>
+              <Pressable onPress={() => step(-1)} hitSlop={10} style={s.arrow} accessibilityLabel="Previous month">
+                <SymbolView name={'chevron.left' as any} size={15} weight="semibold" tintColor={INK} type="monochrome" style={s.sym} />
+              </Pressable>
+              <Pressable onPress={() => step(1)} hitSlop={10} style={s.arrow} accessibilityLabel="Next month">
+                <SymbolView name={'chevron.right' as any} size={15} weight="semibold" tintColor={INK} type="monochrome" style={s.sym} />
+              </Pressable>
+            </View>
           </View>
-          <Pressable onPress={() => step(1)} hitSlop={14} style={s.arrow} accessibilityLabel="Next month">
-            <SymbolView name={'chevron.right' as any} size={18} weight="semibold" tintColor={INK} type="monochrome" style={s.sym} />
-          </Pressable>
-        </View>
-        <View style={s.row}>
-          {WEEKDAY_LETTERS.map((l, i) => <Text key={i} style={s.wd}>{l}</Text>)}
-        </View>
-        {weeks.map((w, wi) => (
-          <View key={wi} style={s.row}>
-            {w.map((c, ci) => (
-              <View key={ci} style={s.cell}>
-                {c.day != null && (
-                  <View style={[s.dayWrap, c.today && s.todayRing]}>
-                    <Text style={[s.day, c.today && s.todayText]}>{c.day}</Text>
-                    <View style={[s.dot, { opacity: c.trained ? 1 : 0 }]} />
-                  </View>
-                )}
-              </View>
-            ))}
+          <View style={s.row}>
+            {WEEKDAY_LETTERS.map((l, i) => <Text key={i} style={s.wd}>{l}</Text>)}
           </View>
-        ))}
-        <Pressable onPress={onClose} style={s.done} accessibilityRole="button"><Text style={s.doneText}>Done</Text></Pressable>
-      </View>
-    </Modal>
+          {weeks.map((w, wi) => (
+            <View key={wi} style={s.row}>
+              {w.map((c, ci) => (
+                <View key={ci} style={s.cell}>
+                  {c.day != null && (
+                    <View style={[s.dayWrap, c.today && s.todayCircle]}>
+                      <Text style={[s.day, c.today && s.todayText]}>{c.day}</Text>
+                      <View style={[s.dot, { opacity: c.trained ? 1 : 0, backgroundColor: c.today ? '#fff' : ACCENT }]} />
+                    </View>
+                  )}
+                </View>
+              ))}
+            </View>
+          ))}
+        </View>
+      </Animated.View>
+    </View>
   );
 }
 
 const s = StyleSheet.create({
-  dim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(17,17,20,0.38)' },
-  sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 18, paddingTop: 8 },
-  grab: { alignSelf: 'center', width: 38, height: 5, borderRadius: 3, backgroundColor: '#d7d7dd', marginBottom: 10 },
-  head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  arrow: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#f2f2f5', alignItems: 'center', justifyContent: 'center' },
-  sym: { width: 18, height: 18 },
-  titleWrap: { alignItems: 'center' },
-  title: { fontSize: 20, fontWeight: '700', color: INK, letterSpacing: -0.4 },
-  sub: { fontSize: 13, fontWeight: '500', color: MUTED, marginTop: 2 },
+  dim: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(17,17,20,0.12)' },
+  card: { position: 'absolute', borderRadius: 28, overflow: 'hidden', shadowColor: '#28325a', shadowOpacity: 0.22, shadowRadius: 24, shadowOffset: { width: 0, height: 14 } },
+  inner: { paddingHorizontal: 14, paddingTop: 16, paddingBottom: 10 },
+  head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 6, marginBottom: 8 },
+  title: { fontSize: 18, fontWeight: '700', color: INK, letterSpacing: -0.4 },
+  sub: { fontSize: 12.5, fontWeight: '500', color: MUTED, marginTop: 2 },
+  arrows: { flexDirection: 'row', gap: 8 },
+  arrow: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(17,17,20,0.06)', alignItems: 'center', justifyContent: 'center' },
+  sym: { width: 15, height: 15 },
   row: { flexDirection: 'row' },
-  wd: { flex: 1, textAlign: 'center', fontSize: 12, fontWeight: '600', color: MUTED, paddingVertical: 6 },
-  cell: { flex: 1, height: 52, alignItems: 'center', justifyContent: 'center' },
-  dayWrap: { width: 42, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  todayRing: { borderWidth: 1.5, borderColor: INK },
-  day: { fontSize: 16, fontWeight: '600', color: INK },
-  todayText: { fontWeight: '800' },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: ACCENT, marginTop: 3 },
-  done: { marginTop: 14, height: 50, borderRadius: 25, backgroundColor: INK, alignItems: 'center', justifyContent: 'center' },
-  doneText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  wd: { flex: 1, textAlign: 'center', fontSize: 11.5, fontWeight: '600', color: MUTED, paddingVertical: 5 },
+  cell: { flex: 1, height: 46, alignItems: 'center', justifyContent: 'center' },
+  dayWrap: { width: 38, height: 40, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  todayCircle: { backgroundColor: INK },
+  day: { fontSize: 15.5, fontWeight: '600', color: INK },
+  todayText: { color: '#fff', fontWeight: '800' },
+  dot: { width: 5, height: 5, borderRadius: 2.5, marginTop: 2 },
 });

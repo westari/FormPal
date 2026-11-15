@@ -6,7 +6,7 @@
  * that match all of that (the design's own text always said "Your streak starts today", whatever the streak was).
  * Plus the page-side code that writes it into streak.html (the design file itself is never edited).
  */
-import { calcStreak, type SessionEntry } from './sessionLog';
+import { calcStreak, workoutSessions, type SessionEntry } from './sessionLog';
 import { FLAME_PATH, FLAME_VIEWBOX } from './streakFlame';
 
 export interface StreakInfo {
@@ -24,7 +24,7 @@ const dayKey = (d: Date) => d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 +
 /** `passedCount`: the streak the workout flow already worked out (the session may not be on disk yet). Only ever raises the count. */
 export function streakInfo(sessions: SessionEntry[], now: number = Date.now(), passedCount = 0): StreakInfo {
   const today = new Date(now); today.setHours(0, 0, 0, 0);
-  const has = new Set(sessions.map(s => dayKey(new Date(s.ts))));
+  const has = new Set(workoutSessions(sessions).map(s => dayKey(new Date(s.ts))));
   let count = calcStreak(sessions, now);
   let trainedToday = has.has(dayKey(today));
   if (passedCount > count) { count = passedCount; trainedToday = true; }
@@ -98,7 +98,7 @@ export function streakPageJs(info: StreakInfo): string {
       nEl = document.createElement('div'); nEl.setAttribute('data-streak-num', '1');
       masks[1].appendChild(nEl);
     }
-    nEl.style.cssText = 'position:absolute;left:0;right:0;top:63%;transform:translateY(-50%);text-align:center;font-weight:800;line-height:1;letter-spacing:-1.5px;color:#e8590c;font-size:' + fsz + 'px;pointer-events:none;';
+    nEl.style.cssText = 'position:absolute;left:0;right:0;top:63%;transform:translate(-4px,-50%);text-align:center;font-weight:800;line-height:1;letter-spacing:-1.5px;color:#e8590c;font-size:' + fsz + 'px;pointer-events:none;';
     if (nEl.textContent !== String(I.count)) nEl.textContent = String(I.count);
     head.textContent = I.headline; sub.textContent = I.sub;
     var CHECK = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M5 12.6 9.8 17.4 19 7.4" stroke="#ffffff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>';

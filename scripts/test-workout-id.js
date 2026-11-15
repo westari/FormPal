@@ -13,7 +13,7 @@ const check = (n, ok, d) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${d ? ' 
 const w = read('app', 'workout', 'index.tsx'), mw = read('app', 'my-workouts.tsx'), tr = read('app', '(tabs)', 'train.tsx');
 check('no merge markers left', !/^(<<<<<<<|=======|>>>>>>>)/m.test(w));
 check('the screen reads its params once: id, preview, template', (w.match(/useLocalSearchParams</g) || []).length === 1 && /const \{ id, preview, template \}\s*= useLocalSearchParams/.test(w));
-check('a template is that template; with an id that workout; without, the next in the plan', /\(template \? templateWorkout\(template\) : null\) \?\? \(id \? usePlanStore\.getState\(\)\.plan\?\.workouts\.find\(w => w\.id === id\) : null\) \?\? getNext\(\)/.test(w));
+check('a template is that template; with an id that workout; without, the next in the plan; and with no plan at all a starter from Templates (never a message)', /\(template \? templateWorkout\(template\) : null\) \?\? \(id \? plan\?\.workouts\.find\(w => w\.id === id\) : null\) \?\? nextPlanned/.test(w) && /STARTER_TEMPLATE_ID/.test(w));
 check('My workouts opens a workout by id, or a FormPal template by template id', /pathname: '\/workout', params: isTemplateId\(String\(m\.id\)\) \? \{ template: String\(m\.id\) \} : \{ id: String\(m\.id\) \}/.test(mw));
 check('Train opens a future day as /workout?id=<id>&preview=1, and the screen has no Start button for it', /params: \{ id: to\.slice\('preview:'\.length\), preview: '1' \}/.test(tr) && /const previewOnly = preview === '1'/.test(w) && /\{!previewOnly && \(/.test(w));
 console.log(failed ? `${failed} FAILED` : 'ALL PASSED'); process.exit(failed ? 1 : 0);

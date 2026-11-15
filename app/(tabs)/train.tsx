@@ -26,6 +26,7 @@
  * page actually contains, so a phone log proves which design file is running.
  */
 
+import { markTabReady, markTabLoading } from '../../lib/tabReady';
 import React, { useCallback, useRef, useState, useEffect } from 'react';
 import { View, StyleSheet, Animated, Easing } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -136,6 +137,9 @@ const TRAIN_CSS = `
   div[style*="height: 76px"] { transition: none !important; }
   /* the streak pill is a button */
   [data-train-streak] { cursor: pointer; }
+  /* the workout name on a day card ("My workout"): its box has overflow hidden (for the ellipsis) and a tight line, which cut the tail of the
+     "y" at the bottom. The box grows 5px downward and moves back up 5px, so nothing else on the card shifts. */
+  div[style*="font-size: 22px"][style*="text-overflow: ellipsis"] { padding-bottom: 5px !important; margin-bottom: -5px !important; }
   ${CUE_ORB_CSS}
   html:not([data-pready]) body { visibility: hidden !important; }
 `;
@@ -419,8 +423,23 @@ export const TRAIN_WEB_INJECT = `
     if (on) { if (!h.hasAttribute('data-pready')) h.setAttribute('data-pready', '1'); }
     else if (h.hasAttribute('data-pready')) h.removeAttribute('data-pready');
   }
+  // A planned day that passed with nothing done: the design's rest card has "Rest day" typed into it, so its title is changed to "Missed"
+  // (only when it differs, so a settled page makes no change)
+  function missedTitles() {
+    var d = D(), r = rail();
+    if (!d || !d.days || !r) return;
+    for (var i = 0; i < r.children.length && i < d.days.length; i++) {
+      if (!d.days[i].missed) continue;
+      var ds = r.children[i].querySelectorAll('div');
+      for (var j = 0; j < ds.length; j++) {
+        var e = ds[j];
+        if (e.children.length === 0 && e.style.fontSize === '24px' && (e.textContent === 'Rest day' || e.textContent === 'Missed')) { if (e.textContent !== 'Missed') e.textContent = 'Missed'; break; }
+      }
+    }
+  }
   function tick() {
     ensureCss();
+    missedTitles();
     done.fit = fit();
     done.header = header();
     done.sheets = sheets();
@@ -586,7 +605,7 @@ export default function TrainScreen() {
     switch (m.type) {
       case 'pong': return;
       case 'haptic': hapticKind((m as any).kind); return;
-      case 'ready': tlog('page ready (layout + data + logic all in place, page still)'); if (revealTimer.current) clearTimeout(revealTimer.current); setRevealed(true); return;
+      case 'ready': markTabReady('train'); tlog('page ready (layout + data + logic all in place, page still)'); if (revealTimer.current) clearTimeout(revealTimer.current); setRevealed(true); return;
       case 'fingerprint': tlog('page fingerprint:', m.fp); return;
       case 'notReady': tlog('page NOT ready after 3s, parts:', JSON.stringify((m as any).parts)); return;
       case 'needData': tlog('page asked for data;', dataJsRef.current ? 'sending' : 'not loaded yet'); if (imgsJsRef.current) webRef.current?.injectJavaScript(imgsJsRef.current); if (dataJsRef.current) webRef.current?.injectJavaScript(dataJsRef.current); return;
@@ -629,7 +648,7 @@ export default function TrainScreen() {
         onLoadEnd={() => { loading.current = false; loads.current += 1; tlog('web view load end #' + loads.current); armReveal(); }}
         onError={(e) => tlog('web view ERROR:', e.nativeEvent.description)}
         onHttpError={(e) => tlog('web view HTTP ERROR:', e.nativeEvent.statusCode, e.nativeEvent.url)}
-        onContentProcessDidTerminate={() => reloadPage('iOS killed the web view process')}
+        onContentProcessDidTerminate={() => { markTabLoading('train'); reloadPage('iOS killed the web view process'); }}
         style={s.web}
         scrollEnabled
         bounces={false}

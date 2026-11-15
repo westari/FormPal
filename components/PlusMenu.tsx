@@ -19,6 +19,10 @@ import CueOrb from './CueOrb';
 import { PLUS_SIZE, TAB_BAR_SIDE } from '../lib/tabBarMetrics';
 
 const BTN = 60;
+// The play triangle (Start workout) is a solid shape and reads bigger than the thin outline symbols at the same size, so the others are a
+// little bigger (30) than it (26) and all four look the same size.
+const SYM_OTHER = 30, SYM_PLAY = 26;
+const symSize = (id: string) => (id === 'workout' ? SYM_PLAY : SYM_OTHER);
 const ORB = 42; // the orb itself (no halo): about the size of the glyph circles around it, centred in the same 60 box
 
 // Top to bottom. Cue on top (the assistant, set apart), then the three things you do, the main one nearest the "+".
@@ -81,7 +85,7 @@ export default function PlusMenu({ open, onClose, bottom }: { open: boolean; onC
             <Text style={s.label}>{a.label}</Text>
             {a.symbol ? (
               <LiquidGlassButton radius={BTN / 2} colorScheme="light" fallbackColor="rgba(255,255,255,0.82)" onPress={() => go(a.route)} accessibilityLabel={a.label} style={s.btn}>
-                <SymbolView name={a.symbol as any} size={26} tintColor="#111114" type="monochrome" style={{ width: 26, height: 26 }} />
+                <SymbolView name={a.symbol as any} size={symSize(a.id)} tintColor="#111114" type="monochrome" style={{ width: symSize(a.id), height: symSize(a.id) }} />
               </LiquidGlassButton>
             ) : (
               <Pressable onPress={() => go(a.route)} accessibilityLabel={a.label} style={s.orb} hitSlop={4}>

@@ -6,7 +6,7 @@
  * lib/profileInject.ts). Nothing is invented — a field with no stored value
  * is null/'' and the page shows "Not set" / an empty state for it.
  */
-import type { SessionEntry } from './sessionLog';
+import { workoutSessions, type SessionEntry } from './sessionLog';
 import type { PlanProfile } from '../types/plan';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -89,7 +89,7 @@ export function computeBadges(sessions: SessionEntry[]): boolean[] {
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 function sinceLabel(ts: number): string { const d = new Date(ts); return `${MONTHS[d.getMonth()]} ${d.getFullYear()}`; }
 
-export function buildProfileData(i: {
+export function buildProfileData(i0: {
   seedVersion: number;
   name: string;
   email: string | null;
@@ -106,6 +106,8 @@ export function buildProfileData(i: {
   referral?: { code: string; joined: number };
   now?: number;
 }): ProfileData {
+  // form-check practice is not a workout: it never counts toward member-since, workouts, streak-days or badges
+  const i = { ...i0, sessions: workoutSessions(i0.sessions) };
   const now = i.now ?? Date.now();
   const firstTs = i.sessions.length ? Math.min(...i.sessions.map(s => s.ts)) : null;
   const sinceTs = firstTs ?? i.planGeneratedAt ?? now;

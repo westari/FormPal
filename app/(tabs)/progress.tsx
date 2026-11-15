@@ -17,6 +17,7 @@
  * before the bundle unpacks, never stops watching, hidden until the page says
  * it's genuinely ready.
  */
+import { markTabReady, markTabLoading } from '../../lib/tabReady';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, Modal, Pressable, Image, Animated } from 'react-native';
 import { useRevealFade } from '../../lib/useRevealFade';
@@ -163,7 +164,7 @@ export default function ProgressScreen() {
     let msg: { type?: string; dateKey?: string; weightLb?: number; ts?: number; msg?: string; pose?: string };
     try { msg = JSON.parse(raw); } catch { return; }
     switch (msg.type) {
-      case 'ready': lag.mark('ready'); onReady(); break;
+      case 'ready': lag.mark('ready'); markTabReady('progress'); onReady(); break;
       case 'pageConsole': if (__DEV__) console.log('[progress-page]', msg.msg); break;
       case 'haptic': hapticKind((msg as any).kind); break;
       // (the first picture needs the art: until it is in, load() pushes the moment it is, so no half-filled first paint)
@@ -202,7 +203,7 @@ export default function ProgressScreen() {
       <Animated.View style={{ flex: 1, opacity: fade }}>
       <WebView
         ref={webRef}
-        onContentProcessDidTerminate={() => { hide(); webRef.current?.reload(); }} /* iOS killed the page's process while it was hidden: load it again at once instead of showing a blank screen */
+        onContentProcessDidTerminate={() => { markTabLoading('progress'); hide(); webRef.current?.reload(); }} /* iOS killed the page's process while it was hidden: load it again at once instead of showing a blank screen */
         source={PROGRESS_HTML}
         originWhitelist={['*']}
         injectedJavaScriptBeforeContentLoaded={PROGRESS_BEFORE}

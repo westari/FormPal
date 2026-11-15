@@ -9,13 +9,12 @@
 import { Muscle, getExerciseDef, muscleCreditParts } from '../constants/exercises';
 import { TIER_META } from '../constants/tierPalette';
 import {
-  TIER_ORDER, tierIndex, tierProgress, muscleCreditTotals, belowBronzeProgress, groupIntoWorkouts, calcStreak, isManualEntry,
+  TIER_ORDER, tierIndex, tierProgress, muscleCreditTotals, belowBronzeProgress, groupIntoWorkouts, calcStreak, isManualEntry, workoutSessions, practiceSessions,
   type SessionEntry, type MuscleTiers, type Tier,
 } from './sessionLog';
 import { computeOverallStanding, MUSCLE_DISPLAY_ORDER } from '../components/MuscleTierMap';
-import { bodyMapSvg, loggedBodySvg } from './bodyMapSvg'; // the clean map (soft silhouette, no per-muscle lines). The busier outlined drawing is lib/progressBodyMap.ts, not used.
+import { bodyMapSvg } from './bodyMapSvg'; // the clean map (soft silhouette, no per-muscle lines). The busier outlined drawing is lib/progressBodyMap.ts, not used.
 import type { WeightEntry } from './weightLog';
-import { workedMuscles } from './muscleRanksData';
 
 export const MUSCLE_LABEL: Record<Muscle, string> = {
   [Muscle.Chest]: 'Chest', [Muscle.Shoulders]: 'Shoulders', [Muscle.RearDelts]: 'Rear delts',
@@ -39,7 +38,9 @@ export interface ProgressData {
   weight: { d: string; w: number }[];
   form: { ts: number; pct: number }[];
   bests: { name: string; value: string; unit: string; kind: 'streak' | 'form' | 'reps' }[];
-  workouts: { ts: number; name: string; when: string; form: string; formPct: number | null; reps: number; sets: number; thumb: string | null; muscle: string | null; fallback: string | null; logged: boolean; body: string | null }[];
+  workouts: { ts: number; name: string; when: string; form: string; formPct: number | null; reps: number; sets: number; thumb: string | null; muscle: string | null; fallback: string | null; logged: boolean }[];
+  /** Form checks (practice sets, not workouts), newest first: shown in their own small list below Past workouts. */
+  practice: { ts: number; name: string; when: string; meta: string }[];
   hasSessions: boolean;
   insets: { top: number; bottom: number; tabCover?: number };
   photos: PhotoView[];
@@ -89,9 +90,18 @@ export function primaryMuscle(entries: SessionEntry[]): string | null {
 }
 
 export function buildProgressData(
-  sessions: SessionEntry[], tiers: MuscleTiers, weights: WeightEntry[], now: number = Date.now(),
+  allSessions: SessionEntry[], tiers: MuscleTiers, weights: WeightEntry[], now: number = Date.now(),
   extras: { insets?: { top: number; bottom: number; tabCover?: number }; photos?: { id: string; ts: number; pose: 'front' | 'side' | 'back'; thumb: string | null }[] } = {},
 ): ProgressData {
+  // form-check practice is its own list ("Form checks"); everything else on this page is workouts only
+  const sessions = workoutSessions(allSessions);
+  const practiceList = practiceSessions(allSessions);
+  const practiceGroups = groupIntoWorkouts(practiceList).slice(0, 12).map(g => {
+    const first = g.entries[0];
+    const scored = g.entries.some(e => e.formChecked !== false);
+    return { ts: g.ts, name: g.entries.length === 1 ? first.displayName : `${first.displayName} + ${g.entries.length - 1} more`, when: dayLabel(g.ts, now),
+      meta: `${g.totalReps} rep${g.totalReps === 1 ? '' : 's'}${scored ? ' · ' + g.pct + '% form' : ''}` };
+  });
   const standing = computeOverallStanding(tiers);
   const tier = standing?.tier ?? 'bronze'; // nobody is "Unranked": everyone starts at Bronze
   const idx = tierIndex(tier);
@@ -135,8 +145,6 @@ export function buildProgressData(
       muscle: primaryMuscle(g.entries), fallback: null as string | null,
       // typed in by hand (Log a session): shown as a "Logged" tile, never as a camera workout
       logged: g.entries.every(isManualEntry),
-      // the small lit body on that "Session logged" tile (only built for typed-in sessions)
-      body: g.entries.every(isManualEntry) ? loggedBodySvg(workedMuscles(g.entries).map(w => w.muscle), tiers) : null,
     };
   });
 
@@ -166,6 +174,7 @@ export function buildProgressData(
     })),
     weight: weights.map(w => ({ d: w.dateKey, w: w.weightLb })),
     form, bests, workouts, hasSessions: sessions.length > 0,
+    practice: practiceGroups,
     insets: extras.insets ?? { top: 0, bottom: 0 },
     photos: (extras.photos ?? []).map(ph => {
       const d = new Date(ph.ts);

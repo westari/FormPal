@@ -6,9 +6,10 @@
  * page's own left-hand title is hidden and replaced by this block; the page's right-hand control (streak chip, share, badges)
  * stays where the design put it and is centred against the block.
  *
- * Home's title IS the live date ("Thursday, November 12", worked out on the phone each time) with a small grey calendar icon
- * beside it; tapping the date or the icon posts {type:'calendar'} and the app shows the full calendar. The date is as big as
- * fits next to the streak chip (30px at most), so it never wraps or runs under the chip.
+ * Home's title IS the live date ("Thursday, November 12", worked out on the phone each time) at the same 30px as the other titles,
+ * with a small grey down-arrow beside it. If the long month does not fit next to the streak chip the month is shortened ("Sunday,
+ * Nov 15"). Tapping the date or the arrow posts {type:'calendar', top, cx}; the app drops the calendar down from there and flips the
+ * arrow with window.__fpChevron(open).
  *
  * window.__fpHeader(title, insetTop, opts) is idempotent: calling it again (every focus, every data push) only refreshes the
  * title, the padding and the size. opts.live = true makes the title the live date and adds the calendar icon. A MutationObserver
@@ -18,8 +19,8 @@ export const TAB_HEADER_JS = `
 (function(){
   if (window.__fpHeader) return;
   var CFG = null;
-  function dateText(){
-    try { return new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }); }
+  function dateText(short){
+    try { return new Date(window.__fpNow || Date.now()).toLocaleDateString('en-US', { weekday: short === 2 ? 'short' : 'long', month: short ? 'short' : 'long', day: 'numeric' }); }
     catch (e) { return ''; }
   }
   function findRow(){
@@ -60,15 +61,20 @@ export const TAB_HEADER_JS = `
       t.style.cssText = 'font-family:"Plus Jakarta Sans",Helvetica,sans-serif;font-size:30px;font-weight:700;letter-spacing:-0.9px;line-height:1.05;color:#111114;white-space:nowrap;';
       block.appendChild(t);
       if (CFG.live) {
-        // the small grey calendar icon beside the date; the whole block (date + icon) is the button
+        // a simple grey down-arrow beside the date; the whole block (date + arrow) is the button. The app flips it to an up-arrow
+        // (window.__fpChevron) while the calendar is dropped down.
         var ic = document.createElement('span');
         ic.setAttribute('data-fp-cal', '1');
-        ic.style.cssText = 'display:inline-block;vertical-align:middle;margin-left:9px;width:20px;height:20px;line-height:0;position:relative;top:-1px;';
-        ic.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9a9aa4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="3.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>';
+        ic.style.cssText = 'display:inline-block;vertical-align:middle;margin-left:7px;width:20px;height:20px;line-height:0;position:relative;top:-1px;transition:transform 220ms cubic-bezier(.2,.8,.2,1);';
+        ic.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8e8e98" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9.5l6 6 6-6"/></svg>';
         t.appendChild(ic);
         block.style.cursor = 'pointer';
         block.style.webkitTapHighlightColor = 'transparent';
-        block.addEventListener('click', function(ev){ ev.preventDefault(); ev.stopPropagation(); try { window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'calendar' })); } catch (e) {} }, true);
+        block.addEventListener('click', function(ev){
+          ev.preventDefault(); ev.stopPropagation();
+          var r = block.getBoundingClientRect(), c = ic.getBoundingClientRect();
+          try { window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'calendar', top: r.bottom, cx: c.left + c.width / 2 })); } catch (e) {}
+        }, true);
       }
       // the design's own left-hand title goes away (hidden, not removed: the page's code may still write to it)
       var first = h.firstElementChild;
@@ -76,28 +82,38 @@ export const TAB_HEADER_JS = `
       h.insertBefore(block, h.firstChild);
     }
     var tEl = block.firstChild;
-    var txt = CFG.live ? dateText() : CFG.title;
+    var txt = CFG.title;
+    var fs = 30;
+    if (CFG.live) {
+      // as big as the other tabs' titles (30px) next to the streak chip; if the long month does not fit, the month is shortened
+      // ("Sunday, Nov 15"); only if even that does not fit is the size reduced (never below 22px)
+      var rowW = h.clientWidth, other = 0;
+      for (var ci = 0; ci < h.children.length; ci++) { var c = h.children[ci]; if (c !== block && getComputedStyle(c).display !== 'none') other += c.getBoundingClientRect().width / S + 12; }
+      var avail = rowW - 44 - other - 2;
+      var cv = window.__fpCv || (window.__fpCv = document.createElement('canvas').getContext('2d'));
+      cv.font = '700 30px "Plus Jakarta Sans", Helvetica, sans-serif';
+      var wOf = function (x) { return cv.measureText(x).width - 0.9 * x.length + 27; }; // + the arrow
+      txt = dateText(false);
+      if (wOf(txt) > avail) { txt = dateText(1); }
+      if (wOf(txt) > avail) { txt = dateText(2); } // last resort for the longest days ("Wed, Jan 7"): both words shortened, still 30px
+      if (wOf(txt) > avail) fs = Math.max(22, Math.floor(30 * avail / wOf(txt)));
+    }
+    var tEl = block.firstChild;
     var tn = tEl.firstChild;
     if (!tn || tn.nodeType !== 3) { tn = document.createTextNode(txt); tEl.insertBefore(tn, tEl.firstChild); }
     else if (tn.nodeValue !== txt) tn.nodeValue = txt;
-    if (CFG.live) {
-      // as big as fits (30px at most) between the left padding and the streak chip
-      var rowW = h.clientWidth, other = 0;
-      for (var ci = 0; ci < h.children.length; ci++) { var c = h.children[ci]; if (c !== block && getComputedStyle(c).display !== 'none') other += c.getBoundingClientRect().width / S + 12; }
-      var avail = rowW - 44 - other - 8, fs = 30;
-      // text width at 30px (the icon and its gap count too), measured on a canvas so nothing on the page is written to
-      var cv = window.__fpCv || (window.__fpCv = document.createElement('canvas').getContext('2d'));
-      cv.font = '700 30px "Plus Jakarta Sans", Helvetica, sans-serif';
-      var w30 = cv.measureText(txt).width - 0.9 * txt.length + 29;
-      fs = Math.max(18, Math.min(30, Math.floor(30 * avail / w30)));
-      if (tEl.style.fontSize !== fs + 'px') tEl.style.fontSize = fs + 'px';
-    }
+    if (tEl.style.fontSize !== fs + 'px') tEl.style.fontSize = fs + 'px';
     if (!h.__fpObs && window.MutationObserver) {
       h.__fpObs = new MutationObserver(function(){ if (!h.querySelector('[data-fp-title-block]')) apply(); });
       h.__fpObs.observe(h, { childList: true });
     }
     return true;
   }
+  // the arrow points down while the calendar is closed and up while it is open
+  window.__fpChevron = function(open){
+    var ic = document.querySelector('[data-fp-cal]');
+    if (ic) ic.style.setProperty('transform', open ? 'rotate(180deg)' : 'rotate(0deg)');
+  };
   window.__fpHeader = function(title, inset, opts){
     CFG = { title: title, inset: inset || 0, live: !!(opts && opts.live) };
     var ok = apply();

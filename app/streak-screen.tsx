@@ -5,6 +5,7 @@
  * with the user's actual current streak (lib/sessionLog.ts's calcStreak()),
  * via DOM text-injection (never editing the design file — see CLAUDE.md).
  */
+import { leaveToTabs } from '../lib/leaveToTabs';
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -52,7 +53,7 @@ export default function StreakScreen() {
     if (variant) {
       router.replace({ pathname: '/progress-photo-screen', params: { variant, dest } } as any);
     } else {
-      router.replace(dest as any);
+      leaveToTabs(router, dest);
     }
   };
 

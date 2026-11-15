@@ -1,102 +1,123 @@
-# Window A report: Ari's phone test (14 items)
+# Window A report: Ari's phone test (13 items)
 
-Branch: work-a. Merged origin/overnight-build first (already up to date). Read the newest session of the dev log.
+Branch: work-a. Merged origin/overnight-build first. Read the newest session of the dev log (2026-11-15, session start 18:39:48).
+I did not touch the "Workout saved", "Session logged", weight or photo check screens.
 
 ## Result by number
 
 | # | Item | Status |
 |---|---|---|
-| 1 | Remove the date line under every tab header | Done |
-| 2 | Home header is the live date with a grey calendar icon; tap opens the full calendar | Done |
-| 3 | Blank screen for ~10s when opening the app | Done in code. Cause found in the log. Needs your phone to confirm the new number |
-| 4 | Train laggy on tap, Progress white on first tap | Done in code. Cause found in the log. Needs your phone to confirm |
-| 5 | Streak fire animated | Done |
-| 6 | Streak number back inside the fire, clean | Done |
-| 7 | Tap the fire on Home opens the streak screen | Done |
-| 8 | New "Session logged" thumbnail: light card, small lit body, label | Done |
-| 9 | Build with Cue uses the shared new orb | Done |
-| 10 | "Workout saved" screen: white wash, drawing check, haptic, close in ~1s | Done in code. Not run on a phone |
-| 11 | "FormPal templates" is now "Templates"; the tabs fit with no sideways scroll | Done |
-| 12 | Practice Exercises search looks cut off when focused | Done |
-| 13 | New Start workout icon in the plus menu | Done (play.fill) |
-| 14 | Cue orb in the plus menu a bit smaller | Done (48 to 42) |
+| 1 | App takes 10+ seconds to open; cover must lift on a hard timeout | Done in code. Cause found in the log. Needs your phone to confirm the new time |
+| 2 | Done after a workout takes ~5s to show Home | Done in code. Cause found. Needs your phone to confirm |
+| 3 | Train flashes on first tap | Done in code. Cause found. Needs your phone to confirm |
+| 4 | Home date as big as the other titles (shorten the month if it does not fit) | Done |
+| 5 | Down-arrow instead of the calendar icon; flips up; calendar drops down from it in real Liquid Glass | Done. The glass look needs your phone (Chromium has no Liquid Glass) |
+| 6 | The "y" in "My workout" cut off on the Today card | Done (Train and Home) |
+| 7 | Streak number nudged left | Done |
+| 8 | Schedule: Missed vs Rest, no two rest days in a row, plan day pattern | Done |
+| 9 | Start workout always opens a real workout | Done |
+| 10 | My workouts: test that everything is wired | Done, 21 checks, all pass. Nothing was broken |
+| 11 | Logged-session cards: no muscle map, clean simple card | Done |
+| 12 | Form checks are practice: not in Recent/Past workouts, not in streaks or the calendar; own "Form checks" list in Progress | Done on my side. Needs Window B's `kind: 'practice'` on the entry (see below) |
+| 13 | Other plus-menu icons slightly bigger so they match Start workout | Done |
 
-## What I found in the log (items 3 and 4)
+## 1. The 10+ second open (real cause from the log)
 
-Newest session, first launch (times are after the app's JS started):
+The log of the cold start:
 
-- +0.8s tab bar mounted. The tab visits were planned for +0.35s and +0.8s, but "TRAIN focused" only came at +4.1s. The cover also lifted at +4.1s. The visits ran 3.7s late.
-- Why late: the JS thread and the web engine were busy with a big hidden recap page (it said "warm" at +2.4s), the clip catch-up (100+ "adopted a clip" lines in 0.7s, one time only) and the three design warm-ups that start at +2.5s. All of that ran at the same time as the four tab pages.
-- Train and Profile only began loading at +4.2s. Their pages were ready at +6.0s ("progress first open: shown -> ready 1907ms").
-- Second finding, this is the one behind "Progress is white on first tap": the tab visits ran once per app run. After every workout recap the whole tabs screen is rebuilt (log at 01:04:12 and 01:11:04: "layout mounted", "TRAIN mounted" again). Nobody visited the tabs again, so the next first tap loaded the page in front of you: "progress first open: shown -> ready 1656ms". At 01:11:21 iOS also killed the Train web view while all this was loading, and the next Train tap took 3.4s ("train shown again 3410ms").
-- Normal revisits are fine: 13 to 35 ms in the same log. The big numbers like 30267ms are time spent away, not lag.
+- 18:39:48.74 last line of the app code loading (modules built).
+- 18:40:16.80 the first screen ("layout mounted"). **28 seconds with no log line at all.**
+- After that, everything is fast: tab bar mounted, pages ready about 2.9s later.
+
+So the 28 seconds is spent before any screen draws, with the loading screen up. Nothing in my tab code runs in that gap. The only thing the root layout waits for is the fonts (`useFonts`, nine font files): `if (!fontsLoaded && !fontError) return null`, and the loading screen is held until then. On a dev build the font files come over the network from your computer, which fits a long silent wait. I can not prove from the log that it is the fonts (no line says when they finished), so this is the most likely cause, not a proven one.
 
 What I changed:
 
-- New gate in lib/launchGate.ts. The hidden recap page and the Create workout / My workouts / Log a session warm-ups wait for it. It opens 1.8s after the tab visits finish, with an 8s backstop. A recap that a screen asks for early is never held back.
-- The tab visits now start at 60ms (was 350ms) and run in 90ms steps. The planned cover time is 390ms (was 760ms).
-- The tab visits now run every time the tab bar is built, not once per app run. So after a workout recap all four pages are loaded again behind a short cover.
-- The tab pages already sit on the page colour (#eeeef1), so a page that is still loading is grey, not white.
+- app/_layout.tsx: the first screen now waits for fonts at most 1.5s (`FONT_WAIT_MS`), then shows the app and hides the loading screen. If the fonts are late, text uses the system font until they arrive. New log lines tell us the truth next time: `[LAUNCH] first screen allowed Nms after the app code started | fonts: loaded / NOT loaded yet` and `[LAUNCH] fonts loaded Nms ...`. If the first number is about 1500 and fonts say "NOT loaded", fonts were the cause.
+- The saved plan is loaded into the plan store at app start.
+- Launch cover (components/GlassTabBar.tsx): it now lifts when the four tab pages are drawn, with a **hard stop at 2.5s** after the tab bar mounted (`LAUNCH_COVER_MAX_MS`), a plain timer that does not depend on any page. Before, it lifted at about 1s while pages were still loading, so you saw an empty Home load.
+- Bug in my last gate: the "launch gate" that holds back the big hidden pages had its 8s backstop timer start when the code loaded. With the 28s gap it had already run out, so the hidden recap page loaded at the same time as the tabs (log: `[warm:recap] warm` at +0.9s). The backstop now starts when the tab bar mounts.
 
-What to look for in the next log (this is how I prove it on your phone):
+What to look for in the next log: `[LAUNCH] ...` lines, then `[TAB-LAG] cover lifted Nms ... | all four pages ready: yes` (about 2000-2500ms or less).
 
-- `[TAB-LAG] cover lifted ~400ms after the tab bar mounted` (was about 3300ms late).
-- `[TAB-LAG] progress first open: shown -> ready` and `profile first open` should be about 0 to 300ms. They were 1656 to 1907ms.
-- After a workout recap, the same lines should show again and a tap on Train/Progress right after should read `shown again ~20ms`.
+## 2. Done takes ~5s
 
-What I can not see: the time before the app's JS starts (iOS launch, splash, loading the bundle from the dev server). The log starts at JS start. If a white screen still shows before the first `[session] start` line time, that part is not in my code. The 100+ clip adoption is one-time and is Window B's file (lib/sessionVideo.ts); I did not change it.
+In the log, Done at 18:49:57.607 is followed by `[TABS] layout mounted`, `[TRAIN] mounted`, `home shown again | page already visible: NO (it is loading again)`, a 1070ms cover, pages ready 1 to 2s later. Cause: after a form check or workout the stack is [tabs, picker/workout, recap]. Done called `router.replace('/(tabs)/')`, which builds a SECOND tabs screen on top, so all four web pages loaded again from scratch.
 
-Tests: scripts/test-launch-speed.js (source and timing checks, gate unit test), scripts/test-tabs.js updated.
+Fix: lib/leaveToTabs.ts uses `router.dismissTo(...)`, which goes back to the tabs that are still there underneath, with all four pages already loaded. Used by the recap Done (form check), the streak screen's Continue and the progress photo screen's finish. (app/recap.tsx, app/streak-screen.tsx and app/progress-photo-screen.tsx are one-line changes.) If `dismissTo` is missing or throws it falls back to the old replace. I can not run the router here; the test checks the code path and the fallback. On your phone the log should show no `layout mounted` after Done.
 
-## Headers (items 1 and 2)
+## 3. Train flash on first tap
 
-- No date line under any title now. Home, Train, Progress and Profile share one header: same font, weight, spacing and left edge, same vertical centre (all four measured at the same y in a real browser, 22px left, centre 148px).
-- Home's title is the live date ("Thursday, November 12", worked out on the phone each time) with a small grey calendar icon beside it. The date is 23px, not 30px: at 30px it does not fit next to the streak chip. It is "as big as fits, 30px at most". Train, Progress and Profile are the full 30px.
-- Tapping the date or the icon opens a full calendar (components/CalendarSheet.tsx). Nothing like it existed, so I built one: a white sheet, one month at a time with arrows, today ringed, a dot on every day you trained, "N days trained" under the month, Done button.
-- Tests: scripts/test-tab-headers.js (measures all four), scripts/test-home-header-taps.js (real clicks on the date, icon, fire chip and number; plus the month grid maths).
+Cause in the log: when the cover lifted (+1.0s), the Train page had not even started loading (`TRAIN web view load start` at +2.0s, ready at +2.9s). A tap on Train in that window showed a half-drawn page. Same after a workout (item 2). Fix: each tab reports when its page is drawn (lib/tabReady.ts; also when iOS kills it). The launch cover waits for all four (hard stop 2.5s). A tap on a tab that is not drawn yet shows the page-coloured cover until it is (hard stop 1.5s). Normal revisits are unchanged (13 to 35ms in the log).
 
-## Streak (items 5, 6, 7)
+## 4 and 5. Home header, down-arrow and calendar
 
-- Why the fire never moved: the page-fit code switches off every animation inside these pages (`#dc-root * { animation: none !important }`). That also killed the design's own sparkles and rising embers. I put the animation back with inline `!important` for the flame and for the design's endless sparkles and embers. The outer flame sways and breathes (3.4s), the inner flame flickers faster (2.2s). It respects "reduce motion".
-- Number: it sits inside the cream belly of the flame, deep orange (#e8590c) on cream, 46px for 1 to 2 digits, smaller for 3+. It is a child of the inner flame, so it moves with it and never looks stuck on. I viewed the screenshot: it reads clearly and does not touch the edges.
-- Home: tapping the fire chip (the flame or the number) opens the streak screen the same way Train does, and back returns to Home.
-- Tests: scripts/test-streak.js (flame animation names and changing transforms, number inside the flame, number colour), scripts/test-home-header-taps.js.
+- The date is now 30px like the other titles. If the long month does not fit next to the streak chip it becomes "Sunday, Nov 15"; for the very longest days the weekday is shortened too ("Wed, Jan 7") so it still stays 30px. Tested for every day of the year at the Home width: 30px, one line, clear of the chip, every day.
+- The calendar picture is replaced by a simple grey down-arrow beside the date. Tapping the date or the arrow flips it up and drops the calendar down from the header (components/CalendarSheet.tsx): a Liquid Glass card (the same LiquidGlass component as the tab bar) under the date that grows out of the arrow's position (not a sheet from the bottom). Month with small arrows, today in a dark circle, a dot on every day you trained, "N days trained". Tapping the arrow again, the dim area below, or leaving Home closes it.
+- Honest limits: Liquid Glass only draws on your phone build (the page and the arrow flip are tested; the glass look is not). I built the "like Bevel" look from the description, not from a picture.
 
-## Session logged thumbnail (item 8)
+## 6. The cut-off "y"
 
-Light flat card (#f2f3f7, no gradient), a small body (front or back, whichever side has more of the session's muscles) with the muscles that session trained lit in their current rank colour (bronze if unranked), a small "Session logged" label. The workout name on the card is now dark so it can be read. Camera workouts keep their video frame. Works on Home and Progress, and the narrow list rows get a smaller label.
-Test: scripts/test-progress-ux.js (flat light colour, body present with lit muscles, label, dark name, no play icon, no gradient).
+The workout name box on the Today card has `overflow: hidden` (for the "..." when the name is long) and a tight line height. I can not reproduce the cut in Chromium; I measured that the "y" tail sat only about 5px inside the box edge, which iOS WebKit rounds differently. Fix: the box grows 5px downward (6px on Home) and moves back up by the same amount, so nothing else shifts. Test checks the padding and that the glyph bottom is inside the box. Needs a look on the phone.
 
-## Create workout, My workouts, Search (items 9 to 12)
+## 7. Streak number
 
-- 9: The design's own orb was drawn with its texture layers. Create workout, My workouts and Log a session now use the one shared Cue orb (lib/cueOrb.ts), on the Build with Cue button and in the open sheet. Test: scripts/test-create-orb.js.
-- 10: components/SavedCheck.tsx redone, used by "Workout saved" and "Session logged": a white panel with a curved top sweeps up (0 to 300ms), a green ring draws itself, then the check draws itself (to 620ms), the words fade up (to 780ms), then it leaves at 1000ms. The success haptic still plays when Save is pressed (in the screens). I could not run React Native here, so the test (scripts/test-create-saved.js) checks the source and the timeline order. Please look at it on the phone once.
-- 11: "FormPal templates" is "Templates" (tab and heading). Tabs are 34px tall, 12.5px text, 5px gaps: all four fit in one row (last one ends at 360 of 390px), no sideways scroll. Test: scripts/test-design-screens.js.
-- 12: Cause: the keyboard shortens the visible area but the Train page stayed 844 tall, so the bottom of it (the search box and results) sat behind the keyboard and could not scroll up. Now the page is only as tall as what is visible while the keyboard is up, and the tapped box scrolls above the keyboard. Keyboard simulated by shrinking the window to 508px: the box is inside the visible area, results appear and fit. With the keyboard down the page is 844 again. Test: scripts/test-train-search-keyboard.js. I also fixed scripts/test-train-phone.js, which looked for the canvas by its old fixed height.
+Moved 4px left (measured 3.8px left of the exact middle of the flame belly).
 
-## Plus menu (items 13 and 14)
+## 8. Train schedule
 
-- Start workout now uses the SF Symbol `play.fill`. Alternative if you do not like it: `bolt.fill` or `figure.run` (one word in components/PlusMenu.tsx).
-- Cue orb is 42 (was 48).
+- A day you did not train that the plan had a workout for now says "Missed". "Rest day" only appears on the plan's own rest days. Days before the plan existed say "No workout".
+- The plan itself has no weekdays (it is a queue of workouts), so the week is laid out from its days per week (lib/trainData.ts `trainingWeekdays`): 1: Wed. 2: Mon, Thu. 3: Mon, Wed, Fri. 4: Mon, Tue, Thu, Sat. 5: Mon, Tue, Thu, Fri, Sat. 6: Mon to Sat. 7: every day. With 4, 5, 6 or 7 days a week there are never two rest days in a row. With 3 days a week one weekend pair is unavoidable (4 rest days into 3 gaps); with 1 or 2 days there are longer stretches. This is a new rule: it means a plan day does not move to the next day anymore. If today is a rest day in the pattern, today shows "Rest day" with "Train anyway", and tomorrow shows the next workout.
+- The design's rest card has "Rest day" typed in; the Train page now changes that title to "Missed" for missed days.
+- Tests: scripts/test-train-schedule.js (pattern, strip, the real page), test-train.js, test-plan-edit.js updated (5 days a week so Thursday and Friday are both training days).
+
+## 9. Start workout always opens a workout
+
+Cause: the plan store was only filled when something loaded it. Nothing did at app start, so the first Start workout read an empty store and showed "No workout scheduled - generate a test plan" even with a full plan saved. Fix: the plan is loaded into the store at app start and when the preview opens; the preview shows a blank page of the same colour while loading, then the workout asked for, else the plan's next workout, else a starter from Templates ("Beginner full body"). The old message screen and its "Generate a Test Plan" button are deleted. Note: it is the plan's NEXT workout on a rest day too (that is what "Train anyway" does). The starter is only used when there is no plan workout at all. Tests: scripts/test-workout-preview.js (no plan -> starter, can be started; loading -> blank; message gone from the code).
+
+## 10. My workouts wiring
+
+scripts/test-my-workouts-wiring.js clicks everything on the real page with real data: the 4 tabs (right cards under the right headings), all 9 cards from the picture and from the name (18 taps, each opens its own id), all 9 bookmarks (save, un-save, never open the card), bookmark floats to the top of its section, search (match, no match, clear), Create workout, Back; then checks the app side sends each to a real route (back, /create-workout, /workout?template=, /workout?id=, saved list stored on the device) and that all 6 templates open real workouts. All pass. I found nothing broken.
+
+## 11. Logged-session card
+
+Muscle map removed. The card is a flat light card with a simple icon, the workout name and "Session logged". Removed the helper that drew the map (`loggedBodySvg`).
+
+## 12. Form checks are practice
+
+- `SessionEntry.kind?: 'workout' | 'practice'` added (lib/sessionLog.ts) with `isPractice`, `workoutSessions`, `practiceSessions`. **Window B's change was not in the branch yet, so I defined the field myself as `kind: 'practice'`. Window B must write exactly that.**
+- Practice never counts toward: the streak (calcStreak, Home chip, Train, Progress, streak page), Train's week strip and calendar, Home's calendar dots, Recent workouts (Home), Past workouts, personal bests and the form chart (Progress), Profile's member-since, workouts and badges.
+- Progress has a new small "Form checks" list below Past workouts (newest 12: name, when, reps and form %). A row opens that form check's recap (the same screen a past workout opens; it shows its video and rep feedback when they were saved). Hidden when there are none.
+- Not changed (you did not ask): practice reps still count toward muscle ranks.
+- Tests: scripts/test-practice-sessions.js (data for Home, Train, Progress, Profile, the streak page, plus the real Progress page and a tap on a row).
+
+## 13. Plus menu icons
+
+The play triangle is a solid shape so it looks bigger. The other icons are 30 (were 26); Start workout stays 26.
 
 ## Tests
 
-Whole suite run. Everything passes except scripts/test-rep-feedback-injection.js (Window B's: it needs an untracked .scratch file, failed before my changes too). `npx tsc --noEmit` shows no errors in files I touched; the errors it prints are in ar-experiment, calibrate, formcheck and onboarding (not mine).
+Whole suite run and every failure from my changes fixed. The only failing test is scripts/test-rep-feedback-injection.js (Window B's; it needs an untracked .scratch file; it failed before my changes too). `npx tsc --noEmit` shows no errors in files I touched.
+
+New tests: test-launch-speed (rewritten), test-home-header-taps, test-tab-headers (366 days), test-train-schedule, test-train-search-keyboard (last round), test-my-workouts-wiring, test-practice-sessions, test-name-clip, test-create-orb. Updated: test-streak, test-tabs, test-train, test-plan-edit, test-train-phone, test-workout-id, test-workout-preview, test-progress-ux.
+
+## What only your phone can show
+
+1 / 2 / 3 timings, the Liquid Glass calendar look, the "y" cut, the font swap at launch. Send the next `[LAUNCH]` and `[TAB-LAG]` lines.
 
 ## Things I touched outside my area
 
-- components/WarmSurfaces.tsx (Window B's): the layers only mount after the launch gate or when a screen activates them. The state still says recap is wanted from app start (test-warm-surfaces still checks that).
-- Nothing in lib/sessionVideo.ts this time.
+- app/recap.tsx (Window B): the one line in Done that leaves to the tabs (and an import).
+- components/WarmSurfaces.tsx: (last round) layers wait for the launch gate.
 
-## Questions (answer when you can)
+## Questions
 
-- Home date at 23px is smaller than the 30px titles on the other tabs because of the streak chip. If you want it bigger, the choice is to drop the chip's number or let the date wrap on two lines. Which one?
-- Is `play.fill` OK for Start workout?
+- Rest-day rule: is "Rest day today, workout moves to the next training day" what you want for plans with fewer than 7 days a week? (It is what you asked for; I want to be sure it does not feel like a plan day disappeared.)
+- Font swap: if the fonts are late at launch, native screens may keep the system font until the next start. Is that OK, or do you prefer the app to wait longer?
 
-## Blocked commands (a hook blocked these as "deletes or discards files"; nothing was deleted, I redid the edits with the Edit/Write tools)
+## Blocked commands
 
-1. `python - <<'EOF' ... EOF` (a python heredoc that added the flame animation and number checks to scripts/test-streak.js) followed by `node scripts/test-streak.js | tail -12`. Blocked as a delete command. Nothing was deleted.
-2. `sed -i "s/const ro = out.getBoundingClientRect(), ri = inn.getBoundingClientRect(), rn = n.getBoundingClientRect();/.../" scripts/test-streak.js && node scripts/test-streak.js ...` (a one-line text swap in the same test). Blocked the same way. Nothing was deleted.
+None this round.
 
 ## Files for you to delete (I never delete)
 

@@ -46,6 +46,7 @@
  * never touches video bytes again.
  */
 
+import { leaveToTabs } from '../lib/leaveToTabs';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { View, StyleSheet, Share, TouchableOpacity, Animated, InteractionManager } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
@@ -482,7 +483,7 @@ export default function RecapScreen() {
     // workouts." Streak is a real-workout concept (calcStreak counts
     // workout days) — a solo form-check session isn't one, so it skips
     // straight to dest instead of the streak screen.
-    if (!isWorkoutMode) { router.replace(dest as any); return; }
+    if (!isWorkoutMode) { leaveToTabs(router, dest); return; }
     // Streak screen after every completed workout, with the real current
     // streak (sessions were already appended earlier in this screen's own
     // load, so calcStreak() here already reflects THIS workout). The

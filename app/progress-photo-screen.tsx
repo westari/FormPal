@@ -19,6 +19,7 @@
  * applied — so it opens full screen immediately instead of showing at the wrong
  * size and jumping.
  */
+import { leaveToTabs } from '../lib/leaveToTabs';
 import React, { useRef, useState } from 'react';
 import { StyleSheet, View, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -96,7 +97,7 @@ export default function ProgressPhotoScreen() {
     if (variant === 'recurring') daysSinceLastPrompt().then(setDaysSince);
   }, [variant]);
 
-  const finish = () => router.replace(dest as any);
+  const finish = () => leaveToTabs(router, dest);
 
   if (daysSince === null) return <View style={styles.flex} />;
 

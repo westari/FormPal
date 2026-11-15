@@ -65,6 +65,8 @@ check('the workout flow\'s own count wins if the session is not on disk yet (3, 
   });
   check('5: the fire is animated (outer + inner flame run an endless animation and their transforms change over time)', live.anim[0] === 'sk-live-out' && live.anim[1] === 'sk-live-in' && live.iter === 'infinite' && (live.a[0] !== live.b[0] || live.b[0] !== live.c[0]) && (live.a[1] !== live.b[1] || live.b[1] !== live.c[1]), JSON.stringify(live.anim) + ' ' + live.a.join(' / ') + ' -> ' + live.c.join(' / '));
   check('6: the streak number (2) is inside the flame, inside the cream belly, with room around it, and moves with the inner flame', live.num === '2' && live.inside && live.within && live.fits, JSON.stringify({ n: live.num, inside: live.inside, within: live.within, fits: live.fits }));
+  const nudge = await page.evaluate(() => { const n = document.querySelector('[data-streak-num]'), inn = document.querySelector('[data-vector-flame="in"]'); const rg = document.createRange(); rg.selectNodeContents(n); const t = rg.getBoundingClientRect(), r = inn.getBoundingClientRect(); return { dx: (t.left + t.width / 2) - (r.left + r.width / 2), tf: n.style.transform }; });
+  check('7: the number sits a little LEFT of the exact middle of the flame belly (looks centred; 2 to 6px left)', nudge.dx <= -2 && nudge.dx >= -6, JSON.stringify(nudge));
   check('6: the number is deep orange on cream (readable), not white on the orange', live.ncolor === 'rgb(232, 89, 12)', live.ncolor);
   await page.screenshot({ path: path.join(ROOT, '.scratch', 'streak-flame-crop.png'), clip: { x: 80, y: 190, width: 230, height: 250 } });
   check('words match: "Day 2 streak!" and not "Your streak starts today"', r.head === 'Day 2 streak!' && !/starts today/i.test(r.sub), r.head + ' / ' + r.sub);
