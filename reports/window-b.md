@@ -1,73 +1,74 @@
-# Window B report, 2026-11-13 (Ari's phone test)
+# Window B report, 2026-11-15 (Ari's phone test)
 
 Branch `work-b`. `git merge origin/overnight-build` ran first (clean).
 
 ## Which native build did the phone run?
 
-**The OLD Oct 8 build again** (master at 23ea174). The log has no `[AWAKE] native` line and no `[REP-QUALITY]` line; both come from native code written after Oct 8. So none of the native work (keep-awake keeper, video fix, expo-brightness, REP-QUALITY) was on the phone. Everything below that is JS runs on both builds. Next build: run "iOS Dev Build" on `overnight-build`, not `master`.
+**The OLD Oct 8 build again.** The log has no `[AWAKE] native` line and no `[REP-QUALITY]` line (both come from native code written after Oct 8). Everything below is JavaScript, so it works on that build. The Swift fixes from earlier rounds still need an "iOS Dev Build" run on `overnight-build` (not `master`).
 
-**Movement Match is NOT broken on the old build.** The log has 78 `[MOVE-MATCH]` lines: score 0 while he stood still, 82 to 96 TRYING while he pressed. So "Movement Match is not firing on the phone" is not what the log shows. What happened is below (item 6).
+## The camera (1 to 3)
 
-## The Guide and the Coach (items 1 to 6)
+**1. Half reps still got no X: done (replayed on this log).**
+Replaying this log (`scripts/fixtures/shoulder-press-2026-11-15.log.txt`) with the previous code: 8 reps, **0 X in 61 seconds**. Two causes in the attempt detector:
+- **Smoothing flattened the half reps.** It took the median of the last 3 readings. This log only has about 2.5 readings a second, so 3 readings span 1.2 seconds. A half rep that reads 65, 69, 72, 61, 66, 80, 64 became 66, 66, 66: no stroke, so no attempt, so no X. Now it only smooths readings from the last 250 ms (still 3 readings at the 10-a-second feed, 1 at the slow feed).
+- **One rep "covered" several strokes.** A stroke was called "counted" if any rep had happened in the 500 ms before its low. So a half rep right after a full rep got "counted" and no X. Now each engine rep belongs to exactly one stroke and only to a stroke that is around when the rep fires.
+Result on the same log: 21 strokes found, 8 counted (= the 8 reps), 13 missed; every missed stroke Movement Match calls real gets an X. Every real rep still gets its check.
+**What the X says:** in this log the top was reached every time (85 to 89) and the short end was the bottom (lows 61 to 70 with the line at 50), so the words are "Go lower". "Go higher" appears when the top is short (a synthetic test covers it). If you meant "arms not all the way up", the data says the opposite for these reps; tell me what the arm position was and I will check.
+I cannot promise every half rep: the feed is 2.5 readings a second and a fast stroke is only 3 readings.
 
-All six replayed on this log with `scripts/test-guide-coach-1113.js` (13 checks, all pass) plus the old suites.
+**2. Guide and a check at the same time: done.** While a check or X is on screen (`feedback` is set) the live Guide is hidden; it comes back when the verdict is gone. Tested on the source rule (the phone shows it).
 
-1. **Before Ready the Guide showed only stars: done.** Cause (found in code, not on the phone): last round I gave the card a fixed 88% width and made the text `flex: 1`. Inside the setup panel (which has no width of its own) the text collapsed to zero width. The live Guide (different container) was fine, which matches what you saw. The card is content-sized again with a minimum width. I could not render React Native layout here, so this is a code diagnosis; the test checks the source rules and the phone will show it.
-2. **"Step back further" while you did not move, and confidence rising by itself: done.** The camera's own "step back / no person" signal flickers while you stand still: the log shows it on at 01:06:38 and off at 01:06:41, the number fell 100 to 35 and rose back to 100, and the Guide said "Step back further" for 4 seconds. That signal now only counts after it has held 1.5 seconds, for both the words and the number (`createCueHold`, placeholder). A real loss of you (3 s) still shows. Tested: a 1.4 s flicker never reaches the screen, a 3 s one does.
-3. **~3 full reps with no checks: done as far as the log shows.** In this log every counted rep (9 of 9) got its check or the form X, so the Coach was not skipping them. One real gap fixed: a counted rep could be held back if another verdict had appeared in the last 1.2 s; now a counted rep always gets its check. If it happened on a rep the engine did NOT count (your bottom at 62 to 66 with the line at 50), that is not a counted rep: it now gets the "Go lower" X (see 5), because the engine cannot count it.
-4. **Standing still got "Go lower": done.** That X (01:07:02) came from a 0.37 rep-span wiggle after your 3rd rep, while the 10 s Movement Match still remembered the reps (score 87). A stroke under 0.4 of a rep span is now never an X (`minAttemptStrokeR`, placeholder), and the log shows why: `[COACH] withheld: the stroke was tiny`. Movement Match LOW still blocks every verdict.
-5. **Half reps got no X: done.** The attempt detector was throwing real half reps out: "ignored ... too slow to be a rep (12.4s)" because it counted the rest before the stroke as part of the stroke, and "stays up near the top" for lows of 73 (limit was 71.75). Fixed both (stroke length is the rise plus the drop; low limit 0.95 of the range) and an X no longer needs the 10 s score to be HIGH when the stroke is a real size (a half rep dips that score). Outcomes resolve after 0.6 s (was 1.5 s), so the X is not late. On the replay a real half rep (low 73, high 85) now gets "Go lower". I cannot promise EVERY half rep: the camera feed in this log is about 2.5 readings a second, and a fast stroke is only 3 readings.
-6. **10 seconds of trying, Guide silent: done.** Two causes. (a) For "the camera sees the whole path, the strokes are just short" the Guide was told to stay silent; it now says "Keep your hands in view" (hands exercises) or "Keep your whole body in view". That is the one honest nudge when no exact cause is found; the log line says "no exact cause found, general framing nudge". (b) The stuck clock ran while you stood still, because the 10 s score remembers reps. A new `movingNow` signal (last 2.5 s) means a rest is never "stuck". Replay: when stuck and moving the Guide is never silent for more than 1 s; when still there is no stuck line.
+**3. The Guide repeated one tip for ever: done.** The Guide keeps an ordered list of causes per situation (`tipOrder`). If the same tip has shown 5 seconds (placeholder, `GUIDE.tipRotateSec`) and the situation is still there, it moves to the next. "Step back further" then "Keep your hands in view", "Move your phone back", "Find more light", "Put your phone at chest height", then round again. Replay of a 40-second "step back" problem: 6.6 s, 11.6 s, 16.6 s, 21.6 s, 26.6 s ... each tip about 5 s. Every tip is a plain Guide line.
 
-## Camera look (7, 8)
+## Form checks are practice (4): done
 
-7. **Ready / Go look: done, but check it is the look you meant.** The code had changed from the original card (big green check, green "Ready. Go!") to the shared white-text cue pill on Nov 3. I restored the original card (40pt green check, green 21pt bold text, glass pill). If you meant a different earlier look, tell me which day.
-8. **Coach text readable on any background: done.** The reason under the X now sits on a dark pill (78% near-black, thin light rim) with 25pt white bold text. Contrast over a pure white wall: 10.3 to 1.
+A solo form check (`mode formCheck`: not a workout, not logged, not history) is practice:
+- Ends with "Form check complete" (the Done screen and the Workout complete page title).
+- Keeps the rep feedback. **Finish** on the last rep goes straight home: no Today's progress, no streak.
+- Saved with `kind: 'practice'` on the session entry. `getAllSessions()` keeps that field (Window A lists by it).
+- Never changes ranks, the muscle map or streaks: every aggregate (`computeMuscleTiers`, credit totals, overall scores, `calcStreak`, the streak page) skips practice entries (`realSessions`). Tested for real with a fake storage: 300 practice reps change nothing.
+- **Rep counter (mode repCounter) is NOT practice.** It is not form-judged but it is a real log (half credit). Tell me if you want it practice too.
 
-## Rep feedback (9 to 11)
+## One shared DoneScreen (5): done
 
-9. **"Finish" and the strong haptic: done.** The last rep's button says "Finish" (the others say "Next rep"). Tapping it fires `hapticFinish()`: impact Heavy plus notification Success, the one exception to the soft-haptics rule (lib/haptics.ts). Playwright proves the label and that the tap posts `finishReview`; the haptic itself needs your hand.
-10. **Liquid Glass controls: done for the video controls; the back and All sets buttons already were.** Back 10 s, forward 10 s and pause now use `LiquidGlassButton` (real Liquid Glass, same component as the back and All sets buttons). Those two buttons were already real glass in `WarmSurfaces.tsx`. If they still look flat, the phone's native build has no glass: the app now logs `[GLASS] real Liquid Glass: ON/OFF` at start, so the next log settles it (then the fix is a new build, not code). On a build without glass the video controls keep the old blur disc rather than a flat grey one.
-11. **Summary card not pressable: done.** Reproduced first: one tap turned it from rgb(244,244,246) to rgb(17,17,20) (black). It now has `pointer-events: none`; the same tap changes nothing.
+`components/DoneScreen.tsx` (timeline in `lib/doneTimeline.ts`, pure and tested). White background, green circle that draws itself slowly (0 to 0.75 s), the check draws inside (0.65 to 1.05 s), success haptic when the check ends (1.05 s), title fades up in the system font (SF Pro) semibold, optional grey line, about 1.5 s plus a 0.2 s hold, tap to skip. Variants: `small` (check + title), `workout` (check + "Workout complete" + reps counting up live), `streak` (flame grows, "3-day streak", "Come back tomorrow to keep it going."). Props: `variant, title?, subtitle?, reps?, streak?, onFinish, haptic?`. Window A can use `<DoneScreen variant="small" title="Workout saved" onFinish={...} />`. I could only check it by tests and `tsc`; the look needs your phone.
 
-## Finish to Today's progress (12)
+## The new flow (6, 7, 8)
 
-12. **White wash then live fill-up: done, about 2 seconds.** After Finish: a white wash sweeps up the screen (700 ms, drawn in `WarmSurfaces.tsx`), and when it covers the screen (380 ms) Today's progress starts to fill for 1.5 s: rows appear one after another, reps count up, "to Gold" counts down, bars slide forward, the header number and the overall bar rise, muscles light up one after another on the body. A tap anywhere skips to the end and does nothing else (it cannot press Done). The page waits empty until the wash arrives; if the app never starts it, it starts itself after 4.5 s. Playwright (real page): armed state is empty, half way the numbers are between empty and final, it ends at the exact final numbers, a tap on Done during the fill only skips. Screenshots in `.scratch/fill-mid.png`, `.scratch/fill-end.png`. The wash itself is React Native and only provable on the phone.
+- **6. Done:** workout ends -> DoneScreen "workout" -> Workout complete / rep feedback -> Today's progress (fills up live) -> Done -> DoneScreen "streak" (real number) -> progress-photo prompt if one is due -> Home. The Workout complete page only shows after the first Done screen (the pages wait, because they are drawn above everything). The old workout-complete haptic is gone (the Done screen fires it: one haptic, not two). `/streak-screen` (the week-row page) is no longer in this flow; it still opens from the streak pill on the tabs.
+- **7. White wash removed completely** (no wash view, no timers, no constants).
+- **8. Today's progress back button** is now the normal Liquid Glass back button (same one as the other pages); the design's white one is hidden.
 
-## Ranks, clearer (13, 14)
+## Today's progress numbers (9, 10): done
 
-13. **Rows in reps: done.** "Shoulders  +28 reps · 122 to Silver" with a bar (the bar is the muscle's progress to its own next rank, moving from where it was to where it is). 1 to 3 muscles are one per line; 4 to 6 sit two per line; more than 6: the six biggest show (the note says "and N more moved up"). Only good reps count and logged reps stay half credit (the reps are the muscle volume after minus before, the same numbers the ranks use).
-14. **Overall has its own section: done.** "Overall rank: Bronze", its bar, "+X% today" on the right, and the small line "The average of all 11 muscles. Train the gray ones to raise it." The body shows every muscle with any good reps bright (in its own rank colour) and every untrained muscle grey. Math untouched.
+- **9.** Reps rows are gone. Back to the old compact small rows in %, each saying what it is progress toward: "Shoulders +18.7% to Silver", "Triceps +7.5% to Silver" (top rank reads "+x% Top rank"). Same math as before (the same muscle gain numbers). More than 3 muscles use the old packed layout (one small row each, the body map shrinks to fit). The fill-up still works: the % counts up from 0.0, rows appear one after another, muscles light up.
+- **10.** The overall rank % and the "average of all 11 muscles" text are gone, and so are the header rank and the overall row. The overall only shows when it really ranks up, as a big moment: "Overall: Bronze → Silver!" with a big rank emblem (tested with a synthetic rank-up; real rank-ups need all muscles at Silver, so I could not make one from real data). The bottom summary card (note, Done) is unchanged.
 
-## Also fixed (found while reading the log)
+## Also fixed / found
 
-- **Orphan-clip adoption (last round) copied 19 old clips, about 240 MB, from July to October into permanent storage** (log 01:01:01). It now only adopts clips from the last 30 days (what the 30-day clean-up keeps). The video itself worked this time: `[VIDEO] stop: camera returned a clip`, and the rep feedback page had the video.
-- The screen stayed awake this whole session (98 s of tracking, `[AWAKE]` lines every 15 s). The earlier dimming is still unexplained; the native keep-awake needs the new build.
-- Two old tests changed because their rules changed: a "tiny wiggle" in `test-attempts.js` (it swung 0.45 of a range, the size of a real half rep) is now a true 7-degree wiggle.
+- Two old tests changed because their rules changed (the 11-13 replay test now checks the flat rest only; the wiggle test uses a real 7-degree wiggle).
+- `.scratch` still has my scratch files and the two earlier `edit-tlt*.js` scripts (see below).
 
 ## Tests
 
-- New: `scripts/test-guide-coach-1113.js` (replays this log), `scripts/test-fill-up.js` (the fill-up, 31 checks on the real design file), `scripts/test-rep-review-1113.js` (Finish label, Summary pill, glass controls, Ready look, Coach pill). Real log saved as `scripts/fixtures/shoulder-press-2026-11-13.log.txt`.
-- Updated: `test-muscle-ranks.js`, `test-setup-guide.js`, `test-movement-match.js`, `test-attempts.js`, `test-workout-video.js`.
-- `npx tsc --noEmit`: same 28 old errors, none new.
+New: `test-half-reps-1115.js` (replay + tip rotation + Guide hidden), `test-done-flow.js` (DoneScreen timeline, flow wiring, practice rules with real storage). Rewritten: `test-fill-up.js` (real design file: rows in %, no overall text, rank-up moment, fill-up, tap skip). Updated: `test-muscle-ranks.js`, `test-guide-coach-1113.js`, `test-haptics-screens.js`, `test-movement-match.js`, `test-warm-surfaces.js`. Real log saved as `scripts/fixtures/shoulder-press-2026-11-15.log.txt`. `npx tsc --noEmit`: the same 28 old errors, none new.
+Not provable here (needs your phone): the DoneScreen look and haptic, the Liquid Glass back button, the Guide hiding during a check, the feel of the half-rep X timing.
 
-## Phone test (after the build, JS parts are live now)
+## Phone test (JS parts are live now)
 
-1. Open the camera: the setup line shows words (not only stars) from the first second.
-2. Stand still 10 s after Go: no "Step back" line, the number does not swing.
-3. Do 3 full reps: a check on each. Do 3 half reps (arms only half way down): an X on each with "Go lower".
-4. Press hard for 10 s with nothing counting (arms stay high): a Guide line appears.
-5. Last rep review: button says Finish, tap it: you feel a strong thump, a white wash rises, the numbers fill up, tap skips.
-6. Look at the video controls and the top buttons: send me the log line `[GLASS] real Liquid Glass:`.
+1. Do 3 full reps then 3 half reps (stop short on purpose): a check on each full rep, an X on each half rep, and the Guide never shows while a check or X is up.
+2. Stand where the camera cannot see your hands for 15 seconds: the Guide changes its tip about every 5 seconds.
+3. Finish a real workout: Done screen (check draws, reps count up, buzz) -> Workout complete -> rep feedback -> Finish -> Today's progress fills up -> Done -> streak screen (flame) -> Home.
+4. Do a form check from the camera: "Form check complete", rep feedback, Finish -> Home with nothing in Today's progress, and your streak and ranks unchanged.
 
-## Questions for Ari (end)
+## Questions for Ari
 
-- Item 7: is the original Ready card (green check, green text) the look you meant, or an earlier one?
-- Items 12 to 14 changed a design file's page by injection only (the .html is untouched); more than 6 muscles in one workout shows the six biggest. OK?
+- Half reps: the data says the bottom was short ("Go lower"). If you wanted "Go higher", tell me what you did with your arms.
+- Is a rep counter (not a form check) meant to stay a real log? I left it counting.
 
-## Blocked (hook blocks deletes): list for Ari to delete
+## Blocked command (the hook stopped it): for Ari to run if wanted
 
-- `.scratch\edit-tlt*.js` (two scripts), Window A's `scripts\test-home-clean.js`, the `.scratch` folder, `train_wk_webkit.png`. Optional: `git rm lib\screenHaptics.ts`.
-- `.scratch\runall.sh`, `.scratch\runall.out`, `.scratch\replay13.js`, `.scratch\summary-before.js`, `.scratch\fix-test-mr*.js` (my scratch files).
+- `rm -f .scratch/runall.out` (deleting my own old test-output scratch file; I wrote to `.scratch/runall2.out` instead).
+- Still open from before: delete `.scratch\edit-tlt*.js`, Window A's `scripts\test-home-clean.js`, `train_wk_webkit.png`; optional `git rm lib\screenHaptics.ts`. My scratch files in `.scratch` (`runall*.sh/out`, `replay13.js`, `recap-edit.js`, `mr-edit.js`, `fix-test-mr*.js`, `summary-before.js`, `recap-title.js`, `ad.bak`, `ad.new`, `mr-old.ts`, `blockOld.js`) can go too.
 
-HQ: Fixed Guide, Coach, rep review, fill-up animation and rank rows; Ready look needs your check.
+Window B HQ: Fixed half-rep X, tip rotation, practice form checks, DoneScreen flow and %-rows.

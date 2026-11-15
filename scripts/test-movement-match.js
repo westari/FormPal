@@ -302,7 +302,7 @@ check('signature test covered every exercise in the catalogue (' + sigRows.lengt
 console.log('\n--- 5. wiring in app/formcheck.tsx ---');
 {
   const fc = fs.readFileSync(path.join(__dirname, '..', 'app/formcheck.tsx'), 'utf8').replace(/\r\n/g, '\n');
-  check('the line with the Cue stars while tracking shows ONLY the Guide\'s line (guideTrack), nothing else', /\{isTracking && !!guideTrack && \([\s\S]{0,260}<CueGlass text=\{guideTrack\} \/>/.test(fc) && !/<CueGlass text=\{cue\} \/>/.test(fc) && !fc.includes("showCue('Range set')"));
+  check('the line with the Cue stars while tracking shows ONLY the Guide\'s line (guideTrack), nothing else', /\{isTracking && !!guideTrack && !feedback && \([\s\S]{0,260}<CueGlass text=\{guideTrack\} \/>/.test(fc) && !/<CueGlass text=\{cue\} \/>/.test(fc) && !fc.includes("showCue('Range set')"));
   check('the old separate "turn sideways" overlay is gone (the Guide says it)', !fc.includes('s.outOfPlaneHint} pointerEvents'));
   check('every check / X on a counted rep goes through THE COACH (Movement Match LOW = none)', fc.includes("coachRef.verdict({ now: Date.now(), match: matchRef.result(), source: 'native'") && fc.includes('shownReason = cv.reason'));
   check('every X on an uncounted attempt goes through THE COACH and only a short stroke gets one', fc.includes("source: 'attempt', blocker: ev.blocker, rangeWord: ev.reason") && fc.includes("if (cva.show !== 'x') continue;"));

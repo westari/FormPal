@@ -22,7 +22,8 @@ export interface StreakInfo {
 const dayKey = (d: Date) => d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
 
 /** `passedCount`: the streak the workout flow already worked out (the session may not be on disk yet). Only ever raises the count. */
-export function streakInfo(sessions: SessionEntry[], now: number = Date.now(), passedCount = 0): StreakInfo {
+export function streakInfo(all: SessionEntry[], now: number = Date.now(), passedCount = 0): StreakInfo {
+  const sessions = all.filter(e => e.kind !== 'practice');   // practice form checks never count toward a streak
   const today = new Date(now); today.setHours(0, 0, 0, 0);
   const has = new Set(sessions.map(s => dayKey(new Date(s.ts))));
   let count = calcStreak(sessions, now);

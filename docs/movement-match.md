@@ -134,3 +134,9 @@ uncounted stroke.
 - **Attempt detector:** a stroke's length no longer includes the rest before it (the 2026-11-13 log threw real half reps out as "too slow, 12.4 s"); the low may sit up to 0.95 of the range above the entry line (was 0.75); outcomes resolve after 0.6 s (was 1.5 s) so an X is not late.
 - **Guide when trying and nothing counts:** it used to stay silent for "range-only"; it now says "Keep your hands in view" / "Keep your whole body in view" (the one honest nudge when no exact cause is known).
 - Proof: `scripts/test-guide-coach-1113.js` replays this log.
+
+## Update 2026-11-15 (Ari's phone test, log scripts/fixtures/shoulder-press-2026-11-15.log.txt)
+
+- Half reps got 0 X in 61 s (8 reps). Causes: the attempt detector's median-of-3 smoothing spanned 1.2 s on the 2.5-readings-a-second feed (a half rep flattened to a constant), and a stroke was "counted" when ANY rep fell in the 500 ms before its low. Now: smoothing only over the last 250 ms (`smoothMs`), and each engine rep belongs to one stroke (`claimRep`, window starts 600 ms before the stroke's low). Replay: 21 strokes, 8 counted (= the 8 reps), 13 missed, each real one gets its X.
+- The Guide and a check/X are never on screen together; the Guide rotates to the next cause after `GUIDE.tipRotateSec` (5 s) with an ordered list (`tipOrder`).
+- Practice form checks: `kind: 'practice'`, skipped by every rank / map / streak aggregate (`realSessions`).

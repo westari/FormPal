@@ -161,6 +161,25 @@ export function createCueHold(holdSec: number = G.cuePersistSec) {
   };
 }
 
+/**
+ * The ORDERED causes for a situation (Ari 2026-11-15: "Keep your hands in view" repeated for ever). The first tip is the most likely fix; when it has
+ * shown tipRotateSec and nothing improved, the next one is tried, and so on (then it starts again). Starts with the tip the situation names.
+ */
+export function tipOrder(base: string, exerciseId?: string): string[] {
+  const hands = handsMatter(exerciseId);
+  const L = GUIDE_LINES;
+  const general = hands ? [L.handsInView, L.backHands, L.phoneBack, L.moreLight, L.chestHeight] : [L.bodyInView, L.backBody, L.phoneBack, L.moreLight, L.chestHeight];
+  const special: Record<string, string[]> = {
+    [L.intoPicture]: [L.intoPicture, L.backHands, L.moreLight],
+    [L.sideways]: [L.sideways, L.facePhone, L.bodyInView],
+    [L.facePhone]: [L.facePhone, L.sideways, L.bodyInView],
+    [L.moreLight]: [L.moreLight, L.chestHeight, L.backHands],
+    [L.closer]: [L.closer, L.chestHeight, L.moreLight],
+  };
+  const list = special[base] ?? general;
+  return [base, ...list.filter(t => t !== base)];
+}
+
 export interface Guide {
   decide(i: GuideInputs): GuideDecision;
   reset(): void;
@@ -169,6 +188,7 @@ export interface Guide {
 export function createGuide(opts: { log?: (m: string) => void } = {}): Guide {
   const calm = createCalmLine();
   let lastLogLine = '', lastLogAt = 0;
+  let ep = { key: '', since: 0, idx: 0, seen: 0, base: '' };
   const log = (now: number, line: string | null, why: string) => {
     if (!opts.log) return;
     const key = line ?? '';
@@ -188,6 +208,15 @@ export function createGuide(opts: { log?: (m: string) => void } = {}): Guide {
         const hint = guideLine(i.nativeCue, i.exerciseId) ?? guideLine(i.outOfPlaneCue, i.exerciseId) ?? guideLine(i.diag, i.exerciseId);
         if (hint) { line = hint; why = `the camera says "${i.nativeCue || i.outOfPlaneCue || i.diag}"`; reason = 'hint'; prio = 1; }
       }
+      // ROTATE: the same tip for tipRotateSec and nothing improved -> the next most likely fix (ordered list per situation)
+      if (line) {
+        const key = reason + "|" + line;
+        if (ep.key !== key) ep = { key, since: i.now, idx: 0, seen: i.now, base: line };
+        else ep.seen = i.now;
+        if (i.now - ep.since >= G.tipRotateSec * 1000) { ep.idx += 1; ep.since = i.now; opts.log?.(`[GUIDE] same tip for ${G.tipRotateSec}s and nothing improved: next fix`); }
+        const order = tipOrder(ep.base, i.exerciseId);
+        line = order[ep.idx % order.length];
+      } else if (ep.key && i.now - ep.seen > 1500) ep = { key: "", since: 0, idx: 0, seen: 0, base: "" };
       // calm: a line stays up at least minShowSec and only changes when the new reason has held for changeConfirmSec
       const wantedLine = line;
       line = calm.feed(i.now, wantedLine);
@@ -196,7 +225,7 @@ export function createGuide(opts: { log?: (m: string) => void } = {}): Guide {
       log(i.now, line, why);
       return { line, why, reason };
     },
-    reset() { calm.reset(); lastLogLine = ''; lastLogAt = 0; },
+    reset() { calm.reset(); ep = { key: '', since: 0, idx: 0, seen: 0, base: '' }; lastLogLine = ''; lastLogAt = 0; },
   };
 }
 

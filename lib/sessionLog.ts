@@ -39,6 +39,14 @@ export interface SessionEntry {
   formChecked?: boolean;
   // true = typed in by hand in Log a session (never recorded with the camera). Older hand-logged entries have no flag: see isManualEntry.
   manual?: boolean;
+  // 'practice' = a form check (not a real workout). It keeps its rep feedback but NEVER changes ranks, the muscle map or streaks (every aggregate below
+  // skips it: see realSessions). Window A lists practice sessions separately by this exact field.
+  kind?: 'practice';
+}
+
+/** The sessions that count toward ranks, the muscle map and streaks: everything except practice form checks. */
+export function realSessions(sessions: SessionEntry[]): SessionEntry[] {
+  return sessions.filter(e => e.kind !== 'practice');
 }
 
 /** A session the user typed in (new entries carry manual: true; older ones are recognised by the way they were written: no form judged, no good reps, no score). */
@@ -84,6 +92,7 @@ export async function getAllSessions(): Promise<SessionEntry[]> {
       pct:         e.pct ?? 0,
       formChecked: e.formChecked ?? true,
       ...(e.manual ? { manual: true } : {}),
+      ...(e.kind === 'practice' ? { kind: 'practice' as const } : {}),
     }));
   } catch {
     return [];
@@ -139,7 +148,8 @@ export function scoredSessions(sessions: SessionEntry[]): SessionEntry[] {
 // session logged first thing this morning doesn't read as streak-broken
 // before the user has had a chance to train today). Single source of truth —
 // previously duplicated as a local function in app/(tabs)/progress.tsx.
-export function calcStreak(sessions: SessionEntry[], now: number = Date.now()): number {
+export function calcStreak(all: SessionEntry[], now: number = Date.now()): number {
+  const sessions = realSessions(all);
   if (sessions.length === 0) return 0;
   const daySet = new Set(sessions.map(s => {
     const d = new Date(s.ts); d.setHours(0, 0, 0, 0); return d.getTime();
@@ -194,7 +204,7 @@ function rawMuscleWeightedReps(sessions: SessionEntry[], now: number): Record<st
 }
 
 export function computeOverallMuscleScores(sessions: SessionEntry[]): MuscleScores {
-  const raw = rawMuscleWeightedReps(sessions, Date.now());
+  const raw = rawMuscleWeightedReps(realSessions(sessions), Date.now());
   const max = Math.max(0, ...Object.values(raw));
   if (max === 0) return {};
   const out: MuscleScores = {};
@@ -275,7 +285,7 @@ export function belowBronzeProgress(_totalCredit: number): number {
 /** Credit-weighted reps per muscle over a set of sessions (every rep, judged or not, no decay). */
 export function muscleCreditTotals(sessions: SessionEntry[]): Map<Muscle, number> {
   const out = new Map<Muscle, number>();
-  for (const e of sessions) {
+  for (const e of realSessions(sessions)) {
     const def = getExerciseDef(e.exerciseId);
     if (!def) continue;
     for (const c of def.muscles) {
@@ -297,7 +307,7 @@ export function computeMuscleTiers(sessions: SessionEntry[]): MuscleTiers {
   // Per muscle: good reps x credit (the rank number), plus judged / good reps for the information-only goodRatio.
   // An entry whose form was never judged (rep counter only, typed in by hand) has no good or bad: its reps count at HALF credit.
   const acc = new Map<Muscle, { vol: number; qual: number; good: number }>();
-  for (const s of sessions) {
+  for (const s of realSessions(sessions)) {   // a practice form check never moves a rank
     const def = getExerciseDef(s.exerciseId);
     if (!def) continue; // exerciseId missing/unknown: can't attribute muscles
     const judged = s.formChecked !== false;

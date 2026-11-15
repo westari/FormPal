@@ -35,7 +35,7 @@ const check = (name, ok, detail) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${na
 const DAY = 24 * 60 * 60 * 1000;
 // A row's % gain, recomputed from its bar (the rows now say reps; the bar moved by exactly the old % gain): barTo - barFrom
 const gp = (h) => Math.round((h.barTo - h.barFrom) * 10) / 10;
-const ROWTXT = /^\+\d+ reps? · (\d+ to [A-Z][a-z]+|Top rank)$/;
+const ROWTXT = /^\+\d+\.\d% (to [A-Z][a-z]+|Top rank)$/;
 const TIERIDX = { bronze: 0, silver: 1, gold: 2, platinum: 3, diamond: 4, master: 5, champion: 6 };
 const NOW = Date.now();
 const entry = (id, reps, good, daysAgo, ts) => ({
@@ -95,8 +95,8 @@ SCENARIOS['many muscles (full body)'] = build(
 {
   const sc = build([entry('romanianDeadlift', 60, 55, 10)], [entry('romanianDeadlift', 30, 27, 0)]);
   sc.payload.hits = [
-    { name: 'Hamstrings', gain: '+30 reps · 100 to Silver', icon: iconFor('hamstrings'), muscle: 'hamstrings', reps: 30, toNext: 100, nextLabel: 'Silver', barFrom: 20, barTo: 40 },
-    { name: 'Rear Delts', gain: '+30 reps · 100 to Silver', icon: iconFor('shoulders'), muscle: 'rearDelts', reps: 30, toNext: 100, nextLabel: 'Silver', barFrom: 20, barTo: 40 },
+    { name: 'Hamstrings', gain: '+30.0% to Silver', gainNum: 30, icon: iconFor('hamstrings'), muscle: 'hamstrings', reps: 30, toNext: 100, nextLabel: 'Silver', barFrom: 20, barTo: 50 },
+    { name: 'Rear Delts', gain: '+30.0% to Silver', gainNum: 30, icon: iconFor('shoulders'), muscle: 'rearDelts', reps: 30, toNext: 100, nextLabel: 'Silver', barFrom: 20, barTo: 50 },
   ];
   sc.synthetic = true; // rows overridden by hand for a layout stress test
   sc.payload.note = 'Layout stress test.';
@@ -142,7 +142,7 @@ for (const [name, sc] of Object.entries(SCENARIOS)) {
     check(`${name}: every number on the page has exactly one decimal`, /^\d+\.\d$/.test(p.rank.gained) && /^\d+\.\d%$|^Top rank$/.test(p.rank.pctLabel) && p.hits.every(h => ROWTXT.test(h.gain)), `${p.rank.pctLabel} | ${p.rank.gained} | ${p.hits.map(h => h.gain).join(',')}`);
     if (!sc.synthetic) check(`${name}: the note is plain coach words (no maths, no arrows, no "total gained")`, !/Total gained|average of|=|→|\+\d/.test(p.note) && p.note.length < 190 && /moved up|Nice work|top rank/.test(p.note), p.note);
   }
-  check(`${name}: every row has a real muscle name + "+N reps · M to Gold" (whole reps)`, p.hits.every(h => h.name && ROWTXT.test(h.gain)));
+  check(`${name}: every row has a real muscle name + "+1.4% to Gold" (a % and what it is progress toward)`, p.hits.every(h => h.name && ROWTXT.test(h.gain)));
 }
 // ── user's report: "Bronze 53.2% -> 53.2%", Shoulders +0.0%, Triceps +0.0% right after a workout ──
 // Shoulders/triceps were already past the overall (weakest-link) tier, so they were capped at 100 before AND after.
@@ -175,7 +175,7 @@ for (const [name, sc] of Object.entries(SCENARIOS)) {
   const sc = build(prior, today);
   const bic = sc.payload.hits.find(h => h.name === 'Biceps');
   // 30 reps before (60% toward Bronze), 39 after (78%): the row is +18.0, not today's 9 reps alone (+18 coincides) - use a case that tells them apart below
-  check('first rank: biceps (117 of the 150 reps to Silver) is Bronze 78%: the row says +27 reps with 33 to go, and its bar moved +18.0%', sc.tiersAfter.biceps.tier === 'bronze' && bic && gp(bic) === 18 && bic.reps === 27 && bic.toNext === 33 && /33 to Silver/.test(bic.gain), bic && bic.gain);
+  check('first rank: biceps (117 of the 150 reps to Silver) is Bronze 78%: the row says +18.0% to Silver', sc.tiersAfter.biceps.tier === 'bronze' && bic && gp(bic) === 18 && bic.gain === '+18.0% to Silver', bic && bic.gain);
   const big = build([mk(120, NOW - 4 * DAY)], [mk(27, NOW)]); // 120 -> 147 reps: 80% -> 98%
   const bic2 = big.payload.hits.find(h => h.name === 'Biceps');
   check('first rank: 147 of 150 reps shows 98% and still Bronze (never 100% until Silver is real) - row +18.0%', big.tiersAfter.biceps.tier === 'bronze' && bic2 && gp(bic2) === 18 && bic2.toNext === 3, bic2 && bic2.gain);
@@ -287,13 +287,12 @@ check('rows carry the real Flaticon art', A.hits.every(h => h.icon && h.icon.sta
     const later = await snap();
 
     const txt = atReady.text.replace(/\s+/g, ' ');
-    check(`${name}: header shows real rank + % + where it is heading`, txt.includes(p.rank.label) && txt.includes(p.rank.pctLabel), `${p.rank.label} ${p.rank.pctLabel}`);
+    check(`${name}: NO overall % and NO "average of all muscles" text on Today's progress (the overall only shows when it ranks up)`, !txt.includes(p.rank.pctLabel) && !/average of all|Overall rank|Overall +/.test(txt) && !/% today/.test(txt), txt.slice(0, 160));
     const overallText = p.rank.atTop ? 'Top rank reached' : `+${p.rank.gained}% today`;
-    check(`${name}: OVERALL has its own section: "Overall rank: ${p.rank.label}" and "${overallText}"`, txt.includes('Overall rank: ' + p.rank.label) && txt.includes(overallText), txt.match(/Overall rank[^A-Z]*[A-Za-z]*/)?.[0]);
+    check(`${name}: the muscle rows read "+X.X% to <next rank>" (small rows, in %)`, p.hits.slice(0, 6).every(h => txt.includes(h.gain)));
     check(`${name}: the old "Each muscle's own progress" text is gone and the section has NO "Bronze → Silver" arrow row any more`, !/own progress/i.test(txt) && !/→/.test(txt) && !new RegExp(p.rank.label + ' ?→').test(txt));
-    check(`${name}: the one small line under the overall bar: "The average of all ${p.rank.count} muscles. Train the gray ones to raise it."`, p.rank.atTop || txt.includes('The average of all ' + p.rank.count + ' muscles. Train the gray ones to raise it.'));
+    check(`${name}: no big overall row either (no Bronze → Silver arrow, no emblem row, no overall bar)`, !/→/.test(txt) && !(await page.evaluate(() => [...document.querySelectorAll('#dc-root div')].some(d => d.style.height === '6px' && d.style.borderRadius === '999px' && d.getBoundingClientRect().width > 0))));
     const pos = await page.evaluate(() => { const gd = document.querySelector('[data-mr-overall]'); if (!gd) return null; const r = gd.getBoundingClientRect(); const grp = gd.parentElement.firstElementChild.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, grpTop: grp.top, grpBottom: grp.bottom, grpRight: grp.right }; });
-    if (!p.rank.atTop) check(`${name}: "+X% today" is on the far RIGHT of the same row as "Overall rank: ${p.rank.label}"`, !!pos && pos.top < pos.grpBottom && pos.bottom > pos.grpTop && pos.left >= pos.grpRight - 1 && pos.right > 330, JSON.stringify(pos));
     check(`${name}: muscle rows = ${p.hits.slice(0, 6).map(h => h.name + ' ' + h.gain).join(', ') || 'none'}`,
       p.hits.slice(0, 6).every(h => txt.includes(h.name) && txt.includes(h.gain)));
     const placeholders = ['Bronze II', 'Bronze III', '+14% today', 'Quads', 'Glutes', '+6%', '+5%', '72%'];
@@ -321,7 +320,7 @@ check('rows carry the real Flaticon art', A.hits.every(h => h.icon && h.icon.sta
       });
       check(`${name}: ${p.hits.length} muscles -> ${lay.n} rows on screen (every muscle that gained), ${lay.rows} compact line(s), no overlaps`, lay.n === p.hits.length && lay.overlaps === 0, JSON.stringify(lay));
       check(`${name}: the card stays the same size (${lay.cardH}px, design 360) and the rows sit inside it below the body map`, lay.cardH === 360 && lay.bottom <= lay.cardPx && lay.top >= lay.imgBottom - 2, JSON.stringify(lay));
-      check(`${name}: the overall is its own section ("+${p.rank.gained}% today" once), not a row among the muscles`, txt.includes(`+${p.rank.gained}% today`) && !/Overall [+]/.test(txt) && !/own progress/i.test(txt), txt.match(/Overall[^A-Z]*/)?.[0]);
+      check(`${name}: still no overall text with 3+ rows`, !/average of all|Overall rank|% today/.test(txt));
     }
     check(`${name}: real body map image, decoded, visible`, atReady.imgSrc === p.bodyMap && atReady.imgW > 0 && atReady.imgVis === 'visible');
     check(`${name}: layout identical at reveal and 2.2s later (nothing shifts)`, JSON.stringify(atReady.rects) === JSON.stringify(later.rects) && atReady.transform === later.transform);

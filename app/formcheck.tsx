@@ -1269,7 +1269,7 @@ export default function FormCheckScreen() {
         ? Math.round((Date.now() - startTimestamp.current) / 1000) : 0);
       prefetchSoloRecap({
         reps: navParams.reps, goodReps: navParams.goodReps, repCounter: repCounterOnly,
-        durationSec, hasVideo: !!navParams.videoUri,
+        durationSec, hasVideo: !!navParams.videoUri, practice: !repCounterOnly,
       });
       router.replace({
         pathname: '/recap',
@@ -1324,7 +1324,7 @@ export default function FormCheckScreen() {
         ? Math.round((Date.now() - startTimestamp.current) / 1000) : 0;
       prefetchSoloRecap({
         reps: navParams.reps, goodReps: navParams.goodReps, repCounter: repCounterOnly,
-        durationSec: recapDurationRef.current, hasVideo: !!navParams.videoUri,
+        durationSec: recapDurationRef.current, hasVideo: !!navParams.videoUri, practice: !repCounterOnly,
       });
     }
 
@@ -1860,7 +1860,8 @@ export default function FormCheckScreen() {
       {/* (the separate planarity hint is gone: the Guide says "Stand sideways to the phone" / "Face the phone" instead) */}
       {/* THE GUIDE while tracking: setup lines only (where to stand, where the phone goes, light), picked from WHY the camera cannot count
           (lib/guideCoach.ts). Never form words: those are the Coach's, on the check / X. */}
-      {isTracking && !!guideTrack && (
+      {/* the Guide and a Coach verdict are NEVER on screen together (Ari 2026-11-15): while a check / X shows, the Guide is hidden */}
+      {isTracking && !!guideTrack && !feedback && (
         <Animated.View style={[s.trackingCueHint, { transform: [{ rotate: floorSpin }] }]} pointerEvents="none">
           <CueGlass text={guideTrack} />
         </Animated.View>

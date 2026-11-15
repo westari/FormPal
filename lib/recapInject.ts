@@ -203,6 +203,8 @@ export function dcScaleFitJs(bg: string, bottomFillColor?: string): string {
 export function recapDataJs(opts: {
   totalReps: number; moves: number; pct: number; hasFormData: boolean;
   durationSec?: number; overview: string; hasVideo: boolean;
+  /** the page title; "Form check complete" for a practice form check (default: the design's "Workout Complete") */
+  title?: string;
 }): string {
   const { totalReps, moves, pct, hasFormData, durationSec, overview, hasVideo } = opts;
   const formValue = hasFormData && totalReps > 0 ? `${pct}%` : 'N/A';
@@ -213,6 +215,7 @@ export function recapDataJs(opts: {
     '12': String(moves),
     '86%': formValue,
     '38:12': durationValue,
+    ...(opts.title ? { 'Workout Complete': opts.title } : {}),
     'Sets': 'Moves',
     'Form': formLabel,
     'Push-up depth improved every set and squats stayed steady. Next time, slow the way down on pull-ups.': overview,

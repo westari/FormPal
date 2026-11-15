@@ -69,6 +69,8 @@ import { Muscle, type ExerciseId } from '../constants/exercises';
 import { computeOverallStanding, MUSCLE_LABELS, MUSCLE_ICON_SOURCES } from '../components/MuscleTierMap';
 import { Asset } from 'expo-asset';
 import { hapticSuccess } from '../lib/haptics';
+import DoneScreen from '../components/DoneScreen';
+import { decideProgressPhotoVariant } from '../lib/postWorkoutFlow';
 import { buildMuscleRanksPayload, workedMuscles, type MuscleRanksPayload } from '../lib/muscleRanksData';
 import { tierDataUri } from '../lib/rankImages';
 import { allSetsDataJs, setTilesFor } from '../lib/allSetsInject';
@@ -76,7 +78,7 @@ import { generateSummary, recapPageData } from '../lib/recapPrefetch';
 import { postLag } from '../lib/postLag';
 import { repFeedbackDataJs } from '../lib/repFeedbackInject';
 import { athltSetDataJs } from '../lib/dcLogicPatch';
-import { warmWant, warmPrepare, warmActivate, warmDeactivate, warmRelease, warmSetBg, warmSetOverlay, warmSetUnderlay } from '../components/WarmSurfaces';
+import { warmInject, warmWant, warmPrepare, warmActivate, warmDeactivate, warmRelease, warmSetBg, warmSetOverlay, warmSetUnderlay } from '../components/WarmSurfaces';
 import { useWorkoutSessionStore } from '../store/workoutSessionStore';
 import type { WorkoutSummary } from '../store/workoutSessionStore';
 import { usePlanStore } from '../store/planStore';
@@ -191,7 +193,7 @@ export default function RecapScreen() {
       }
       if (repFeedbackSignal.finishedReview) {
         repFeedbackSignal.finishedReview = false;
-        setView('ranks');
+        if (!isPractice) setView('ranks');
       }
     }, [])
   );
@@ -219,6 +221,9 @@ export default function RecapScreen() {
   // Overall +X%), the same screen a real workout ends on, with the logged exercises counted.
   const isLoggedMode = mode === 'logged' && tsParam != null;
   const isHistoryMode = !isWorkoutMode && !isLoggedMode && tsParam != null;
+  // A form check (not a real workout) is PRACTICE (Ari 2026-11-15): "Form check complete", keeps the rep feedback, skips Today's progress and the
+  // streak, and its session entry is saved with kind: 'practice' so it never changes ranks, the muscle map or streaks.
+  const isPractice = mode === 'formCheck' && !isWorkoutMode && !isLoggedMode && !isHistoryMode;
 
   const finishWorkout       = useWorkoutSessionStore(s => s.finishWorkout);
   const abortWorkout        = useWorkoutSessionStore(s => s.abortWorkout);
@@ -264,6 +269,7 @@ export default function RecapScreen() {
       ts: soloTs, exerciseId: exId,
       displayName: EXERCISE_DEFINITIONS[exId as ExerciseId]?.displayName ?? exId,
       reps, goodReps, pct, formChecked,
+      ...(isPractice ? { kind: 'practice' as const } : {}),
     };
     persistOnMount.current = reps > 0 ? [entry] : [];
     let soloEvents: RepEventData[] = [];
@@ -286,8 +292,16 @@ export default function RecapScreen() {
   const [view, setView] = useState<'summary' | 'allsets' | 'ranks'>(isLoggedMode ? 'ranks' : 'summary');
   // "Finish review" on rep feedback: show the muscle page at once, while that screen is still on top.
   const [finishing, setFinishing] = useState(false);
+  // DONE SCREENS (components/DoneScreen.tsx): #1 when the workout ends ("Workout complete" / "Form check complete" with the reps counting up), #2 after
+  // Today's progress > Done (the streak). The warm pages (drawn above the navigator) only show once the screen on top is gone.
+  const [doneIntro, setDoneIntro] = useState(!isHistoryMode && !isLoggedMode);
+  const [streakDone, setStreakDone] = useState<{ count: number; dest: string } | null>(null);
   useEffect(() => {
-    repFeedbackSignal.onFinishReview = () => { postLag('recap: finish review -> switching to the muscle page'); setView('ranks'); setFinishing(true); };
+    repFeedbackSignal.onFinishReview = () => {
+      // practice: the rep feedback is the end (no Today's progress, no streak)
+      if (isPractice) { postLag('recap: finish review -> practice, straight home'); router.replace('/(tabs)/' as any); return; }
+      postLag('recap: finish review -> switching to the muscle page'); setView('ranks'); setFinishing(true);
+    };
     return () => { repFeedbackSignal.onFinishReview = null; };
   }, []);
 
@@ -471,6 +485,7 @@ export default function RecapScreen() {
   // actually completes the session and navigates away now.
   const handleBack = useCallback(async () => {
     if (data?.isHistory) { router.back(); return; }
+    if (isPractice) { router.replace('/(tabs)/' as any); return; }
     setView('ranks');
   }, [data, router]);
 
@@ -493,8 +508,9 @@ export default function RecapScreen() {
     const streakCount = calcStreak(sessions);
     const lastTs = sessions.length > 0 ? sessions[sessions.length - 1].ts : Date.now();
     saveStreakToCloud(streakCount, lastTs).catch(() => {});
-    router.replace({ pathname: '/streak-screen', params: { count: String(streakCount), dest } } as any);
-  }, [isWorkoutMode, completeSession, router]);
+    // Great job #2: the streak Done screen (flame, "3-day streak"), then the progress-photo prompt if one is due, then home
+    setStreakDone({ count: Math.max(1, streakCount), dest });
+  }, [isWorkoutMode, completeSession]);
 
   // Real per-rep what/fix text (repFeedbackText — same function this file
   // already used), only meaningful when there's a real video to scrub to.
@@ -546,8 +562,9 @@ export default function RecapScreen() {
     return recapPageData({
       totalReps: data.totalReps, totalGoodReps: data.totalGoodReps, moves: data.entries.length,
       pct: data.pct, hasFormData: data.hasFormData, durationSec: data.durationSec, hasVideo,
+      title: isPractice ? 'Form check complete' : undefined,
     });
-  }, [data, hasVideo]);
+  }, [data, hasVideo, isPractice]);
 
   // Real tiles for the warm All sets page (lib/allSetsInject.ts). Only the first
   // set has a recorded clip (one video per solo session), so only it can open
@@ -569,7 +586,7 @@ export default function RecapScreen() {
   // being reviewed, and handleBack never routes there in that case anyway.
   const [ranksPayload, setRanksPayload] = useState<MuscleRanksPayload | null>(null);
   useEffect(() => {
-    if (!data || data.isHistory) return;
+    if (!data || data.isHistory || isPractice) return;   // practice has no Today's progress
     let cancelled = false;
     (async () => {
       postLag('recap: rank payload start');
@@ -668,7 +685,7 @@ export default function RecapScreen() {
   // they're tapped. Everything is released (and a fresh page re-warmed) when
   // this screen goes away.
   useEffect(() => {
-    if (!isHistoryMode) warmWant('ranks', true);
+    if (!isHistoryMode && !isPractice) warmWant('ranks', true);
     // The 4th page (All sets) is only needed if the user taps it: mount it once the screen is idle (not at a fixed
     // 1.2s, which landed in the middle of the Workout complete animation and the rep feedback open).
     const task = InteractionManager.runAfterInteractions(() => { postLag('recap: mounting the All sets page (idle)'); warmWant('allsets', true); });
@@ -699,11 +716,18 @@ export default function RecapScreen() {
   useEffect(() => { if (allSetsDataJsStr) warmPrepare('allsets', allSetsDataJsStr); }, [allSetsDataJsStr]);
   const warmKind: 'recap' | 'ranks' | 'allsets' | null =
     effectiveView === 'summary' ? 'recap' : effectiveView === 'ranks' ? 'ranks' : 'allsets';
-  const mayShow = isFocused || finishing;
+  const mayShow = (isFocused || finishing) && !doneIntro && !streakDone;
   useLayoutEffect(() => {
     if (!warmKind || !mayShow) return;
     warmActivate(warmKind, { onMessage: (m) => onWebMsg.current(m) });
     return () => warmDeactivate(warmKind);
+  }, [warmKind, mayShow]);
+
+  // Today's progress fills up live (reps/% counting, rows one after another, muscles lighting) the moment it is on screen; the page was armed (empty) when ready
+  useEffect(() => {
+    if (warmKind !== 'ranks' || !mayShow) return;
+    const t = setTimeout(() => warmInject('ranks', 'window.__mrPlay && window.__mrPlay(); true;'), 260);
+    return () => clearTimeout(t);
   }, [warmKind, mayShow]);
 
   // Native colour under the page: dark until the native video has a frame,
@@ -746,7 +770,6 @@ export default function RecapScreen() {
   onWebMsg.current = (msg: InMsg) => {
     // Haptics: Workout complete (a real workout, not a past one opened from history) and a rank up are celebrated once each
     if (msg.type === 'ready') {
-      if (!isHistoryMode && !celebrated.current) { celebrated.current = true; hapticSuccess(); }
       if (view === 'ranks' && ranksPayload?.rank.rankedUp && !rankCelebrated.current) { rankCelebrated.current = true; hapticSuccess(); }
     }
     if (__DEV__) console.log('[recap-debug] onMessage:', msg.type, 'current view=', view, 'effectiveView=', effectiveView);
@@ -783,7 +806,7 @@ export default function RecapScreen() {
 
   return (
     <View style={[styles.root, isLoggedMode ? { backgroundColor: '#f2f2f6' } : null]}>
-      <StatusBar style={isLoggedMode ? 'dark' : 'light'} />
+      <StatusBar style={isLoggedMode || doneIntro || streakDone ? 'dark' : 'light'} />
       {/* Native video — a real AVPlayer, its own process, nothing to do
           with the WebView (see file header). Sits BEHIND the WebView;
           the summary WebView's own background goes transparent above so
@@ -818,6 +841,21 @@ export default function RecapScreen() {
           showing ALONGSIDE allsets' own, the literal duplicate reported.
           Removing it entirely rather than re-scoping it further, since no
           view actually needs it any more. */}
+      {/* Great job #1: the workout is done (or the form check). The reps count up; the Workout complete page appears when it finishes. */}
+      {doneIntro ? (
+        <DoneScreen variant="workout" title={isPractice ? 'Form check complete' : 'Workout complete'} reps={data.totalReps} onFinish={() => setDoneIntro(false)} />
+      ) : null}
+      {/* Great job #2: the streak. Then the progress photo prompt (if one is due) and home. */}
+      {streakDone ? (
+        <DoneScreen
+          variant="streak" streak={streakDone.count}
+          onFinish={async () => {
+            const variant = await decideProgressPhotoVariant();
+            if (variant) router.replace({ pathname: '/progress-photo-screen', params: { variant, dest: streakDone.dest } } as any);
+            else router.replace(streakDone.dest as any);
+          }}
+        />
+      ) : null}
     </View>
   );
 }

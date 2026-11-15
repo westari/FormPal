@@ -72,7 +72,7 @@ const SURFACES = {
     file: 'muscleranks.html',
     data: athltSetDataJs(ranksPayload),
     cold: mr.muscleRanksBeforeJs(ranksPayload),
-    real: (t) => t.includes(ranksPayload.rank.label) && ranksPayload.hits.every(h => t.includes(h.name) && t.includes(h.gain)) && !/Quads|Glutes|\+6%|Bronze II/.test(t),
+    real: (t) => ranksPayload.hits.every(h => t.includes(h.name) && t.includes(h.gain)) && !/Quads|Glutes|\+6%|Bronze II/.test(t),
     card: '#dc-root img[alt="Muscles worked this session"]',
     // Its data (incl. decoding the body-map SVG) is injected while the user is
     // still on Workout Complete, i.e. long before the page is shown, so what

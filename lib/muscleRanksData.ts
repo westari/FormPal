@@ -89,7 +89,8 @@ export interface MuscleRanksPayload {
     pctLabel: string;       // header text: only the newest number, e.g. "9.0%"
     gained: string;         // the OVERALL gain: the exact sum of the muscle row percentages, number text without "+"/"%"
     beforePct: string;      // the OVERALL rank % before this workout (one decimal, no "%"); the page shows "before -> after"
-    rankedUp: boolean;      // the overall rank itself went up (the % then starts over in the new rank)
+    rankedUp: boolean;
+    prevLabel: string;      // the overall rank before today ("Bronze"): the rank-up moment reads "Overall: Bronze -> Silver!"      // the overall rank itself went up (the % then starts over in the new rank)
     hi: string; lo: string; ink: string;
     emblem: string | null;
     count: number;          // how many muscles the overall rank averages (11): "The average of all 11 muscles"
@@ -100,7 +101,8 @@ export interface MuscleRanksPayload {
   hits: {
     name: string; gain: string; icon: string | null;
     muscle: string;
-    reps: number;           // reps gained today (whole number, at least 1 when the muscle gained)
+    gainNum: number;        // the row's % gain, one decimal (the text is "+1.4% to Gold")
+    reps: number;           // reps gained today (kept for the tests; the page no longer shows reps)
     toNext: number | null;  // reps still needed for this muscle's NEXT rank (null = top rank)
     nextLabel: string;      // "Gold" (empty at the top)
     barFrom: number; barTo: number; // this muscle's bar before / after today, 0-100 (a rank-up starts again from 0)
@@ -190,9 +192,11 @@ export function buildMuscleRanksPayload(opts: {
     const barTo = a ? (nt ? r1(muscleProgressPct(a)) : 100) : 0;
     const barFrom = sameTier && b ? (nt ? r1(muscleProgressPct(b)) : 100) : (b && !a ? r1(muscleProgressPct(b)) : 0);
     const nextLabel = nt ? cap(nt) : '';
-    const repsText = `+${reps} ${reps === 1 ? 'rep' : 'reps'}`;
-    const gain = toNext === null ? `${repsText} · Top rank` : `${repsText} · ${toNext} to ${nextLabel}`;
-    return { muscle: m, reps, toNext, nextLabel, barFrom: Math.min(barFrom, barTo), barTo, gain };
+    // Back to PERCENT rows (Ari 2026-11-15: "Triceps +3 reps" makes no sense when he did 8 reps), each saying what it is progress TOWARD:
+    // "Shoulders +1.4% to Gold". The number is the same muscle gain as before (the math is untouched).
+    const gainNum = Math.min(99.9, r1(gainOf(m)));
+    const gain = nt ? `+${fmt1(gainNum)}% to ${nextLabel}` : `+${fmt1(gainNum)}% Top rank`;
+    return { muscle: m, reps, toNext, nextLabel, barFrom: Math.min(barFrom, barTo), barTo, gain, gainNum };
   });
   // The body: a muscle with ANY good reps is bright (in its own rank colour), every other muscle is grey: the user SEES why the overall
   // average moves slowly. Today's new ones are lit one after another by the page.
@@ -230,6 +234,7 @@ export function buildMuscleRanksPayload(opts: {
       gained: fmt1(overallGainTenths / 10), // how much the overall rank (the average of every muscle) really moved
       beforePct: fmt1(standingBefore && !standingBefore.atTop ? standingBefore.progress * 100 : 0),
       rankedUp,
+      prevLabel: standingBefore?.tier ? cap(standingBefore.tier) : 'Bronze',
       hi: meta.hi, lo: meta.lo, ink: meta.ink,
       emblem,
       count: opts.muscleCount ?? 11,
@@ -240,7 +245,7 @@ export function buildMuscleRanksPayload(opts: {
     note: explain,
     hits: shown.map((w, i) => ({
       name: name(w.muscle),
-      gain: rows[i].gain,
+      gain: rows[i].gain, gainNum: rows[i].gainNum,
       icon: iconFor(w.muscle),
       muscle: String(w.muscle),
       reps: rows[i].reps, toNext: rows[i].toNext, nextLabel: rows[i].nextLabel, barFrom: rows[i].barFrom, barTo: rows[i].barTo,

@@ -24,6 +24,7 @@
 
 // ── placeholders ──────────────────────────────────────────────────────────────────────────────────────────────────
 export const ATTEMPT_TUNING = {
+  smoothMs: 250,            // ...but only readings this recent (see smoothed())
   smoothN: 3,               // median of the last N samples (the log gives a value about every 0.33s)
   swingHysteresis: 0.22,    // a turn is real when the value moved this fraction of the exercise's full range
   minStrokeFraction: 0.3,   // a low-to-high stroke (and the drop before it) must cover at least this much of the full range to be an attempt
@@ -108,6 +109,9 @@ export function createAttemptDetector(opts: { exerciseId?: string; now?: () => n
   let nAttempts = 0;
   let missedInARow = 0;
   let lastRepAt = 0, repCount = 0, soft = 0;
+  // Engine [REP] times not yet matched to a stroke. A rep belongs to ONE stroke (2026-11-15 log: a half rep right after a full rep, or two
+  // seconds after one, was called "counted" because a rep had happened within 500 ms before its low, so no half rep ever got an X).
+  let unclaimedReps: number[] = [];
   let pendingRejectAt = 0, rejectKind: 'unreliable' | 'other' | '' = '', rejectLightMax = 1;
   let suppressedAt = 0;
   let lastNoPersonAt = 0;
@@ -124,7 +128,11 @@ export function createAttemptDetector(opts: { exerciseId?: string; now?: () => n
   const median = (a: number[]) => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : 0; };
 
   function smoothed(): number {
-    const tail = samples.slice(-T.smoothN).map(p => p.v);
+    // Median over the last smoothMs only. The old "last 3 samples" spanned 1.2 s on the 2.5-readings-a-second feed, which flattened a whole half rep
+    // (65, 69, 72, 61, 66, 80, 64 read as 66, 66, 66: the 2026-11-15 half reps never became strokes). At 10 readings a second it is still 3.
+    const tNow = samples[samples.length - 1].t;
+    let tail = samples.filter(p => tNow - p.t <= T.smoothMs).slice(-T.smoothN).map(p => p.v);
+    if (!tail.length) tail = [samples[samples.length - 1].v];
     return median(tail);
   }
 
@@ -263,8 +271,18 @@ export function createAttemptDetector(opts: { exerciseId?: string; now?: () => n
     lastAttemptAt = t;
     // the engine's [REP] line comes when the rep completes, i.e. before the stroke's peak has settled: it counts for this stroke if it
     // arrived after the stroke's low
-    pending.push({ low: c.low, high: c.high, at: t, period, repSeen: lastRepAt > 0 && lastRepAt >= c.low.t - 500 });
+    pending.push({ low: c.low, high: c.high, at: t, period, repSeen: claimRep(c.low.t - 600) });
     return [];
+  }
+
+  // the earliest unmatched engine rep since `since` belongs to this stroke (and to no other)
+  function claimRep(since: number): boolean {
+    const tNow = now();
+    // a rep from before this stroke began had its chance with an earlier stroke: it can never be this one's (it would hide a half rep)
+    unclaimedReps = unclaimedReps.filter(r => tNow - r < 12000 && r >= since);
+    if (!unclaimedReps.length) return false;
+    unclaimedReps.shift();
+    return true;
   }
 
   function step(v: number): DetectorEvent[] {
@@ -324,7 +342,7 @@ export function createAttemptDetector(opts: { exerciseId?: string; now?: () => n
     if (/^\[ACTIVITY\] state=suppressed/.test(line)) { suppressedAt = t; return []; }
     if (/^\[ACTIVITY\] state=active/.test(line)) { return []; }
     if (/^\[TRACK\] person lost/.test(line)) { lastNoPersonAt = t; return []; }
-    if (/^\[REP\] #\d+/.test(line)) { const pd = pending[pending.length - 1]; if (pd && t - pd.at < RESOLVE_MS) pd.repSeen = true; lastRepAt = t; repCount++; missedInARow = 0; missedLows = []; missedHighs = []; missedBlockers = []; stuckCue = null; return []; }
+    if (/^\[REP\] #\d+/.test(line)) { const pd = pending.find(p => !p.repSeen && t - p.at < RESOLVE_MS); if (pd) pd.repSeen = true; else unclaimedReps.push(t); lastRepAt = t; repCount++; missedInARow = 0; missedLows = []; missedHighs = []; missedBlockers = []; stuckCue = null; return []; }
     if (/^\[REP\] rejected/.test(line)) {
       pendingRejectAt = t;
       if (/tracking unreliable/i.test(line)) {
@@ -348,7 +366,7 @@ export function createAttemptDetector(opts: { exerciseId?: string; now?: () => n
     adapted() { return adaptedLine; },
     reset() {
       samples = []; lastHigh = lastLow = null; dir = null; ext = null; lastAttemptAt = 0; nAttempts = 0; missedInARow = 0;
-      lastRepAt = 0; repCount = 0; soft = 0; pendingRejectAt = 0; rejectKind = ''; suppressedAt = 0; lastNoPersonAt = 0;
+      lastRepAt = 0; unclaimedReps = []; repCount = 0; soft = 0; pendingRejectAt = 0; rejectKind = ''; suppressedAt = 0; lastNoPersonAt = 0;
       stuckCue = null; missedLows = []; missedHighs = []; missedBlockers = []; adaptedLine = null; startedAt = 0; pending = []; cand = null; ignoredAt = 0; pathCut = null;
     },
   };

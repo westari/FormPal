@@ -27,6 +27,7 @@ export function generateSummary(reps: number, goodReps: number, hasFormData = tr
 export interface RecapPageInput {
   totalReps: number; totalGoodReps: number; moves: number; pct: number;
   hasFormData: boolean; durationSec?: number; hasVideo: boolean;
+  title?: string;
 }
 
 export function recapPageData(i: RecapPageInput): string {
@@ -34,7 +35,7 @@ export function recapPageData(i: RecapPageInput): string {
     totalReps: i.totalReps, moves: i.moves, pct: i.pct,
     hasFormData: i.hasFormData, durationSec: i.durationSec,
     overview: generateSummary(i.totalReps, i.totalGoodReps, i.hasFormData),
-    hasVideo: i.hasVideo,
+    hasVideo: i.hasVideo, title: i.title,
   });
 }
 
@@ -55,13 +56,14 @@ export function prefetchWorkoutRecap(): void {
 }
 
 /** Call right before router.replace('/recap', ...) for a solo form check / analysed video. */
-export function prefetchSoloRecap(p: { reps: number; goodReps: number; repCounter: boolean; durationSec?: number; hasVideo: boolean }): void {
+export function prefetchSoloRecap(p: { reps: number; goodReps: number; repCounter: boolean; durationSec?: number; hasVideo: boolean; practice?: boolean }): void {
   try {
     const formChecked = !p.repCounter;
     warmPrepare('recap', recapPageData({
       totalReps: p.reps, totalGoodReps: p.goodReps, moves: p.reps > 0 ? 1 : 0,
       pct: formChecked && p.reps > 0 ? Math.round((p.goodReps / p.reps) * 100) : 0,
       hasFormData: formChecked, durationSec: p.durationSec, hasVideo: p.hasVideo,
+      title: p.practice ? 'Form check complete' : undefined,
     }));
     if (__DEV__) console.log('[warm:recap] prefetched before navigation (solo)');
   } catch (e) { if (__DEV__) console.warn('[warm:recap] prefetch failed', e); }

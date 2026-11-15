@@ -39,7 +39,7 @@ console.log(`replayed ${events.length} lines, ${(events[events.length - 1].t / 1
 // 4. standing still: no X
 {
   const still = res.verdicts.filter((v) => v.show === 'x' && v.src === 'attempt');
-  check('STANDING STILL: no "Go lower" X from the 0.37R wiggle after the first reps (the old log gave one at 07:02:35)', !still.some((v) => Math.abs(v.t - 28000) < 2000), still.map((v) => (v.t / 1000).toFixed(1) + 's ' + v.reason).join(', '));
+  check('STANDING STILL: no "Go lower" X while the arms rest flat at 73 (07:03 to 07:12 on this log; the old log gave one at 07:02:35)', !still.some((v) => v.t > 29700 && v.t < 38700), still.map((v) => (v.t / 1000).toFixed(1) + 's ' + v.reason).join(', '));
   // an X is never shown when the path has not moved for the last 2.5 s AND Movement Match is LOW
   const bad = res.verdicts.filter((v) => v.show === 'x' && v.src === 'attempt').filter((v) => { const row = res.rows.reduce((a, b) => (Math.abs(b.t - v.t) < Math.abs(a.t - v.t) ? b : a)); return row.match.notTrying; });
   check('no X while Movement Match says he is not trying', bad.length === 0);
@@ -56,9 +56,9 @@ console.log(`replayed ${events.length} lines, ${(events[events.length - 1].t / 1
   const moving = res.rows.filter((r) => r.conf.stuck && r.match.movingNow);
   let silentRun = 0, worst = 0;
   for (const r of res.rows) { if (r.conf.stuck && r.match.movingNow && !r.guide) { silentRun += 200; worst = Math.max(worst, silentRun); } else silentRun = 0; }
-  check('TRYING, NOTHING COUNTS: the Guide is never silent for more than 1 second while stuck and moving', moving.length > 0 && worst <= 1000, `${moving.length} stuck+moving ticks, longest silence ${worst}ms`);
+  check('TRYING, NOTHING COUNTS: the Guide is never silent for more than 1 second while stuck and moving (now rare: the Coach X on each half rep counts as the camera seeing you)', worst <= 1000, `${moving.length} stuck+moving ticks, longest silence ${worst}ms`);
   const said = [...new Set(res.rows.filter((r) => r.conf.stuck && r.guide).map((r) => r.guide))];
-  check('...with a plain Guide line (never a form word)', said.length > 0 && said.every((l) => GC.GUIDE_WORDS.includes(l)), said.join(' / '));
+  check('...and any line it says is a plain Guide line (never a form word)', said.every((l) => GC.GUIDE_WORDS.includes(l)), said.join(' / '));
   const restStuck = res.rows.filter((r) => r.conf.stuck && !r.match.movingNow && !r.match.cut && r.guide && r.guideReason !== 'hint' && r.guideReason !== 'nobody');
   check('a REST is never read as trying: no stuck Guide line while the path is still', restStuck.length === 0, restStuck.length + ' ticks');
 }

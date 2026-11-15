@@ -68,6 +68,7 @@ export const GUIDE = {
   minShowSec: 2.5,          // a Guide line stays up at least this long
   changeConfirmSec: 1.5,    // a different line (or none) must be wanted this long, without a break, before it replaces the one shown
   firstShowConfirmSec: 0.4, // a line shows after being wanted this long (so a one-frame blip never flashes)
+  tipRotateSec: 5,          // PLACEHOLDER: the same Guide tip for this long with nothing improved -> switch to the next most likely fix
   minTryingSec: 2,          // Movement Match must have been HIGH this long before a stuck diagnosis is trusted
   cuePersistSec: 1.5,       // the camera's own "step back / no person" signal must hold this long before the words or the number react (it flickers while you stand still)
   logEverySec: 4,
