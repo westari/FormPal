@@ -19,6 +19,7 @@ import { SymbolView } from 'expo-symbols';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from '../../lib/haptics';
 import ScreenBackground from '../../components/ScreenBackground';
+import GlassBackButton from '../../components/GlassBackButton';
 import { usePlanStore } from '../../store/planStore';
 import { useWorkoutSessionStore } from '../../store/workoutSessionStore';
 import { workoutMinutes } from '../../lib/trainData';
@@ -49,7 +50,7 @@ function PageBackground() {
   );
 }
 
-/** One sets or reps row in the edit sheet: label, minus, number, plus. */
+/** One sets or reps row in the edit sheet: a grey rounded row (like an exercise row on Home's Edit Workout sheet) with white round controls. */
 function Stepper({ label, value, min, max, onChange }: { label: string; value: number; min: number; max: number; onChange: (n: number) => void }) {
   const step = (d: number) => { const n = Math.max(min, Math.min(max, value + d)); if (n !== value) { Haptics.selectionAsync(); onChange(n); } };
   return (
@@ -57,11 +58,11 @@ function Stepper({ label, value, min, max, onChange }: { label: string; value: n
       <Text style={s.stepLabel}>{label}</Text>
       <View style={s.stepCtl}>
         <Pressable hitSlop={8} onPress={() => step(-1)} style={s.stepBtn} accessibilityRole="button" accessibilityLabel={`Fewer ${label.toLowerCase()}`}>
-          <SymbolView name="minus" size={15} weight="bold" tintColor={INK} type="monochrome" style={{ width: 15, height: 15 }} />
+          <SymbolView name="minus" size={14} weight="bold" tintColor={INK} type="monochrome" style={{ width: 14, height: 14 }} />
         </Pressable>
         <Text style={s.stepVal}>{value}</Text>
         <Pressable hitSlop={8} onPress={() => step(1)} style={s.stepBtn} accessibilityRole="button" accessibilityLabel={`More ${label.toLowerCase()}`}>
-          <SymbolView name="plus" size={15} weight="bold" tintColor={INK} type="monochrome" style={{ width: 15, height: 15 }} />
+          <SymbolView name="plus" size={14} weight="bold" tintColor={INK} type="monochrome" style={{ width: 14, height: 14 }} />
         </Pressable>
       </View>
     </View>
@@ -83,6 +84,9 @@ function ExCard({ name, sets, reps, onEdit }: { name: string; sets: number; reps
     </View>
   );
 }
+
+/** The header starts BELOW the notch / status bar with real breathing room (it sat right up against it before). */
+export const headerTop = (insetTop: number) => Math.max(insetTop, 47) + 14;
 
 export default function WorkoutPreviewScreen() {
   const router     = useRouter();
@@ -161,10 +165,8 @@ export default function WorkoutPreviewScreen() {
     <View style={s.root}>
       <PageBackground />
 
-      <View style={[s.header, { paddingTop: Math.max(insets.top - 6, 14) }]}>
-        <Pressable hitSlop={10} onPress={() => router.back()} style={s.backCircle} accessibilityRole="button" accessibilityLabel="Back">
-          <SymbolView name="chevron.left" size={15} weight="bold" tintColor={INK} type="monochrome" style={{ width: 15, height: 15 }} />
-        </Pressable>
+      <View style={[s.header, { paddingTop: headerTop(insets.top) }]}>
+        <GlassBackButton onPress={() => router.back()} />
         <View style={s.titleBlock}>
           <Text style={s.title} numberOfLines={1}>{workout.splitLabel}</Text>
           <Text style={s.subtitle} numberOfLines={1}>{workoutMinutes(workout)} min · {plural(exCount, 'exercise')}</Text>
@@ -184,14 +186,26 @@ export default function WorkoutPreviewScreen() {
 
       <Modal visible={editing != null} transparent animationType="slide" onRequestClose={() => setEditing(null)}>
         <Pressable style={s.sheetBack} onPress={() => setEditing(null)} accessibilityLabel="Close" />
-        <View style={[s.sheet, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
-          <View style={s.grab} />
-          <Text style={s.sheetTitle} numberOfLines={1}>{editing != null ? workout.exercises[editing]?.displayName : ''}</Text>
-          <Stepper label="Sets" value={draft.sets} min={1} max={10} onChange={n => setDraft(d => ({ ...d, sets: n }))} />
-          <Stepper label="Reps" value={draft.reps} min={1} max={50} onChange={n => setDraft(d => ({ ...d, reps: n }))} />
-          <Pressable style={s.sheetSave} onPress={saveEdit} accessibilityRole="button" accessibilityLabel="Save">
-            <Text style={s.startTxt}>Save</Text>
-          </Pressable>
+        {/* The same sheet as the Edit Workout sheet on Home: a floating white sheet (8px from the sides and the bottom, 40px corners), the grab
+            bar, a 20px bold title with a round close button, grey rounded rows (#f6f6f8, 20px corners) with white round controls, and the
+            black Done pill. */}
+        <View style={[s.sheet, { bottom: 8 + Math.max(insets.bottom - 8, 0) }]} testID="edit-sheet">
+          <Pressable onPress={() => setEditing(null)} style={s.grabHit} accessibilityLabel="Close grab bar"><View style={s.grab} /></Pressable>
+          <View style={s.sheetHead}>
+            <Text style={s.sheetTitle} numberOfLines={1}>{editing != null ? workout.exercises[editing]?.displayName : ''}</Text>
+            <Pressable onPress={() => setEditing(null)} style={s.closeBtn} accessibilityRole="button" accessibilityLabel="Close">
+              <SymbolView name="xmark" size={12} weight="bold" tintColor={INK} type="monochrome" style={{ width: 12, height: 12 }} />
+            </Pressable>
+          </View>
+          <View style={s.sheetRows}>
+            <Stepper label="Sets" value={draft.sets} min={1} max={10} onChange={n => setDraft(d => ({ ...d, sets: n }))} />
+            <Stepper label="Reps" value={draft.reps} min={1} max={50} onChange={n => setDraft(d => ({ ...d, reps: n }))} />
+          </View>
+          <View style={s.sheetBtns}>
+            <Pressable style={s.sheetSave} onPress={saveEdit} accessibilityRole="button" accessibilityLabel="Save">
+              <Text style={s.sheetSaveTxt}>Done</Text>
+            </Pressable>
+          </View>
         </View>
       </Modal>
 
@@ -232,10 +246,6 @@ const s = StyleSheet.create({
 
   // header: round white back button, then the name over "52 min · 8 exercises"
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 0, gap: 15 },
-  backCircle: {
-    width: 34, height: 34, borderRadius: 17, backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center',
-    boxShadow: '0 6px 16px -6px rgba(40,50,90,0.28), 0 1px 3px rgba(40,50,90,0.08)',
-  } as any,
   titleBlock: { flex: 1 },
   title: { fontFamily: FONT.displayBlack, fontSize: 25, lineHeight: 29, letterSpacing: -0.8, color: INK },
   subtitle: { fontFamily: FONT.display, fontSize: 13.5, lineHeight: 18, color: SUB, marginTop: 2 },
@@ -254,15 +264,24 @@ const s = StyleSheet.create({
   pencil: { width: 16, height: 16, marginLeft: 8 },
 
   sheetBack: { flex: 1, backgroundColor: 'rgba(17,17,20,0.35)' },
-  sheet: { backgroundColor: '#ffffff', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingTop: 10 },
-  grab: { alignSelf: 'center', width: 38, height: 5, borderRadius: 3, backgroundColor: '#dcdce1', marginBottom: 16 },
-  sheetTitle: { fontFamily: FONT.displayBlack, fontSize: 20, lineHeight: 24, letterSpacing: -0.5, color: INK, marginBottom: 6 },
-  stepRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 64 },
-  stepLabel: { fontFamily: FONT.displayBold, fontSize: 16, color: INK },
-  stepCtl: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  stepBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#f1f1f4', alignItems: 'center', justifyContent: 'center' },
-  stepVal: { fontFamily: FONT.displayBlack, fontSize: 20, color: INK, minWidth: 48, textAlign: 'center' },
-  sheetSave: { height: 54, borderRadius: 27, backgroundColor: INK, alignItems: 'center', justifyContent: 'center', marginTop: 10 },
+  sheet: {
+    position: 'absolute', left: 8, right: 8, borderRadius: 40, overflow: 'hidden', backgroundColor: '#ffffff',
+    boxShadow: '0 -10px 40px -14px rgba(40,50,90,0.35), 0 2px 8px -2px rgba(40,50,90,0.1)',
+  } as any,
+  grabHit: { paddingTop: 10, paddingBottom: 4, alignItems: 'center' },
+  grab: { width: 38, height: 5, borderRadius: 3, backgroundColor: '#dcdce1' },
+  sheetHead: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 20, paddingTop: 10 },
+  sheetTitle: { flex: 1, fontFamily: FONT.displayBold, fontSize: 20, lineHeight: 25, letterSpacing: -0.5, color: INK },
+  closeBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#f1f1f4', alignItems: 'center', justifyContent: 'center' },
+  sheetRows: { paddingHorizontal: 16, paddingTop: 14, gap: 8 },
+  stepRow: { borderRadius: 20, paddingVertical: 13, paddingLeft: 16, paddingRight: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f6f6f8' },
+  stepLabel: { fontFamily: FONT.displayBold, fontSize: 15.5, letterSpacing: -0.3, color: INK },
+  stepCtl: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  stepBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px -3px rgba(40,50,90,0.3)' } as any,
+  stepVal: { fontFamily: FONT.displayBold, fontSize: 18, color: INK, minWidth: 44, textAlign: 'center' },
+  sheetBtns: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 16, gap: 8 },
+  sheetSave: { height: 54, borderRadius: 27, backgroundColor: '#111114', alignItems: 'center', justifyContent: 'center', boxShadow: '0 16px 30px -16px rgba(17,17,20,0.6)' } as any,
+  sheetSaveTxt: { fontFamily: FONT.displayBold, fontSize: 16, color: '#ffffff' },
   footer: { position: 'absolute', left: 16, right: 16, flexDirection: 'row', gap: 10, alignItems: 'center' },
   saveBtn: { width: 58, height: 58, borderRadius: 29, backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center', boxShadow: '0 10px 22px -10px rgba(40,50,90,0.35), 0 1px 3px rgba(40,50,90,0.1)' } as any,
   tplNote: { fontFamily: FONT.display, fontSize: 12.5, lineHeight: 16, color: SUB, marginTop: 4 },

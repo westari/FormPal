@@ -44,6 +44,9 @@ import type { RepEventData } from '../../lib/sessionLog';
 import { FONT, W, Sp, R, Elev, Col } from '../../constants/theme';
 import { getExerciseDef } from '../../constants/exercises';
 import { getDemoCues } from '../../lib/demoCues';
+import { demoBeforeJs, demoData } from '../../lib/demoScreen';
+import { demoTimeline } from '../../lib/demoVideos';
+import { decideMusicGate, MUSIC_MAX_SHOWS, MUSIC_SHOWN_KEY } from '../../lib/musicGate';
 import { prefetchWorkoutRecap } from '../../lib/recapPrefetch';
 import { postLag, postLagStart } from '../../lib/postLag';
 import { useKeepAwake } from 'expo-keep-awake';
@@ -113,18 +116,6 @@ function scoreColor(pct: number): string {
 // of a script-level hook. ─────────────────────────────────────────────────
 const DEMO_STEP_HTML = require('../../assets/app screens/demovideo.html');
 
-// The exact 3 default cue strings demovideo.html's dc-script falls back to
-// (p.cues ?? [...] — cues has no data-props editor entry, so this default
-// is always what actually renders in the static export). Matched in order
-// against the real getDemoCues() result; a cue row with no real
-// replacement (an exercise with <3 cues) gets hidden rather than left
-// showing stale placeholder text.
-const DEMO_VIDEO_DEFAULT_CUES = [
-  'Hands just wider than your shoulders',
-  'Body in one straight line, head to heels',
-  'Lower until your chest nearly touches the floor',
-];
-
 // None of these Claude-Design exports ship a <meta name="viewport">.
 // Without one, iOS WKWebView lays the page out in a 980px world and
 // shrink-to-fits it (the artboard renders at ~40% size) — same fix
@@ -161,7 +152,7 @@ const DC_VIEWPORT_JS = `(function(){try{
 // (cropped via overflow:hidden if the device is relatively wider than
 // 390:844, which is the common case on modern phones — acceptable, the
 // cropped margin is background, not content).
-function dcScaleFitJs(bg: string): string {
+function dcScaleFitJs(bg: string, extraTop = 0): string {
   return `
   (function(){
     var W=390, H=844;
@@ -190,7 +181,8 @@ function dcScaleFitJs(bg: string): string {
         var el=all[i]; if(el.children.length) continue;
         if((el.textContent||'').trim()==='9:41'){
           var row=el.parentElement;
-          if(row){ row.style.setProperty('display','none','important'); return true; }
+          // hidden but it keeps its room: removing it pulled every title and button up under the notch (music screen: "all the text is too high")
+          if(row){ row.style.setProperty('visibility','hidden','important'); if(${extraTop}) row.style.setProperty('height',(50+${extraTop})+'px','important'); return true; }
         }
       }
       return false;
@@ -200,137 +192,37 @@ function dcScaleFitJs(bg: string): string {
   `;
 }
 
-function demoVideoInject(opts: {
-  exName: string; sets: number; reps: number; stepIndex: number; stepTotal: number;
-  cues: string[]; skipPref: boolean;
-}): string {
-  const { exName, sets, reps, stepIndex, stepTotal, cues, skipPref } = opts;
-  const meta = `${sets} set${sets === 1 ? '' : 's'} · ${reps} rep${reps === 1 ? '' : 's'}`;
-  const position = `${stepIndex} of ${stepTotal}`;
-  const MAP: Record<string, string> = {
-    'Push-ups': exName,
-    '3 sets · 12 reps': meta,
-    '1 of 4': position,
-  };
-  DEMO_VIDEO_DEFAULT_CUES.forEach((def, i) => {
-    if (cues[i]) MAP[def] = cues[i];
-  });
-  return dcScaleFitJs('#111114') + `
-(function(){
-  function post(m){ try{ window.ReactNativeWebView.postMessage(m); }catch(e){} }
-  var MAP = ${JSON.stringify(MAP)};
-  var HIDE_CUES_FROM = ${cues.length};
-  var DEFAULT_CUES = ${JSON.stringify(DEMO_VIDEO_DEFAULT_CUES)};
-  var SKIP_PREF = ${JSON.stringify(skipPref)};
-  var hideApplied = false, backWired = false, readyWired = false, hideToggleWired = false;
-  function apply(){
-    var hit=0;
-    var all=document.querySelectorAll('#dc-root div,#dc-root span');
-    for(var i=0;i<all.length;i++){
-      var el=all[i]; if(el.children.length) continue;
-      var t=(el.textContent||'').trim();
-      if(MAP[t]!=null && t!==MAP[t]){ el.textContent=MAP[t]; hit++; }
-    }
-    // Cue rows beyond the real cue count: hide the whole row (the text
-    // div's parent — sc-camel-on-click="{{ c.pick }}" row), not just blank
-    // the text, so there's no dangling placeholder-looking row.
-    if(!hideApplied && HIDE_CUES_FROM < DEFAULT_CUES.length){
-      var divs=document.querySelectorAll('#dc-root div');
-      for(var j=0;j<divs.length;j++){
-        var dt=(divs[j].textContent||'').trim();
-        var idx=DEFAULT_CUES.indexOf(dt);
-        if(idx>=0 && idx>=HIDE_CUES_FROM && !divs[j].children.length && divs[j].parentElement){
-          divs[j].parentElement.style.display='none';
-          hideApplied=true; hit++;
-        }
-      }
-    }
-    // Close (X) -> end workout. "I'm ready" / skip-demo -> start the set.
-    // Both are <a href="...dc.html"> — real anchors would try to navigate
-    // the WebView itself to a dead relative URL, so intercept clicks on
-    // them specifically rather than letting the generic CTA regex (which
-    // these pages don't use) guess.
-    if(!backWired){
-      var closeBtn=document.querySelector('#dc-root a[aria-label="Close"]');
-      if(closeBtn){ closeBtn.addEventListener('click', function(ev){ ev.preventDefault(); post('__tap'); post('demoBack'); }, true); backWired=true; hit++; }
-    }
-    if(!readyWired){
-      var readyLinks=document.querySelectorAll('#dc-root a[href="In Workout.dc.html"]');
-      if(readyLinks.length){
-        for(var k=0;k<readyLinks.length;k++){
-          readyLinks[k].addEventListener('click', function(ev){ ev.preventDefault(); post('__tap'); post('demoReady'); }, true);
-        }
-        readyWired=true; hit++;
-      }
-    }
-    if(!hideToggleWired){
-      var hideRow=null;
-      var cands=document.querySelectorAll('#dc-root div');
-      for(var m=0;m<cands.length;m++){
-        if((cands[m].textContent||'').trim()==="Don't show this demo again" && !cands[m].children.length){
-          hideRow=cands[m].parentElement; break;
-        }
-      }
-      if(hideRow){
-        hideRow.addEventListener('click', function(ev){ post('__tap'); post('demoTogglePref'); }, true);
-        // Pre-check the box to match the already-persisted preference —
-        // the artboard's own "hide" state always starts false (no prop
-        // override channel for it either), so sync it with one synthetic
-        // click rather than leaving it visually unchecked while the real
-        // preference is already on.
-        if(SKIP_PREF){ hideRow.click(); }
-        hideToggleWired=true; hit++;
-      }
-    }
-    return hit>=3;
-  }
-  if(!apply()) [200,500,1000,2000,3500,5000].forEach(function(d){ setTimeout(apply,d); });
-  else [1000,2500].forEach(function(d){ setTimeout(apply,d); });
-  var root = document.getElementById('dc-root') || document.body;
-  var mo = new MutationObserver(function(){ apply(); });
-  mo.observe(root, { childList: true, subtree: true, characterData: true });
-})();
-true;
-`;
-}
-
 function DemoStepWebView({
-  exName, sets, reps, stepIndex, stepTotal, cues, skipPref, topInset, bottomInset,
+  exerciseId, exName, sets, reps, stepIndex, stepTotal, cues, skipPref,
   onBack, onReady, onTogglePref,
 }: {
-  exName: string; sets: number; reps: number; stepIndex: number; stepTotal: number;
+  exerciseId: string; exName: string; sets: number; reps: number; stepIndex: number; stepTotal: number;
   cues: string[]; skipPref: boolean; topInset: number; bottomInset: number;
   onBack: () => void; onReady: () => void; onTogglePref: () => void;
 }) {
-  const webRef = useRef<WebView>(null);
-
-  // Same re-injection split as before: the INITIAL script only changes
-  // when stepIndex changes (a genuinely new exercise) so it can stay an
-  // injectedJavaScriptBeforeContentLoaded config prop without reloading
-  // the WebView on every render; skipPref changes get pushed live after
-  // the fact via injectJavaScript instead.
-  const initialInject = useMemo(
-    () => demoVideoInject({ exName, sets, reps, stepIndex, stepTotal, cues, skipPref }),
+  // The real exercise, numbers and TIMED steps go in BEFORE the page's first draw (lib/demoScreen.ts), so the design's own default text
+  // ("Push-ups", "3 sets · 12 reps") is never on screen. Built once per exercise (stepIndex changes only for a new exercise).
+  const before = useMemo(
+    () => demoBeforeJs(demoData({ exerciseId, exName, sets, reps, stepIndex, stepTotal, cues, skipPref })),
     [stepIndex] // eslint-disable-line react-hooks/exhaustive-deps
   );
-
-  useEffect(() => {
-    webRef.current?.injectJavaScript(demoVideoInject({ exName, sets, reps, stepIndex, stepTotal, cues, skipPref }));
-  }, [skipPref]); // eslint-disable-line react-hooks/exhaustive-deps
-
+  if (__DEV__) {
+    const tl = demoTimeline(exerciseId, cues);
+    if (!tl.timed) console.log('[DEMO] ' + exerciseId + ': placeholder timing (' + tl.length + 's, steps at ' + tl.steps.map(x => x.start).join(', ') + ') - set real start times in lib/demoVideos.ts');
+  }
   return (
     <WebView
-      ref={webRef}
       source={DEMO_STEP_HTML}
       originWhitelist={['*']}
       style={{ flex: 1, backgroundColor: '#1b1b1f' }}
-      injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS + NO_ZOOM_JS}
-      injectedJavaScript={initialInject}
+      injectedJavaScriptBeforeContentLoaded={before}
+      injectedJavaScript={dcScaleFitJs('#111114')}
       onMessage={(e) => {
         const m = e.nativeEvent.data;
         if (m === 'demoBack') onBack();
         else if (m === 'demoReady') onReady();
         else if (m === 'demoTogglePref') onTogglePref();
+        else if (m === 'demoShown' && __DEV__) console.log('[DEMO] shown with the real data');
       }}
       allowFileAccess
       allowFileAccessFromFileURLs
@@ -339,10 +231,7 @@ function DemoStepWebView({
       domStorageEnabled
       bounces={false}
       overScrollMode="never"
-      // Still under active editing — without this the WebView can go on
-      // serving an old cached response after a reload, indistinguishable
-      // from "the edit didn't actually change anything."
-      cacheEnabled={false}
+      cacheEnabled
     />
   );
 }
@@ -352,10 +241,12 @@ function DemoStepWebView({
 // user checks "Don't show this page again" — then persisted forever via
 // AsyncStorage, same pattern as SKIP_DEMO_KEY above. ───────────────────────
 const SKIP_MUSIC_KEY = 'formpal_skip_connect_music';
+// The screen is shown only the FIRST 2 TIMES EVER (counted when it is shown), then never again.
 const CONNECT_MUSIC_HTML = require('../../assets/app screens/connectmusic.html');
 
 function connectMusicInject(): string {
-  return dcScaleFitJs('#ffffff') + `
+  // extraTop 28: the title and text sit a little lower than the design's own spot (they sat right under the notch)
+  return dcScaleFitJs('#ffffff', 28) + `
 (function(){
   function post(m){ try{ window.ReactNativeWebView.postMessage(m); }catch(e){} }
   var hidden = false;
@@ -470,9 +361,15 @@ export default function WorkoutRunScreen() {
   const [musicGate, setMusicGate] = useState<'loading' | 'show' | 'done'>('loading');
   useEffect(() => {
     if (!session || session.currentIndex !== 0) { setMusicGate('done'); return; }
-    AsyncStorage.getItem(SKIP_MUSIC_KEY)
-      .then((raw) => setMusicGate(raw === '1' ? 'done' : 'show'))
-      .catch(() => setMusicGate('show'));
+    Promise.all([AsyncStorage.getItem(SKIP_MUSIC_KEY), AsyncStorage.getItem(MUSIC_SHOWN_KEY)])
+      .then(([skip, shownRaw]) => {
+        const d = decideMusicGate(skip, shownRaw);
+        if (!d.show) { setMusicGate('done'); return; }
+        AsyncStorage.setItem(MUSIC_SHOWN_KEY, String(d.nextCount)).catch(() => {});
+        if (__DEV__) console.log('[MUSIC] screen shown (' + d.nextCount + ' of ' + MUSIC_MAX_SHOWS + ')');
+        setMusicGate('show');
+      })
+      .catch(() => setMusicGate('done'));
   }, [session?.currentIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Progress bar animation
@@ -760,6 +657,7 @@ export default function WorkoutRunScreen() {
       {/* ── INTRO PHASE ── */}
       {isDemoStep && currentEx && (
         <DemoStepWebView
+          exerciseId={currentEx.exerciseId}
           exName={currentEx.displayName}
           sets={currentEx.targetSets}
           reps={currentEx.targetReps}

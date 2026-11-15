@@ -153,7 +153,22 @@ Module._load = function (r) {
   const cmp = await browser.newPage({ viewport: { width: 820, height: 820 } });
   await cmp.setContent(`<body style="margin:0;background:#888;display:flex;gap:16px;padding:8px"><div><div style="color:#fff;font:12px sans-serif">his design</div><img src="data:image/png;base64,${his}" style="width:388px"></div><div><div style="color:#fff;font:12px sans-serif">built screen (cropped to the same height)</div><img src="data:image/png;base64,${mine}" style="width:388px;height:785px;object-fit:cover;object-position:top"></div></body>`);
   await cmp.screenshot({ path: path.join(dir, 'preview-compare.png') });
-    // 9: Start workout ALWAYS opens a real workout, never "No workout scheduled"
+    // 6: content starts below the notch with real spacing
+  params = {};
+  const wsrc = fs.readFileSync(path.join(ROOT, 'app', 'workout', 'index.tsx'), 'utf8');
+  const top = await (await shoot(browser, h(Screen), path.join(dir, 'preview-render6.html'))).evaluate(() => { const t = [...document.querySelectorAll('div,span')].find((e) => e.children.length === 0 && e.textContent.trim() === 'Full body'); return Math.round(t.getBoundingClientRect().top); });
+  const HT = /headerTop = \(insetTop: number\) => Math\.max\(insetTop, 47\) \+ (\d+)/.exec(wsrc);
+  check('6: the header starts well below the notch (inset 62: the back button at y 76, the title right beside it; was y 56)', HT && +HT[1] >= 12 && top >= 76 && top <= 100, 'title top ' + top);
+  // 7: the shared glass back button
+  const gb = fs.readFileSync(path.join(ROOT, 'components', 'GlassBackButton.tsx'), 'utf8');
+  check('7: the back button is the shared Liquid Glass one (LiquidGlassButton, chevron), not a plain white circle', /GlassBackButton onPress=\{\(\) => router\.back\(\)\}/.test(wsrc) && /LiquidGlassButton/.test(gb) && /GLASS_BACK_SIZE = 40/.test(gb) && !/backCircle/.test(wsrc));
+  // 8: the edit sheet uses the look of Home's Edit Workout sheet (numbers read from Ari's home design file)
+  const st = (k) => new RegExp(k + ': \{([^}]*)\}').exec(wsrc)[1];
+  const sheet = st('sheet'), row = st('stepRow'), title = st('sheetTitle'), done = st('sheetSave'), close = st('closeBtn'), ctl = st('stepBtn');
+  check('8: the sheet is the Home Edit Workout sheet: floating 8px from the sides, 40px corners, white, grab bar, 20px bold title, round close button', /left: 8, right: 8/.test(sheet) && /borderRadius: 40/.test(sheet) && /fontSize: 20/.test(title) && /width: 34, height: 34, borderRadius: 17, backgroundColor: '#f1f1f4'/.test(close) && /width: 38, height: 5/.test(st('grab')));
+  check('8: rows are grey rounded rows like Home (20px corners, #f6f6f8) with white 36px round controls and the black 54px Done pill', /borderRadius: 20/.test(row) && /#f6f6f8/.test(row) && /width: 36, height: 36, borderRadius: 18, backgroundColor: '#ffffff'/.test(ctl) && /height: 54/.test(done) && /#111114/.test(done) && />Done</.test(wsrc));
+  check('8: the sheet still saves sets and reps (Done calls saveEdit) and closes from the X, the grab bar or the dim area', /onPress=\{saveEdit\}/.test(wsrc) && (wsrc.match(/setEditing\(null\)/g) || []).length >= 5);
+  // 9: Start workout ALWAYS opens a real workout, never "No workout scheduled"
   STORE = { plan: null, isLoaded: true }; params = {};
   const p4 = await shoot(browser, h(Screen), path.join(dir, 'preview-render4.html'));
   const t4 = await p4.evaluate(() => document.body.innerText.split(String.fromCharCode(10)).join(' | '));

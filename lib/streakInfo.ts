@@ -44,7 +44,7 @@ export function streakInfo(all: SessionEntry[], now: number = Date.now(), passed
   return { count, trainedToday, week, todayIdx, headline, sub };
 }
 
-/** Page-side: the flame (vector, gently animated, the streak number inside it), headline, sub line and the week row (an orange circle with a white check on every streak day).
+/** Page-side: the flame (vector, still, the streak number inside it, a field of fading stars around it), headline, sub line and the week row (an orange circle with a white check on every streak day).
  *  window.__streakApplied becomes true the moment everything is in place, so the screen can reveal the page already correct. */
 export function streakPageJs(info: StreakInfo): string {
   return `(function(){
@@ -60,6 +60,44 @@ export function streakPageJs(info: StreakInfo): string {
       + '<defs><linearGradient id="' + id + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + c0 + '"/>' + (c1 ? '<stop offset="0.45" stop-color="' + c1 + '"/>' : '') + '<stop offset="1" stop-color="' + c2 + '"/></linearGradient></defs>'
       + '<path d="' + FLAME + '" fill="url(#' + id + ')"/></svg>';
   }
+  // ~14 small stars around the flame. Each fades in and out on its own timing and, every time it fades out, comes back somewhere else.
+  var STAR = 'M12 0c.9 6.6 4.4 10.4 12 12-7.6 1.6-11.1 5.4-12 12-.9-6.6-4.4-10.4-12-12 7.6-1.6 11.1-5.4 12-12Z';
+  var COLORS = ['#ffd36b', '#ffb347', '#ff9a3c', '#ffe39a', '#ffc15a'];
+  var N_STARS = 14;
+  function spot(size){
+    // inside the area around the flame (box 170 x 192) but never over the flame itself (an ellipse around its centre)
+    for (var t = 0; t < 60; t++) {
+      var x = -78 + Math.random() * 326, y = -64 + Math.random() * 252;
+      var dx = (x + size / 2 - 85) / 88, dy = (y + size / 2 - 104) / 104;
+      if (dx * dx + dy * dy > 1) return [x, y];
+    }
+    return [-60, 20];
+  }
+  function buildStars(box){
+    if (box.querySelector('[data-sk-stars]')) return;
+    if (!document.getElementById('sk-stars-css')) {
+      var st = document.createElement('style'); st.id = 'sk-stars-css';
+      st.textContent = '@keyframes sk-star { 0% { opacity: 0; transform: scale(0.4) rotate(0deg); } 50% { opacity: var(--peak); transform: scale(1) rotate(14deg); } 100% { opacity: 0; transform: scale(0.4) rotate(0deg); } }';
+      document.head.appendChild(st);
+    }
+    var wrap = document.createElement('div');
+    wrap.setAttribute('data-sk-stars', '1');
+    wrap.style.cssText = 'position:absolute;left:0;top:0;width:0;height:0;pointer-events:none;';
+    var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    for (var i = 0; i < N_STARS; i++) {
+      var size = 7 + Math.round(Math.random() * 9), p = spot(size), dur = 2.6 + Math.random() * 2.2;
+      var el = document.createElement('div');
+      el.setAttribute('data-sk-star', '1');
+      el.style.cssText = 'position:absolute;line-height:0;left:' + p[0].toFixed(1) + 'px;top:' + p[1].toFixed(1) + 'px;width:' + size + 'px;height:' + size + 'px;--peak:' + (0.55 + Math.random() * 0.4).toFixed(2) + ';opacity:0;';
+      el.innerHTML = '<svg width="100%" height="100%" viewBox="0 0 24 24"><path d="' + STAR + '" fill="' + COLORS[i % COLORS.length] + '"></path></svg>';
+      // staggered from the very first frame (a negative delay starts each star part-way through its own cycle)
+      if (!still) el.style.setProperty('animation', 'sk-star ' + dur.toFixed(2) + 's ease-in-out ' + (-Math.random() * dur).toFixed(2) + 's infinite', 'important');
+      else el.style.setProperty('opacity', '0.5');
+      el.addEventListener('animationiteration', function (ev) { var t = ev.currentTarget, sz = parseFloat(t.style.width) || 10, q = spot(sz); t.style.left = q[0].toFixed(1) + 'px'; t.style.top = q[1].toFixed(1) + 'px'; });
+      wrap.appendChild(el);
+    }
+    box.appendChild(wrap);
+  }
   function apply(){
     var num = q('div[style*="font-size: 54px"]'), head = q('div[style*="font-size: 29px"]'), sub = q('div[style*="font-size: 16px"]');
     var circles = [].slice.call(document.querySelectorAll('#dc-root div[style*="width: 30px"][style*="height: 30px"]'));
@@ -68,29 +106,26 @@ export function streakPageJs(info: StreakInfo): string {
     num.style.setProperty('display', 'none', 'important'); // the design's own white number sat on the flame like a sticker: replaced by the one below
     flame(masks[0], 'sf-out', '#ffd36b', '#ff9a3c', '#ff5a1f');
     flame(masks[1], 'sf-in', '#fff6d6', null, '#ffe39a');
-    // a gentle living flame: the outer flame sways and breathes slowly, the inner one flickers a little faster, both from the base
-    if (!document.getElementById('sk-live')) {
-      var st = document.createElement('style'); st.id = 'sk-live';
-      st.textContent = '@keyframes sk-live-out { 0%,100% { transform: scale(1,1) skewX(0deg); } 30% { transform: scale(1.03,1.055) skewX(-1.6deg); } 60% { transform: scale(0.985,1.02) skewX(1.3deg); } }'
-        + '@keyframes sk-live-in { 0%,100% { transform: scale(1,1) skewX(0deg); } 25% { transform: scale(0.97,1.07) skewX(2deg); } 55% { transform: scale(1.04,0.97) skewX(-1.8deg); } 80% { transform: scale(0.99,1.04) skewX(1deg); } }';
-      document.head.appendChild(st);
-    }
     masks[0].setAttribute('data-vector-flame', 'out'); masks[1].setAttribute('data-vector-flame', 'in');
-    // The page-fit code switches EVERY animation inside the page off (#dc-root * { animation: none !important }), which is why the fire sat
-    // still. An inline !important beats that, so the flame's own sway goes on here, and so do the design's endless sparkles and embers.
-    var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (!still) {
-      var live = function (el, v) { if (el.style.getPropertyValue('animation') !== v) { el.style.setProperty('animation', v, 'important'); el.style.setProperty('will-change', 'transform'); } };
-      masks[0].style.setProperty('transform-origin', '50% 92%'); live(masks[0], 'sk-live-out 3.4s ease-in-out 0.9s infinite');
-      masks[1].style.setProperty('transform-origin', '50% 96%'); live(masks[1], 'sk-live-in 2.2s ease-in-out 1.1s infinite');
-      var all = document.querySelectorAll('#dc-root div[style*="infinite"]');
-      for (var ai = 0; ai < all.length; ai++) {
-        var el = all[ai];
-        if (el === masks[0] || el === masks[1]) continue;
-        var orig = el.getAttribute('data-sk-anim');
-        if (!orig) { orig = el.style.animation || el.style.webkitAnimation; if (!orig) continue; el.setAttribute('data-sk-anim', orig); }
-        live(el, orig);
+    // The fire does NOT move. The page-fit code switches every animation inside the page off (#dc-root * { animation: none !important });
+    // the design's own sparkles and rising embers are hidden, and a field of small stars is drawn around the flame instead.
+    masks[0].style.setProperty('filter', 'none', 'important'); // no heavy shadow under the flame: a cleaner look
+    var box = masks[0].parentElement && masks[0].parentElement.parentElement;      // the 170 x 192 box the flame sits in
+    var outer = box && box.parentElement;                                           // the 192 x 214 box with the soft glow
+    if (outer) {
+      for (var oi = 0; oi < outer.children.length; oi++) {
+        var oc = outer.children[oi];
+        if (oc === box) continue;
+        if (!oc.hasAttribute('data-sk-glow')) { oc.setAttribute('data-sk-glow', '1'); oc.style.setProperty('opacity', '0.55', 'important'); }
       }
+    }
+    if (box) {
+      for (var bi = 0; bi < box.children.length; bi++) {
+        var bc = box.children[bi];
+        if (bc === masks[0].parentElement || bc.hasAttribute('data-sk-stars') || bc.hasAttribute('data-streak-num')) continue;
+        bc.style.setProperty('display', 'none', 'important'); // the 3 big sparkles and the embers
+      }
+      buildStars(box);
     }
     // the streak number sits INSIDE the cream belly of the flame, deep orange on cream (readable), and moves with the inner flame
     var digits = String(I.count).length, fsz = digits <= 2 ? 46 : digits === 3 ? 34 : 26;
@@ -107,11 +142,26 @@ export function streakPageJs(info: StreakInfo): string {
       var c = circles[i], on = !!I.week[i], label = c.previousElementSibling;
       c.setAttribute('data-streak-day', on ? '1' : '0');
       c.style.setProperty('background', on ? 'linear-gradient(180deg, #ffa24a 0%, #ff6a2b 100%)' : '#f1f1f4', 'important');
-      c.style.setProperty('box-shadow', on ? '0 4px 10px -3px rgba(255,106,43,0.55)' : 'none', 'important');
+      c.style.setProperty('box-shadow', 'none', 'important');
       c.innerHTML = on ? CHECK : '';
       if (label) label.style.setProperty('color', i === I.todayIdx ? '#ff6a2b' : on ? '#ff8a3c' : '#9a9aa2', 'important');
     }
-    window.__streakApplied = true;
+    // cleaner: the week row is a flat white pill with a hairline (no heavy shadow), and the Continue button's shadow is light
+    var pill = circles[0].parentElement && circles[0].parentElement.parentElement;
+    if (pill) pill.style.setProperty('box-shadow', '0 0 0 1px rgba(17,17,20,0.07)', 'important');
+    var btns = document.querySelectorAll('#dc-root a, #dc-root div');
+    for (var bi2 = 0; bi2 < btns.length; bi2++) {
+      var bt = btns[bi2];
+      if (bt.children.length <= 1 && (bt.textContent || '').trim() === 'Continue') { var holder = bt.closest('a') || bt; holder.style.setProperty('box-shadow', '0 8px 18px -12px rgba(17,17,20,0.35)', 'important'); break; }
+    }
+    if (!window.__streakSettling) {
+      window.__streakSettling = true;
+      // Revealed only when the very first frame is final: the page is scaled to the screen, the fonts are in (the number and headline do
+      // not change shape after they show) and two frames have been drawn.
+      var done = function(){ requestAnimationFrame(function(){ requestAnimationFrame(function(){ window.__streakApplied = true; }); }); };
+      var waitScale = function(n){ if (window.__dcCanvasScale || n > 40) done(); else setTimeout(function(){ waitScale(n + 1); }, 25); };
+      try { (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(function(){ waitScale(0); }, function(){ waitScale(0); }); } catch (e) { waitScale(0); }
+    }
     return true;
   }
   if (!apply()) { var n = 0, iv = setInterval(function(){ if (apply() || ++n > 80) clearInterval(iv); }, 40); }

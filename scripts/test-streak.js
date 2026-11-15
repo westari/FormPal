@@ -63,7 +63,33 @@ check('the workout flow\'s own count wins if the session is not on disk yet (3, 
       num: n.textContent, inside: n.parentElement === inn, ncolor: getComputedStyle(n).color,
       within: rn.left >= ri.left - 1 && rn.right <= ri.right + 1 && rn.top >= ri.top && rn.bottom <= ri.bottom, fits: rn.width < ri.width * 0.8 };
   });
-  check('5: the fire is animated (outer + inner flame run an endless animation and their transforms change over time)', live.anim[0] === 'sk-live-out' && live.anim[1] === 'sk-live-in' && live.iter === 'infinite' && (live.a[0] !== live.b[0] || live.b[0] !== live.c[0]) && (live.a[1] !== live.b[1] || live.b[1] !== live.c[1]), JSON.stringify(live.anim) + ' ' + live.a.join(' / ') + ' -> ' + live.c.join(' / '));
+  const still = await page.evaluate(async () => {
+    const out = document.querySelector('[data-vector-flame="out"]'), inn = document.querySelector('[data-vector-flame="in"]');
+    const tf = () => [getComputedStyle(out).transform, getComputedStyle(inn).transform, getComputedStyle(out).animationName, getComputedStyle(inn).animationName, getComputedStyle(out).filter];
+    const a = tf(); await new Promise(r => setTimeout(r, 900)); const b = tf();
+    return { same: JSON.stringify(a) === JSON.stringify(b), names: a.slice(2, 4), filter: a[4] };
+  });
+  check('3: the fire does NOT move (no animation on either flame, same transform over time, no shadow filter)', still.same && still.names.every((n) => n === 'none') && still.filter === 'none', JSON.stringify(still));
+  // the stars: ~14, each with its own timing, all outside the flame, each fading in and out forever
+  const stars = await page.evaluate(async () => {
+    const els = [...document.querySelectorAll('[data-sk-star]')];
+    const cs = els.map((e) => getComputedStyle(e));
+    const box = document.querySelector('[data-sk-stars]').parentElement.getBoundingClientRect(), S = window.__dcCanvasScale || 1;
+    const centre = (e) => { const r = e.getBoundingClientRect(); return [(r.left + r.width / 2 - box.left) / S, (r.top + r.height / 2 - box.top) / S]; };
+    const ops = []; for (let k = 0; k < 6; k++) { ops.push(els.map((e) => +getComputedStyle(e).opacity)); await new Promise((r) => setTimeout(r, 450)); }
+    const before = els.map((e) => e.style.left + '|' + e.style.top);
+    const oldSpark = [...document.querySelectorAll('#dc-root div[style*="sk-twinkle"], #dc-root div[style*="sk-ember"]')].filter((e) => e.getClientRects().length > 0 && !e.closest('[data-sk-stars]')).length;
+    return { n: els.length, names: [...new Set(cs.map((c) => c.animationName))], iter: [...new Set(cs.map((c) => c.animationIterationCount))], durs: new Set(cs.map((c) => c.animationDuration)).size, delays: new Set(cs.map((c) => c.animationDelay)).size,
+      outside: els.every((e) => { const [x, y] = centre(e); const dx = (x - 85) / 92, dy = (y - 104) / 108; return dx * dx + dy * dy > 0.85; }),
+      varies: ops[0].map((_, i) => ops.some((o) => Math.abs(o[i] - ops[0][i]) > 0.05)).filter(Boolean).length, sizes: new Set(els.map((e) => e.style.width)).size, oldSpark };
+  });
+  console.log('      stars:', JSON.stringify(stars));
+  check('3: 12 to 16 small stars around the fire', stars.n >= 12 && stars.n <= 16, String(stars.n));
+  check('3: every star fades in and out forever (animation sk-star, infinite), each with its own duration and start time', stars.names.join() === 'sk-star' && stars.iter.join() === 'infinite' && stars.durs >= 8 && stars.delays >= 8, JSON.stringify(stars));
+  check('3: they are really fading (opacity changes over time on most stars), different sizes, none on top of the flame, the old 3 sparkles and embers are gone', stars.varies >= 8 && stars.sizes >= 4 && stars.outside && stars.oldSpark === 0, JSON.stringify(stars));
+  // a star comes back somewhere else after each fade
+  const moved = await page.evaluate(async () => { const e = document.querySelector('[data-sk-star]'); const p0 = e.style.left + e.style.top; e.dispatchEvent(new Event('animationiteration')); const p1 = e.style.left + e.style.top; return p0 !== p1; });
+  check('3: after a fade out the star returns at a new place', moved);
   check('6: the streak number (2) is inside the flame, inside the cream belly, with room around it, and moves with the inner flame', live.num === '2' && live.inside && live.within && live.fits, JSON.stringify({ n: live.num, inside: live.inside, within: live.within, fits: live.fits }));
   const nudge = await page.evaluate(() => { const n = document.querySelector('[data-streak-num]'), inn = document.querySelector('[data-vector-flame="in"]'); const rg = document.createRange(); rg.selectNodeContents(n); const t = rg.getBoundingClientRect(), r = inn.getBoundingClientRect(); return { dx: (t.left + t.width / 2) - (r.left + r.width / 2), tf: n.style.transform }; });
   check('7: the number sits a little LEFT of the exact middle of the flame belly (looks centred; 2 to 6px left)', nudge.dx <= -2 && nudge.dx >= -6, JSON.stringify(nudge));
@@ -71,6 +97,18 @@ check('the workout flow\'s own count wins if the session is not on disk yet (3, 
   await page.screenshot({ path: path.join(ROOT, '.scratch', 'streak-flame-crop.png'), clip: { x: 80, y: 190, width: 230, height: 250 } });
   check('words match: "Day 2 streak!" and not "Your streak starts today"', r.head === 'Day 2 streak!' && !/starts today/i.test(r.sub), r.head + ' / ' + r.sub);
   check('exactly the two streak days are orange circles with a white check; the rest are plain grey with no check', r.days.length === 7 && r.days.map(d => d.on).join() === '0,1,1,0,0,0,0' && r.days.every(d => (d.on === '1') === (d.bg.startsWith('linear-gradient') && d.check)), JSON.stringify(r.days));
+  // 2: right from the first frame. A fresh page: the moment __streakApplied turns true (that is what reveals the page), everything is final.
+  const p2 = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  await p2.addInitScript(() => { window.ReactNativeWebView = { postMessage() {} }; });
+  await p2.addInitScript(H.DC_VIEWPORT_JS + H.DC_NO_ZOOM_JS);
+  await p2.goto(pathToFileURL(path.join(ROOT, 'assets', 'app screens', 'streak.html')).href, { waitUntil: 'load' });
+  await p2.evaluate(H.dcScaleFitJs('#ffffff') + streakPageJs(two));
+  await p2.waitForFunction(() => window.__streakApplied === true, null, { timeout: 8000 });
+  const f1 = await p2.evaluate(() => { const n = document.querySelector('[data-streak-num]'); const r = n.getBoundingClientRect(); return { fonts: document.fonts.status, scale: window.__dcCanvasScale, num: n.textContent, numTop: Math.round(r.top), numLeft: Math.round(r.left), head: document.querySelector('#dc-root div[style*="font-size: 29px"]').textContent, headFont: getComputedStyle(n).fontFamily.split(',')[0] }; });
+  await p2.waitForTimeout(1500);
+  const f2 = await p2.evaluate(() => { const n = document.querySelector('[data-streak-num]'); const r = n.getBoundingClientRect(); return { fonts: document.fonts.status, scale: window.__dcCanvasScale, num: n.textContent, numTop: Math.round(r.top), numLeft: Math.round(r.left), head: document.querySelector('#dc-root div[style*="font-size: 29px"]').textContent, headFont: getComputedStyle(n).fontFamily.split(',')[0] }; });
+  check('2: at the moment the page is revealed the fonts are loaded, the page is scaled to the screen, and the number, headline and their positions are exactly what they stay (no change afterwards)', f1.fonts === 'loaded' && f1.scale > 0 && JSON.stringify(f1) === JSON.stringify(f2) && f1.num === '2' && f1.head === 'Day 2 streak!', JSON.stringify(f1) + ' vs ' + JSON.stringify(f2));
+  await p2.close();
   await browser.close();
   console.log(failed ? `\n${failed} FAILED` : '\nall passed');
   process.exit(failed ? 1 : 0);

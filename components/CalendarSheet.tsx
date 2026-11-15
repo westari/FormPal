@@ -54,7 +54,10 @@ export default function CalendarSheet({ open, onClose, timestamps, anchor }: { o
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close calendar" />
       </Animated.View>
       <Animated.View style={[s.card, { top, left: SIDE, width: cardW, opacity: prog, transform: [{ translateY: slide }, { scale }], transformOrigin: `${originX}px 0px` } as any]} testID="calendar-drop">
-        <LiquidGlass radius={28} variant="regular" colorScheme="light" fallbackColor="rgba(255,255,255,0.9)" style={StyleSheet.absoluteFill} />
+        {/* Real Liquid Glass is see-through by nature: over the page it let the "Energy" pills, "Today" and the workout card show through the
+            calendar (phone screenshot). A near-solid white base goes under the glass, so the glass only adds its edge light and depth. */}
+        <View style={[StyleSheet.absoluteFill, s.base]} testID="calendar-base" />
+        <LiquidGlass radius={28} variant="regular" colorScheme="light" tintColor="rgba(255,255,255,0.35)" fallbackColor="rgba(255,255,255,0)" style={StyleSheet.absoluteFill} pointerEvents="none" />
         <View style={s.inner}>
           <View style={s.head}>
             <View>
@@ -96,6 +99,7 @@ export default function CalendarSheet({ open, onClose, timestamps, anchor }: { o
 const s = StyleSheet.create({
   dim: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(17,17,20,0.12)' },
   card: { position: 'absolute', borderRadius: 28, overflow: 'hidden', shadowColor: '#28325a', shadowOpacity: 0.22, shadowRadius: 24, shadowOffset: { width: 0, height: 14 } },
+  base: { backgroundColor: 'rgb(252,252,254)', borderRadius: 28 },
   inner: { paddingHorizontal: 14, paddingTop: 16, paddingBottom: 10 },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 6, marginBottom: 8 },
   title: { fontSize: 18, fontWeight: '700', color: INK, letterSpacing: -0.4 },

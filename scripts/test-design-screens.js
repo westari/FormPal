@@ -63,7 +63,7 @@ const anchor = (p, src, act = 'click') => p.evaluate((s) => { const a = [...docu
   {
     const { browser, page, msgs, logs } = await openDesign('create', DS.createWorkoutData(cat));
     check('page posts ready with no errors', msgs.some((m) => m.type === 'ready') && !logs.some((l) => /pageerror|render error/.test(l)), logs.filter((l) => /error/i.test(l)).slice(0, 2).join(' | '));
-    check('starts EMPTY (the design\'s demo Squat / Push-up workout is gone)', /No exercises yet/.test(await text(page)) && !/Squat|Push-up/.test(await text(page)));
+    check('starts EMPTY (the design\'s demo Squat / Push-up workout is gone)', /No exercises yet/.test(await text(page)) && (await page.evaluate(() => (window.__athltCurrent || { items: [] }).items.length)) === 0);
     const fs = await page.evaluate(() => [...document.querySelectorAll('input')].map((i) => parseFloat(getComputedStyle(i).fontSize)));
     check('every input is at least 16px (no iOS zoom on focus); the 24px title input keeps its size', fs.every((f) => f >= 16) && fs.includes(24), fs.join(','));
     // 13: a clear "Add exercise" button in the empty card that opens the search

@@ -173,6 +173,7 @@ ${CATALOG_PAGE}
     }
     renderVals() {
       if (!useCatalog(this)) return super.renderVals();
+      window.__cwSelf = this; // the starter list below the search box adds exercises through the page's own toggle
       var d0 = D();
       // the design starts with a demo "Squat / Push-up" workout: a new workout starts empty
       if (!this.__dsInit) { this.__dsInit = true; this.state = Object.assign({}, this.state, { order: [], data: {}, name: '' }); }
@@ -225,6 +226,68 @@ export const CREATE_WORKOUT_DOM_JS = String.raw`
         card.appendChild(b);
       }
       break;
+    }
+    // Something to start from. Only a search bar left a user who does not know what to search for with an empty screen. Under the search
+    // box: the six muscle groups as chips (tap one: that group's real exercises) and a short Popular list shown by default. Real catalogue
+    // only. While you type, the search results take over and this block is hidden.
+    var inp = root.querySelector('input[placeholder="Search to add an exercise"]');
+    var dd = window.__athltData;
+    if (inp && dd && dd.popular) {
+      var anchor = inp.parentElement && inp.parentElement.parentElement;
+      var st = root.querySelector('[data-cw-starter]');
+      if (!st && anchor) {
+        st = document.createElement('div'); st.setAttribute('data-cw-starter', '1');
+        st.style.cssText = 'padding:14px 14px 0;';
+        anchor.parentElement.insertBefore(st, anchor.nextElementSibling);
+        window.__cwGroup = window.__cwGroup || '';
+        window.__cwMore = false;
+      }
+      if (st) {
+        var cur = window.__athltCurrent || { items: [] };
+        var added = {}; cur.items.forEach(function (it) { added[it.n] = 1; });
+        var typing = String(inp.value || '').trim().length > 0;
+        var grp = window.__cwGroup || '';
+        var names = grp ? (dd.groups[grp] || []) : dd.popular;
+        var cap = window.__cwMore ? names.length : 8;
+        var shown = names.slice(0, cap);
+        var sig = [typing ? 1 : 0, grp, cap, shown.join('|'), shown.map(function (n) { return added[n] ? 1 : 0; }).join('')].join('#');
+        if (st.__sig !== sig) {
+          st.__sig = sig;
+          st.style.display = typing ? 'none' : 'block';
+          var label = grp ? (dd.groupLabels.filter(function (g) { return g.id === grp; })[0] || { label: grp }).label + ' exercises' : 'Popular';
+          var chips = dd.groupLabels.map(function (g) {
+            var on = g.id === grp;
+            return '<div data-cw-chip="' + g.id + '" style="height:32px;padding:0 8px;border-radius:999px;display:flex;align-items:center;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;'
+              + (on ? 'background:#111114;color:#ffffff;box-shadow:0 8px 16px -8px rgba(17,17,20,0.5);' : 'background:#ffffff;color:#111114;box-shadow:inset 0 1px 0 #ffffff,0 6px 14px -8px rgba(40,50,90,0.3);') + '">' + g.label + '</div>';
+          }).join('');
+          var rows = shown.map(function (n, i) {
+            var on = !!added[n];
+            return '<div data-cw-row="' + i + '" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 0;cursor:pointer;' + (i ? 'border-top:1px solid rgba(17,17,20,0.07);' : '') + '">'
+              + '<div style="font-size:15px;font-weight:600;letter-spacing:-0.2px;color:#111114;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>'
+              + '<div style="flex:none;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;line-height:0;background:' + (on ? '#111114' : '#f4f4f7') + ';">'
+              + '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="' + (on ? 'M2.6 6.4 5 8.8l4.4-5' : 'M6 2.2v7.6M2.2 6h7.6') + '" stroke="' + (on ? '#ffffff' : '#111114') + '" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"></path></svg></div></div>';
+          }).join('');
+          var more = names.length > 8 ? '<div data-cw-more="1" style="padding:12px 0 8px;text-align:center;font-size:13.5px;font-weight:700;color:#5f5f69;cursor:pointer;border-top:1px solid rgba(17,17,20,0.07);">' + (window.__cwMore ? 'Show fewer' : 'Show all ' + names.length) + '</div>' : '';
+          st.innerHTML = '<div style="font-size:13px;font-weight:600;color:#6e6e77;padding:0 4px 8px;">Start from a muscle group</div>'
+            + '<div style="display:flex;flex-wrap:nowrap;gap:5px;">' + chips + '</div>'
+            + '<div style="font-size:21px;font-weight:700;letter-spacing:-0.6px;color:#111114;padding:18px 4px 10px;">' + label + '</div>'
+            + '<div style="border-radius:24px;padding:4px 16px;background:#ffffff;box-shadow:0 12px 28px -14px rgba(40,50,90,0.24),0 2px 6px -2px rgba(40,50,90,0.08);">' + rows + more + '</div>';
+          var rowEls = st.querySelectorAll('[data-cw-row]');
+          for (var r = 0; r < rowEls.length; r++) rowEls[r].firstChild.textContent = shown[r];
+        }
+        if (!st.__wired) {
+          st.__wired = true;
+          st.addEventListener('click', function (ev) {
+            var t = ev.target;
+            var chip = t.closest && t.closest('[data-cw-chip]');
+            if (chip) { var id = chip.getAttribute('data-cw-chip'); window.__cwGroup = window.__cwGroup === id ? '' : id; window.__cwMore = false; st.__sig = ''; if (window.__athltBump) window.__athltBump(); return; }
+            var mo = t.closest && t.closest('[data-cw-more]');
+            if (mo) { window.__cwMore = !window.__cwMore; st.__sig = ''; if (window.__athltBump) window.__athltBump(); return; }
+            var row = t.closest && t.closest('[data-cw-row]');
+            if (row && window.__cwSelf) { window.__cwSelf.toggle(row.firstChild.textContent); }
+          }, true);
+        }
+      }
     }
     return !!root.querySelector('input[placeholder="Name your workout"]');
   });
@@ -512,10 +575,10 @@ export const myWorkoutsBeforeJs   = () => COMMON + dcLogicPatchJs(MY_WORKOUTS_LO
 export { athltSetDataJs };
 
 // ─── data builders (pure) ───────────────────────────────────────────────────────
-export interface CatalogItem { name: string; id: string; bodyweight: boolean; sets: number; reps: number }
+export interface CatalogItem { name: string; id: string; bodyweight: boolean; sets: number; reps: number; groups: string[] }
 
-export function buildCatalog(defs: readonly { id: string; displayName: string; equipment: unknown[]; defaultSets: number; defaultReps: number }[]): CatalogItem[] {
-  return defs.map(d => ({ id: d.id, name: d.displayName, bodyweight: d.equipment.length === 0, sets: d.defaultSets, reps: d.defaultReps }))
+export function buildCatalog(defs: readonly { id: string; displayName: string; equipment: unknown[]; defaultSets: number; defaultReps: number; muscleGroups?: readonly unknown[] }[]): CatalogItem[] {
+  return defs.map(d => ({ id: d.id, name: d.displayName, bodyweight: d.equipment.length === 0, sets: d.defaultSets, reps: d.defaultReps, groups: (d.muscleGroups ?? []).map(String) }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -598,4 +661,22 @@ export function logSessionData(catalog: CatalogItem[], now: Date, recent: string
   const popular = POPULAR_IDS.map(id => catalog.find(c => c.id === id)?.name).filter((n): n is string => !!n && names.has(n));
   return { catalog, today: { y: now.getFullYear(), m: now.getMonth(), d: now.getDate() }, recent, popular };
 }
-export function createWorkoutData(catalog: CatalogItem[]) { return { catalog }; }
+/** The six starting points on Create workout, in order (the real muscle groups of the catalogue). */
+export const CREATE_GROUPS: { id: string; label: string }[] = [
+  { id: 'chest', label: 'Chest' }, { id: 'back', label: 'Back' }, { id: 'legs', label: 'Legs' },
+  { id: 'shoulders', label: 'Shoulders' }, { id: 'arms', label: 'Arms' }, { id: 'core', label: 'Core' },
+];
+/** The exercises of one muscle group, from the real catalogue: the ones that mainly train it first (popular first, then A to Z), then the ones that also train it. */
+export function groupExercises(catalog: CatalogItem[], group: string): string[] {
+  const rank = (c: CatalogItem) => { const i = POPULAR_IDS.indexOf(c.id); return i < 0 ? 999 : i; };
+  const primary = (c: CatalogItem) => (c.groups[0] === group ? 0 : 1); // exercises that mainly train the group first, then the ones that also train it
+  return catalog.filter(c => c.groups.includes(group)).sort((a, b) => primary(a) - primary(b) || rank(a) - rank(b) || a.name.localeCompare(b.name)).map(c => c.name);
+}
+/** The short "Popular" list shown by default (real catalogue exercises only). */
+export function popularExercises(catalog: CatalogItem[], limit = 8): string[] {
+  return POPULAR_IDS.map(id => catalog.find(c => c.id === id)?.name).filter((n): n is string => !!n).slice(0, limit);
+}
+export function createWorkoutData(catalog: CatalogItem[]) {
+  const groups = Object.fromEntries(CREATE_GROUPS.map(g => [g.id, groupExercises(catalog, g.id)]));
+  return { catalog, popular: popularExercises(catalog), groups, groupLabels: CREATE_GROUPS };
+}
