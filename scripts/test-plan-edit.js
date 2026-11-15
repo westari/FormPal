@@ -27,7 +27,7 @@ const { buildTrainData } = require('../lib/trainData.ts');
 const { athltSetDataJs } = require('../lib/dcLogicPatch.ts');
 
 const ex = (id, name, sets, reps, rest = 75) => ({ exerciseId: id, displayName: name, targetSets: sets, targetReps: reps, restSeconds: rest, currentVariationId: id });
-const mkPlan = () => ({ id: 'p', profile: { goal: 'general', experience: 'beginner', daysPerWeek: 4, location: 'gym' }, splitType: 'fullBody', progressionState: {}, generatedAt: 1, currentWorkoutIndex: 1,
+const mkPlan = () => ({ id: 'p', profile: { goal: 'general', experience: 'beginner', daysPerWeek: 5, location: 'gym' }, splitType: 'fullBody', progressionState: {}, generatedAt: 1, currentWorkoutIndex: 1,
   workouts: [
     { id: 'w0', sessionNumber: 1, splitLabel: 'Lower Body', rationale: '', completed: true, exercises: [ex('squat', 'Bodyweight Squat', 3, 12), ex('lunge', 'Lunge', 3, 10)] },
     { id: 'w1', sessionNumber: 2, splitLabel: 'Upper Body', rationale: '', completed: false, exercises: [ex('pushup', 'Push-up', 3, 12), ex('shoulderPress', 'Shoulder Press', 3, 10), ex('curl', 'Bicep Curl', 3, 12), ex('pullup', 'Pull-up', 3, 6)] },

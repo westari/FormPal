@@ -13,7 +13,7 @@ export const LOGGED_TILE_JS = String.raw`
   if (window.__paintLogged) return;
   var LIGHT = '#f2f3f7';
   var NOTE = '<svg width="34" height="34" viewBox="0 0 40 40" fill="none"><rect x="8" y="5" width="21" height="27" rx="5" fill="#ffffff" stroke="#8b8d99" stroke-width="2"></rect><path d="M13.5 13h10M13.5 18h10M13.5 23h5" stroke="#8b8d99" stroke-width="2" stroke-linecap="round"></path><circle cx="29.5" cy="29.5" r="8" fill="#34c759" stroke="#f2f3f7" stroke-width="2.5"></circle><path d="m25.8 29.6 2.5 2.5 4.4-4.9" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
-  window.__paintLogged = function (el, on, body) {
+  window.__paintLogged = function (el, on) {
     if (!el) return false;
     var mine = null;
     for (var i = 0; i < el.children.length; i++) if (el.children[i].hasAttribute && el.children[i].hasAttribute('data-athlt-logged')) mine = el.children[i];
@@ -45,7 +45,7 @@ export const LOGGED_TILE_JS = String.raw`
     el.style.setProperty('background-color', LIGHT, 'important'); // flat light card, no gradient
     el.style.setProperty('background-size', 'cover', 'important');
     el.style.setProperty('background-repeat', 'no-repeat', 'important');
-    var sig = body ? 'b' + body.length : 'n';
+    var sig = 'n';
     if (mine && mine.getAttribute('data-athlt-logged') === sig) return true;
     if (mine) mine.remove();
     if (getComputedStyle(el).position === 'static') el.style.setProperty('position', 'relative');
@@ -59,9 +59,7 @@ export const LOGGED_TILE_JS = String.raw`
     var fig = document.createElement('div');
     fig.setAttribute('data-athlt-body', '1');
     fig.style.cssText = 'flex:1 1 auto;min-height:0;width:100%;display:flex;align-items:center;justify-content:center;';
-    fig.innerHTML = body || NOTE;
-    var svg = fig.querySelector('svg');
-    if (svg && body) { svg.style.setProperty('width', 'auto'); svg.style.setProperty('height', '100%'); svg.style.setProperty('max-width', '100%'); }
+    fig.innerHTML = NOTE;
     var lab = document.createElement('div');
     lab.setAttribute('data-athlt-label', '1');
     lab.style.cssText = 'flex:0 0 auto;font-size:' + (narrow ? 9 : 11) + 'px;font-weight:700;letter-spacing:0.2px;color:#5d5f6b;background:rgba(17,17,20,0.07);padding:' + (narrow ? '2px 6px' : '3px 10px') + ';border-radius:999px;white-space:nowrap;';

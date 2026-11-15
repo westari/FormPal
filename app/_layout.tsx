@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Stack } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -8,6 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { configureAudioSession } from '../lib/audioFeedback';
 import WarmSurfaces from '../components/WarmSurfaces';
 import DesignPrewarm from '../components/DesignPrewarm';
+import { usePlanStore } from '../store/planStore';
 import { installDevLogger } from '../lib/devLogger';
 import { installPressHaptics } from '../lib/haptics';
 import {
@@ -25,6 +26,8 @@ import {
   PlusJakartaSans_800ExtraBold,
 } from '@expo-google-fonts/plus-jakarta-sans';
 
+const JS_STARTED_AT = Date.now();
+const FONT_WAIT_MS = 1500;
 installDevLogger();
 installPressHaptics(); // every normal press gets the Light haptic unless it makes its own (lib/haptics.ts)
 
@@ -65,17 +68,27 @@ export default function RootLayout() {
     PlusJakartaSans_800ExtraBold,
   });
 
+  // HARD STOP: the app never waits for fonts longer than FONT_WAIT_MS. The log showed 28 seconds between the last module line and the
+  // first screen, with the loading screen up the whole time (nothing else in this layout waits). After the stop the app draws with the
+  // system font and the real fonts swap in the moment they arrive.
+  const [fontWaitOver, setFontWaitOver] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setFontWaitOver(true), FONT_WAIT_MS); return () => clearTimeout(t); }, []);
+  const ready = fontsLoaded || !!fontError || fontWaitOver;
   useEffect(() => {
-    if (fontsLoaded || fontError) {
+    if (ready) {
+      if (__DEV__) console.log('[LAUNCH] first screen allowed ' + (Date.now() - JS_STARTED_AT) + 'ms after the app code started | fonts: ' + (fontsLoaded ? 'loaded' : fontError ? 'failed' : 'NOT loaded yet (hard stop after ' + FONT_WAIT_MS + 'ms)'));
       void SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, fontError]);
+  }, [ready, fontsLoaded, fontError]);
+  useEffect(() => { if (fontsLoaded && __DEV__) console.log('[LAUNCH] fonts loaded ' + (Date.now() - JS_STARTED_AT) + 'ms after the app code started'); }, [fontsLoaded]);
 
   useEffect(() => { void pruneOldVideos(); }, []);
   useEffect(() => { void configureAudioSession(); }, []);
+  // the saved plan goes into the plan store at app start (Start workout reads the store; an empty store showed "No workout scheduled")
+  useEffect(() => { void usePlanStore.getState().loadFromStorage().catch(() => {}); }, []);
 
   // Block render until fonts loaded (or failed — system font fallback is fine).
-  if (!fontsLoaded && !fontError) return null;
+  if (!ready) return null;
 
   return (
     <SafeAreaProvider>

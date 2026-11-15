@@ -66,7 +66,9 @@ const FAKE = {
 };
 const mk = (n, sets, reps) => ({ exerciseId: n.toLowerCase().replace(/\W/g, ''), displayName: n, targetSets: sets, targetReps: reps, restSeconds: 60 });
 const WORKOUT = { id: 'w1', splitLabel: 'Full body', sessionNumber: 1, rationale: '', exercises: [mk('Squat', 4, 8), mk('Push-up', 3, 12), mk('Deadlift', 3, 6), mk('Pull-up', 3, 8), mk('Lunge', 3, 10), mk('Overhead press', 3, 8), mk('Row', 3, 10), mk('Plank', 3, 1)].slice(0, 8) };
-const planStore = Object.assign((sel) => sel({ getNextWorkout: () => WORKOUT, createPlan: async () => {} }), { getState: () => ({ plan: { workouts: [WORKOUT, { ...WORKOUT, id: 'w2', splitLabel: 'Upper body' }] } }) });
+let STORE = { plan: { currentWorkoutIndex: 0, workouts: [WORKOUT, { ...WORKOUT, id: 'w2', splitLabel: 'Upper body' }] }, isLoaded: true };
+const storeState = () => ({ ...STORE, loadFromStorage: async () => {}, setExerciseTargets: async () => {} });
+const planStore = Object.assign((sel) => sel(storeState()), { getState: storeState });
 const sessStore = (sel) => sel({ startWorkout: (w) => started.push(w.id) });
 
 const prev = Module._load;
@@ -151,6 +153,23 @@ Module._load = function (r) {
   const cmp = await browser.newPage({ viewport: { width: 820, height: 820 } });
   await cmp.setContent(`<body style="margin:0;background:#888;display:flex;gap:16px;padding:8px"><div><div style="color:#fff;font:12px sans-serif">his design</div><img src="data:image/png;base64,${his}" style="width:388px"></div><div><div style="color:#fff;font:12px sans-serif">built screen (cropped to the same height)</div><img src="data:image/png;base64,${mine}" style="width:388px;height:785px;object-fit:cover;object-position:top"></div></body>`);
   await cmp.screenshot({ path: path.join(dir, 'preview-compare.png') });
+    // 9: Start workout ALWAYS opens a real workout, never "No workout scheduled"
+  STORE = { plan: null, isLoaded: true }; params = {};
+  const p4 = await shoot(browser, h(Screen), path.join(dir, 'preview-render4.html'));
+  const t4 = await p4.evaluate(() => document.body.innerText.split(String.fromCharCode(10)).join(' | '));
+  check('9: no plan at all: Start workout opens a starter workout from Templates ("Beginner full body", real exercises, Start button), not a message', /Beginner full body/.test(t4) && /Start workout/.test(t4) && !/No workout scheduled|Test Plan|account/i.test(t4), t4.slice(0, 120));
+  started.length = 0; presses['Start workout']();
+  check('9: and that starter can be started (the session starts with it and the run screen opens)', started.join() === 'tpl-beginner-full' && nav.pushed.filter((x) => x === '/workout/run').length >= 2, JSON.stringify(started));
+  await p4.close();
+  STORE = { plan: null, isLoaded: false };
+  const p5 = await shoot(browser, h(Screen), path.join(dir, 'preview-render5.html'));
+  const t5 = await p5.evaluate(() => document.body.innerText.trim());
+  check('9: while the saved plan is still loading the page is blank, never the old message', !/No workout scheduled/.test(t5) && t5 === '', JSON.stringify(t5));
+  await p5.close();
+  STORE = { plan: { currentWorkoutIndex: 0, workouts: [WORKOUT] }, isLoaded: true };
+  const src = fs.readFileSync(path.join(ROOT, 'app', 'workout', 'index.tsx'), 'utf8');
+  check('9: the old "No workout scheduled / Generate a Test Plan" screen is gone from the code', !/No workout scheduled|Generate a Test Plan|generate a test plan/i.test(src));
+  check('9: the saved plan is loaded into the store at app start and when the preview opens', /loadFromStorage/.test(fs.readFileSync(path.join(ROOT, 'app', '_layout.tsx'), 'utf8')) && /loadFromStorage\(\)/.test(src));
   await browser.close();
   console.log(failed ? `\n${failed} FAILED` : '\nall passed'); process.exit(failed ? 1 : 0);
 })();

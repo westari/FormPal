@@ -39,15 +39,19 @@ export interface SessionEntry {
   formChecked?: boolean;
   // true = typed in by hand in Log a session (never recorded with the camera). Older hand-logged entries have no flag: see isManualEntry.
   manual?: boolean;
-  // 'practice' = a form check (not a real workout). It keeps its rep feedback but NEVER changes ranks, the muscle map or streaks (every aggregate below
-  // skips it: see realSessions). Window A lists practice sessions separately by this exact field.
-  kind?: 'practice';
+  // 'practice' = a form check (a practice set of one exercise, not a workout). Practice entries NEVER change ranks, the muscle map or streaks
+  // (every aggregate skips them: see workoutSessions / realSessions), never show in Recent / Past workouts or the workout calendar, and have their own
+  // "Form checks" list in Progress (practiceSessions). Missing = a workout (every older entry).
+  kind?: 'workout' | 'practice';
 }
 
-/** The sessions that count toward ranks, the muscle map and streaks: everything except practice form checks. */
-export function realSessions(sessions: SessionEntry[]): SessionEntry[] {
-  return sessions.filter(e => e.kind !== 'practice');
-}
+export function isPractice(e: SessionEntry): boolean { return e.kind === 'practice'; }
+/** The entries that are workouts (everything except form-check practice). */
+export function workoutSessions(sessions: SessionEntry[]): SessionEntry[] { return sessions.filter(e => !isPractice(e)); }
+/** The form-check practice entries only. */
+export function practiceSessions(sessions: SessionEntry[]): SessionEntry[] { return sessions.filter(isPractice); }
+/** Same as workoutSessions: the sessions that count toward ranks, the muscle map and streaks (kept under this name for the rank code). */
+export const realSessions = workoutSessions;
 
 /** A session the user typed in (new entries carry manual: true; older ones are recognised by the way they were written: no form judged, no good reps, no score). */
 export function isManualEntry(e: SessionEntry): boolean {
@@ -149,7 +153,7 @@ export function scoredSessions(sessions: SessionEntry[]): SessionEntry[] {
 // before the user has had a chance to train today). Single source of truth —
 // previously duplicated as a local function in app/(tabs)/progress.tsx.
 export function calcStreak(all: SessionEntry[], now: number = Date.now()): number {
-  const sessions = realSessions(all);
+  const sessions = workoutSessions(all); // practice (form checks) never count toward a streak
   if (sessions.length === 0) return 0;
   const daySet = new Set(sessions.map(s => {
     const d = new Date(s.ts); d.setHours(0, 0, 0, 0); return d.getTime();

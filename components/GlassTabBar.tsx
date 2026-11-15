@@ -27,7 +27,8 @@ import LiquidGlass, { LiquidGlassButton } from './LiquidGlass';
 import PlusMenu from './PlusMenu';
 import { TAB_BAR_H, PLUS_SIZE, TAB_BAR_SIDE, TAB_BAR_GAP, tabBarBottom } from '../lib/tabBarMetrics';
 import { tapClock } from '../lib/tabLag';
-import { markLaunchSettled } from '../lib/launchGate';
+import { markLaunchSettled, startLaunchBackstop } from '../lib/launchGate';
+import { useTabReadyVersion, allTabsReady, isTabReady, LAUNCH_COVER_MAX_MS, TAP_COVER_MAX_MS } from '../lib/tabReady';
 import { tabIndexAt, lensLeft, lensStretch, releaseTarget, LENS_SCALE_X, LENS_SCALE_Y, LIFT_SPRING, SETTLE_SPRING } from '../lib/tabDrag';
 
 // ONE-LINE SWITCH: true = the new Train (dumbbell) and Progress (bars) icons; false = the previous ones (strength figure, line chart).
@@ -47,7 +48,7 @@ const MUTED = '#6e6e77';
 
 const WARM_STEP_MS = 90;
 const WARM_FIRST_MS = 60;
-const SETTLE_AFTER_MS = 1800; // the hidden pages (recap, design warm-ups) may start this long after the tabs were visited
+const SETTLE_AFTER_MS = 1000; // the hidden pages (recap, design warm-ups) may start this long after the tabs were visited
 
 export default function GlassTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
@@ -145,24 +146,49 @@ export default function GlassTabBar({ state, navigation }: BottomTabBarProps) {
   // reloaded unseen and the first Train / Progress tap showed a blank page for 1-2 seconds (log: "progress first open: shown ->
   // ready 1656ms"). The cover is up for well under a second; the pages finish loading behind it.
   const [warming, setWarming] = useState(true);
+  const [roundDone, setRoundDone] = useState(false);
+  const mountedAt = useRef(Date.now());
+  useTabReadyVersion(); // re-render when a tab's page becomes ready
   useEffect(() => {
-    const t0 = Date.now();
+    startLaunchBackstop();
     const start = state.routes[state.index]?.name;
     const others = TABS.map(t => t.name as string).filter(n => n !== start);
     const timers: ReturnType<typeof setTimeout>[] = [];
     let t = WARM_FIRST_MS;
     others.forEach((n) => { const at = t; timers.push(setTimeout(() => { navigation.navigate(n as never); }, at)); t += WARM_STEP_MS; });
     timers.push(setTimeout(() => { if (start) navigation.navigate(start as never); }, t)); t += 60;
-    timers.push(setTimeout(() => { setWarming(false); if (__DEV__) console.log('[TAB-LAG] cover lifted ' + (Date.now() - t0) + 'ms after the tab bar mounted (' + others.length + ' tabs visited behind it; planned ' + t + 'ms)'); }, t));
-    timers.push(setTimeout(markLaunchSettled, t + SETTLE_AFTER_MS)); // now the big hidden pages may load
-    timers.push(setTimeout(() => setWarming(false), 1500)); // whatever happens, the cover is never left on
+    timers.push(setTimeout(() => setRoundDone(true), t));
+    // HARD STOP: whatever happens (a page that never says ready, a busy JS thread) the cover is gone this long after the bar mounted
+    timers.push(setTimeout(() => setWarming(false), LAUNCH_COVER_MAX_MS));
     return () => { timers.forEach(clearTimeout); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // The cover lifts as soon as the tab visits are done AND all four pages are drawn (so nothing is ever shown half-loaded).
+  const everyReady = allTabsReady();
+  useEffect(() => {
+    if (!warming) return;
+    if (roundDone && everyReady) setWarming(false);
+  }, [warming, roundDone, everyReady]);
+  useEffect(() => {
+    if (warming) return;
+    if (__DEV__) console.log('[TAB-LAG] cover lifted ' + (Date.now() - mountedAt.current) + 'ms after the tab bar mounted | all four pages ready: ' + (allTabsReady() ? 'yes' : 'NO (hard stop at ' + LAUNCH_COVER_MAX_MS + 'ms)'));
+    const t = setTimeout(markLaunchSettled, SETTLE_AFTER_MS); // now the big hidden pages may load
+    return () => clearTimeout(t);
+  }, [warming]);
+  // A tap on a tab whose page is still loading (or was killed by iOS) shows the page-coloured cover until it is drawn, 1.5s at most.
+  const [tapGaveUp, setTapGaveUp] = useState(false);
+  useEffect(() => {
+    setTapGaveUp(false);
+    if (!focusedName || isTabReady(focusedName)) return;
+    const t = setTimeout(() => setTapGaveUp(true), TAP_COVER_MAX_MS);
+    return () => clearTimeout(t);
+  }, [focusedName]);
+  const waitingForPage = !warming && !!focusedName && focusedName !== 'plus' && !isTabReady(focusedName) && !tapGaveUp;
 
   const bottom = tabBarBottom(insets.bottom);
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+      {waitingForPage && <View style={[StyleSheet.absoluteFill, { backgroundColor: '#eeeef1' }]} pointerEvents="auto" />}
       <PlusMenu open={menuOpen} onClose={() => setMenuOpen(false)} bottom={bottom + PLUS_SIZE + 14} />
       <View style={[s.row, { bottom, left: TAB_BAR_SIDE, right: TAB_BAR_SIDE }]} pointerEvents="box-none">
         <View style={s.capsuleWrap} onLayout={(e) => setBarW(e.nativeEvent.layout.width)}>

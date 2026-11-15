@@ -11,7 +11,7 @@
  */
 import { EXERCISE_CATALOG } from '../constants/exercises';
 import { searchExercises } from './exerciseSearch';
-import { groupIntoWorkouts, calcStreak, type SessionEntry, type WorkoutGroup } from './sessionLog';
+import { groupIntoWorkouts, calcStreak, workoutSessions, type SessionEntry, type WorkoutGroup } from './sessionLog';
 import { addableExercises } from './planEdit';
 import type { Plan, Workout } from '../types/plan';
 
@@ -21,6 +21,7 @@ export interface TrainDay {
   meta: string;           // "38 min · 4 exercises" | "Recover for Wednesday"
   done?: boolean;
   rest?: boolean;
+  missed?: boolean;       // a planned workout day that passed with nothing done (its card says "Missed", not "Rest day")
   href: string;           // what the main button does ("tr:start" | "tr:recap:<ts>" | "tr:preview:<workout id>" | "tr:myworkouts" | "tr:none")
   restHref: string;       // what a rest card's button does
   rows: [string, string][]; // what the Edit sheet shows for this card
@@ -49,6 +50,27 @@ const dayStart = (d: Date) => { const x = new Date(d); x.setHours(0, 0, 0, 0); r
 const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 const keyOf = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
+
+/**
+ * Which weekdays (0 = Sunday) the plan trains on, from its days per week. The plan itself is a queue of workouts with no weekdays, so the
+ * week is laid out here: training days spread so rest days are never back to back where the numbers allow it (4 and 5 days a week never
+ * have two rest days in a row; 3 days a week cannot avoid one weekend pair, 1 and 2 days a week cannot avoid a few).
+ */
+const PATTERNS: Record<number, number[]> = {
+  1: [3],                    // Wed
+  2: [1, 4],                 // Mon, Thu
+  3: [1, 3, 5],              // Mon, Wed, Fri
+  4: [1, 2, 4, 6],           // Mon, Tue, Thu, Sat   (rest Wed, Fri, Sun)
+  5: [1, 2, 4, 5, 6],        // Mon, Tue, Thu, Fri, Sat (rest Wed, Sun)
+  6: [1, 2, 3, 4, 5, 6],     // rest Sun
+  7: [0, 1, 2, 3, 4, 5, 6],
+};
+export function trainingWeekdays(daysPerWeek: number | undefined): number[] {
+  if (typeof daysPerWeek !== 'number' || !Number.isFinite(daysPerWeek)) return PATTERNS[7]; // unknown days per week: no day is a rest day
+  const n = Math.max(1, Math.min(7, Math.round(daysPerWeek)));
+  return PATTERNS[n];
+}
+export const isTrainingDay = (plan: Plan | null, date: Date): boolean => !!plan && trainingWeekdays(plan.profile?.daysPerWeek).includes(date.getDay());
 
 export function workoutMinutes(w: Workout): number {
   return Math.max(10, Math.round(w.exercises.reduce((a, e) => a + e.targetSets * (e.restSeconds + 40), 0) / 60));
@@ -90,10 +112,11 @@ export function practiceLibrary(): { lib: [string, string][]; libIds: Record<str
 
 export function buildTrainData(
   plan: Plan | null,
-  sessions: SessionEntry[],
+  allSessions: SessionEntry[],
   insets: { top: number; bottom: number; tabCover?: number } = { top: 0, bottom: 0 },
   now: Date = new Date(),
 ): TrainData {
+  const sessions = workoutSessions(allSessions); // form-check practice is not a workout: no card, no streak
   const today = dayStart(now);
   const groups = groupIntoWorkouts(sessions);
   const byDay = new Map<string, WorkoutGroup>();
@@ -102,8 +125,12 @@ export function buildTrainData(
   const cur = workouts.length ? Math.max(0, Math.min(workouts.length - 1, plan!.currentWorkoutIndex ?? 0)) : -1;
   const todayDone = byDay.has(keyOf(today));
   // today's planned workout; tomorrow's is the next one (or the same one again once today's is done and the plan has moved on)
-  const todayW = cur >= 0 && !todayDone ? workouts[cur] : null;
-  const tomorrowW = cur >= 0 ? workouts[todayDone ? cur : (cur + 1) % workouts.length] : null;
+  // (only on the plan's training days: a rest day in the plan shows as a rest day, and the next workout moves to tomorrow)
+  const todayPlanned = cur >= 0 && !todayDone && isTrainingDay(plan, today);
+  const todayW = todayPlanned ? workouts[cur] : null;
+  const tomorrowDate = addDays(today, 1);
+  const tomorrowW = cur >= 0 && isTrainingDay(plan, tomorrowDate) ? workouts[todayDone || !todayPlanned ? cur : (cur + 1) % workouts.length] : null;
+  const planStart = plan ? dayStart(new Date(plan.generatedAt || 0)).getTime() : 0;
 
   const moves: Record<string, [string, string][]> = {};
   const days: TrainDay[] = [];
@@ -122,7 +149,7 @@ export function buildTrainData(
         moves[todayW.splitLabel] = plannedRows(todayW);
         days.push({ short: SHORT[date.getDay()], name: todayW.splitLabel, meta: plannedMeta(todayW), href: 'tr:start', restHref: 'tr:start', rows: plannedRows(todayW), wid: todayW.id });
       } else {
-        days.push({ short: SHORT[date.getDay()], name: 'Rest day', meta: cur < 0 ? 'Build a plan to get started' : 'Recover for tomorrow', rest: true, href: 'tr:start', restHref: 'tr:start', rows: [] });
+        days.push({ short: SHORT[date.getDay()], name: 'Rest day', meta: cur < 0 ? 'Build a plan to get started' : 'Recover for ' + LONG[tomorrowDate.getDay()], rest: true, href: 'tr:start', restHref: 'tr:start', rows: [] });
       }
     } else if (i === 6) {
       if (tomorrowW) {
@@ -131,8 +158,14 @@ export function buildTrainData(
       } else {
         days.push({ short: SHORT[date.getDay()], name: 'Rest day', meta: 'Recover for ' + LONG[addDays(date, 1).getDay()], rest: true, href: 'tr:none', restHref: 'tr:none', rows: [] });
       }
-    } else {
+    } else if (plan && isTrainingDay(plan, date) && date.getTime() >= planStart) {
+      // a workout the plan had for that day and nothing was done: Missed (never "Rest day")
+      days.push({ short: SHORT[date.getDay()], name: 'Missed', meta: 'Planned workout, not done', rest: true, missed: true, href: 'tr:none', restHref: 'tr:log', rows: [] });
+    } else if (plan && !isTrainingDay(plan, date)) {
       days.push({ short: SHORT[date.getDay()], name: 'Rest day', meta: 'Recover for ' + nextName, rest: true, href: 'tr:none', restHref: 'tr:log', rows: [] });
+    } else {
+      // before the plan existed (or no plan yet): nothing was planned, so it is neither rest nor missed
+      days.push({ short: SHORT[date.getDay()], name: 'No workout', meta: plan ? 'Before your plan' : 'Build a plan to get started', rest: true, href: 'tr:none', restHref: 'tr:log', rows: [] });
     }
   }
   // the Edit sheet looks rows up by the card's name and falls back to "Full body"

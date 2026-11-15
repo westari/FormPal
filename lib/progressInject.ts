@@ -1011,6 +1011,39 @@ export const PROGRESS_DOM_JS = String.raw`
     var pw = sectionAfter('Past Workouts');
     if (pw && pw.next) setEmpty(pw.next, !d.workouts || d.workouts.length === 0, 'No workouts yet', 'Your finished workouts show up here with a form score.', { inset: '12px 14px 20px', radius: '26px', minH: 190 });
 
+    // Form checks: practice sets (not workouts), their own small list right below Past Workouts. Hidden when there are none. A row opens that
+    // form check's recap (its video and rep feedback) the same way a past workout does.
+    (function () {
+      var list = d.practice || [];
+      var sec = root.querySelector('[data-athlt-formchecks]');
+      if (!(pw && pw.next)) return;
+      if (!list.length) { if (sec && sec.style.display !== 'none') sec.style.display = 'none'; return; }
+      var sig = JSON.stringify(list.map(function (x) { return [x.ts, x.name, x.when, x.meta]; }));
+      if (!sec) {
+        sec = document.createElement('div');
+        sec.setAttribute('data-athlt-formchecks', '1');
+        pw.next.parentElement.insertBefore(sec, pw.next.nextElementSibling);
+      }
+      if (sec.style.display === 'none') sec.style.removeProperty('display');
+      if (sec.__sig === sig) return;
+      sec.__sig = sig;
+      var rows = list.map(function (x, i) {
+        return '<div data-fc-ts="' + x.ts + '" style="display:flex;align-items:center;gap:10px;padding:12px 0;' + (i ? 'border-top:1px solid rgba(17,17,20,0.07);' : '') + 'cursor:pointer;">'
+          + '<div style="flex:1;min-width:0;"><div style="font-size:15px;font-weight:600;letter-spacing:-0.2px;color:#111114;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>'
+          + '<div style="font-size:12.5px;font-weight:500;color:#5f5f69;padding-top:1px;"></div></div>'
+          + '<svg width="8" height="13" viewBox="0 0 8 13" fill="none" style="flex:0 0 auto;"><path d="M1.5 1.5 6.5 6.5l-5 5" stroke="#9a9aa2" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>';
+      }).join('');
+      sec.innerHTML = '<div style="padding:6px 22px 0;"><div style="font-size:21px;font-weight:700;letter-spacing:-0.6px;color:#111114;">Form checks</div>'
+        + '<div style="font-size:13px;font-weight:500;color:#6e6e77;padding-top:3px;">Practice sets. They are not workouts.</div></div>'
+        + '<div style="padding:12px 14px 4px;"><div style="border-radius:26px;padding:4px 16px;background:#ffffff;box-shadow:0 0 0 1px rgba(17,17,20,0.04),0 14px 34px -16px rgba(40,50,90,0.22);">' + rows + '</div></div>';
+      var els = sec.querySelectorAll('[data-fc-ts]');
+      for (var r = 0; r < els.length; r++) {
+        var t = els[r].children[0].children;
+        t[0].textContent = list[r].name; t[1].textContent = list[r].when + ' · ' + list[r].meta;
+        (function (ts) { els[r].addEventListener('click', function (ev) { ev.preventDefault(); ev.stopPropagation(); post({ type: 'openWorkout', ts: ts }); }, true); })(list[r].ts);
+      }
+    })();
+
     // Progress Photos — the whole home card opens the design's own Photos page (in-page, instant)
     var pp = sectionAfter('Progress Photos');
     var ppCard = pp && pp.next && pp.next.children[0];
@@ -1107,10 +1140,10 @@ export const PROGRESS_DOM_JS = String.raw`
     var vidBoxes = root.querySelectorAll('div[role="img"][aria-label$=" video"]');
     var listBoxes = root.querySelectorAll('div[style*="width: 74px"][style*="height: 92px"]');
     var setThumb = function (el, w) {
-      var sig = w.logged ? 'L' + (w.body ? w.body.length : 0) : w.thumb ? 'v' + w.thumb.length : w.fallback ? 'f' + w.fallback.length : '';
+      var sig = w.logged ? 'L' : w.thumb ? 'v' + w.thumb.length : w.fallback ? 'f' + w.fallback.length : '';
       if (!sig || el.__thumb === sig) return;
       el.__thumb = sig;
-      if (window.__paintLogged) window.__paintLogged(el, !!w.logged, w.body);
+      if (window.__paintLogged) window.__paintLogged(el, !!w.logged);
       if (w.logged) return; // typed in by hand: a "Logged" tile, never a camera frame
       if (w.thumb) {
         el.style.setProperty('background-image', 'url(' + w.thumb + ')', 'important');

@@ -42,7 +42,7 @@ check('the file on disk is the new design (not the 164 KB Oct 5 file)', fs.statS
 const DAY = 86400000, now = new Date(2026, 10, 5, 14, 0, 0); // a Thursday
 const at = (daysAgo, h = 9) => { const d = new Date(now); d.setDate(d.getDate() - daysAgo); d.setHours(h, 0, 0, 0); return d.getTime(); };
 const ex = (id, displayName, sets, reps) => ({ exerciseId: id, displayName, targetSets: sets, targetReps: reps, restSeconds: 60, currentVariationId: id });
-const plan = { id: 'p', profile: { goal: 'general', experience: 'beginner', daysPerWeek: 4, location: 'gym' }, currentWorkoutIndex: 1,
+const plan = { id: 'p', profile: { goal: 'general', experience: 'beginner', daysPerWeek: 5, location: 'gym' }, currentWorkoutIndex: 1,
   workouts: [
     { id: 'w0', splitLabel: 'Lower Body', exercises: [ex('squat', 'Bodyweight Squat', 3, 12), ex('lunge', 'Lunge', 3, 10)] },
     { id: 'w1', splitLabel: 'Upper Body', exercises: [ex('pushup', 'Push-up', 3, 12), ex('shoulderPress', 'Shoulder Press', 3, 10), ex('curl', 'Bicep Curl', 3, 12), ex('pullup', 'Pull-up', 3, 6)] },
@@ -63,8 +63,9 @@ console.log('      days  ', data.days.map(d => `${d.short}:${d.name}${d.done ? '
 check('7 day cards and 7 calendar days, today in slot 5 (the design centres slot 5)', data.days.length === 7 && data.cal.length === 7 && data.cal[5][1] === 5 && data.cal[5][0] === 'Thu', JSON.stringify(data.cal[5]));
 check('today is the plan\'s current workout with real minutes and exercise count', data.days[5].name === 'Upper Body' && /^\d+ min · 4 exercises$/.test(data.days[5].meta), data.days[5].meta);
 check('yesterday shows the workout that was really done (matched to the plan)', data.days[4].done && data.days[4].name === 'Lower Body' && /2 exercises · 22 reps/.test(data.days[4].meta), data.days[4].name + ' / ' + data.days[4].meta);
-check('days with no workout are rest days', data.days[3].rest === true && /^Recover for /.test(data.days[3].meta), data.days[3].short + ' ' + data.days[3].meta);
-check('tomorrow is the next plan workout', data.days[6].name === 'Full Body');
+check('a planned day with no workout done says Missed (never Rest day); 5 days a week = Mon Tue Thu Fri Sat, so Tuesday and Saturday were planned', data.days[3].missed === true && data.days[3].name === 'Missed' && data.days[0].missed === true, data.days[3].short + ' ' + data.days[3].name);
+check('tomorrow (Friday, a plan training day) is the next plan workout', data.days[6].name === 'Full Body');
+check('the rest days of the plan are Rest day (Wednesday and Sunday are rest in a 5-day plan; they were done here, so check the pattern itself)', [0, 3].every((d) => !require('../lib/trainData.ts').trainingWeekdays(5).includes(d)));
 check('Edit sheet rows exist for today (real exercises)', data.moves['Upper Body'].length === 4 && data.moves['Upper Body'][0][0] === 'Push-up' && data.moves['Full body'].length > 0);
 check('Practice list is the real catalogue, Squat/Push-up first, ids mapped', data.lib.length > 20 && data.libIds[data.lib[0][0]] === 'squat' && data.libIds[data.lib[1][0]] === 'pushup', data.lib.slice(0, 3).map(l => l.join(' / ')).join(' | '));
 check('My Workouts = first three plan workouts', data.myWorkouts.length === 3 && data.myWorkouts[0].name === 'Lower Body');
@@ -157,7 +158,7 @@ async function openTab(browser, { width = 402, height = 874, insets = INS, datas
   console.log('      cards:', dom.cards.map(c => c.slice(0, 48)).join(' || '));
   check('Today card (slot 5) shows the real workout, "Start workout" button', /^Today Upper Body \d+ min · 4 exercises/.test(dom.cards[5]) && /Start workout/.test(dom.cards[5]), dom.cards[5]);
   check('Yesterday shows the real finished workout with "View recap"', /^Wed Lower Body 2 exercises · 22 reps/.test(dom.cards[4].replace('Thu', 'Wed')) || /Lower Body 2 exercises · 22 reps/.test(dom.cards[4]), dom.cards[4].slice(0, 70));
-  check('rest days show "Rest day"', /Rest day/.test(dom.cards[3]) && /Rest day/.test(dom.cards[0]), dom.cards[3].slice(0, 40));
+  check('skipped planned days show "Missed" on the card', /Missed/.test(dom.cards[3]) && /Missed/.test(dom.cards[0]), dom.cards[3].slice(0, 40));
   check('the calendar strip carries the real dates (rolling week, today = slot 5)', dom.nums.join(',') === data.cal.map(c => c[1]).join(','), dom.nums.join(','));
   check('the design centred Today on open (its own scroll logic still works)', Math.abs(dom.todayCentre - dom.vw / 2) < 6, `today centre ${dom.todayCentre.toFixed(1)} vs ${dom.vw / 2}`);
   check('the streak is the real streak', dom.streak === String(data.streak), dom.streak + ' vs ' + data.streak);

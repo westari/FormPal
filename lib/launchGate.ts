@@ -23,7 +23,13 @@ export function resetLaunchGate(): void { settled = false; }
 const subscribe = (f: () => void) => { subs.add(f); return () => { subs.delete(f); }; };
 export function useLaunchSettled(): boolean { return useSyncExternalStore(subscribe, () => settled, () => settled); }
 
-/** Backstop: whatever happens, the hidden pages are allowed to load 8 seconds after the app started. */
+/** Backstop: whatever happens, the hidden pages are allowed to load this long after the TAB BAR mounted (not after the app's JS
+ *  started: the log showed 28 seconds between the two, so a timer started at import time had already run out). */
 export const LAUNCH_BACKSTOP_MS = 8000;
-const backstop: any = setTimeout(markLaunchSettled, LAUNCH_BACKSTOP_MS);
-if (backstop && typeof backstop.unref === 'function') backstop.unref(); // (node tests only: never keeps a process alive)
+let backstopStarted = false;
+export function startLaunchBackstop(): void {
+  if (backstopStarted) return;
+  backstopStarted = true;
+  const t: any = setTimeout(markLaunchSettled, LAUNCH_BACKSTOP_MS);
+  if (t && typeof t.unref === 'function') t.unref(); // (node tests only: never keeps a process alive)
+}
