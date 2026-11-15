@@ -152,7 +152,7 @@ for (const [name, parts] of Object.entries(CASES(sigPress))) {
 {
   const r = R['too close (person lost)'];
   const said = r.s.guideSaid;
-  check('TOO CLOSE: the Guide says to step into the picture / move the phone back', said.includes(GUIDE_LINES.intoPicture) && (said.includes(GUIDE_LINES.phoneBack) || said.includes(GUIDE_LINES.backHands)), said.join(' / ') || 'silent');
+  check('TOO CLOSE: the Guide says "Back up" (someone who was in the picture and is now lost is too close), never "Step into view" for them', said.includes(GUIDE_LINES.backUp) && !said.includes(GUIDE_LINES.intoPicture), said.join(' / ') || 'silent');
   check('TOO CLOSE: no X while the person is out of the picture', r.verdicts.filter((v) => v.show === 'x' && r.rows.some((x) => Math.abs(x.t - v.t) < 300 && x.guideReason === 'nobody')).length === 0);
   check('TOO CLOSE: the Guide and the Coach never say the same thing', guideAndCoachClash(r).length === 0);
 }
@@ -288,7 +288,7 @@ for (const ex of CAT) {
   if (cg.some((w) => !GUIDE_SET.has(w.toLowerCase()))) fails.push('cut: Guide line not in its list');
   // too close: person lost
   const lost = run([{ kind: 'rest', sec: 2 }, { kind: 'reps', sec: 6, period: 3.5, engine: true }, { kind: 'lost', sec: 5 }, { kind: 'reps', sec: 8, period: 3.5, depthR: 0.5 }]);
-  if (!lost.rows.some((x) => x.guide === GUIDE_LINES.intoPicture)) fails.push('lost: no "step into the picture"');
+  if (!lost.rows.some((x) => x.guide === GUIDE_LINES.backUp)) fails.push('lost: no "Back up" (a person who was in the picture and is now lost is too close)');
   // the form cue of this exercise's rep range fault is a Coach word
   const rc = SC.coachLine(romCue);
   if (rc !== null && !COACH_SET.has(rc.toLowerCase())) fails.push('range cue not a Coach word: ' + rc);
@@ -305,8 +305,8 @@ console.log('\n--- 5. wiring in app/formcheck.tsx ---');
   check('the line with the Cue stars while tracking shows ONLY the Guide\'s line (guideTrack), nothing else', /\{isTracking && !!guideTrack && !feedback && \([\s\S]{0,260}<CueGlass text=\{guideTrack\} \/>/.test(fc) && !/<CueGlass text=\{cue\} \/>/.test(fc) && !fc.includes("showCue('Range set')"));
   check('the old separate "turn sideways" overlay is gone (the Guide says it)', !fc.includes('s.outOfPlaneHint} pointerEvents'));
   check('every check / X on a counted rep goes through THE COACH (Movement Match LOW = none)', fc.includes("coachRef.verdict({ now: Date.now(), match: matchRef.result(), source: 'native'") && fc.includes('shownReason = cv.reason'));
-  check('every X on an uncounted attempt goes through THE COACH and only a short stroke gets one', fc.includes("source: 'attempt', blocker: ev.blocker, rangeWord: ev.reason") && fc.includes("if (cva.show !== 'x') continue;"));
-  check('a soft rep (the app counted it) is a check through THE COACH too', fc.includes("source: 'soft'"));
+  check('ONE JUDGE: a half rep is an X only from the engine onAttemptMissed event, through THE COACH (source missed)', fc.includes("source: 'missed', missedReason: ev.reason") && fc.includes('addAttemptMissedListener(') && fc.includes("if (cv.show !== 'x') return;"));
+  check('the JS attempt detector can no longer show an X, add a soft rep or take a rep back (its handler does nothing on screen)', fc.includes('onAttemptRef.current = (_evs: DetectorEvent[]) => { /* nothing on screen */ };') && !fc.includes("source: 'soft'") && !fc.includes("source: 'attempt'") && !fc.includes('took back a counted rep'));
   check('the meter shows CAMERA CONFIDENCE (Movement Match + counting + path coverage), capped by the frame hint', fc.includes('confidence={confidenceRef}') && fc.includes('tgt = Math.min(tgt, confidence.current)'));
   check('Movement Match is fed every log line and everything resets at Go', fc.includes('matchRef.feed(e.message);') && fc.includes('matchRef.reset(); confRef.reset(); guideEngine.reset(); coachRef.reset();'));
   check('the 200ms tick wires match -> path cut -> confidence -> Guide', fc.includes('attemptRef.current.setPathCut(m.cut);') && fc.includes('const conf = confRef.update(') && fc.includes('guideEngine.decide('));

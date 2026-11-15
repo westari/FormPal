@@ -141,7 +141,7 @@ public class ATHLTCameraModule: Module {
     public func definition() -> ModuleDefinition {
         Name("ATHLTCamera")
 
-        Events("onRepDetected", "onError", "onCameraState", "onDebugStats", "onSetupStatus", "onCalibrationStatus", "onDebugLog")
+        Events("onRepDetected", "onAttemptMissed", "onError", "onCameraState", "onDebugStats", "onSetupStatus", "onCalibrationStatus", "onDebugLog")
 
         View(ATHLTCameraView.self) {
             Prop("isActive") { (_: ATHLTCameraView, _: Bool) in }
@@ -585,6 +585,17 @@ public class ATHLTCameraModule: Module {
                 peakValue:  peakValue,
                 repEndTime: repEndTime
             )
+        }
+
+        // A half rep: a stroke that clearly started like a rep but did not count (ExerciseEngine.trackAttempt). One event per stroke, when it ends.
+        engine.onAttemptMissed = { [weak self] reason, reached, needed in
+            guard let self else { return }
+            self.sendEvent("onAttemptMissed", [
+                "reason":    reason,
+                "reached":   reached,
+                "needed":    needed,
+                "timestamp": Date().timeIntervalSince1970 * 1000.0,
+            ])
         }
 
         engine.onDebugStats = { [weak self] stats in

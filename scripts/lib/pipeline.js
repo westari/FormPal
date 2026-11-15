@@ -18,6 +18,7 @@ const GCm = require('../../lib/guideCoach.ts');
 const AD = require('../../lib/attemptDetector.ts');
 const AD_OLD = require(path.join(__dirname, '..', 'fixtures', 'legacy-2026-11-11', 'attemptDetector.ts'));
 const RD = require('../../lib/repDiagnostics.ts');
+const MIRROR = require('./missed-attempt-mirror.js');
 
 /** A wall clock the pipeline reads (Date.now is what the real modules call). */
 function withClock(fn) {
@@ -54,22 +55,16 @@ function run(events, opts = {}) {
     const rdO = RD.createRepDiagnostic(undefined, exerciseId);
     const old = { conf: [], x: [], cue: [], stuck: [] };
 
-    const onEvents = (evs) => {
+    // ONE JUDGE (2026-11-15): the attempt detector (det) feeds Movement Match / logs only. A half rep is judged by the MIRROR of the engine's own
+    // missed-attempt tracker (scripts/lib/missed-attempt-mirror.js = ExerciseEngine.swift trackAttempt), through the same Coach path as a counted rep.
+    const mirror = MIRROR.createMissedAttemptMirror({ onMissed: (m) => {
       const now = getClock();
-      for (const ev of evs) {
-        if (ev.kind !== 'attempt') continue;
-        if (ev.outcome === 'soft') {
-          st.soft++; st.lastCountAt = now; st.missed = 0;
-          const v = coach.verdict({ now, match: mm.result(), source: 'soft' });
-          verdicts.push({ t: now - 1e12, show: v.show, reason: v.reason, src: 'soft', score: mm.result().score });
-        } else if (ev.outcome === 'missed' || ev.outcome === 'rejected') {
-          st.missed++;
-          const v = coach.verdict({ now, match: mm.result(), source: 'attempt', blocker: ev.blocker, rangeWord: ev.reason, n: ev.n, strokeR: ev.strokeR });
-          if (v.show) st.lastJudgedAt = now;
-          verdicts.push({ t: now - 1e12, show: v.show, reason: v.reason, src: 'attempt', blocker: ev.blocker, score: mm.result().score });
-        }
-      }
-    };
+      st.missed++;
+      const v = coach.verdict({ now, match: mm.result(), source: 'missed', missedReason: m.reason });
+      if (v.show) st.lastJudgedAt = now;
+      verdicts.push({ t: now - 1e12, show: v.show, reason: v.reason, src: 'missed', score: mm.result().score, size: m.size });
+    } });
+    const onEvents = (_evs) => { /* the attempt detector judges nothing */ };
     const oldEvents = (evs) => {
       for (const ev of evs) {
         if (ev.kind === 'attempt' && (ev.outcome === 'missed' || ev.outcome === 'rejected')) old.x.push({ t: getClock() - 1e12, text: 'X ' + ev.reason, src: 'attempt' });
@@ -96,8 +91,30 @@ function run(events, opts = {}) {
       old.cue.push({ t: now - 1e12, text: oc || rdO.message() || null });
     };
 
+    // The frames the ENGINE would have seen. A device log only has the [METRIC] line about 2.5 times a second, so a rep's real bottom is usually not in it;
+    // the [REP] line carries the engine's own bottom (bottom=38.5), which is added as a frame 600 ms before the [REP] line (the line comes after the rep has risen back above the exit line), so a counted rep is
+    // never mistaken for a half rep. [REP-TRACE] lines (10 a second while a rep is in progress) are frames too.
+    const mirrorFrames = [];
+    if (opts.nativeMissed !== false) {
+      for (const ev of events) {
+        const mx = /^\[METRIC\].*?value=([-\d.]+) enter=([-\d.]+) exit=([-\d.]+) rom=([-\d.]+) top=([-\d.]+)/.exec(ev.line);
+        if (mx) mirrorFrames.push({ t: ev.t, v: +mx[1], lines: { enter: +mx[2], exit: +mx[3], rom: +mx[4], top: +mx[5] } });
+        const tr = /^\[REP-TRACE\][^\n]*?angle=([-\d.]+)/.exec(ev.line);
+        if (tr) mirrorFrames.push({ t: ev.t, v: +tr[1] });
+        const rp = /^\[REP\] #\d+ .*?bottom=([-\d.]+)/.exec(ev.line);
+        if (rp) mirrorFrames.push({ t: ev.t - 600, v: +rp[1] });
+      }
+      mirrorFrames.sort((x, y) => x.t - y.t);
+    }
+    let mi = 0;
     let i = 0, t = t0 + tickMs;
     for (; t <= endMs; t += tickMs) {
+      while (mi < mirrorFrames.length && mirrorFrames[mi].t <= t) {
+        const fr = mirrorFrames[mi++];
+        setClock(1e12 + fr.t);
+        if (fr.lines) mirror.setLines(fr.lines);
+        mirror.frame(fr.v, getClock());
+      }
       setClock(1e12 + t);
       while (i < events.length && events[i].t <= t) {
         const line = events[i].line;

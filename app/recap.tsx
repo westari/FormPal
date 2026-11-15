@@ -194,7 +194,7 @@ export default function RecapScreen() {
       }
       if (repFeedbackSignal.finishedReview) {
         repFeedbackSignal.finishedReview = false;
-        if (!isPractice) setView('ranks');
+        setView('ranks');
       }
     }, [])
   );
@@ -299,8 +299,6 @@ export default function RecapScreen() {
   const [streakDone, setStreakDone] = useState<{ count: number; dest: string } | null>(null);
   useEffect(() => {
     repFeedbackSignal.onFinishReview = () => {
-      // practice: the rep feedback is the end (no Today's progress, no streak)
-      if (isPractice) { postLag('recap: finish review -> practice, straight home'); router.replace('/(tabs)/' as any); return; }
       postLag('recap: finish review -> switching to the muscle page'); setView('ranks'); setFinishing(true);
     };
     return () => { repFeedbackSignal.onFinishReview = null; };
@@ -794,6 +792,7 @@ export default function RecapScreen() {
           exerciseName: data.entries[0]?.displayName ?? EXERCISE_DEFINITIONS[(exercise ?? '') as ExerciseId]?.displayName ?? 'Exercise',
           videoUri: data.videoUri ?? '',
           repEvents: JSON.stringify(repEvents),
+          practice: isPractice ? '1' : '',
         },
       } as any);
     }

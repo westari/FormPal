@@ -53,7 +53,12 @@ console.log('\n--- 4. practice ---');
 check('PRACTICE: a solo form check (mode formCheck, not a workout, not logged, not history) is practice', /const isPractice = mode === 'formCheck' && !isWorkoutMode && !isLoggedMode && !isHistoryMode;/.test(rc));
 check('PRACTICE: its session entry is saved with kind: \'practice\'', /\.\.\.\(isPractice \? \{ kind: 'practice' as const \} : \{\}\)/.test(rc));
 check('PRACTICE: the screen says "Form check complete" (DoneScreen AND the Workout complete page title)', /title=\{isPractice \? 'Form check complete' : 'Workout complete'\}/.test(rc) && /title: isPractice \? 'Form check complete' : undefined/.test(rc) && /practice: !repCounterOnly/.test(read('app/formcheck.tsx')) && /'Workout Complete': opts\.title/.test(read('lib/recapInject.ts')));
-check('PRACTICE: keeps the rep feedback, but Finish review goes straight home (no Today\'s progress, no streak)', /if \(isPractice\) \{ postLag\('recap: finish review -> practice, straight home'\); router\.replace/.test(rc) && /if \(isPractice\) \{ router\.replace\('\/\(tabs\)\/' as any\); return; \}/.test(rc) && /if \(!isHistoryMode && !isPractice\) warmWant\('ranks', true\)/.test(rc) && /data\.isHistory \|\| isPractice\) return/.test(rc));
+{
+  const rfb = read('app/rep-feedback.tsx');
+  check("PRACTICE: keeps the rep feedback; Finish leaves from the rep feedback screen straight HOME, once (dismissAll + a leaving guard), not back to the recap (the 2026-11-15 loop), no Today's progress, no streak",
+    rc.includes("practice: isPractice ? '1' : ''") && /if \(isPractice\) \{[\s\S]{0,300}router\.dismissAll\(\);\s*return;/.test(rfb) && rfb.includes('if (leaving.current) return;') && !rc.includes('practice, straight home')
+    && rc.includes("if (isPractice) { router.replace('/(tabs)/' as any); return; }") && rc.includes("if (!isHistoryMode && !isPractice) warmWant('ranks', true)"));
+}
 
 // the data rules, run for real with a fake storage
 const store = {};

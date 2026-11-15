@@ -305,6 +305,21 @@ export function addRepListener(
   return safeListen('onRepDetected', callback);
 }
 
+/** Emitted once when a stroke that clearly started like a rep ended without counting (a half rep). NEW native builds only: an older build never sends it. */
+export interface AttemptMissedEvent {
+  reason: 'short_top' | 'short_bottom';  // which end was short
+  reached: number;                        // the value the stroke got to
+  needed: number;                         // the line it had to cross
+  timestamp: number;                      // ms
+}
+
+export function addAttemptMissedListener(
+  callback: (event: AttemptMissedEvent) => void
+): EventSubscription {
+  if (!nativeEmitter) return { remove: () => {} };
+  return safeListen('onAttemptMissed', callback);
+}
+
 export function addDebugStatsListener(
   callback: (event: DebugStatsEvent) => void
 ): EventSubscription {

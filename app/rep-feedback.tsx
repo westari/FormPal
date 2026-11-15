@@ -72,9 +72,11 @@ export default function RepFeedbackScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const { exerciseName, videoUri, repEvents: repEventsParam } = useLocalSearchParams<{
-    exerciseName?: string; videoUri?: string; repEvents?: string;
+  const { exerciseName, videoUri, repEvents: repEventsParam, practice } = useLocalSearchParams<{
+    exerciseName?: string; videoUri?: string; repEvents?: string; practice?: string;
   }>();
+  const isPractice = practice === '1';
+  const leaving = useRef(false);   // Finish / back can only leave ONCE (the 2026-11-15 loop: Finish -> Form check complete -> rep feedback -> ...)
 
   // DIAGNOSTIC — full mount/unmount + WebView lifecycle logging, kept per
   // explicit instruction ("keep the build stamp and logs in for now").
@@ -256,7 +258,15 @@ export default function RepFeedbackScreen() {
     else if (msg.type === 'openAllSets') { repFeedbackSignal.openAllSets = true; router.back(); }
     else if (msg.type === 'finishReview') {
       postLag('rep feedback: Finish review tapped');
+      if (leaving.current) return;   // a second tap (or a second message) does nothing
+      leaving.current = true;
       hapticFinish(); // the one strong haptic in the app: Heavy impact + Success
+      if (isPractice) {
+        // A form check (practice) ends here: straight HOME, once. Not back to the recap (that is what looped), no Today's progress, no streak.
+        warmDeactivate('repfeedback');
+        router.dismissAll();
+        return;
+      }
       // No waiting for the back transition: the muscle page is put on screen underneath right now and this
       // page slides away over it (see recap.tsx's onFinishReview and WarmSurfaces' in-place show).
       repFeedbackSignal.finishedReview = true;

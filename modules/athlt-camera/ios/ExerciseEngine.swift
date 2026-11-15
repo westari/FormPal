@@ -518,6 +518,86 @@ final class ExerciseEngine {
     private var lastActivityLogTime: Double = 0
     private var lastSettleRejectLogTime: Double = 0
 
+    // ── Missed-attempt tracker (Ari 2026-11-15) ──────────────────────────────
+    // ALL FOUR NUMBERS ARE PLACEHOLDERS (reasoned, not device-verified; tune from the [ATTEMPT-MISSED] log lines).
+    // A stroke is a REAL TRY when it covers at least this fraction of the rep range (|top - goodROM|); smaller is noise and fires nothing.
+    private static let ATTEMPT_MIN_FRACTION: Double = 0.35
+    // A stroke starts when the metric falls this fraction of the range below its running top, and ENDS when it rises this far above its low.
+    private static let ATTEMPT_TURN_FRACTION: Double = 0.15
+    // ...and it must last at least this many frames and seconds (one garbled frame is not a stroke).
+    private static let ATTEMPT_MIN_FRAMES: Int = 3
+    private static let ATTEMPT_MIN_SECONDS: Double = 0.25
+    // The top of a rep should reach at least (topAngle - this fraction of the range). A stroke whose start peak sat lower than that is "short_top".
+    private static let ATTEMPT_TOP_FRACTION: Double = 0.20
+    private var atkPeak: Double = -Double.greatestFiniteMagnitude
+    private var atkStartPeak: Double = 0
+    private var atkLow: Double = Double.greatestFiniteMagnitude
+    private var atkFrames: Int = 0
+    private var atkStartTime: Date? = nil
+    private var atkDescending: Bool = false
+
+    private func resetAttemptTracker() {
+        atkPeak = -Double.greatestFiniteMagnitude
+        atkStartPeak = 0
+        atkLow = Double.greatestFiniteMagnitude
+        atkFrames = 0
+        atkStartTime = nil
+        atkDescending = false
+    }
+
+    // Called every trusted frame while waiting at the top. A stroke that dips below the rep's enter line starts a REAL rep (the state machine
+    // switches to .inRep and this tracker is reset), so only strokes that stay ABOVE the enter line can end here as "missed".
+    private func trackAttempt(angle: Double, timestamp: Date) {
+        // The rep range is the exercise's OWN (topAngle to goodROM), not the running top: early in a set the running top is still small, which made
+        // tiny wobbles look like a big fraction of the range.
+        let range = abs(def.topAngle - effectiveROMThreshold)
+        guard range > 0.01 else { return }
+        let turn = range * Self.ATTEMPT_TURN_FRACTION
+        if !atkDescending {
+            atkPeak = max(atkPeak, angle)
+            if atkPeak - angle >= turn {
+                atkDescending = true
+                atkStartPeak = atkPeak
+                atkLow = angle
+                atkFrames = 1
+                atkStartTime = timestamp
+            }
+        } else {
+            atkFrames += 1
+            if angle < atkLow { atkLow = angle }
+            if angle - atkLow >= turn {
+                finishAttempt(range: range, timestamp: timestamp)
+                atkDescending = false
+                atkPeak = angle
+            }
+        }
+    }
+
+    private func finishAttempt(range: Double, timestamp: Date) {
+        let size = (atkStartPeak - atkLow) / range
+        let seconds = atkStartTime.map { timestamp.timeIntervalSince($0) } ?? 0
+        guard size >= Self.ATTEMPT_MIN_FRACTION, atkFrames >= Self.ATTEMPT_MIN_FRAMES, seconds >= Self.ATTEMPT_MIN_SECONDS else { return }
+        // A stroke that stayed above the enter line never counts, so the bottom is short by construction; the top is short too when the stroke
+        // started from a peak lower than the rep's own top. Report whichever end is further from its line (as a share of the range).
+        let topNeeded = def.topAngle - Self.ATTEMPT_TOP_FRACTION * range
+        let topDef    = max(0.0, (topNeeded - atkStartPeak) / range)
+        let bottomDef = max(0.0, (atkLow - effectiveEnterThreshold) / range)
+        guard topDef > 0 || bottomDef > 0 else { return }
+        let reason: String
+        let reached: Double
+        let needed: Double
+        if topDef > bottomDef {
+            reason = "short_top"; reached = atkStartPeak; needed = topNeeded
+        } else {
+            reason = "short_bottom"; reached = atkLow; needed = effectiveEnterThreshold
+        }
+        let msg = "[ATTEMPT-MISSED] (def.id) (reason) reached=(String(format: "%.1f", reached)) needed=(String(format: "%.1f", needed)) " +
+                  "size=(String(format: "%.2f", size))R frames=(atkFrames) (min (Self.ATTEMPT_MIN_FRACTION)R, PLACEHOLDER)"
+        NSLog("[Engine] [%@] %@", def.id, msg)
+        onDebugLog?(msg)
+        onAttemptMissed?(reason, reached, needed)
+    }
+
     // ── Callbacks ─────────────────────────────────────────────────────────────
     var onRepDetected:       ((RepResult)        -> Void)?
     var onDebugStats:        ((EngineDebugStats) -> Void)?
@@ -526,6 +606,10 @@ final class ExerciseEngine {
     // Arbitrary diagnostic message — wired to sendEvent("onDebugLog") in ATHLTCameraModule.
     // Used for [METRIC], [VALID], [GATE], [REP] logs so they reach JS/Metro on Windows.
     var onDebugLog:          ((String) -> Void)?
+    // A stroke that clearly started like a rep but did not count (a half rep). Fired ONCE, at the moment the stroke ends.
+    // reason: "short_top" (never got back up to the start zone before going down) or "short_bottom" (never went low enough to enter a rep).
+    // reached = the value the stroke got to, needed = the line it had to cross. The engine sees every frame, so it knows which end was short.
+    var onAttemptMissed:     ((_ reason: String, _ reached: Double, _ needed: Double) -> Void)?
     // Lets UniversalQualityEngine veto a GOOD verdict using signals this engine
     // has no primitive for (velocity/jerk over time — ExerciseEngine only ever
     // sees instantaneous per-frame angles). Wired in ATHLTCameraModule to call
@@ -556,6 +640,7 @@ final class ExerciseEngine {
         resetActivityState()
         resetSettleState()
         resetTrackingHealth()
+        resetAttemptTracker()
     }
 
     // Partial reset — resets rep counters but keeps enginePhase and calibration-derived thresholds.
@@ -571,6 +656,7 @@ final class ExerciseEngine {
         resetActivityState()
         resetSettleState()
         resetTrackingHealth()
+        resetAttemptTracker()
     }
 
     // FIX 2 — the flicker-tolerance + live-cue counters.
@@ -1288,7 +1374,11 @@ final class ExerciseEngine {
             // recovered from a pose gap (step-out-of-frame, occlusion) — see the
             // var's doc comment. A garbled edge-of-frame reading could otherwise
             // spuriously dip below effectiveEnterThreshold and start a phantom rep.
+            if framesSincePoseGap >= Self.MIN_FRAMES_AFTER_POSE_GAP, angle >= effectiveEnterThreshold {
+                trackAttempt(angle: angle, timestamp: timestamp)   // a stroke that stays above the enter line may end as a missed attempt
+            }
             if framesSincePoseGap >= Self.MIN_FRAMES_AFTER_POSE_GAP, angle < effectiveEnterThreshold {
+                resetAttemptTracker()                              // a real rep starts: the attempt tracker starts again after it
                 repPhase      = .inRep
                 repMinAngle   = angle
                 repEnterValue = angle
@@ -1299,6 +1389,7 @@ final class ExerciseEngine {
             }
 
         case .inRep:
+            resetAttemptTracker()   // (no missed-attempt tracking while a rep is in progress)
             // Per-frame metric trace — DIAGNOSTIC for comparing what the video-
             // file path actually samples per rep against what live capture
             // sampled for the identical set (see the "video path phantom-

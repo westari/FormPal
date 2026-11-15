@@ -140,3 +140,9 @@ uncounted stroke.
 - Half reps got 0 X in 61 s (8 reps). Causes: the attempt detector's median-of-3 smoothing spanned 1.2 s on the 2.5-readings-a-second feed (a half rep flattened to a constant), and a stroke was "counted" when ANY rep fell in the 500 ms before its low. Now: smoothing only over the last 250 ms (`smoothMs`), and each engine rep belongs to one stroke (`claimRep`, window starts 600 ms before the stroke's low). Replay: 21 strokes, 8 counted (= the 8 reps), 13 missed, each real one gets its X.
 - The Guide and a check/X are never on screen together; the Guide rotates to the next cause after `GUIDE.tipRotateSec` (5 s) with an ordered list (`tipOrder`).
 - Practice form checks: `kind: 'practice'`, skipped by every rank / map / streak aggregate (`realSessions`).
+
+## Update 2026-11-15 (second round): ONE judge
+
+- The Coach shows a check or X only from NATIVE events: `onRepDetected` (a counted rep) and the new `onAttemptMissed` (a half rep: ExerciseEngine.swift trackAttempt/finishAttempt, reason short_top / short_bottom, reached, needed). The JS attempt detector no longer shows an X, adds a soft rep or takes a rep back; it only feeds Movement Match and the log.
+- On an old native build the event never arrives, so nothing shows for half reps (by design). Constants (all placeholders): 35% of the range = a real try, 15% turn, 3 frames, 0.25 s, top line = topAngle - 20% of the range. Mirrored in scripts/lib/missed-attempt-mirror.js.
+- Guide: "Back up" when too close (or a person who was in the picture and is now lost); "Step into view" only when nobody was ever in the picture.

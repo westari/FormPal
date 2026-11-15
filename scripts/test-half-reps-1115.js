@@ -22,7 +22,7 @@ const reps = events.filter((e) => /^\[REP\] #\d+/.test(e.line)).length;
 const atts = res.logs.filter((l) => /\[ATTEMPT\] #\d+/.test(l.m));
 const counted = atts.filter((l) => /outcome=counted/.test(l.m)).length;
 const missed = atts.filter((l) => /outcome=missed/.test(l.m));
-const xs = res.verdicts.filter((v) => v.show === 'x' && v.src === 'attempt');
+const xs = res.verdicts.filter((v) => v.show === 'x' && v.src === 'missed');
 console.log(`  ${reps} engine reps, ${atts.length} strokes found (${counted} counted, ${missed.length} missed), ${xs.length} X: ` + xs.map((v) => (v.t / 1000).toFixed(1) + 's ' + v.reason).join(', '));
 check('every engine rep still gets its check (none withheld)', events.filter((e) => /^\[REP\] #\d+/.test(e.line)).every((e) => res.verdicts.some((v) => v.src === 'native' && Math.abs(v.t - e.t) < 300 && v.show)));
 check('a stroke is only "counted" when an engine rep really belongs to it (counted strokes never outnumber the reps)', counted <= reps, `${counted} counted vs ${reps} reps`);
