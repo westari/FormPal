@@ -1,57 +1,46 @@
-# Window B report (2026-11-16)
+# Window B report (2026-11-16, evening round)
 
-Phone still runs the OLD Oct 8 native build. Everything below is JS (live on Metro) unless it says "needs the new build".
+## Which native build the phone ran: the OLD Oct 8 build
+Read from `C:\Users\arize\gym app\logs\latest.log` (newest session, 16:14 to 16:19):
+- No native `ATTEMPT-MISSED` or `REP-QUALITY` lines anywhere (the new Swift prints them). The `[ATTEMPT]` lines are the JS mirror, not native.
+- `expo-brightness is NOT in this build (old build)`, and setup is the old one (`rep metric trackable - starting 2.0s hold`, no whole-body check).
+- The JS is NEW (the log has `[READY-GATE]`, `[COACH]`, the new `[CONFIDENCE]` lines). So: new JS on the old native build.
+- So on the phone, half reps get NO X yet. That comes with the new iOS build. I did not start a build.
+- I merged `origin/overnight-build` first (clean). I did not touch any done / complete screens.
 
-## Part 0 - why the builds failed
-Runs 43758159307 and 43747908863 (commit 384038b), step 11 EAS local build. Two kinds of error:
-1. **Swift syntax errors in `ExerciseEngine.swift`**: the ATTEMPT-MISSED and REP-QUALITY log lines had lost the backslashes in their `\(...)` interpolations, so the compiler read the text after the string as code. Fixed (the lines now build their text in plain variables first).
-2. **`ATHLTCameraModule.swift:141 failed to produce diagnostic for expression`** inside `definition()`: the `?? NSNull()` / `?? "none"` expressions inside Expo's result builder crash the type-checker. Fixed: moved into three plain helper functions above `definition()` (`clipValue`, `clipName`, `stopResultDict`).
-- Other things checked: `check-swift-strings.js` (16 Swift files clean), `check-swift-calls.js`, `check-imports.js`, and a new rule in `test-build-safety.js` that fails if `definition()` ever gets a `?? NSNull()` / `as Any?` again.
-- **Is overnight-build ready to build? Yes**, as far as anything outside Apple's compiler can tell. I cannot run Xcode on Windows, so this is "every error CI showed is fixed and every static check passes", not a guarantee.
+## Camera screen look (1 to 6): all done in code, not seen on a phone
+1. **Record button removed. Done.** A small Liquid Glass "Finish" pill (76 x 40) takes its place on the rep count's row, at the right edge (20 pt from the edge, so a two-digit count never touches it on a small phone). It only shows while tracking, because only then does it do anything. It does the same as the old button (`handleStop`).
+2. **Pill centred, higher. Done.** I cannot see why it was off centre on your phone (my mock was centred). The likely cause: the glass was sized by its content and the native glass view put it off. It now has a FIXED width (240) placed from the screen's own middle, so it is centred exactly on every phone (a test checks all six sizes). It sits near the top of the brackets (12 pt below them) instead of 30% down. "Ready. Go!" sits at the same height.
+3. **Cue stars back. Done.** The blue sparkle sits to the left of the Guide text inside the pill (same image as before).
+4. **Set bars. Done.** Each set is its own thin (18 pt) Liquid Glass pill with 8 pt gaps. Finished and current sets have a bright white fill and a soft green glow, upcoming sets are plain dim glass.
+5. **Timer icon. Done / nothing to fix in code.** The timer already used the real SF Symbol `stopwatch` (SymbolView), not a drawing. I made it bigger (16 pt, medium weight) and added a test that fails if a custom drawing ever replaces it. If it still looks wrong on the phone, send me a screenshot.
+6. **Solo rep counter. Done.** It is now the same component as the workout: "3 / 10", the target is the exercise's default reps (`defaultReps` from the catalog, 10 if missing), same font.
+- Six phone sizes (SE, 13 mini, 15, 16 Pro, 15 Pro Max, 16 Pro Max), workout and solo: `scripts\test-camera-hud-layout.js` (no overlaps, inside safe areas, pill centred exactly, Finish clear of the count and the demo drawer).
+- Screenshots (my layout in Chromium next to your image): `.scratch\hud-compare2.png`, six sizes `.scratch\hud-sizes2.png`. Glass is only approximated there (browser, no Liquid Glass, no SF Pro).
 
-## Part 1 - camera confidence (items 2, 3): done
-- Cause confirmed in the log: the old meter capped the number at 35 whenever a hint was showing, so it went 100 -> 35 -> 100 with nothing changing for the camera. Replay of the newest log, BEFORE: min 5, moves of 47 points in 1 s, 4 dips below 50 while he stood still / counted reps.
-- Now: the number comes only from what the camera sees (metric samples, pose gaps, low-confidence rejections, the "trying but nothing counts" rule). Hints never set it. It is slew-limited to 6 points a second while tracking (45 a second in setup, 30 when nobody is there). Reps counting keeps it at 90+.
-- AFTER on the same log: biggest move 6 points in a second, 90+ during the whole set. If it drops, the Guide names the reason within about 1.5 s.
-- Tests: `test-confidence-truth.js`, `test-live-tracking.js`.
+## Coach and Guide logic (7 to 9)
+**7. "Start your reps" once: done.** If he stands in frame after Go and no rep is counted and no stroke is tried for 6 seconds, the Guide says "Start your reps" once, for 4 seconds. It is dead for good as soon as any rep counts or a stroke is tried, so it never repeats and never shows in a rest between sets. It never shows with nobody in the picture. Standing still, confidence stays 100.
+- Replay: in his log the first rep came 3.8 s after Go, so it was never shown (correct). Synthetic: standing 40 s shows it once at 6.0 s; reps then a 40 s rest shows it never. Test: `test-no-form-drop.js`.
 
-## Part 2 - Guide said untrue things (item 4): done
-- "Lower your hands" and "Keep your hands in view" came from path-cut memory: the 12 s Movement Match window kept a top/bottom "cut" long after his hands were back, and a person-lost gap was read as hands-lost.
-- Now every Guide line has an evidence table entry (`GUIDE_EVIDENCE` in `lib/guideCoach.ts`), shows only after its evidence has been present about 1 s, hides about 0.5 s after the evidence is gone, and cuts count only while fresh (hands 4 s, frame edge 1.5 s). Lines the old build cannot prove are removed.
-- AFTER on the newest log: the Guide is silent during the set (before: "Step back further", "Keep your hands in view", "Lower your hands").
+**8. Confidence dropping during half reps: done (MAJOR).**
+- Cause in the log: the "trying but no rep counted for 5 s" rule lowered the number (76 down to 33) while the log itself said "the camera sees 100". It treated a form problem as a camera problem.
+- Now the "trying but nothing counts" drop only applies when there is a REAL camera problem: the camera's visibility score under 85, or the rep path cut at the top, bottom or frame edge right now (a cut older than 4 s is not evidence). When every needed joint is clearly seen, confidence stays where the camera sees it (100) and the Coach's X (from onAttemptMissed, new build) says "Go lower".
+- BEFORE (phone): half-rep stretch 63 to 80 s after Go: 76 falling to 33, Guide silent, no X.
+- AFTER (same log): 100 for the whole stretch, never "stuck"; the number never goes under 90 anywhere in the working part (5 to 90 s). A real camera problem still lowers it: when he walks out of frame at the end it falls to under 60 and the Guide speaks ("Step back further" / "Back up") no later than the drop.
+- Old build: half reps still show no X. The number is now right, the X needs the new build.
 
-## Part 3 - Ready/Go and false checks (items 5, 6, 7)
-- **5 done.** Ready/Go fired 1 s after native passed while his arms hung at his sides (metric about 20, the path starts at about 30). Go now needs native setup passed AND body steady about 1 s AND the body on the exercise path. Real-log replay: old rule Go at +1.0 s, new rule waits about 34 s, until his arms reach the path before the first rep.
-- **6 done.** Reaching for the phone gave a check because a counted rep still got a check without asking Movement Match. A rep whose bottom is off the exercise path is now withheld (replay: rep #7 withheld). A counted rep does not force Movement Match up any more.
-- **7 confirmed.** Replaying the newest log through the JS mirror of the Swift tracker: `onAttemptMissed` fires for his half reps. Verdicts: X "Go lower" at 44.1, 51.3, 55.3, 57.7 and 63.8 s; the missed attempts are `bottom-short` (low 59 to 69 against an enter line of 50). Real counted reps got checks at 37.0, 38.4, 46.2, 47.5, 58.9, 60.1 s. On the OLD build these X marks do not appear (no onAttemptMissed in the old binary), that comes with the new build.
+**9. A check with no stroke: not found, nothing to fix.** All 10 checks the phone showed have a real stroke (25+ degrees of movement) in the 2.5 s before them, and there is no `[COACH]` line and no verdict during his 15 s of standing still (38 to 53 s after Go). One thing I looked at closely: native counted a "rep #1" (arms dropping to his sides, bottom 25.8) 0.6 s BEFORE Go; it got no check on the phone because reps before Go are ignored. The replay, which has no phase, would give it one, so that line is a replay artefact, not a phone event.
 
-## Part 4 - practice history title (item 8): done
-Opening a past form check from Progress -> Form checks now says "Form check complete" (when every entry in that session has `kind: 'practice'`). A real workout keeps "Workout complete". Test in `test-done-flow.js`.
+## What changed in the code
+- `lib/cameraConfidence.ts`: the camera-problem rule; stale cuts no longer cap. `lib/coachTuning.ts`: `clearVisibleMin: 85` (PLACEHOLDER, my number, not from a log).
+- `lib/guideCoach.ts`: `createStartReps`, the "Start your reps" Guide word and its evidence entry.
+- `lib/cameraHudLayout.ts`, `app/formcheck.tsx`: the look.
+- Tests: new `test-no-form-drop.js` (replays the new log, fixture `scripts\fixtures\shoulder-press-2026-11-16b.log.txt`); `test-camera-hud-layout.js` updated; `test-movement-match.js` rule changed on purpose (it used to demand "never 80+ while trying with no rep" even when everything was visible; that is exactly the bug).
 
-## Part 5 - new camera screen: done in code, not seen on a phone
-Built to Ari's image from `lib/cameraHudLayout.ts` (one layout for workout and solo, all positions from the safe areas):
-- Top-left round glass back, top-right three round glass buttons (sound, flash, flip), all 38 pt.
-- Set bar: glass track, one rounded segment per set, finished and current sets bright white with a soft green glow, upcoming dim (workout only).
-- Glass timer pill with stopwatch icon (workout only).
-- White corner brackets, 42 pt arms, 3 pt, 20 pt radius, 31 pt from the sides.
-- ONE centre glass pill: Guide line on top, under it the info icon, the % and the green bar. No "Camera confidence" label; tapping the info icon opens a short explanation that closes by itself after 9 s. The Guide is hidden while a check / X shows.
-- Rep count at the bottom centre: number 92 pt bold, "/ 10" 26 pt grey. Solo: no "/ 10".
-- Demo video drawer kept at the bottom. The Coach check / X is drawn in a band under the pill and above the count (it shrinks on short phones).
-- Tests: `test-camera-hud-layout.js` runs six phone sizes, workout and solo (SE, 13 mini, 15, 16 Pro, 15 Pro Max, 16 Pro Max): no overlaps, inside the safe areas, check / X band at least 55% size.
-- Side-by-side screenshots (my layout in Chromium next to your image): `.scratch\hud-compare.png`, six sizes: `.scratch\hud-sizes.png`.
-
-### Differences I could not match
-1. Real Liquid Glass cannot render in a browser. The screenshots use blur and a light fill; on the phone it is the system material (same as the tab bar), so it will look different from my screenshots, closer to your image.
-2. Font: your image is SF Pro. My screenshot machine is Windows and has no SF Pro, so the screenshot shows a fallback font. The app itself uses the system font (SF Pro) for these pieces.
-3. The flash button icon: your image shows a camera with a slash. SF Symbols has no "camera.slash", so I kept the lightning-bolt-slash for flash (the function did not change). Tell me if you want a different symbol.
-4. Your image has no stop button. A stop button is needed to end the set, so I kept it, smaller (60 pt), on the rep count's row at the right edge. The count stays centred.
-5. The rep count sits higher than in your image (about 28 pt) so it clears the demo drawer's peek strip, which your image does not show.
-6. Floor exercises: the pill rotates with the phone like the old cue did; the set bar and brackets do not.
-7. Confidence bar turns green from 75 (was 95), so it reads green while reps count, as in your image. White between 36 and 74, orange at 35 or less. These are my numbers, not from a log.
+## Differences I still could not match (from last round, unchanged unless noted)
+- Real Liquid Glass and SF Pro cannot render in my screenshots. The flash icon is the bolt-slash (SF Symbols has no camera-slash).
+- Your original image has no Finish pill and no demo strip; both are in my version.
 
 ## Not verified
-- None of the new screen has been seen on a real phone or with real glass. Please send one screenshot of it at the end.
-- Swift changes (onAttemptMissed, clip fix, keep-awake keeper, whole-body setup) only work after the new iOS build.
-
-## Suggestions (not done, not asked)
-- A single unit test file per screen is getting long; later split `test-live-tracking.js`.
+- Nothing here was seen on a phone. Please send one screenshot of the workout camera screen at the end.
+- Swift changes (onAttemptMissed, clip fix, keep-awake keeper, whole-body setup) still need the new iOS build.

@@ -57,6 +57,7 @@ export const CONFIDENCE = {
   stuckStart: 78,           // PLACEHOLDER: the cap when it starts (below 80)
   stuckFallPerSec: 3,       // ... then it keeps falling
   stuckFloor: 15,
+  clearVisibleMin: 85,      // PLACEHOLDER: the camera's own visibility score at or above this (and no fresh path cut) = every needed joint is clearly seen = NOT a camera problem
   countingFloor: 90,        // trying AND reps counting: 90-100
   countRecentSec: 7,        // a rep counts as "counting" for this long (about 2 reps of rhythm)
   releaseSec: 8,            // once it has started falling it only recovers when a rep counts, or the user has not been trying for this long (no flicker back to 100 in a pause)
