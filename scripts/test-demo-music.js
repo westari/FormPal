@@ -136,6 +136,38 @@ const connectMusicInject = new Function('dcScaleFitJs', ts.transpileModule(music
   const onState = await (async () => { const o = await open(data, dcScaleFitJs('#111114')); const v = await o.p.evaluate(() => { const e = [...document.querySelectorAll('#dc-root div')].find((d) => d.children.length === 0 && d.textContent.trim() === "Don't show this demo again"); const box = e.previousElementSibling; return box ? getComputedStyle(box).backgroundColor : null; }); await o.p.close(); return v; })();
   check('10: the "don\'t show this demo again" box starts ticked when the saved choice is on, and empty when it is off (no synthetic click)', onState !== tick1 && onState === 'rgb(17, 17, 20)', JSON.stringify([onState, tick1]));
   await off.p.close();
+  // ───────────── 7: the clock starts only when the demo is visible ─────────────
+  const open2 = async (d, startNow) => {
+    const pg = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+    await pg.addInitScript(() => { window.ReactNativeWebView = { postMessage() {} }; });
+    await pg.addInitScript(demoBeforeJs(d, startNow));
+    await pg.goto(pathToFileURL(path.join(ROOT, 'assets', 'app screens', 'demovideo.html')).href, { waitUntil: 'load' });
+    await pg.evaluate(dcScaleFitJs('#111114'));
+    await pg.waitForFunction(() => document.documentElement.hasAttribute('data-demo-ready'), null, { timeout: 8000 });
+    return pg;
+  };
+  const clock = (pg) => pg.evaluate(() => ({ t: window.__demoT, step: window.__demoStep, playing: window.__demoSelf.state.playing, bar: [...document.querySelectorAll('#dc-root div')].map((d) => d.style.width).find((w) => /^[0-9.]+%$/.test(w) && parseFloat(w) < 100) }));
+  const hidden = await open2(data, false);              // the demo drawn while it is still under the music screen
+  await hidden.waitForTimeout(4500);                     // (the old page would be at ~4.5 of 18 seconds after this; under the music screen it ran to ~16)
+  const c0 = await clock(hidden);
+  check('7: a demo that is drawn but NOT visible (under the music screen) stays at 0 and paused, however long it waits (4.5s: still 0, bar 0%)', c0.t === 0 && c0.playing === false && c0.step === 0 && (c0.bar === '0.00%' || c0.bar === '0%'), JSON.stringify(c0));
+  await hidden.evaluate(() => window.__demoStart());
+  await hidden.waitForTimeout(1300);
+  const c1 = await clock(hidden);
+  check('7: when the app says it is visible, the clock starts at 0 and runs (1.3s later it is about 1 second in, not 16)', c1.playing === true && c1.t > 0.5 && c1.t < 2.6, JSON.stringify(c1));
+  await hidden.evaluate(() => window.__demoStart()); await hidden.waitForTimeout(100);
+  const c2 = await clock(hidden);
+  check('7: starting again restarts from 0', c2.t < 0.6, JSON.stringify(c2));
+  await hidden.close();
+  const live = await open2(data, true); await live.waitForTimeout(1300);
+  const c3 = await clock(live);
+  check('7: a demo that is visible from the start (no music screen) plays from 0 at once', c3.playing === true && c3.t > 0.5 && c3.t < 2.6, JSON.stringify(c3));
+  await live.close();
+  check('7: the app starts the clock only when the music overlay is gone (active = musicGate done) and injects window.__demoStart then', /active=\{musicGate === 'done'\}/.test(run) && /window\.__demoStart && window\.__demoStart\(\)/.test(run) && /if \(!active\) return;/.test(run));
+  // ───────────── 6: the music screen arrival ─────────────
+  check('6: the demo web view is created only AFTER the music page has drawn (350ms later), so the two web views are no longer built at the same moment on arrival', /isDemoStep && currentEx && demoAllowed && \(/.test(run) && /setTimeout\(\(\) => setDemoAllowed\(true\), 350\)/.test(run) && /if \(!musicPageShown\) return;/.test(run));
+  check('6: the music page fades in when it is final (160ms) instead of popping, and the app logs how long it took ("[MUSIC] page drawn Nms after the screen opened")', /toValue: 1, duration: 160/.test(run) && /\[MUSIC\] page drawn/.test(run));
+  check('10: Continue waits for the demo underneath to be drawn (1.5s at most) before the overlay fades, so the demo is never half-loaded when it appears', /demoReady=\{demoDrawn \|\| !isDemoStep\}/.test(run) && /setTimeout\(\(\) => setWaitedOut\(true\), 1500\)/.test(run) && /demoReady \|\| waitedOut/.test(run));
   // ───────────── 11: timed steps ─────────────
   const ph = demoTimeline('curl', cues, {});
   check('11: with no video the steps still have start times, spread over the 18s placeholder (0, 6, 12) and timed is false', ph.timed === false && ph.length === PLACEHOLDER_LENGTH && ph.steps.map((x) => x.start).join() === '0,6,12', JSON.stringify(ph.steps));

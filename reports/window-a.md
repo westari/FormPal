@@ -1,76 +1,67 @@
-# Window A report: Ari's phone test, round 4 (12 items)
+# Window A report: Ari's phone test, round 5 (7 items)
 
-Branch: work-a. Merged origin/overnight-build first. I did not touch the check / "complete" screens or the camera screens.
-Things in your live feedback that are NOT in this prompt (the form-check coach giving no X marks, the guide being slow and saying "keep your hands in view", a great-job screen after rep feedback, and the camera screen layout) are camera work (Window B) or the done screen Window B is building, so I left them. Short answer to your question: the missing X marks are not about a dev build. A dev build is only needed for native code (Swift); the rep judging runs in JS, so a JS fix would show on reload. It needs its own proper pass in Window B.
+Branch: work-a. Merged origin/overnight-build first. I did not touch the check / "complete" screens or the camera / in-workout screens.
 
 ## Result by number
 
 | # | Item | Status |
 |---|---|---|
-| 1 | Calendar popover (real glass, pointer, no blur/dim, fast) | Done. The glass look needs your phone |
-| 2 | Learn the moves page | Done |
-| 3 | Streak glitch on open | Done (3 fixes). Needs your phone |
-| 4 | Bigger, fewer sparkles; gentle fire | Done (7 sparkles) |
-| 5 | Glass back button arrow | Done |
-| 6 | "My workout" font and size | Done |
-| 7 | Edit sheet background fade | Done |
-| 8 | Music screen arrival glitch | Done |
-| 9 | "Don't show again" works; twice-rule removed | Done |
-| 10 | Music to demo glitch | Done |
-| 11 | Demo card touches sides and bottom | Done |
-| 12 | Weekly goal (lib/weeklyGoal.ts, Home line, Profile) | Done |
+| 1 | Calendar: real Liquid Glass, no white, system font | Done. The glass look needs your phone |
+| 2 | Three goal rings on Home; old week line and Form score card removed | Done |
+| 3 | Weekly goal stepper in Profile | Done |
+| 4 | Progress: hard edge under Past workouts and Personal bests | Done |
+| 5 | Edit sheet laggy | Done in code. Needs your phone to feel |
+| 6 | Music screen arrival glitch: real cause | Done. Cause from the log, partly an inference (see below) |
+| 7 | Demo clock already at ~16 of 18s | Done |
 
-## 1. Calendar (3rd try)
+## 1. Calendar, 4th try
 
-What I got wrong before: a full-height layer under the card was tinted (a dim) and the card had a big soft shadow, which is the "blur over the bottom half". Both are gone. It is now a small popover:
-- Real Liquid Glass (the same LiquidGlass component as the tab bar), frosted with a white tint over a light base so the numbers stay readable. The base is 84% white: the earlier fully clear glass let the page show through the numbers. If you want it clearer, it is one number in components/CalendarSheet.tsx (`base`).
-- A small pointer on the top edge, centred under the date's arrow (measured at the arrow's x), so it is attached.
-- No dim, no blur on the rest of the screen. A fully transparent layer only catches a tap outside it (the header stays tappable, so the arrow closes it too).
-- Opens in 200ms, closes in 150ms, native driver, grows out of the pointer.
-Test: scripts/test-calendar-drop.js (draws it at 390x844 over a Home-like page, worst case clear glass): position, pointer x and tip above the card, transparent outside layer and nothing big tinted, timings, closed leaves nothing.
-Limit: real glass draws only on your phone build.
+I took everything white out. The popover now uses the exact same LiquidGlass settings as the tab bar (`variant="regular"`, `colorScheme="light"`, the same fallback colour, no tint). There is no base layer, no frost, no blur layer. The pointer is a small piece of the same glass. Position, pointer and speed (200ms open, 150ms close) are unchanged. Text uses the system font (SF Pro: `fontFamily: 'System'`, no custom font), weights 500 to 700 (no 800), dark text (#111114), secondary text darker than before (#55555f) for contrast, larger day numbers (17).
+Test (scripts/test-calendar-drop.js) compares the calendar's glass props with the tab bar's in the source and fails if a base, tint or blur layer comes back.
+Honest limit: with real glass and no white behind it, how readable the numbers are depends on what is under it. If the busy parts of Home show through too much, the one safe lever is the text colour, not a white card. Please look at it on the phone.
 
-## 2. Learn the moves
+## 2. Goal rings
 
-The arrow beside "Learn The Moves" was a link to a file that does not exist, so the page said "asset not found". Home now posts "moves" and opens the new page (app/learn-moves.tsx), built from the My workouts design file itself (same layout, cards and search), titled "Learn the moves", with all 56 exercises. Filter chips: All, Bodyweight, Dumbbell, Barbell, Machine, Chest, Back, Legs, Shoulders, Arms, Core. Each chip shows exactly that set (tested against the catalogue). Search works. Tapping an exercise opens its form check (`/formcheck?exercise=<id>`). The Create button and bookmarks are hidden on this page. Test: scripts/test-learn-moves.js (22 checks). Note: only 6 exercises are bodyweight-only in the catalogue's own data.
+Three white tiles right under the two drop-downs (the same soft white style as the pills), each with a ring, its number in the middle and a small label under it:
+- Workouts: this week's workouts / the weekly goal (lib/weeklyGoal.ts), e.g. 2/4. Camera and logged count, practice doesn't.
+- Form: this week's average form (reps-weighted over form-checked exercises), goal 90%. Ring is full at 90%.
+- Muscles: muscles trained this week out of the 11 on the muscle map.
+The week is Monday to Sunday. Each ring fills in 1 second. At 0 the track shows and the number reads 0/4, 0%, 0/11. The first time each ring completes in a week there is a soft success haptic (after the fill, 900ms), remembered per ring and week on the device. The old "Progress" heading, the "x of y workouts" line and the Form score card are hidden.
+Files: lib/homeRings.ts (maths), lib/homeRingsPage.ts (the page side). Test: scripts/test-home-rings.js (maths, position under the drop-downs, equal tiles, fill transition, empty state, old card hidden, haptic rule). Screenshot: .scratch/home-rings.png.
+Note: Muscles counts every muscle an exercise credits, secondary ones too, so a few exercises can already reach many of the 11.
 
-## 3 and 4. Streak
+## 3. Weekly goal stepper
 
-- Glitch on open, three causes fixed: (a) the page was revealed in one hard frame; it now fades in over 180ms; (b) the fonts are loaded by name (the three weights the page uses) before the reveal, because the fonts are only fetched when text that uses them is drawn, so "fonts ready" could be true too early; (c) I found a real bug of mine: a 30px sparkle matched the selector for the week circles ("width: 30px; height: 30px"), which could break the week row. Excluded now.
-- Sparkles: 7 (was 14), 20 to 34px (was 7 to 16), each fades in and out forever with its own timing and comes back somewhere else. The centre of the icon (the number in the flame) is unchanged.
-- Fire: a very slight breathing only (under 2% size, under 0.5 degree), 3.4 to 4.6s cycles. Measured over 6 seconds: size changes by 2%.
-- Test: scripts/test-streak.js.
+Profile > Weekly goal now opens the design's own stepper page (the one Weight uses): a big number with - and +, "4 workouts a week", 1 to 7 (stops at both ends). The number is stored as that many picked days (that is what lib/weeklyGoal.ts counts), so Home's rings follow it. Test: scripts/test-weekly-goal.js (taps - and + on the real page, limits 1 and 7).
 
-## 5, 6, 7. Workout preview
+## 4. Progress hard edge
 
-- 5: the glass back button draws the same arrow as the design files' back buttons (the path `M8.2 1.8 1.8 8.5l6.4 6.7`, 10x17, 2.4 stroke, round ends) instead of the system chevron.
-- 6: the title is the normal title font (Plus Jakarta Sans Bold, like the tab titles; it was ExtraBold) at 34 (was 25), shrinks to fit a long name. "10 min · 1 exercise" is 18 (was 13.5).
-- 7: the Modal's own slide moved the dim layer up the screen (the hard moving edge). Now the Modal has no animation; the whole background is one full-screen layer that only fades (220ms) on open and on Done, and only the sheet slides. Tests: scripts/test-workout-preview.js (code checks: I can not draw a native Modal in the web renderer, please look once).
+Cause: the Personal bests and Past workouts rows scroll sideways, and a sideways scroller also clips whatever spills below it. The cards' soft shadows spill about 30px, so the shadow was cut by a straight line at the bottom of the row: the grey to white step. Fix: each row gets 46px more room at the bottom and gives it back with a negative margin (nothing moves; the empty-state card keeps its place). Test: scripts/test-progress-edge.js looks at the actual pixels under each row, with and without data; before the fix it failed (a step at the row's old bottom edge), after it no pixel row steps by more than 3 levels.
 
-## 8, 9, 10, 11. Music and demo
+## 5. Edit sheet lag
 
-- 8: the music page is hidden until it is final (scaled, status-row space kept, title already in place; measured the same at reveal and 0.5s later).
-- 9: "Don't show this page again": Continue now reads the tick box as it is shown. Tested on the real page: unticked gives `musicContinue:0`, ticked gives `musicContinue:1`, and the app stores `formpal_skip_connect_music = 1` and never shows the screen again. The show-only-twice rule is removed (lib/musicGate.ts is now just the tick).
-- 10: the two web views were swapped one for the other (the glitch). The music screen is now a white overlay on top of the workout screen, which is already loading the demo underneath; Continue fades the overlay out in 180ms and the demo is simply there.
-- 11: the demo's white card now spans the full width and reaches the bottom, rounded top corners only (36px), square bottom. Measured: left 0, right 390, bottom 844.
-- Test: scripts/test-demo-music.js.
+Cause: the sheet was a React Native Modal. Opening a Modal makes iOS build and present a whole new native screen while the sheet slides, and that is the stutter. It is now part of the screen itself, mounted from the start (hidden, off-screen), so opening only plays two native animations (the background fade and the slide). It is the last layer on the screen, so the background covers the Start button too, and while closed it lets every touch through. Lighter shadow too. Same look as before. Test: scripts/test-workout-preview.js. Limit: I can not time a native animation here.
 
-## 12. Weekly goal
+## 6. Music screen arrival: the real cause
 
-- lib/weeklyGoal.ts (pure, tested): the goal is the number of workouts a week. It starts from the plan's days per week; if you pick days in Profile, the number of days you picked is the goal. No plan and no pick: 3. The week is Monday to Sunday. Camera workouts and logged sessions count, practice form checks (kind: 'practice') do not. The count caps at the goal, extras show as a bonus: "4 of 4 workouts · +4 bonus", never "8 of 4".
-- Home's week line uses it (the old code counted from Sunday against a fixed 4).
-- Profile: "Training days" is renamed "Weekly goal" and reads "4 workouts a week". Tapping it opens the same day picker with a new title ("Weekly goal") and text ("Pick the days you plan to train. The number of days is your weekly goal"). Saving a pick changes the goal everywhere. I kept the weekday picker as the way to edit because it already saves; if you want a number stepper instead, tell me.
-- Tests: scripts/test-weekly-goal.js (week bounds, goal rules, counting, cap and bonus, Home line, Profile row and page), test-data-wiring and test-profile-slide updated.
-- Not done here: the rings (you are designing them).
+What the log shows (2026-11-16 15:21): `[MUSIC] screen shown` at 21:36.736 and the demo drawn at 21:37.246, 0.5s later. So the music web view and the demo web view were created at the same moment, together with the screen change, sharing one web engine and the JS thread. My logs did not record when the music page itself drew, so the exact stall is an inference, not a measurement. What I changed, all aimed at that:
+- The demo web view is now created only after the music page has drawn (350ms later), so only one page loads at a time on arrival.
+- The music page fades in (160ms) when it is final, instead of popping from white.
+- New log line to measure it next time: `[MUSIC] page drawn Nms after the screen opened`. Send me that line if it still glitches.
+- Going to the demo (item 10 from last round): Continue waits for the demo underneath to be drawn (1.5s at most), then fades the overlay.
+
+## 7. Demo clock bug
+
+Cause: the design starts its clock the moment it is drawn, and I draw it under the music screen, so it ran to about 16 of 18 seconds before you saw it. Now the clock is held at 0 and paused until the app says the demo is visible (the music screen is gone), then it starts at 0. Test: drawn but not visible for 4.5 seconds stays at 0 and paused; after the start call it is about 1.25s in after 1.3s; starting again restarts at 0; a demo with no music screen plays from 0 at once.
 
 ## Tests
 
-The whole suite was run at the end: everything passes except scripts/test-rep-feedback-injection.js (Window B's, needs an untracked .scratch file, failed before my changes). test-home-clean was updated: it asserted the old "8 of 4". New: test-learn-moves, test-weekly-goal. Updated: test-calendar-drop, test-streak, test-workout-preview, test-demo-music, test-data-wiring, test-profile-slide.
+The whole suite was run at the end: everything passes except scripts/test-rep-feedback-injection.js (Window B's, needs an untracked .scratch file, failed before my changes). test-home-cue also needed updating (it expected the Cue card tucked under the old week card). New: test-home-rings, test-progress-edge. Updated: test-calendar-drop, test-weekly-goal, test-workout-preview, test-demo-music, test-home-clean (it asserted the old week line), home-harness.
 
 ## Questions
 
-- Calendar glass: is the white frosting right, or do you want it clearer (less white)?
-- Weekly goal editing: the weekday picker, or a number stepper?
+- Calendar: if the real glass is hard to read over Home, do you want me to darken the numbers further, or put the calendar at a different spot on the screen?
+- Rings: should Muscles count only the main muscle of each exercise (stricter) instead of every muscle an exercise credits?
 
 ## Blocked commands
 

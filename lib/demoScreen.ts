@@ -49,7 +49,10 @@ export const DEMO_LOGIC_EXT = String.raw`function (Orig) {
       var d = window.__athltData;
       if (!d) return super.renderVals();
       this.LEN = d.length;
-      if (!this.__demoInit) { this.__demoInit = true; this.state = Object.assign({}, this.state, { hide: !!d.skipPref }); }
+      window.__demoSelf = this;
+      // The demo must start at 0 only when it is really on screen. The design starts its clock the moment it is drawn, so while it sat under the
+      // music screen it ran to about 16 of 18 seconds. It is held at 0, paused, until the app says it is visible (window.__demoStart).
+      if (!this.__demoInit) { this.__demoInit = true; this.state = Object.assign({}, this.state, { hide: !!d.skipPref, t: 0, playing: !!window.__demoGo }); }
       var v = super.renderVals(), self = this, t = this.state.t, step = this.stepAt(t), st = d.steps;
       v.exercise = d.exercise; v.meta = d.meta; v.position = d.position;
       v.steps = st.map(function (s, i) {
@@ -69,6 +72,8 @@ export const DEMO_PAGE_JS = String.raw`
 (function(){
   if (window.__demoPage) return; window.__demoPage = true;
   function post(m){ try { window.ReactNativeWebView.postMessage(m); } catch (e) {} }
+  // the app calls this when the demo becomes visible: the clock starts at 0 now
+  window.__demoStart = function(){ window.__demoGo = true; var s = window.__demoSelf; if (s) s.setState({ t: 0, playing: true }); };
   // nothing is painted until the real data is in; the design's entrance animations (and its drifting colour blobs) are off
   var css = 'html:not([data-demo-ready]) body{visibility:hidden!important;} #dc-root *{animation:none!important;-webkit-animation:none!important;} #dc-root div[style*="height: 346px"][style*="z-index: 4"]{left:0!important;right:0!important;bottom:0!important;height:auto!important;border-radius:36px 36px 0 0!important;}';
   function addCss(){
@@ -95,6 +100,6 @@ export const DEMO_PAGE_JS = String.raw`
 `;
 
 /** Everything injected BEFORE the page loads: viewport, no-zoom, the logic swap, the data, the page fixes. */
-export function demoBeforeJs(data: DemoData): string {
-  return DC_VIEWPORT_JS + NO_ZOOM_JS + dcLogicPatchJs(DEMO_LOGIC_EXT) + `\nwindow.__athltData = ${JSON.stringify(data)}; true;\n` + DEMO_PAGE_JS;
+export function demoBeforeJs(data: DemoData, startNow = true): string {
+  return DC_VIEWPORT_JS + NO_ZOOM_JS + dcLogicPatchJs(DEMO_LOGIC_EXT) + `\nwindow.__athltData = ${JSON.stringify(data)}; window.__demoGo = ${startNow ? 'true' : 'false'}; true;\n` + DEMO_PAGE_JS;
 }

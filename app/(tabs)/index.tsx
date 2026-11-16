@@ -50,8 +50,12 @@ import { addableExercises, type EditRow } from '../../lib/planEdit';
 import { plannedMeta } from '../../lib/trainData';
 import { tabBarCover } from '../../lib/tabBarMetrics';
 import { TAB_HEADER_JS } from '../../lib/tabHeader';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import CalendarSheet from '../../components/CalendarSheet';
-import { weekProgress, resolveWeeklyGoal } from '../../lib/weeklyGoal';
+import { resolveWeeklyGoal } from '../../lib/weeklyGoal';
+import { homeRings, ringDoneKey, ringsToCelebrate } from '../../lib/homeRings';
+import { HOME_RINGS_JS } from '../../lib/homeRingsPage';
+import { hapticSuccess } from '../../lib/haptics';
 import { loadUserDays } from '../../lib/weeklyGoalStore';
 
 const HOME_HTML = require('../../assets/app screens/home.html');
@@ -232,15 +236,14 @@ export function buildHomeInjectJs(plan: Plan | null, allSessions: SessionEntry[]
   const scored = scoredSessions(sessions);
   const overallPct = scored.length > 0 ? Math.round(scored.reduce((a, s) => a + s.pct, 0) / scored.length) : 0;
 
-  // the week line: this week (Monday to Sunday) against the weekly goal, capped at the goal with a bonus for extras (lib/weeklyGoal.ts)
-  const week = weekProgress(sessions, resolveWeeklyGoal(plan?.profile?.daysPerWeek, userDays).goal);
+  // the three goal rings under the drop-downs (lib/homeRings.ts); they replace the old "x of y workouts" week line and the Form score card
+  const ringsData = homeRings(sessions, resolveWeeklyGoal(plan?.profile?.daysPerWeek, userDays).goal);
 
   const map: Record<string, string> = {};
   const today = new Date();
   map['Sat, 12 September'] = today.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'long' });
   map['3'] = String(streak); // streak chip — scoped below via style, not bare global match
   map['38 min · 4 exercises'] = '';
-  map['2 of 4 workouts'] = week.label;
 
   if (plan && plan.workouts.length > 0) {
     const w = plan.workouts[plan.currentWorkoutIndex] ?? plan.workouts[0];
@@ -256,6 +259,7 @@ export function buildHomeInjectJs(plan: Plan | null, allSessions: SessionEntry[]
   return TAB_HEADER_JS + `(function(){
     function post(m){ try{ window.ReactNativeWebView.postMessage(JSON.stringify(m)); }catch(e){} }
     var MAP = ${JSON.stringify(map)};
+    window.__homeRingsData = ${JSON.stringify(ringsData.rings)}; if (window.__homeRings) window.__homeRings();
     // BUG FOUND ("clear cutoff — colored background then blank white on
     // top, doesn't match"): an RN-level marginTop on the WebView created a
     // gap ABOVE the canvas showing the screen's plain background color,
@@ -536,6 +540,18 @@ export function buildHomeLogicData(plan: Plan | null, tabCover?: number): HomeLo
   };
 }
 
+/** A soft success haptic the first time each ring is completed in a week (remembered on the device per ring and week). */
+async function ringHaptic(h: { weekStart: number; rings: { id: string; done: boolean }[] }) {
+  try {
+    const seen = new Set<string>();
+    for (const r of h.rings) if (await AsyncStorage.getItem(ringDoneKey(r.id, h.weekStart))) seen.add(r.id);
+    const fresh = ringsToCelebrate(h.rings as any, id => seen.has(id));
+    for (const id of fresh) await AsyncStorage.setItem(ringDoneKey(id, h.weekStart), '1');
+    const fire = fresh.length > 0;
+    if (fire) setTimeout(() => hapticSuccess(), 900); // after the ring has filled
+  } catch { /* no haptic */ }
+}
+
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -562,6 +578,7 @@ export default function HomeScreen() {
     Promise.all([loadPlan(), getAllSessions(), loadUserDays()]).then(async ([plan, allSessions, userDays]) => {
       const sessions = workoutSessions(allSessions);
       setInjectJs(buildHomeInjectJs(plan, sessions, insets.top, insets.bottom, userDays));
+      void ringHaptic(homeRings(sessions, resolveWeeklyGoal(plan?.profile?.daysPerWeek, userDays).goal));
       setWorkoutTimes(sessions.map(x => x.ts));
       const ld = buildHomeLogicData(plan, tabBarCover(insets.bottom));
       setLogicJs(athltSetDataJs(ld) + '; window.__editWid = ' + JSON.stringify(ld.editWid) + '; true;');
@@ -603,7 +620,7 @@ export default function HomeScreen() {
         onContentProcessDidTerminate={() => { markTabLoading('index'); hide(); webRef.current?.reload(); }} /* iOS killed the page's process while it was hidden: load it again at once instead of showing a blank screen */
         source={HOME_HTML}
         originWhitelist={['*']}
-        injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS + DC_NO_ZOOM_JS + DC_SETTLE_JS + HOME_GUARD_JS + EDIT_BRIDGE_JS + ADD_PICKER_JS + HAPTIC_PAGE_JS + LOGGED_TILE_JS + WORKOUT_LONGPRESS_JS + dcLogicPatchJs(HOME_LOGIC_EXT)}
+        injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS + DC_NO_ZOOM_JS + DC_SETTLE_JS + HOME_GUARD_JS + HOME_RINGS_JS + EDIT_BRIDGE_JS + ADD_PICKER_JS + HAPTIC_PAGE_JS + LOGGED_TILE_JS + WORKOUT_LONGPRESS_JS + dcLogicPatchJs(HOME_LOGIC_EXT)}
         injectedJavaScript={HOME_SCALE_FIT_JS + HOME_CUE_REAL_JS}
         onLoadStart={() => { setPageLoaded(false); onLoadStart(); }}
         onLoadEnd={() => { setPageLoaded(true); onLoadEnd(); }}

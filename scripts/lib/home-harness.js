@@ -26,6 +26,7 @@ async function openHome({ inject = true, height = 844, inset = 47 } = {}) {
   await page.waitForTimeout(1800);
   if (inject) {
     await page.evaluate(home.HOME_SCALE_FIT_JS);
+    await page.evaluate(require('../../lib/homeRingsPage.ts').HOME_RINGS_JS);
     await page.evaluate(home.buildHomeInjectJs(plan, sessions, inset, 34));
     await page.waitForTimeout(1500);
   }

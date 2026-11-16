@@ -8,13 +8,14 @@
  * `anchor` is where the page says the date block ends (top, screen points) and where its arrow is (cx).
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Animated, Easing, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import LiquidGlass from './LiquidGlass';
 import { monthGrid, trainedDays, MONTH_NAMES, WEEKDAY_LETTERS } from '../lib/calendarMonth';
 
 const INK = '#111114';
-const MUTED = '#7b7b85';
+const MUTED = '#55555f';
+const SYS = Platform.select({ ios: 'System', default: undefined }); // SF Pro
 const ACCENT = '#f2701c';
 const SIDE = 14;
 export const CAL_OPEN_MS = 200;
@@ -59,11 +60,13 @@ export default function CalendarSheet({ open, onClose, timestamps, anchor }: { o
         testID="calendar-drop"
       >
         {/* the pointer: a small rounded diamond whose top half stands out above the card, centred under the arrow */}
-        <View style={[s.caret, { left: caretX - CARET / 2 }]} testID="calendar-caret" pointerEvents="none" />
+        <View style={[s.caret, { left: caretX - CARET / 2 }]} testID="calendar-caret" pointerEvents="none">
+          <LiquidGlass radius={4} variant="regular" colorScheme="light" fallbackColor="rgba(255,255,255,0.82)" style={StyleSheet.absoluteFill} />
+        </View>
         <View style={s.card}>
-          {/* Real Liquid Glass (the same material as the tab bar), frosted with a white tint so the numbers stay readable over the page. */}
-          <View style={[StyleSheet.absoluteFill, s.base]} testID="calendar-base" />
-          <LiquidGlass radius={28} variant="regular" colorScheme="light" tintColor="rgba(255,255,255,0.55)" fallbackColor="rgba(255,255,255,0)" style={StyleSheet.absoluteFill} pointerEvents="none" />
+          {/* The EXACT Liquid Glass of the tab bar (components/GlassTabBar.tsx): the same component, variant "regular", colour scheme "light" and
+              fallback colour. No white base, no tint, no frost: what is behind is softened by the glass itself. */}
+          <LiquidGlass radius={28} variant="regular" colorScheme="light" fallbackColor="rgba(255,255,255,0.82)" style={StyleSheet.absoluteFill} pointerEvents="none" />
         <View style={s.inner}>
           <View style={s.head}>
             <View>
@@ -107,21 +110,20 @@ const s = StyleSheet.create({
   outside: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: 'transparent' },
   pop: { position: 'absolute', shadowColor: '#28325a', shadowOpacity: 0.16, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
   card: { borderRadius: 28, overflow: 'hidden' },
-  caret: { position: 'absolute', top: -CARET / 2 + 2, width: CARET, height: CARET, borderRadius: 4, backgroundColor: 'rgba(250,250,252,0.94)', transform: [{ rotate: '45deg' }] },
-  base: { backgroundColor: 'rgba(250,250,252,0.84)', borderRadius: 28 },
+  caret: { position: 'absolute', top: -CARET / 2 + 2, width: CARET, height: CARET, borderRadius: 4, overflow: 'hidden', transform: [{ rotate: '45deg' }] },
   inner: { paddingHorizontal: 14, paddingTop: 16, paddingBottom: 10 },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 6, marginBottom: 8 },
-  title: { fontSize: 18, fontWeight: '700', color: INK, letterSpacing: -0.4 },
-  sub: { fontSize: 12.5, fontWeight: '500', color: MUTED, marginTop: 2 },
+  title: { fontFamily: SYS, fontSize: 19, fontWeight: '700', color: INK },
+  sub: { fontFamily: SYS, fontSize: 13, fontWeight: '500', color: MUTED, marginTop: 2 },
   arrows: { flexDirection: 'row', gap: 8 },
   arrow: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(17,17,20,0.06)', alignItems: 'center', justifyContent: 'center' },
   sym: { width: 15, height: 15 },
   row: { flexDirection: 'row' },
-  wd: { flex: 1, textAlign: 'center', fontSize: 11.5, fontWeight: '600', color: MUTED, paddingVertical: 5 },
+  wd: { flex: 1, textAlign: 'center', fontFamily: SYS, fontSize: 12, fontWeight: '600', color: MUTED, paddingVertical: 5 },
   cell: { flex: 1, height: 46, alignItems: 'center', justifyContent: 'center' },
   dayWrap: { width: 38, height: 40, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   todayCircle: { backgroundColor: INK },
-  day: { fontSize: 15.5, fontWeight: '600', color: INK },
-  todayText: { color: '#fff', fontWeight: '800' },
+  day: { fontFamily: SYS, fontSize: 17, fontWeight: '500', color: INK },
+  todayText: { color: '#fff', fontWeight: '700' },
   dot: { width: 5, height: 5, borderRadius: 2.5, marginTop: 2 },
 });

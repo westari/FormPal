@@ -61,6 +61,7 @@ Module._load = function (r) {
   const m = await p.evaluate(() => {
     const card = document.querySelector('[data-testid="calendar-drop"]'); if (!card) return null;
     const r = card.getBoundingClientRect(), base = document.querySelector('[data-testid="calendar-base"]');
+    if (!base) { const spots0 = [[60, 232], [60, 330], [120, 420], [200, 480], [150, 500]].map(([x, y]) => { const el = document.elementFromPoint(x, y); return card.contains(el) || el === card; }); const days0 = [...card.querySelectorAll('div')].filter((d) => /^\d{1,2}$/.test((d.textContent || '').trim()) && d.children.length === 0).length; return { r: [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)], vw: innerWidth, vh: innerHeight, alpha: null, spots: spots0, days: days0, text: card.innerText.split(String.fromCharCode(10)).join(' | ').slice(0, 90), glassBelowBase: false }; }
     const bg = getComputedStyle(base).backgroundColor, a = bg.startsWith('rgba') ? parseFloat(bg.split(',')[3]) : 1;
     // what is on top at the spots where the page's own text sits (the card must cover them)
     const spots = [[60, 232], [60, 330], [120, 420], [200, 480], [150, 500]].map(([x, y]) => { const el = document.elementFromPoint(x, y); return card.contains(el) || el === card; });
@@ -69,7 +70,13 @@ Module._load = function (r) {
   });
   console.log('      open:', JSON.stringify(m));
   check('1: the calendar is drawn at phone size, inside the screen (14px each side), hanging just under the date (top ~211)', m && m.r[0] === 14 && m.r[2] === 362 && m.r[1] >= 205 && m.r[1] <= 225 && m.r[1] + m.r[3] < m.vh - 150, JSON.stringify(m && m.r));
-  check('1: real Liquid Glass (the LiquidGlass component, frosted with a white tint) over a light base, nothing dimmed or blurred', m && m.glassBelowBase && m.alpha >= 0.7 && m.alpha < 0.95, JSON.stringify(m && [m.alpha, m.glassBelowBase]));
+  const csrc = fs.readFileSync(path.join(__dirname, '..', 'components', 'CalendarSheet.tsx'), 'utf8'), bsrc = fs.readFileSync(path.join(__dirname, '..', 'components', 'GlassTabBar.tsx'), 'utf8');
+  const glassProps = (src, re) => { const m = re.exec(src); return m ? { variant: /variant="(\w+)"/.exec(m[0])[1], scheme: /colorScheme="(\w+)"/.exec(m[0])[1], fallback: /fallbackColor="([^"]+)"/.exec(m[0])[1], tint: /tintColor=/.test(m[0]) } : null; };
+  const calG = glassProps(csrc, /<LiquidGlass radius=\{28\}[^>]*>/), barG = glassProps(bsrc, /<LiquidGlass radius=\{TAB_BAR_H \/ 2\}[^>]*>/);
+  check('1: the calendar uses the EXACT Liquid Glass settings of the tab bar (same component, variant "regular", colour scheme "light", same fallback colour), with no tint', !!calG && !!barG && calG.variant === barG.variant && calG.scheme === barG.scheme && calG.fallback === barG.fallback && !calG.tint, JSON.stringify([calG, barG]));
+  check('1: NO white base and NO frost: there is no base layer in the card and no white tint or blur layer anywhere (the glass itself softens what is behind)', m && m.glassBelowBase === false && !/calendar-base|s\.base|base:/.test(csrc) && !/tintColor="rgba\(255/.test(csrc) && !/BlurView|backdropFilter/.test(csrc), JSON.stringify(m && [m.glassBelowBase]));
+  const fonts = await p.evaluate(() => { const card = document.querySelector('[data-testid="calendar-drop"]'); const t = [...card.querySelectorAll('div')].filter((d) => d.children.length === 0 && d.textContent.trim().length > 0); const fam = [...new Set(t.map((d) => getComputedStyle(d).fontFamily.split(',')[0].replace(/["']/g, '')))]; return { fam, weights: [...new Set(t.map((d) => getComputedStyle(d).fontWeight))], colors: [...new Set(t.map((d) => getComputedStyle(d).color))] }; });
+  check('1: text is the system font (no custom font family; SF Pro on the phone), clean weights 500 to 700, dark text for contrast', /fontFamily: SYS/.test(csrc) && /Platform\.select\(\{ ios: 'System'/.test(csrc) && !/PlusJakarta|Bricolage/.test(csrc) && !/fontWeight: '800'|fontWeight: '900'/.test(csrc) && /const INK = '#111114'/.test(csrc), JSON.stringify(fonts));
   const pop = await p.evaluate(() => {
     const card = document.querySelector('[data-testid="calendar-drop"]'), caret = document.querySelector('[data-testid="calendar-caret"]'), outside = document.querySelector('[data-testid="calendar-outside"]');
     const cr = card.getBoundingClientRect(), kr = caret.getBoundingClientRect();

@@ -10,7 +10,7 @@
  * "4 sets · 8 reps", pencil) and the black "Start workout" pill floating at the bottom. Real data: the plan's workout.
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Modal, Animated, Easing } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Animated, Easing } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -116,24 +116,18 @@ export default function WorkoutPreviewScreen() {
   // The sheet and its background are animated here, not by the Modal: the Modal's own "slide" slid the dim layer up the screen as well, so its
   // hard top edge was visible moving up on open and down on close. Now the Modal has no animation, the whole background fades in and out
   // evenly (no moving edge), and only the sheet itself slides.
-  const [sheetShown, setSheetShown] = useState(false);
+  // The sheet is NOT a Modal any more: opening a Modal makes iOS build and present a whole new native screen while the sheet slides, which is
+  // what made it lag. It is part of this screen, mounted from the start (hidden, off-screen), so opening only plays the 2 native animations.
   const dim = useRef(new Animated.Value(0)).current;
   const slide = useRef(new Animated.Value(0)).current;
   const lastEditing = useRef<number | null>(null);
   if (editing != null) lastEditing.current = editing;
   useEffect(() => {
-    if (editing != null) {
-      setSheetShown(true);
-      Animated.parallel([
-        Animated.timing(dim, { toValue: 1, duration: SHEET_MS, easing: Easing.out(Easing.quad), useNativeDriver: true }),
-        Animated.timing(slide, { toValue: 1, duration: SHEET_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-      ]).start();
-    } else if (sheetShown) {
-      Animated.parallel([
-        Animated.timing(dim, { toValue: 0, duration: SHEET_MS, easing: Easing.in(Easing.quad), useNativeDriver: true }),
-        Animated.timing(slide, { toValue: 0, duration: SHEET_MS, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
-      ]).start(({ finished }) => { if (finished) setSheetShown(false); });
-    }
+    const to = editing != null ? 1 : 0;
+    Animated.parallel([
+      Animated.timing(dim, { toValue: to, duration: SHEET_MS, easing: to ? Easing.out(Easing.quad) : Easing.in(Easing.quad), useNativeDriver: true }),
+      Animated.timing(slide, { toValue: to, duration: SHEET_MS, easing: to ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic), useNativeDriver: true }),
+    ]).start();
   }, [editing]); // eslint-disable-line react-hooks/exhaustive-deps
   const workout = baseWorkout ? { ...baseWorkout, exercises: baseWorkout.exercises.map((e, i) => edits[i] ? { ...e, targetSets: edits[i].sets, targetReps: edits[i].reps } : e) } : baseWorkout;
   const openEdit = (i: number) => {
@@ -207,8 +201,22 @@ export default function WorkoutPreviewScreen() {
         ))}
       </ScrollView>
 
-      <Modal visible={sheetShown} transparent animationType="none" onRequestClose={() => setEditing(null)} statusBarTranslucent>
-        <Animated.View style={[StyleSheet.absoluteFill, s.sheetBack, { opacity: dim }]} testID="edit-dim">
+      {!previewOnly && (
+        <View style={[s.footer, { bottom: footer }]} pointerEvents="box-none">
+          {isTemplate && (
+            <Pressable style={s.saveBtn} onPress={toggleSaved} accessibilityRole="button" accessibilityLabel={savedToMine ? 'Template saved' : 'Save template'}>
+              <SymbolView name={savedToMine ? 'bookmark.fill' : 'bookmark'} size={20} tintColor={INK} type="monochrome" style={{ width: 20, height: 20 }} />
+            </Pressable>
+          )}
+          <Pressable style={[s.startBtn, { flex: 1 }]} onPress={handleStart} accessibilityRole="button" accessibilityLabel="Start workout">
+            <SymbolView name="play.fill" size={12} tintColor="#ffffff" type="monochrome" style={{ width: 12, height: 12 }} />
+            <Text style={s.startTxt}>Start workout</Text>
+          </Pressable>
+        </View>
+      )}
+
+      <View style={StyleSheet.absoluteFill} pointerEvents={editing != null ? 'auto' : 'none'} testID="edit-layer">
+        <Animated.View style={[StyleSheet.absoluteFill, s.sheetBack, { opacity: dim }]} testID="edit-dim" pointerEvents={editing != null ? 'auto' : 'none'}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setEditing(null)} accessibilityLabel="Close" />
         </Animated.View>
         {/* The same sheet as the Edit Workout sheet on Home: a floating white sheet (8px from the sides and the bottom, 40px corners), the grab
@@ -232,21 +240,7 @@ export default function WorkoutPreviewScreen() {
             </Pressable>
           </View>
         </Animated.View>
-      </Modal>
-
-      {!previewOnly && (
-        <View style={[s.footer, { bottom: footer }]} pointerEvents="box-none">
-          {isTemplate && (
-            <Pressable style={s.saveBtn} onPress={toggleSaved} accessibilityRole="button" accessibilityLabel={savedToMine ? 'Template saved' : 'Save template'}>
-              <SymbolView name={savedToMine ? 'bookmark.fill' : 'bookmark'} size={20} tintColor={INK} type="monochrome" style={{ width: 20, height: 20 }} />
-            </Pressable>
-          )}
-          <Pressable style={[s.startBtn, { flex: 1 }]} onPress={handleStart} accessibilityRole="button" accessibilityLabel="Start workout">
-            <SymbolView name="play.fill" size={12} tintColor="#ffffff" type="monochrome" style={{ width: 12, height: 12 }} />
-            <Text style={s.startTxt}>Start workout</Text>
-          </Pressable>
-        </View>
-      )}
+      </View>
     </View>
   );
 }
@@ -291,7 +285,7 @@ const s = StyleSheet.create({
   sheetBack: { backgroundColor: 'rgba(17,17,20,0.35)' },
   sheet: {
     position: 'absolute', left: 8, right: 8, borderRadius: 40, overflow: 'hidden', backgroundColor: '#ffffff',
-    boxShadow: '0 -10px 40px -14px rgba(40,50,90,0.35), 0 2px 8px -2px rgba(40,50,90,0.1)',
+    boxShadow: '0 -8px 24px -12px rgba(40,50,90,0.3)',
   } as any,
   grabHit: { paddingTop: 10, paddingBottom: 4, alignItems: 'center' },
   grab: { width: 38, height: 5, borderRadius: 3, backgroundColor: '#dcdce1' },

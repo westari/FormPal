@@ -120,7 +120,20 @@ export const PROFILE_LOGIC_EXT = String.raw`function (Orig) {
       };
       v.shareLink = function (e) { if (e && e.preventDefault) e.preventDefault(); post({ type: 'shareReferral' }); };
       v.copyLink = function () { copyText(refCode); self.showToast('Code copied'); };
-      if (s.page === 'days' && v.pg) { v.pg.title = 'Weekly goal'; v.pg.intro = 'Pick the days you plan to train. The number of days is your weekly goal, in workouts a week.'; }
+      if (s.page === 'days' && v.pg) {
+        // the weekly goal is a simple number (workouts a week, 1 to 7) with a - and a + (the design's own stepper page, the one Weight uses).
+        // The number is kept as that many picked days (the saved form); nothing else reads which weekdays.
+        var SPREAD = { 1: [2], 2: [0, 3], 3: [0, 2, 4], 4: [0, 1, 3, 5], 5: [0, 1, 3, 4, 5], 6: [0, 1, 2, 3, 4, 5], 7: [0, 1, 2, 3, 4, 5, 6] };
+        var cur = s.days.filter(Boolean).length || d.planDays || 3;
+        var setGoal = function (k) {
+          k = Math.max(1, Math.min(7, k)); if (k === cur) return;
+          var arr = [false, false, false, false, false, false, false]; SPREAD[k].forEach(function (i) { arr[i] = true; });
+          self.setState({ days: arr, dirty: 'days' });
+        };
+        v.pg.isDays = false; v.pg.isStepper = true; v.pg.title = 'Weekly goal'; v.pg.intro = 'How many workouts do you want to do each week?';
+        v.pg.value = String(cur); v.pg.unit = cur === 1 ? 'workout a week' : 'workouts a week';
+        v.pg.dec = function () { setGoal(cur - 1); }; v.pg.inc = function () { setGoal(cur + 1); };
+      }
       if (s.page === 'rewards' && v.pg && v.pg.tiers) {
         var joined = d.referral ? d.referral.joined : 0;
         v.pg.tiers = v.pg.tiers.map(function (t, i) {

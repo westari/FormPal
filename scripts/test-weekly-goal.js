@@ -53,8 +53,8 @@ global.Date = class extends RealDate { constructor(...a) { if (a.length === 0) r
 const js = home.buildHomeInjectJs(plan, extra, 62, 34);
 const js2 = home.buildHomeInjectJs(plan, extra, 62, 34, [true, true, false, false, false, false, false]);
 global.Date = RealDate;
-check('Home: the week line uses the weekly goal: "4 of 4 workouts · +4 bonus" (8 workouts, goal 4 from the plan), never "8 of 4"', js.includes('4 of 4 workouts · +4 bonus') && !/8 of 4/.test(js), (/"2 of 4 workouts":"([^"]*)"/.exec(js) || [])[1]);
-check('Home: a goal the user picked in Profile (2 days) replaces the plan\'s 4: "2 of 2 workouts · +6 bonus"', js2.includes('2 of 2 workouts · +6 bonus'), (/"2 of 4 workouts":"([^"]*)"/.exec(js2) || [])[1]);
+check('Home: the Workouts ring uses the weekly goal: 8 workouts on a goal of 4 from the plan -> "4/4" (capped, full), never "8 of 4"', /"id":"workouts","label":"Workouts","fill":1,"text":"4\/4"/.test(js) && !/8 of 4/.test(js), (/"id":"workouts"[^}]*/.exec(js) || [])[0]);
+check('Home: a goal the user picked in Profile (2 days) replaces the 4 of the plan: the ring reads "2/2"', /"id":"workouts","label":"Workouts","fill":1,"text":"2\/2"/.test(js2), (/"id":"workouts"[^}]*/.exec(js2) || [])[0]);
 const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'app', '(tabs)', 'index.tsx'), 'utf8');
 check('Home loads the user\'s picked days with the plan and sessions (so the goal follows Profile)', /loadUserDays\(\)/.test(src) && /buildHomeInjectJs\(plan, sessions, insets\.top, insets\.bottom, userDays\)/.test(src));
 
@@ -68,8 +68,22 @@ check('Home loads the user\'s picked days with the plan and sessions (so the goa
   await page.waitForTimeout(100);
   const pt = await page.evaluate(() => { const e = [...document.querySelectorAll('#dc-root div')].filter((d) => d.children.length <= 1 && d.textContent.trim() === 'Weekly goal')[0]; e.scrollIntoView({ block: 'center' }); const r = e.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
   await page.touchscreen.tap(pt.x, pt.y); await page.waitForTimeout(900);
-  const sheet = await page.evaluate(() => { const root = document.getElementById('dc-root'); const t = root.textContent.split(/\s+/).join(' '); return { text: t, intro: /Pick the days you plan to train/.test(t), oldIntro: /Pick the days you want to train/.test(t), dayBtns: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].filter((w) => [...root.querySelectorAll('div')].some((d) => d.textContent.trim() === w && d.getBoundingClientRect().height > 0)).length }; });
-  check('Profile: tapping it opens an editable page titled "Weekly goal" with the day picker (the number of days picked is the goal)', sheet.intro && !sheet.oldIntro && !/Training days/.test(sheet.text), JSON.stringify([sheet.intro, sheet.oldIntro, sheet.dayBtns]));
+  const read = () => page.evaluate(() => { const root = document.getElementById('dc-root'); const t = root.textContent.split(/\s+/).join(' '); const big = [...root.querySelectorAll('div')].filter((d) => d.children.length <= 1 && /^[0-9]$/.test(d.textContent.trim()) && parseFloat(getComputedStyle(d).fontSize) >= 40)[0]; return { title: /Weekly goal/.test(t), intro: /How many workouts do you want to do each week/.test(t), n: big ? big.textContent.trim() : null, unit: /workouts? a week/.test(t), days: ['Mon', 'Tue'].some((w) => [...root.querySelectorAll('div')].some((d) => d.textContent.trim() === w && d.getBoundingClientRect().height > 0 && getComputedStyle(d).fontSize !== '0px' && d.closest('[style*="opacity: 1"]') && false)) }; });
+  const sheet = await read();
+  check('3: tapping it opens a simple number stepper ("4 workouts a week") with the own - and + of the design (no weekday picker)', sheet.intro && sheet.n === '4' && sheet.unit, JSON.stringify(sheet));
+  const tapBtn = async (label) => { const pt = await page.evaluate((label) => { const btns = [...document.querySelectorAll('#dc-root div')].filter((d) => d.style.width === '48px' && d.style.height === '48px' && d.style.borderRadius === '50%'); const e = btns[label === '-' ? 0 : 1]; const r = e.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; }, label); await page.touchscreen.tap(pt.x, pt.y); await page.waitForTimeout(350); };
+  await tapBtn('+'); let st = await read();
+  check('3: + adds one (4 -> 5), - takes one away', st.n === '5' && st.unit, JSON.stringify(st));
+  await tapBtn('-'); await tapBtn('-'); st = await read();
+  check('3: ... (5 -> 4 -> 3)', st.n === '3', JSON.stringify(st));
+  for (let k = 0; k < 6; k++) await tapBtn('-');
+  st = await read();
+  check('3: it stops at 1 (never 0): the number reads 1 and the unit says "workout a week"', st.n === '1' && /workout a week/.test(await page.evaluate(() => document.getElementById('dc-root').textContent.split(/\s+/).join(' '))), JSON.stringify(st));
+  for (let k = 0; k < 9; k++) await tapBtn('+');
+  st = await read();
+  check('3: it stops at 7 (never 8)', st.n === '7', JSON.stringify(st));
+  const saved = await page.evaluate(() => (window.__lastPosted || null));
+  check('3: the picked number is kept as that many picked days, which is the goal everywhere (lib/weeklyGoal.ts counts them); the lists for 1..7 have exactly that many days', [1, 2, 3, 4, 5, 6, 7].every((k) => { const m = /SPREAD = (\{[^}]*\})/.exec(require('fs').readFileSync(require('path').join(__dirname, '..', 'lib', 'profileInject.ts'), 'utf8')); const o = eval('(' + m[1] + ')'); return o[k].length === k && new Set(o[k]).size === k; }));
   await b.close();
   console.log(failed ? `${failed} FAILED` : 'ALL PASSED'); process.exit(failed ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

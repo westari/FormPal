@@ -194,25 +194,36 @@ function dcScaleFitJs(bg: string, extraTop = 0): string {
 }
 
 function DemoStepWebView({
-  exerciseId, exName, sets, reps, stepIndex, stepTotal, cues, skipPref,
-  onBack, onReady, onTogglePref,
+  exerciseId, exName, sets, reps, stepIndex, stepTotal, cues, skipPref, active,
+  onBack, onReady, onTogglePref, onShown,
 }: {
   exerciseId: string; exName: string; sets: number; reps: number; stepIndex: number; stepTotal: number;
   cues: string[]; skipPref: boolean; topInset: number; bottomInset: number;
-  onBack: () => void; onReady: () => void; onTogglePref: () => void;
+  /** true when the demo is really on screen (not under the music screen): only then does its clock start, at 0 */
+  active: boolean;
+  onBack: () => void; onReady: () => void; onTogglePref: () => void; onShown: () => void;
 }) {
+  const webRef = useRef<WebView>(null);
+  const activeAtMount = useRef(active).current;
   // The real exercise, numbers and TIMED steps go in BEFORE the page's first draw (lib/demoScreen.ts), so the design's own default text
   // ("Push-ups", "3 sets · 12 reps") is never on screen. Built once per exercise (stepIndex changes only for a new exercise).
   const before = useMemo(
-    () => demoBeforeJs(demoData({ exerciseId, exName, sets, reps, stepIndex, stepTotal, cues, skipPref })),
+    () => demoBeforeJs(demoData({ exerciseId, exName, sets, reps, stepIndex, stepTotal, cues, skipPref }), activeAtMount),
     [stepIndex] // eslint-disable-line react-hooks/exhaustive-deps
   );
+  // the clock starts at 0 the moment the demo becomes visible (the music screen is gone), never before
+  useEffect(() => {
+    if (!active) return;
+    if (__DEV__) console.log('[DEMO] visible: the clock starts at 0');
+    webRef.current?.injectJavaScript('window.__demoStart && window.__demoStart(); true;');
+  }, [active]);
   if (__DEV__) {
     const tl = demoTimeline(exerciseId, cues);
     if (!tl.timed) console.log('[DEMO] ' + exerciseId + ': placeholder timing (' + tl.length + 's, steps at ' + tl.steps.map(x => x.start).join(', ') + ') - set real start times in lib/demoVideos.ts');
   }
   return (
     <WebView
+      ref={webRef}
       source={DEMO_STEP_HTML}
       originWhitelist={['*']}
       style={{ flex: 1, backgroundColor: '#1b1b1f' }}
@@ -223,7 +234,7 @@ function DemoStepWebView({
         if (m === 'demoBack') onBack();
         else if (m === 'demoReady') onReady();
         else if (m === 'demoTogglePref') onTogglePref();
-        else if (m === 'demoShown' && __DEV__) console.log('[DEMO] shown with the real data');
+        else if (m === 'demoShown') { if (__DEV__) console.log('[DEMO] shown with the real data'); onShown(); }
       }}
       allowFileAccess
       allowFileAccessFromFileURLs
@@ -293,12 +304,28 @@ const MUSIC_HIDE_UNTIL_READY_JS = `(function(){ function add(){ if (document.get
  * overlay away (180ms) and the demo is simply there: the two web views are no longer swapped one for the other (that swap was the glitch).
  * The overlay is plain white from its first frame, so nothing flashes while its page loads.
  */
-function ConnectMusicOverlay({ onContinue }: { onContinue: (dontShowAgain: boolean) => void }) {
+function ConnectMusicOverlay({ onContinue, onPageShown, demoReady }: { onContinue: (dontShowAgain: boolean) => void; onPageShown: () => void; demoReady: boolean }) {
   const inject = useMemo(() => connectMusicInject(), []);
-  const fade = useRef(new Animated.Value(1)).current;
-  const leaving = useRef(false);
+  const fade = useRef(new Animated.Value(1)).current;     // the whole overlay (fades out on Continue)
+  const pageFade = useRef(new Animated.Value(0)).current; // the page inside it (fades in when it is final, instead of popping)
+  const mountedAt = useRef(Date.now()).current;
+  const [pending, setPending] = useState<boolean | null>(null);
+  const [waitedOut, setWaitedOut] = useState(false);
+  const left = useRef(false);
+  // Continue: the overlay goes only when the demo underneath is drawn (or after 1.5s at most), so the demo is never half-loaded when it appears
+  useEffect(() => {
+    if (pending == null) return;
+    const t = setTimeout(() => setWaitedOut(true), 1500);
+    return () => clearTimeout(t);
+  }, [pending]);
+  useEffect(() => {
+    if (pending == null || left.current || !(demoReady || waitedOut)) return;
+    left.current = true;
+    Animated.timing(fade, { toValue: 0, duration: MUSIC_FADE_MS, easing: Easing.out(Easing.quad), useNativeDriver: true }).start(() => onContinue(pending));
+  }, [pending, demoReady, waitedOut]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <Animated.View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: '#ffffff', opacity: fade, zIndex: 100 }} testID="music-overlay">
+      <Animated.View style={{ flex: 1, opacity: pageFade }}>
       <WebView
         source={CONNECT_MUSIC_HTML}
         originWhitelist={['*']}
@@ -307,10 +334,12 @@ function ConnectMusicOverlay({ onContinue }: { onContinue: (dontShowAgain: boole
         injectedJavaScript={inject}
         onMessage={(e) => {
           const m = e.nativeEvent.data;
-          if (m.indexOf('musicContinue:') === 0 && !leaving.current) {
-            leaving.current = true;
-            const again = m.slice('musicContinue:'.length) === '1';
-            Animated.timing(fade, { toValue: 0, duration: MUSIC_FADE_MS, easing: Easing.out(Easing.quad), useNativeDriver: true }).start(() => onContinue(again));
+          if (m === 'musicShown') {
+            if (__DEV__) console.log('[MUSIC] page drawn ' + (Date.now() - mountedAt) + 'ms after the screen opened');
+            Animated.timing(pageFade, { toValue: 1, duration: 160, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
+            onPageShown();
+          } else if (m.indexOf('musicContinue:') === 0 && pending == null) {
+            setPending(m.slice('musicContinue:'.length) === '1');
           }
         }}
         allowFileAccess
@@ -322,6 +351,7 @@ function ConnectMusicOverlay({ onContinue }: { onContinue: (dontShowAgain: boole
         overScrollMode="never"
         cacheEnabled
       />
+      </Animated.View>
     </Animated.View>
   );
 }
@@ -375,6 +405,20 @@ export default function WorkoutRunScreen() {
   // dismiss flag has been checked, so it never flashes on screen for
   // someone who already dismissed it for good.
   const [musicGate, setMusicGate] = useState<'loading' | 'show' | 'done'>('loading');
+  // Two web views used to be created at the same moment on arrival (the music page and the demo), sharing one web engine and the JS thread
+  // with the screen change: that was the glitch. The demo is now created only AFTER the music page has drawn (or at once when there is no
+  // music screen), and the overlay leaves only when the demo has drawn.
+  const [musicPageShown, setMusicPageShown] = useState(false);
+  const [demoDrawn, setDemoDrawn] = useState(false);
+  const [demoAllowed, setDemoAllowed] = useState(false);
+  useEffect(() => {
+    if (musicGate === 'loading') return;
+    if (musicGate === 'done') { setDemoAllowed(true); return; }
+    if (!musicPageShown) return;
+    const t = setTimeout(() => setDemoAllowed(true), 350);
+    return () => clearTimeout(t);
+  }, [musicGate, musicPageShown]);
+  useEffect(() => { if (musicGate !== 'show') return; const t = setTimeout(() => setDemoAllowed(true), 3000); return () => clearTimeout(t); }, [musicGate]); // (whatever happens)
   useEffect(() => {
     if (!session || session.currentIndex !== 0) { setMusicGate('done'); return; }
     AsyncStorage.getItem(SKIP_MUSIC_KEY)
@@ -660,7 +704,7 @@ export default function WorkoutRunScreen() {
       )}
 
       {/* ── INTRO PHASE ── */}
-      {isDemoStep && currentEx && (
+      {isDemoStep && currentEx && demoAllowed && (
         <DemoStepWebView
           exerciseId={currentEx.exerciseId}
           exName={currentEx.displayName}
@@ -675,6 +719,8 @@ export default function WorkoutRunScreen() {
           onBack={handleEndWorkout}
           onReady={handleStartExercise}
           onTogglePref={toggleSkipDemoPref}
+          active={musicGate === 'done'}
+          onShown={() => setDemoDrawn(true)}
         />
       )}
 
@@ -806,6 +852,8 @@ export default function WorkoutRunScreen() {
     </ScreenBackground>
     {musicGate === 'show' && (
       <ConnectMusicOverlay
+        demoReady={demoDrawn || !isDemoStep}
+        onPageShown={() => setMusicPageShown(true)}
         onContinue={(dontShowAgain) => {
           if (dontShowAgain) AsyncStorage.setItem(SKIP_MUSIC_KEY, '1').catch(() => {});
           setMusicGate('done');

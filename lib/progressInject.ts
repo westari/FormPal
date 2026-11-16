@@ -1004,6 +1004,24 @@ export const PROGRESS_DOM_JS = String.raw`
     }
 
     // Personal Bests
+    // A card row that scrolls sideways (overflow-x: auto) also clips anything that spills below it, and the cards' soft shadows spill ~30px: the
+    // shadow was cut off by a straight line at the bottom of the row, a hard grey-to-white edge. The row gets 46px more room at the bottom and
+    // gives it back with a negative margin, so nothing moves and the shadow fades out smoothly.
+    if (!document.getElementById('__unclip_css')) {
+      // an empty row draws its own white card (absolute, 20px from the bottom): it keeps its place when the row gets 46px more room
+      var uc = document.createElement('style'); uc.id = '__unclip_css';
+      uc.textContent = '[data-unclip] > [data-athlt-empty] { bottom: 66px !important; }';
+      document.head.appendChild(uc);
+    }
+    var unclip = function (el) {
+      if (!el || el.hasAttribute('data-unclip')) return;
+      el.setAttribute('data-unclip', '1');
+      var pbm = parseFloat(getComputedStyle(el).paddingBottom) || 0;
+      el.style.setProperty('padding-bottom', (pbm + 46) + 'px', 'important');
+      el.style.setProperty('margin-bottom', '-46px', 'important');
+    };
+    unclip(sectionAfter('Personal Bests') && sectionAfter('Personal Bests').next);
+    unclip(sectionAfter('Past Workouts') && sectionAfter('Past Workouts').next);
     var pb = sectionAfter('Personal Bests');
     if (pb && pb.next) setEmpty(pb.next, !d.bests || d.bests.length === 0, 'No personal bests yet', 'Finish your first workout and your records land here.', { inset: '14px 14px 20px', radius: '24px', minH: 170 });
 

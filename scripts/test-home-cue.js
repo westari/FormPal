@@ -15,17 +15,18 @@ const check = (name, ok, detail) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${na
 
 (async () => {
   const { browser, page } = await openHome({ inject: true });
-  await page.evaluate(() => { document.querySelector('div[style*="margin: -26px 8px 0"]').closest('[data-scroll]').scrollTop = 120; });
+  await page.evaluate(() => { document.querySelector('[data-ring-cue]').closest('[data-scroll]').scrollTop = 120; });
   await page.addStyleTag({ content: '*{animation-play-state:paused!important}' });
   await page.waitForTimeout(300);
   const card = await page.evaluate(() => {
-    const el = document.querySelector('div[style*="margin: -26px 8px 0"]'); const c = getComputedStyle(el);
+    const el = document.querySelector('[data-ring-cue]'); const c = getComputedStyle(el);
     const week = [...document.querySelectorAll('div')].find((d) => d.textContent.trim().startsWith('This week') && d.getBoundingClientRect().height > 100 && d.getBoundingClientRect().height < 220);
     return { bg: c.backgroundImage, shadow: c.boxShadow, z: c.zIndex, r: el.getBoundingClientRect().toJSON(), wr: week ? week.getBoundingClientRect().toJSON() : null };
   });
   check('Cue card has the design\'s white gradient background again', /linear-gradient/.test(card.bg) && /255, 255, 255/.test(card.bg), card.bg.slice(0, 70));
   check('Cue card has the design\'s shadow again', card.shadow !== 'none' && /rgba/.test(card.shadow), card.shadow.slice(0, 50));
-  check('the card is layered behind the This week card (its top edge tucks under it)', card.wr && card.r.top < card.wr.bottom, `card top ${Math.round(card.r.top)} < week bottom ${card.wr && Math.round(card.wr.bottom)}`);
+  const today = await page.evaluate(() => { const t = [...document.querySelectorAll('#dc-root div')].find((d) => d.children.length <= 1 && d.textContent.trim() === 'Recent Workouts'); const c = document.querySelector('[data-ring-cue]'); return { cueTop: c.getBoundingClientRect().top, recentTop: t.getBoundingClientRect().top, radius: getComputedStyle(c).borderTopLeftRadius, h: c.getBoundingClientRect().height }; });
+  check('the Cue card stays on Home after the rings replaced the week and Form score cards: fully rounded (it used to tuck under the week card), visible, above Recent workouts', today.h > 40 && parseFloat(today.radius) >= 24 && today.cueTop < today.recentTop, JSON.stringify(today));
   const orb = await page.evaluate(() => {
     const w = document.querySelector('div[style*="hm-orb-breathe"]');
     const shown = (sel) => [...w.querySelectorAll(sel)].filter((e) => getComputedStyle(e).display !== 'none');
@@ -46,7 +47,7 @@ const check = (name, ok, detail) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${na
       d(px(t, 1), px(t, 3)), d(px(W - 1 - t, 1), px(W - 1 - t, 3)), d(px(t, Hh - 2), px(t, Hh - 4)), d(px(W - 1 - t, Hh - 2), px(W - 1 - t, Hh - 4)));
   }
   check('orb: no hard edge at its 44px box (nothing square is painted around the orb)', step <= 4, `largest step across the box edge ${step}`);
-  const el = await page.$('div[style*="margin: -26px 8px 0"]');
+  const el = await page.$('[data-ring-cue]');
   const bb = await el.boundingBox();
   await page.screenshot({ path: path.join(ROOT, '.scratch', 'home-cue-after.png'), clip: { x: 0, y: Math.max(0, bb.y - 140), width: 390, height: Math.min(844 - Math.max(0, bb.y - 140), bb.height + 170) } });
   await browser.close();
