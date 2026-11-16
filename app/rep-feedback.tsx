@@ -55,6 +55,7 @@ import { repFeedbackSignal } from '../lib/repFeedbackSignal';
 
 import { postLag } from '../lib/postLag';
 import { hapticFinish } from '../lib/haptics';
+import DoneScreen from '../components/DoneScreen';
 
 const SPEEDS = [0.5, 1, 1.5, 2];
 
@@ -76,6 +77,7 @@ export default function RepFeedbackScreen() {
     exerciseName?: string; videoUri?: string; repEvents?: string; practice?: string;
   }>();
   const isPractice = practice === '1';
+  const [practiceDone, setPracticeDone] = useState(false);   // the short done screen after a form check, before Home
   const leaving = useRef(false);   // Finish / back can only leave ONCE (the 2026-11-15 loop: Finish -> Form check complete -> rep feedback -> ...)
 
   // DIAGNOSTIC — full mount/unmount + WebView lifecycle logging, kept per
@@ -262,9 +264,10 @@ export default function RepFeedbackScreen() {
       leaving.current = true;
       hapticFinish(); // the one strong haptic in the app: Heavy impact + Success
       if (isPractice) {
-        // A form check (practice) ends here: straight HOME, once. Not back to the recap (that is what looped), no Today's progress, no streak.
+        // A form check (practice) ends here: a short done screen (the DoneScreen small variant, a placeholder until Ari's own design), then HOME, once.
+        // Not back to the recap (that is what looped), no Today's progress, no streak. The warm page is hidden first (it is drawn above the screens).
         warmDeactivate('repfeedback');
-        router.dismissAll();
+        setPracticeDone(true);
         return;
       }
       // No waiting for the back transition: the muscle page is put on screen underneath right now and this
@@ -312,7 +315,8 @@ export default function RepFeedbackScreen() {
 
   return (
     <View style={styles.root}>
-      <StatusBar style="light" />
+      <StatusBar style={practiceDone ? 'dark' : 'light'} />
+      {practiceDone ? <DoneScreen variant="small" title="Nice work" onFinish={() => router.dismissAll()} /> : null}
       {/* Native video — a real AVPlayer, its own process, nothing to do
           with the WebView (see file header). Sits BEHIND the WebView; the
           WebView's own background goes transparent above so this shows

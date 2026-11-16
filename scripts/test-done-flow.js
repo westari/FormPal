@@ -55,8 +55,8 @@ check('PRACTICE: its session entry is saved with kind: \'practice\'', /\.\.\.\(i
 check('PRACTICE: the screen says "Form check complete" (DoneScreen AND the Workout complete page title)', /title=\{isPractice \? 'Form check complete' : 'Workout complete'\}/.test(rc) && /title: isPractice \? 'Form check complete' : undefined/.test(rc) && /practice: !repCounterOnly/.test(read('app/formcheck.tsx')) && /'Workout Complete': opts\.title/.test(read('lib/recapInject.ts')));
 {
   const rfb = read('app/rep-feedback.tsx');
-  check("PRACTICE: keeps the rep feedback; Finish leaves from the rep feedback screen straight HOME, once (dismissAll + a leaving guard), not back to the recap (the 2026-11-15 loop), no Today's progress, no streak",
-    rc.includes("practice: isPractice ? '1' : ''") && /if \(isPractice\) \{[\s\S]{0,300}router\.dismissAll\(\);\s*return;/.test(rfb) && rfb.includes('if (leaving.current) return;') && !rc.includes('practice, straight home')
+  check("PRACTICE: Finish on the rep feedback shows the short DoneScreen (small variant, \"Nice work\") FIRST, then goes HOME once (dismissAll when it finishes), behind a leaving guard; not back to the recap (the 2026-11-15 loop), no Today's progress, no streak",
+    rc.includes("practice: isPractice ? '1' : ''") && /if \(isPractice\) \{[\s\S]{0,400}setPracticeDone\(true\);\s*return;/.test(rfb) && rfb.includes('<DoneScreen variant="small" title="Nice work" onFinish={() => router.dismissAll()} />') && (rfb.match(/router\.dismissAll\(\)/g) || []).length === 1 && rfb.includes('if (leaving.current) return;') && !rc.includes('practice, straight home')
     && rc.includes("if (isPractice) { router.replace('/(tabs)/' as any); return; }") && rc.includes("if (!isHistoryMode && !isPractice) warmWant('ranks', true)"));
 }
 

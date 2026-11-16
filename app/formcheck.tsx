@@ -443,16 +443,14 @@ function RepCounter({
 // corner. The mirrored (right) notch reuses this exact path via a scaleX
 // flip instead of a second hand-derived formula, so there's only one arc to
 // get right, not two.
-// ── Workout HUD layout (all offsets from the TOP SAFE AREA, so they hold on every iPhone) ──
-const HUD_SEG_TOP = 56;                 // the set bars, right under the top bar buttons
-const HUD_PILL_TOP = 78;                // the "Set 1 of 3 / Next:" glass pill
-const HUD_ROW_TOP = 134;                // ONE row: timer capsule + Camera confidence capsule (the pill ends at about 126)
-const HUD_ROW_H = 40;
-const HUD_TIMER_W = 80, HUD_ROW_GAP = 8, HUD_METER_W = 206;
-const SOLO_METER_BOTTOM = 56 + 91;     // solo form check: the big Camera confidence block sits at 56 and is about 91 high
-const HUD_GUIDE_TOP = HUD_ROW_TOP + HUD_ROW_H + 10;   // the framing box starts below the row (was 160, which sat UNDER the row)
-const hudRowLeft = (screenW: number) => Math.max(8, Math.round((screenW - (HUD_TIMER_W + HUD_ROW_GAP + HUD_METER_W)) / 2));
-const hudMeterLeft = (screenW: number) => hudRowLeft(screenW) + HUD_TIMER_W + HUD_ROW_GAP;
+// ── Workout camera screen, top to bottom (Ari 2026-11-16). Every offset is from the TOP SAFE AREA, never from the screen height, so nothing overlaps on any iPhone:
+//   top bar buttons (8..52)  >  progress bar in Liquid Glass (rounded ends)  >  timer in Liquid Glass  >  the big Camera confidence block (same as the solo form check)
+const HUD_BAR_TOP = 66, HUD_BAR_H = 18;                 // the set progress bar: a glass capsule with a rounded fill
+const HUD_TIMER_TOP = HUD_BAR_TOP + HUD_BAR_H + 10, HUD_TIMER_H = 34, HUD_TIMER_W = 92;   // the timer capsule
+const HUD_CONF_TOP = HUD_TIMER_TOP + HUD_TIMER_H + 10;  // the Camera confidence block (label + pill), exactly like the solo form check
+const CONF_BLOCK_H = 91;                                // label 21 + 6 gap + pill 64
+const SOLO_METER_BOTTOM = 56 + CONF_BLOCK_H;            // solo form check: the same block sits at 56
+const HUD_GUIDE_TOP = HUD_CONF_TOP + CONF_BLOCK_H + 8;  // the framing box starts below the confidence block
 
 /** Real Liquid Glass where the build has it; the same blur glass every other pill here uses where it does not (never a flat white card). */
 function HudGlass({ radius, style, children }: { radius: number; style?: any; children?: React.ReactNode }) {
@@ -486,48 +484,32 @@ function WorkoutHud({
   repsIntoSet: number; targetReps: number; completedSets: number; targetSets: number; nextLabel: string; elapsedSec: number;
 }) {
   const insets = useSafeAreaInsets();
-  const { width: screenW } = useWindowDimensions();
   const m = Math.floor(elapsedSec / 60);
   const sec = elapsedSec % 60;
 
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFillObject}>
-      {/* Scorecard, now REAL Liquid Glass (Ari 2026-11-15: the white panel must be glass). Layout, top to bottom, none of it overlapping on any
-          iPhone (everything is measured from the top safe area, never from the screen height): the segment bars, this pill, then ONE row holding
-          the timer capsule and the Camera confidence capsule (see HUD_ROW_TOP and TrackingMeter compact). The guide box starts below that row. */}
-      <View style={[wh.pillRow, { top: insets.top + HUD_PILL_TOP }]}>
-        <HudGlass radius={999} style={wh.scorePill}>
-          <View style={wh.scoreInner}>
-            <Text style={wh.scoreSetTxt}>Set {completedSets + 1} of {targetSets}</Text>
-            <Text style={wh.scoreNextTxt}>Next: {nextLabel}</Text>
+      {/* Progress bar: one segment per set (the current one fills with the reps), inside a REAL Liquid Glass capsule with rounded ends. The old
+          "Set 1 of 3" and "Next: ..." text is gone (Ari 2026-11-16). */}
+      <View style={[wh.barWrap, { top: insets.top + HUD_BAR_TOP }]}>
+        <HudGlass radius={999} style={wh.barGlass}>
+          <View style={wh.barInner}>
+            {Array.from({ length: targetSets }).map((_, i) => {
+              const fillPct = i < completedSets ? 100 : i === completedSets ? Math.round((repsIntoSet / targetReps) * 100) : 0;
+              return (
+                <View key={i} style={wh.segTrack}>
+                  <View style={[wh.segFill, { width: `${fillPct}%` }]} />
+                </View>
+              );
+            })}
           </View>
         </HudGlass>
       </View>
-      <View style={[wh.timerCapsuleWrap, { top: insets.top + HUD_ROW_TOP, left: hudRowLeft(screenW) }]}>
+      {/* Timer, under the bar, also Liquid Glass */}
+      <View style={[wh.timerWrap, { top: insets.top + HUD_TIMER_TOP }]}>
         <HudGlass radius={999} style={wh.timerCapsule}>
           <Text style={wh.scoreTimeTxt}>{m}:{String(sec).padStart(2, '0')}</Text>
         </HudGlass>
-      </View>
-
-      {/* Segment progress — one bar per set; the current set's bar fills
-          proportionally, earlier sets are fully filled, later ones empty.
-          Now sits ABOVE the scorecard (swapped order, per explicit
-          request), right under the top bar. */}
-      <View style={[wh.segRow, { top: insets.top + HUD_SEG_TOP }]}>
-        {Array.from({ length: targetSets }).map((_, i) => {
-          const fillPct = i < completedSets ? 100 : i === completedSets ? Math.round((repsIntoSet / targetReps) * 100) : 0;
-          const isCurrent = i === completedSets;
-          return (
-            <View key={i} style={wh.segTrack}>
-              <View style={[wh.segFill, { width: `${fillPct}%` }]} />
-              {/* Leading dot on the current set's bar only — matches the
-                  real design file; absent from the earlier recreation. */}
-              {isCurrent && (
-                <View style={[wh.segDot, { left: `${fillPct}%` as any }]} />
-              )}
-            </View>
-          );
-        })}
       </View>
 
       <View style={[wh.counterWrap, { bottom: HUD_COUNTER_BOTTOM }]}>
@@ -614,10 +596,8 @@ const ri = StyleSheet.create({
 // createMeterSmoother in lib/liveTracking.ts — in its own state, so its ticks
 // never re-render the whole camera screen. Always mounted (renders nothing when
 // !show) so the "is it high yet" report that gates "Ready. Go!" keeps working.
-function TrackingMeter({ target, show, top, left, compact, onHighChange, counter, counterActive, flags, confidence }: {
+function TrackingMeter({ target, show, top, onHighChange, counter, counterActive, flags, confidence }: {
   target: number; show: boolean; top: number; onHighChange: (high: boolean) => void;
-  /** workout HUD: a compact capsule in the row under the scorecard (left = its x), instead of the big label + pill */
-  left?: number; compact?: boolean;
   counter: CounterSignal; counterActive: boolean; flags: { diag: boolean; cue: boolean };
   /** the live CAMERA CONFIDENCE (lib/cameraConfidence.ts), or null before tracking has produced one */
   confidence: { current: number | null };
@@ -653,21 +633,6 @@ function TrackingMeter({ target, show, top, left, compact, onHighChange, counter
   }, [smoother, onHighChange, counter, confidence]);
   if (!show) return null;
   const level = display >= 95 ? C.good : display <= 35 ? C.warn : '#FFFFFF';
-  if (compact) {
-    return (
-      <View pointerEvents="none" style={{ position: 'absolute', top, left: left ?? 0, width: HUD_METER_W, height: HUD_ROW_H }}>
-        <HudGlass radius={999} style={{ width: HUD_METER_W, height: HUD_ROW_H }}>
-          <View style={s.meterCompactRow}>
-            <Text style={s.meterCompactLabel}>Camera</Text>
-            <Text style={s.meterCompactNum}>{display}<Text style={s.meterCompactPct}>%</Text></Text>
-            <View style={s.meterCompactTrack}>
-              <View style={[s.meterFill, { width: `${display}%`, backgroundColor: level }]} />
-            </View>
-          </View>
-        </HudGlass>
-      </View>
-    );
-  }
   return (
     <View pointerEvents="none" style={[s.cameraLockWrap, { top }]}>
       {/* how well the camera sees your whole body: the label sits OUTSIDE the glass, just above it */}
@@ -1591,7 +1556,7 @@ export default function FormCheckScreen() {
       const dec = guideEngine.decide({
         now, exerciseId: exerciseType, personMissing: noPersonNow && cueHeld,
         nativeCue: cueHeld || !isFrameHint(rawCue) ? rawCue : null, outOfPlaneCue: statsRef.current?.outOfPlaneCue || null, diag: d,
-        match: m, stuck: conf.stuck, rejectedLowQuality: rej.lowQuality, rejectedDark: rej.dark, facing,
+        match: m, stuck: conf.stuck, rejectedLowQuality: rej.lowQuality, rejectedDark: rej.dark, rejectedJoints: rej.joints, facing,
       });
       // a plain framing hint is not shown right after a rep was judged (the camera obviously sees the person); a real "cannot count" fix always is
       const line = dec.reason === 'hint' && now - lastJudgedAt.current < JUDGED_QUIET_MS ? null : dec.line;
@@ -1811,9 +1776,7 @@ export default function FormCheckScreen() {
       <TrackingMeter
         target={cameraLockTarget}
         show={stopButtonActive}
-        top={hudActive ? insets.top + HUD_ROW_TOP : insets.top + 56}
-        left={hudMeterLeft(screenW)}
-        compact={hudActive}
+        top={hudActive ? insets.top + HUD_CONF_TOP : insets.top + 56}
         onHighChange={setMeterHigh}
         counter={counterRef}
         counterActive={isTracking}
@@ -2135,12 +2098,6 @@ const s = StyleSheet.create({
   meterRow:   { flexDirection: 'row', alignItems: 'center', gap: 14 },
   meterTrack: { width: 110, height: 9, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.22)', overflow: 'hidden' },
   meterFill:  { height: 9, borderRadius: 5 },
-  // the compact Camera confidence capsule in the workout HUD row
-  meterCompactRow:   { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 14 },
-  meterCompactLabel: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 12.5, color: 'rgba(255,255,255,0.9)', letterSpacing: 0.1 },
-  meterCompactNum:   { fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 20, color: '#fff', letterSpacing: -0.4, fontVariant: ['tabular-nums'] },
-  meterCompactPct:   { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 12, color: 'rgba(255,255,255,0.8)' },
-  meterCompactTrack: { width: 52, height: 7, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.22)', overflow: 'hidden' },
   meterLabel: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 16, lineHeight: 21, color: '#FFFFFF', letterSpacing: 0.2, marginBottom: 6, textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
   meterNum:   { fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 38, lineHeight: 44, color: '#fff', letterSpacing: -1, fontVariant: ['tabular-nums'] },
   meterPct:   { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 20, color: 'rgba(255,255,255,0.75)' },
@@ -2243,7 +2200,7 @@ const wh = StyleSheet.create({
   // overflow:hidden removed (was clipping segFill's corners to the track) —
   // the current-set dot needs to poke slightly above the track, which that
   // would have clipped too.
-  segTrack: { flex: 1, height: 4, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.3)' },
+  segTrack: { flex: 1, height: 6, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.28)', overflow: 'hidden' },
   segFill:  { height: '100%', borderRadius: 999, backgroundColor: '#ffffff' },
   segDot: {
     position: 'absolute', top: -4, width: 12, height: 12, marginLeft: -6, borderRadius: 6, backgroundColor: '#ffffff',
@@ -2265,9 +2222,11 @@ const wh = StyleSheet.create({
   counterTotal: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 26, letterSpacing: -0.6, color: 'rgba(255,255,255,0.8)' },
 
   pillRow: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
-  scoreInner: { flexDirection: 'row', alignItems: 'center', gap: 18, paddingVertical: 13, paddingLeft: 22, paddingRight: 26 },
-  timerCapsuleWrap: { position: 'absolute', width: HUD_TIMER_W, height: HUD_ROW_H },
-  timerCapsule: { width: HUD_TIMER_W, height: HUD_ROW_H, alignItems: 'center', justifyContent: 'center' },
+  barWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  barGlass: { width: '86%', maxWidth: 420, height: HUD_BAR_H },
+  barInner: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 6 },
+  timerWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  timerCapsule: { width: HUD_TIMER_W, height: HUD_TIMER_H, alignItems: 'center', justifyContent: 'center' },
 
   // ── Scorecard — matches assets/app screens/inworkout.html's real markup
   // (px values, colors, radii) directly, not a recreation from memory. ──────

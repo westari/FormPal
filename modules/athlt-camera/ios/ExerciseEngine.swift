@@ -591,8 +591,11 @@ final class ExerciseEngine {
         } else {
             reason = "short_bottom"; reached = atkLow; needed = effectiveEnterThreshold
         }
-        let msg = "[ATTEMPT-MISSED] (def.id) (reason) reached=(String(format: "%.1f", reached)) needed=(String(format: "%.1f", needed)) " +
-                  "size=(String(format: "%.2f", size))R frames=(atkFrames) (min (Self.ATTEMPT_MIN_FRACTION)R, PLACEHOLDER)"
+        let reachedText = String(format: "%.1f", reached)
+        let neededText  = String(format: "%.1f", needed)
+        let sizeText    = String(format: "%.2f", size)
+        let msg = "[ATTEMPT-MISSED] \(def.id) \(reason) reached=\(reachedText) needed=\(neededText) " +
+                  "size=\(sizeText)R frames=\(atkFrames) (min \(Self.ATTEMPT_MIN_FRACTION)R, PLACEHOLDER)"
         NSLog("[Engine] [%@] %@", def.id, msg)
         onDebugLog?(msg)
         onAttemptMissed?(reason, reached, needed)
@@ -1552,7 +1555,10 @@ final class ExerciseEngine {
                     let unreliableFraction = Double(primaryUnreliableFrames) / Double(primaryTotalFrames)
                     // Logged for EVERY rep that reaches this gate (counted or not): the real numbers a sensible cap and a
                     // stray-rep rule must be set from. Entry-to-exit time and the share of low-confidence frames.
-                    onDebugLog?("[REP-QUALITY] (def.id) entry-to-exit=(String(format: "%.2f", timestamp.timeIntervalSince(repEnterTime)))s unreliable=(primaryUnreliableFrames)/(primaryTotalFrames) ((String(format: "%.0f", unreliableFraction * 100))%) travel=(String(format: "%.1f", repTopValue - repMinAngle))")
+                    let entryToExitText = String(format: "%.2f", timestamp.timeIntervalSince(repEnterTime))
+                    let unreliablePctText = String(format: "%.0f", unreliableFraction * 100)
+                    let travelText = String(format: "%.1f", repTopValue - repMinAngle)
+                    onDebugLog?("[REP-QUALITY] \(def.id) entry-to-exit=\(entryToExitText)s unreliable=\(primaryUnreliableFrames)/\(primaryTotalFrames) (\(unreliablePctText)%) travel=\(travelText)")
                     let reliabilityCap = videoMode
                         ? max(def.repReliabilityMaxUnreliableFraction, Self.VIDEO_RELIABILITY_FLOOR)
                         : def.repReliabilityMaxUnreliableFraction

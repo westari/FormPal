@@ -184,7 +184,7 @@ public class ATHLTCameraModule: Module {
                     if let p = self.pendingStopPromise {
                         p.resolve(["reps":     self.engine.totalReps,
                                    "goodReps": self.engine.goodReps,
-                                   "videoUri": self.lastFinishedClipURL?.absoluteString ?? NSNull()])
+                                   "videoUri": (self.lastFinishedClipURL?.absoluteString as Any?) ?? NSNull()])
                         self.pendingStopPromise = nil
                     }
                     self.engine.reset()
@@ -434,7 +434,7 @@ public class ATHLTCameraModule: Module {
                           self.engine.goodReps, self.engine.totalReps, self.lastFinishedClipURL?.lastPathComponent ?? "none")
                     promise.resolve(["reps":     self.engine.totalReps,
                                      "goodReps": self.engine.goodReps,
-                                     "videoUri": self.lastFinishedClipURL?.absoluteString ?? NSNull()])
+                                     "videoUri": (self.lastFinishedClipURL?.absoluteString as Any?) ?? NSNull()])
                 }
             }
         }
@@ -657,11 +657,11 @@ public class ATHLTCameraModule: Module {
             let size = ((try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? NSNumber)?.intValue ?? 0
             if size <= 0 { usable = false }
             if usable {
-                NSLog("[GymCamera] recording saved: %@ (%d bytes)", url.lastPathComponent, size)
+                NSLog("[GymCamera] recording saved: %@ (%ld bytes)", url.lastPathComponent, size)
                 dict["videoUri"] = url.absoluteString
                 if url == self.currentClipURL { self.lastFinishedClipURL = url }
             } else {
-                NSLog("[GymCamera] recording has no usable file: %@ (%d bytes)", url.lastPathComponent, size)
+                NSLog("[GymCamera] recording has no usable file: %@ (%ld bytes)", url.lastPathComponent, size)
                 dict["videoUri"] = NSNull()
             }
             NSLog("[GymCamera] tracking stopped — %d good / %d reps",

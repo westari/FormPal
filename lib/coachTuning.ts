@@ -41,7 +41,7 @@ export const MOVEMENT_MATCH = {
   repEvidenceFloor: 40,     // a rep the engine really counted is evidence of this exercise: for one window after it the score is at least this ("unsure", never LOW), so a counted rep after a pause still gets its check / X
   // path cuts
   cutGapSec: 0.9,           // the samples stop for this long while the value is in the top (or bottom) zone = the camera lost the joints there
-  cutLongSec: 2.0,           // a gap this long counts double
+  cutLongSec: 1.2,           // a gap this long counts double (was 2.0: a single clear loss of the hands then counts at once, so the Guide can speak in about 3 s; PLACEHOLDER)
   cutTopZoneR: 0.8,         // "near the top": within this many R below top
   cutBottomZoneR: 0.3,      // "near the bottom": within this many R above the exercise's low line (the lower of enter and rom)
   cutWindowSec: 12,
@@ -68,6 +68,7 @@ export const GUIDE = {
   minShowSec: 2.5,          // a Guide line stays up at least this long
   changeConfirmSec: 1.5,    // a different line (or none) must be wanted this long, without a break, before it replaces the one shown
   firstShowConfirmSec: 0.4, // a line shows after being wanted this long (so a one-frame blip never flashes)
+  evidenceHoldSec: 1.0,     // PLACEHOLDER: a real camera problem must be seen this long before the Guide speaks (with the path-cut detection this is about 3 s in all)
   tipRotateSec: 5,          // PLACEHOLDER: the same Guide tip for this long with nothing improved -> switch to the next most likely fix
   minTryingSec: 2,          // Movement Match must have been HIGH this long before a stuck diagnosis is trusted
   cuePersistSec: 1.5,       // the camera's own "step back / no person" signal must hold this long before the words or the number react (it flickers while you stand still)

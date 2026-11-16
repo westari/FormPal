@@ -142,7 +142,7 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8').replace(/\r\n/g,
   // 4. native: a finished clip is handed back even after an early error
   const sw = read('modules/athlt-camera/ios/ATHLTCameraModule.swift');
   check('native: a recording that ended with an error still returns its clip when the file exists with content (AVErrorRecordingSuccessfullyFinishedKey)', sw.includes('AVErrorRecordingSuccessfullyFinishedKey') && sw.includes('lastFinishedClipURL'));
-  check('native: stopTracking while not recording hands back the last finished clip instead of "no video"', /not recording now; last finished clip/.test(sw) && /"videoUri": self\.lastFinishedClipURL\?\.absoluteString \?\? NSNull\(\)/.test(sw));
+  check('native: stopTracking while not recording hands back the last finished clip instead of "no video"', /not recording now; last finished clip/.test(sw) && sw.includes('"videoUri": (self.lastFinishedClipURL?.absoluteString as Any?) ?? NSNull()'));
   console.log(failed ? `\n${failed} FAILED` : '\nall passed');
   process.exit(failed ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

@@ -20,14 +20,16 @@ let saved: number | null = null;
 /** Turn the max-brightness part on or off. Returns true if the native module exists (false = this build cannot change brightness). */
 export async function setFlashBrightness(on: boolean): Promise<boolean> {
   const B = brightness();
-  if (!B) return false;
+  if (!B) { console.log('[BRIGHTNESS] expo-brightness is NOT in this build: the flash cannot raise the brightness (old build)'); return false; }
   try {
     if (on) {
       if (saved === null) saved = await B.getBrightnessAsync();
       await B.setBrightnessAsync(1);
+      console.log('[BRIGHTNESS] flash on: brightness set to 1 (was ' + saved + ')');
     } else if (saved !== null) {
       const back = saved; saved = null;
       await B.setBrightnessAsync(back);
+      console.log('[BRIGHTNESS] flash off: brightness put back to ' + back);
     }
     return true;
   } catch {
