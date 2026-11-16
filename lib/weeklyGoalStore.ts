@@ -15,3 +15,12 @@ export async function loadUserDays(): Promise<boolean[] | null> {
     return d && Array.isArray(d.days) ? d.days : null;
   } catch { return null; }
 }
+
+/** Does the user show weights in kg? (Profile > Units; stored with the profile details) */
+export async function loadUnitsKg(): Promise<boolean> {
+  try {
+    const raw = await AsyncStorage.getItem(PROFILE_DETAILS_KEY);
+    const d = raw ? JSON.parse(raw) : null;
+    return !!d && d.units === 1;
+  } catch { return false; }
+}

@@ -33,6 +33,9 @@ import { TAB_HEADER_JS } from '../../lib/tabHeader';
 import { PROGRESS_LOGIC_EXT, PROGRESS_DOM_JS } from '../../lib/progressInject';
 import { getAllSessions, computeMuscleTiers, TIER_ORDER } from '../../lib/sessionLog';
 import { getWeightLog, logWeight } from '../../lib/weightLog';
+import { showDone } from '../../lib/doneStore';
+import { DONE_TITLES, weightDoneLine } from '../../lib/doneInfo';
+import { loadUnitsKg } from '../../lib/weeklyGoalStore';
 import { buildProgressData, type ProgressData } from '../../lib/progressData';
 import { tierDataUri } from '../../lib/rankImages';
 import { muscleIconUri } from '../../lib/muscleIcons';
@@ -174,8 +177,12 @@ export default function ProgressScreen() {
         // this just persists it, then re-syncs from storage.
         if (!msg.dateKey || !msg.weightLb) break;
         const [y, m, d] = msg.dateKey.split('-').map(Number);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        logWeight(msg.weightLb, new Date(y, m - 1, d)).then(() => load()).catch(() => {});
+        logWeight(msg.weightLb, new Date(y, m - 1, d)).then(async () => {
+          load();
+          // the done screen (Ari's design, components/DoneHost.tsx): "Weight logged" and the real change since last time
+          const kg = await loadUnitsKg();
+          showDone({ title: DONE_TITLES.weight, subtitle: weightDoneLine({ weightLb: msg.weightLb as number, prevLb: typeof (msg as any).prevLb === 'number' ? (msg as any).prevLb : null, kg }), onContinue: () => {} });
+        }).catch(() => {});
         break;
       }
       case 'workoutMenu':

@@ -178,6 +178,7 @@ Module._load = function (r) {
   check('5: the sheet layer is the LAST thing in the screen, so the dim covers the Start button too, and the closed layer lets every touch through', wsrc.indexOf('testID="edit-layer"') > wsrc.indexOf('accessibilityLabel="Start workout"'));
   check('7: the background dim covers the whole screen and only FADES (opacity), while only the sheet slides (translateY)', /<Animated\.View style=\{\[StyleSheet\.absoluteFill, s\.sheetBack, \{ opacity: dim \}\]\}/.test(wsrc) && /translateY: slide\.interpolate/.test(wsrc) && /sheetBack: \{ backgroundColor/.test(wsrc) && !/sheetBack: \{ flex/.test(wsrc));
   check('7: it fades in and out evenly with the same short time (220ms) on open and on Done, using the native driver', /SHEET_MS = 220/.test(wsrc) && (wsrc.match(/duration: SHEET_MS/g) || []).length === 2 && !/useNativeDriver: false/.test(wsrc));
+  check('4: the edit icon on each exercise is the clean SF Symbol "pencil" (regular weight, 20pt; it was a semibold 16)', /<SymbolView name="pencil" size=\{20\} weight="regular"/.test(wsrc) && !/square\.and\.pencil|pencil\.line|pencil\.circle/.test(wsrc));
   // 9: Start workout ALWAYS opens a real workout, never "No workout scheduled"
   STORE = { plan: null, isLoaded: true }; params = {};
   const p4 = await shoot(browser, h(Screen), path.join(dir, 'preview-render4.html'));

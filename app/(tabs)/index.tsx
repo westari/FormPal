@@ -634,6 +634,7 @@ export default function HomeScreen() {
           if (msg.type === 'cue') { router.push('/cue' as any); return; }
           if (msg.type === 'calendar') { if (typeof (msg as any).top === 'number') setCalAnchor({ top: (msg as any).top, cx: typeof (msg as any).cx === 'number' ? (msg as any).cx : 60 }); setCalOpen(o => !o); return; }
           if (msg.type === 'streak') { router.push({ pathname: '/streak-screen', params: { from: 'tab', dest: '/(tabs)' } } as any); return; }
+          if (msg.type === 'ring' && (msg as any).id) { router.push(`/goal/${encodeURIComponent(String((msg as any).id))}` as any); return; }
           if (msg.type === 'moves') { router.push('/learn-moves' as any); return; }
           if (msg.type === 'progress') { router.push('/(tabs)/progress' as any); return; }
           if (msg.type === 'recap' && msg.ts != null) { openRecap(router, msg.ts); return; }

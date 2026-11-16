@@ -18,6 +18,8 @@ const MUTED = '#55555f';
 const SYS = Platform.select({ ios: 'System', default: undefined }); // SF Pro
 const ACCENT = '#f2701c';
 const SIDE = 14;
+// A slightly stronger glass (easier to read): the tab bar's glass plus a light tint of its own colour. Not a white card: the glass itself is unchanged.
+export const GLASS_TINT = 'rgba(255,255,255,0.2)';
 export const CAL_OPEN_MS = 200;
 export const CAL_CLOSE_MS = 150;
 const CARET = 18; // the little pointer on the top edge, pointing up at the date's arrow
@@ -28,45 +30,46 @@ export default function CalendarSheet({ open, onClose, timestamps, anchor }: { o
   const { width } = useWindowDimensions();
   const now = new Date();
   const [ym, setYm] = useState({ y: now.getFullYear(), m: now.getMonth() });
-  const [mounted, setMounted] = useState(open);
   const prog = useRef(new Animated.Value(open ? 1 : 0)).current;
   useEffect(() => {
     if (open) {
       const n = new Date(); setYm({ y: n.getFullYear(), m: n.getMonth() });
-      setMounted(true);
       Animated.timing(prog, { toValue: 1, duration: CAL_OPEN_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
     } else {
-      Animated.timing(prog, { toValue: 0, duration: CAL_CLOSE_MS, easing: Easing.in(Easing.quad), useNativeDriver: true }).start(({ finished }) => { if (finished) setMounted(false); });
+      Animated.timing(prog, { toValue: 0, duration: CAL_CLOSE_MS, easing: Easing.in(Easing.quad), useNativeDriver: true }).start();
     }
   }, [open, prog]);
   const trained = useMemo(() => trainedDays(timestamps), [timestamps]);
   const weeks = useMemo(() => monthGrid(ym.y, ym.m, trained, new Date()), [ym, trained]);
   const step = (d: number) => setYm((c) => { const t = new Date(c.y, c.m + d, 1); return { y: t.getFullYear(), m: t.getMonth() }; });
   const monthCount = weeks.flat().filter((c) => c.trained).length;
-  if (!mounted || !anchor) return null;
+  // The calendar is drawn from the moment Home is on screen (invisible, nothing touches it) so the native glass is already built and rendered
+  // when it is first opened. It used to be created at the first tap, and a glass view that is still being built shows its plain fallback
+  // colour: that was the "old look" on the first open (later opens were fine because the view already existed).
+  const a = anchor ?? { top: 200, cx: 250 };
 
-  const top = anchor.top + 12; // leaves room for the pointer between the arrow and the card
+  const top = a.top + 12; // leaves room for the pointer between the arrow and the card
   const cardW = width - SIDE * 2;
-  const caretX = Math.max(26, Math.min(cardW - 26, anchor.cx - SIDE)); // the pointer sits right under the arrow
+  const caretX = Math.max(26, Math.min(cardW - 26, a.cx - SIDE)); // the pointer sits right under the arrow
   const scale = prog.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] });
   const slide = prog.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] });
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+    <View style={StyleSheet.absoluteFill} pointerEvents={open ? 'box-none' : 'none'}>
       {/* Nothing is dimmed or blurred. This invisible layer under the calendar only catches a tap outside it (the header stays tappable). */}
-      <Pressable style={[s.outside, { top }]} onPress={onClose} accessibilityLabel="Close calendar" testID="calendar-outside" />
+      <Pressable style={[s.outside, { top }]} onPress={onClose} accessibilityLabel="Close calendar" testID="calendar-outside" pointerEvents={open ? 'auto' : 'none'} />
       <Animated.View
-        style={[s.pop, { top, left: SIDE, width: cardW, opacity: prog, transform: [{ translateY: slide }, { scale }], transformOrigin: `${caretX}px 0px` } as any]}
+        style={[s.pop, { top, left: SIDE, width: cardW, opacity: prog.interpolate({ inputRange: [0, 1], outputRange: [0.004, 1] }), transform: [{ translateY: slide }, { scale }], transformOrigin: `${caretX}px 0px` } as any]}
         testID="calendar-drop"
       >
         {/* the pointer: a small rounded diamond whose top half stands out above the card, centred under the arrow */}
         <View style={[s.caret, { left: caretX - CARET / 2 }]} testID="calendar-caret" pointerEvents="none">
-          <LiquidGlass radius={4} variant="regular" colorScheme="light" fallbackColor="rgba(255,255,255,0.82)" style={StyleSheet.absoluteFill} />
+          <LiquidGlass radius={4} variant="regular" colorScheme="light" tintColor={GLASS_TINT} fallbackColor="rgba(255,255,255,0.82)" style={StyleSheet.absoluteFill} />
         </View>
         <View style={s.card}>
           {/* The EXACT Liquid Glass of the tab bar (components/GlassTabBar.tsx): the same component, variant "regular", colour scheme "light" and
               fallback colour. No white base, no tint, no frost: what is behind is softened by the glass itself. */}
-          <LiquidGlass radius={28} variant="regular" colorScheme="light" fallbackColor="rgba(255,255,255,0.82)" style={StyleSheet.absoluteFill} pointerEvents="none" />
+          <LiquidGlass radius={28} variant="regular" colorScheme="light" tintColor={GLASS_TINT} fallbackColor="rgba(255,255,255,0.82)" style={StyleSheet.absoluteFill} pointerEvents="none" />
         <View style={s.inner}>
           <View style={s.head}>
             <View>
@@ -121,9 +124,9 @@ const s = StyleSheet.create({
   row: { flexDirection: 'row' },
   wd: { flex: 1, textAlign: 'center', fontFamily: SYS, fontSize: 12, fontWeight: '600', color: MUTED, paddingVertical: 5 },
   cell: { flex: 1, height: 46, alignItems: 'center', justifyContent: 'center' },
-  dayWrap: { width: 38, height: 40, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  dayWrap: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   todayCircle: { backgroundColor: INK },
   day: { fontFamily: SYS, fontSize: 17, fontWeight: '500', color: INK },
   todayText: { color: '#fff', fontWeight: '700' },
-  dot: { width: 5, height: 5, borderRadius: 2.5, marginTop: 2 },
+  dot: { position: 'absolute', bottom: 3, width: 5, height: 5, borderRadius: 2.5 },
 });

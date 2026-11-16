@@ -87,6 +87,10 @@ const connectMusicInject = new Function('dcScaleFitJs', ts.transpileModule(music
   check('9: tick "Don\'t show this page again" (the box turns dark), then Continue posts musicContinue:1: the app then stores the flag and never shows the screen again', boxBg === 'rgb(17, 17, 20)' && m1.msgs.includes('musicContinue:1'), JSON.stringify([boxBg, m1.msgs]));
   await m1.p.close();
   check('10: the music screen is an overlay above the workout screen, which is already mounted and loading the demo; Continue fades the overlay away (180ms) instead of swapping one web view for the other', /function ConnectMusicOverlay/.test(run) && /musicGate === 'show' && \(\s*<ConnectMusicOverlay/.test(run) && /MUSIC_FADE_MS = 180/.test(run) && /backgroundColor: '#ffffff', opacity: fade, zIndex: 100/.test(run) && !/return \(\s*<ConnectMusicWebView/.test(run));
+  // 5 (round 6): the dark blank before the white music screen
+  const MG = require('../lib/musicGate.ts');
+  check('5: the stored the do-not-show-again tick answer is remembered in memory (read at app start), so the workout screen knows it on its first frame', MG.getMusicSkipCache() === null && (MG.setMusicSkipCache(true), MG.getMusicSkipCache() === true) && (MG.setMusicSkipCache(false), MG.getMusicSkipCache() === false) && /setMusicSkipCache\(v === '1'\)/.test(fs.readFileSync(path.join(ROOT, 'app', '_layout.tsx'), 'utf8')));
+  check('5: while the answer is still being read the workout screen draws WHITE (it drew nothing: the dark stack background, then the white music screen = a dark-to-white flash on arrival); and with "skip" remembered it goes straight to the demo (no white at all)', /musicGate === 'loading'\) return <View style=\{\{ flex: 1, backgroundColor: '#ffffff' \}\}/.test(run) && /getMusicSkipCache\(\) === true \? 'done' : 'loading'/.test(run));
   // ───────────── 10: the demo ─────────────
   const exId = 'curl', cues = ['Keep your elbows pinned to your sides', 'Curl up without swinging', 'Lower slowly, do not drop it'];
   const data = demoData({ exerciseId: exId, exName: 'Bicep Curl', sets: 3, reps: 12, stepIndex: 2, stepTotal: 5, cues, skipPref: true });

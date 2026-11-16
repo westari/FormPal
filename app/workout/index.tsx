@@ -79,7 +79,7 @@ function ExCard({ name, sets, reps, onEdit }: { name: string; sets: number; reps
         <Text style={s.exMeta} numberOfLines={1}>{plural(sets, 'set')} · {plural(reps, 'rep')}</Text>
       </View>
       <Pressable hitSlop={14} onPress={onEdit} accessibilityRole="button" accessibilityLabel={`Edit sets and reps for ${name}`}>
-        <SymbolView name="pencil" size={16} weight="semibold" tintColor={INK} type="monochrome" style={s.pencil} />
+        <SymbolView name="pencil" size={20} weight="regular" tintColor={INK} type="monochrome" style={s.pencil} />
       </Pressable>
     </View>
   );
@@ -280,7 +280,7 @@ const s = StyleSheet.create({
   cardText: { flex: 1, marginLeft: 14, gap: 3 },
   exName: { fontFamily: FONT.displayBold, fontSize: 16, lineHeight: 20, letterSpacing: -0.2, color: INK },
   exMeta: { fontFamily: FONT.display, fontSize: 13.5, lineHeight: 17, color: SUB },
-  pencil: { width: 16, height: 16, marginLeft: 8 },
+  pencil: { width: 20, height: 20, marginLeft: 8 },
 
   sheetBack: { backgroundColor: 'rgba(17,17,20,0.35)' },
   sheet: {

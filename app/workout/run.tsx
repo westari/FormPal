@@ -47,7 +47,7 @@ import { getExerciseDef } from '../../constants/exercises';
 import { getDemoCues } from '../../lib/demoCues';
 import { demoBeforeJs, demoData } from '../../lib/demoScreen';
 import { demoTimeline } from '../../lib/demoVideos';
-import { decideMusicGate } from '../../lib/musicGate';
+import { decideMusicGate, getMusicSkipCache, setMusicSkipCache } from '../../lib/musicGate';
 import { prefetchWorkoutRecap } from '../../lib/recapPrefetch';
 import { postLag, postLagStart } from '../../lib/postLag';
 import { useKeepAwake } from 'expo-keep-awake';
@@ -404,7 +404,7 @@ export default function WorkoutRunScreen() {
   // ahead of the very first exercise. 'loading' until the persisted
   // dismiss flag has been checked, so it never flashes on screen for
   // someone who already dismissed it for good.
-  const [musicGate, setMusicGate] = useState<'loading' | 'show' | 'done'>('loading');
+  const [musicGate, setMusicGate] = useState<'loading' | 'show' | 'done'>(getMusicSkipCache() === true ? 'done' : 'loading');
   // Two web views used to be created at the same moment on arrival (the music page and the demo), sharing one web engine and the JS thread
   // with the screen change: that was the glitch. The demo is now created only AFTER the music page has drawn (or at once when there is no
   // music screen), and the overlay leaves only when the demo has drawn.
@@ -423,6 +423,7 @@ export default function WorkoutRunScreen() {
     if (!session || session.currentIndex !== 0) { setMusicGate('done'); return; }
     AsyncStorage.getItem(SKIP_MUSIC_KEY)
       .then((skip) => {
+        setMusicSkipCache(skip === '1');
         if (!decideMusicGate(skip)) { setMusicGate('done'); return; }
         if (__DEV__) console.log('[MUSIC] screen shown (until "Don\'t show this page again" is ticked)');
         setMusicGate('show');
@@ -654,7 +655,8 @@ export default function WorkoutRunScreen() {
   // Gate on the connect-music screen before anything else in the workout
   // — only reachable with musicGate === 'show' on the first exercise
   // (session.currentIndex === 0), per the effect above.
-  if (musicGate === 'loading') return null;
+  // (white, not nothing: the music screen is white, and "nothing" was the dark stack background: a dark flash on arrival)
+  if (musicGate === 'loading') return <View style={{ flex: 1, backgroundColor: '#ffffff' }} testID="music-loading" />;
 
   const totalEx     = session.workout.exercises.length;
   const doneCount   = session.currentIndex;

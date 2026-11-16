@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
  * scripts/test-log-saved.js
- * Log a session: after Save a short "Session logged" check shows (success haptic) BEFORE Today's progress opens.
+ * Log a session: after Save the done screen ("Session logged", Ari's design via components/DoneHost.tsx) shows BEFORE Today's progress opens.
  * Source order check (React Native can't run under node); the phone log proves it live:
- * "[LOG-SESSION] saved N exercises - showing the Session logged check", then "[LOG-SESSION] check done - opening ..." about 1s later.
+ * "[LOG-SESSION] saved N exercises - showing the done screen", then "[LOG-SESSION] done screen finished - opening ..." after Continue.
+ * (The look and the words of the done screen are tested in scripts/test-done-screen.js.)
  */
 const fs = require('fs');
 const path = require('path');
@@ -11,9 +12,10 @@ let failed = 0;
 const check = (name, ok, detail) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  -> ' + detail : ''}`); if (!ok) failed++; };
 const ls = fs.readFileSync(path.join(__dirname, '..', 'app/log-session.tsx'), 'utf8').replace(/\r\n/g, '\n');
 const save = ls.slice(ls.indexOf('const save = useCallback'), ls.indexOf('const onMessage'));
-check('Save writes the session log FIRST, then plays the success haptic and shows the check', save.indexOf('await appendSessions') > 0 && save.indexOf('await appendSessions') < save.indexOf('hapticSuccess()') && save.indexOf('hapticSuccess()') < save.indexOf('setLoggedTs(ts)'));
-check('Save itself no longer opens Today\'s progress (that happens only after the check)', !/router\.replace/.test(save));
-check('the check says "Session logged" and then opens Today\'s progress for that session (mode logged, its ts)', ls.includes('<SavedCheck text="Session logged" onDone={onLoggedDone} />') && /router\.replace\(\{ pathname: '\/recap' as any, params: \{ mode: 'logged', ts: String\(loggedTs\) \} \}\)/.test(ls));
+check('Save writes the session log FIRST, then reads the week, then shows the done screen', save.indexOf('await appendSessions') > 0 && save.indexOf('await appendSessions') < save.indexOf('await currentWeek()') && save.indexOf('await currentWeek()') < save.indexOf('showDone('));
+check('Save itself does not open Today\'s progress (that happens only when Continue is tapped)', !/router\.replace/.test(save.slice(0, save.indexOf('onContinue'))));
+check('the done screen says "Session logged" with the real exercises, reps and week, and Continue opens Today\'s progress for that session (mode logged, its ts)', /DONE_TITLES\.logged/.test(save) && /loggedDoneLine\(/.test(save) && /router\.replace\(\{ pathname: '\/recap' as any, params: \{ mode: 'logged', ts: String\(ts\) \} \}\)/.test(save));
 check('a second tap while saving does nothing', save.includes('if (saving.current) return;'));
-check('log lines prove it on the phone', ls.includes('[LOG-SESSION] saved') && ls.includes('[LOG-SESSION] check done'));
+check('the success haptic is the done screen\'s, one only', !/hapticSuccess\(\)/.test(save));
+check('log lines prove it on the phone', ls.includes('[LOG-SESSION] saved') && ls.includes('[LOG-SESSION] done screen finished'));
 console.log(failed ? `\n${failed} FAILED` : '\nall passed'); process.exit(failed ? 1 : 0);

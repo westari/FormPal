@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { CAMERA_TIPS_KEY, cameraTipsRoute } from '../lib/cameraTips';
 import {
   View, Text, StyleSheet, TouchableOpacity, Platform, ScrollView,
   Animated, PanResponder, Image, TextInput, Pressable, Easing, KeyboardAvoidingView, Alert, Dimensions,
@@ -3607,7 +3608,9 @@ export default function OnboardingScreen() {
   const finishOnboarding = async () => {
     haptic(Haptics.ImpactFeedbackStyle.Medium);
     await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
-    router.replace('/(tabs)');
+    // "Quick workout tips" (Ari's design) once, right after onboarding; then Home
+    const tipsSeen = await AsyncStorage.getItem(CAMERA_TIPS_KEY).catch(() => null);
+    router.replace(cameraTipsRoute(tipsSeen) as any);
   };
 
   // ── WELCOME — Cal-AI style: white screen, a small floating phone mock

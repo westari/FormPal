@@ -255,20 +255,12 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
             var hadAny = (d.weight || []).filter(function (x) { return x.d !== key; }).length > 0;
             d.weight = (d.weight || []).filter(function (x) { return x.d !== key; })
               .concat([{ d: key, w: v }]).sort(function (a, b) { return a.d < b.d ? -1 : 1; });
-            post({ type: 'logWeight', dateKey: key, weightLb: v });
-            if (window.__hapticClaim) window.__hapticClaim('success'); // weight logged: the success haptic replaces the Submit press's
-            // The graph updates behind; a short "weight logged" moment shows the new number and the change, then it
-            // fades away onto the updated graph.
-            window.__athltDone = { v: v, delta: prev ? Math.round((v - prev.w) * 10) / 10 : null, first: !hadAny };
-            var finish = function () {
-              if (!window.__athltDone) return;
-              window.__athltDone = null;
-              window.__athltEditing = false;
-              self.setState({ weigh: false, logged: true, wIn: '', dateOpen: false });
-            };
-            window.__athltDoneEnd = finish;
-            self.setState({ wDoneAt: Date.now() });
-            setTimeout(finish, 2100);
+            // prevLb: the weight before this date (for "down 3.7 lb since last time" on the done screen the app now shows)
+            post({ type: 'logWeight', dateKey: key, weightLb: v, prevLb: prev ? prev.w : null });
+            // The sheet closes and the graph updates behind. The "weight logged" moment is now the app's one done screen
+            // (components/DoneHost.tsx, Ari's design), shown by the app when this message arrives.
+            window.__athltEditing = false;
+            self.setState({ weigh: false, logged: false, wIn: '', dateOpen: false });
           };
           // far from the last weight: ask first
           var daysSince = ref ? Math.abs(parseKey(key).getTime() - parseKey(ref.d).getTime()) / DAY : 0;

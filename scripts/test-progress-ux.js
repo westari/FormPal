@@ -110,11 +110,11 @@ const png = (c) => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http:
   h0 = hz().length;
   await submitTap();
   await p.waitForTimeout(700);
-  check('13 haptics: Submit that saves the weight is ONE success haptic (it replaces the Submit press own)', hz().slice(h0).join() === 'success', hz().slice(h0).join());
+  check('13 haptics: the page plays no success haptic itself on Submit (the app plays the one success with the done screen)', !hz().slice(h0).includes('success'), hz().slice(h0).join());
   const lg = await p.evaluate(() => { const e = document.getElementById('__athlt_logged'); return e ? { text: e.innerText.replace(/\s+/g, ' ').trim(), sheet: !!document.querySelector('#dc-root div[style*="z-index: 60"]') } : null; });
   console.log('      moment:', JSON.stringify(lg));
-  check('14. After Submit a "weight logged" moment shows the NEW number and the change since last time', lg && /Weight logged/.test(lg.text) && /178\.4/.test(lg.text) && /Down 3\.7 lb since last time/.test(lg.text), lg && lg.text);
   const post = msgs.filter(m => m.type === 'logWeight').pop();
+  check('14. After Submit the page shows no moment of its own (the app done screen "Weight logged" replaces it); the message carries the weight before this one (prevLb 182.1) for "down 3.7 lb since last time"', !lg && post.prevLb === 182.1, JSON.stringify(post));
   check('14. The weight was saved (sent to the app once)', msgs.filter(m => m.type === 'logWeight').length === posts0 + 1 && post.weightLb === 178.4, JSON.stringify(post));
   await shot('ux_weight_logged');
   await p.waitForTimeout(2200);
@@ -184,7 +184,7 @@ const png = (c) => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http:
   const nPosts = msgs.filter(m => m.type === 'logWeight').length;
   await submitTap(); await p.waitForTimeout(800);
   const lg2 = await p.evaluate(() => { const e = document.getElementById('__athlt_logged'); return e ? e.innerText.replace(/\s+/g, ' ').trim() : null; });
-  check('3. Saving the edit shows the new number and REPLACES today\'s entry (one send, same date)', /179\.2/.test(lg2 || '') && msgs.filter(m => m.type === 'logWeight').length === nPosts + 1 && msgs.filter(m => m.type === 'logWeight').pop().dateKey === post.dateKey, lg2);
+  check('3. Saving the edit REPLACES today\'s entry (one send, same date, new number 179.2)', !lg2 && msgs.filter(m => m.type === 'logWeight').pop().weightLb === 179.2 && msgs.filter(m => m.type === 'logWeight').length === nPosts + 1 && msgs.filter(m => m.type === 'logWeight').pop().dateKey === post.dateKey, lg2);
   // 4. it fades away: sample the overlay's opacity every frame after it starts leaving
   await p.waitForTimeout(1050);
   await p.evaluate(() => window.__probe(() => { const e = document.getElementById('__athlt_logged'); return { has: !!e, op: e ? parseFloat(getComputedStyle(e).opacity) : -1, sheet: !!document.querySelector('#dc-root div[style*="z-index: 60"]') }; }));
@@ -193,7 +193,7 @@ const png = (c) => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http:
   const ops = fr.filter(r => r.has).map(r => r.op);
   const mid = ops.filter(o => o > 0.05 && o < 0.95).length;
   console.log('      fade frames: overlay opacity by frame', ops.map(o => o.toFixed(2)).join(' ').slice(0, 160));
-  check('4. After the moment it FADES back to Progress over several frames (not one jump), and is gone at the end', mid >= 3 && !fr[fr.length - 1].has && !fr[fr.length - 1].sheet, `${mid} in-between frames`);
+  check('4. (page moment gone) the sheet is closed and no overlay is left at the end', !fr[fr.length - 1].has && !fr[fr.length - 1].sheet, `${mid} in-between frames`);
   const same = await p.evaluate(() => (window.__athltData.weight || []).filter(w => { const t = new Date(); return w.d === t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0'); }).map(w => w.w));
   check('3. Only ONE entry exists for today and it is the edited one', same.length === 1 && same[0] === 179.2, JSON.stringify(same));
 
@@ -228,7 +228,7 @@ const png = (c) => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http:
   await p.waitForTimeout(200);
   const w1 = msgs.filter(m => m.type === 'haptic').length;
   await submitTap(); await p.waitForTimeout(500);
-  check('2. A normal change (179.2 to 180) does not ask', !(await p.evaluate(() => document.getElementById('__athlt_confirm'))) && msgs.filter(m => m.type === 'logWeight').length === np + 1 && msgs.filter(m => m.type === 'haptic').slice(w1).map(m => m.kind).join() === 'success');
+  check('2. A normal change (179.2 to 180) does not ask', !(await p.evaluate(() => document.getElementById('__athlt_confirm'))) && msgs.filter(m => m.type === 'logWeight').length === np + 1 && !msgs.filter(m => m.type === 'haptic').slice(w1).some(m => m.kind === 'success'));
   await p.waitForTimeout(2600);
   // a far weight confirmed with "Yes" is saved
   await tapAt(`() => [...document.querySelectorAll('#dc-root a')].find(a => /Edit today's weight/.test(a.innerText))`);
@@ -237,7 +237,7 @@ const png = (c) => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http:
   for (const k of ['2', '0']) await key(k);
   await submitTap(); await p.waitForTimeout(400);
   await tapAt(`() => document.querySelector('#__athlt_confirm [data-cf="yes"]')`); await p.waitForTimeout(500);
-  check('2. "Yes, it\'s right" saves the far weight (20 lb)', msgs.filter(m => m.type === 'logWeight').pop().weightLb === 20 && !!(await p.evaluate(() => document.getElementById('__athlt_logged'))));
+  check('2. "Yes, it\'s right" saves the far weight (20 lb)', msgs.filter(m => m.type === 'logWeight').pop().weightLb === 20);
   await p.waitForTimeout(2800);
 
   // ── 16 / 17. past workouts: the picture, and the tap ──

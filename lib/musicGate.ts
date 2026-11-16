@@ -9,3 +9,10 @@
 export function decideMusicGate(skip: string | null | undefined): boolean {
   return skip !== '1';
 }
+
+// The stored answer, remembered in memory so the workout screen knows it on its very first frame (see app/workout/run.tsx): without it the
+// screen drew NOTHING (a dark blank, the stack's own background) while it read the answer from storage, and then the white music screen
+// appeared: a dark-to-white flash on arrival. null = not read yet.
+let skipCache: boolean | null = null;
+export const getMusicSkipCache = (): boolean | null => skipCache;
+export const setMusicSkipCache = (v: boolean): void => { skipCache = v; };

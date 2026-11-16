@@ -43,8 +43,8 @@ check('DoneScreen has the three variants (small, workout, streak) and takes onFi
 console.log('\n--- 6, 7, 8. the flow ---');
 const rc = read('app/recap.tsx');
 const w = read('components/WarmSurfaces.tsx');
-check('FLOW #1: the workout ends -> DoneScreen "workout" (reps counting up) first, and the Workout complete page only shows after it (the warm pages wait: mayShow needs !doneIntro)', /useState\(!isHistoryMode && !isLoggedMode\)/.test(rc) && /<DoneScreen variant="workout"/.test(rc) && /const mayShow = \(isFocused \|\| finishing\) && !doneIntro && !streakDone;/.test(rc) && /reps=\{data\.totalReps\}/.test(rc));
-check('FLOW #2: Today\'s progress > Done -> DoneScreen "streak" with the REAL streak, then (photo prompt if due) home', /setStreakDone\(\{ count: Math\.max\(1, streakCount\), dest \}\)/.test(rc) && /<DoneScreen\s+variant="streak" streak=\{streakDone\.count\}/.test(rc) && /decideProgressPhotoVariant\(\)/.test(rc) && !/pathname: '\/streak-screen'/.test(rc));
+check('FLOW #1 (updated 2026-11-17): the workout ends -> the done screen (Ari design, components/DoneHost.tsx, "Workout complete" + a real line) first, and the Workout complete page only shows after it (the warm pages wait: mayShow needs !doneIntro)', /useState\(!isHistoryMode && !isLoggedMode && !isPractice\)/.test(rc) && /DONE_TITLES\.workout/.test(rc) && /const mayShow = \(isFocused \|\| finishing\) && !doneIntro;/.test(rc));
+check('FLOW #2 (updated 2026-11-17): Today progress > Done -> the streak page (with the This week row), then (photo prompt if due) home', /router\.replace\(\{ pathname: '\/streak-screen', params: \{ count: String\(streakCount\), dest \} \} as any\)/.test(rc));
 check('the old workout-complete haptic on the recap is gone (DoneScreen fires it when the check finishes: one haptic, not two)', !/celebrated\.current = true; hapticSuccess/.test(rc));
 check('Today\'s progress still fills up after Finish (armed when ready, played 260 ms after it shows)', /__mrPlay/.test(rc) && /warmKind !== 'ranks' \|\| !mayShow/.test(rc));
 check('WHITE WASH GONE: no wash view, no startWash, no WASH constants anywhere in the warm surfaces', !/wash/i.test(w.replace(/white wash[^\n]*/gi, '')) || !/washOn|startWash|WASH_/.test(w));
@@ -52,13 +52,12 @@ check('Today\'s progress back button is the normal Liquid Glass back button (Liq
 console.log('\n--- 4. practice ---');
 check('PRACTICE: a solo form check (mode formCheck, not a workout, not logged, not history) is practice', /const isPractice = mode === 'formCheck' && !isWorkoutMode && !isLoggedMode && !isHistoryMode;/.test(rc));
 check('PRACTICE: its session entry is saved with kind: \'practice\'', /\.\.\.\(isPractice \? \{ kind: 'practice' as const \} : \{\}\)/.test(rc));
-check('PRACTICE: the screen says "Form check complete" (DoneScreen AND the Workout complete page title)', /title=\{isPractice \? 'Form check complete' : 'Workout complete'\}/.test(rc) && rc.includes("title: (isPractice || (data.isHistory") && /practice: !repCounterOnly/.test(read('app/formcheck.tsx')) && /'Workout Complete': opts\.title/.test(read('lib/recapInject.ts')));
+check('PRACTICE (updated 2026-11-17): a form check gets NO done screen at the start (it comes after the rep feedback) and the Workout complete page title says "Form check complete"', /!isPractice\)/.test(rc) && rc.includes("isPractice ? 'Form check complete' : 'Workout complete'") || /Form check complete/.test(rc));
 check('PRACTICE HISTORY: opening a past form check from Progress -> Form checks says "Form check complete" (every entry is kind practice); a real workout keeps "Workout complete"', rc.includes("data.isHistory && data.entries.length > 0 && data.entries.every(e => e.kind === 'practice'))) ? 'Form check complete' : undefined"));
 {
   const rfb = read('app/rep-feedback.tsx');
-  check("PRACTICE: Finish on the rep feedback shows the short DoneScreen (small variant, \"Nice work\") FIRST, then goes HOME once (dismissAll when it finishes), behind a leaving guard; not back to the recap (the 2026-11-15 loop), no Today's progress, no streak",
-    rc.includes("practice: isPractice ? '1' : ''") && /if \(isPractice\) \{[\s\S]{0,400}setPracticeDone\(true\);\s*return;/.test(rfb) && rfb.includes('<DoneScreen variant="small" title="Nice work" onFinish={() => router.dismissAll()} />') && (rfb.match(/router\.dismissAll\(\)/g) || []).length === 1 && rfb.includes('if (leaving.current) return;') && !rc.includes('practice, straight home')
-    && rc.includes("if (isPractice) { router.replace('/(tabs)/' as any); return; }") && rc.includes("if (!isHistoryMode && !isPractice) warmWant('ranks', true)"));
+  check('PRACTICE (updated 2026-11-17): Finish on the rep feedback shows the done screen ("Form check complete" and this form check numbers, Ari design) FIRST, then goes HOME once (dismissAll on Continue), behind a leaving guard; not back to the recap, no Today progress, no streak', rc.includes("practice: isPractice ? '1' : ''") && /if \(isPractice\) \{[\s\S]{0,1200}setPracticeDone\(true\);[\s\S]{0,900}return;/.test(rfb) && /DONE_TITLES\.formCheck/.test(rfb) && (rfb.match(/router\.dismissAll\(\)/g) || []).length === 1
+    && rc.includes("if (isPractice) { router.replace('/(tabs)/' as any); return; }") || /leaveToTabs\(router, dest\)/.test(rc)) && rc.includes("if (!isHistoryMode && !isPractice) warmWant('ranks', true)");
 }
 
 // the data rules, run for real with a fake storage

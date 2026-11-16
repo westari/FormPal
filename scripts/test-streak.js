@@ -43,7 +43,7 @@ check('the workout flow\'s own count wins if the session is not on disk yet (3, 
   await page.waitForTimeout(1500);
   const r = await page.evaluate(() => {
     const t = (sel) => (document.querySelector('#dc-root ' + sel) || {}).textContent;
-    const cs = [...document.querySelectorAll('#dc-root div[style*="width: 30px"][style*="height: 30px"]')];
+    const cs = [...document.querySelectorAll('#dc-root div[style*="width: 30px"][style*="height: 30px"]')].filter(c => !c.closest('[data-sk-star]') && !c.hasAttribute('data-sk-star'));
     return {
       head: t('div[style*="font-size: 29px"]'), sub: t('div[style*="font-size: 16px"]'),
       days: cs.map(c => ({ on: c.getAttribute('data-streak-day'), bg: getComputedStyle(c).backgroundImage.slice(0, 22), check: !!c.querySelector('svg'), w: Math.round(c.getBoundingClientRect().width) })),

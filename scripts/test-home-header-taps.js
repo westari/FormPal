@@ -57,7 +57,7 @@ const check = (n, ok, d) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${d ? ' 
   const src = fs.readFileSync(path.join(__dirname, '..', 'app', '(tabs)', 'index.tsx'), 'utf8');
   check('app: Home toggles the calendar on "calendar" (taps again close it) and opens the streak screen on "streak"', /msg\.type === 'calendar'\) \{[\s\S]*?setCalOpen\(o => !o\)/.test(src) && /msg\.type === 'streak'\) \{ router\.push\(\{ pathname: '\/streak-screen'/.test(src));
   const cal = fs.readFileSync(path.join(__dirname, '..', 'components', 'CalendarSheet.tsx'), 'utf8');
-  check('5: the calendar is a real Liquid Glass card dropped DOWN from the header at the arrow (not a Modal sheet from the bottom)', /<LiquidGlass radius=\{28\}/.test(cal) && !/<Modal/.test(cal) && /transformOrigin/.test(cal) && /anchor\.top/.test(cal) && /anchor\.cx/.test(cal));
+  check('5: the calendar is a real Liquid Glass card dropped DOWN from the header at the arrow (not a Modal sheet from the bottom)', /<LiquidGlass radius=\{28\}/.test(cal) && !/<Modal/.test(cal) && /transformOrigin/.test(cal) && /a\.top \+ 12/.test(cal) && /a\.cx - SIDE/.test(cal));
   check('5: the arrow flips with the calendar (page-side __fpChevron is called when it opens and closes)', /__fpChevron && window\.__fpChevron\(\$\{calOpen\}\)/.test(src));
   console.log(failed ? `${failed} FAILED` : 'ALL PASSED'); process.exit(failed ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

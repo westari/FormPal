@@ -11,7 +11,9 @@ import { useRouter } from 'expo-router';
 import { EXERCISE_CATALOG } from '../constants/exercises';
 import { loadPlan, savePlan } from '../lib/planStorage';
 import { hapticError, hapticSuccess } from '../lib/haptics';
-import SavedCheck from '../components/SavedCheck';
+import { showDone } from '../lib/doneStore';
+import { DONE_TITLES, createdDoneLine } from '../lib/doneInfo';
+import { workoutMinutes } from '../lib/trainData';
 import DesignScreen, { type DesignMessage } from '../components/DesignScreen';
 import {
   buildCatalog, createWorkoutBeforeJs, createWorkoutData, athltSetDataJs, workoutFromPage,
@@ -24,8 +26,6 @@ export default function CreateWorkoutScreen() {
   const router = useRouter();
   const catalog = useMemo(() => buildCatalog(EXERCISE_CATALOG as any), []);
   const dataJs = useMemo(() => athltSetDataJs(createWorkoutData(catalog)), [catalog]);
-  // after a successful Save: a short check + "Workout saved" before the screen leaves
-  const [saved, setSaved] = useState(false);
   const saving = useRef(false);
 
   const save = useCallback(async (msg: DesignMessage) => {
@@ -39,9 +39,13 @@ export default function CreateWorkoutScreen() {
       const next = [...plan.workouts];
       next.splice(plan.currentWorkoutIndex, 0, workout);
       await savePlan({ ...plan, workouts: next });
-      console.log('[CREATE] workout saved: "' + workout.splitLabel + '" with ' + workout.exercises.length + ' exercises - showing the Workout saved check');
-      hapticSuccess();
-      setSaved(true); // the check shows, then onSavedDone leaves the screen
+      console.log('[CREATE] workout saved: "' + workout.splitLabel + '" with ' + workout.exercises.length + ' exercises - showing the done screen');
+      // the done screen (Ari's design, components/DoneHost.tsx): "Workout created" and what was created; Continue leaves this screen
+      showDone({
+        title: DONE_TITLES.created,
+        subtitle: createdDoneLine({ name: workout.splitLabel, exercises: workout.exercises.length, minutes: workoutMinutes(workout) }),
+        onContinue: () => { console.log('[CREATE] leaving after the done screen'); router.back(); },
+      });
     } catch {
       saving.current = false;
       hapticError(); Alert.alert('Something went wrong', 'Could not save this workout. Try again.');
@@ -53,12 +57,9 @@ export default function CreateWorkoutScreen() {
     else if (m.type === 'save') void save(m);
   }, [router, save]);
 
-  const onSavedDone = useCallback(() => { console.log('[CREATE] leaving after the saved check'); router.back(); }, [router]);
-
   return (
     <>
       <DesignScreen name="create-workout" source={SOURCE} beforeJs={BEFORE} dataJs={dataJs} onMessage={onMessage} />
-      {saved ? <SavedCheck text="Workout saved" onDone={onSavedDone} /> : null}
     </>
   );
 }

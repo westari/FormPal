@@ -70,7 +70,9 @@ import { Muscle, type ExerciseId } from '../constants/exercises';
 import { computeOverallStanding, MUSCLE_LABELS, MUSCLE_ICON_SOURCES } from '../components/MuscleTierMap';
 import { Asset } from 'expo-asset';
 import { hapticSuccess } from '../lib/haptics';
-import DoneScreen from '../components/DoneScreen';
+import { showDone } from '../lib/doneStore';
+import { DONE_TITLES, workoutDoneLine, isNewBestForm } from '../lib/doneInfo';
+import { currentWeek } from '../lib/doneInfoStore';
 import { decideProgressPhotoVariant } from '../lib/postWorkoutFlow';
 import { buildMuscleRanksPayload, workedMuscles, type MuscleRanksPayload } from '../lib/muscleRanksData';
 import { tierDataUri } from '../lib/rankImages';
@@ -293,10 +295,34 @@ export default function RecapScreen() {
   const [view, setView] = useState<'summary' | 'allsets' | 'ranks'>(isLoggedMode ? 'ranks' : 'summary');
   // "Finish review" on rep feedback: show the muscle page at once, while that screen is still on top.
   const [finishing, setFinishing] = useState(false);
-  // DONE SCREENS (components/DoneScreen.tsx): #1 when the workout ends ("Workout complete" / "Form check complete" with the reps counting up), #2 after
+  // DONE SCREENS (components/DoneHost.tsx): #1 when the workout ends ("Workout complete" / "Form check complete" with the reps counting up), #2 after
   // Today's progress > Done (the streak). The warm pages (drawn above the navigator) only show once the screen on top is gone.
-  const [doneIntro, setDoneIntro] = useState(!isHistoryMode && !isLoggedMode);
-  const [streakDone, setStreakDone] = useState<{ count: number; dest: string } | null>(null);
+  // The done screen (Ari's design, components/DoneHost.tsx) shows when a real WORKOUT ends. A form check is practice: its done screen comes AFTER
+  // the rep feedback (app/rep-feedback.tsx), not here.
+  const [doneIntro, setDoneIntro] = useState(!isHistoryMode && !isLoggedMode && !isPractice);
+  const doneShown = useRef(false);
+  useEffect(() => {
+    if (!doneIntro || doneShown.current || !data) return;
+    doneShown.current = true;
+    let cancelled = false;
+    (async () => {
+      // the real line under the title: reps and clean reps, time, a new best, or how close the week is to the goal
+      let newBestPct: number | null = null, week: { count: number; goal: number } | null = null;
+      try {
+        await persistRef.current; // (this workout is saved first, so the week count includes it)
+        week = await currentWeek();
+        const nb = isNewBestForm(await getAllSessions(), data.ts);
+        if (nb.best) newBestPct = nb.pct;
+      } catch { /* the line still has the reps */ }
+      if (cancelled) return;
+      showDone({
+        title: DONE_TITLES.workout,
+        subtitle: workoutDoneLine({ reps: data.totalReps, goodReps: data.totalGoodReps, scored: data.hasFormData !== false && data.pct > 0, durationSec: data.durationSec, newBestPct, week }),
+        onContinue: () => setDoneIntro(false),
+      });
+    })();
+    return () => { cancelled = true; };
+  }, [doneIntro, data]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     repFeedbackSignal.onFinishReview = () => {
       postLag('recap: finish review -> switching to the muscle page'); setView('ranks'); setFinishing(true);
@@ -507,9 +533,9 @@ export default function RecapScreen() {
     const streakCount = calcStreak(sessions);
     const lastTs = sessions.length > 0 ? sessions[sessions.length - 1].ts : Date.now();
     saveStreakToCloud(streakCount, lastTs).catch(() => {});
-    // Great job #2: the streak Done screen (flame, "3-day streak"), then the progress-photo prompt if one is due, then home
-    setStreakDone({ count: Math.max(1, streakCount), dest });
-  }, [isWorkoutMode, completeSession]);
+    // Done -> the streak page (it carries the "This week" row; the progress-photo prompt follows it when one is due) -> Home
+    router.replace({ pathname: '/streak-screen', params: { count: String(streakCount), dest } } as any);
+  }, [isWorkoutMode, completeSession, router]);
 
   // Real per-rep what/fix text (repFeedbackText — same function this file
   // already used), only meaningful when there's a real video to scrub to.
@@ -716,7 +742,7 @@ export default function RecapScreen() {
   useEffect(() => { if (allSetsDataJsStr) warmPrepare('allsets', allSetsDataJsStr); }, [allSetsDataJsStr]);
   const warmKind: 'recap' | 'ranks' | 'allsets' | null =
     effectiveView === 'summary' ? 'recap' : effectiveView === 'ranks' ? 'ranks' : 'allsets';
-  const mayShow = (isFocused || finishing) && !doneIntro && !streakDone;
+  const mayShow = (isFocused || finishing) && !doneIntro;
   useLayoutEffect(() => {
     if (!warmKind || !mayShow) return;
     warmActivate(warmKind, { onMessage: (m) => onWebMsg.current(m) });
@@ -807,7 +833,7 @@ export default function RecapScreen() {
 
   return (
     <View style={[styles.root, isLoggedMode ? { backgroundColor: '#f2f2f6' } : null]}>
-      <StatusBar style={isLoggedMode || doneIntro || streakDone ? 'dark' : 'light'} />
+      <StatusBar style={isLoggedMode || doneIntro ? 'dark' : 'light'} />
       {/* Native video — a real AVPlayer, its own process, nothing to do
           with the WebView (see file header). Sits BEHIND the WebView;
           the summary WebView's own background goes transparent above so
@@ -842,21 +868,6 @@ export default function RecapScreen() {
           showing ALONGSIDE allsets' own, the literal duplicate reported.
           Removing it entirely rather than re-scoping it further, since no
           view actually needs it any more. */}
-      {/* Great job #1: the workout is done (or the form check). The reps count up; the Workout complete page appears when it finishes. */}
-      {doneIntro ? (
-        <DoneScreen variant="workout" title={isPractice ? 'Form check complete' : 'Workout complete'} reps={data.totalReps} onFinish={() => setDoneIntro(false)} />
-      ) : null}
-      {/* Great job #2: the streak. Then the progress photo prompt (if one is due) and home. */}
-      {streakDone ? (
-        <DoneScreen
-          variant="streak" streak={streakDone.count}
-          onFinish={async () => {
-            const variant = await decideProgressPhotoVariant();
-            if (variant) router.replace({ pathname: '/progress-photo-screen', params: { variant, dest: streakDone.dest } } as any);
-            else router.replace(streakDone.dest as any);
-          }}
-        />
-      ) : null}
     </View>
   );
 }

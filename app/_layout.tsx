@@ -8,6 +8,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { configureAudioSession } from '../lib/audioFeedback';
 import WarmSurfaces from '../components/WarmSurfaces';
 import DesignPrewarm from '../components/DesignPrewarm';
+import DoneHost from '../components/DoneHost';
+import { setMusicSkipCache } from '../lib/musicGate';
 import { usePlanStore } from '../store/planStore';
 import { installDevLogger } from '../lib/devLogger';
 import { installPressHaptics } from '../lib/haptics';
@@ -84,6 +86,8 @@ export default function RootLayout() {
 
   useEffect(() => { void pruneOldVideos(); }, []);
   useEffect(() => { void configureAudioSession(); }, []);
+  // the saved "Don't show the music screen again" answer is read at app start, so the workout screen knows it on its first frame
+  useEffect(() => { AsyncStorage.getItem('formpal_skip_connect_music').then(v => setMusicSkipCache(v === '1')).catch(() => {}); }, []);
   // the saved plan goes into the plan store at app start (Start workout reads the store; an empty store showed "No workout scheduled")
   useEffect(() => { void usePlanStore.getState().loadFromStorage().catch(() => {}); }, []);
 
@@ -119,6 +123,8 @@ export default function RootLayout() {
       <WarmSurfaces />
       {/* Warms the web engine for Create workout / My workouts / Log a session so they open without a blank wait. */}
       <DesignPrewarm />
+      {/* The one done screen (Ari's greatjobanimation.html), above every screen and the tab bar: components/DoneHost.tsx */}
+      <DoneHost />
     </SafeAreaProvider>
   );
 }

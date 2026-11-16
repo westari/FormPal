@@ -30,14 +30,15 @@ export const HOME_RINGS_JS = String.raw`
         // normal rounded card with its own spacing
         if (cue && !cue.hasAttribute('data-ring-cue')) {
           cue.setAttribute('data-ring-cue', '1');
-          cue.style.setProperty('margin', '14px 8px 0', 'important'); cue.style.setProperty('border-radius', '26px', 'important');
+          // (the original: margin -26px 8px 0, square top corners, 40px top padding: all of that only existed to tuck it under the week card)
+          cue.style.setProperty('margin', '14px 0 0', 'important'); cue.style.setProperty('border-radius', '26px', 'important'); cue.style.setProperty('padding', '18px', 'important');
         }
       }
     }
   }
   function tile(r){
     var col = COLORS[r.id] || COLORS.workouts;
-    return '<div data-ring="' + r.id + '" style="background:#ffffff;border-radius:24px;padding:12px 0 11px;display:flex;flex-direction:column;align-items:center;gap:7px;box-shadow:inset 0 1px 0 rgba(255,255,255,1),0 8px 18px -8px rgba(40,50,90,0.28),0 1px 3px -1px rgba(40,50,90,0.1);">'
+    return '<div data-ring="' + r.id + '" style="cursor:pointer;background:#ffffff;border-radius:24px;padding:12px 0 11px;display:flex;flex-direction:column;align-items:center;gap:7px;box-shadow:inset 0 1px 0 rgba(255,255,255,1),0 8px 18px -8px rgba(40,50,90,0.28),0 1px 3px -1px rgba(40,50,90,0.1);">'
       + '<div style="position:relative;width:66px;height:66px;">'
       + '<svg width="66" height="66" viewBox="0 0 66 66" style="display:block;transform:rotate(-90deg);">'
       + '<defs><linearGradient id="hr-' + r.id + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' + col[0] + '"/><stop offset="1" stop-color="' + col[1] + '"/></linearGradient></defs>'
@@ -76,6 +77,13 @@ export const HOME_RINGS_JS = String.raw`
       t.setAttribute('data-done', r.done ? '1' : '0');
     });
   }
+  // tap a ring: the app opens that goal in depth (this week by day, past weeks, what counts)
+  document.addEventListener('click', function(ev){
+    var t = ev.target; if (!t || !t.closest) return;
+    var tile = t.closest('[data-ring]'); if (!tile || !tile.closest('[data-home-rings]')) return;
+    ev.preventDefault(); ev.stopPropagation();
+    try { window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ring', id: tile.getAttribute('data-ring') })); } catch (e) {}
+  }, true);
   window.__homeRings = apply;
   apply();
   setInterval(apply, 400);

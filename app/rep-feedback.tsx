@@ -55,7 +55,8 @@ import { repFeedbackSignal } from '../lib/repFeedbackSignal';
 
 import { postLag } from '../lib/postLag';
 import { hapticFinish } from '../lib/haptics';
-import DoneScreen from '../components/DoneScreen';
+import { showDone } from '../lib/doneStore';
+import { DONE_TITLES, formCheckDoneLine } from '../lib/doneInfo';
 
 const SPEEDS = [0.5, 1, 1.5, 2];
 
@@ -264,10 +265,18 @@ export default function RepFeedbackScreen() {
       leaving.current = true;
       hapticFinish(); // the one strong haptic in the app: Heavy impact + Success
       if (isPractice) {
-        // A form check (practice) ends here: a short done screen (the DoneScreen small variant, a placeholder until Ari's own design), then HOME, once.
+        // A form check (practice) ends here: a short done screen (Ari's done screen, components/DoneHost.tsx), then HOME, once.
         // Not back to the recap (that is what looped), no Today's progress, no streak. The warm page is hidden first (it is drawn above the screens).
         warmDeactivate('repfeedback');
         setPracticeDone(true);
+        // the done screen (Ari's design, components/DoneHost.tsx): "Form check complete" and this form check's real numbers, then HOME
+        let evs: { good?: boolean }[] = [];
+        try { evs = repEventsParam ? JSON.parse(repEventsParam) : []; } catch { evs = []; }
+        showDone({
+          title: DONE_TITLES.formCheck,
+          subtitle: formCheckDoneLine({ exerciseName, reps: evs.length, goodReps: evs.filter(e => e && e.good).length }),
+          onContinue: () => router.dismissAll(),
+        });
         return;
       }
       // No waiting for the back transition: the muscle page is put on screen underneath right now and this
@@ -316,7 +325,6 @@ export default function RepFeedbackScreen() {
   return (
     <View style={styles.root}>
       <StatusBar style={practiceDone ? 'dark' : 'light'} />
-      {practiceDone ? <DoneScreen variant="small" title="Nice work" onFinish={() => router.dismissAll()} /> : null}
       {/* Native video — a real AVPlayer, its own process, nothing to do
           with the WebView (see file header). Sits BEHIND the WebView; the
           WebView's own background goes transparent above so this shows
