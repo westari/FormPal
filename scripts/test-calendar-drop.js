@@ -61,15 +61,24 @@ Module._load = function (r) {
   const m = await p.evaluate(() => {
     const card = document.querySelector('[data-testid="calendar-drop"]'); if (!card) return null;
     const r = card.getBoundingClientRect(), base = document.querySelector('[data-testid="calendar-base"]');
-    const bg = getComputedStyle(base).backgroundColor, a = bg.startsWith('rgba') ? +bg.split(',')[3] : 1;
+    const bg = getComputedStyle(base).backgroundColor, a = bg.startsWith('rgba') ? parseFloat(bg.split(',')[3]) : 1;
     // what is on top at the spots where the page's own text sits (the card must cover them)
     const spots = [[60, 232], [60, 330], [120, 420], [200, 480], [150, 500]].map(([x, y]) => { const el = document.elementFromPoint(x, y); return card.contains(el) || el === card; });
     const days = [...card.querySelectorAll('div')].filter((d) => /^\d{1,2}$/.test((d.textContent || '').trim()) && d.children.length === 0).length;
-    return { r: [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)], vw: innerWidth, vh: innerHeight, alpha: a, spots, days, text: card.innerText.replace(/\n+/g, ' | ').slice(0, 90), glassBelowBase: (() => { const kids = [...card.children]; return kids.indexOf(base) < kids.findIndex((k) => k.getAttribute('data-testid') === 'clear-glass'); })() };
+    return { r: [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)], vw: innerWidth, vh: innerHeight, alpha: a, spots, days, text: card.innerText.replace(/\n+/g, ' | ').slice(0, 90), glassBelowBase: (() => { const kids = [...base.parentElement.children]; return kids.indexOf(base) < kids.findIndex((k) => k.getAttribute('data-testid') === 'clear-glass'); })() };
   });
   console.log('      open:', JSON.stringify(m));
-  check('1: the calendar is drawn at phone size, inside the screen (14px each side), hanging just under the date (top ~211)', m && m.r[0] === 14 && m.r[2] === 362 && m.r[1] >= 205 && m.r[1] <= 215 && m.r[1] + m.r[3] < m.vh - 150, JSON.stringify(m && m.r));
-  check('1: a solid white base sits UNDER the glass, so the page cannot show through even if the glass is fully clear', m && m.alpha >= 0.99 && m.glassBelowBase, JSON.stringify(m && [m.alpha, m.glassBelowBase]));
+  check('1: the calendar is drawn at phone size, inside the screen (14px each side), hanging just under the date (top ~211)', m && m.r[0] === 14 && m.r[2] === 362 && m.r[1] >= 205 && m.r[1] <= 225 && m.r[1] + m.r[3] < m.vh - 150, JSON.stringify(m && m.r));
+  check('1: real Liquid Glass (the LiquidGlass component, frosted with a white tint) over a light base, nothing dimmed or blurred', m && m.glassBelowBase && m.alpha >= 0.7 && m.alpha < 0.95, JSON.stringify(m && [m.alpha, m.glassBelowBase]));
+  const pop = await p.evaluate(() => {
+    const card = document.querySelector('[data-testid="calendar-drop"]'), caret = document.querySelector('[data-testid="calendar-caret"]'), outside = document.querySelector('[data-testid="calendar-outside"]');
+    const cr = card.getBoundingClientRect(), kr = caret.getBoundingClientRect();
+    return { caretCx: Math.round(kr.left + kr.width / 2), caretTop: Math.round(kr.top), cardTop: Math.round(cr.top), outsideBg: getComputedStyle(outside).backgroundColor, outsideTop: Math.round(outside.getBoundingClientRect().top), dimmed: [...document.querySelectorAll('div')].filter((d) => /rgba\(17, 17, 20, 0\.[0-9]+\)/.test(getComputedStyle(d).backgroundColor) && d.getBoundingClientRect().height > 300).length };
+  });
+  check('1: a little pointer sits on the top edge, centred under the date arrow (x 296), with its tip above the card', Math.abs(pop.caretCx - 296) <= 2 && pop.caretTop < pop.cardTop, JSON.stringify(pop));
+  check('1: NO dim and NO blur on the rest of the screen: the layer that catches an outside tap is fully transparent and nothing big is tinted', /rgba\(0, 0, 0, 0\)|transparent/.test(pop.outsideBg) && pop.dimmed === 0, JSON.stringify(pop));
+  const src = fs.readFileSync(path.join(__dirname, '..', 'components', 'CalendarSheet.tsx'), 'utf8');
+  check('1: it opens and closes fast (about 200ms / 150ms) with the native driver', /CAL_OPEN_MS = 200/.test(src) && /CAL_CLOSE_MS = 150/.test(src) && !/useNativeDriver: false/.test(src) && !/<Modal/.test(src) && /@callstack|LiquidGlass/.test(src));
   check('1: the card (not the page) is what you touch and see at every spot where the page had text', m && m.spots.every(Boolean), JSON.stringify(m && m.spots));
   check('1: the month, "days trained" line and all 30 days of November are there', m && /\d+ days? trained|No workouts/.test(m.text) && m.days >= 28, m && m.text);
   await p.close();

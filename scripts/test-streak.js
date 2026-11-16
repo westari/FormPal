@@ -69,7 +69,9 @@ check('the workout flow\'s own count wins if the session is not on disk yet (3, 
     const a = tf(); await new Promise(r => setTimeout(r, 900)); const b = tf();
     return { same: JSON.stringify(a) === JSON.stringify(b), names: a.slice(2, 4), filter: a[4] };
   });
-  check('3: the fire does NOT move (no animation on either flame, same transform over time, no shadow filter)', still.same && still.names.every((n) => n === 'none') && still.filter === 'none', JSON.stringify(still));
+  check('4: the fire has only a very slight, gentle animation (sway under 2.5% / 1 degree, slow 3 to 5s cycles) on both flames', still.names.join() === 'sk-live-out,sk-live-in' && !still.same, JSON.stringify(still));
+  const sway = await page.evaluate(async () => { const out = document.querySelector('[data-vector-flame="out"]'); let lo = 9, hi = 0, sk = 0; for (let k = 0; k < 24; k++) { const m = getComputedStyle(out).transform.match(/matrix\(([^)]+)\)/); if (m) { const v = m[1].split(',').map(Number); lo = Math.min(lo, v[3]); hi = Math.max(hi, v[3]); sk = Math.max(sk, Math.abs(v[2])); } await new Promise((r) => setTimeout(r, 250)); } return { lo, hi, sk, dur: getComputedStyle(out).animationDuration }; });
+  check('4: ...measured over 6 seconds the outer flame never changes size by more than 2.5%', sway.hi - sway.lo > 0.003 && sway.hi <= 1.025 && sway.sk < 0.02, JSON.stringify(sway));
   // the stars: ~14, each with its own timing, all outside the flame, each fading in and out forever
   const stars = await page.evaluate(async () => {
     const els = [...document.querySelectorAll('[data-sk-star]')];
@@ -81,12 +83,13 @@ check('the workout flow\'s own count wins if the session is not on disk yet (3, 
     const oldSpark = [...document.querySelectorAll('#dc-root div[style*="sk-twinkle"], #dc-root div[style*="sk-ember"]')].filter((e) => e.getClientRects().length > 0 && !e.closest('[data-sk-stars]')).length;
     return { n: els.length, names: [...new Set(cs.map((c) => c.animationName))], iter: [...new Set(cs.map((c) => c.animationIterationCount))], durs: new Set(cs.map((c) => c.animationDuration)).size, delays: new Set(cs.map((c) => c.animationDelay)).size,
       outside: els.every((e) => { const [x, y] = centre(e); const dx = (x - 85) / 92, dy = (y - 104) / 108; return dx * dx + dy * dy > 0.85; }),
-      varies: ops[0].map((_, i) => ops.some((o) => Math.abs(o[i] - ops[0][i]) > 0.05)).filter(Boolean).length, sizes: new Set(els.map((e) => e.style.width)).size, oldSpark };
+      varies: ops[0].map((_, i) => ops.some((o) => Math.abs(o[i] - ops[0][i]) > 0.05)).filter(Boolean).length, sizes: new Set(els.map((e) => e.style.width)).size, minSize: Math.min(...els.map((e) => parseFloat(e.style.width))), maxSize: Math.max(...els.map((e) => parseFloat(e.style.width))), oldSpark };
   });
   console.log('      stars:', JSON.stringify(stars));
-  check('3: 12 to 16 small stars around the fire', stars.n >= 12 && stars.n <= 16, String(stars.n));
-  check('3: every star fades in and out forever (animation sk-star, infinite), each with its own duration and start time', stars.names.join() === 'sk-star' && stars.iter.join() === 'infinite' && stars.durs >= 8 && stars.delays >= 8, JSON.stringify(stars));
-  check('3: they are really fading (opacity changes over time on most stars), different sizes, none on top of the flame, the old 3 sparkles and embers are gone', stars.varies >= 8 && stars.sizes >= 4 && stars.outside && stars.oldSpark === 0, JSON.stringify(stars));
+  check('4: 6 to 8 sparkles around the fire (7)', stars.n >= 6 && stars.n <= 8, String(stars.n));
+  check('4: they are BIG: every sparkle is 20px or more on the 390-wide design (was 7 to 16), at least 6 different sizes up to 34px', stars.minSize >= 20 && stars.maxSize <= 34 && stars.sizes >= 4, JSON.stringify([stars.minSize, stars.maxSize, stars.sizes]));
+  check('3: every star fades in and out forever (animation sk-star, infinite), each with its own duration and start time', stars.names.join() === 'sk-star' && stars.iter.join() === 'infinite' && stars.durs >= 5 && stars.delays >= 5, JSON.stringify(stars));
+  check('3: they are really fading (opacity changes over time on most stars), different sizes, none on top of the flame, the old 3 sparkles and embers are gone', stars.varies >= 5 && stars.sizes >= 4 && stars.outside && stars.oldSpark === 0, JSON.stringify(stars));
   // a star comes back somewhere else after each fade
   const moved = await page.evaluate(async () => { const e = document.querySelector('[data-sk-star]'); const p0 = e.style.left + e.style.top; e.dispatchEvent(new Event('animationiteration')); const p1 = e.style.left + e.style.top; return p0 !== p1; });
   check('3: after a fade out the star returns at a new place', moved);
@@ -107,7 +110,7 @@ check('the workout flow\'s own count wins if the session is not on disk yet (3, 
   const f1 = await p2.evaluate(() => { const n = document.querySelector('[data-streak-num]'); const r = n.getBoundingClientRect(); return { fonts: document.fonts.status, scale: window.__dcCanvasScale, num: n.textContent, numTop: Math.round(r.top), numLeft: Math.round(r.left), head: document.querySelector('#dc-root div[style*="font-size: 29px"]').textContent, headFont: getComputedStyle(n).fontFamily.split(',')[0] }; });
   await p2.waitForTimeout(1500);
   const f2 = await p2.evaluate(() => { const n = document.querySelector('[data-streak-num]'); const r = n.getBoundingClientRect(); return { fonts: document.fonts.status, scale: window.__dcCanvasScale, num: n.textContent, numTop: Math.round(r.top), numLeft: Math.round(r.left), head: document.querySelector('#dc-root div[style*="font-size: 29px"]').textContent, headFont: getComputedStyle(n).fontFamily.split(',')[0] }; });
-  check('2: at the moment the page is revealed the fonts are loaded, the page is scaled to the screen, and the number, headline and their positions are exactly what they stay (no change afterwards)', f1.fonts === 'loaded' && f1.scale > 0 && JSON.stringify(f1) === JSON.stringify(f2) && f1.num === '2' && f1.head === 'Day 2 streak!', JSON.stringify(f1) + ' vs ' + JSON.stringify(f2));
+  check('2: at the moment the page is revealed the fonts are loaded, the page is scaled to the screen, and the number and headline are what they stay (the number only drifts with the slight sway of the flame, under 3px)', f1.fonts === 'loaded' && f1.scale > 0 && f1.num === f2.num && f1.head === f2.head && f1.scale === f2.scale && Math.abs(f1.numTop - f2.numTop) <= 3 && Math.abs(f1.numLeft - f2.numLeft) <= 3 && f1.num === '2' && f1.head === 'Day 2 streak!', JSON.stringify(f1) + ' vs ' + JSON.stringify(f2));
   await p2.close();
   await browser.close();
   console.log(failed ? `\n${failed} FAILED` : '\nall passed');

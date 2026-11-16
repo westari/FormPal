@@ -56,8 +56,8 @@ async function open(withClean, sess) {
   {
     const { browser, page } = await open(true, sessions);
     await page.screenshot({ path: path.join(ROOT, '.scratch', 'home-after.png') });
-    const week = await page.evaluate(() => { const e = [...document.querySelectorAll('div,span')].filter(d => /^\d+ of \d+ workouts$/.test((d.textContent || '').trim())); return e.length ? e[e.length - 1].textContent.trim() : null; });
-    check('the week line is the real count (8 sessions -> "8 of 4 workouts"; the sample text "2 of 4" is gone)', week === '8 of 4 workouts', week);
+    const week = await page.evaluate(() => { const e = [...document.querySelectorAll('div,span')].filter(d => /^\d+ of \d+ workouts?( · \+\d+ bonus)?$/.test((d.textContent || '').trim())); return e.length ? e[e.length - 1].textContent.trim() : null; });
+    check('the week line is the real count against the weekly goal (Monday to Sunday, capped at the goal, extras as a bonus; never "8 of 4"; the sample text "2 of 4" is gone)', !!week && !/^8 of 4/.test(week) && !/^[5-9] of 4/.test(week) && week !== '2 of 4 workouts', week);
     const scrollPad = await page.evaluate(() => { const sc = document.querySelector('[data-scroll]'); return sc ? parseFloat(getComputedStyle(sc).paddingBottom) : -1; });
     check('the page scrolls and its bottom clears the floating tab bar', scrollPad < 0 || scrollPad >= 34 + 49 + 24 - 1, scrollPad + 'px');
     await browser.close();

@@ -51,6 +51,8 @@ import { plannedMeta } from '../../lib/trainData';
 import { tabBarCover } from '../../lib/tabBarMetrics';
 import { TAB_HEADER_JS } from '../../lib/tabHeader';
 import CalendarSheet from '../../components/CalendarSheet';
+import { weekProgress, resolveWeeklyGoal } from '../../lib/weeklyGoal';
+import { loadUserDays } from '../../lib/weeklyGoalStore';
 
 const HOME_HTML = require('../../assets/app screens/home.html');
 const HOME_BUILD = 'home-5';
@@ -223,22 +225,22 @@ export const HOME_GUARD_JS = `(function(){
   try { new MutationObserver(function(){ add(); }).observe(document, { childList: true, subtree: true }); } catch (e) {}
 })(); true;`;
 
-export function buildHomeInjectJs(plan: Plan | null, allSessions: SessionEntry[], insetTop: number, insetBottom: number): string {
+export function buildHomeInjectJs(plan: Plan | null, allSessions: SessionEntry[], insetTop: number, insetBottom: number, userDays?: boolean[] | null): string {
   const sessions = workoutSessions(allSessions); // form-check practice is not a workout: not in Recent workouts, not in the streak
   const workoutGroups = groupIntoWorkouts(sessions);
   const streak = calcStreak(sessions);
   const scored = scoredSessions(sessions);
   const overallPct = scored.length > 0 ? Math.round(scored.reduce((a, s) => a + s.pct, 0) / scored.length) : 0;
 
-  const weekStart = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - d.getDay()); return d.getTime(); })();
-  const workoutsThisWeek = workoutGroups.filter(g => g.ts >= weekStart).length;
+  // the week line: this week (Monday to Sunday) against the weekly goal, capped at the goal with a bonus for extras (lib/weeklyGoal.ts)
+  const week = weekProgress(sessions, resolveWeeklyGoal(plan?.profile?.daysPerWeek, userDays).goal);
 
   const map: Record<string, string> = {};
   const today = new Date();
   map['Sat, 12 September'] = today.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'long' });
   map['3'] = String(streak); // streak chip — scoped below via style, not bare global match
   map['38 min · 4 exercises'] = '';
-  map['2 of 4 workouts'] = `${workoutsThisWeek} of 4 workouts`;
+  map['2 of 4 workouts'] = week.label;
 
   if (plan && plan.workouts.length > 0) {
     const w = plan.workouts[plan.currentWorkoutIndex] ?? plan.workouts[0];
@@ -441,6 +443,7 @@ export function buildHomeInjectJs(plan: Plan | null, allSessions: SessionEntry[]
         var href = el.getAttribute('href');
         if (href === 'Cue.dc.html') { ev.preventDefault(); post({type:'cue'}); return; }
         if (href === 'Progress.dc.html') { ev.preventDefault(); post({type:'progress'}); return; }
+        if (href === 'Train.dc.html' && /Learn/i.test(el.textContent || '')) { ev.preventDefault(); post({type:'moves'}); return; }
       }
     }, true);
     }
@@ -556,9 +559,9 @@ export default function HomeScreen() {
   useFocusEffect(useCallback(() => {
     homeLag.revisit(revealedRef.current);
     let alive = true;
-    Promise.all([loadPlan(), getAllSessions()]).then(async ([plan, allSessions]) => {
+    Promise.all([loadPlan(), getAllSessions(), loadUserDays()]).then(async ([plan, allSessions, userDays]) => {
       const sessions = workoutSessions(allSessions);
-      setInjectJs(buildHomeInjectJs(plan, sessions, insets.top, insets.bottom));
+      setInjectJs(buildHomeInjectJs(plan, sessions, insets.top, insets.bottom, userDays));
       setWorkoutTimes(sessions.map(x => x.ts));
       const ld = buildHomeLogicData(plan, tabBarCover(insets.bottom));
       setLogicJs(athltSetDataJs(ld) + '; window.__editWid = ' + JSON.stringify(ld.editWid) + '; true;');
@@ -614,6 +617,7 @@ export default function HomeScreen() {
           if (msg.type === 'cue') { router.push('/cue' as any); return; }
           if (msg.type === 'calendar') { if (typeof (msg as any).top === 'number') setCalAnchor({ top: (msg as any).top, cx: typeof (msg as any).cx === 'number' ? (msg as any).cx : 60 }); setCalOpen(o => !o); return; }
           if (msg.type === 'streak') { router.push({ pathname: '/streak-screen', params: { from: 'tab', dest: '/(tabs)' } } as any); return; }
+          if (msg.type === 'moves') { router.push('/learn-moves' as any); return; }
           if (msg.type === 'progress') { router.push('/(tabs)/progress' as any); return; }
           if (msg.type === 'recap' && msg.ts != null) { openRecap(router, msg.ts); return; }
           if (msg.type === 'homeCueSend' && msg.text) { void handleHomeCueSend(msg.text); return; }
@@ -622,10 +626,10 @@ export default function HomeScreen() {
             void saveWorkoutEdit(msg.wid, msg.rows).then(async (saved) => {
               if (__DEV__) console.log('[HOME] Edit sheet closed:', msg.rows?.length, 'exercises |', saved ? 'saved to the plan' : 'no change to save');
               if (!saved) return;
-              const [plan, sessions] = await Promise.all([loadPlan(), getAllSessions()]);
+              const [plan, sessions, userDays] = await Promise.all([loadPlan(), getAllSessions(), loadUserDays()]);
               const ld = buildHomeLogicData(plan, tabBarCover(insets.bottom));
               setLogicJs(athltSetDataJs(ld) + '; window.__editWid = ' + JSON.stringify(ld.editWid) + '; true;');
-              setInjectJs(buildHomeInjectJs(plan, sessions, insets.top, insets.bottom));
+              setInjectJs(buildHomeInjectJs(plan, sessions, insets.top, insets.bottom, userDays));
             }).catch(() => {});
             return;
           }

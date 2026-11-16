@@ -16,7 +16,7 @@ const { chromium } = require('playwright');
 const ROOT = path.join(__dirname, '..');
 const { demoBeforeJs, demoData, DEMO_PAGE_JS } = require('../lib/demoScreen.ts');
 const { demoTimeline, PLACEHOLDER_LENGTH } = require('../lib/demoVideos.ts');
-const { decideMusicGate, MUSIC_MAX_SHOWS } = require('../lib/musicGate.ts');
+const { decideMusicGate } = require('../lib/musicGate.ts');
 const H = require('../lib/dcWebviewHelpers.ts');
 let failed = 0;
 const check = (n, ok, d) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${d ? '  -> ' + d : ''}`); if (!ok) failed++; };
@@ -25,15 +25,14 @@ const check = (n, ok, d) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${d ? ' 
 const run = fs.readFileSync(path.join(ROOT, 'app', 'workout', 'run.tsx'), 'utf8').replace(/\r\n/g, '\n');
 const slice = run.slice(run.indexOf('function dcScaleFitJs('), run.indexOf('function DemoStepWebView('));
 const dcScaleFitJs = new Function(ts.transpileModule(slice + '\nreturn dcScaleFitJs;', { compilerOptions: { target: 'ES2019' } }).outputText.replace(/^"use strict";\n?/, '').replace(/return dcScaleFitJs;?\s*$/, '') + '\nreturn dcScaleFitJs;')();
-const musicSlice = run.slice(run.indexOf('function connectMusicInject('), run.indexOf('function ConnectMusicWebView('));
+const musicSlice = run.slice(run.indexOf('function connectMusicInject('), run.indexOf('const MUSIC_HIDE_UNTIL_READY_JS'));
 const connectMusicInject = new Function('dcScaleFitJs', ts.transpileModule(musicSlice, { compilerOptions: { target: 'ES2019' } }).outputText.replace(/^"use strict";\n?/, '') + '\nreturn connectMusicInject;')(dcScaleFitJs);
 
 (async () => {
   const browser = await chromium.launch();
   // ───────────── 9: the music screen ─────────────
-  check('9: shown the first 2 times ever, then never (counts 0 -> 1 -> 2 -> skipped)', MUSIC_MAX_SHOWS === 2 && JSON.stringify([decideMusicGate(null, null), decideMusicGate(null, '1'), decideMusicGate(null, '2'), decideMusicGate(null, '7')]) === JSON.stringify([{ show: true, nextCount: 1 }, { show: true, nextCount: 2 }, { show: false, nextCount: 2 }, { show: false, nextCount: 7 }]));
-  check('9: "Don\'t show this page again" still skips it at once; a broken stored value counts as 0', !decideMusicGate('1', '0').show && decideMusicGate(null, 'garbage').show && decideMusicGate(null, '-4').nextCount === 1);
-  check('9: run.tsx stores the count when it shows the screen and uses the decision', /decideMusicGate\(skip, shownRaw\)/.test(run) && /AsyncStorage\.setItem\(MUSIC_SHOWN_KEY, String\(d\.nextCount\)\)/.test(run));
+  check('9: the music screen is shown until "Don\'t show this page again" is ticked, with NO limit on how many times (the show-only-twice rule is gone)', decideMusicGate(null) === true && decideMusicGate('0') === true && decideMusicGate('1') === false && !/MUSIC_MAX_SHOWS|formpal_music_shown_count/.test(run + fs.readFileSync(path.join(ROOT, 'lib', 'musicGate.ts'), 'utf8')));
+  check('9: run.tsx stores the tick as formpal_skip_connect_music = 1 and reads it before showing the screen', /AsyncStorage\.setItem\(SKIP_MUSIC_KEY, '1'\)/.test(run) && /decideMusicGate\(skip\)/.test(run));
   const music = async (inject) => {
     const p = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
     await p.addInitScript(() => { window.ReactNativeWebView = { postMessage() {} }; });
@@ -58,6 +57,36 @@ const connectMusicInject = new Function('dcScaleFitJs', ts.transpileModule(music
   check('9: the status bar row is hidden but keeps its room (visibility hidden, not removed)', now.nineVis === 'hidden' && now.nineDisplay !== 'none');
   check('9: the title sits LOWER than the design\'s own spot and well below the notch (inset 62): title top >= design + 20 and >= 110', now.title >= raw.title + 20 && now.title >= 110, JSON.stringify({ raw: raw.title, now: now.title }));
   check('9: the text under the title moves down with it', now.sub >= raw.sub + 20, now.sub.toFixed(0));
+  // the page itself: Continue reports the tick box as it is shown; the page is revealed only when final
+  const mpage = async () => {
+    const p = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+    const msgs = []; await p.exposeFunction('__post', (m) => msgs.push(m));
+    await p.addInitScript(() => {
+      window.ReactNativeWebView = { postMessage: (m) => window.__post(m) };
+      const orig = Element.prototype.setAttribute;
+      Element.prototype.setAttribute = function (k) { if (k === 'data-music-ready') { const row = [...document.querySelectorAll('#dc-root div')].find((d) => !d.children.length && d.textContent.trim() === '9:41'); const t = [...document.querySelectorAll('#dc-root div')].filter((d) => /^Listen to music/.test(d.textContent.trim()) && d.children.length <= 1).pop(); window.__atMusicShow = { rowHidden: row && row.parentElement.style.visibility, scaled: !!document.getElementById('dc-root').style.transform, titleTop: t && Math.round(t.getBoundingClientRect().top) }; } return orig.apply(this, arguments); };
+    });
+    await p.addInitScript(H.DC_VIEWPORT_JS + require('../lib/noZoom.ts').NO_ZOOM_JS + run.match(/const MUSIC_HIDE_UNTIL_READY_JS = `([\s\S]*?)`;/)[1]);
+    await p.goto(pathToFileURL(path.join(ROOT, 'assets', 'app screens', 'connectmusic.html')).href, { waitUntil: 'load' });
+    await p.evaluate(connectMusicInject());
+    await p.waitForFunction(() => document.documentElement.hasAttribute('data-music-ready'), null, { timeout: 8000 });
+    return { p, msgs };
+  };
+  const m1 = await mpage();
+  const at = await m1.p.evaluate(() => window.__atMusicShow);
+  await m1.p.waitForTimeout(500);
+  const later = await measure(m1.p);
+  check('8: the music page is hidden until it is final: at the moment it is revealed it is scaled, the status row space is kept, and the title is already where it stays (no jump on arrival)', at && at.scaled && at.rowHidden === 'hidden' && Math.abs(at.titleTop - later.title) <= 1 && m1.msgs.filter((x) => x === 'musicShown').length === 1, JSON.stringify([at, later.title]));
+  await m1.p.evaluate(() => { [...document.querySelectorAll('#dc-root div')].find((d) => !d.children.length && d.textContent.trim() === 'Continue').click(); });
+  check('9: Continue with the box NOT ticked posts musicContinue:0 (the screen will show again next time)', m1.msgs.includes('musicContinue:0'), JSON.stringify(m1.msgs));
+  const rowPt = await m1.p.evaluate(() => { const e = [...document.querySelectorAll('#dc-root div')].find((d) => !d.children.length && d.textContent.trim() === "Don't show this page again"); const r = e.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
+  await m1.p.mouse.click(rowPt.x, rowPt.y); await m1.p.waitForTimeout(250);
+  const boxBg = await m1.p.evaluate(() => { const e = [...document.querySelectorAll('#dc-root div')].find((d) => !d.children.length && d.textContent.trim() === "Don't show this page again"); return getComputedStyle(e.previousElementSibling).backgroundColor; });
+  m1.msgs.length = 0;
+  await m1.p.evaluate(() => { [...document.querySelectorAll('#dc-root div')].find((d) => !d.children.length && d.textContent.trim() === 'Continue').click(); });
+  check('9: tick "Don\'t show this page again" (the box turns dark), then Continue posts musicContinue:1: the app then stores the flag and never shows the screen again', boxBg === 'rgb(17, 17, 20)' && m1.msgs.includes('musicContinue:1'), JSON.stringify([boxBg, m1.msgs]));
+  await m1.p.close();
+  check('10: the music screen is an overlay above the workout screen, which is already mounted and loading the demo; Continue fades the overlay away (180ms) instead of swapping one web view for the other', /function ConnectMusicOverlay/.test(run) && /musicGate === 'show' && \(\s*<ConnectMusicOverlay/.test(run) && /MUSIC_FADE_MS = 180/.test(run) && /backgroundColor: '#ffffff', opacity: fade, zIndex: 100/.test(run) && !/return \(\s*<ConnectMusicWebView/.test(run));
   // ───────────── 10: the demo ─────────────
   const exId = 'curl', cues = ['Keep your elbows pinned to your sides', 'Curl up without swinging', 'Lower slowly, do not drop it'];
   const data = demoData({ exerciseId: exId, exName: 'Bicep Curl', sets: 3, reps: 12, stepIndex: 2, stepTotal: 5, cues, skipPref: true });
@@ -89,6 +118,8 @@ const connectMusicInject = new Function('dcScaleFitJs', ts.transpileModule(music
   const busy = await p.evaluate(() => new Promise((res) => { const gaps = []; let last = performance.now(); const end = last + 2000; (function loop() { const n = performance.now(); gaps.push(n - last); last = n; if (n < end) requestAnimationFrame(loop); else res({ n: gaps.length, worst: Math.round(Math.max(...gaps.slice(2))), over40: gaps.slice(2).filter((g) => g > 40).length }); })(); }));
   console.log('      2s of the demo playing:', JSON.stringify(busy));
   check('10: while it plays there are no slow frames (none over 40 ms in 2 seconds)', busy.over40 === 0, JSON.stringify(busy));
+  const cardBox = await p.evaluate(() => { const c = [...document.querySelectorAll('#dc-root div')].find((d) => /height: 346px|z-index: 4/.test(d.getAttribute('style') || '') && d.style.zIndex === '4'); const r = c.getBoundingClientRect(), root = document.getElementById('dc-root').getBoundingClientRect(), cs = getComputedStyle(c); return { l: Math.round(r.left), r: Math.round(r.right), b: Math.round(r.bottom), vw: innerWidth, vh: innerHeight, rootR: Math.round(root.right), rootB: Math.round(root.bottom), tl: cs.borderTopLeftRadius, bl: cs.borderBottomLeftRadius, br: cs.borderBottomRightRadius }; });
+  check('11: the white demo card touches BOTH sides and the BOTTOM of the screen, with rounded top corners only (like the Workout complete card)', cardBox.l <= 0 && cardBox.r >= cardBox.vw && cardBox.b >= cardBox.vh && parseFloat(cardBox.tl) >= 30 && parseFloat(cardBox.bl) === 0 && parseFloat(cardBox.br) === 0, JSON.stringify(cardBox));
   // the buttons
   const m0 = msgs.length;
   await p.evaluate(() => document.querySelector('#dc-root a[aria-label="Close"]').click());

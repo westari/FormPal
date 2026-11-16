@@ -6,10 +6,11 @@
  * back button should use this one.
  */
 import React from 'react';
-import { SymbolView } from 'expo-symbols';
+import Svg, { Path } from 'react-native-svg';
 import { LiquidGlassButton } from './LiquidGlass';
 
 export const GLASS_BACK_SIZE = 40;
+export const BACK_ARROW = { d: 'M8.2 1.8 1.8 8.5l6.4 6.7', w: 10, h: 17 };
 
 export default function GlassBackButton({ onPress, scheme = 'light' }: { onPress: () => void; scheme?: 'light' | 'dark' }) {
   const dark = scheme === 'dark';
@@ -24,7 +25,10 @@ export default function GlassBackButton({ onPress, scheme = 'light' }: { onPress
       accessibilityLabel="Back"
       style={{ width: GLASS_BACK_SIZE, height: GLASS_BACK_SIZE, alignItems: 'center', justifyContent: 'center' }}
     >
-      <SymbolView name="chevron.left" size={17} weight="semibold" tintColor={dark ? '#ffffff' : '#111114'} type="monochrome" style={{ width: 17, height: 17 }} />
+      {/* the exact arrow every back button in the app uses (the design files' own): a 10 x 17 chevron, 2.4 stroke, round ends */}
+      <Svg width={BACK_ARROW.w} height={BACK_ARROW.h} viewBox="0 0 10 17" fill="none">
+        <Path d={BACK_ARROW.d} stroke={dark ? '#ffffff' : '#111114'} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" />
+      </Svg>
     </LiquidGlassButton>
   );
 }

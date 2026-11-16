@@ -120,6 +120,7 @@ export const PROFILE_LOGIC_EXT = String.raw`function (Orig) {
       };
       v.shareLink = function (e) { if (e && e.preventDefault) e.preventDefault(); post({ type: 'shareReferral' }); };
       v.copyLink = function () { copyText(refCode); self.showToast('Code copied'); };
+      if (s.page === 'days' && v.pg) { v.pg.title = 'Weekly goal'; v.pg.intro = 'Pick the days you plan to train. The number of days is your weekly goal, in workouts a week.'; }
       if (s.page === 'rewards' && v.pg && v.pg.tiers) {
         var joined = d.referral ? d.referral.joined : 0;
         v.pg.tiers = v.pg.tiers.map(function (t, i) {
@@ -136,7 +137,13 @@ export const PROFILE_LOGIC_EXT = String.raw`function (Orig) {
           // a value that was never chosen is "Not set", never the design's or a default's (the page only has the picker's starting point)
           else if (r.label === 'Goal' && !d.goalSet && s.goal === d.goalIdx) r.value = 'Not set';
           else if (r.label === 'Where you train' && !d.placeSet && s.place === d.placeIdx) r.value = 'Not set';
-          else if (r.label === 'Training days' && !d.daysSet && JSON.stringify(s.days) === JSON.stringify(d.days)) r.value = d.planDays ? d.planDays + (d.planDays === 1 ? ' day a week' : ' days a week') : 'Not set';
+          else if (r.label === 'Training days') {
+            // renamed: the weekly goal is workouts per week = how many days are picked (until picked, the plan's days per week)
+            var picked = s.days.filter(Boolean).length, changed = d.daysSet || JSON.stringify(s.days) !== JSON.stringify(d.days);
+            var goalN = changed ? picked : (d.planDays || 0);
+            r.label = 'Weekly goal';
+            r.value = goalN ? goalN + (goalN === 1 ? ' workout a week' : ' workouts a week') : 'Not set';
+          }
           else if (r.label === 'Audio coaching') { r.value = d.audioLabel; r.tap = function () { post({ type: 'nav', to: 'audio' }); }; }
           r.line = i === 0 ? 'none' : '1px solid rgba(17,17,20,0.07)';
           return r;

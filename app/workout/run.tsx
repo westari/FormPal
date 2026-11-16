@@ -31,6 +31,7 @@ import {
   Pressable,
   Alert,
   Animated,
+  Easing,
   ScrollView,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -46,7 +47,7 @@ import { getExerciseDef } from '../../constants/exercises';
 import { getDemoCues } from '../../lib/demoCues';
 import { demoBeforeJs, demoData } from '../../lib/demoScreen';
 import { demoTimeline } from '../../lib/demoVideos';
-import { decideMusicGate, MUSIC_MAX_SHOWS, MUSIC_SHOWN_KEY } from '../../lib/musicGate';
+import { decideMusicGate } from '../../lib/musicGate';
 import { prefetchWorkoutRecap } from '../../lib/recapPrefetch';
 import { postLag, postLagStart } from '../../lib/postLag';
 import { useKeepAwake } from 'expo-keep-awake';
@@ -241,7 +242,7 @@ function DemoStepWebView({
 // user checks "Don't show this page again" — then persisted forever via
 // AsyncStorage, same pattern as SKIP_DEMO_KEY above. ───────────────────────
 const SKIP_MUSIC_KEY = 'formpal_skip_connect_music';
-// The screen is shown only the FIRST 2 TIMES EVER (counted when it is shown), then never again.
+// The screen is shown before the first exercise until "Don't show this page again" is ticked (then never again).
 const CONNECT_MUSIC_HTML = require('../../assets/app screens/connectmusic.html');
 
 function connectMusicInject(): string {
@@ -249,67 +250,82 @@ function connectMusicInject(): string {
   return dcScaleFitJs('#ffffff', 28) + `
 (function(){
   function post(m){ try{ window.ReactNativeWebView.postMessage(m); }catch(e){} }
-  var hidden = false;
-  var hideWired = false, ctaWired = false;
-  function apply(){
-    var hit = 0;
-    if(!hideWired){
-      var cands = document.querySelectorAll('#dc-root div');
-      for(var i=0;i<cands.length;i++){
-        if((cands[i].textContent||'').trim()==="Don't show this page again" && !cands[i].children.length){
-          var row = cands[i].parentElement;
-          if(row){ row.addEventListener('click', function(){ hidden = !hidden; }, true); hideWired=true; hit++; }
-          break;
-        }
+  // "Don't show this page again" is read from the design's own tick box when Continue is pressed (the box shows ticked via its dark fill), so the
+  // answer is always what the user sees. One delegated listener, no scanning.
+  function ticked(){
+    var cands = document.querySelectorAll('#dc-root div');
+    for (var i = 0; i < cands.length; i++) {
+      if ((cands[i].textContent || '').trim() === "Don't show this page again" && !cands[i].children.length) {
+        var box = cands[i].previousElementSibling;
+        if (!box) return false;
+        var bg = getComputedStyle(box).backgroundColor;
+        return bg === 'rgb(17, 17, 20)';
       }
     }
-    if(!ctaWired){
-      var all=document.querySelectorAll('#dc-root div');
-      for(var j=0;j<all.length;j++){
-        var el=all[j]; if(el.children.length) continue;
-        var t=(el.textContent||'').trim();
-        if(t==='Continue'){
-          el.addEventListener('click', function(ev){ ev.stopPropagation(); post('__tap'); post('musicContinue:'+(hidden?'1':'0')); }, true);
-          ctaWired=true; hit++;
-          break;
-        }
-      }
-    }
-    return hit>=2;
+    return false;
   }
-  if(!apply()) [200,500,1000,2000,3500].forEach(function(d){ setTimeout(apply,d); });
-  var root = document.getElementById('dc-root') || document.body;
-  var mo = new MutationObserver(function(){ apply(); });
-  mo.observe(root, { childList: true, subtree: true, characterData: true });
+  document.addEventListener('click', function(ev){
+    var t = ev.target; if (!t || !t.closest) return;
+    var el = t;
+    for (var i = 0; el && i < 5; i++, el = el.parentElement) {
+      if ((el.textContent || '').trim() === 'Continue' && el.children.length <= 1) { ev.stopPropagation(); post('__tap'); post('musicContinue:' + (ticked() ? '1' : '0')); return; }
+    }
+  }, true);
+  // nothing is shown until the page is scaled to the screen and the status row space is final (no jump on arrival)
+  var shown = false;
+  function show(){ if (shown) return; shown = true; document.documentElement.setAttribute('data-music-ready', '1'); post('musicShown'); }
+  (function wait(n){
+    var r = document.getElementById('dc-root');
+    var row = null, c = document.querySelectorAll('#dc-root div');
+    for (var i = 0; i < c.length; i++) { if (!c[i].children.length && (c[i].textContent || '').trim() === '9:41') { row = c[i].parentElement; break; } }
+    if (r && r.style.transform && row && row.style.visibility === 'hidden') requestAnimationFrame(function(){ requestAnimationFrame(show); });
+    else if (n > 60) show(); else setTimeout(function(){ wait(n + 1); }, 30);
+  })(0);
 })();
 true;
 `;
 }
 
-function ConnectMusicWebView({ onContinue }: { onContinue: (dontShowAgain: boolean) => void }) {
+const MUSIC_HIDE_UNTIL_READY_JS = `(function(){ function add(){ if (document.getElementById('__music_css')) return; var h = document.head || document.documentElement; if (!h) return; var s = document.createElement('style'); s.id = '__music_css'; s.textContent = 'html:not([data-music-ready]) body{visibility:hidden!important;} #dc-root *{animation:none!important;}'; h.appendChild(s); } add(); try { new MutationObserver(add).observe(document, { childList: true }); } catch (e) {} })(); true;`;
+
+/**
+ * The music screen is an OVERLAY on top of the workout screen, which is already mounted and loading the demo underneath. Continue fades the
+ * overlay away (180ms) and the demo is simply there: the two web views are no longer swapped one for the other (that swap was the glitch).
+ * The overlay is plain white from its first frame, so nothing flashes while its page loads.
+ */
+function ConnectMusicOverlay({ onContinue }: { onContinue: (dontShowAgain: boolean) => void }) {
   const inject = useMemo(() => connectMusicInject(), []);
+  const fade = useRef(new Animated.Value(1)).current;
+  const leaving = useRef(false);
   return (
-    <WebView
-      source={CONNECT_MUSIC_HTML}
-      originWhitelist={['*']}
-      style={{ flex: 1, backgroundColor: '#ffffff' }}
-      injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS + NO_ZOOM_JS}
-      injectedJavaScript={inject}
-      onMessage={(e) => {
-        const m = e.nativeEvent.data;
-        if (m.indexOf('musicContinue:') === 0) onContinue(m.slice('musicContinue:'.length) === '1');
-      }}
-      allowFileAccess
-      allowFileAccessFromFileURLs
-      allowUniversalAccessFromFileURLs
-      javaScriptEnabled
-      domStorageEnabled
-      bounces={false}
-      overScrollMode="never"
-      cacheEnabled={false}
-    />
+    <Animated.View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: '#ffffff', opacity: fade, zIndex: 100 }} testID="music-overlay">
+      <WebView
+        source={CONNECT_MUSIC_HTML}
+        originWhitelist={['*']}
+        style={{ flex: 1, backgroundColor: '#ffffff' }}
+        injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS + NO_ZOOM_JS + MUSIC_HIDE_UNTIL_READY_JS}
+        injectedJavaScript={inject}
+        onMessage={(e) => {
+          const m = e.nativeEvent.data;
+          if (m.indexOf('musicContinue:') === 0 && !leaving.current) {
+            leaving.current = true;
+            const again = m.slice('musicContinue:'.length) === '1';
+            Animated.timing(fade, { toValue: 0, duration: MUSIC_FADE_MS, easing: Easing.out(Easing.quad), useNativeDriver: true }).start(() => onContinue(again));
+          }
+        }}
+        allowFileAccess
+        allowFileAccessFromFileURLs
+        allowUniversalAccessFromFileURLs
+        javaScriptEnabled
+        domStorageEnabled
+        bounces={false}
+        overScrollMode="never"
+        cacheEnabled
+      />
+    </Animated.View>
   );
 }
+export const MUSIC_FADE_MS = 180;
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -361,12 +377,10 @@ export default function WorkoutRunScreen() {
   const [musicGate, setMusicGate] = useState<'loading' | 'show' | 'done'>('loading');
   useEffect(() => {
     if (!session || session.currentIndex !== 0) { setMusicGate('done'); return; }
-    Promise.all([AsyncStorage.getItem(SKIP_MUSIC_KEY), AsyncStorage.getItem(MUSIC_SHOWN_KEY)])
-      .then(([skip, shownRaw]) => {
-        const d = decideMusicGate(skip, shownRaw);
-        if (!d.show) { setMusicGate('done'); return; }
-        AsyncStorage.setItem(MUSIC_SHOWN_KEY, String(d.nextCount)).catch(() => {});
-        if (__DEV__) console.log('[MUSIC] screen shown (' + d.nextCount + ' of ' + MUSIC_MAX_SHOWS + ')');
+    AsyncStorage.getItem(SKIP_MUSIC_KEY)
+      .then((skip) => {
+        if (!decideMusicGate(skip)) { setMusicGate('done'); return; }
+        if (__DEV__) console.log('[MUSIC] screen shown (until "Don\'t show this page again" is ticked)');
         setMusicGate('show');
       })
       .catch(() => setMusicGate('done'));
@@ -596,16 +610,6 @@ export default function WorkoutRunScreen() {
   // Gate on the connect-music screen before anything else in the workout
   // — only reachable with musicGate === 'show' on the first exercise
   // (session.currentIndex === 0), per the effect above.
-  if (musicGate === 'show') {
-    return (
-      <ConnectMusicWebView
-        onContinue={(dontShowAgain) => {
-          if (dontShowAgain) AsyncStorage.setItem(SKIP_MUSIC_KEY, '1').catch(() => {});
-          setMusicGate('done');
-        }}
-      />
-    );
-  }
   if (musicGate === 'loading') return null;
 
   const totalEx     = session.workout.exercises.length;
@@ -626,6 +630,7 @@ export default function WorkoutRunScreen() {
   const isDemoStep = phase === 'intro' && !!currentEx && isFormCheckable(currentEx.exerciseId);
 
   return (
+    <View style={{ flex: 1 }}>
     <ScreenBackground>
       {/* Safe-area top */}
       {!isDemoStep && <View style={{ height: insets.top + 8 }} />}
@@ -799,6 +804,15 @@ export default function WorkoutRunScreen() {
         </View>
       )}
     </ScreenBackground>
+    {musicGate === 'show' && (
+      <ConnectMusicOverlay
+        onContinue={(dontShowAgain) => {
+          if (dontShowAgain) AsyncStorage.setItem(SKIP_MUSIC_KEY, '1').catch(() => {});
+          setMusicGate('done');
+        }}
+      />
+    )}
+    </View>
   );
 }
 

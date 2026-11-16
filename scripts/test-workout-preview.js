@@ -60,7 +60,7 @@ const FAKE = {
   'expo-router': { useRouter: () => ({ back: () => { nav.backs++; }, push: (p) => nav.pushed.push(p), replace: (p) => nav.replaced.push(p) }), useLocalSearchParams: () => params },
   'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 62, bottom: 34, left: 0, right: 0 }) },
   'expo-linear-gradient': { LinearGradient },
-  'react-native-svg': { __esModule: true, default: Svg, Defs: () => null, RadialGradient: () => null, Stop: () => null, Rect: () => null },
+  'react-native-svg': { __esModule: true, default: Svg, Defs: () => null, RadialGradient: () => null, Stop: () => null, Rect: () => null, Path: () => null },
   'expo-symbols': { SymbolView },
   'expo-haptics': { ImpactFeedbackStyle: { Light: 'Light', Medium: 'Medium', Soft: 'Soft' }, NotificationFeedbackType: {}, selectionAsync: async () => {}, impactAsync: async () => {}, notificationAsync: async () => {} },
 };
@@ -119,7 +119,7 @@ Module._load = function (r) {
   check('card text matches his design: "Squat" / "4 sets · 8 reps" ... "3 sets · 12 reps"', /Squat \| 4 sets · 8 reps/.test(m.allText) && /Push-up \| 3 sets · 12 reps/.test(m.allText) && /Row \| 3 sets · 10 reps/.test(m.allText));
   check('the name and its line sit 14px to the right of the 60px picture square (x = 98 as in his design)', m.squat && Math.abs(m.squat.x - 98) <= 1, JSON.stringify(m.squat));
   check('black Start workout pill, 58 tall, 358 wide, floating near the bottom', m.start && m.start.h === 58 && m.start.w === 358 && m.start.y > 740 && /rgb\(17, 17, 20\)/.test(m.startBg), JSON.stringify(m.start) + ' ' + m.startBg);
-  check('the font is Plus Jakarta Sans, like the design', /PlusJakartaSans_800ExtraBold/.test(m.titleFont) && /PlusJakartaSans_700Bold/.test(m.nameFont), m.titleFont + ' / ' + m.nameFont);
+  check('the font is Plus Jakarta Sans, like the design', /PlusJakartaSans_700Bold/.test(m.titleFont) && /PlusJakartaSans_700Bold/.test(m.nameFont), m.titleFont + ' / ' + m.nameFont);
 
   // Start opens the run screen and starts the session
   presses['Start workout']();
@@ -168,6 +168,15 @@ Module._load = function (r) {
   check('8: the sheet is the Home Edit Workout sheet: floating 8px from the sides, 40px corners, white, grab bar, 20px bold title, round close button', /left: 8, right: 8/.test(sheet) && /borderRadius: 40/.test(sheet) && /fontSize: 20/.test(title) && /width: 34, height: 34, borderRadius: 17, backgroundColor: '#f1f1f4'/.test(close) && /width: 38, height: 5/.test(st('grab')));
   check('8: rows are grey rounded rows like Home (20px corners, #f6f6f8) with white 36px round controls and the black 54px Done pill', /borderRadius: 20/.test(row) && /#f6f6f8/.test(row) && /width: 36, height: 36, borderRadius: 18, backgroundColor: '#ffffff'/.test(ctl) && /height: 54/.test(done) && /#111114/.test(done) && />Done</.test(wsrc));
   check('8: the sheet still saves sets and reps (Done calls saveEdit) and closes from the X, the grab bar or the dim area', /onPress=\{saveEdit\}/.test(wsrc) && (wsrc.match(/setEditing\(null\)/g) || []).length >= 5);
+  // 5, 6, 7 (second round)
+  const gb2 = fs.readFileSync(path.join(ROOT, 'components', 'GlassBackButton.tsx'), 'utf8');
+  check('5: the glass back button draws the SAME arrow as every other back button (the design file chevron: M8.2 1.8 1.8 8.5l6.4 6.7, 10 x 17, stroke 2.4, round ends)', /M8\.2 1\.8 1\.8 8\.5l6\.4 6\.7/.test(gb2) && /strokeWidth=\{2\.4\}/.test(gb2) && /w: 10, h: 17/.test(gb2) && !/SymbolView/.test(gb2));
+  const tstyle = /title: \{([^}]*)\}/.exec(wsrc)[1], sstyle = /subtitle: \{([^}]*)\}/.exec(wsrc)[1];
+  const tsz = +/fontSize: (\d+)/.exec(tstyle)[1], ssz = +/fontSize: ([\d.]+)/.exec(sstyle)[1];
+  check('6: "My workout" is the normal app title font (Plus Jakarta Sans Bold, like the tab titles; not the ExtraBold) and much bigger (34, was 25); "10 min · 1 exercise" is bigger (18, was 13.5)', /displayBold/.test(tstyle) && !/displayBlack/.test(tstyle) && tsz === 34 && ssz === 18, tstyle.trim() + ' / ' + sstyle.trim());
+  check('7: the Modal has no animation of its own (its slide moved the dim layer up the screen: the hard moving edge)', /<Modal visible=\{sheetShown\} transparent animationType="none"/.test(wsrc) && !/animationType="slide"/.test(wsrc));
+  check('7: the background dim covers the whole screen and only FADES (opacity), while only the sheet slides (translateY)', /<Animated\.View style=\{\[StyleSheet\.absoluteFill, s\.sheetBack, \{ opacity: dim \}\]\}/.test(wsrc) && /translateY: slide\.interpolate/.test(wsrc) && /sheetBack: \{ backgroundColor/.test(wsrc) && !/sheetBack: \{ flex/.test(wsrc));
+  check('7: it fades in and out evenly with the same short time (220ms) on open and on Done, using the native driver', /SHEET_MS = 220/.test(wsrc) && (wsrc.match(/duration: SHEET_MS/g) || []).length === 4 && !/useNativeDriver: false/.test(wsrc));
   // 9: Start workout ALWAYS opens a real workout, never "No workout scheduled"
   STORE = { plan: null, isLoaded: true }; params = {};
   const p4 = await shoot(browser, h(Screen), path.join(dir, 'preview-render4.html'));

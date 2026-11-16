@@ -566,12 +566,98 @@ export const MY_WORKOUTS_DOM_JS = String.raw`
 })();
 true;`;
 
+// ─── Learn the moves ────────────────────────────────────────────────────────────
+// The same page as My workouts (the same design file, layout and cards), listing every exercise of the catalogue, with filter chips:
+// Bodyweight / Dumbbell / Barbell / Machine and the six muscle groups. Tapping a card opens that exercise's demo / form check.
+export const LEARN_MOVES_LOGIC_EXT = String.raw`function (Orig) {
+  function D() { return window.__athltData || null; }
+  var THEMES = [
+    { c: '#8b5cf6', a: 'rgba(196,178,255,0.5)', b: 'rgba(255,214,232,0.42)' },
+    { c: '#22a85a', a: 'rgba(170,232,196,0.5)', b: 'rgba(206,228,255,0.42)' },
+    { c: '#f08a24', a: 'rgba(255,206,160,0.55)', b: 'rgba(255,226,214,0.42)' },
+    { c: '#3b7bea', a: 'rgba(178,204,255,0.5)', b: 'rgba(220,214,255,0.42)' },
+    { c: '#e2558a', a: 'rgba(255,190,214,0.5)', b: 'rgba(255,226,200,0.42)' }
+  ];
+  return class extends Orig {
+    renderVals() {
+      var d = D();
+      if (!d) return super.renderVals();
+      var v = super.renderVals(), s = this.state, self = this;
+      var q = String(s.query || '').trim().toLowerCase();
+      var chip = d.chips.some(function (c) { return c.id === s.tab; }) ? s.tab : 'all';
+      window.__athltTab = chip;
+      var shown = d.items.filter(function (m) {
+        var okChip = chip === 'all' || m.eq.indexOf(chip) >= 0 || m.groups.indexOf(chip) >= 0;
+        var okQ = !q || m.name.toLowerCase().indexOf(q) >= 0 || m.moves.toLowerCase().indexOf(q) >= 0;
+        return okChip && okQ;
+      });
+      window.__athltShown = shown.length;
+      v.list = shown.map(function (m) {
+        var th = THEMES[m.theme % THEMES.length];
+        return { name: m.name, meta: m.meta, moves: m.moves, c: th.c, href: '#open-' + m.id,
+          bg: 'radial-gradient(80% 70% at 100% 0%, ' + th.a + ' 0%, rgba(255,255,255,0) 70%), radial-gradient(70% 60% at 0% 100%, ' + th.b + ' 0%, rgba(255,255,255,0) 70%), #ffffff',
+          fill: '#ffffff', toggle: function () {} };
+      });
+      v.tabs = d.chips.map(function (c) {
+        var on = chip === c.id;
+        return { label: c.label, bg: on ? '#111114' : '#ffffff', fg: on ? '#ffffff' : '#111114',
+          sh: on ? '0 8px 16px -8px rgba(17,17,20,0.5)' : 'inset 0 1px 0 #ffffff, 0 6px 14px -8px rgba(40,50,90,0.3)',
+          pick: function () { self.setState({ tab: c.id }); } };
+      });
+      v.none = false;
+      v.empty = shown.length === 0;
+      v.emptyText = 'No moves match that.';
+      return v;
+    }
+  };
+}`;
+
+export const LEARN_MOVES_DOM_JS = String.raw`
+(function () {
+  window.__dsHooks.push(function (root) {
+    window.__dsLink = function (l) {
+      var m = /^#open-(.+)$/.exec(l.href);
+      if (m) { window.__dsPost({ type: 'openMove', id: m[1] }); return; }
+      if (/Train\.dc\.html/.test(l.href)) window.__dsPost({ type: 'back' });
+    };
+    // the page is My workouts with a different title, search words and no Create button / bookmarks
+    var leaves = root.querySelectorAll('div');
+    for (var i = 0; i < leaves.length; i++) {
+      var e = leaves[i];
+      if (e.children.length > 1) continue;
+      var t = (e.textContent || '').trim();
+      if (t === 'My Workouts' && e.firstChild && e.firstChild.nodeType === 3) { e.firstChild.nodeValue = 'Learn the moves'; break; }
+    }
+    var inp = root.querySelector('input[placeholder="Search your workouts"], input[placeholder="Search moves"]');
+    if (inp && inp.getAttribute('placeholder') !== 'Search moves') inp.setAttribute('placeholder', 'Search moves');
+    [].forEach.call(root.querySelectorAll('a'), function (a) {
+      if (/Create Workout/i.test(a.getAttribute('href') || '') || /^Create workout$/i.test((a.textContent || '').trim())) { if (a.style.display !== 'none') a.style.setProperty('display', 'none', 'important'); }
+    });
+    [].forEach.call(root.querySelectorAll('[aria-label="Save"]'), function (b) { if (b.style.display !== 'none') b.style.setProperty('display', 'none', 'important'); });
+    // eleven filter chips: two lines, small, no sideways scrolling
+    var chipEls = [].filter.call(root.querySelectorAll('div'), function (e) { return e.style.height === '36px' && e.style.borderRadius === '999px' && (e.textContent || '').trim().length > 0 && e.children.length <= 1; });
+    if (!chipEls.length) chipEls = [].filter.call(root.querySelectorAll('div[data-learn-chip]'), function () { return true; });
+    chipEls.forEach(function (e) {
+      e.setAttribute('data-learn-chip', '1');
+      e.style.setProperty('white-space', 'nowrap'); e.style.setProperty('flex', 'none');
+      e.style.setProperty('height', '34px'); e.style.setProperty('padding', '0 12px'); e.style.setProperty('font-size', '13px');
+    });
+    if (chipEls.length) {
+      var row = chipEls[0].parentElement;
+      row.style.setProperty('flex-wrap', 'wrap'); row.style.setProperty('gap', '8px'); row.style.setProperty('overflow', 'visible');
+    }
+    return !!inp;
+  });
+})();
+true;`;
+
 // ─── before-content-loaded bundles ──────────────────────────────────────────────
 // CUE_ORB_JS: the ONE shared Cue orb (lib/cueOrb.ts) instead of the design file's own textured one
 const COMMON = DC_VIEWPORT_JS + NO_ZOOM_JS + CONSOLE_FORWARD_JS + DC_SETTLE_JS + HAPTIC_CLICK_JS + CUE_ORB_JS;
 export const createWorkoutBeforeJs = () => COMMON + dcLogicPatchJs(CREATE_WORKOUT_LOGIC_EXT) + DS_BASE_JS + CREATE_WORKOUT_DOM_JS;
 export const logSessionBeforeJs   = () => COMMON + dcLogicPatchJs(LOG_SESSION_LOGIC_EXT) + DS_BASE_JS + LOG_SESSION_DOM_JS;
 export const myWorkoutsBeforeJs   = () => COMMON + dcLogicPatchJs(MY_WORKOUTS_LOGIC_EXT) + DS_BASE_JS + MY_WORKOUTS_DOM_JS;
+export const learnMovesBeforeJs   = () => COMMON + dcLogicPatchJs(LEARN_MOVES_LOGIC_EXT) + DS_BASE_JS + LEARN_MOVES_DOM_JS;
 export { athltSetDataJs };
 
 // ─── data builders (pure) ───────────────────────────────────────────────────────
@@ -639,6 +725,25 @@ export function myWorkoutsData(
   const templates = WORKOUT_TEMPLATES.map((t, i) => card(templateWorkout(t.id)!, i + 2));
   const all = [...created, ...made, ...templates];
   return { created, made, templates, templateNote: TEMPLATE_NOTE, saved: savedIds.filter(id => all.some(c => c.id === id)) };
+}
+
+// ─── Learn the moves: data ──────────────────────────────────────────────────────
+export const LEARN_CHIPS: { id: string; label: string }[] = [
+  { id: 'all', label: 'All' }, { id: 'bodyweight', label: 'Bodyweight' }, { id: 'dumbbell', label: 'Dumbbell' }, { id: 'barbell', label: 'Barbell' },
+  { id: 'machine', label: 'Machine' }, { id: 'chest', label: 'Chest' }, { id: 'back', label: 'Back' }, { id: 'legs', label: 'Legs' },
+  { id: 'shoulders', label: 'Shoulders' }, { id: 'arms', label: 'Arms' }, { id: 'core', label: 'Core' },
+];
+const EQ_LABEL: Record<string, string> = { bodyweight: 'Bodyweight', dumbbell: 'Dumbbell', barbell: 'Barbell', machine: 'Machine', cable: 'Cable', pullup_bar: 'Pull-up bar' };
+const cap1 = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
+
+/** Every exercise of the catalogue as a card: name, "Equipment · Main muscle group", the muscle groups it works, and its filters. */
+export function learnMovesData(defs: readonly { id: string; displayName: string; equipment: readonly unknown[]; muscleGroups: readonly unknown[] }[]) {
+  const items = defs.map(d => {
+    const eq = d.equipment.length === 0 ? ['bodyweight'] : d.equipment.map(String);
+    const groups = d.muscleGroups.map(String);
+    return { id: d.id, name: d.displayName, eq, groups, meta: `${EQ_LABEL[eq[0]] ?? cap1(eq[0])}${groups[0] ? ' · ' + cap1(groups[0]) : ''}`, moves: groups.map(cap1).join(', '), theme: 0 };
+  }).sort((a, b) => a.name.localeCompare(b.name)).map((m, i) => ({ ...m, theme: i }));
+  return { items, chips: LEARN_CHIPS };
 }
 
 /** Exercises most people start with; the Log a session screen shows them under the search box (names from the catalog). */

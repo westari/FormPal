@@ -1,91 +1,80 @@
-# Window A report: Ari's phone test (11 items)
+# Window A report: Ari's phone test, round 4 (12 items)
 
-Branch: work-a. Merged origin/overnight-build first. The dev log in C:\Users\arize\gym app\logs\latest.log is still the old session (2026-11-15 18:39, 1889 lines, nothing about the calendar, streak, Create workout, preview or demo), so there was nothing in it for this round. I did not touch any check / saved / complete animation screens.
+Branch: work-a. Merged origin/overnight-build first. I did not touch the check / "complete" screens or the camera screens.
+Things in your live feedback that are NOT in this prompt (the form-check coach giving no X marks, the guide being slow and saying "keep your hands in view", a great-job screen after rep feedback, and the camera screen layout) are camera work (Window B) or the done screen Window B is building, so I left them. Short answer to your question: the missing X marks are not about a dev build. A dev build is only needed for native code (Swift); the rep judging runs in JS, so a JS fix would show on reload. It needs its own proper pass in Window B.
 
 ## Result by number
 
 | # | Item | Status |
 |---|---|---|
-| 1 | Home calendar glitched | Done. Cause found from the screenshot. The glass look needs your phone |
-| 2 | Streak screen glitches on open, number glitches | Done |
-| 3 | Fire must not move; 12 to 16 fading stars | Done (14 stars) |
-| 4 | Cleaner streak screen | Done |
-| 5 | Create workout: muscle chips + Popular | Done |
-| 6 | Workout preview content too high | Done |
-| 7 | Preview back button not Liquid Glass | Done (new shared glass back button) |
-| 8 | Edit sheet looks bad: use Home's Edit Workout look | Done. Not seen on a phone (see limits) |
-| 9 | Music screen: text too high; only first 2 times | Done |
-| 10 | Demo screen glitchy and laggy on first open | Done in code; needs your phone for the feel |
-| 11 | Demo steps timed, ready for real videos | Done; how to set the times is below |
+| 1 | Calendar popover (real glass, pointer, no blur/dim, fast) | Done. The glass look needs your phone |
+| 2 | Learn the moves page | Done |
+| 3 | Streak glitch on open | Done (3 fixes). Needs your phone |
+| 4 | Bigger, fewer sparkles; gentle fire | Done (7 sparkles) |
+| 5 | Glass back button arrow | Done |
+| 6 | "My workout" font and size | Done |
+| 7 | Edit sheet background fade | Done |
+| 8 | Music screen arrival glitch | Done |
+| 9 | "Don't show again" works; twice-rule removed | Done |
+| 10 | Music to demo glitch | Done |
+| 11 | Demo card touches sides and bottom | Done |
+| 12 | Weekly goal (lib/weeklyGoal.ts, Home line, Profile) | Done |
 
-## 1. The calendar
+## 1. Calendar (3rd try)
 
-What was broken in your screenshot: the calendar card was see-through. Real Liquid Glass is clear by nature, so the page behind it (the Energy and Training pills, "Today", the big "My workout" card) showed straight through the month grid and the numbers, which made it unreadable. The card itself was in the right place under the date.
+What I got wrong before: a full-height layer under the card was tinted (a dim) and the card had a big soft shadow, which is the "blur over the bottom half". Both are gone. It is now a small popover:
+- Real Liquid Glass (the same LiquidGlass component as the tab bar), frosted with a white tint over a light base so the numbers stay readable. The base is 84% white: the earlier fully clear glass let the page show through the numbers. If you want it clearer, it is one number in components/CalendarSheet.tsx (`base`).
+- A small pointer on the top edge, centred under the date's arrow (measured at the arrow's x), so it is attached.
+- No dim, no blur on the rest of the screen. A fully transparent layer only catches a tap outside it (the header stays tappable, so the arrow closes it too).
+- Opens in 200ms, closes in 150ms, native driver, grows out of the pointer.
+Test: scripts/test-calendar-drop.js (draws it at 390x844 over a Home-like page, worst case clear glass): position, pointer x and tip above the card, transparent outside layer and nothing big tinted, timings, closed leaves nothing.
+Limit: real glass draws only on your phone build.
 
-Fix (components/CalendarSheet.tsx): a solid near-white base now sits under the glass, so nothing behind can show through; the glass on top (the real Liquid Glass, lightly tinted) only adds its edge light and depth. Same drop-down from the arrow, same grow-out animation, closes with a fade and leaves nothing behind.
+## 2. Learn the moves
 
-Test (scripts/test-calendar-drop.js): the component is drawn at 390x844 over a page that looks like Home, with the glass replaced by a fully clear layer (the worst case). Open: card at x 14, width 362, top at 211 just under the date, solid base under the glass, the card (not the page) is on top at every spot where the page had text, all 30 days of November, "3 days trained". Closed: no card and no dim layer left. Screenshots: .scratch/cal-open.png and cal-closed.png.
+The arrow beside "Learn The Moves" was a link to a file that does not exist, so the page said "asset not found". Home now posts "moves" and opens the new page (app/learn-moves.tsx), built from the My workouts design file itself (same layout, cards and search), titled "Learn the moves", with all 56 exercises. Filter chips: All, Bodyweight, Dumbbell, Barbell, Machine, Chest, Back, Legs, Shoulders, Arms, Core. Each chip shows exactly that set (tested against the catalogue). Search works. Tapping an exercise opens its form check (`/formcheck?exercise=<id>`). The Create button and bookmarks are hidden on this page. Test: scripts/test-learn-moves.js (22 checks). Note: only 6 exercises are bodyweight-only in the catalogue's own data.
 
-Limit: Liquid Glass itself only draws on your phone build, so how the glass edge looks I can not show.
+## 3 and 4. Streak
 
-## 2, 3, 4. Streak screen
+- Glitch on open, three causes fixed: (a) the page was revealed in one hard frame; it now fades in over 180ms; (b) the fonts are loaded by name (the three weights the page uses) before the reveal, because the fonts are only fetched when text that uses them is drawn, so "fonts ready" could be true too early; (c) I found a real bug of mine: a 30px sparkle matched the selector for the week circles ("width: 30px; height: 30px"), which could break the week row. Excluded now.
+- Sparkles: 7 (was 14), 20 to 34px (was 7 to 16), each fades in and out forever with its own timing and comes back somewhere else. The centre of the icon (the number in the flame) is unchanged.
+- Fire: a very slight breathing only (under 2% size, under 0.5 degree), 3.4 to 4.6s cycles. Measured over 6 seconds: size changes by 2%.
+- Test: scripts/test-streak.js.
 
-- Right from the first frame: the page is now only revealed when the fonts are loaded, the page is scaled to the screen and two frames have been drawn. Before, it could be shown while the font was still loading (the number and headline changed shape) or before the scale was applied. The test loads a fresh page and checks that at the moment it is revealed, the fonts are loaded, the scale is set, and the number, headline and their positions are exactly what they stay afterwards. The wait for the page is 4 seconds at most (was 2.4).
-- The fire does not move: my flame animation is removed. Test: no animation on either flame, same transform 0.9s apart, no shadow filter.
-- Stars: 14 small stars around the flame, 7 to 16px, five warm colours. Each has its own length (2.6 to 4.8s) and its own start time, fades in and out forever, and every time it fades out it comes back at a NEW place (never on top of the flame; kept above the headline). The design's old 3 big sparkles and the rising embers are hidden. Respects "reduce motion" (static dim stars).
-- Cleaner: no heavy shadow under the flame, the glow behind it halved, the week row is a flat white pill with a hairline (the orange day circles lost their glow), the Continue button shadow is light.
+## 5, 6, 7. Workout preview
 
-## 5. Create workout
+- 5: the glass back button draws the same arrow as the design files' back buttons (the path `M8.2 1.8 1.8 8.5l6.4 6.7`, 10x17, 2.4 stroke, round ends) instead of the system chevron.
+- 6: the title is the normal title font (Plus Jakarta Sans Bold, like the tab titles; it was ExtraBold) at 34 (was 25), shrinks to fit a long name. "10 min · 1 exercise" is 18 (was 13.5).
+- 7: the Modal's own slide moved the dim layer up the screen (the hard moving edge). Now the Modal has no animation; the whole background is one full-screen layer that only fades (220ms) on open and on Done, and only the sheet slides. Tests: scripts/test-workout-preview.js (code checks: I can not draw a native Modal in the web renderer, please look once).
 
-Under the search box there is now a row of six chips (Chest, Back, Legs, Shoulders, Arms, Core, all on one line) and a "Popular" list (8 real exercises) shown by default. Tap a chip and its exercises show (8, with "Show all N" for the rest); tap an exercise to add it (its + becomes a check; tap again removes it); tap the chip again for Popular. Typing in the search hides this and shows the search results as before; clearing brings it back. Real catalogue only: each group lists the exercises that mainly train it first (popular first, then A to Z), then the ones that also train it. Core has only one exercise that mainly trains it (Sit-up), so the rest of its list is squats and push-ups that also work the core. That is the catalogue's own data; adding core-only exercises to the catalogue would fix it. Test: scripts/test-create-starter.js (23 checks).
+## 8, 9, 10, 11. Music and demo
 
-## 6, 7, 8. Workout preview
+- 8: the music page is hidden until it is final (scaled, status-row space kept, title already in place; measured the same at reveal and 0.5s later).
+- 9: "Don't show this page again": Continue now reads the tick box as it is shown. Tested on the real page: unticked gives `musicContinue:0`, ticked gives `musicContinue:1`, and the app stores `formpal_skip_connect_music = 1` and never shows the screen again. The show-only-twice rule is removed (lib/musicGate.ts is now just the tick).
+- 10: the two web views were swapped one for the other (the glitch). The music screen is now a white overlay on top of the workout screen, which is already loading the demo underneath; Continue fades the overlay out in 180ms and the demo is simply there.
+- 11: the demo's white card now spans the full width and reaches the bottom, rounded top corners only (36px), square bottom. Measured: left 0, right 390, bottom 844.
+- Test: scripts/test-demo-music.js.
 
-- 6: the header now starts 14px below the notch (`Math.max(inset, 47) + 14`): the back button at y 76 on a phone with a 62 inset, was 56.
-- 7: new shared component components/GlassBackButton.tsx: real Liquid Glass (the same LiquidGlassButton as the tab bar and + button), 40px, chevron. Use it on any other native screen that needs a back button.
-- 8: the pencil sheet is rebuilt from Home's Edit Workout design (numbers read from your home design file): floating white sheet 8px from the sides and bottom with 40px corners, grab bar, 20px bold title (the exercise name) with the round grey close button, grey rounded rows (#f6f6f8, 20px corners) for Sets and Reps with white 36px round minus/plus buttons, and the black 54px "Done" pill (was "Save"). It still saves sets and reps. Limit: the sheet is a native Modal, so my web renderer can not draw it; I checked the numbers and wiring in code, not a picture. Please look at it once.
-- Tests: scripts/test-workout-preview.js (title position, glass back button, sheet numbers).
+## 12. Weekly goal
 
-## 9. Music screen
-
-- The text was too high because the fake status bar row of the design was being removed from the page, which pulled everything up by 50px under the notch. It is now hidden but keeps its room (same for the demo screen), plus 28px more, so the title is at 118 (the design's own spot is 90, it was right under the notch).
-- Shown only the first 2 times ever: the number of times is stored on the device (`formpal_music_shown_count`); lib/musicGate.ts decides (shown 0 or 1 times: show; 2 or more: skip). "Don't show this page again" still skips it at once. To see it again for testing, clear the app data.
-
-## 10. Demo screen
-
-Causes: the design's default text ("Push-ups", "3 sets · 12 reps", its three default instructions) was painted first and swapped by hand a moment later (that is the glitch), and a MutationObserver re-scanned every div on the page after every change while the page redraws 4 times a second (that is the lag).
-
-Now (lib/demoScreen.ts): the real exercise and steps go in through the design's own logic (the same method Home and Train use) BEFORE the first draw; nothing is painted until that data is in and the page is scaled (so the first visible frame is final); the page's entrance animations and drifting colour blobs are off; the three buttons (close, I'm ready, don't show again) use one delegated click listener, no observer, no scanning. The "don't show again" box starts ticked from the saved choice without a fake click. The demo and music pages are also loaded invisibly in the background at launch (DesignPrewarm), so the first open has no file load.
-Test (scripts/test-demo-music.js): at the exact moment of reveal the page shows "Bicep Curl", "2 of 5" and the 3 real steps and none of the design defaults; no animation running; "demoShown" posted once; 2 seconds of playing with no frame over 40ms (worst 18ms); the three buttons post the right messages.
-Limit: I measured Chromium, not the phone; the feel on the phone needs your check. Log lines: `[DEMO] shown with the real data`, `[MUSIC] screen shown (N of 2)`.
-
-## 11. Demo ready for real videos
-
-Every instruction step has a START TIME in seconds; the lit step is always "the last step whose start time has passed"; tapping a step jumps to its start time; the progress bar and the clock follow. With no video it uses a placeholder timeline: 18 seconds with the steps spread evenly (0, 6, 12 for 3 steps), and the app logs `[DEMO] <exercise>: placeholder timing ...` for each one.
-
-HOW TO SET THE TIMES (also written at the top of lib/demoVideos.ts): open lib/demoVideos.ts and add one line per exercise in `DEMO_VIDEOS`, keyed by the exercise id:
-
-    pushup: { videoLength: 24, stepStarts: [0, 8.5, 16] },
-
-`videoLength` is the video's length in seconds; `stepStarts` has one start second per instruction, in the order the instructions are shown (the order of getDemoCues in lib/demoCues.ts). Times are sorted for you, extra ones are ignored, missing ones are spread over the rest of the video. Nothing else changes. Putting the video file itself into the grey "Drop demo video frame" box is the next step; the timing needs no change then.
+- lib/weeklyGoal.ts (pure, tested): the goal is the number of workouts a week. It starts from the plan's days per week; if you pick days in Profile, the number of days you picked is the goal. No plan and no pick: 3. The week is Monday to Sunday. Camera workouts and logged sessions count, practice form checks (kind: 'practice') do not. The count caps at the goal, extras show as a bonus: "4 of 4 workouts · +4 bonus", never "8 of 4".
+- Home's week line uses it (the old code counted from Sunday against a fixed 4).
+- Profile: "Training days" is renamed "Weekly goal" and reads "4 workouts a week". Tapping it opens the same day picker with a new title ("Weekly goal") and text ("Pick the days you plan to train. The number of days is your weekly goal"). Saving a pick changes the goal everywhere. I kept the weekday picker as the way to edit because it already saves; if you want a number stepper instead, tell me.
+- Tests: scripts/test-weekly-goal.js (week bounds, goal rules, counting, cap and bonus, Home line, Profile row and page), test-data-wiring and test-profile-slide updated.
+- Not done here: the rings (you are designing them).
 
 ## Tests
 
-New: test-calendar-drop, test-create-starter, test-demo-music. Updated: test-streak, test-workout-preview, test-launch-speed (earlier). The whole suite was run at the end: everything passes except scripts/test-rep-feedback-injection.js (Window B's; it needs an untracked .scratch file and failed before my changes too). test-design-screens was updated because Create workout now shows a Popular list. `npx tsc --noEmit` shows no errors in files I touched.
-
-## Things I touched outside my area
-
-- app/workout/run.tsx (the music and demo screens you asked for): the demo uses the new logic, the music gate counts shows, the status row fix.
-- components/DesignPrewarm.tsx: two more pages warmed.
+The whole suite was run at the end: everything passes except scripts/test-rep-feedback-injection.js (Window B's, needs an untracked .scratch file, failed before my changes). test-home-clean was updated: it asserted the old "8 of 4". New: test-learn-moves, test-weekly-goal. Updated: test-calendar-drop, test-streak, test-workout-preview, test-demo-music, test-data-wiring, test-profile-slide.
 
 ## Questions
 
-- Core chip: only one exercise (Sit-up) mainly trains core. OK to show the others that also work the core, or do you want core-only exercises added to the catalogue?
-- Music screen: "first 2 times ever" counts each time it is shown. If you want it counted per workout finished instead, say so.
+- Calendar glass: is the white frosting right, or do you want it clearer (less white)?
+- Weekly goal editing: the weekday picker, or a number stepper?
 
 ## Blocked commands
 
-One command was blocked by the hook as "deletes or discards files": `rm -f .scratch/suite.out 2>/dev/null; (for f in scripts/test-*.js; do ... done; echo ALLDONE) > .scratch/suite2.out 2>&1 &` (the `rm -f` of my own scratch output file before starting a test run). Nothing was deleted; I ran the test loop without it, writing to a new file.
+None this round.
 
 ## Files for you to delete (I never delete)
 

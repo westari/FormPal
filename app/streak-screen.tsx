@@ -7,7 +7,7 @@
  */
 import { leaveToTabs } from '../lib/leaveToTabs';
 import React, { useEffect, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Animated, Easing, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { CONSOLE_FORWARD_JS, DC_VIEWPORT_JS, dcScaleFitJs } from '../lib/dcWebviewHelpers';
@@ -45,6 +45,9 @@ export default function StreakScreen() {
   const dest = params.dest ?? '/(tabs)/';
   const [ready, setReady] = useState(false);
   const webRef = useRef<WebView>(null);
+  // the page is revealed with a short even fade (it used to pop from nothing to everything in one frame)
+  const fade = useRef(new Animated.Value(0)).current;
+  useEffect(() => { if (ready) Animated.timing(fade, { toValue: 1, duration: 180, easing: Easing.out(Easing.quad), useNativeDriver: true }).start(); }, [ready, fade]);
 
   const advance = async () => {
     // opened by tapping the streak pill on a tab: just go back (no progress-photo prompt, that is for finishing a workout)
@@ -60,11 +63,12 @@ export default function StreakScreen() {
   if (!info) return <View style={styles.flex} />;
   return (
     <View style={styles.flex}>
+      <Animated.View style={{ flex: 1, opacity: fade }}>
       <WebView
         ref={webRef}
         source={STREAK_HTML}
         originWhitelist={['*']}
-        style={[styles.web, { opacity: ready ? 1 : 0 }]}
+        style={styles.web}
         injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS + NO_ZOOM_JS}
         injectedJavaScript={CONSOLE_FORWARD_JS + streakInject(info)}
         onMessage={(e) => {
@@ -82,6 +86,7 @@ export default function StreakScreen() {
         cacheEnabled={false}
         scrollEnabled={false}
       />
+      </Animated.View>
     </View>
   );
 }

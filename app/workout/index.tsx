@@ -9,8 +9,8 @@
  * the workout name over "52 min · 8 exercises", one white rounded card per exercise (picture square, name,
  * "4 sets · 8 reps", pencil) and the black "Start workout" pill floating at the bottom. Real data: the plan's workout.
  */
-import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Modal } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Modal, Animated, Easing } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -86,6 +86,7 @@ function ExCard({ name, sets, reps, onEdit }: { name: string; sets: number; reps
 }
 
 /** The header starts BELOW the notch / status bar with real breathing room (it sat right up against it before). */
+export const SHEET_MS = 220;
 export const headerTop = (insetTop: number) => Math.max(insetTop, 47) + 14;
 
 export default function WorkoutPreviewScreen() {
@@ -112,6 +113,28 @@ export default function WorkoutPreviewScreen() {
   const [edits, setEdits] = useState<Record<number, { sets: number; reps: number }>>({});
   const [editing, setEditing] = useState<number | null>(null);
   const [draft, setDraft] = useState<{ sets: number; reps: number }>({ sets: 3, reps: 10 });
+  // The sheet and its background are animated here, not by the Modal: the Modal's own "slide" slid the dim layer up the screen as well, so its
+  // hard top edge was visible moving up on open and down on close. Now the Modal has no animation, the whole background fades in and out
+  // evenly (no moving edge), and only the sheet itself slides.
+  const [sheetShown, setSheetShown] = useState(false);
+  const dim = useRef(new Animated.Value(0)).current;
+  const slide = useRef(new Animated.Value(0)).current;
+  const lastEditing = useRef<number | null>(null);
+  if (editing != null) lastEditing.current = editing;
+  useEffect(() => {
+    if (editing != null) {
+      setSheetShown(true);
+      Animated.parallel([
+        Animated.timing(dim, { toValue: 1, duration: SHEET_MS, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        Animated.timing(slide, { toValue: 1, duration: SHEET_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      ]).start();
+    } else if (sheetShown) {
+      Animated.parallel([
+        Animated.timing(dim, { toValue: 0, duration: SHEET_MS, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+        Animated.timing(slide, { toValue: 0, duration: SHEET_MS, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
+      ]).start(({ finished }) => { if (finished) setSheetShown(false); });
+    }
+  }, [editing]); // eslint-disable-line react-hooks/exhaustive-deps
   const workout = baseWorkout ? { ...baseWorkout, exercises: baseWorkout.exercises.map((e, i) => edits[i] ? { ...e, targetSets: edits[i].sets, targetReps: edits[i].reps } : e) } : baseWorkout;
   const openEdit = (i: number) => {
     if (!workout) return;
@@ -168,7 +191,7 @@ export default function WorkoutPreviewScreen() {
       <View style={[s.header, { paddingTop: headerTop(insets.top) }]}>
         <GlassBackButton onPress={() => router.back()} />
         <View style={s.titleBlock}>
-          <Text style={s.title} numberOfLines={1}>{workout.splitLabel}</Text>
+          <Text style={s.title} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{workout.splitLabel}</Text>
           <Text style={s.subtitle} numberOfLines={1}>{workoutMinutes(workout)} min · {plural(exCount, 'exercise')}</Text>
           {isTemplate && <Text style={s.tplNote} numberOfLines={2}>FormPal template. {TEMPLATE_NOTE}</Text>}
         </View>
@@ -184,15 +207,17 @@ export default function WorkoutPreviewScreen() {
         ))}
       </ScrollView>
 
-      <Modal visible={editing != null} transparent animationType="slide" onRequestClose={() => setEditing(null)}>
-        <Pressable style={s.sheetBack} onPress={() => setEditing(null)} accessibilityLabel="Close" />
+      <Modal visible={sheetShown} transparent animationType="none" onRequestClose={() => setEditing(null)} statusBarTranslucent>
+        <Animated.View style={[StyleSheet.absoluteFill, s.sheetBack, { opacity: dim }]} testID="edit-dim">
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setEditing(null)} accessibilityLabel="Close" />
+        </Animated.View>
         {/* The same sheet as the Edit Workout sheet on Home: a floating white sheet (8px from the sides and the bottom, 40px corners), the grab
             bar, a 20px bold title with a round close button, grey rounded rows (#f6f6f8, 20px corners) with white round controls, and the
             black Done pill. */}
-        <View style={[s.sheet, { bottom: 8 + Math.max(insets.bottom - 8, 0) }]} testID="edit-sheet">
+        <Animated.View style={[s.sheet, { bottom: 8 + Math.max(insets.bottom - 8, 0), transform: [{ translateY: slide.interpolate({ inputRange: [0, 1], outputRange: [420, 0] }) }] }]} testID="edit-sheet">
           <Pressable onPress={() => setEditing(null)} style={s.grabHit} accessibilityLabel="Close grab bar"><View style={s.grab} /></Pressable>
           <View style={s.sheetHead}>
-            <Text style={s.sheetTitle} numberOfLines={1}>{editing != null ? workout.exercises[editing]?.displayName : ''}</Text>
+            <Text style={s.sheetTitle} numberOfLines={1}>{lastEditing.current != null ? workout.exercises[lastEditing.current]?.displayName : ''}</Text>
             <Pressable onPress={() => setEditing(null)} style={s.closeBtn} accessibilityRole="button" accessibilityLabel="Close">
               <SymbolView name="xmark" size={12} weight="bold" tintColor={INK} type="monochrome" style={{ width: 12, height: 12 }} />
             </Pressable>
@@ -206,7 +231,7 @@ export default function WorkoutPreviewScreen() {
               <Text style={s.sheetSaveTxt}>Done</Text>
             </Pressable>
           </View>
-        </View>
+        </Animated.View>
       </Modal>
 
       {!previewOnly && (
@@ -247,8 +272,8 @@ const s = StyleSheet.create({
   // header: round white back button, then the name over "52 min · 8 exercises"
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 0, gap: 15 },
   titleBlock: { flex: 1 },
-  title: { fontFamily: FONT.displayBlack, fontSize: 25, lineHeight: 29, letterSpacing: -0.8, color: INK },
-  subtitle: { fontFamily: FONT.display, fontSize: 13.5, lineHeight: 18, color: SUB, marginTop: 2 },
+  title: { fontFamily: FONT.displayBold, fontSize: 34, lineHeight: 40, letterSpacing: -1, color: INK },
+  subtitle: { fontFamily: FONT.display, fontSize: 18, lineHeight: 24, color: SUB, marginTop: 2 },
 
   // one card per exercise
   list: { paddingHorizontal: 14, paddingTop: 25, gap: 10 },
@@ -263,7 +288,7 @@ const s = StyleSheet.create({
   exMeta: { fontFamily: FONT.display, fontSize: 13.5, lineHeight: 17, color: SUB },
   pencil: { width: 16, height: 16, marginLeft: 8 },
 
-  sheetBack: { flex: 1, backgroundColor: 'rgba(17,17,20,0.35)' },
+  sheetBack: { backgroundColor: 'rgba(17,17,20,0.35)' },
   sheet: {
     position: 'absolute', left: 8, right: 8, borderRadius: 40, overflow: 'hidden', backgroundColor: '#ffffff',
     boxShadow: '0 -10px 40px -14px rgba(40,50,90,0.35), 0 2px 8px -2px rgba(40,50,90,0.1)',

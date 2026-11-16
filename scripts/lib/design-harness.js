@@ -8,8 +8,8 @@ const ROOT = path.join(__dirname, '..', '..');
 const DS = require('../../lib/designScreens.ts');
 const { EXERCISE_CATALOG } = require('../../constants/exercises.ts');
 
-const FILES = { create: 'createworkout.html', my: 'myworkouts.html', log: 'logsessionv2.html' };
-const BEFORE = { create: DS.createWorkoutBeforeJs, my: DS.myWorkoutsBeforeJs, log: DS.logSessionBeforeJs };
+const FILES = { create: 'createworkout.html', my: 'myworkouts.html', log: 'logsessionv2.html', learn: 'myworkouts.html' };
+const BEFORE = { create: DS.createWorkoutBeforeJs, my: DS.myWorkoutsBeforeJs, log: DS.logSessionBeforeJs, learn: DS.learnMovesBeforeJs };
 
 async function openDesign(kind, data, { height = 844, withData = true } = {}) {
   const browser = await chromium.launch();

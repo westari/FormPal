@@ -17,6 +17,9 @@ const INK = '#111114';
 const MUTED = '#7b7b85';
 const ACCENT = '#f2701c';
 const SIDE = 14;
+export const CAL_OPEN_MS = 200;
+export const CAL_CLOSE_MS = 150;
+const CARET = 18; // the little pointer on the top edge, pointing up at the date's arrow
 
 export interface CalendarAnchor { top: number; cx: number }
 
@@ -30,9 +33,9 @@ export default function CalendarSheet({ open, onClose, timestamps, anchor }: { o
     if (open) {
       const n = new Date(); setYm({ y: n.getFullYear(), m: n.getMonth() });
       setMounted(true);
-      Animated.timing(prog, { toValue: 1, duration: 260, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+      Animated.timing(prog, { toValue: 1, duration: CAL_OPEN_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
     } else {
-      Animated.timing(prog, { toValue: 0, duration: 180, easing: Easing.in(Easing.quad), useNativeDriver: true }).start(({ finished }) => { if (finished) setMounted(false); });
+      Animated.timing(prog, { toValue: 0, duration: CAL_CLOSE_MS, easing: Easing.in(Easing.quad), useNativeDriver: true }).start(({ finished }) => { if (finished) setMounted(false); });
     }
   }, [open, prog]);
   const trained = useMemo(() => trainedDays(timestamps), [timestamps]);
@@ -41,23 +44,26 @@ export default function CalendarSheet({ open, onClose, timestamps, anchor }: { o
   const monthCount = weeks.flat().filter((c) => c.trained).length;
   if (!mounted || !anchor) return null;
 
-  const top = anchor.top + 6;
+  const top = anchor.top + 12; // leaves room for the pointer between the arrow and the card
   const cardW = width - SIDE * 2;
-  const originX = Math.max(0, Math.min(cardW, anchor.cx - SIDE)); // the card grows out of the arrow
-  const scale = prog.interpolate({ inputRange: [0, 1], outputRange: [0.86, 1] });
-  const slide = prog.interpolate({ inputRange: [0, 1], outputRange: [-14, 0] });
+  const caretX = Math.max(26, Math.min(cardW - 26, anchor.cx - SIDE)); // the pointer sits right under the arrow
+  const scale = prog.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] });
+  const slide = prog.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] });
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-      {/* the area below the card: a tap closes (the header above stays tappable, so the arrow itself closes it too) */}
-      <Animated.View style={[s.dim, { top, opacity: prog }]}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close calendar" />
-      </Animated.View>
-      <Animated.View style={[s.card, { top, left: SIDE, width: cardW, opacity: prog, transform: [{ translateY: slide }, { scale }], transformOrigin: `${originX}px 0px` } as any]} testID="calendar-drop">
-        {/* Real Liquid Glass is see-through by nature: over the page it let the "Energy" pills, "Today" and the workout card show through the
-            calendar (phone screenshot). A near-solid white base goes under the glass, so the glass only adds its edge light and depth. */}
-        <View style={[StyleSheet.absoluteFill, s.base]} testID="calendar-base" />
-        <LiquidGlass radius={28} variant="regular" colorScheme="light" tintColor="rgba(255,255,255,0.35)" fallbackColor="rgba(255,255,255,0)" style={StyleSheet.absoluteFill} pointerEvents="none" />
+      {/* Nothing is dimmed or blurred. This invisible layer under the calendar only catches a tap outside it (the header stays tappable). */}
+      <Pressable style={[s.outside, { top }]} onPress={onClose} accessibilityLabel="Close calendar" testID="calendar-outside" />
+      <Animated.View
+        style={[s.pop, { top, left: SIDE, width: cardW, opacity: prog, transform: [{ translateY: slide }, { scale }], transformOrigin: `${caretX}px 0px` } as any]}
+        testID="calendar-drop"
+      >
+        {/* the pointer: a small rounded diamond whose top half stands out above the card, centred under the arrow */}
+        <View style={[s.caret, { left: caretX - CARET / 2 }]} testID="calendar-caret" pointerEvents="none" />
+        <View style={s.card}>
+          {/* Real Liquid Glass (the same material as the tab bar), frosted with a white tint so the numbers stay readable over the page. */}
+          <View style={[StyleSheet.absoluteFill, s.base]} testID="calendar-base" />
+          <LiquidGlass radius={28} variant="regular" colorScheme="light" tintColor="rgba(255,255,255,0.55)" fallbackColor="rgba(255,255,255,0)" style={StyleSheet.absoluteFill} pointerEvents="none" />
         <View style={s.inner}>
           <View style={s.head}>
             <View>
@@ -91,15 +97,18 @@ export default function CalendarSheet({ open, onClose, timestamps, anchor }: { o
             </View>
           ))}
         </View>
+        </View>
       </Animated.View>
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  dim: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(17,17,20,0.12)' },
-  card: { position: 'absolute', borderRadius: 28, overflow: 'hidden', shadowColor: '#28325a', shadowOpacity: 0.22, shadowRadius: 24, shadowOffset: { width: 0, height: 14 } },
-  base: { backgroundColor: 'rgb(252,252,254)', borderRadius: 28 },
+  outside: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: 'transparent' },
+  pop: { position: 'absolute', shadowColor: '#28325a', shadowOpacity: 0.16, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
+  card: { borderRadius: 28, overflow: 'hidden' },
+  caret: { position: 'absolute', top: -CARET / 2 + 2, width: CARET, height: CARET, borderRadius: 4, backgroundColor: 'rgba(250,250,252,0.94)', transform: [{ rotate: '45deg' }] },
+  base: { backgroundColor: 'rgba(250,250,252,0.84)', borderRadius: 28 },
   inner: { paddingHorizontal: 14, paddingTop: 16, paddingBottom: 10 },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 6, marginBottom: 8 },
   title: { fontSize: 18, fontWeight: '700', color: INK, letterSpacing: -0.4 },

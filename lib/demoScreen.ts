@@ -70,7 +70,7 @@ export const DEMO_PAGE_JS = String.raw`
   if (window.__demoPage) return; window.__demoPage = true;
   function post(m){ try { window.ReactNativeWebView.postMessage(m); } catch (e) {} }
   // nothing is painted until the real data is in; the design's entrance animations (and its drifting colour blobs) are off
-  var css = 'html:not([data-demo-ready]) body{visibility:hidden!important;} #dc-root *{animation:none!important;-webkit-animation:none!important;}';
+  var css = 'html:not([data-demo-ready]) body{visibility:hidden!important;} #dc-root *{animation:none!important;-webkit-animation:none!important;} #dc-root div[style*="height: 346px"][style*="z-index: 4"]{left:0!important;right:0!important;bottom:0!important;height:auto!important;border-radius:36px 36px 0 0!important;}';
   function addCss(){
     if (document.getElementById('__demo_css')) return;
     var host = document.head || document.documentElement; if (!host) return; // the page may not have a root yet: the observer below tries again

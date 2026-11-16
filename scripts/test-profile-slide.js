@@ -16,7 +16,7 @@ const check = (n, ok, d) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${d ? ' 
   await p.evaluate(() => {
     window.__probe = () => { window.__rows = []; window.__on = true; const t = performance.now(); (function loop() { if (!window.__on) return; const v = [...document.querySelectorAll('#dc-root div[style*="pf-in"]')][0]; const cs = v ? getComputedStyle(v) : null; window.__rows.push({ t: Math.round(performance.now() - t), page: !!v, anim: cs ? cs.animationName : '', op: cs ? parseFloat(cs.opacity) : 1, vis: getComputedStyle(document.body).visibility }); requestAnimationFrame(loop); })(); };
   });
-  for (const row of ['Personal details', 'Training days', 'Audio coaching', 'Camera setup']) {
+  for (const row of ['Personal details', 'Weekly goal', 'Audio coaching', 'Camera setup']) {
     const pt = await p.evaluate((row) => { const e = [...document.querySelectorAll('#dc-root div')].filter(d => d.children.length <= 1 && (d.textContent || '').trim() === row)[0]; if (!e) return null; e.scrollIntoView({ block: 'center' }); return 1; }, row);
     if (!pt) { console.log('      (row not present: ' + row + ')'); continue; }
     await p.waitForTimeout(250);

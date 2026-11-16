@@ -122,7 +122,7 @@ const EXP = {
   check('Profile: weight', 'newest entry of the weight log', 'page', val('Weight') === '163.7 lb', val('Weight'));
   check('Profile: goal', 'the plan profile goal chosen in onboarding', 'page', val('Goal') === 'Lose weight', val('Goal'));
   check('Profile: where you train', 'the training location saved at onboarding', 'page', val('Where you train') === 'Outdoors', val('Where you train'));
-  check('Profile: training days', 'weekdays picked on the Profile page; until then the plan days per week', 'page', val('Training days') === '5 days a week', val('Training days'));
+  check('Profile: weekly goal', 'weekdays picked on the Profile page; until then the plan days per week', 'page', val('Weekly goal') === '5 workouts a week', val('Weekly goal'));
   check('Profile: audio coaching', 'the audio settings store', 'page', val('Audio coaching') === 'Corrections + counts', val('Audio coaching'));
   check('Profile: app version', 'the installed app (Expo config version and build number)', 'page', L.includes('FormPal 1.0.0 (7)') && !L.includes('FormPal 1.0 (12)'), L[L.length - 1]);
   check('Profile: referral banner', 'no reward system exists, so no "$10" / "free month" promise', 'page', L.includes('Refer a friend') && !L.some((x) => /\$10|free month/i.test(x)), L.filter((x) => /Refer|\$10/.test(x)).join(' | '));
@@ -151,7 +151,7 @@ const EXP = {
   const pn = await openProfile('empty', { width: 390, height: 844 });
   await pn.p.evaluate((d) => window.__athltSetData && window.__athltSetData(d), none); await pn.p.waitForTimeout(900);
   const N = await lines(pn.p); const nv = (label) => N[N.indexOf(label) + 1];
-  check('Profile (no data): weight / goal / where / days', 'nothing stored -> "Not set" (days: "Not set" with no plan)', 'page', nv('Weight') === 'Not set' && nv('Goal') === 'Not set' && nv('Where you train') === 'Not set' && nv('Training days') === 'Not set', JSON.stringify(['Weight', 'Goal', 'Where you train', 'Training days'].map(nv)));
+  check('Profile (no data): weight / goal / where / days', 'nothing stored -> "Not set" (days: "Not set" with no plan)', 'page', nv('Weight') === 'Not set' && nv('Goal') === 'Not set' && nv('Where you train') === 'Not set' && nv('Weekly goal') === 'Not set', JSON.stringify(['Weight', 'Goal', 'Where you train', 'Weekly goal'].map(nv)));
   const demoP = rawProf.filter((x) => (/\d/.test(x) || /Jordan|JL|Build muscle|Annual|Renews|Restore|Apple Health|Workout time|reminders/i.test(x)) && !/^(FormPal|Home|Train|Progress|Profile)$/.test(x) && !/^(lb|kg)$/.test(x));
   const leakedP = demoP.filter((x) => N.includes(x));
   check('Profile (no data): the design demo content', 'every demo value of profile.html (Jordan Lee, 184 lb, Mon Wed Fri, renewal date, ...)', 'page: none of it appears', leakedP.length === 0, leakedP.join(' | ') || 'none leaked');

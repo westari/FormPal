@@ -60,10 +60,10 @@ export function streakPageJs(info: StreakInfo): string {
       + '<defs><linearGradient id="' + id + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + c0 + '"/>' + (c1 ? '<stop offset="0.45" stop-color="' + c1 + '"/>' : '') + '<stop offset="1" stop-color="' + c2 + '"/></linearGradient></defs>'
       + '<path d="' + FLAME + '" fill="url(#' + id + ')"/></svg>';
   }
-  // ~14 small stars around the flame. Each fades in and out on its own timing and, every time it fades out, comes back somewhere else.
+  // 7 big sparkles (20 to 34px) around the flame. Each fades in and out on its own timing and, every time it fades out, comes back somewhere else.
   var STAR = 'M12 0c.9 6.6 4.4 10.4 12 12-7.6 1.6-11.1 5.4-12 12-.9-6.6-4.4-10.4-12-12 7.6-1.6 11.1-5.4 12-12Z';
   var COLORS = ['#ffd36b', '#ffb347', '#ff9a3c', '#ffe39a', '#ffc15a'];
-  var N_STARS = 14;
+  var N_STARS = 7;
   function spot(size){
     // inside the area around the flame (box 170 x 192) but never over the flame itself (an ellipse around its centre)
     for (var t = 0; t < 60; t++) {
@@ -85,7 +85,7 @@ export function streakPageJs(info: StreakInfo): string {
     wrap.style.cssText = 'position:absolute;left:0;top:0;width:0;height:0;pointer-events:none;';
     var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     for (var i = 0; i < N_STARS; i++) {
-      var size = 7 + Math.round(Math.random() * 9), p = spot(size), dur = 2.6 + Math.random() * 2.2;
+      var size = 20 + Math.round(Math.random() * 14), p = spot(size), dur = 3.2 + Math.random() * 2.2;
       var el = document.createElement('div');
       el.setAttribute('data-sk-star', '1');
       el.style.cssText = 'position:absolute;line-height:0;left:' + p[0].toFixed(1) + 'px;top:' + p[1].toFixed(1) + 'px;width:' + size + 'px;height:' + size + 'px;--peak:' + (0.55 + Math.random() * 0.4).toFixed(2) + ';opacity:0;';
@@ -100,15 +100,27 @@ export function streakPageJs(info: StreakInfo): string {
   }
   function apply(){
     var num = q('div[style*="font-size: 54px"]'), head = q('div[style*="font-size: 29px"]'), sub = q('div[style*="font-size: 16px"]');
-    var circles = [].slice.call(document.querySelectorAll('#dc-root div[style*="width: 30px"][style*="height: 30px"]'));
+    var circles = [].slice.call(document.querySelectorAll('#dc-root div[style*="width: 30px"][style*="height: 30px"]')).filter(function (c) { return !c.closest('[data-sk-stars]'); }); // (a 30px sparkle is not a week circle)
     var masks = [].slice.call(document.querySelectorAll('#dc-root div[style*="mask"]'));
     if (!num || !head || !sub || circles.length < 7 || masks.length < 2) return false;
     num.style.setProperty('display', 'none', 'important'); // the design's own white number sat on the flame like a sticker: replaced by the one below
     flame(masks[0], 'sf-out', '#ffd36b', '#ff9a3c', '#ff5a1f');
     flame(masks[1], 'sf-in', '#fff6d6', null, '#ffe39a');
     masks[0].setAttribute('data-vector-flame', 'out'); masks[1].setAttribute('data-vector-flame', 'in');
-    // The fire does NOT move. The page-fit code switches every animation inside the page off (#dc-root * { animation: none !important });
-    // the design's own sparkles and rising embers are hidden, and a field of small stars is drawn around the flame instead.
+    // The page-fit code switches every animation inside the page off (#dc-root * { animation: none !important }), so what moves here is put
+    // back on purpose: the flame breathes very slightly (a barely visible sway), and a few big sparkles fade in and out around it.
+    // The design's own sparkles and rising embers are hidden.
+    if (!document.getElementById('sk-live')) {
+      var lv = document.createElement('style'); lv.id = 'sk-live';
+      lv.textContent = '@keyframes sk-live-out { 0%,100% { transform: scale(1,1) skewX(0deg); } 50% { transform: scale(1.012,1.02) skewX(0.5deg); } }'
+        + '@keyframes sk-live-in { 0%,100% { transform: scale(1,1) skewX(0deg); } 50% { transform: scale(0.992,1.024) skewX(-0.7deg); } }';
+      document.head.appendChild(lv);
+    }
+    var calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!calm) {
+      masks[0].style.setProperty('transform-origin', '50% 92%'); masks[0].style.setProperty('animation', 'sk-live-out 4.6s ease-in-out infinite', 'important');
+      masks[1].style.setProperty('transform-origin', '50% 96%'); masks[1].style.setProperty('animation', 'sk-live-in 3.4s ease-in-out infinite', 'important');
+    }
     masks[0].style.setProperty('filter', 'none', 'important'); // no heavy shadow under the flame: a cleaner look
     var box = masks[0].parentElement && masks[0].parentElement.parentElement;      // the 170 x 192 box the flame sits in
     var outer = box && box.parentElement;                                           // the 192 x 214 box with the soft glow
@@ -160,7 +172,12 @@ export function streakPageJs(info: StreakInfo): string {
       // not change shape after they show) and two frames have been drawn.
       var done = function(){ requestAnimationFrame(function(){ requestAnimationFrame(function(){ window.__streakApplied = true; }); }); };
       var waitScale = function(n){ if (window.__dcCanvasScale || n > 40) done(); else setTimeout(function(){ waitScale(n + 1); }, 25); };
-      try { (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(function(){ waitScale(0); }, function(){ waitScale(0); }); } catch (e) { waitScale(0); }
+      try {
+        // the fonts are only fetched when text that uses them is laid out: load the three weights this page uses explicitly, then wait
+        var F = '"Plus Jakarta Sans"';
+        var loads = document.fonts && document.fonts.load ? [document.fonts.load('800 29px ' + F), document.fonts.load('500 16px ' + F), document.fonts.load('700 11px ' + F), document.fonts.load('800 46px ' + F)] : [];
+        Promise.all(loads).then(function(){ return document.fonts.ready; }).then(function(){ waitScale(0); }, function(){ waitScale(0); });
+      } catch (e) { waitScale(0); }
     }
     return true;
   }
