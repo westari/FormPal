@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Workout Complete</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700&display=swap" rel="stylesheet" />
+<style>
+  body { margin: 0; background: #ffffff; -webkit-font-smoothing: antialiased; }
+  a { text-decoration: none; }
+  /* empty viewfinder fades in small, unfolds out to the sides, then gives one gentle focus "lock" */
+  @keyframes nw-bracket {
+    0% { opacity: 0; transform: translate(var(--dx0), var(--dy0)) scale(0.7); animation-timing-function: cubic-bezier(.2,.8,.2,1); }
+    22% { opacity: 1; transform: translate(var(--dx0), var(--dy0)) scale(1); }
+    25% { transform: translate(var(--dx0), var(--dy0)) scale(1); animation-timing-function: cubic-bezier(.65,0,.15,1); }
+    72% { transform: translate(0, 0) scale(1); animation-timing-function: ease-in-out; }
+    86% { transform: translate(calc(var(--sx) * -3px), calc(var(--sy) * -3px)) scale(1); animation-timing-function: ease-in-out; }
+    100% { opacity: 1; transform: translate(0, 0) scale(1); }
+  }
+  @keyframes nw-press { 0% { transform: scale(1); } 40% { transform: scale(0.94); } 100% { transform: scale(1); } }
+  @keyframes nw-wash { from { clip-path: circle(0px at 50% 786px); } to { clip-path: circle(1000px at 50% 786px); } }
+  @keyframes nw-focus { 0% { opacity: 0; filter: blur(12px); transform: scale(1.05); } 100% { opacity: 1; filter: blur(0); transform: scale(1); } }
+  @keyframes nw-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+<style>html, body { margin: 0; } body { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #f0f0f2; }</style>
+</head>
+<body>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #e9e9ed; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', system-ui, sans-serif; color: #111114;">
+  <!-- the Done button the wash grows out of -->
+  <div style="position: absolute; left: 20px; right: 20px; bottom: 30px; height: 56px; border-radius: 999px; background: #111114; color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 600; animation: nw-press 260ms ease-out both;">Done</div>
+  <!-- wash: clean white sweeps up from the button -->
+  <div style="position: absolute; inset: 0; background: linear-gradient(180deg, #f5f5f7 0%, #fbfbfc 45%, #ffffff 100%); animation: nw-wash 700ms cubic-bezier(.6,0,.3,1) 180ms both;">
+  <div aria-hidden="true" style="position: absolute; left: 35px; top: 360px; width: 28px; height: 28px; line-height: 0; --dx0: 126px; --dy0: 10px; --sx: -1; --sy: -1; animation: nw-bracket 1620ms linear 1050ms both;">
+    <svg width="28" height="28" viewBox="0 0 28 28" fill="none" style="transform: none;"><path d="M2 26V13A11 11 0 0 1 13 2h13" stroke="#111114" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+  </div>
+  <div aria-hidden="true" style="position: absolute; left: 327px; top: 360px; width: 28px; height: 28px; line-height: 0; --dx0: -126px; --dy0: 10px; --sx: 1; --sy: -1; animation: nw-bracket 1620ms linear 1050ms both;">
+    <svg width="28" height="28" viewBox="0 0 28 28" fill="none" style="transform: scaleX(-1);"><path d="M2 26V13A11 11 0 0 1 13 2h13" stroke="#111114" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+  </div>
+  <div aria-hidden="true" style="position: absolute; left: 35px; top: 420px; width: 28px; height: 28px; line-height: 0; --dx0: 126px; --dy0: -10px; --sx: -1; --sy: 1; animation: nw-bracket 1620ms linear 1050ms both;">
+    <svg width="28" height="28" viewBox="0 0 28 28" fill="none" style="transform: scaleY(-1);"><path d="M2 26V13A11 11 0 0 1 13 2h13" stroke="#111114" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+  </div>
+  <div aria-hidden="true" style="position: absolute; left: 327px; top: 420px; width: 28px; height: 28px; line-height: 0; --dx0: -126px; --dy0: -10px; --sx: 1; --sy: 1; animation: nw-bracket 1620ms linear 1050ms both;">
+    <svg width="28" height="28" viewBox="0 0 28 28" fill="none" style="transform: scale(-1,-1);"><path d="M2 26V13A11 11 0 0 1 13 2h13" stroke="#111114" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+  </div>
+
+  <div style="position: absolute; left: 0; right: 0; top: 383px; height: 42px; display: flex; align-items: center; justify-content: center; font-size: 30px; line-height: 1; font-weight: 600; letter-spacing: -0.8px; animation: nw-focus 700ms cubic-bezier(.2,.7,.2,1) 1830ms both;">Workout complete!</div>
+
+  <div style="position: absolute; left: 40px; right: 40px; top: 500px; text-align: center; font-size: 18.5px; line-height: 1.45; font-weight: 500; letter-spacing: -0.2px; color: #6e6e77; text-wrap: balance; animation: nw-rise 600ms cubic-bezier(.2,.8,.2,1) 2250ms both;">Day 2 of your streak. Next up: Upper body on Wednesday.</div>
+
+  <a href="#" style="position: absolute; left: 20px; right: 20px; bottom: 30px; height: 56px; border-radius: 999px; background: #111114; color: #ffffff; display: flex; align-items: center; justify-content: center; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', system-ui, sans-serif; font-size: 17px; font-weight: 600; letter-spacing: -0.2px; animation: nw-rise 520ms cubic-bezier(.2,.8,.2,1) 2700ms both;">Continue</a>
+</div>
+</div>
+</body>
+</html>
