@@ -561,7 +561,8 @@ export default function RecapScreen() {
     return recapPageData({
       totalReps: data.totalReps, totalGoodReps: data.totalGoodReps, moves: data.entries.length,
       pct: data.pct, hasFormData: data.hasFormData, durationSec: data.durationSec, hasVideo,
-      title: isPractice ? 'Form check complete' : undefined,
+      // a past form check opened from Progress -> Form checks says "Form check complete" too (its entries are saved with kind: 'practice')
+      title: (isPractice || (data.isHistory && data.entries.length > 0 && data.entries.every(e => e.kind === 'practice'))) ? 'Form check complete' : undefined,
     });
   }, [data, hasVideo, isPractice]);
 

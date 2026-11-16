@@ -25,6 +25,8 @@ export interface MatchResult {
   samples: number;
   cut: PathCut;               // where the path is cut off from the camera, if it is
   topCuts: number; bottomCuts: number; frameCuts: number;
+  /** seconds since the newest cut of each kind (Infinity = none in the window): a cut is evidence only while it is fresh */
+  cutAgo: { top: number; bottom: number; frame: number };
   tryingForSec: number;       // how long it has been HIGH without a break
   /** the path moved in the last ~2.5 s. The 10 s score remembers reps after the user stops; this does not. Stuck / Guide / Coach use it so a rest is never read as "trying". */
   movingNow: boolean;
@@ -34,7 +36,11 @@ export interface MovementMatch {
   /** Feed every native debug-log line. */
   feed(line: string): void;
   /** A rep was counted now (native [REP] lines are seen by feed; use this for reps the app counts itself). */
-  noteRep(): void;
+  noteRep(bottom?: number): void;
+  /** The exercise's path band (lowest and highest metric value that still counts as this exercise), or null before the first [METRIC] line. */
+  band(): { lo: number; hi: number } | null;
+  /** Is a rep that went down to `bottom` on the exercise's path? true when unknown. A rep far below the path (arms dropped, reaching) is not evidence of the exercise. */
+  repOnPath(bottom: number | undefined): boolean;
   result(): MatchResult;
   reset(): void;
 }
@@ -56,11 +62,24 @@ export function createMovementMatch(opts: { now?: () => number; log?: (m: string
   let lastRepAt = 0;
 
   const R = () => Math.max(1e-6, Math.abs(top - rom));
+  function band(): { lo: number; hi: number } | null {
+    if (!haveDef) return null;
+    const r = R();
+    return { lo: Math.min(enter, rom) - T.bandBelowLow * r, hi: top + T.bandAboveTop * r };
+  }
+  function repOnPath(bottom: number | undefined): boolean {
+    const b = band();
+    if (!haveDef || bottom === undefined || isNaN(bottom)) return true;
+    // far below the path = not this exercise (arms dropped, reaching). A GENEROUS line (a whole rep span below the entry line): a real deep rep (28.6 on a path
+    // that starts at 29.7) is still a rep. 2026-11-16 log: the reach for the phone read bottom=1.0, real reps 28.6 to 45.7.
+    return bottom >= Math.min(enter, rom) - T.repBelowPathR * R();
+  }
 
   function addSample(t: number, v: number) {
     const last = samples[samples.length - 1];
     if (last && t - last.t < 100) return; // several log lines for one frame
-    if (last && haveDef && t - last.t >= T.cutGapSec * 1000) {
+    // (a gap that contains "[TRACK] person lost" is the WHOLE person leaving, a frame cut: not the hands or feet being lost at one end of the stroke)
+    if (last && haveDef && t - last.t >= T.cutGapSec * 1000 && !(lastLostAt >= last.t && lastLostAt > 0)) {
       const r = R();
       const gapSec = (t - last.t) / 1000;
       {
@@ -88,7 +107,13 @@ export function createMovementMatch(opts: { now?: () => number; log?: (m: string
     if (m) { addSample(t, parseFloat(m[1])); return; }
     m = /^\[ACTIVITY\] suppressed[^\n]*?metric=([-\d.]+)/.exec(line);
     if (m) { addSample(t, parseFloat(m[1])); return; }
-    if (/^\[REP\] #[0-9]+/.test(line)) { lastRepAt = t; return; }
+    if (/^\[REP\] #[0-9]+/.test(line)) {
+      // A counted rep is evidence of THIS exercise (the score floor) only if it stayed on the exercise's path. 2026-11-16 log: reaching for the phone at the
+      // end of the set counted a "rep" with bottom=1.0 (the arms dropped to the side); that rep forced the score up and got a check.
+      const bm = /bottom=([-\d.]+)/.exec(line);
+      if (!bm || repOnPath(parseFloat(bm[1]))) lastRepAt = t;
+      return;
+    }
     if (/^\[TRACK\] person lost/.test(line)) { lastLostAt = t; cuts.push({ t, where: 'frame', weight: 1 }); return; }
     if (/^\[TRACK\] person back/.test(line)) { lastBackAt = t; return; }
   }
@@ -132,25 +157,29 @@ export function createMovementMatch(opts: { now?: () => number; log?: (m: string
     return best;
   }
 
-  function cutState(t: number): { cut: PathCut; top: number; bottom: number; frame: number } {
+  function cutState(t: number): { cut: PathCut; top: number; bottom: number; frame: number; ago: { top: number; bottom: number; frame: number } } {
     cuts = cuts.filter(c => t - c.t <= T.cutWindowSec * 1000);
     let topN = 0, botN = 0, frameN = 0;
-    for (const c of cuts) { if (c.where === 'top') topN += c.weight; else if (c.where === 'bottom') botN += c.weight; else frameN += c.weight; }
+    const ago = { top: Infinity, bottom: Infinity, frame: Infinity };   // seconds since the newest cut of each kind
+    for (const c of cuts) {
+      if (c.where === 'top') topN += c.weight; else if (c.where === 'bottom') botN += c.weight; else frameN += c.weight;
+      ago[c.where] = Math.min(ago[c.where], (t - c.t) / 1000);
+    }
     // hands / feet that have not come back yet: the gap is still open
     const last = samples[samples.length - 1];
     if (last && haveDef && t - last.t >= T.cutGapSec * 1500 && t - lastLostAt > 1500) {
       const r = R();
-      if (last.v >= top - T.cutTopZoneR * r) topN += 1; else if (last.v <= Math.min(enter, rom) + T.cutBottomZoneR * r) botN += 1;
+      if (last.v >= top - T.cutTopZoneR * r) { topN += 1; ago.top = 0; } else if (last.v <= Math.min(enter, rom) + T.cutBottomZoneR * r) { botN += 1; ago.bottom = 0; }
     }
     const cutTop = topN >= T.cutMinEvents, cutBot = botN >= T.cutMinEvents;
     const cut: PathCut = cutTop && cutBot ? 'both' : cutTop ? 'top' : cutBot ? 'bottom' : frameN >= 1 ? 'frame' : null;
-    return { cut, top: topN, bottom: botN, frame: frameN };
+    return { cut, top: topN, bottom: botN, frame: frameN, ago };
   }
 
   const empty = (t: number, cs: ReturnType<typeof cutState>, n: number): MatchResult => ({
     score: 0, trying: false, notTrying: true, haveData: false,
     parts: { motion: 0, rhythm: null, range: 0, position: 0 }, spreadR: 0, inBandFrac: 0, periodSec: null, samples: n,
-    cut: cs.cut, topCuts: cs.top, bottomCuts: cs.bottom, frameCuts: cs.frame, tryingForSec: 0, movingNow: false,
+    cut: cs.cut, topCuts: cs.top, bottomCuts: cs.bottom, frameCuts: cs.frame, cutAgo: cs.ago, tryingForSec: 0, movingNow: false,
   });
 
   function result(): MatchResult {
@@ -224,7 +253,7 @@ export function createMovementMatch(opts: { now?: () => number; log?: (m: string
       score, trying, notTrying, haveData: true,
       parts: { motion: Math.round(motion * 100), rhythm: rhythm === null ? null : Math.round(rhythm * 100), range: Math.round(range * 100), position: Math.round(position * 100) },
       spreadR, inBandFrac: inFrac, periodSec, samples: win.length,
-      cut: cs.cut, topCuts: cs.top, bottomCuts: cs.bottom, frameCuts: cs.frame,
+      cut: cs.cut, topCuts: cs.top, bottomCuts: cs.bottom, frameCuts: cs.frame, cutAgo: cs.ago,
       tryingForSec: tryStart ? (t - tryStart) / 1000 : 0,
       movingNow: (() => {
         const rec = samples.filter(p => t - p.t <= T.moveNowSec * 1000).map(p => p.v).sort((a, b) => a - b);
@@ -241,7 +270,9 @@ export function createMovementMatch(opts: { now?: () => number; log?: (m: string
 
   return {
     feed,
-    noteRep() { lastRepAt = now(); },
+    noteRep(bottom) { if (repOnPath(bottom)) lastRepAt = now(); },
+    band,
+    repOnPath,
     result,
     reset() { samples = []; cuts = []; lastLostAt = 0; lastBackAt = 0; tryStart = 0; lowSince = 0; lastLogAt = 0; lastLogScore = -100; lastLogCut = ''; lastRepAt = 0; haveDef = false; },
   };

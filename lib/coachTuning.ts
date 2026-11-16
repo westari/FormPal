@@ -12,6 +12,7 @@ export const MOVEMENT_MATCH = {
   maxInterpSec: 1.0,        // a gap longer than this stays a gap (never invented)
   minSamples: 6,            // fewer samples than this in the window = no data (score 0, "blind")
   // the exercise's path band, in rep spans R = |top - rom|
+  repBelowPathR: 1.0,       // PLACEHOLDER: a counted rep whose lowest value is more than this many rep spans below the entry line is NOT evidence of the exercise (no score floor, no check)
   bandBelowLow: 0.7,        // PLACEHOLDER: the path band reaches this many R below the exercise's low line (the lower of enter and rom)
   bandAboveTop: 0.25,
   // parts
@@ -68,10 +69,15 @@ export const GUIDE = {
   minShowSec: 2.5,          // a Guide line stays up at least this long
   changeConfirmSec: 1.5,    // a different line (or none) must be wanted this long, without a break, before it replaces the one shown
   firstShowConfirmSec: 0.4, // a line shows after being wanted this long (so a one-frame blip never flashes)
+  cutFreshSec: 4,           // PLACEHOLDER: a lost-hands / lost-feet cut counts as evidence for this long after its newest event (a rep every 2 to 4 s keeps it alive)
+  frameCutFreshSec: 1.5,    // PLACEHOLDER: a lost-person cut is evidence for this long (the person comes back, the line goes)
+  goneConfirmSec: 0.5,      // PLACEHOLDER: when its evidence is gone, a line is hidden after this long...
+  minShowGoneSec: 1.0,      // ...but only once it has been up at least this long (so a line is readable)
   evidenceHoldSec: 1.0,     // PLACEHOLDER: a real camera problem must be seen this long before the Guide speaks (with the path-cut detection this is about 3 s in all)
   tipRotateSec: 5,          // PLACEHOLDER: the same Guide tip for this long with nothing improved -> switch to the next most likely fix
   minTryingSec: 2,          // Movement Match must have been HIGH this long before a stuck diagnosis is trusted
-  cuePersistSec: 1.5,       // the camera's own "step back / no person" signal must hold this long before the words or the number react (it flickers while you stand still)
+  cuePersistSec: 0.8,       // PLACEHOLDER: the camera's own "step back / no person" cue must hold this long (was 1.5). With the 0.4 s confirm a proven drop is explained in about 1.2 s.
+  hintHoldSec: 0.5,         // PLACEHOLDER: the counter's own diagnosis (repDiag) must hold this long before it becomes a Guide line
   logEverySec: 4,
 };
 

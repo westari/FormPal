@@ -21,18 +21,12 @@ export const GUIDE_LINES = {
   backUp:       'Back up',          // too close (Ari 2026-11-15)
   backHands:    'Step back further',
   backBody:     'Step back further',
-  closer:       'Step closer',
   phoneBack:    'Move your phone back',
   handsInView:  'Keep your hands in view',
   bodyInView:   'Keep your whole body in view',
   sideways:     'Turn sideways to the phone',
   facePhone:    'Face the phone',
   moreLight:    'Find more light',
-  chestHeight:  'Put your phone at chest height',
-  handsStart:   'Lower your hands',
-  startPos:     'Get ready to start',
-  raiseHands:   'Raise your hands overhead',
-  lowerHands:   'Lower your hands',
   holdStill:    'Hold still',
   ready:        'Ready. Go!',
 } as const;
@@ -54,14 +48,12 @@ export function guideLine(text: string | null | undefined, exerciseId?: string):
   if (!t) return null;
   const hands = handsMatter(exerciseId);
   if (/step into|get in frame|get back in frame|no person|into the frame|in the picture/.test(t)) return GUIDE_LINES.intoPicture;
-  if (/closer|too far/.test(t)) return GUIDE_LINES.closer;
   if (/too close|back up/.test(t)) return GUIDE_LINES.backUp;
   if (/phone back|too close|move back|step back|back up|tracking lost|can't see|cannot see|loses you|losing you/.test(t)) return hands ? GUIDE_LINES.backHands : GUIDE_LINES.backBody;
   if (/side-on|sideways|turn side/.test(t)) return GUIDE_LINES.sideways;
   if (/face (the )?(camera|phone)|face camera/.test(t)) return GUIDE_LINES.facePhone;
   if (/light|dark/.test(t)) return GUIDE_LINES.moreLight;
-  if (/hands? (at|to) (your )?shoulders?/.test(t)) return GUIDE_LINES.handsStart;
-  if (/start position|starting position|get in position|start again|adjust position|get ready/.test(t)) return hands && /press|overhead/i.test(exerciseId ?? '') ? GUIDE_LINES.handsStart : GUIDE_LINES.startPos;
+  // ("Hands at shoulders" / "Get in position" are the counter waiting for a start position, not a camera problem: no Guide line. It used to say "Lower your hands".)
   if (/hold still|stand still|stay still|steady/.test(t) && !/keep (body|hips|knees|elbows?|head|wrists?|ankles?|shoulders?)/.test(t)) return GUIDE_LINES.holdStill;
   return null;
 }
@@ -96,10 +88,13 @@ export interface GuideDecision { line: string | null; why: string; reason: WhyCa
 /** Picks the real reason it cannot count. Pure: the same inputs always give the same answer. */
 export function whyCannotCount(i: GuideInputs): WhyCannotCount {
   if (i.personMissing) return 'nobody';
-  if (i.match.cut === 'frame') return 'frame-edge';
-  if (i.match.cut === 'both') return 'cut-both';
-  if (i.match.cut === 'top') return 'cut-top';
-  if (i.match.cut === 'bottom') return 'cut-bottom';
+  // a cut is evidence only while it is FRESH (the window remembers 12 s; a line must not hang on after its evidence is gone)
+  const ago = i.match.cutAgo ?? { top: 0, bottom: 0, frame: 0 };
+  const fTop = ago.top <= G.cutFreshSec, fBot = ago.bottom <= G.cutFreshSec, fFrame = ago.frame <= G.frameCutFreshSec;
+  if (i.match.cut === 'frame' && fFrame) return 'frame-edge';
+  if (i.match.cut === 'both' && fTop && fBot) return 'cut-both';
+  if ((i.match.cut === 'top' || i.match.cut === 'both') && fTop) return 'cut-top';
+  if ((i.match.cut === 'bottom' || i.match.cut === 'both') && fBot) return 'cut-bottom';
   if (i.rejectedDark) return 'dark';
   if (i.rejectedLowQuality) return 'low-quality';
   if (i.outOfPlaneCue) return 'angle';
@@ -165,6 +160,11 @@ export function createCalmLine(): CalmLine {
         return shown;
       }
       if (wanted !== cand) { cand = wanted; candSince = now; }
+      // the evidence is GONE (nothing wanted): hide soon (Ari 2026-11-16: a line must not hang around after its evidence has gone)
+      if (wanted === null) {
+        if (now - shownSince >= G.minShowGoneSec * 1000 && now - candSince >= G.goneConfirmSec * 1000) { shown = null; cand = null; }
+        return shown;
+      }
       if (now - shownSince >= G.minShowSec * 1000 && now - candSince >= G.changeConfirmSec * 1000) { shown = wanted; shownSince = now; cand = null; }
       return shown;
     },
@@ -173,8 +173,34 @@ export function createCalmLine(): CalmLine {
 }
 
 /**
+ * EVIDENCE TABLE (Ari 2026-11-16): every Guide line, the exact evidence it needs, and whether the OLD (Oct 8) native build can provide it.
+ * A line may only show when its evidence has been present for at least GUIDE.evidenceHoldSec, and is hidden again when the evidence is gone.
+ * A line whose evidence the old build cannot provide is not in GUIDE_LINES at all (it comes back with the new build).
+ */
+export const GUIDE_EVIDENCE: Record<string, { evidence: string; oldBuild: boolean }> = {
+  'Step into view':               { evidence: 'Vision finds nobody in the picture AND the person was never seen before (personDetected false, metric samples silent)', oldBuild: true },
+  'Back up':                      { evidence: 'a person who WAS in the picture a moment ago is lost (personDetected false after being seen), or native says "Back up" / "too close" in setup', oldBuild: true },
+  'Step back further':            { evidence: 'native says "Step back into frame" AND the metric samples really stop or pose gaps appear (a cue the samples contradict is ignored); or the path is cut at the frame edge', oldBuild: true },
+  'Move your phone back':         { evidence: 'the rep path is cut at the frame edge or at BOTH ends (metric samples stop near both the top and the bottom)', oldBuild: true },
+  'Keep your hands in view':      { evidence: 'metric samples stop near the TOP of the stroke (hands / arms lost there), or a rep was rejected and the poorly seen joints are the elbow / wrist', oldBuild: true },
+  'Keep your whole body in view': { evidence: 'metric samples stop near the BOTTOM of the stroke, or a rep was rejected and the poorly seen joints are hips / knees / ankles', oldBuild: true },
+  'Turn sideways to the phone':   { evidence: 'native out-of-plane cue (the angle is foreshortened) for an exercise filmed from the side', oldBuild: true },
+  'Face the phone':               { evidence: 'native out-of-plane cue (the angle is foreshortened) for an exercise filmed from the front', oldBuild: true },
+  'Find more light':              { evidence: 'a rep was rejected and even the best joint confidence was under 0.45', oldBuild: true },
+  'Hold still':                   { evidence: 'setup only: the native setup check is holding (every joint visible, the hold timer running)', oldBuild: true },
+};
+// REMOVED 2026-11-16 because the old build cannot give their evidence: "Step closer" (nothing tells us the person is too far), "Put your phone at chest height"
+// (no evidence of the phone height), "Lower your hands" / "Raise your hands overhead" / "Get ready to start" (the "Hands at shoulders" message is the counter
+// waiting for a start position; it said "Lower your hands" while his hands WERE down: wrong direction and not a camera problem).
+
+export interface Guide {
+  decide(i: GuideInputs): GuideDecision;
+  reset(): void;
+}
+
+/**
  * A signal that only counts once it has held for `holdSec` without a break. The camera's own "step back / no person" signal flickers on and
- * off while the user stands still; the words and the confidence number only react to it once it has persisted (GUIDE.cuePersistSec).
+ * off while the user stands still; the words only react to it once it has persisted (GUIDE.cuePersistSec).
  */
 export function createCueHold(holdSec: number = G.cuePersistSec) {
   let since = 0;
@@ -188,37 +214,16 @@ export function createCueHold(holdSec: number = G.cuePersistSec) {
   };
 }
 
-/**
- * The ORDERED causes for a situation (Ari 2026-11-15: "Keep your hands in view" repeated for ever). The first tip is the most likely fix; when it has
- * shown tipRotateSec and nothing improved, the next one is tried, and so on (then it starts again). Starts with the tip the situation names.
- */
-export function tipOrder(base: string, exerciseId?: string): string[] {
-  const hands = handsMatter(exerciseId);
-  const L = GUIDE_LINES;
-  const general = hands ? [L.handsInView, L.backHands, L.phoneBack, L.moreLight, L.chestHeight] : [L.bodyInView, L.backBody, L.phoneBack, L.moreLight, L.chestHeight];
-  const special: Record<string, string[]> = {
-    [L.intoPicture]: [L.intoPicture, L.backHands, L.moreLight],
-    [L.backUp]: [L.backUp, L.backHands, L.phoneBack, L.moreLight],
-    [L.sideways]: [L.sideways, L.facePhone, L.bodyInView],
-    [L.facePhone]: [L.facePhone, L.sideways, L.bodyInView],
-    [L.moreLight]: [L.moreLight, L.chestHeight, L.backHands],
-    [L.closer]: [L.closer, L.chestHeight, L.moreLight],
-  };
-  const list = special[base] ?? general;
-  return [base, ...list.filter(t => t !== base)];
-}
-
-export interface Guide {
-  decide(i: GuideInputs): GuideDecision;
-  reset(): void;
-}
+/** Does the metric stream back up a native "step back / person lost" cue? True when the samples really stopped or the pose dropped. */
+export function frameCueHasEvidence(i: { healthy: boolean }): boolean { return !i.healthy; }
 
 export function createGuide(opts: { log?: (m: string) => void } = {}): Guide {
   const calm = createCalmLine();
   let lastLogLine = '', lastLogAt = 0;
-  let ep = { key: '', since: 0, idx: 0, seen: 0, base: '' };
+  let ep = { key: '', since: 0, idx: 0, seen: 0 };
+  let lastPick: string | null = null;
   let seenAt = 0;
-  let evSince = 0, evKey = '';
+  const evSince: Record<string, number> = {};
   const log = (now: number, line: string | null, why: string) => {
     if (!opts.log) return;
     const key = line ?? '';
@@ -226,50 +231,64 @@ export function createGuide(opts: { log?: (m: string) => void } = {}): Guide {
     lastLogLine = key; lastLogAt = now;
     opts.log(line ? `[GUIDE] says "${line}" because ${why}` : `[GUIDE] says nothing (${why})`);
   };
+  // evidence must have held for evidenceHoldSec before its line may show
+  const held = (key: string, present: boolean, now: number, holdSec: number = G.evidenceHoldSec): boolean => {
+    if (!present) { delete evSince[key]; return false; }
+    if (!evSince[key]) evSince[key] = now;
+    return now - evSince[key] >= holdSec * 1000;
+  };
   return {
     decide(i) {
-      let line: string | null = null, why = 'nothing to fix', reason: GuideDecision['reason'] = 'none', prio = 0;
-      // the cause: only when the user is really moving (or the path was cut), and only a cause the CAMERA can fix. Short strokes with every joint seen = no cause.
-      const active = i.match.haveData && (i.match.trying || i.match.movingNow || !!i.match.cut);
-      const cause = active ? whyCannotCount(i) : 'unknown';
-      const causeLine = guideForReason(cause, i);
-      const evidence = evidenceFor(active ? cause : 'unknown', i);
-      if (causeLine && !i.personMissing) { if (!evSince || evKey !== cause) { evSince = i.now; evKey = cause; } } else { evSince = 0; evKey = ''; }
+      const cands: { line: string; why: string; reason: GuideDecision['reason'] }[] = [];
       if (!i.personMissing) seenAt = i.now;
-      // nobody in the picture: "Step into view" only if they were never seen; someone who WAS in the picture a moment ago and is now lost is too close
-      if (i.personMissing) {
+      // 1. nobody in the picture: "Step into view" only if they were never seen; someone who WAS in the picture a moment ago and is now lost is too close
+      if (held('nobody', i.personMissing, i.now, 0)) {   // (the screen already holds the camera's own cue for GUIDE.cuePersistSec)
         const wasThere = seenAt > 0 && i.now - seenAt < 10000;
-        line = wasThere ? GUIDE_LINES.backUp : GUIDE_LINES.intoPicture;
-        why = wasThere ? 'the person was in the picture a moment ago and is now lost: too close' : 'the camera finds nobody in the picture';
-        reason = 'nobody'; prio = 3;
+        cands.push({ line: wasThere ? GUIDE_LINES.backUp : GUIDE_LINES.intoPicture, why: wasThere ? 'evidence: the person was in the picture a moment ago and is now lost (too close)' : 'evidence: the camera finds nobody in the picture', reason: 'nobody' });
       }
-      else if (cause && causeLine) {
-        // a REAL camera problem, proven by evidence: speak (after the evidence has held evidenceHoldSec)
-        const held = evSince > 0 && i.now - evSince >= G.evidenceHoldSec * 1000;
-        line = held ? causeLine : null; reason = cause; prio = 2;
-        why = `real camera problem, evidence: ${evidence}${held ? '' : ' (waiting ' + G.evidenceHoldSec + ' s to be sure)'}`;
-      } else {
-        const hint = guideLine(i.nativeCue, i.exerciseId) ?? guideLine(i.outOfPlaneCue, i.exerciseId) ?? guideLine(i.diag, i.exerciseId);
-        if (hint) { line = hint; why = `the camera says "${i.nativeCue || i.outOfPlaneCue || i.diag}"`; reason = 'hint'; prio = 1; }
-      }
-      // ROTATE: the same tip for tipRotateSec and nothing improved -> the next most likely fix (ordered list per situation)
-      if (line) {
-        const key = reason + "|" + line;
-        if (ep.key !== key) ep = { key, since: i.now, idx: 0, seen: i.now, base: line };
-        else ep.seen = i.now;
-        if (i.now - ep.since >= G.tipRotateSec * 1000) { ep.idx += 1; ep.since = i.now; opts.log?.(`[GUIDE] same tip for ${G.tipRotateSec}s and nothing improved: next fix`); }
-        const order = tipOrder(ep.base, i.exerciseId);
-        line = order[ep.idx % order.length];
-      } else if (ep.key && i.now - ep.seen > 1500) ep = { key: "", since: 0, idx: 0, seen: 0, base: "" };
-      // calm: a line stays up at least minShowSec and only changes when the new reason has held for changeConfirmSec
+      // 2. a camera problem proven by the movement itself (only while the user really moves, and only a cause the CAMERA can fix)
+      const active = i.match.haveData && (i.match.trying || i.match.movingNow || !!i.match.cut);
+      const cause = active && !i.personMissing ? whyCannotCount(i) : 'unknown';
+      const causeLine = guideForReason(cause, i);
+      if (held('cause:' + cause, !!causeLine, i.now) && causeLine) cands.push({ line: causeLine, why: 'real camera problem, evidence: ' + evidenceFor(cause, i), reason: cause });
+      // 3. what the camera itself says (native cue, angle cue, the counter's diagnosis): only a line that has an evidence rule
+      const hintSrc = i.nativeCue || i.outOfPlaneCue || i.diag || '';
+      let hint = guideLine(i.nativeCue, i.exerciseId) ?? guideLine(i.outOfPlaneCue, i.exerciseId) ?? guideLine(i.diag, i.exerciseId);
+      // the counter's generic diagnosis ("Move back") is weaker than a specific proven cause (which joints, which end): when a cause exists it speaks instead
+      if (hint && !i.nativeCue && !i.outOfPlaneCue && causeLine) hint = null;
+      // "Step into view" is only for a person who was never seen; someone who was in the picture a moment ago and is lost now is too close
+      if (hint === GUIDE_LINES.intoPicture && seenAt > 0 && i.now - seenAt < 10000) hint = GUIDE_LINES.backUp;
+      if (held('hint:' + (hint ?? ''), !!hint, i.now, i.nativeCue || i.outOfPlaneCue ? 0 : G.hintHoldSec) && hint) cands.push({ line: hint, why: `evidence: the camera says "${hintSrc}"`, reason: 'hint' });
+      // distinct lines only, strongest first
+      const lines: typeof cands = [];
+      for (const c of cands) if (!lines.some((x) => x.line === c.line)) lines.push(c);
+
+      // ROTATE only among causes that are ALL proven: the same tip for tipRotateSec with nothing improved -> the next proven cause. One cause = no rotation.
+      let pick = lines[0] ?? null;
+      if (lines.length > 1) {
+        const key = lines.map((x) => x.line).join('|');
+        if (ep.key !== key) {
+          // a new proven cause appeared (or one went): stay on the tip that is showing; its 5 s clock keeps running
+          const at = lines.findIndex((x) => x.line === lastPick);
+          ep = { key, since: at >= 0 && ep.since ? ep.since : i.now, idx: at >= 0 ? at : 0, seen: i.now };
+        } else ep.seen = i.now;
+        if (i.now - ep.since >= G.tipRotateSec * 1000) { ep.idx += 1; ep.since = i.now; opts.log?.(`[GUIDE] same tip for ${G.tipRotateSec}s and nothing improved: next proven cause`); }
+        pick = lines[ep.idx % lines.length];
+      } else if (ep.key && i.now - ep.seen > 1500) ep = { key: '', since: 0, idx: 0, seen: 0 };
+
+      lastPick = pick ? pick.line : null;
+      let line: string | null = pick ? pick.line : null;
+      let why = pick ? pick.why : (cause === 'range-only' ? 'nothing to fix: ' + evidenceFor('range-only', i) : 'nothing to fix: no camera problem is proven');
+      const reason: GuideDecision['reason'] = pick ? pick.reason : 'none';
+      const evidence = pick ? pick.why : (cause === 'range-only' ? evidenceFor('range-only', i) : '');
+      // calm: a line stays up a short time and only changes when the new reason has held; it is HIDDEN soon after its evidence is gone
       const wantedLine = line;
       line = calm.feed(i.now, wantedLine);
-      if (line !== wantedLine) why = line ? 'holding the last line (calm: a line stays up a few seconds)' : why;
-      void prio;
+      if (line !== wantedLine && line) why = 'holding the last line a moment (calm); ' + why;
       log(i.now, line, why);
-      return { line, why, reason, evidence: line ? (reason === 'hint' ? why : evidence) : (cause === 'range-only' ? evidence : '') };
+      return { line, why, reason, evidence };
     },
-    reset() { evSince = 0; evKey = ''; seenAt = 0; calm.reset(); ep = { key: '', since: 0, idx: 0, seen: 0, base: '' }; lastLogLine = ''; lastLogAt = 0; },
+    reset() { for (const k of Object.keys(evSince)) delete evSince[k]; seenAt = 0; calm.reset(); ep = { key: '', since: 0, idx: 0, seen: 0 }; lastLogLine = ''; lastLogAt = 0; },
   };
 }
 
@@ -288,6 +307,8 @@ export interface CoachInput {
   reason?: string;
   /** missed: which end was short, as the engine reported it ('short_top' | 'short_bottom') */
   missedReason?: string;
+  /** native rep: did it stay on the exercise's path? false = it went far below it (the arms dropped, reaching for the phone): not this exercise, so no check and no X */
+  onPath?: boolean;
 }
 export interface CoachVerdict { show: 'check' | 'x' | null; reason: string; why: string }
 
@@ -314,6 +335,7 @@ export function createCoach(opts: { log?: (m: string) => void } = {}): Coach {
     verdict(i) {
       const lowMatch = i.match.haveData && i.match.notTrying;
       if (lowMatch) return out(i, { show: null, reason: '', why: 'Movement Match is LOW (not trying this exercise), so no check and no X' });
+      if (i.source === 'native' && i.onPath === false) return out(i, { show: null, reason: '', why: 'the counted rep went far below the exercise path (arms dropped / reaching): it is not this exercise, so no check and no X' });
       if (i.source === 'missed') {
         // a missed stroke never stacks on a verdict that was just shown (a counted rep always gets its own)
         if (i.now - lastAt < K.oneVerdictPerSec * 1000) return out(i, { show: null, reason: '', why: 'a verdict was just shown' });

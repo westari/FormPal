@@ -44,6 +44,9 @@ function run(events, opts = {}) {
     const mm = MMm.createMovementMatch({ log });
     const conf = CCm.createCameraConfidence({ log });
     const guide = GCm.createGuide({ log });
+    const cueHold = GCm.createCueHold();             // the screen holds the camera's own cue (GUIDE.cuePersistSec) and checks it against the metric stream
+    let meterPrimed = false;
+    const meterS = LT.createMeterSmoother();         // the number on screen: slew-limited, evidence only
     const coach = GCm.createCoach({ log });
     const det = AD.createAttemptDetector({ exerciseId, log: (m) => log(m) });
     const rd = RD.createRepDiagnostic(undefined, exerciseId);
@@ -79,11 +82,18 @@ function run(events, opts = {}) {
       counter.setFlags({ diag: !!rd.message(), cue: false });
       const c = conf.update({ now, visibility: counter.score(now), match: m, lastCountAt: st.lastCountAt, lastJudgedAt: st.lastJudgedAt > 0 ? st.lastJudgedAt : 0, missedSinceCount: st.missed });
       const rej = det.recentReject(8000);
+      // the same evidence rule as app/formcheck.tsx: the camera's cue becomes words only when the metric stream backs it up
+      const rawCue = opts.trackingCue ? opts.trackingCue(now - 1e12) : null;
+      const cueHeld = cueHold.feed(now, !!rawCue || st.lost);
+      const streamHealthy = counter.seen() && counter.healthy(now, 1500, 2);
+      const cueProven = cueHeld && !streamHealthy;
+      const meter = meterS.tick(c.value, now, meterPrimed ? LT.METER_MAX_RATE : 1e6);   // (on the phone the setup meter is already high when tracking starts)
+      meterPrimed = true;
       const g = guide.decide({
-        now, exerciseId, personMissing: st.lost, nativeCue: opts.trackingCue ? opts.trackingCue(now - 1e12) : null, outOfPlaneCue: null, diag: rd.message(),
+        now, exerciseId, personMissing: st.lost && cueProven, nativeCue: cueProven ? rawCue : null, outOfPlaneCue: null, diag: rd.message(),
         match: m, stuck: c.stuck, rejectedLowQuality: rej.lowQuality, rejectedDark: rej.dark, rejectedJoints: rej.joints, facing: opts.facing,
       });
-      rows.push({ t: now - 1e12, match: m, conf: c, guide: g.line, guideWhy: g.why, guideReason: g.reason, guideEvidence: g.evidence });
+      rows.push({ t: now - 1e12, meter, cueRaw: rawCue, cueHeld, cueProven, match: m, conf: c, guide: g.line, guideWhy: g.why, guideReason: g.reason, guideEvidence: g.evidence });
       // old
       counterO.setFlags({ diag: !!rdO.message(), cue: false });
       old.conf.push({ t: now - 1e12, v: counterO.score(now) });
@@ -128,7 +138,8 @@ function run(events, opts = {}) {
         if (m) {
           st.lastCountAt = getClock(); st.missed = 0; st.native++;
           const good = m[2].trim() === 'GOOD';
-          const v = coach.verdict({ now: getClock(), match: mm.result(), source: 'native', good, reason: good ? '' : m[2].trim() });
+          const bm = /bottom=([-\d.]+)/.exec(line);
+          const v = coach.verdict({ now: getClock(), match: mm.result(), source: 'native', good, reason: good ? '' : m[2].trim(), onPath: mm.repOnPath(bm ? parseFloat(bm[1]) : undefined) });
           verdicts.push({ t: getClock() - 1e12, show: v.show, reason: v.reason, src: 'native', score: mm.result().score });
           // old: a counted rep got a check, a bad one the old reason
           old.x.push({ t: getClock() - 1e12, text: good ? 'CHECK' : 'X ' + m[2].trim(), src: 'native' });

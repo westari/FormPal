@@ -57,5 +57,13 @@ for (const [name, file] of [['Swift strings, interpolation and brackets', 'check
   const pod = read('modules/athlt-camera/athlt-camera.podspec');
   check('podspec: UIKit is linked (the keep-awake keeper uses UIApplication / UIScreen) and Swift 5.9', /'UIKit'/.test(pod) && /swift_version\s*=\s*'5\.9'/.test(pod) && /^import UIKit/m.test(mod));
 }
+{
+  // CI 2026-11-15: "failed to produce diagnostic for expression" at definition(): a `?? NSNull()` / `as Any?` expression inside the Expo result builder
+  const swift = fs.readFileSync(path.join(__dirname, '..', 'modules', 'athlt-camera', 'ios', 'ATHLTCameraModule.swift'), 'utf8');
+  const a = swift.indexOf('public func definition() -> ModuleDefinition');
+  const b = swift.indexOf('private func wireEngineCallbacks()');
+  const body = a >= 0 && b > a ? swift.slice(a, b) : '';
+  check('definition() holds no `?? NSNull()` / `as Any?` expression (they crash the Swift type-checker inside the Expo result builder; use the helpers above it)', body.length > 1000 && !/\?\? NSNull\(\)|as Any\?/.test(body));
+}
 console.log(failed ? `\n${failed} FAILED` : '\nall passed');
 process.exit(failed ? 1 : 0);
