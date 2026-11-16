@@ -15,6 +15,9 @@ import { WebView } from 'react-native-webview';
 import LiquidGlass, { LiquidGlassButton, GLASS_SUPPORTED } from '../components/LiquidGlass';
 import RepFeedback from '../components/RepFeedback';
 import {
+  hudLayout, HudLayout, HUD_BTN, HUD_BTN_GAP, HUD_SIDE, HUD_COUNT_HEIGHT,
+} from '../lib/cameraHudLayout';
+import {
   ATHLTCameraView,
   startSession,
   stopSession,
@@ -56,7 +59,7 @@ import { createGuide, createCoach, createCalmLine, createCueHold, guideLine, GUI
 import { createSetupGuide, SETUP_TUNING, type SetupDecision } from '../lib/setupGuide';
 import { createAttemptDetector, type DetectorEvent } from '../lib/attemptDetector';
 import { hapticError, hapticMain, hapticSelect, hapticWarning } from '../lib/haptics';
-import { capMeterTarget, isFrameHint, showVerdict, showFrameHint, JUDGED_QUIET_MS, meterTarget, createMeterSmoother, trackingIsHigh, NO_PERSON_CUE, createSteadyGate, READY_STEADY_MS, createCounterSignal, READY_COUNTER_WINDOW_MS, READY_COUNTER_MIN_SAMPLES, type CounterSignal } from '../lib/liveTracking';
+import { METER_MAX_RATE, METER_SETUP_RATE, isFrameHint, showVerdict, showFrameHint, JUDGED_QUIET_MS, meterTarget, createMeterSmoother, trackingIsHigh, NO_PERSON_CUE, createSteadyGate, READY_STEADY_MS, createCounterSignal, READY_COUNTER_WINDOW_MS, READY_COUNTER_MIN_SAMPLES, type CounterSignal } from '../lib/liveTracking';
 import { useAudioSettingsStore } from '../store/audioSettingsStore';
 import { useFormTheme, type FormTheme } from '../lib/activeTheme';
 import type { DebugStatsEvent, RepEvent, ExerciseType } from '../modules/athlt-camera/src/index';
@@ -320,7 +323,7 @@ function CueGlass({ text, ready }: { text: string; ready?: boolean }) {
 // Native per-side border width + per-corner border radius is a real,
 // directly-supported RN style feature — nothing to get subtly wrong here.
 function CornerFrame({ color }: { color: string }) {
-  const SIZE = 58, BW = 4, R = 26;
+  const SIZE = 42, BW = 3, R = 20;   // Ari's design 2026-11-16: 42 pt arms, 3 pt thick, 20 pt corner radius
   return (
     <>
       <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, width: SIZE, height: SIZE, borderColor: color, borderTopWidth: BW, borderLeftWidth: BW, borderTopLeftRadius: R }} />
@@ -338,32 +341,11 @@ function CornerFrame({ color }: { color: string }) {
 // request). Sized generously (legs / full standing body fit inside).
 // Purely visual — doesn't hit-test joints (that's native).
 function PositioningGuide({
-  box, ready, children, clearHud = false,
-}: { box: 'standing' | 'floor'; ready: boolean; children?: React.ReactNode; clearHud?: boolean }) {
-  // Workout-flow sessions (clearHud) stack real chrome along both edges that
-  // a solo session doesn't have — the segment-progress line near the top
-  // (see WorkoutHud's segRow, pinned at insets.top + 80) and the pull-up
-  // drawer's peek strip along the bottom (DRAWER_PEEK_HEIGHT) — so the
-  // generic percentage-based margins below put the box's own corners
-  // visibly behind that white drawer sheet / progress line. Fixed pixel
-  // clearance past each one, only when that chrome actually exists.
-  const hudInsets = useSafeAreaInsets();
-  // clearHud margins bumped (top: 92->160 to clear the taller combined
-  // scoreboard card + segment row now above it; bottom: 16->70 further
-  // clear of the drawer peek) and side margins reduced (9%->5%, 6%->4%) —
-  // the box was reading as way too tall/narrow.
-  // clearHud side margin is a fixed 30px now (matching the real design file
-  // exactly), not a percentage — a plain, predictable number instead of
-  // something that quietly scales with screen width.
-  // The framing box never starts above the Camera confidence block (top bar + label + pill, measured from the safe area), whatever the phone's height
-  const { height: guideH } = useWindowDimensions();
-  const soloTop = (pct: number) => Math.max(guideH * pct, hudInsets.top + SOLO_METER_BOTTOM + 8);
-  const rect = box === 'floor'
-    // Floor exercises (phone raised on a chair, angled down): the body sits as
-    // a wide band across the middle. A real framed target with clear dark
-    // margins top and bottom — NOT the whole screen (that guides nothing).
-    ? { top: clearHud ? hudInsets.top + HUD_GUIDE_TOP : soloTop(0.22), bottom: clearHud ? DRAWER_PEEK_HEIGHT + 70 : '16%', side: clearHud ? 30 : '4%'  }
-    : { top: clearHud ? hudInsets.top + HUD_GUIDE_TOP : soloTop(0.16), bottom: clearHud ? DRAWER_PEEK_HEIGHT + 70 : '7%',  side: clearHud ? 30 : '5%'  };
+  ready, children, layout,
+}: { box?: 'standing' | 'floor'; ready: boolean; children?: React.ReactNode; clearHud?: boolean; layout: HudLayout }) {
+  // The brackets are the same frame in the workout and in the solo form check (Ari 2026-11-16): measured from the safe areas, 31 pt from each
+  // side, the bottom clear of the rep count and the demo drawer (lib/cameraHudLayout.ts).
+  const rect = { top: layout.frame.top, bottom: layout.frame.bottom, side: layout.frame.left };
 
   // Subtle breathe while waiting (0.86 -> 1 opacity); locks solid on ready.
   const pulse = useRef(new Animated.Value(1)).current;
@@ -402,29 +384,26 @@ function PositioningGuide({
 // repCounterOnly: this exercise's form isn't judged (see exerciseDefinitions
 // `mode`), so show a neutral "REP COUNTER" tag instead of a good-rep count.
 function RepCounter({
-  reps, goodReps, repCounterOnly, theme, spin,
-}: { reps: number; goodReps: number; repCounterOnly: boolean; theme: FormTheme; spin?: Animated.AnimatedInterpolation<string> }) {
+  reps, repCounterOnly, theme, spin, layout,
+}: { reps: number; goodReps: number; repCounterOnly: boolean; theme: FormTheme; spin?: Animated.AnimatedInterpolation<string>; layout: HudLayout }) {
+  // Solo form check: the same rep count as the workout, without "/ 10" (there is no target here)
+  return <RepCount reps={reps} total={null} layout={layout} color={!theme.isDefault ? theme.repText : undefined} spin={spin} tag={repCounterOnly ? 'REP COUNTER · FORM NOT SCORED' : undefined} />;
+}
+
+/** The big rep count at the bottom centre (Ari's design): the number large and bold, "/ 10" smaller and grey. SF Pro (the system font). */
+function RepCount({ reps, total, layout, color, spin, tag }: {
+  reps: number; total: number | null; layout: HudLayout; color?: string; spin?: Animated.AnimatedInterpolation<string>; tag?: string;
+}) {
   return (
-    <Animated.View style={[s.repBlock, spin ? { transform: [{ rotate: spin }] } : null]} pointerEvents="none">
-      {/* Identical layout to WorkoutHud's counter now — same wh.counterRow
-          (big number + smaller label INLINE on one row), not a stacked
-          dot+label row underneath. Explicit complaint: "the form check has
-          a different layout than the workout stuff — it has this green dot
-          and then says like 5 good reps... I don't know why it's not the
-          exact same." Solo mode has no target-reps to show "/ N" against,
-          so the second slot shows "N good" instead — same row, same fonts,
-          just a different label. */}
-      {repCounterOnly ? (
-        <>
-          <Text style={[wh.counterNum, !theme.isDefault && { color: theme.repText }]}>{reps}</Text>
-          <Text style={s.repCounterTag}>REP COUNTER · FORM NOT SCORED</Text>
-        </>
-      ) : (
-        <View style={wh.counterRow}>
-          <Text style={[wh.counterNum, !theme.isDefault && { color: theme.repText }]}>{reps}</Text>
-          <Text style={wh.counterTotal}>{goodReps} good</Text>
-        </View>
-      )}
+    <Animated.View
+      pointerEvents="none"
+      style={[wh.countWrap, { top: layout.count.top, height: layout.count.height }, spin ? { transform: [{ rotate: spin }] } : null]}
+    >
+      {!!tag && <Text style={wh.countTag}>{tag}</Text>}
+      <View style={wh.countRow}>
+        <Text allowFontScaling={false} style={[wh.countNum, color ? { color } : null]}>{reps}</Text>
+        {total != null && <Text allowFontScaling={false} style={wh.countTotal}>/ {total}</Text>}
+      </View>
     </Animated.View>
   );
 }
@@ -443,14 +422,7 @@ function RepCounter({
 // corner. The mirrored (right) notch reuses this exact path via a scaleX
 // flip instead of a second hand-derived formula, so there's only one arc to
 // get right, not two.
-// ── Workout camera screen, top to bottom (Ari 2026-11-16). Every offset is from the TOP SAFE AREA, never from the screen height, so nothing overlaps on any iPhone:
-//   top bar buttons (8..52)  >  progress bar in Liquid Glass (rounded ends)  >  timer in Liquid Glass  >  the big Camera confidence block (same as the solo form check)
-const HUD_BAR_TOP = 66, HUD_BAR_H = 18;                 // the set progress bar: a glass capsule with a rounded fill
-const HUD_TIMER_TOP = HUD_BAR_TOP + HUD_BAR_H + 10, HUD_TIMER_H = 34, HUD_TIMER_W = 92;   // the timer capsule
-const HUD_CONF_TOP = HUD_TIMER_TOP + HUD_TIMER_H + 10;  // the Camera confidence block (label + pill), exactly like the solo form check
-const CONF_BLOCK_H = 91;                                // label 21 + 6 gap + pill 64
-const SOLO_METER_BOTTOM = 56 + CONF_BLOCK_H;            // solo form check: the same block sits at 56
-const HUD_GUIDE_TOP = HUD_CONF_TOP + CONF_BLOCK_H + 8;  // the framing box starts below the confidence block
+// The camera screen's positions come from lib/cameraHudLayout.ts (Ari's design 2026-11-16), measured from the safe areas.
 
 /** Real Liquid Glass where the build has it; the same blur glass every other pill here uses where it does not (never a flat white card). */
 function HudGlass({ radius, style, children }: { radius: number; style?: any; children?: React.ReactNode }) {
@@ -479,45 +451,36 @@ function ScoreNotch({ side }: { side: 'left' | 'right' }) {
 // SAME real reps/goodReps this screen already tracks (see isWorkoutHud's
 // own comment) — not a second, separate rep-tracking system. ──────────────
 function WorkoutHud({
-  repsIntoSet, targetReps, completedSets, targetSets, nextLabel, elapsedSec,
+  repsIntoSet, targetReps, completedSets, targetSets, elapsedSec, layout,
 }: {
-  repsIntoSet: number; targetReps: number; completedSets: number; targetSets: number; nextLabel: string; elapsedSec: number;
+  repsIntoSet: number; targetReps: number; completedSets: number; targetSets: number; elapsedSec: number; layout: HudLayout;
 }) {
-  const insets = useSafeAreaInsets();
   const m = Math.floor(elapsedSec / 60);
   const sec = elapsedSec % 60;
 
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFillObject}>
-      {/* Progress bar: one segment per set (the current one fills with the reps), inside a REAL Liquid Glass capsule with rounded ends. The old
-          "Set 1 of 3" and "Next: ..." text is gone (Ari 2026-11-16). */}
-      <View style={[wh.barWrap, { top: insets.top + HUD_BAR_TOP }]}>
-        <HudGlass radius={999} style={wh.barGlass}>
+      {/* Set progress bar: one rounded segment per set in a glass track. Finished and current sets are bright white with a soft green glow,
+          upcoming sets are dim (Ari's design 2026-11-16). */}
+      <View style={{ position: 'absolute', top: layout.bar.top, left: layout.bar.left, width: layout.bar.width, height: layout.bar.height }}>
+        <HudGlass radius={layout.bar.height / 2} style={{ width: layout.bar.width, height: layout.bar.height }}>
           <View style={wh.barInner}>
-            {Array.from({ length: targetSets }).map((_, i) => {
-              const fillPct = i < completedSets ? 100 : i === completedSets ? Math.round((repsIntoSet / targetReps) * 100) : 0;
-              return (
-                <View key={i} style={wh.segTrack}>
-                  <View style={[wh.segFill, { width: `${fillPct}%` }]} />
-                </View>
-              );
-            })}
+            {Array.from({ length: targetSets }).map((_, i) => (
+              <View key={i} style={[wh.seg, i <= completedSets ? wh.segOn : wh.segOff]} />
+            ))}
           </View>
         </HudGlass>
       </View>
-      {/* Timer, under the bar, also Liquid Glass */}
-      <View style={[wh.timerWrap, { top: insets.top + HUD_TIMER_TOP }]}>
-        <HudGlass radius={999} style={wh.timerCapsule}>
-          <Text style={wh.scoreTimeTxt}>{m}:{String(sec).padStart(2, '0')}</Text>
+      {/* Timer: a small glass pill with a stopwatch icon, centred under the bar */}
+      <View style={{ position: 'absolute', top: layout.timer.top, left: layout.timer.left, width: layout.timer.width, height: layout.timer.height }}>
+        <HudGlass radius={layout.timer.height / 2} style={{ width: layout.timer.width, height: layout.timer.height }}>
+          <View style={wh.timerRow}>
+            <SymbolView name="stopwatch" size={14} tintColor="rgba(255,255,255,0.9)" type="monochrome" style={{ width: 14, height: 14 }} />
+            <Text style={wh.timerTxt}>{m}:{String(sec).padStart(2, '0')}</Text>
+          </View>
         </HudGlass>
       </View>
-
-      <View style={[wh.counterWrap, { bottom: HUD_COUNTER_BOTTOM }]}>
-        <View style={wh.counterRow}>
-          <Text style={wh.counterNum}>{repsIntoSet}</Text>
-          <Text style={wh.counterTotal}>/ {targetReps}</Text>
-        </View>
-      </View>
+      <RepCount reps={repsIntoSet} total={targetReps} layout={layout} />
     </View>
   );
 }
@@ -596,13 +559,15 @@ const ri = StyleSheet.create({
 // createMeterSmoother in lib/liveTracking.ts — in its own state, so its ticks
 // never re-render the whole camera screen. Always mounted (renders nothing when
 // !show) so the "is it high yet" report that gates "Ready. Go!" keeps working.
-function TrackingMeter({ target, show, top, onHighChange, counter, counterActive, flags, confidence }: {
-  target: number; show: boolean; top: number; onHighChange: (high: boolean) => void;
+function TrackingMeter({ target, show, layout, guideText, spin, onHighChange, counter, counterActive, flags, confidence }: {
+  target: number; show: boolean; layout: HudLayout; guideText: string | null; spin?: Animated.AnimatedInterpolation<string>;
+  onHighChange: (high: boolean) => void;
   counter: CounterSignal; counterActive: boolean; flags: { diag: boolean; cue: boolean };
   /** the live CAMERA CONFIDENCE (lib/cameraConfidence.ts), or null before tracking has produced one */
   confidence: { current: number | null };
 }) {
   const [display, setDisplay] = useState(0);
+  const [infoOpen, setInfoOpen] = useState(false);
   const smoother = useRef(createMeterSmoother()).current;
   const targetRef = useRef(target);
   targetRef.current = target;
@@ -622,31 +587,51 @@ function TrackingMeter({ target, show, top, onHighChange, counter, counterActive
       // The cue caps (frame hint 35, setup step caps) still hold it down.
       if (activeRef.current && tgt > 0) {
         if (confidence.current !== null) tgt = Math.min(tgt, confidence.current);
-        else { counter.setFlags(flagsRef.current); if (counter.seen()) tgt = counter.score(now); }
+        else if (counter.seen()) tgt = counter.score(now);
       }
-      const d = smoother.tick(tgt, now);
+      // never a jump: at most a few points a second while tracking (the setup meter may move faster while the person is still getting into place)
+      const d = smoother.tick(tgt, now, activeRef.current ? METER_MAX_RATE : METER_SETUP_RATE);
       setDisplay((prev) => (prev === d ? prev : d));
       const high = trackingIsHigh(d, smoother.effectiveTarget);
       if (high !== highRef.current) { highRef.current = high; onHighChange(high); }
     }, 33);
     return () => clearInterval(id);
   }, [smoother, onHighChange, counter, confidence]);
+  // the explanation closes by itself
+  useEffect(() => {
+    if (!infoOpen) return;
+    const id = setTimeout(() => setInfoOpen(false), 9000);
+    return () => clearTimeout(id);
+  }, [infoOpen]);
   if (!show) return null;
-  const level = display >= 95 ? C.good : display <= 35 ? C.warn : '#FFFFFF';
+  const level = display >= 75 ? C.good : display <= 35 ? C.warn : '#FFFFFF';
   return (
-    <View pointerEvents="none" style={[s.cameraLockWrap, { top }]}>
-      {/* how well the camera sees your whole body: the label sits OUTSIDE the glass, just above it */}
-      <Text style={s.meterLabel}>Camera confidence</Text>
-      <GlassPanel radius={999} style={s.meterPill}>
-        <View style={s.meterInner}>
-          <View style={s.meterRow}>
-            <Text style={s.meterNum}>{display}<Text style={s.meterPct}>%</Text></Text>
-            <View style={s.meterTrack}>
-              <View style={[s.meterFill, { width: `${display}%`, backgroundColor: level }]} />
+    <View pointerEvents="box-none" style={[s.cameraLockWrap, { top: layout.pill.top }]}>
+      <Animated.View pointerEvents="box-none" style={[{ alignItems: 'center' }, spin ? { transform: [{ rotate: spin }] } : null]}>
+        {/* ONE glass pill (Ari's design 2026-11-16): the Guide line on top; under it the info icon, the camera confidence % and its bar.
+            No separate "Camera confidence" label: tapping the info icon explains the number. */}
+        <HudGlass radius={26} style={{ minWidth: layout.pill.minWidth, maxWidth: layout.pill.maxWidth }}>
+          <View style={s.pillInner}>
+            {!!guideText && <Text style={s.pillGuide} numberOfLines={2}>{guideText}</Text>}
+            <View style={s.pillRow}>
+              <Pressable onPress={() => setInfoOpen((v) => !v)} hitSlop={16} accessibilityRole="button" accessibilityLabel="What camera confidence means">
+                <SymbolView name={infoOpen ? 'info.circle.fill' : 'info.circle'} size={15} tintColor="rgba(255,255,255,0.78)" type="monochrome" style={{ width: 15, height: 15 }} />
+              </Pressable>
+              <Text style={s.pillPct}>{display}%</Text>
+              <View style={s.pillTrack}>
+                <View style={[s.pillFill, { width: `${display}%`, backgroundColor: level }]} />
+              </View>
             </View>
           </View>
-        </View>
-      </GlassPanel>
+        </HudGlass>
+        {infoOpen && (
+          <HudGlass radius={20} style={{ marginTop: 8, maxWidth: layout.pill.maxWidth }}>
+            <Text style={s.pillInfo}>
+              {'Camera confidence is how well the camera can see the joints this exercise needs, and whether your reps are being counted. 90 or more is great. If it drops, the line above says why.'}
+            </Text>
+          </HudGlass>
+        )}
+      </Animated.View>
     </View>
   );
 }
@@ -679,7 +664,7 @@ export default function FormCheckScreen() {
     return () => { alive = false; clearInterval(id); sub.remove(); void deactivateKeepAwake(TAG); };
   }, []);
   const insets = useSafeAreaInsets();
-  const { width: screenW } = useWindowDimensions();
+  const { width: screenW, height: screenH } = useWindowDimensions();
   // User's unlocked rank colour for the ✓ orb / rep counter / accent glow —
   // resolves to the shipped green/red when "Classic" (or nothing) is selected.
   const theme = useFormTheme();
@@ -935,6 +920,7 @@ export default function FormCheckScreen() {
   // The camera's own "Step back into frame" / no-person signal can flicker on and off while the user stands still (2026-11-13 log: the
   // number fell 100 -> 35 -> 100 and the Guide said "Step back further" with no movement). It only counts once it has held GUIDE.cuePersistSec.
   const frameCueHold = useRef(createCueHold()).current;
+  const cueIgnoredLogged = useRef(false);
   const [frameCueHeld, setFrameCueHeld] = useState(false);
   const softRepsRef = useRef(0);          // reps the detector counted itself (engine paused / adapted range); negative = a counted rep it took back
   const softGoodRef = useRef(0);          // the same, for good reps
@@ -1177,7 +1163,7 @@ export default function FormCheckScreen() {
       setReps(rep.reps + softRepsRef.current);
       setGoodReps(rep.goodReps + softGoodRef.current);
       lastNativeRep.current = { at: Date.now(), good: rep.good, retracted: false };
-      lastCountAtRef.current = Date.now(); missedSinceCountRef.current = 0; matchRef.noteRep(); // a rep counted: reps are counting
+      lastCountAtRef.current = Date.now(); missedSinceCountRef.current = 0; matchRef.noteRep(rep.depthAngle); // a rep counted: reps are counting (but a rep far below the exercise's path is not evidence of the exercise)
       setAttemptCue(null);
       // A rep landed — re-ask the diagnostic rather than force-clearing. If
       // several reps are merging (attempts >> counted) or the legs kicked,
@@ -1197,7 +1183,7 @@ export default function FormCheckScreen() {
       // X carries a plain FORM reason (never a camera / setup line: that is the Guide's).
       let shownGood = rep.good, shownReason = rep.reason;
       if (!repCounterOnly) {
-        const cv = coachRef.verdict({ now: Date.now(), match: matchRef.result(), source: 'native', good: rep.good, reason: rep.reason });
+        const cv = coachRef.verdict({ now: Date.now(), match: matchRef.result(), source: 'native', good: rep.good, reason: rep.reason, onPath: matchRef.repOnPath(rep.depthAngle) });
         if (!cv.show) {
           const timeSecC = startTimestamp.current != null ? (Date.now() - startTimestamp.current) / 1000 : 0;
           repEvents.current.push({ timeSec: timeSecC, good: rep.good, reason: rep.reason });
@@ -1431,6 +1417,14 @@ export default function FormCheckScreen() {
   // modes now (solo form-check used to get a separate pill-shaped
   // GlassButton here, which is what read as "different from in-workout").
   const stopButtonActive = phase === 'setup' || phase === 'setup-done' || isTracking || isStopping;
+  // Every position on this screen comes from here (safe areas + the screen size), the same for the workout and the solo form check
+  const hud = hudLayout({ width: screenW, height: screenH, insetTop: insets.top, peekHeight: DRAWER_PEEK_HEIGHT, solo: !isWorkoutHud });
+  // THE line in the centre pill: the Guide while setting up, the Guide while tracking. Never while a Coach check / X is on screen.
+  const pillGuide: string | null = phase === 'setup'
+    ? (guide
+        ? (setupShown ?? (guide.stage === 'ready' ? GUIDE_LINES.holdStill : guide.text))
+        : (guideLine(setupHint, exerciseType) ?? (setupHint || SETUP_INFO[exerciseType].title)))
+    : (isTracking && !feedback ? guideTrack : null);
   // Same "ready" condition PositioningGuide's own corner brackets use —
   // the person is actually framed/positioned, not just that the HUD itself
   // is visible. Drives the stop button's idle vs. "recording" look below.
@@ -1497,8 +1491,9 @@ export default function FormCheckScreen() {
   });
   // ONE story for the new user: the number can only read high when the words say you are set. While setting up it is capped by
   // the current step; while a "step back / can't see" hint is showing it can never read above 35.
-  const frameHintActive = isTracking && (isFrameHint(repDiag) || (!isFloor && frameCueHeld));
-  const cameraLockTarget = capMeterTarget(cameraLockTargetRaw, phase === 'setup' && guide ? guide.cap : null, frameHintActive);
+  // The number comes ONLY from what the camera sees (Ari 2026-11-16). No hint and no setup step caps it any more: a flickering hint used to slam it
+  // 100 -> 35 -> 100. The Guide's words come from the same evidence (see lib/guideCoach.ts), never the other way round.
+  const cameraLockTarget = cameraLockTargetRaw;
   // The number glides to the target (and ignores one-frame flickers of it):
   // see createMeterSmoother in lib/liveTracking.ts. The counting lives in
   // <TrackingMeter> (its own state, so its ticks don't re-render this whole
@@ -1519,7 +1514,18 @@ export default function FormCheckScreen() {
         timer = setTimeout(tryGo, Math.max(100, Math.min(300, READY_STEADY_MS - steady)));
         return;
       }
-      console.log(`[READY-GATE] Ready: every joint visible (native setup passed) and steady ${steady}ms >= ${READY_STEADY_MS}ms (placeholder)`);
+      // IN POSITION (Ari 2026-11-16): Go fired at 15:19:43 while his arms hung at his sides (the metric read ~20; the exercise's path starts around 30), before he
+      // was in position. Go needs the body on the exercise's path for the same ~1 s: the last readings all inside the path band (MovementMatch.band()).
+      const band = matchRef.band();
+      if (counterRef.seen() && band) {
+        const nowMs = Date.now();
+        if (!counterRef.atStartPosition(band.lo, nowMs, READY_STEADY_MS + 200, 2)) {
+          console.log(`[READY-GATE] waiting: not in position yet (the last readings are below the exercise's path, ${band.lo.toFixed(0)}+ needed; last value ${counterRef.lastValue() === null ? 'none' : (counterRef.lastValue() as number).toFixed(0)})`);
+          timer = setTimeout(tryGo, 300);
+          return;
+        }
+      }
+      console.log(`[READY-GATE] Ready: native setup passed, every joint visible, in position on the exercise's path, and steady ${steady}ms >= ${READY_STEADY_MS}ms (placeholder)`);
       setReadyPending(false);
       const go = announceReadyRef.current;
       announceReadyRef.current = null;
@@ -1545,7 +1551,6 @@ export default function FormCheckScreen() {
       const now = Date.now();
       const m = matchRef.result();
       attemptRef.current.setPathCut(m.cut);
-      counterRef.setFlags({ diag: !!d, cue: !!(statsRef.current?.trackingCue || statsRef.current?.outOfPlaneCue) });
       const conf = confRef.update({ now, visibility: counterRef.score(now), match: m, lastCountAt: lastCountAtRef.current, lastJudgedAt: lastJudgedAt.current, missedSinceCount: missedSinceCountRef.current });
       confidenceRef.current = conf.value;
       const rej = attemptRef.current.recentReject(8000);
@@ -1553,9 +1558,16 @@ export default function FormCheckScreen() {
       const noPersonNow = statsRef.current?.personDetected === false;
       const cueHeld = frameCueHold.feed(now, (!!rawCue && isFrameHint(rawCue)) || noPersonNow);
       setFrameCueHeld(prev => (prev === cueHeld ? prev : cueHeld));
+      // EVIDENCE: the camera's "step back / no person" cue only becomes words when the metric stream backs it up. If the samples keep flowing with no pose gap
+      // (2026-11-16: "Step back into frame" shown while he stood still and the metric arrived every 0.4 s) the person IS seen, so the cue is ignored.
+      const streamHealthy = counterRef.seen() && counterRef.healthy(now, 1500, 2);
+      const cueContradicted = cueHeld && streamHealthy;
+      if (cueContradicted && !cueIgnoredLogged.current) { cueIgnoredLogged.current = true; console.log('[GUIDE] ignoring the camera cue "' + (rawCue || 'no person') + '": the metric keeps flowing with no pose gap, so you are seen (no evidence for a Guide line)'); }
+      if (!cueHeld) cueIgnoredLogged.current = false;
+      const cueProven = cueHeld && !cueContradicted;
       const dec = guideEngine.decide({
-        now, exerciseId: exerciseType, personMissing: noPersonNow && cueHeld,
-        nativeCue: cueHeld || !isFrameHint(rawCue) ? rawCue : null, outOfPlaneCue: statsRef.current?.outOfPlaneCue || null, diag: d,
+        now, exerciseId: exerciseType, personMissing: noPersonNow && cueProven,
+        nativeCue: cueProven || !isFrameHint(rawCue) ? rawCue : null, outOfPlaneCue: statsRef.current?.outOfPlaneCue || null, diag: d,
         match: m, stuck: conf.stuck, rejectedLowQuality: rej.lowQuality, rejectedDark: rej.dark, rejectedJoints: rej.joints, facing,
       });
       // a plain framing hint is not shown right after a rep was judged (the camera obviously sees the person); a real "cannot count" fix always is
@@ -1633,6 +1645,7 @@ export default function FormCheckScreen() {
       {/* Rep feedback badge */}
       {feedback && (
         <RepFeedback
+          area={hud.orb}
           good={feedback.good} reason={feedback.reason} seq={feedback.seq}
           onComplete={() => setFeedback(null)}
           goodColor={theme.orbGood} badColor={theme.orbBad}
@@ -1646,35 +1659,10 @@ export default function FormCheckScreen() {
           border. The rep counter is its own element up top (below). */}
       {(phase === 'setup' || phase === 'starting' || phase === 'setup-done' || phase === 'tracking') && (
         <PositioningGuide
-          box={guideBoxFor(exerciseType)}
           ready={setupAllVisible || phase === 'setup-done' || phase === 'tracking'}
-          clearHud={hudActive}
+          layout={hud}
         >
-          {phase === 'setup' && (
-            <View style={s.setupPanel}>
-              {/* ONE short line: the live positioning cue, else the
-                  exercise's instruction, else "Perfect — hold still". No
-                  card background — same "just the text" treatment as the
-                  live tracking cues below.
-                  BUG FOUND ("says perfect hold still, then immediately
-                  says move back"): this used to show "Perfect" the INSTANT
-                  setupAllVisible flipped true — i.e. holdProgress=0, right
-                  as the native 2s hold timer starts, not once it's near
-                  done. Any wobble/partial occlusion during that whole 2s
-                  window resets the hold, so the user could see "Perfect"
-                  then immediately get corrective guidance again, 2 seconds
-                  too early. setupHoldProgress was already being tracked
-                  from native events (line above) but never actually read
-                  anywhere — gating on it being most of the way through (so
-                  there's only a brief window left to actually wobble)
-                  instead of the very start. */}
-              {/* Same glass pill as the live cues AFTER you're in place (CueGlass),
-                  so a message looks identical before and after setup. */}
-              <CueGlass text={guide
-                ? (setupShown ?? (guide.stage === 'ready' ? GUIDE_LINES.holdStill : guide.text))
-                : (guideLine(setupHint, exerciseType) ?? (setupHint || SETUP_INFO[exerciseType].title))} />
-            </View>
-          )}
+          {/* (the Guide line while setting up is in the centre pill now: TrackingMeter below) */}
         </PositioningGuide>
       )}
 
@@ -1684,7 +1672,7 @@ export default function FormCheckScreen() {
           targetSets — see isWorkoutHud's own comment); everything else
           (solo form-check) keeps the existing counter untouched. */}
       {showRepCounter && !isWorkoutHud && (
-        <RepCounter reps={reps} goodReps={goodReps} repCounterOnly={repCounterOnly} theme={theme} spin={isFloor ? floorSpin : undefined} />
+        <RepCounter reps={reps} goodReps={goodReps} repCounterOnly={repCounterOnly} theme={theme} spin={isFloor ? floorSpin : undefined} layout={hud} />
       )}
       {hudActive && (
         <WorkoutHud
@@ -1692,8 +1680,8 @@ export default function FormCheckScreen() {
           targetReps={targetReps!}
           completedSets={completedSets}
           targetSets={targetSets!}
-          nextLabel={nextExerciseName || 'Last exercise'}
           elapsedSec={elapsedSec}
+          layout={hud}
         />
       )}
 
@@ -1717,53 +1705,51 @@ export default function FormCheckScreen() {
           @callstack/liquid-glass linked; falls back to a plain translucent
           dark surface (still lighter/more honest than GlassButton's flat
           fill) everywhere else — see LiquidGlass.tsx's own header comment. */}
-      <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
+      <View style={[s.topBar, { paddingTop: hud.buttons.top }]}>
         <LiquidGlassButton
           onPress={() => { hapticSelect(); void handleBack(); }}
-          radius={20}
+          radius={HUD_BTN / 2}
           colorScheme="dark"
           fallbackColor="rgba(40,41,48,0.55)"
-          style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
+          style={s.topBtn}
         >
-          <SymbolView name="chevron.left" size={18} tintColor={C.text} type="monochrome" style={{ width: 18, height: 18 }} />
+          <SymbolView name="chevron.left" size={16} tintColor={C.text} type="monochrome" style={{ width: 16, height: 16 }} />
         </LiquidGlassButton>
         <Text style={s.title} numberOfLines={1}>
           {phase === 'tracking' || phase === 'setup' || phase === 'setup-done' || phase === 'starting'
             ? ''
             : (EXERCISE_DEFINITIONS[exerciseType]?.displayName ?? exerciseType)}
         </Text>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
+        <View style={{ flexDirection: 'row', gap: HUD_BTN_GAP }}>
           <LiquidGlassButton
             onPress={() => { hapticSelect(); handleToggleMute(); }}
-            radius={20}
+            radius={HUD_BTN / 2}
             colorScheme="dark"
             fallbackColor="rgba(40,41,48,0.55)"
-            style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
+            style={s.topBtn}
           >
             <SymbolView
               name={audioEnabled ? 'speaker.wave.2.fill' : 'speaker.slash.fill'}
-              size={18} tintColor={C.text} type="monochrome" style={{ width: 18, height: 18 }}
+              size={16} tintColor={C.text} type="monochrome" style={{ width: 16, height: 16 }}
             />
           </LiquidGlassButton>
-          {(
-            <LiquidGlassButton
-              onPress={() => { hapticSelect(); handleFlash(); }}
-              radius={20}
-              colorScheme="dark"
-              fallbackColor="rgba(40,41,48,0.55)"
-              style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
-            >
-              <SymbolView name={flashActive ? 'bolt.fill' : 'bolt.slash.fill'} size={18} tintColor={flashActive ? '#FFD60A' : C.text} type="monochrome" style={{ width: 18, height: 18 }} />
-            </LiquidGlassButton>
-          )}
           <LiquidGlassButton
-            onPress={() => { hapticSelect(); handleFlip(); }}
-            radius={20}
+            onPress={() => { hapticSelect(); handleFlash(); }}
+            radius={HUD_BTN / 2}
             colorScheme="dark"
             fallbackColor="rgba(40,41,48,0.55)"
-            style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
+            style={s.topBtn}
           >
-            <SymbolView name="arrow.triangle.2.circlepath.camera.fill" size={18} tintColor={C.text} type="monochrome" style={{ width: 18, height: 18 }} />
+            <SymbolView name={flashActive ? 'bolt.fill' : 'bolt.slash.fill'} size={16} tintColor={flashActive ? '#FFD60A' : C.text} type="monochrome" style={{ width: 16, height: 16 }} />
+          </LiquidGlassButton>
+          <LiquidGlassButton
+            onPress={() => { hapticSelect(); handleFlip(); }}
+            radius={HUD_BTN / 2}
+            colorScheme="dark"
+            fallbackColor="rgba(40,41,48,0.55)"
+            style={s.topBtn}
+          >
+            <SymbolView name="arrow.triangle.2.circlepath.camera.fill" size={16} tintColor={C.text} type="monochrome" style={{ width: 16, height: 16 }} />
           </LiquidGlassButton>
         </View>
       </View>
@@ -1775,8 +1761,10 @@ export default function FormCheckScreen() {
           what it's built from. */}
       <TrackingMeter
         target={cameraLockTarget}
-        show={stopButtonActive}
-        top={hudActive ? insets.top + HUD_CONF_TOP : insets.top + 56}
+        show={stopButtonActive && phase !== 'setup-done'}
+        layout={hud}
+        guideText={pillGuide}
+        spin={isFloor ? floorSpin : undefined}
         onHighChange={setMeterHigh}
         counter={counterRef}
         counterActive={isTracking}
@@ -1819,11 +1807,7 @@ export default function FormCheckScreen() {
       {/* THE GUIDE while tracking: setup lines only (where to stand, where the phone goes, light), picked from WHY the camera cannot count
           (lib/guideCoach.ts). Never form words: those are the Coach's, on the check / X. */}
       {/* the Guide and a Coach verdict are NEVER on screen together (Ari 2026-11-15): while a check / X shows, the Guide is hidden */}
-      {isTracking && !!guideTrack && !feedback && (
-        <Animated.View style={[s.trackingCueHint, { transform: [{ rotate: floorSpin }] }]} pointerEvents="none">
-          <CueGlass text={guideTrack} />
-        </Animated.View>
-      )}
+      {/* (the tracking Guide line is in the centre pill too) */}
 
       {/* Debug stats panel removed from the default view to match
           in-workout's clean look (it was solo-only before). stats itself
@@ -1840,23 +1824,18 @@ export default function FormCheckScreen() {
           stats/shareLiveLog data collection is untouched, just not surfaced
           here; re-add the JSX below if a threshold-tuning session needs it
           back (see CLAUDE.md's exercise-definition process). */}
-      <View
-        style={[
-          s.bottomBar,
-          // Clears the demo drawer's own peek (bottom:0, height 56) — the
-          // drawer shows in solo form-check now too (see stopButtonActive),
-          // so both modes need the same clearance.
-          { paddingBottom: HUD_STOP_BOTTOM },
-        ]}
-      >
-        {phase === 'starting' && <Text style={s.hint}>Starting camera…</Text>}
-        {isStopping          && <Text style={s.hint}>Saving session…</Text>}
-        {stopButtonActive && (
-          // Visible through setup (see hudActive's own comment) but only
-          // actually wired to handleStop once real tracking has begun —
-          // stopTracking()/stopSession() assume a session that's actually
-          // started, so a tap during setup is a no-op instead of calling
-          // those in a state they don't expect.
+      {(phase === 'starting' || isStopping) && (
+        <View style={[s.bottomBar, { paddingBottom: HUD_STOP_BOTTOM }]} pointerEvents="none">
+          {phase === 'starting' && <Text style={s.hint}>Starting camera…</Text>}
+          {isStopping          && <Text style={s.hint}>Saving session…</Text>}
+        </View>
+      )}
+      {stopButtonActive && (
+        // Visible through setup (see hudActive's own comment) but only actually wired to handleStop once real tracking has begun —
+        // stopTracking()/stopSession() assume a session that's actually started, so a tap during setup is a no-op.
+        // It sits on the rep count's row at the right edge (Ari's design has no stop button; the count stays centred and the demo drawer's
+        // peek below stays clear).
+        <View style={{ position: 'absolute', right: hud.stop.right, bottom: hud.stop.bottom }}>
           <Pressable
             onPress={isTracking ? () => { hapticMain(); void handleStop(); } : undefined}
             onPressIn={() => Animated.spring(stopScale, { toValue: 0.88, useNativeDriver: true, speed: 30, bounciness: 0 }).start()}
@@ -1864,27 +1843,20 @@ export default function FormCheckScreen() {
             hitSlop={12}
           >
             <Animated.View style={[wh.stopCircle, { transform: [{ scale: stopScale }] }]}>
-              {/* One shape that MORPHS from a circle (idle) into the
-                  rounded-square "recording" look once the person is
-                  actually in frame — a real animated transition (shape +
-                  a brief scale pop), not two views conditionally swapped
-                  in/out, which read as "just spawning in." Black
-                  throughout, matching the real iOS shutter button's own
-                  "same color, shape changes" approach (just black instead
-                  of red, per earlier explicit request). */}
+              {/* One shape that MORPHS from a circle (idle) into the rounded-square "recording" look once the person is in frame */}
               <Animated.View
                 style={[
                   wh.stopCircleInner,
                   {
-                    borderRadius: recordMorph.interpolate({ inputRange: [0, 1], outputRange: [15, 9] }),
+                    borderRadius: recordMorph.interpolate({ inputRange: [0, 1], outputRange: [11, 7] }),
                     transform: [{ scale: recordMorph.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.18, 1] }) }],
                   },
                 ]}
               />
             </Animated.View>
           </Pressable>
-        )}
-      </View>
+        </View>
+      )}
 
       {/* ── "Watch the demo again" — available any time stopButtonActive is
           true (solo form-check included now, not just workout-flow — see
@@ -2091,6 +2063,15 @@ function logLineStyle(type: ReturnType<typeof logLineType>) {
 const s = StyleSheet.create({
   root:       { flex: 1, backgroundColor: '#000' },
   topBar:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 8 },
+  topBtn:     { width: HUD_BTN, height: HUD_BTN, alignItems: 'center', justifyContent: 'center' },
+  // the centre pill (Ari's design): Guide line on top, info icon + % + bar under it. SF Pro (the system font).
+  pillInner:  { alignItems: 'center', paddingHorizontal: 18, paddingVertical: 12, gap: 8 },
+  pillGuide:  { fontSize: 17, lineHeight: 22, fontWeight: '400', color: '#FFFFFF', textAlign: 'center', letterSpacing: -0.2 },
+  pillRow:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
+  pillPct:    { fontSize: 15, lineHeight: 18, fontWeight: '500', color: 'rgba(255,255,255,0.85)', fontVariant: ['tabular-nums'], minWidth: 40 },
+  pillTrack:  { width: 114, height: 7, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.22)', overflow: 'hidden' },
+  pillFill:   { height: 7, borderRadius: 4 },
+  pillInfo:   { fontSize: 14, lineHeight: 19, color: 'rgba(255,255,255,0.92)', paddingHorizontal: 18, paddingVertical: 12, textAlign: 'center' },
   title:      { flex: 1, textAlign: 'center', marginHorizontal: 10, fontFamily: F.bold, fontSize: 15, color: C.text, letterSpacing: 0.2 },
   cameraLockWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   meterPill:  { alignSelf: 'center' },
@@ -2223,10 +2204,18 @@ const wh = StyleSheet.create({
 
   pillRow: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   barWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
-  barGlass: { width: '86%', maxWidth: 420, height: HUD_BAR_H },
-  barInner: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 6 },
-  timerWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
-  timerCapsule: { width: HUD_TIMER_W, height: HUD_TIMER_H, alignItems: 'center', justifyContent: 'center' },
+  barInner: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 4 },
+  seg:      { flex: 1, height: 18, borderRadius: 9 },
+  segOn:    { backgroundColor: '#FFFFFF', shadowColor: '#34C759', shadowOpacity: 0.85, shadowRadius: 8, shadowOffset: { width: 0, height: 0 } },
+  segOff:   { backgroundColor: 'rgba(255,255,255,0.14)' },
+  timerRow: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  timerTxt: { fontSize: 16, lineHeight: 20, fontWeight: '500', color: '#FFFFFF', fontVariant: ['tabular-nums'] },
+  // the rep count at the bottom centre (Ari's design): the number large and bold, "/ 10" smaller and grey
+  countWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center', justifyContent: 'center' },
+  countRow:  { flexDirection: 'row', alignItems: 'baseline', gap: 12 },
+  countNum:  { fontSize: 92, lineHeight: 92, fontWeight: '700', color: '#FFFFFF', letterSpacing: -2, fontVariant: ['tabular-nums'] },
+  countTotal:{ fontSize: 26, lineHeight: 30, fontWeight: '500', color: 'rgba(255,255,255,0.55)' },
+  countTag:  { position: 'absolute', top: -14, fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.62)', letterSpacing: 1.4 },
 
   // ── Scorecard — matches assets/app screens/inworkout.html's real markup
   // (px values, colors, radii) directly, not a recreation from memory. ──────
@@ -2273,11 +2262,11 @@ const wh = StyleSheet.create({
   // ring from the reference screenshot. Press-scale spring (stopScale)
   // still gives the whole button a real tactile press.
   stopCircle: {
-    width: 74, height: 74, borderRadius: 37, borderWidth: 6, borderColor: '#ffffff',
+    width: 60, height: 60, borderRadius: 30, borderWidth: 5, borderColor: '#ffffff',
     alignItems: 'center', justifyContent: 'center',
   },
   // borderRadius intentionally omitted — recordMorph animates it inline.
-  stopCircleInner: { width: 30, height: 30, backgroundColor: '#1c1c20' },
+  stopCircleInner: { width: 24, height: 24, backgroundColor: '#1c1c20' },
 });
 
 // ─── Session log review styles ─────────────────────────────────────────────────

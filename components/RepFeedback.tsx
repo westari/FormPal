@@ -123,6 +123,7 @@ export default function RepFeedback({
   goodColor,
   badColor,
   spin,
+  area,
 }: {
   good: boolean;
   reason: string;
@@ -132,6 +133,9 @@ export default function RepFeedback({
   badColor?: string;
   // floor exercises: rotate the orb + cue to match the propped phone
   spin?: Animated.AnimatedInterpolation<string>;
+  // where the check / X may draw (the camera screen's centre pill and rep count must stay uncovered): a band under the pill, above the count.
+  // It shrinks to fit a short phone. Without it the overlay fills the screen and centres, as before.
+  area?: { top: number; height: number; scale: number };
 }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const scale   = useRef(new Animated.Value(0.8)).current;
@@ -159,10 +163,10 @@ export default function RepFeedback({
 
   return (
     <Animated.View
-      style={[StyleSheet.absoluteFill, rf.overlay, { opacity }]}
+      style={[area ? { position: 'absolute', left: 0, right: 0, top: area.top, height: area.height } : StyleSheet.absoluteFill, rf.overlay, { opacity }]}
       pointerEvents="none"
     >
-      <Animated.View style={{ transform: spin ? [{ scale }, { rotate: spin }] : [{ scale }], alignItems: 'center' }}>
+      <Animated.View style={{ transform: [...(area && area.scale < 1 ? [{ scale: area.scale }] : []), ...(spin ? [{ scale }, { rotate: spin }] : [{ scale }])], alignItems: 'center' }}>
         <GlassOrb good={good} goodColor={goodColor} badColor={badColor} />
         {!good && !!reason && (
           <View style={rf.cuePill}><Text style={rf.cue} numberOfLines={2}>{shortCue(reason)}</Text></View>

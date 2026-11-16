@@ -1,68 +1,57 @@
-# Window B report, 2026-11-16 (make the next build work, then the Guide tells the truth)
+# Window B report (2026-11-16)
 
-Branch `work-b`. `git merge origin/overnight-build` ran first (clean).
-Native build in the newest log (`latest.log`, 20:18 UTC session): still the **old Oct 8 build** (no `[AWAKE] native`, no `[REP-QUALITY]`).
+Phone still runs the OLD Oct 8 native build. Everything below is JS (live on Metro) unless it says "needs the new build".
 
-## PART 1 - make the next build work: done. I found and fixed a build-breaker.
+## Part 0 - why the builds failed
+Runs 43758159307 and 43747908863 (commit 384038b), step 11 EAS local build. Two kinds of error:
+1. **Swift syntax errors in `ExerciseEngine.swift`**: the ATTEMPT-MISSED and REP-QUALITY log lines had lost the backslashes in their `\(...)` interpolations, so the compiler read the text after the string as code. Fixed (the lines now build their text in plain variables first).
+2. **`ATHLTCameraModule.swift:141 failed to produce diagnostic for expression`** inside `definition()`: the `?? NSNull()` / `?? "none"` expressions inside Expo's result builder crash the type-checker. Fixed: moved into three plain helper functions above `definition()` (`clipValue`, `clipName`, `stopResultDict`).
+- Other things checked: `check-swift-strings.js` (16 Swift files clean), `check-swift-calls.js`, `check-imports.js`, and a new rule in `test-build-safety.js` that fails if `definition()` ever gets a `?? NSNull()` / `as Any?` again.
+- **Is overnight-build ready to build? Yes**, as far as anything outside Apple's compiler can tell. I cannot run Xcode on Windows, so this is "every error CI showed is fixed and every static check passes", not a guarantee.
 
-**The build-breaker (1):** two Swift log lines I wrote earlier had lost their backslashes when I edited them from a shell script. `"[ATTEMPT-MISSED] (def.id) (reason) reached=(String(format: "%.1f", reached)) ..."` and the `[REP-QUALITY]` line were not valid Swift (the inner quotes end the string). The first build would have failed there. Both lines are rewritten (the number text is built in separate lets first, then one clean string with `\( )`). I then wrote a Swift lexer (`scripts/check-swift-strings.js`) that walks every Swift file (strings, `\( )` interpolation, nested strings, comments, brackets) and flags "code that starts with a printf format" (the signature of a lost backslash). It flags the old lines and passes the fixed files; a test proves it catches the bug.
+## Part 1 - camera confidence (items 2, 3): done
+- Cause confirmed in the log: the old meter capped the number at 35 whenever a hint was showing, so it went 100 -> 35 -> 100 with nothing changing for the camera. Replay of the newest log, BEFORE: min 5, moves of 47 points in 1 s, 4 dips below 50 while he stood still / counted reps.
+- Now: the number comes only from what the camera sees (metric samples, pose gaps, low-confidence rejections, the "trying but nothing counts" rule). Hints never set it. It is slew-limited to 6 points a second while tracking (45 a second in setup, 30 when nobody is there). Reps counting keeps it at 90+.
+- AFTER on the same log: biggest move 6 points in a second, 90+ during the whole set. If it drops, the Guide names the reason within about 1.5 s.
+- Tests: `test-confidence-truth.js`, `test-live-tracking.js`.
 
-**1. Swift reviewed as the compiler** (`git diff 23ea174..HEAD`, the Oct 8 commit the phone runs, 6 Swift files, 407 lines). What I checked:
-- **Types and optionals:** `Double`/`Float` mixes (`pose[$0]?.confidence ?? 0` against `SETUP_JOINT_MIN_CONF: Float`, the same pattern the file already used), `Date`/`timeIntervalSince`, `Int` in `NSLog` (`%d` changed to `%ld` for the byte count), `String(format:)` arguments, `lastRepTime` is a `Date`.
-- **Fixed:** `lastFinishedClipURL?.absoluteString ?? NSNull()` (a `String?` with an `NSNull` default can fail to type-check inside a dictionary): now `(x as Any?) ?? NSNull()`, the same pattern the file already uses for `currentVideoTimeSec`. Two places.
-- **Argument labels and order:** `scripts/check-swift-calls.js` reads the 24 parameters of `ExerciseDefinition.init` and checks all 7 `ExerciseDefinition(...)` calls: labels exist, no duplicates, declared order, required arguments present (a duplicate `phantomGuardFraction` once broke a build; the registry comment about it is just a comment now). New params `startPositionGate` and `setupExtraJoints` have defaults and sit last.
-- **Closures:** `onAttemptMissed` is `((_ reason: String, _ reached: Double, _ needed: Double) -> Void)?`; the call `onAttemptMissed?(reason, reached, needed)` and the module closure `{ [weak self] reason, reached, needed in ... }` match; `guard let self` is used the same way as elsewhere. The keep-awake `assertAwake` closure (`[weak self] (why: String) in`), `Timer.scheduledTimer(...) { _ in ... }`, `NotificationCenter.addObserver(forName:object:queue:using:)` (returns `NSObjectProtocol`, stored as one).
-- **Parser:** `parseMetric(md)`, `Joint.init(string:)` (it exists, handles `leftHip` etc.), `gate.metric.measure(pose:)` returns `Double?`, `Metric.normalizedVerticalGap` exists, JSON keys `startPositionGate` / `startMin` / `peakMax` / `setupExtraJoints` match `constants/exerciseDefinitions.ts`.
-- **Imports:** the module already imports `UIKit`, `AVFoundation`, `Vision`; the podspec links UIKit; `AVErrorRecordingSuccessfullyFinishedKey` and `AVFoundationErrorDomain` come from AVFoundation.
-- **Events registered:** every `sendEvent("x")` (7 names: `onDebugLog`, `onRepDetected`, `onAttemptMissed`, `onSetupStatus`, `onCalibrationStatus`, `onCameraState`, `onDebugStats`) is in `Events(...)`, and every JS listener uses a registered name (tested).
-- **Threading:** all `UIApplication` / `UIScreen` calls are inside `DispatchQueue.main.async` (the 4-second timer and the become-active observer run on main); `handleMovieFinished` runs on the inference queue as before; the stop path hands the keeper's teardown to main.
-- **Brackets:** balanced in every file (the lexer).
-- **Not provable here:** an actual compile (Windows). Swift 5.9 mode, so concurrency issues would only be warnings. Honest risk: a type-inference surprise in one of the long `+` string concatenations; none looks risky after the rewrite.
+## Part 2 - Guide said untrue things (item 4): done
+- "Lower your hands" and "Keep your hands in view" came from path-cut memory: the 12 s Movement Match window kept a top/bottom "cut" long after his hands were back, and a person-lost gap was read as hands-lost.
+- Now every Guide line has an evidence table entry (`GUIDE_EVIDENCE` in `lib/guideCoach.ts`), shows only after its evidence has been present about 1 s, hides about 0.5 s after the evidence is gone, and cuts count only while fresh (hands 4 s, frame edge 1.5 s). Lines the old build cannot prove are removed.
+- AFTER on the newest log: the Guide is silent during the set (before: "Step back further", "Keep your hands in view", "Lower your hands").
 
-**2. Workflow, app.json, package.json (checked, `scripts/test-build-safety.js`, 16 checks):** workflow is `workflow_dispatch` only, macos-26 / Xcode 26, `npm install --legacy-peer-deps`, then `eas build --platform ios --profile development --local`; the flaky "downloadPlatform" step retries 3 times and never fails the run. `app.json` has `expo-camera` and `./plugins/withoutAppleSignIn` in the plugin list (the Sign In with Apple strip plugin is still there and removes the `com.apple.developer.applesignin` entitlement), camera and microphone descriptions are present. New native modules are at Expo SDK 54 versions (`expo-brightness ~14.0.8`, `expo-camera ~17.0.10`, `expo-keep-awake ~15.0.8`, `expo-apple-authentication ~8.0.8`) and are in `package-lock.json`. The removed `@dr.pogodin/*` packages are not imported anywhere. `scripts/check-imports.js` checked all 40 imported packages against `package.json`. `eas.json` development profile is a dev client.
+## Part 3 - Ready/Go and false checks (items 5, 6, 7)
+- **5 done.** Ready/Go fired 1 s after native passed while his arms hung at his sides (metric about 20, the path starts at about 30). Go now needs native setup passed AND body steady about 1 s AND the body on the exercise path. Real-log replay: old rule Go at +1.0 s, new rule waits about 34 s, until his arms reach the path before the first rep.
+- **6 done.** Reaching for the phone gave a check because a counted rep still got a check without asking Movement Match. A rep whose bottom is off the exercise path is now withheld (replay: rep #7 withheld). A counted rep does not force Movement Match up any more.
+- **7 confirmed.** Replaying the newest log through the JS mirror of the Swift tracker: `onAttemptMissed` fires for his half reps. Verdicts: X "Go lower" at 44.1, 51.3, 55.3, 57.7 and 63.8 s; the missed attempts are `bottom-short` (low 59 to 69 against an enter line of 50). Real counted reps got checks at 37.0, 38.4, 46.2, 47.5, 58.9, 60.1 s. On the OLD build these X marks do not appear (no onAttemptMissed in the old binary), that comes with the new build.
 
-**3. JS calls into native are safe on both builds:** every native function goes through `callNative` (a function the build does not have returns the fallback), every event listener through `safeListen` (never throws; `onAttemptMissed` simply never arrives on the old build). `expo-brightness` is loaded inside try/catch. `expo-keep-awake` and `expo-apple-authentication` are already in the old binary (the old log shows both). I added `[BRIGHTNESS]` log lines so the next log says whether brightness works.
+## Part 4 - practice history title (item 8): done
+Opening a past form check from Progress -> Form checks now says "Form check complete" (when every entry in that session has `kind: 'practice'`). A real workout keeps "Workout complete". Test in `test-done-flow.js`.
 
-**4. "First run on the new build" checklist:** `docs/first-run-new-build.md` (table of the log line for each native fix: `[AWAKE] native`, `[ATTEMPT-MISSED]`, `[REP-QUALITY]`, `[SETUP] whole body`, `[REP-GATE]`, `[TRACK]`, `[ACTIVITY]`, `[VIDEO]`, `[BRIGHTNESS]`, `[GLASS]`, `[GUIDE] ... evidence`, and what to send if the build or the camera fails).
+## Part 5 - new camera screen: done in code, not seen on a phone
+Built to Ari's image from `lib/cameraHudLayout.ts` (one layout for workout and solo, all positions from the safe areas):
+- Top-left round glass back, top-right three round glass buttons (sound, flash, flip), all 38 pt.
+- Set bar: glass track, one rounded segment per set, finished and current sets bright white with a soft green glow, upcoming dim (workout only).
+- Glass timer pill with stopwatch icon (workout only).
+- White corner brackets, 42 pt arms, 3 pt, 20 pt radius, 31 pt from the sides.
+- ONE centre glass pill: Guide line on top, under it the info icon, the % and the green bar. No "Camera confidence" label; tapping the info icon opens a short explanation that closes by itself after 9 s. The Guide is hidden while a check / X shows.
+- Rep count at the bottom centre: number 92 pt bold, "/ 10" 26 pt grey. Solo: no "/ 10".
+- Demo video drawer kept at the bottom. The Coach check / X is drawn in a band under the pill and above the count (it shrinks on short phones).
+- Tests: `test-camera-hud-layout.js` runs six phone sizes, workout and solo (SE, 13 mini, 15, 16 Pro, 15 Pro Max, 16 Pro Max): no overlaps, inside the safe areas, check / X band at least 55% size.
+- Side-by-side screenshots (my layout in Chromium next to your image): `.scratch\hud-compare.png`, six sizes: `.scratch\hud-sizes.png`.
 
-## PART 2 - the Guide must tell the truth: done (replayed on the newest log)
+### Differences I could not match
+1. Real Liquid Glass cannot render in a browser. The screenshots use blur and a light fill; on the phone it is the system material (same as the tab bar), so it will look different from my screenshots, closer to your image.
+2. Font: your image is SF Pro. My screenshot machine is Windows and has no SF Pro, so the screenshot shows a fallback font. The app itself uses the system font (SF Pro) for these pieces.
+3. The flash button icon: your image shows a camera with a slash. SF Symbols has no "camera.slash", so I kept the lightning-bolt-slash for flash (the function did not change). Tell me if you want a different symbol.
+4. Your image has no stop button. A stop button is needed to end the set, so I kept it, smaller (60 pt), on the rep count's row at the right edge. The count stays centred.
+5. The rep count sits higher than in your image (about 28 pt) so it clears the demo drawer's peek strip, which your image does not show.
+6. Floor exercises: the pill rotates with the phone like the old cue did; the set bar and brackets do not.
+7. Confidence bar turns green from 75 (was 95), so it reads green while reps count, as in your image. White between 36 and 74, orange at 35 or less. These are my numbers, not from a log.
 
-5. **A tip comes from evidence.** In your 20:18 session (half reps, hands in view) the Guide said "Keep your hands in view" three times because of a fallback I added earlier: "you are trying, nothing counts, no exact cause, so say something". That fallback is removed. Now (`lib/guideCoach.ts`): 
-   - "Keep your hands in view": only when the metric samples really stop near the TOP of the stroke (hands or arms lost there), or the camera rejected a rep and the poorly seen joints are the elbow / wrist (the native "tracking unreliable" line names the joints and their best confidence; I now read them).
-   - "Keep your whole body in view" / "Step back further" / "Back up": the person is lost, the path is cut at the bottom or at both ends, or the poorly seen joints are hips / knees / ankles.
-   - "Find more light": a rep was rejected and even the best joint confidence was under 0.45.
-   - Every joint seen and the strokes just short: the Guide stays quiet; the decision says so ("every joint is seen all through the stroke; the strokes are just short (a form problem, the Coach's job)"). The Coach's half-rep X (new build) handles it.
-   - Every `[GUIDE]` line now ends with its evidence: `[GUIDE] says "Keep your hands in view" because real camera problem, evidence: the metric samples stopped 2 time(s) near the TOP of the stroke in 12 s (hands / arms lost there)`.
-   **Honest limit:** the old build does not send per-wrist confidence, so on it the "hands" evidence is the path cut at the top and the low-quality rejection (which names joints). A per-joint wrist confidence field in the engine's debug stats would be the next native addition; I did not add more Swift to a build that is about to compile for the first time.
-6. **A real problem is spoken in about 3 seconds.** The old route needed "trying, then nothing counted for 5 s, then 2 s of trying" before any tip. Now a proven cause speaks after the evidence has held 1.0 s (`GUIDE.evidenceHoldSec`, placeholder) plus the Guide's 0.4 s confirm. A single clear loss of the hands (a gap of 1.2 s or more near the top, was 2.0 s) now counts straight away (`cutLongSec`, placeholder). Replay: hands lost at the top, first gap at 3.3 s, the Guide speaks at 4.7 s (1.4 s later); low-quality reject at 9 s, tip at 10.5 s.
-7. **Proof:** `scripts/test-guide-truth.js`: your two real logs (the 18:39 set and the 20:18 set, saved as fixtures) give no hands / step back / light tip during the half reps; synthetic: hands lost at the top, person lost, low quality on arms, on hips, on everything, each gives the right tip with its evidence; plain half reps give a completely quiet Guide.
+## Not verified
+- None of the new screen has been seen on a real phone or with real glass. Please send one screenshot of it at the end.
+- Swift changes (onAttemptMissed, clip fix, keep-awake keeper, whole-body setup) only work after the new iOS build.
 
-## PART 3 - workout camera screen top: done
-
-8. Top to bottom, each offset measured from the top safe area (so nothing overlaps on any iPhone): top bar buttons, then the progress bar (a real Liquid Glass capsule with rounded ends, one rounded segment per set, moved down to 66), then the timer in a Liquid Glass capsule, then the big "Camera confidence" block, the same label + pill as the solo form check. The "Set 1 of 3" and "Next / last exercise" text is gone, and the compact capsule I tried last round is gone. The framing box starts below the confidence block. `scripts/test-camera-layout.js` checks 6 phone sizes (SE to Pro Max): no two boxes overlap, and the framing box keeps at least 40% of the screen. Where the build has no native glass, the same blur-glass pill the Guide uses is drawn. Not seen on a phone.
-
-## PART 4 - after a form check: done
-
-9. **Finish on the rep feedback of a form check** now hides the page, shows the existing `DoneScreen` small variant ("Nice work", a placeholder until your design), and when it finishes goes Home with one `router.dismissAll()`. There is one `dismissAll` in the file, a `leaving` guard stops a second tap or message, and the done screen calls `onFinish` once, so no loop. DoneScreen itself is untouched.
-
-## Tests
-
-New: `test-build-safety.js` (16 checks, runs the three static checkers), `test-guide-truth.js`; scripts `check-swift-strings.js`, `check-swift-calls.js`, `check-imports.js`. Rewritten: `test-camera-layout.js`. Updated: `test-done-flow.js`, `test-workout-video.js` (the new `as Any?` form). Whole suite: all pass. `npx tsc --noEmit`: the same 28 old errors, none new.
-
-## Phone test (after the build)
-
-1. Build installs and opens. Open the camera: `[GLASS] real Liquid Glass: ON`, `[AWAKE] native: ...` lines.
-2. Half reps with your hands in view: an X ("Go lower") on each half rep, and the Guide says nothing. Cover your hands at the top: the Guide says "Keep your hands in view" in about 3 seconds.
-3. A workout set: progress bar and timer glass capsules, then the big Camera confidence block, nothing overlapping.
-4. Form check, rep feedback, Finish: "Nice work" then Home, once.
-5. Send the log (see `docs/first-run-new-build.md`).
-
-## Questions for Ari
-
-None blocking. (The 35% half-rep line and the 1 s evidence hold are placeholders; send the `[ATTEMPT-MISSED]` and `[GUIDE]` lines.)
-
-## Blocked commands
-
-None this round. Still open: `rm -f .scratch/runall.out` (my scratch file), delete `.scratch\edit-tlt*.js`, Window A's `scripts\test-home-clean.js`, `train_wk_webkit.png`; optional `git rm lib\screenHaptics.ts`. My scratch files in `.scratch` can go too.
-
-Window B HQ: Found and fixed two build-breaking Swift lines, Guide now needs evidence, glass workout top, done screen.
+## Suggestions (not done, not asked)
+- A single unit test file per screen is getting long; later split `test-live-tracking.js`.

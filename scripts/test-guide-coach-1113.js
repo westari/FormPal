@@ -66,15 +66,15 @@ console.log(`replayed ${events.length} lines, ${(events[events.length - 1].t / 1
 {
   const hold = GC.createCueHold();
   let shown = false;
-  for (let t = 0; t < 1400; t += 200) shown = shown || hold.feed(t, true);          // a flicker shorter than 1.5 s
+  for (let t = 0; t < 600; t += 200) shown = shown || hold.feed(t, true);          // a flicker shorter than the hold (0.8 s)
   hold.feed(1400, false);
-  check('FLICKER: a "step back" signal that lasts 1.4 s never reaches the words or the number', shown === false);
+  check('FLICKER: a "step back" signal that lasts 0.6 s never reaches the words or the number', shown === false);
   hold.reset(); let held = false;
   for (let t = 0; t <= 3000; t += 200) held = hold.feed(t, true);
   check('...but one that holds 3 s does (the camera really lost you)', held === true);
-  check('the hold time is the tuned placeholder (1.5 s)', TUN.GUIDE.cuePersistSec === 1.5);
+  check('the hold time is the tuned placeholder (0.8 s: a proven drop is explained in about 1.2 s with the 0.4 s confirm)', TUN.GUIDE.cuePersistSec === 0.8);
   const fc = fs.readFileSync(path.join(__dirname, '..', 'app/formcheck.tsx'), 'utf8').split('\r\n').join('\n');
-  check('the camera screen uses it for BOTH the Guide line and the confidence cap', fc.includes('frameCueHold.feed(now,') && fc.includes('(!isFloor && frameCueHeld)') && fc.includes('personMissing: noPersonNow && cueHeld'));
+  check('the camera screen uses the hold for the Guide line only: the number is never capped by a hint (2026-11-16)', fc.includes('frameCueHold.feed(now,') && fc.includes('personMissing:') && !fc.includes('(!isFloor && frameCueHeld)') && !fc.includes('capMeterTarget('));
 }
 // Guide calm still holds on this log
 {

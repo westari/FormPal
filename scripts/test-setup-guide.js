@@ -49,7 +49,22 @@ const src = fs.readFileSync(path.join(__dirname, '..', 'app/formcheck.tsx'), 'ut
   check('a frame with a joint missing restarts the steady count', gate2.steadyMs(200) === 0);
   const a = src.indexOf("// \"Ready. Go!\" (Ari's rule, 2026-11-12)"), b = src.indexOf('}, [readyPending, steadyGate]);');
   const eff = a >= 0 && b > a ? src.slice(a, b) : '';
-  check("the Ready gate waits ONLY for native's pass and the steady time: no meter-high, hands-at-start, reach-to-the-top or guide-step wait", eff.length > 200 && !/meterHigh|atStartPosition|guideRef|healthy\(/.test(eff) && /steadyGate\.steadyMs/.test(eff));
+  check("the Ready gate waits for: native's pass, the body steady ~1 s, AND the body on the exercise's path (the last readings inside the path band); no meter-high, hands-at-start, reach-to-the-top or guide-step wait", eff.length > 200 && !/meterHigh|guideRef|healthy\(/.test(eff) && /steadyGate\.steadyMs/.test(eff) && /matchRef\.band\(\)/.test(eff) && /counterRef\.atStartPosition\(band\.lo/.test(eff));
+  {
+    // 2026-11-16 REAL LOG: native setup passed at 15:19:43.756 while his arms hung at his sides (the metric read ~20; the path starts at about 30). The old rule said Go 1.0 s later.
+    const LT2 = require('../lib/liveTracking.ts');
+    const rows = fs.readFileSync(path.join(__dirname, 'fixtures', 'shoulder-press-2026-11-16.log.txt'), 'utf8').split(/\r?\n/);
+    const toMs = (l) => { const m = /^(\d\d):(\d\d):(\d\d\.\d+)/.exec(l); return m ? (+m[1] * 3600 + +m[2] * 60 + parseFloat(m[3])) * 1000 : null; };
+    const cs = LT2.createCounterSignal(); let passedAt = null, goOld = null, goNew = null; const lo = 50 - 0.7 * 29;
+    for (const l of rows) {
+      const t = toMs(l); if (t === null) continue; const m = /\[DEBUG\] (.*)$/.exec(l); const msg = m ? m[1] : '';
+      if (/PASSED — entering ACTIVE/.test(msg) && passedAt === null) passedAt = t;
+      if (msg.startsWith('[METRIC]') || msg.startsWith('[SETTLE-TRACE]')) cs.feedLog(msg, t);
+      if (passedAt !== null) { if (goOld === null && t - passedAt >= 1000) goOld = t; if (goNew === null && t - passedAt >= 1000 && cs.atStartPosition(lo, t, 1200, 2)) goNew = t; }
+    }
+    check('REAL LOG 2026-11-16: the OLD rule said Go 1.0 s after native passed (arms at his sides, metric ~20)', goOld !== null && goOld - passedAt <= 1100, goOld === null ? 'never' : ((goOld - passedAt) / 1000).toFixed(1) + ' s');
+    check('REAL LOG 2026-11-16: the NEW rule waits until his arms are on the exercise path (about 34 s later, just before his first rep)', goNew !== null && goNew - passedAt > 20000 && goNew - passedAt < 45000, goNew === null ? 'never' : ((goNew - passedAt) / 1000).toFixed(1) + ' s');
+  }
   check('the setup line the user sees goes through the calm filter', src.includes('setupCalm.feed(now, dec.text)'));
 }
 
@@ -73,7 +88,7 @@ const src = fs.readFileSync(path.join(__dirname, '..', 'app/formcheck.tsx'), 'ut
   const lines = [...new Set(GC.GUIDE_WORDS)].filter((x) => x !== 'Ready. Go!');
   const bad = /so your|shoulders|bring your|show\b|picture|position/i;
   check('every Guide line is ONE simple physical action (no "so your hands show", no "Bring your hands back to your shoulders")', lines.every((t) => !bad.test(t)), lines.filter((t) => bad.test(t)).join(' | '));
-  check('the lines Ari named exist word for word: Step back further / Raise your hands overhead / Lower your hands', L.backHands === 'Step back further' && L.raiseHands === 'Raise your hands overhead' && L.lowerHands === 'Lower your hands');
+  check('the Guide lines with evidence exist word for word (Step back further, Back up, Keep your hands in view ...); the lines the old build cannot prove are gone', L.backHands === 'Step back further' && L.backUp === 'Back up' && L.handsInView === 'Keep your hands in view' && L.raiseHands === undefined && L.lowerHands === undefined && L.closer === undefined && L.chestHeight === undefined && L.handsStart === undefined && L.startPos === undefined);
   check('every line starts with a capital letter and has 2-6 words (a beginner reads it at a glance)', lines.every((t) => /^[A-Z]/.test(t) && t.split(' ').length >= 2 && t.split(' ').length <= 6), lines.filter((t) => !/^[A-Z]/.test(t) || t.split(' ').length > 6).join(' | '));
   check('every Guide line fits the card in two lines (35 characters or fewer)', lines.every((t) => t.length <= 35), lines.filter((t) => t.length > 35).join(' | '));
   const i0 = src.indexOf('trackingCueText: {');

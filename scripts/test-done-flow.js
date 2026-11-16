@@ -52,7 +52,8 @@ check('Today\'s progress back button is the normal Liquid Glass back button (Liq
 console.log('\n--- 4. practice ---');
 check('PRACTICE: a solo form check (mode formCheck, not a workout, not logged, not history) is practice', /const isPractice = mode === 'formCheck' && !isWorkoutMode && !isLoggedMode && !isHistoryMode;/.test(rc));
 check('PRACTICE: its session entry is saved with kind: \'practice\'', /\.\.\.\(isPractice \? \{ kind: 'practice' as const \} : \{\}\)/.test(rc));
-check('PRACTICE: the screen says "Form check complete" (DoneScreen AND the Workout complete page title)', /title=\{isPractice \? 'Form check complete' : 'Workout complete'\}/.test(rc) && /title: isPractice \? 'Form check complete' : undefined/.test(rc) && /practice: !repCounterOnly/.test(read('app/formcheck.tsx')) && /'Workout Complete': opts\.title/.test(read('lib/recapInject.ts')));
+check('PRACTICE: the screen says "Form check complete" (DoneScreen AND the Workout complete page title)', /title=\{isPractice \? 'Form check complete' : 'Workout complete'\}/.test(rc) && rc.includes("title: (isPractice || (data.isHistory") && /practice: !repCounterOnly/.test(read('app/formcheck.tsx')) && /'Workout Complete': opts\.title/.test(read('lib/recapInject.ts')));
+check('PRACTICE HISTORY: opening a past form check from Progress -> Form checks says "Form check complete" (every entry is kind practice); a real workout keeps "Workout complete"', rc.includes("data.isHistory && data.entries.length > 0 && data.entries.every(e => e.kind === 'practice'))) ? 'Form check complete' : undefined"));
 {
   const rfb = read('app/rep-feedback.tsx');
   check("PRACTICE: Finish on the rep feedback shows the short DoneScreen (small variant, \"Nice work\") FIRST, then goes HOME once (dismissAll when it finishes), behind a leaving guard; not back to the recap (the 2026-11-15 loop), no Today's progress, no streak",

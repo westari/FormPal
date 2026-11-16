@@ -79,9 +79,11 @@ export function createCameraConfidence(opts: { log?: (m: string) => void } = {})
         value = C.cutCap; cap = 'cut';
         why = `trying, and the rep path is cut off at the ${i.match.cut} (the camera never sees the whole rep)`;
       }
-      if (trying && counting && !stuck && value < C.countingFloor) {
+      // Reps are counting = the camera plainly sees you: 90+, whatever else flickers (Ari 2026-11-16: it dropped to 35 while reps were being counted).
+      // Only a person who is really out of the picture (the path cut at the frame edge) is exempt.
+      if (counting && !stuck && i.match.cut !== 'frame' && value < C.countingFloor) {
         value = C.countingFloor; cap = 'floor';
-        why = `trying and reps are counting, so 90+ (the camera sees ${i.visibility})`;
+        why = `reps are counting, so 90+ (the camera sees ${i.visibility})`;
       }
       value = Math.max(0, Math.min(100, Math.round(value)));
       if (opts.log && (Math.abs(value - lastLogVal) >= C.logDelta || why.slice(0, 20) !== lastLogWhy || i.now - lastLogAt >= C.logEverySec * 1000)) {

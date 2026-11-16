@@ -136,6 +136,25 @@ public class ATHLTCameraModule: Module {
     private var awakeObserver: NSObjectProtocol?
     private var lastFinishedClipURL: URL?
 
+    // These are built OUTSIDE definition() on purpose. Expo's module DSL is a result builder: every expression inside definition() is type-checked
+    // as one big unit, and the first two iOS builds failed with "failed to produce diagnostic for expression" at definition(). Plain helpers with
+    // explicit types keep the body of definition() simple.
+    private func clipValue() -> Any {
+        if let u = lastFinishedClipURL { return u.absoluteString }
+        return NSNull()
+    }
+    private func clipName() -> String {
+        if let u = lastFinishedClipURL { return u.lastPathComponent }
+        return "none"
+    }
+    private func stopResultDict() -> [String: Any] {
+        var d: [String: Any] = [:]
+        d["reps"] = engine.totalReps
+        d["goodReps"] = engine.goodReps
+        d["videoUri"] = clipValue()
+        return d
+    }
+
     // MARK: – Module definition ─────────────────────────────────────────────────
 
     public func definition() -> ModuleDefinition {
@@ -182,9 +201,7 @@ public class ATHLTCameraModule: Module {
                     // If stopTracking() was never called (e.g. back button during
                     // tracking), resolve its dangling promise now so nothing leaks.
                     if let p = self.pendingStopPromise {
-                        p.resolve(["reps":     self.engine.totalReps,
-                                   "goodReps": self.engine.goodReps,
-                                   "videoUri": (self.lastFinishedClipURL?.absoluteString as Any?) ?? NSNull()])
+                        p.resolve(self.stopResultDict())
                         self.pendingStopPromise = nil
                     }
                     self.engine.reset()
@@ -431,10 +448,8 @@ public class ATHLTCameraModule: Module {
                     self.sessionQueue.async { movieOut.stopRecording() }
                 } else {
                     NSLog("[GymCamera] tracking stopped — %d good / %d reps (not recording now; last finished clip: %@)",
-                          self.engine.goodReps, self.engine.totalReps, self.lastFinishedClipURL?.lastPathComponent ?? "none")
-                    promise.resolve(["reps":     self.engine.totalReps,
-                                     "goodReps": self.engine.goodReps,
-                                     "videoUri": (self.lastFinishedClipURL?.absoluteString as Any?) ?? NSNull()])
+                          self.engine.goodReps, self.engine.totalReps, self.clipName())
+                    promise.resolve(self.stopResultDict())
                 }
             }
         }

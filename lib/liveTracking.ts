@@ -27,7 +27,8 @@ export function isFrameHint(text: string | null | undefined): boolean {
   const t = text.trim().toLowerCase();
   return FRAME_HINTS.has(t) || /(step back|into frame|in frame|can't see|cannot see)/.test(t);
 }
-/** The number on screen can never contradict the words: while a frame hint ("Step into frame", "Step back") is up it cannot read above this. */
+/** NOT USED BY THE SCREEN ANY MORE (Ari 2026-11-16). A hint used to cap the number at 35, so a flickering hint slammed it 100 -> 35 -> 100. The number now comes
+ *  ONLY from what the camera sees (createCounterSignal + lib/cameraConfidence.ts); kept only so the before / after replay can run the old rule. */
 export const FRAME_HINT_METER_CAP = 35;
 /** The meter target after both caps: the current setup step's cap (setup only) and the frame-hint cap. */
 export function capMeterTarget(target: number, setupCap: number | null, frameHintActive: boolean): number {
@@ -111,7 +112,7 @@ export interface CounterFlags { diag?: boolean; cue?: boolean }
 export interface CounterSignal {
   /** Feed every native debug-log line. */
   feedLog(message: string, nowMs: number): void;
-  /** Tell it which soft warnings are showing right now (a "why not counting" message, a framing cue). They fade in and out over ~0.5s. */
+  /** Kept for old callers; it no longer changes the score (a hint never sets the number). */
   setFlags(flags: CounterFlags): void;
   /** 0-100, continuous: how well the counter can see you right now. Before any sample has arrived it returns 100 (nothing is wrong yet). */
   score(nowMs: number): number;
@@ -191,7 +192,9 @@ export function createCounterSignal(): CounterSignal {
       pen += clamp01((now - sampleAt - 400) / (COUNTER_BLIND_MS - 400)) * COUNTER_SILENCE_MAX;
       if (gapAt) pen += clamp01(1 - (now - gapAt) / COUNTER_GAP_RECOVER_MS) * COUNTER_GAP_MAX;
       if (unreliableAt) pen += clamp01(1 - (now - unreliableAt) / COUNTER_UNRELIABLE_MS) * (1 - confQ) * COUNTER_CONF_MAX;
-      pen += flagVal.diag * COUNTER_DIAG_MAX + flagVal.cue * COUNTER_CUE_MAX;
+      // (a "why not counting" message or a framing cue used to subtract up to 40 / 25 points HERE. That made a hint set the number. Removed 2026-11-16:
+      //  the number is evidence only: the samples arriving, pose gaps, joints rejected for low confidence. A hint is the Guide's words for the same evidence.)
+      void flagVal;
       return Math.max(5, Math.round(100 - Math.min(95, pen)));
     },
     healthy(now, windowMs, minSamples) {
@@ -247,10 +250,9 @@ export function meterTarget(i: MeterInputs): number {
   if (i.phase === 'setup-done') return 100;
   if (i.isActive) {
     if (personLost(i)) return 0;
+    // EVIDENCE ONLY (Ari 2026-11-16): no hint caps the number any more (a repDiag hint used to force 35, a tracking cue 55). The same signal the counter
+    // works from decides it: high only if the camera really sees the joints and reps can be counted.
     let t = 100;
-    if (i.repDiag) t = 35;
-    else if (i.trackingCue || i.outOfPlaneCue) t = 55;
-    // the same signal the counter works from: high only if reps can actually be counted
     if (i.counterScore !== undefined) t = Math.min(t, i.counterScore);
     return t;
   }
@@ -258,16 +260,17 @@ export function meterTarget(i: MeterInputs): number {
 }
 
 // ── Smooth meter ─────────────────────────────────────────────────────────────
-// The number is LIVE and CONTINUOUS: the target it chases is itself a continuous quality (see createCounterSignal.score:
-// it moves a little when the picture changes a little), and the shown number follows it with exponential smoothing, so a
-// small change in the picture is a small change on screen (100 -> 98), a big one glides, and nothing ever steps.
-// "Nobody there" is still shown at once (0). Time-based, so it feels the same at any frame rate.
-export const METER_TAU_UP_MS = 220;     // PLACEHOLDER smoothing time constants
-export const METER_TAU_DOWN_MS = 300;
+// The number may NEVER jump (Ari 2026-11-16: it went 100 -> 35 -> 100 -> 35 while he stood still). It follows its target at a limited speed:
+// at most METER_MAX_RATE points a second while tracking (setup may be quicker: the person is still getting into place). A pose that
+// drops out for one second therefore moves it a few points at most; a real, lasting loss walks it down and the Guide says why long before it
+// gets far. "Nobody there" (target 0, held) is allowed to fall faster. Time-based, so it feels the same at any frame rate.
+export const METER_MAX_RATE = 6;            // points per second while tracking (PLACEHOLDER)
+export const METER_SETUP_RATE = 45;         // points per second while setting up (PLACEHOLDER)
+export const METER_NOBODY_RATE = 30;        // falling to 0 because nobody is in the picture (PLACEHOLDER)
 
 export interface MeterSmoother {
-  /** Advance to `nowMs` with the raw `target`; returns the integer to display. */
-  tick(target: number, nowMs: number): number;
+  /** Advance to `nowMs` with the raw `target`; returns the integer to display. `maxRate` = the most points per second it may move. */
+  tick(target: number, nowMs: number, maxRate?: number): number;
   /** The target the display is gliding toward. */
   readonly effectiveTarget: number;
 }
@@ -275,13 +278,15 @@ export interface MeterSmoother {
 export function createMeterSmoother(): MeterSmoother {
   let eff = 0, disp = 0, lastMs = -1;
   return {
-    tick(target, nowMs) {
-      const dt = lastMs < 0 ? 0 : Math.max(0, nowMs - lastMs);
+    tick(target, nowMs, maxRate = METER_MAX_RATE) {
+      if (lastMs < 0) { lastMs = nowMs; eff = target; disp = target; return Math.round(disp); }   // the first reading starts AT its target (never a climb from 0)
+      const dt = Math.max(0, nowMs - lastMs);
       lastMs = nowMs;
-      if (target === 0) { eff = 0; disp = 0; return 0; }
       eff = target;
-      const tau = target > disp ? METER_TAU_UP_MS : METER_TAU_DOWN_MS;
-      disp += (target - disp) * (1 - Math.exp(-dt / tau));
+      const rate = target === 0 && disp > 0 ? Math.max(maxRate, METER_NOBODY_RATE) : maxRate;
+      const step = rate * dt / 1000;
+      const d = target - disp;
+      disp += Math.abs(d) <= step ? d : Math.sign(d) * step;
       return Math.round(disp);
     },
     get effectiveTarget() { return eff; },
