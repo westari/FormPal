@@ -86,10 +86,12 @@ export interface GuideInputs {
   /** the camera rejected reps for low joint quality recently, and how dark it was */
   rejectedLowQuality?: boolean;
   rejectedDark?: boolean;
+  /** which joints the camera rejected a rep for (name + best confidence), from the native "tracking unreliable" line */
+  rejectedJoints?: { name: string; max: number }[];
   facing?: 'camera' | 'side';
 }
 
-export interface GuideDecision { line: string | null; why: string; reason: WhyCannotCount | 'hint' | 'none' }
+export interface GuideDecision { line: string | null; why: string; reason: WhyCannotCount | 'hint' | 'none'; /** the evidence the line rests on (logged with every [GUIDE] line) */ evidence: string }
 
 /** Picks the real reason it cannot count. Pure: the same inputs always give the same answer. */
 export function whyCannotCount(i: GuideInputs): WhyCannotCount {
@@ -105,6 +107,23 @@ export function whyCannotCount(i: GuideInputs): WhyCannotCount {
   return 'unknown';
 }
 
+/** The evidence behind a camera problem, in plain words (it goes into every [GUIDE] log line). */
+export function evidenceFor(r: WhyCannotCount, i: GuideInputs): string {
+  const m = i.match;
+  switch (r) {
+    case 'nobody':      return 'Vision finds nobody in the picture';
+    case 'frame-edge':  return `the person was lost ${m.frameCuts} time(s) in the last 12 s (body cut off or too big in the frame)`;
+    case 'cut-both':    return `the rep path stopped at BOTH ends (top ${m.topCuts}, bottom ${m.bottomCuts} in 12 s): joints lost at both ends`;
+    case 'cut-top':     return `the metric samples stopped ${m.topCuts} time(s) near the TOP of the stroke in 12 s (hands / arms lost there)`;
+    case 'cut-bottom':  return `the metric samples stopped ${m.bottomCuts} time(s) near the BOTTOM of the stroke in 12 s (legs / hips lost there)`;
+    case 'dark':        return `the camera rejected a rep and even its best joint confidence was under 0.45 (${(i.rejectedJoints ?? []).map(j => j.name + ' max ' + j.max.toFixed(2)).join(', ') || 'low light or low quality overall'})`;
+    case 'low-quality': return `the camera rejected a rep for low joint quality: ${(i.rejectedJoints ?? []).map(j => j.name + ' best ' + j.max.toFixed(2)).join(', ') || 'joints unclear'}`;
+    case 'angle':       return `the camera says the angle is foreshortened ("${i.outOfPlaneCue}")`;
+    case 'range-only':  return 'every joint is seen all through the stroke; the strokes are just short (a form problem, the Coach\'s job)';
+    default:            return 'no data yet';
+  }
+}
+
 export function guideForReason(r: WhyCannotCount, i: GuideInputs): string | null {
   const hands = handsMatter(i.exerciseId);
   switch (r) {
@@ -114,11 +133,17 @@ export function guideForReason(r: WhyCannotCount, i: GuideInputs): string | null
     case 'cut-top':     return hands ? GUIDE_LINES.handsInView : GUIDE_LINES.phoneBack;
     case 'cut-bottom':  return GUIDE_LINES.bodyInView;
     case 'dark':        return GUIDE_LINES.moreLight;
-    case 'low-quality': return hands ? GUIDE_LINES.handsInView : GUIDE_LINES.bodyInView;
+    case 'low-quality': {
+      // hands only when the poorly seen joints really are the hands / arms (wrist or elbow); legs or hips = the whole body
+      const names = (i.rejectedJoints ?? []).map(j => j.name);
+      const armJoint = names.some(n => /wrist|elbow/i.test(n)), bodyJoint = names.some(n => /hip|knee|ankle/i.test(n));
+      if (armJoint && !bodyJoint) return GUIDE_LINES.handsInView;
+      return GUIDE_LINES.bodyInView;
+    }
     case 'angle':       return i.facing === 'camera' ? GUIDE_LINES.facePhone : GUIDE_LINES.sideways;
-    // range-only / unknown: no single setup cause is known, but the user IS trying and nothing counts, so the Guide must still speak
-    // (Ari 2026-11-13: 10 s of trying and the Guide said nothing). The one honest nudge: make sure the camera sees the moving joints.
-    default:            return hands ? GUIDE_LINES.handsInView : GUIDE_LINES.bodyInView;
+    // range-only / unknown: NO camera problem is proven. Every joint is seen and the strokes are just short: that is a FORM problem, so the Guide
+    // stays quiet and the Coach's half-rep X handles it (Ari 2026-11-15: it said "Keep your hands in view" while the hands were in view).
+    default:            return null;
   }
 }
 
@@ -193,6 +218,7 @@ export function createGuide(opts: { log?: (m: string) => void } = {}): Guide {
   let lastLogLine = '', lastLogAt = 0;
   let ep = { key: '', since: 0, idx: 0, seen: 0, base: '' };
   let seenAt = 0;
+  let evSince = 0, evKey = '';
   const log = (now: number, line: string | null, why: string) => {
     if (!opts.log) return;
     const key = line ?? '';
@@ -203,6 +229,12 @@ export function createGuide(opts: { log?: (m: string) => void } = {}): Guide {
   return {
     decide(i) {
       let line: string | null = null, why = 'nothing to fix', reason: GuideDecision['reason'] = 'none', prio = 0;
+      // the cause: only when the user is really moving (or the path was cut), and only a cause the CAMERA can fix. Short strokes with every joint seen = no cause.
+      const active = i.match.haveData && (i.match.trying || i.match.movingNow || !!i.match.cut);
+      const cause = active ? whyCannotCount(i) : 'unknown';
+      const causeLine = guideForReason(cause, i);
+      const evidence = evidenceFor(active ? cause : 'unknown', i);
+      if (causeLine && !i.personMissing) { if (!evSince || evKey !== cause) { evSince = i.now; evKey = cause; } } else { evSince = 0; evKey = ''; }
       if (!i.personMissing) seenAt = i.now;
       // nobody in the picture: "Step into view" only if they were never seen; someone who WAS in the picture a moment ago and is now lost is too close
       if (i.personMissing) {
@@ -211,10 +243,11 @@ export function createGuide(opts: { log?: (m: string) => void } = {}): Guide {
         why = wasThere ? 'the person was in the picture a moment ago and is now lost: too close' : 'the camera finds nobody in the picture';
         reason = 'nobody'; prio = 3;
       }
-      else if (i.stuck && (i.match.movingNow !== false || i.match.cut)) {   // (a cut path has no recent samples, so it cannot show "moving")
-        const r = whyCannotCount(i);
-        line = guideForReason(r, i); reason = r; prio = 2;
-        why = `you are trying but no rep counts: ${r === 'range-only' || r === 'unknown' ? 'no exact cause found, general framing nudge' : r}`;
+      else if (cause && causeLine) {
+        // a REAL camera problem, proven by evidence: speak (after the evidence has held evidenceHoldSec)
+        const held = evSince > 0 && i.now - evSince >= G.evidenceHoldSec * 1000;
+        line = held ? causeLine : null; reason = cause; prio = 2;
+        why = `real camera problem, evidence: ${evidence}${held ? '' : ' (waiting ' + G.evidenceHoldSec + ' s to be sure)'}`;
       } else {
         const hint = guideLine(i.nativeCue, i.exerciseId) ?? guideLine(i.outOfPlaneCue, i.exerciseId) ?? guideLine(i.diag, i.exerciseId);
         if (hint) { line = hint; why = `the camera says "${i.nativeCue || i.outOfPlaneCue || i.diag}"`; reason = 'hint'; prio = 1; }
@@ -234,9 +267,9 @@ export function createGuide(opts: { log?: (m: string) => void } = {}): Guide {
       if (line !== wantedLine) why = line ? 'holding the last line (calm: a line stays up a few seconds)' : why;
       void prio;
       log(i.now, line, why);
-      return { line, why, reason };
+      return { line, why, reason, evidence: line ? (reason === 'hint' ? why : evidence) : (cause === 'range-only' ? evidence : '') };
     },
-    reset() { seenAt = 0; calm.reset(); ep = { key: '', since: 0, idx: 0, seen: 0, base: '' }; lastLogLine = ''; lastLogAt = 0; },
+    reset() { evSince = 0; evKey = ''; seenAt = 0; calm.reset(); ep = { key: '', since: 0, idx: 0, seen: 0, base: '' }; lastLogLine = ''; lastLogAt = 0; },
   };
 }
 

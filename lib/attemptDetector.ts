@@ -69,7 +69,7 @@ export interface Detector {
   /** where Movement Match sees the rep path cut off from the camera (hands leaving the frame at the top...) */
   setPathCut(cut: 'top' | 'bottom' | 'both' | 'frame' | null): void;
   /** the camera rejected a rep for low joint quality within the last `ms` (and how dark it was) */
-  recentReject(ms: number): { lowQuality: boolean; dark: boolean };
+  recentReject(ms: number): { lowQuality: boolean; dark: boolean; /** the joints whose confidence was low during the rejected rep (from the native line), with their best confidence */ joints: { name: string; max: number }[] };
   /** current blocker cue (2-3 words) while it should be on screen, else null */
   cue(): string | null;
   softReps(): number;
@@ -113,6 +113,7 @@ export function createAttemptDetector(opts: { exerciseId?: string; now?: () => n
   // seconds after one, was called "counted" because a rep had happened within 500 ms before its low, so no half rep ever got an X).
   let unclaimedReps: number[] = [];
   let pendingRejectAt = 0, rejectKind: 'unreliable' | 'other' | '' = '', rejectLightMax = 1;
+  let rejectJoints: { name: string; max: number }[] = [];
   let suppressedAt = 0;
   let lastNoPersonAt = 0;
   let angleCue: string | null = null;
@@ -349,6 +350,8 @@ export function createAttemptDetector(opts: { exerciseId?: string; now?: () => n
         rejectKind = 'unreliable';
         const hi = [...line.matchAll(/=\[[-\d.]+-([\d.]+)\]/g)].map(x => parseFloat(x[1]));
         rejectLightMax = hi.length ? Math.max(...hi) : 1;
+        // "leftWrist=[0.10-0.55]": which joints were poorly seen, and the best the camera ever saw them
+        rejectJoints = [...line.matchAll(/(\w+)=\[[-\d.]+-([\d.]+)\]/g)].map(x => ({ name: x[1], max: parseFloat(x[2]) })).filter(j => j.max < 0.6);
       } else rejectKind = 'other';
       return [];
     }
@@ -359,7 +362,7 @@ export function createAttemptDetector(opts: { exerciseId?: string; now?: () => n
     feed,
     setAngleCue(c) { angleCue = c && c.trim() ? c : null; },
     setPathCut(c) { pathCut = c; },
-    recentReject(ms) { const recent = rejectKind === 'unreliable' && pendingRejectAt > 0 && now() - pendingRejectAt <= ms; return { lowQuality: recent, dark: recent && rejectLightMax < 0.45 }; },
+    recentReject(ms) { const recent = rejectKind === 'unreliable' && pendingRejectAt > 0 && now() - pendingRejectAt <= ms; return { lowQuality: recent, dark: recent && rejectLightMax < 0.45, joints: recent ? rejectJoints : [] }; },
     cue() { const t = now(); if (stuckCue && t < stuckCue.until) return stuckCue.text; return null; },
     softReps() { return soft; },
     recentlyIgnored(ms: number) { return ignoredAt > 0 && now() - ignoredAt <= ms; },

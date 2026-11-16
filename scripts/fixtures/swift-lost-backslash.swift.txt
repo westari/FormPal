@@ -1,0 +1,3 @@
+func f(def: Int) {
+    let msg = "[X] (def.id) reached=(String(format: "%.1f", 1.0))"
+}

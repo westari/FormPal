@@ -81,9 +81,9 @@ function run(events, opts = {}) {
       const rej = det.recentReject(8000);
       const g = guide.decide({
         now, exerciseId, personMissing: st.lost, nativeCue: opts.trackingCue ? opts.trackingCue(now - 1e12) : null, outOfPlaneCue: null, diag: rd.message(),
-        match: m, stuck: c.stuck, rejectedLowQuality: rej.lowQuality, rejectedDark: rej.dark, facing: opts.facing,
+        match: m, stuck: c.stuck, rejectedLowQuality: rej.lowQuality, rejectedDark: rej.dark, rejectedJoints: rej.joints, facing: opts.facing,
       });
-      rows.push({ t: now - 1e12, match: m, conf: c, guide: g.line, guideWhy: g.why, guideReason: g.reason });
+      rows.push({ t: now - 1e12, match: m, conf: c, guide: g.line, guideWhy: g.why, guideReason: g.reason, guideEvidence: g.evidence });
       // old
       counterO.setFlags({ diag: !!rdO.message(), cue: false });
       old.conf.push({ t: now - 1e12, v: counterO.score(now) });
