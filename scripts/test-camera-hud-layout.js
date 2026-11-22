@@ -28,7 +28,7 @@ for (const p of PHONES) {
     const frameBottomY = p.h - l.frame.bottom;
     const pillBottomMax = l.pill.top + l.pill.maxHeight;
     const countTop = l.count.top, countBottom = l.count.top + l.count.height;
-    const stopTop = p.h - l.stop.bottom - l.stop.size, stopLeft = p.w - l.stop.right - l.stop.size;
+    const stopTop = p.h - l.stop.bottom - l.stop.height, stopLeft = p.w - l.stop.right - l.stop.width;
     // 2-digit count with "/ 10" at the largest size: digits about 0.62 em of 92 pt, "/ 10" about 46 pt, gap 12
     const countHalfW = (2 * 0.62 * 92 + 12 + 46) / 2;
     check(tag + ': the buttons sit under the top safe area', l.buttons.top >= p.top);
@@ -40,10 +40,11 @@ for (const p of PHONES) {
     check(tag + ': the centre pill (even two guide lines + the confidence row) fits inside the brackets, above the rep count', l.pill.top >= l.frame.top && apart(pillBottomMax, frameBottomY), JSON.stringify({ pillTop: l.pill.top, pillBottomMax, frameBottomY }));
     check(tag + ': the brackets end above the rep count', apart(frameBottomY, countTop), JSON.stringify({ frameBottomY, countTop }));
     check(tag + ': the rep count stays above the demo drawer peek (56 pt) with a gap', apart(countBottom, p.h - PEEK));
-    check(tag + ': the stop button is on the count row, right of the count, and clear of the brackets and the drawer', stopLeft > p.w / 2 + countHalfW && stopTop >= frameBottomY && apart(stopTop + l.stop.size, p.h - PEEK), JSON.stringify({ stopLeft, need: p.w / 2 + countHalfW }));
+    check(tag + ': the Finish pill is on the count row, right of the count, and clear of the brackets and the drawer', stopLeft > p.w / 2 + countHalfW && stopTop >= frameBottomY && apart(stopTop + l.stop.height, p.h - PEEK), JSON.stringify({ stopLeft, need: p.w / 2 + countHalfW }));
     check(tag + ': the Coach check / X has a band under the pill and above the count, inside the brackets', l.orb.top >= l.pill.top + 52 && l.orb.top + l.orb.height <= frameBottomY + 0.5 && l.orb.height > 0, JSON.stringify(l.orb));
     check(tag + ': the check / X needs to shrink to at most 55% on this phone (it never covers the pill or the count)', l.orb.scale >= 0.55, 'scale ' + l.orb.scale.toFixed(2));
-    check(tag + ': the pill fits the width (31 pt side margins)', l.pill.maxWidth <= p.w - 2 * L.HUD_SIDE && l.pill.minWidth <= l.pill.maxWidth);
+    check(tag + ': the pill is centred EXACTLY (equal space left and right of a fixed width) and fits the width', Math.abs(l.pill.left * 2 + l.pill.width - p.w) <= 1, JSON.stringify(l.pill));
+    check(tag + ': the pill is near the TOP of the brackets (within 14 pt), out of the way of the body', l.pill.top - l.frame.top <= 14 && l.pill.top >= l.frame.top);
   }
 }
 
@@ -53,9 +54,13 @@ check('formcheck: ONE layout object feeds the brackets, the set bar, the timer, 
   /const hud = hudLayout\(/.test(fc) && /layout=\{hud\}/.test(fc) && /area=\{hud\.orb\}/.test(fc) && /hud\.stop\.bottom/.test(fc) && /layout\.bar\.top/.test(fc) && /layout\.timer\.top/.test(fc) && /layout\.pill\.top/.test(fc) && /layout\.count\.top/.test(fc));
 check('formcheck: the Guide is hidden while a Coach check / X is on screen (the pill keeps only its confidence row)', /isTracking && !feedback \? guideTrack : null/.test(fc));
 check('formcheck: no separate "Camera confidence" label any more; the info icon explains the number', !/Camera confidence<\/Text>/.test(fc) && /What camera confidence means/.test(fc) && /setInfoOpen/.test(fc));
-check('formcheck: the solo rep count has no "/ N" (total is null), the workout one shows "/ targetReps"', /total=\{null\}/.test(fc) && /total=\{targetReps\}/.test(fc));
-check('formcheck: finished AND current sets are bright with a green glow, upcoming dim', /i <= completedSets \? wh\.segOn : wh\.segOff/.test(fc) && /segOn:\s+\{[^}]*#34C759/.test(fc));
-check('formcheck: the timer pill has a stopwatch icon', /name="stopwatch"/.test(fc));
+check('formcheck: the solo rep count is 3 / 10 like the workout (target = the exercise default reps), same RepCount component', fc.includes('total={target}') && fc.includes('defaultReps ?? 10') && fc.includes('total={targetReps}'));
+check('formcheck: each set is its OWN glass pill with gaps; finished AND current sets are bright with a green glow, upcoming dim', fc.includes('const on = i <= completedSets;') && fc.includes('wh.setGlow') && fc.includes("setGlow:  { shadowColor: '#34C759'") &&fc.includes('gap: HUD_BAR_GAP') && L.HUD_BAR_HEIGHT <= 20);
+check('formcheck: the timer pill uses the real SF Symbol stopwatch (SymbolView), no custom drawing', fc.includes('<SymbolView name="stopwatch"') && !fc.includes('stopwatchPath'));
+check('formcheck: NO record button any more (no white ring + black dot); a small glass Finish pill finishes the set', !fc.split('const wh = StyleSheet.create')[0].includes('stopCircleInner') && fc.includes('<Text style={s.finishTxt}>Finish</Text>') && fc.includes('void handleStop()'));
+check('formcheck: the Cue stars (blue sparkle) sit LEFT of the Guide text inside the pill', fc.indexOf('<Image source={SPARKLE_DUO} style={s.pillStars} />') > 0 && fc.indexOf('<Image source={SPARKLE_DUO} style={s.pillStars} />') < fc.indexOf('<Text style={s.pillGuide}'));
+check('formcheck: Ready. Go! sits at the pill height (up with it)', fc.includes('paddingTop: hud.pill.top'));
+check('formcheck: Start your reps is wired once (createStartReps), never reset', fc.includes('createStartReps') && fc.includes('startRepsEngine.tick') && !fc.includes('startRepsEngine.reset'));
 check('formcheck: the demo video drawer is still there', /instepdrawer\.html/.test(fc) && /DRAWER_PEEK_HEIGHT/.test(fc));
 check('formcheck: the five glass pieces are real Liquid Glass (HudGlass / LiquidGlassButton), never a flat card', (fc.match(/<HudGlass/g) || []).length >= 4 && (fc.match(/<LiquidGlassButton/g) || []).length >= 4);
 check('formcheck: brackets are 42 pt arms, 3 pt thick, 20 pt radius', /const SIZE = 42, BW = 3, R = 20;/.test(fc));

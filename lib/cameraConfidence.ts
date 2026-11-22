@@ -7,14 +7,17 @@
  * at the top and the counter never saw the top of the rep). The rules now, identical for every exercise:
  *   - Movement Match HIGH and reps counting      -> 90-100
  *   - A check or an X from the Coach counts like a counted rep: the camera saw the stroke, so confidence stays 90+ (half reps with X)
- *   - Movement Match HIGH, no rep counted AND no check / X for ~5 seconds (or 2 attempts that got neither)
+ *   - Movement Match HIGH, no rep counted AND no check / X for ~5 seconds (or 2 attempts that got neither), AND a real camera problem is
+ *     visible (the visibility score is down, or the rep path is cut right now)
  *                                                -> below 80 and FALLING (-3 a second, floor 15), never near 100
+ *   - The same, but every needed joint is clearly seen and the path is whole (half reps)
+ *                                                -> NO drop: that is a form problem, not a camera problem (Ari 2026-11-16 evening)
  *   - Movement Match HIGH and the rep path is cut at the top / bottom (hands or feet leaving the frame)
  *                                                -> capped at 70 straight away
  *   - Movement Match LOW                         -> just what the camera sees (the visibility score)
- * So it can NEVER read 80+ while the user is clearly trying and no reps count.
+ * So it never reads 80+ while the user is trying, no reps count AND the camera has a real problem; it never drops for form.
  */
-import { CONFIDENCE as C, MOVEMENT_MATCH as MM } from './coachTuning';
+import { CONFIDENCE as C, MOVEMENT_MATCH as MM, GUIDE as G } from './coachTuning';
 import type { MatchResult } from './movementMatch';
 
 export interface ConfidenceInputs {
@@ -62,8 +65,15 @@ export function createCameraConfidence(opts: { log?: (m: string) => void } = {})
       // Only time spent MOVING counts: the 10 s score still reads HIGH for a few seconds after the user stops, and a rest is not "stuck".
       if (trying) { lastTryingAt = i.now; if (i.match.movingNow !== false || i.match.cut) tryAcc += dt; }
       const notCountingSec = tryAcc;
-      const onset = trying && !counting && (tryAcc >= C.stuckAfterSec || i.missedSinceCount >= C.stuckAttempts);
-      if (counting) stuckSince = 0;
+      // A REAL camera problem, as evidence: the camera's own visibility score is down (joints missing / low quality / gaps), or the rep path is cut off
+      // RIGHT NOW at the top, the bottom or the frame edge. When every needed joint is clearly seen and the path is whole, no rep counting is a FORM
+      // problem (half reps), not a camera problem: confidence stays where the camera sees it, and the Coach's X (onAttemptMissed) says the rest.
+      const ago = i.match.cutAgo ?? { top: Infinity, bottom: Infinity, frame: Infinity };
+      const freshEndCut = ((i.match.cut === 'top' || i.match.cut === 'both') && ago.top <= G.cutFreshSec) || ((i.match.cut === 'bottom' || i.match.cut === 'both') && ago.bottom <= G.cutFreshSec);
+      const freshCut = freshEndCut || (i.match.cut === 'frame' && ago.frame <= G.frameCutFreshSec);
+      const cameraProblem = i.visibility < C.clearVisibleMin || freshCut;
+      const onset = trying && !counting && cameraProblem && (tryAcc >= C.stuckAfterSec || i.missedSinceCount >= C.stuckAttempts);
+      if (counting || !cameraProblem) stuckSince = 0;
       else if (onset && !stuckSince) stuckSince = i.now;
       else if (stuckSince && !trying && i.now - lastTryingAt > C.releaseSec * 1000) stuckSince = 0; // the user stopped: it recovers
       const stuck = stuckSince > 0;
@@ -75,7 +85,7 @@ export function createCameraConfidence(opts: { log?: (m: string) => void } = {})
         if (c < value) { value = c; cap = 'stuck'; }
         why = `trying (match ${i.match.score}) but no rep counted for ${notCountingSec.toFixed(0)}s / ${i.missedSinceCount} attempts, so it cannot read high (falling ${C.stuckFallPerSec}/s)`;
       }
-      if (trying && (i.match.cut === 'top' || i.match.cut === 'bottom' || i.match.cut === 'both') && value > C.cutCap) {
+      if (trying && freshEndCut && value > C.cutCap) {
         value = C.cutCap; cap = 'cut';
         why = `trying, and the rep path is cut off at the ${i.match.cut} (the camera never sees the whole rep)`;
       }

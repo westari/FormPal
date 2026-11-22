@@ -29,6 +29,7 @@ export const GUIDE_LINES = {
   moreLight:    'Find more light',
   holdStill:    'Hold still',
   ready:        'Ready. Go!',
+  startReps:    'Start your reps', // ONCE, when he stands in frame after Go and nothing has moved for ~6 s (Ari 2026-11-16 evening)
 } as const;
 export const GUIDE_WORDS: string[] = Object.values(GUIDE_LINES);
 export { COACH_WORDS };
@@ -187,6 +188,7 @@ export const GUIDE_EVIDENCE: Record<string, { evidence: string; oldBuild: boolea
   'Turn sideways to the phone':   { evidence: 'native out-of-plane cue (the angle is foreshortened) for an exercise filmed from the side', oldBuild: true },
   'Face the phone':               { evidence: 'native out-of-plane cue (the angle is foreshortened) for an exercise filmed from the front', oldBuild: true },
   'Find more light':              { evidence: 'a rep was rejected and even the best joint confidence was under 0.45', oldBuild: true },
+  'Start your reps':              { evidence: 'tracking began (Go) at least 6 s ago, the person is in the picture, NO rep has counted, NO stroke attempt and no check / X since Go. Shown once per camera screen, for 4 s; never again, and never once any rep has counted (so never in a rest between sets)', oldBuild: true },
   'Hold still':                   { evidence: 'setup only: the native setup check is holding (every joint visible, the hold timer running)', oldBuild: true },
 };
 // REMOVED 2026-11-16 because the old build cannot give their evidence: "Step closer" (nothing tells us the person is too far), "Put your phone at chest height"
@@ -216,6 +218,50 @@ export function createCueHold(holdSec: number = G.cuePersistSec) {
 
 /** Does the metric stream back up a native "step back / person lost" cue? True when the samples really stopped or the pose dropped. */
 export function frameCueHasEvidence(i: { healthy: boolean }): boolean { return !i.healthy; }
+
+/**
+ * "Start your reps" (Ari 2026-11-16 evening): he stood still and fully in frame after Go: confidence 100, nothing happens, which is fine. But if no rep
+ * comes for START_REPS_AFTER_SEC after Go, the Guide says "Start your reps" ONCE. It never repeats, and it is dead for good as soon as ANY rep counts or
+ * a stroke is tried (so never in a rest between sets, never while he is working).
+ */
+export const START_REPS_AFTER_SEC = 6;       // PLACEHOLDER (Ari said about 6 s)
+export const START_REPS_SHOW_SEC = 4;
+export interface StartRepsInput {
+  now: number;
+  /** when tracking began (Go), ms */
+  goAt: number;
+  /** a rep was counted or a check / X was judged at or after Go */
+  repSinceGo: boolean;
+  /** Movement Match sees real strokes being tried (an attempt), counted or not */
+  trying: boolean;
+  /** the person is in the picture (Vision sees them) */
+  personHere: boolean;
+}
+export function createStartReps(opts: { log?: (m: string) => void } = {}) {
+  let state: 'wait' | 'showing' | 'done' = 'wait';
+  let shownAt = 0;
+  return {
+    /** returns the line to show right now, or null */
+    tick(i: StartRepsInput): string | null {
+      if (state === 'done') return null;
+      if (i.repSinceGo || i.trying) {
+        if (state === 'showing') opts.log?.('[GUIDE] "Start your reps" hidden: he started (a rep or a stroke)');
+        state = 'done'; return null;
+      }
+      if (state === 'wait') {
+        if (i.now - i.goAt >= START_REPS_AFTER_SEC * 1000 && i.personHere) {
+          state = 'showing'; shownAt = i.now;
+          opts.log?.(`[GUIDE] says "${GUIDE_LINES.startReps}" because evidence: Go was ${((i.now - i.goAt) / 1000).toFixed(1)}s ago, he is in the picture, no rep counted and no stroke tried since (said once, never again)`);
+          return GUIDE_LINES.startReps;
+        }
+        return null;
+      }
+      if (i.now - shownAt >= START_REPS_SHOW_SEC * 1000) { state = 'done'; return null; }
+      return GUIDE_LINES.startReps;
+    },
+    state: () => state,
+  };
+}
 
 export function createGuide(opts: { log?: (m: string) => void } = {}): Guide {
   const calm = createCalmLine();

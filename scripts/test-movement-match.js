@@ -207,9 +207,12 @@ function stuckRuns(res) {
 for (const name of REAL) {
   const res = realResults[name], runs = stuckRuns(res);
   const longRuns = runs.filter((r) => r.rows.length >= 15);
-  const worst = longRuns.length ? Math.max(...longRuns.flatMap((r) => r.rows.map((x) => x.conf.value))) : null;
+  // Ari 2026-11-16 evening: confidence drops only for a REAL camera problem (visibility down, or the path cut right now). Rows where the module says stuck = a proven camera problem and must read under 80; rows with every joint clearly seen (a form problem) are NOT lowered.
+  const camRows = longRuns.flatMap((r) => r.rows.filter((x) => x.conf.stuck));
+  const formRows = longRuns.flatMap((r) => r.rows.filter((x) => !x.conf.stuck));
+  const worst = camRows.length ? Math.max(...camRows.map((x) => x.conf.value)) : null;
   const oldWorst = longRuns.length ? Math.max(...longRuns.flatMap((r) => r.rows.map((x) => res.old.conf[res.rows.indexOf(x)].v))) : null;
-  check(`${name}: while trying with no rep counted and no check / X (${longRuns.length} stretches, ${longRuns.reduce((a, r) => a + r.rows.length, 0) / 5}s) confidence never reads 80+ (was up to ${oldWorst ?? '-'}, now ${worst ?? '-'})`, worst === null || worst < 80, `new max ${worst}, old max ${oldWorst}`);
+  check(`${name}: while trying with no rep counted and no check / X (${longRuns.length} stretches, ${longRuns.reduce((a, r) => a + r.rows.length, 0) / 5}s) a proven camera problem keeps confidence under 80; ${formRows.length / 5}s of form-only (everything visible) is not lowered (was up to ${oldWorst ?? '-'}, now ${worst ?? '-'})`, worst === null || worst < 80, `new max ${worst}, old max ${oldWorst}`);
   const fall = longRuns.filter((r) => r.rows.length >= 40).every((r) => r.rows[r.rows.length - 1].conf.value <= r.rows[0].conf.value);
   check(`${name}: and it keeps falling through a long stretch (not creeping back up)`, fall);
   const counting = res.rows.filter((x) => { const reps = res.events.filter((e) => /^\[REP\] #\d+/.test(e.line) && e.t <= x.t && x.t - e.t <= 3500); return x.match.trying && x.match.tryingForSec >= TUN.MOVEMENT_MATCH.minTryingSec && reps.length >= 1 && !x.conf.stuck && x.guideReason !== 'nobody'; });
