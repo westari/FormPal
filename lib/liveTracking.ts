@@ -217,7 +217,10 @@ export function createCounterSignal(): CounterSignal {
 
 // Hints native's setup check emits when Vision found nobody at all (every
 // frame, see ExerciseEngine.notePersonMissing / positionGuidance).
-const SETUP_NO_PERSON_HINTS = ['Get in frame', 'Get back in frame'];
+export const SETUP_NO_PERSON_HINTS = ['Get in frame', 'Get back in frame'];
+
+/** The lowest the camera number goes while Vision can see a person (Ari 2026-11-22). Near 0 only when nobody is in the picture. */
+export const METER_PERSON_FLOOR = 25;
 
 export interface MeterInputs {
   phase: string;                 // formcheck Phase
@@ -226,6 +229,8 @@ export interface MeterInputs {
   setupHoldProgress: number;     // 0..1
   setupHint: string;
   personDetected?: boolean;      // onDebugStats.personDetected (tracking only)
+  /** Vision's own answer while SETTING UP (onDebugStats.personDetected, read during setup too). true = a person is in the picture even if native's setup check says nothing about joints. */
+  setupPersonSeen?: boolean;
   trackingCue?: string;
   outOfPlaneCue?: string;
   repDiag: string | null;
@@ -235,6 +240,10 @@ export interface MeterInputs {
 
 export function personLost(i: MeterInputs): boolean {
   if (i.phase === 'setup') {
+    // Native only sends setup updates when the rep metric can be MEASURED. A person it sees but cannot measure (legs cut off for a squat) sends nothing,
+    // and the last "Get in frame" hint stays on screen for ever. Vision's own personDetected is the truth about "nobody there".
+    if (i.setupPersonSeen === true) return false;
+    if (i.setupPersonSeen === false) return true;
     return !i.setupAllVisible && (i.setupHint === '' || SETUP_NO_PERSON_HINTS.includes(i.setupHint));
   }
   if (i.isActive) return i.personDetected === false || i.repDiag === NO_PERSON_CUE;
@@ -254,7 +263,7 @@ export function meterTarget(i: MeterInputs): number {
     // works from decides it: high only if the camera really sees the joints and reps can be counted.
     let t = 100;
     if (i.counterScore !== undefined) t = Math.min(t, i.counterScore);
-    return t;
+    return Math.max(METER_PERSON_FLOOR, t);   // a person is in the picture here (personLost was false): never under the floor
   }
   return 0;
 }

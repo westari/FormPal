@@ -181,7 +181,7 @@ export function createCalmLine(): CalmLine {
 export const GUIDE_EVIDENCE: Record<string, { evidence: string; oldBuild: boolean }> = {
   'Step into view':               { evidence: 'Vision finds nobody in the picture AND the person was never seen before (personDetected false, metric samples silent)', oldBuild: true },
   'Back up':                      { evidence: 'a person who WAS in the picture a moment ago is lost (personDetected false after being seen), or native says "Back up" / "too close" in setup', oldBuild: true },
-  'Step back further':            { evidence: 'native says "Step back into frame" AND the metric samples really stop or pose gaps appear (a cue the samples contradict is ignored); or the path is cut at the frame edge', oldBuild: true },
+  'Step back further':            { evidence: 'while setting up: Vision SEES a person (onDebugStats.personDetected) but the rep metric is not measurable (no metric samples at all, so the exercise\'s joints are cut off or too close); or native says "Step back into frame" AND the metric samples really stop or pose gaps appear (a cue the samples contradict is ignored); or the path is cut at the frame edge', oldBuild: true },
   'Move your phone back':         { evidence: 'the rep path is cut at the frame edge or at BOTH ends (metric samples stop near both the top and the bottom)', oldBuild: true },
   'Keep your hands in view':      { evidence: 'metric samples stop near the TOP of the stroke (hands / arms lost there), or a rep was rejected and the poorly seen joints are the elbow / wrist', oldBuild: true },
   'Keep your whole body in view': { evidence: 'metric samples stop near the BOTTOM of the stroke, or a rep was rejected and the poorly seen joints are hips / knees / ankles', oldBuild: true },

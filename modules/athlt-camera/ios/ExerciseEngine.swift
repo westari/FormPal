@@ -683,6 +683,16 @@ final class ExerciseEngine {
         consecutiveMissingFrames = 0
 
         guard let angle = def.repMetric.measure(pose: pose) else {
+            if enginePhase == .setup {
+                // A person IS in the picture but the rep metric cannot be measured (for a squat: the legs are cut off or too weak). Nothing used to be sent
+                // here, so the screen kept the old "Get in frame" hint and 0% (My Workout, 2026-11-22). Say what is missing instead.
+                if case .holding = setupPhaseState { setupPhaseState = .pending }
+                let weakJoints: [Joint] = def.repMetric.referencedJoints().filter {
+                    (pose[$0]?.confidence ?? 0) < Self.SETUP_JOINT_MIN_CONF
+                }
+                onSetupUpdate?(SetupStatus(allJointsVisible: false, holdProgress: 0.0, passed: false,
+                                           hint: positionGuidance(pose: pose, missing: weakJoints)))
+            }
             handleNoPose(timestamp: timestamp)
             return
         }
