@@ -50,7 +50,7 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import VideoControls from '../components/VideoControls';
 import LiquidGlass from '../components/LiquidGlass';
 import { repFeedbackDataJs } from '../lib/repFeedbackInject';
-import { warmPrepare, warmActivate, warmDeactivate, warmRelease, warmSetBg, warmSetOverlay, warmInject } from '../components/WarmSurfaces';
+import { warmPrepare, warmActivate, warmDeactivate, warmHideNow, warmRelease, warmSetBg, warmSetOverlay, warmInject } from '../components/WarmSurfaces';
 import { repFeedbackSignal } from '../lib/repFeedbackSignal';
 
 import { postLag } from '../lib/postLag';
@@ -273,7 +273,10 @@ export default function RepFeedbackScreen() {
         showDone({
           title: DONE_TITLES.formCheck,
           subtitle: formCheckDoneLine({ exerciseName, reps: evs.length, goodReps: evs.filter(e => e && e.good).length }),
-          onContinue: () => { warmDeactivate('repfeedback'); router.dismissAll(); },
+          // Continue: the done screen now fades away over whatever is underneath, so everything underneath is hidden THIS frame (no fade of its own) and the
+          // stack is popped back to the tabs, to the tab he started from. Before, the rep feedback page faded out, then the Workout complete card showed for a
+          // moment, then the tab: a couple of screens flashing.
+          onContinue: () => { console.log('[LEAVE] form check Continue: warm pages hidden at once, stack popped to the tabs, no flash'); warmHideNow(['repfeedback', 'recap', 'ranks', 'allsets']); router.dismissAll(); },
         });
         return;
       }

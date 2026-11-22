@@ -20,6 +20,7 @@ import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AppBackground from '../components/AppBackground';
 import { LiquidGlassButton } from '../components/LiquidGlass';
+import GlassBackButton from '../components/GlassBackButton';
 import RankWheelScreen from '../components/onboarding/RankWheelScreen';
 import SaveProgressScreen from '../components/onboarding/SaveProgressScreen';
 import TryForFreeScreen from '../components/onboarding/TryForFreeScreen';
@@ -1375,8 +1376,9 @@ const DC_PAGE_INJECT = `
     // killers on these artboards (frosted pills, faded scroll edges). Drop
     // them — the pills already carry a solid-ish rgba fill, so they stay
     // readable, and the scroll wheel / tap animations stop stuttering.
-    + '*{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}'
-    + '[style*="mask-image"],[style*="mask:"]{-webkit-mask-image:none!important;mask-image:none!important;-webkit-mask:none!important;mask:none!important;}'
+    // (NOT on the pages that are drawn with them: window.__dcKeepFx, set before load for the trial reminder, the paywall and the gift offer)
+    + (window.__dcKeepFx ? '' : '*{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}')
+    + (window.__dcKeepFx ? '' : '[style*="mask-image"],[style*="mask:"]{-webkit-mask-image:none!important;mask-image:none!important;-webkit-mask:none!important;mask:none!important;}')
     // Momentum scrolling on any inner scroller (the rank rows / assessment
     // wheel), and no big blurred shadows repainting on the moving pieces.
     + '[style*="overflow-x"],[style*="overflow-y"],[style*="overflow:"],[style*="overflow-scrolling"]{-webkit-overflow-scrolling:touch!important;}'
@@ -1549,6 +1551,27 @@ const VIEWPORT_JS = `(function(){try{
 // One-screen pages: fit to the screen height too so nothing needs scrolling.
 const FIT_BOTH_INJECT = `window.__dcFitBoth=1;`;
 
+// Pages that are DRAWN with backdrop blur / masks (see DC_PAGE_INJECT): they keep them. Set BEFORE the page loads.
+const KEEP_FX_KEYS: string[] = ['trialTimeline', 'paywall', 'giftOffer'];
+const KEEP_FX_JS = 'window.__dcKeepFx=1;';
+
+// Paywall and gift offer (Ari 2026-11-22): (1) the design's own round X chip is hidden (it stayed on screen under the native X: two X buttons), the native
+// glass BACK button replaces it; (2) the page colour continues behind the artboard, so there is no pale strip down both sides when the artboard is scaled
+// to fit a shorter phone. (The feature list scrolling under the faded footer is the design itself, left as it is.)
+const PAYWALL_TIDY_JS = `(function(){
+  var st=document.createElement('style');
+  st.textContent='#dc-root a[aria-label="Close"]{visibility:hidden!important;pointer-events:none!important;}';
+  (document.head||document.documentElement).appendChild(st);
+  var tries=0;
+  (function bg(){
+    var r=document.getElementById('dc-root'); var d=r&&r.querySelector('div[style*="width: 390px"]');
+    var b=d&&d.style&&d.style.background;
+    if(b){ var h=document.documentElement.style; h.setProperty('background',b,'important'); h.setProperty('background-repeat','no-repeat','important'); h.setProperty('background-size','100% 100%','important'); h.setProperty('background-attachment','fixed','important'); document.body.style.setProperty('background','transparent','important'); return; }
+    if(tries++<40) setTimeout(bg,100);
+  })();
+  true;
+})();`;
+
 // generatePlan is a timed "generating…" beat. It shows its own "See my
 // plan" CTA when the progress finishes — the user taps that. NO auto-
 // advance (the screen was skipping itself).
@@ -1706,6 +1729,7 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
   ];
   const dcExtra =
     htmlKey === 'generatePlan' ? GENERATE_PLAN_INJECT :
+    htmlKey === 'paywall' || htmlKey === 'giftOffer' ? ((fitBothKeys.includes(htmlKey) ? FIT_BOTH_INJECT : '') + '\n' + PAYWALL_TIDY_JS) :
     fitBothKeys.includes(htmlKey) ? FIT_BOTH_INJECT :
     undefined;
   const strengthExtra = htmlKey === 'strengthAssessment' ? STRENGTH_CAPTURE_JS : undefined;
@@ -1725,7 +1749,7 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
           ref={webRef}
           source={htmlOverride != null ? { html: htmlOverride } : (ONB_HTML[htmlKey] as any)}
           originWhitelist={['*']}
-          injectedJavaScriptBeforeContentLoaded={isDcPage ? VIEWPORT_JS + '\n' + CUE_ORB_JS + '\n' + (extraJsBeforeLoad ?? '') : undefined}
+          injectedJavaScriptBeforeContentLoaded={isDcPage ? VIEWPORT_JS + '\n' + CUE_ORB_JS + '\n' + (KEEP_FX_KEYS.includes(htmlKey) ? KEEP_FX_JS + '\n' : '') + (extraJsBeforeLoad ?? '') : undefined}
           injectedJavaScript={extraJs ? baseInject + '\n' + extraJs : baseInject}
           onLoadEnd={() => setWebReady(true)}
           onMessage={(e) => {
@@ -1773,53 +1797,22 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
           after the flex:1 WebView its absolute child was being measured from
           the bottom of the screen and pushed off. In pool mode only the
           active page shows its back control. */}
-      {(inPool && !poolActive) ? null : htmlKey === 'paywall' ? (
-        // Paywall: iOS-standard layout — close (X) top-left, plain grey
-        // "Restore" top-right. No glass pill on Restore. NO progress bar
-        // here — explicit ask ("random black line at the top"), the last
-        // screen's bar sits at ~100% fill which just read as a stray
-        // black line, not a meaningful progress indicator.
+      {(inPool && !poolActive) ? null : (htmlKey === 'paywall' || htmlKey === 'giftOffer') ? (
+        // Paywall and gift offer: the standard glass BACK button top-left (Ari 2026-11-22: it was an X), same spot as every other page's back button.
+        // The paywall also has a plain grey "Restore" top-right. NO progress bar here (a stray black line, earlier ask).
         <Animated.View
           pointerEvents="box-none"
-          style={{ position: 'absolute', top: Math.max(6, topInset - 6), left: 0, right: 0, zIndex: 80, opacity: backFade, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20 }}
+          style={{ position: 'absolute', top: topInset + 12, left: 0, right: 0, zIndex: 80, opacity: backFade, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20 }}
         >
-          <LiquidGlassButton
-            onPress={() => { Haptics.selectionAsync(); onBack(); }}
-            hitSlop={12}
-            radius={17}
-            variant="regular"
-            fallbackColor="rgba(255,255,255,0.92)"
-            style={[web.backCircle, web.backCircleDc]}
-          >
-            <SymbolView name="xmark" size={14} tintColor="#1b1f27" type="monochrome" style={{ width: 14, height: 14 }} />
-          </LiquidGlassButton>
-          <TouchableOpacity
-            onPress={() => { Haptics.selectionAsync(); Alert.alert('Restore purchases', 'No previous subscription found on this Apple ID.'); }}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <Text style={web.restoreTxt}>Restore</Text>
-          </TouchableOpacity>
-        </Animated.View>
-      ) : htmlKey === 'giftOffer' ? (
-        // Gift offer: same X-close-only treatment as paywall (its own
-        // internal "Close" link has no real handler — handled natively
-        // here instead), no Restore (nothing to restore), no progress bar
-        // (same reasoning as paywall — this is a terminal post-paywall
-        // screen, not a flow step).
-        <Animated.View
-          pointerEvents="box-none"
-          style={{ position: 'absolute', top: Math.max(6, topInset - 6), left: 0, right: 0, zIndex: 80, opacity: backFade, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', paddingHorizontal: 20 }}
-        >
-          <LiquidGlassButton
-            onPress={() => { Haptics.selectionAsync(); onBack(); }}
-            hitSlop={12}
-            radius={17}
-            variant="regular"
-            fallbackColor="rgba(255,255,255,0.92)"
-            style={[web.backCircle, web.backCircleDc]}
-          >
-            <SymbolView name="xmark" size={14} tintColor="#1b1f27" type="monochrome" style={{ width: 14, height: 14 }} />
-          </LiquidGlassButton>
+          <GlassBackButton onPress={() => { Haptics.selectionAsync(); onBack(); }} scheme="light" />
+          {htmlKey === 'paywall' ? (
+            <TouchableOpacity
+              onPress={() => { Haptics.selectionAsync(); Alert.alert('Restore purchases', 'No previous subscription found on this Apple ID.'); }}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Text style={web.restoreTxt}>Restore</Text>
+            </TouchableOpacity>
+          ) : null}
         </Animated.View>
       ) : (
         <Animated.View

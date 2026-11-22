@@ -18,6 +18,8 @@ const FILES = [
   // the exercise demo and the music screen open right before the camera: warmed too, so the first one opens without a load (see app/workout/run.tsx)
   require('../assets/app screens/demovideo.html'),
   require('../assets/app screens/connectmusic.html'),
+  // the camera screen's demo drawer: its page took about 5 s to appear on a fresh form check (a white card sat over the demo strip)
+  require('../assets/app screens/instepdrawer.html'),
 ];
 const START_DELAY_MS = 2500; // after the launch gate opens (the four tabs load first: lib/launchGate.ts)
 const EACH_MS = 1800;

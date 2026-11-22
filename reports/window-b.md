@@ -1,64 +1,67 @@
-# Window B report (2026-11-22)
+# Window B report (2026-11-22, round 2)
 
-Branch work-b. I merged origin/overnight-build first (clean). Phone is still on the OLD Oct 8 native build (log: "expo-brightness is NOT in this build", old setup lines). I did not start a build, delete anything or push to main.
+Branch work-b. I merged origin/overnight-build first (clean). I did not start a build, delete anything or push to main. I did not touch any done / complete screen (only what happens when you tap Continue on the form-check one, which is rep feedback navigation).
 
-## 1. My Workout camera: "Step into view", number never started, Guide silent - found, fixed (JS now, Swift on the new build)
+## 1. BUILD SAFETY (Swift I changed without compiling): re-read everything, nothing found that should fail, 5 small doubts listed
 
-**What the log shows** (`C:\Users\arize\gym app\logs\latest.log`, 16:42:15 to 16:42:56, goblet squat in My Workout; saved as `scripts\fixtures\workout-goblet-2026-11-22.log.txt`):
-- The camera opened, the setup Guide said "Step into view" once, and then for 40 seconds there is no `[METRIC]` line, no `[SETUP-TRACE]` line and no other Guide line. The same day's solo shoulder press has all of them within 5 seconds.
+**How I checked:** I diffed every native file against the last build that was known good (master@23ea174, the Oct 8 phone build). That is 6 files: `ATHLTCameraModule.swift`, `ExerciseEngine.swift`, `ExerciseDefinition.swift`, `ExerciseDefinitionParser.swift`, `ExerciseRegistry.swift`, `src/index.ts`. I read every changed line for syntax, types, optionals, names and imports, and grepped each new name for its declaration (no duplicates, nothing missing).
 
-**Is it a workout-only bug? No, I could not find any workout-only code.** I checked the whole start path (starting the camera, the setup listener, the Ready gate, the meter input): none of it reads the workout settings. A test now fails if anyone ever adds that. The real difference between the two tests is the EXERCISE: goblet squat vs shoulder press.
+**An important thing I realised:** the two failed CI runs only reported syntax errors in `ExerciseEngine.swift` (the lost-backslash strings). When Swift finds syntax errors in a file it does not type-check that file, so everything else I added to `ExerciseEngine.swift` has NEVER been type-checked by a compiler. That is why I re-read all of it, not only the latest change.
 
-**Cause (two parts):**
-1. Native only sends a setup update when it can measure the rep metric (`ExerciseEngine.ingest`: `guard let angle = measure(pose)`). A squat needs the legs. If a person is in the picture but the legs are cut off or too weak, native sends NOTHING.
-2. The screen then kept the last thing native said, "Get in frame" ("Step into view"), and treated that as "nobody there": the number was 0 and the Guide never changed. The screen also never read Vision's own "a person is in the picture" signal during setup (it only listened while tracking).
+**What I confirmed exists and has the right type** (each one grepped):
+- `Joint.init?(string:)` (ExerciseStandards.swift), used with `.compactMap(Joint.init(string:))` in the parser.
+- `parseMetric(_:)` (private static in the same extension), used for the gate metric.
+- `StartPositionGate` struct (declared at the end of ExerciseDefinition.swift) and the two new `ExerciseDefinition` init arguments with defaults; `check-swift-calls.js` passes (7 calls, labels and order fine).
+- `SetupStatus(allJointsVisible:holdProgress:passed:hint:)` memberwise init; `positionGuidance(pose:missing:)`, `isNearFrameEdge`, `SETUP_JOINT_MIN_CONF` (Float), `setupPhaseState` / `SetupPhaseState.pending/.holding(startTime:)` (private enum used inside the same class, `if case .holding = ...` is already used elsewhere), `enginePhase == .setup`, `lastRepTime: Date`, `repEnterTime: Date`, `repTopValue`, `repMinAngle`, `primaryUnreliableFrames` / `primaryTotalFrames` (Int), `effectiveEnterThreshold`, `effectiveROMThreshold`, `MIN_FRAMES_AFTER_POSE_GAP`, `MIN_SWING_FRACTION`, `ATTEMPT_*` statics, `onAttemptMissed` callback type `((String, Double, Double) -> Void)?`.
+- `ATHLTCameraModule.swift` imports `UIKit` (needed for `UIApplication`, `UIScreen`); `AVErrorRecordingSuccessfullyFinishedKey` and `AVFoundationErrorDomain` come from `AVFoundation` (imported).
+- No name declared twice (`lastFinishedClipURL`, `currentClipURL`, `awakeTimer`, `awakeTicks`, `awakeObserver`, `repGateMin`, `repEnterTime`, `personLostLogged`, and every new function).
+- The pod builds in Swift 5.9 language mode (`athlt-camera.podspec`), so Swift-6 concurrency complaints (UIApplication from a timer closure) are warnings, not errors.
+- The earlier CI error `failed to produce diagnostic ... definition()`: the three expressions that were the likely cause (`?? NSNull()` and `?? "none"` inside `definition()`) are now in plain helper functions, and `test-build-safety.js` fails if one comes back. I re-read the rest of `definition()`: no new complex expression.
+- All checks pass: `check-swift-strings.js` (16 files), `check-swift-calls.js`, `check-imports.js`, `test-build-safety.js`.
 
-**Honest limit:** the log cannot tell "he was not seen at all" from "he was seen but the legs were not measurable": both print nothing. The fix covers the second case and makes the next log tell the two apart (new `[SETUP-SEEN]` line).
+**Things I am NOT 100% sure about** (none is a known error; these are where a compiler could still surprise us):
+1. **`startAwakeKeeper`**: a multi-statement closure `let assertAwake = { [weak self] (why: String) in ... }` with no declared return type, captured by a `Timer` closure. Fine in Swift 5.9, but it is the most "clever" code I added. If the build fails here, the fix is to give the closure an explicit `-> Void`.
+2. **`UIApplication.shared` in a pod**: allowed unless the pod is built "app-extension-safe only". expo-keep-awake does the same, so I expect it is fine.
+3. **The long `[REP-WAIT]` log string** (three concatenated string pieces, each with several `String(format:)` inside interpolations). The old build compiled a similar `[REP] rejected` message, but if the compiler says "expression too complex", split it into local `let` texts like I did for ATTEMPT-MISSED and REP-QUALITY.
+4. **`size` in the recording-finished block**: `((try? FileManager.default.attributesOfItem(...))?[.size] as? NSNumber)?.intValue ?? 0`, a long chained optional on one line. I believe the types line up (`Int`), but it is a dense line.
+5. **The new `ingest` branch** (person seen, metric not measurable, send a setup update): written with the exact same names and types as the lines just below it. No doubt about the types; the only unknown is behaviour on a real phone (it should show "Back up" / "Come closer" hints for a squat with the legs cut off).
 
-**Fix, works on the old build (JS):**
-- During setup the screen now reads Vision's `personDetected` (it arrives about once a second even when native is silent).
-- A person seen = the stale "Get in frame" hint is dropped, the number is at least 25, and the Guide says "Step back further" (his legs are cut off or he is too close) instead of staying on "Step into view".
-- Nobody seen = 0 and "Step into view", as before.
+## 2. PAYWALL: found and fixed (render before / after: `reports\paywall-before-after.png`)
 
-**Fix, needs the new build (Swift):** when a person is seen but the metric cannot be measured during setup, native now sends a setup update with a real hint ("Back up", "Come closer"...). I could not compile it on Windows; the string/bracket/call/import checks pass. It uses the same names as the code right below it.
+I rendered both screens in real Chromium with the exact script the app injects (`DC_PAGE_INJECT`) at iPhone 15, 16, 15 Pro Max and 16 Pro Max (plus SE), next to the raw design files. I did not have your screenshot, so I worked from the renders.
 
-**Tests:** `scripts\test-workout-camera-start.js` (new): the log has no metric lines; before = number 0 and "Step into view", after = 25 and "Step back further"; workout and solo share one start path; the wiring and the Swift change are in place.
+**What was broken (cause: one blanket "speed-up" rule):** the app injects a rule into every design page that switches off all CSS masks and backdrop blur. Three pages are DRAWN with them:
+- **Paywall plan card:** its metal ring is a masked gradient. Without the mask the whole Annual card turned into a grey gradient with dark text on it (hard to read).
+- **Paywall X:** the design's own round X chip stayed on screen UNDER the native X button: two X buttons.
+- **Pale strips:** when the page is scaled to fit a shorter phone, a lighter strip showed down both sides (and on Pro Max, strips and a band at the bottom).
+- (the trial reminder and the gift offer have the same mask / blur problem, see 3.)
 
-## 2. Confidence never 0 while a person is seen: done
-- The lowest the on-screen number goes while Vision sees a person is **25** (setup and tracking). It goes to 0 only when nobody is in the picture (it still walks down to 0 then; tested).
-- Three places: the meter target (`lib/liveTracking.ts`), the on-screen number (`app/formcheck.tsx`), and the confidence module's own floor (15 to 25, `lib/coachTuning.ts`). 25 is the number you gave me.
+**Fix:**
+- Those pages (trial reminder, paywall, gift offer) now keep their masks and blur (a flag set before the page loads). Everything else still gets the speed-up.
+- The design's own X chip is hidden (kept invisible so the layout does not move).
+- The page colour now continues behind the design, so there are no pale strips.
+- **The X is gone. It is now the standard glass back button** (`GlassBackButton`, same as the workout preview), top-left, at the same position as every other page's back button. The paywall keeps its grey "Restore" top-right. Same for the gift offer.
+- The paywall list scrolling under the faded footer ("Improve Your Rank" half hidden behind the plan card) is how the design works (an inner scroll list with a fade). I tried tightening the gaps, it showed ghost rows of the next features through the card, so I put it back as the design has it.
+- Test: `scripts\test-paywall-screens.js` (renders the real files at 4 sizes: the phone keeps its fade mask, the rows start below where it has faded, the card rim keeps its mask, the design X is hidden, the standard back button is used and there is no `xmark` left).
 
-## 3. Set bars: white, no green: done
-Done and current sets are bright white with a soft WHITE glow, upcoming sets are dim glass, same separate glass pills. The only green left on the screen is the confidence bar, as in your design. (A test fails if the set glow turns green again.)
+## 3. Trial reminder overlap: fixed (screen left where it is)
+Cause: the same blanket rule removed the mask that fades the phone mock out at the bottom. The phone ran down under "Remind me 2 days before" and cut it ("Rem|ind"). With the mask kept, the phone fades out completely before the two rows, the notification card keeps its frosted look, and the rows no longer overlap anything. Checked at all four sizes by the test above (first row top >= where the phone has faded out).
 
-## 4. Timer icon: changed to the SF Symbol "timer", but I cannot show you a real side-by-side
-- I changed `stopwatch` (size 16) to `timer` (size 15, medium weight, same medium weight as the "0:00" text next to it). "timer" is the cleaner outline at small sizes: a plain circle with a short hand and a small crown, fewer details than "stopwatch".
-- **I cannot render real SF Symbols on this Windows machine**, and a drawn imitation would be a fake comparison, so there is no honest picture to put here. Look at it on the phone. If you still prefer another one, it is one word in one place (`name="timer"` in `app/formcheck.tsx`, the line with the timer text): `clock` (a plain round clock face) or `stopwatch` (the old one). Tell me which and I will switch it.
+## 4. Demo video strip covered by a white card for about 5 s: fixed (needs your eyes on the phone)
+Cause: the drawer's page (`instepdrawer.html`) took a few seconds to appear on a fresh screen, and its WebView is plain white until it paints. It was also only created once setup started, and loaded with the cache off.
+Fix: (a) the strip (dark card, handle, "Demo video", exercise name) is drawn natively from the very first frame; (b) the page is created the moment the screen opens (not once setup starts) and stays invisible until it has loaded, so its white loading screen never shows; (c) cache on (a changed design file is a new asset URL with a new hash, so an old copy cannot be served); (d) the file is warmed at app start with the other design pages. Dragging the drawer open, the scrim and the pause logic are unchanged.
+**Proof on the phone:** the log line `[DRAWER] demo page loaded N ms after the screen opened`. The strip should be there at once whatever N is.
+Test: `scripts\test-formcheck-open-and-leave.js`. I cannot run a native WebView here, so this one is source checks plus that log line, not a screenshot.
 
-## 5. Half reps after the new build: confirmed from the code and a replay; phone test list below
-**What will happen on the new build:**
-- The new native engine watches every frame. When a stroke starts like a rep and does not count, it sends `onAttemptMissed` (log line `[ATTEMPT-MISSED]` with reason, reached, needed). The screen turns it into ONE verdict: a red X, with the Coach's word under it: "Go lower" (bottom too short) or "Go higher" (top too short).
-- The word is the Coach's, shown on the X. The Guide does NOT speak then: by design the Guide only talks about camera problems, and it is hidden while an X is on screen. So you get the X and "Go lower", not a separate Guide line.
-- While it is working, the camera number stays high (reps being judged = the camera sees you), and an X is not shown if a "step back" hint is up (the camera obviously cannot see the stroke).
+## 5. Finish -> Continue flashes: fixed (needs your eyes on the phone)
+Cause: Continue on the form-check done screen fades the done screen away over what is under it. Under it were the rep feedback page, then the Workout complete card, then the tab. The rep feedback page faded out (its own 160 ms animation), the Workout complete card showed for a moment, then the stack popped: a couple of screens flashing.
+Fix: Continue now hides all the post-workout pages in the same frame (no fade, new `warmHideNow`) and then pops the stack back to the tabs, so the done screen fades away straight onto the tab he started from. The routes already have no transition. A real workout's Finish review path is untouched.
+**Proof on the phone:** the log lines `[LEAVE] form check Continue ...` and `[warm:...] hidden INSTANTLY`.
 
-**Proof from your newest log (shoulder press, 16:39, old build, JS mirror of the new native code):** 6 reps counted (checks) and 8 half reps got an X "Go lower". On the old build none of those 8 X marks appear. That is expected.
-
-**Phone test list for after the new build** (install the new iOS build from GitHub Actions first; I did not start it):
-1. Solo form check, shoulder press, stand 2 to 3 metres back. Setup should pass, "Ready. Go!" should come only once you are in position. Say if it comes too early.
-2. Do 3 full reps: 3 checks, the count goes 1, 2, 3, the camera number stays 90+.
-3. Do 3 half reps (stop high, do not go down far enough): each gets an X and "Go lower" (or "Go higher"). The count does not go up. The number does not fall. Say if an X is missing or late.
-4. Stand still for 10 seconds after Go: nothing happens, no check. After 6 seconds with no rep you get "Start your reps" once.
-5. Start a My Workout with a squat (goblet squat). Stand so your legs are cut off (too close): you should see "Step back further", the number at 25 or more (not 0), and a hint from native. Then step back until your whole body shows: it should pass and say Ready.
-6. Walk out of the picture: the number goes to 0 and the Guide says to step back in. Come back: it recovers.
-7. In a My Workout: the set bars are white pills (no green), "Finish" pill works, the timer icon looks clean.
-8. Screen should stay on the whole time (the new keep-awake). Check the video clip plays in rep feedback.
-9. Send me the log (`latest.log`) after step 3 and step 5: I want the `[ATTEMPT-MISSED]` and `[SETUP-SEEN]` lines.
-
-## What I changed
-- `lib/liveTracking.ts`, `lib/coachTuning.ts`, `lib/guideCoach.ts`, `app/formcheck.tsx`, `modules/athlt-camera/ios/ExerciseEngine.swift`.
-- Tests: new `test-workout-camera-start.js`; `test-camera-hud-layout.js` updated for white bars and the `timer` symbol.
-- New fixture `scripts\fixtures\workout-goblet-2026-11-22.log.txt`.
+## Tests
+New: `test-paywall-screens.js`, `test-formcheck-open-and-leave.js`. Full suite run at the end (see my final message for the result).
 
 ## Not verified
-- Nothing here was seen on a phone. The Swift change is not compiled.
-- I could not reproduce the My Workout bug on a device, only from the log and the code.
+- Nothing here has been seen on a phone. The paywall and trial reminder renders are real Chromium, not a WKWebView, so fonts and the glass back button will look slightly different.
+- Items 4 and 5 are native-WebView / navigation behaviour I could only check in the source.
+- The Swift is still not compiled (section 1 lists my doubts).

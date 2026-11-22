@@ -209,6 +209,20 @@ export function warmSetOverlay(k: WarmKind, node: React.ReactNode) { set(k, { ov
 export function warmSetUnderlay(k: WarmKind, node: React.ReactNode) { set(k, { underlay: node } as any); }
 /** Hide it but keep its state (another screen is on top). */
 export function warmDeactivate(k: WarmKind) { set(k, { active: false } as any); }
+// Layers that must vanish THIS frame, with no fade or slide of their own (see warmHideNow).
+const instantHide: Partial<Record<WarmKind, boolean>> = {};
+/**
+ * Hide these pages at once, no fade, no slide. For leaving the post-workout screens for good (a form check's Continue): the done screen fades away over
+ * whatever is underneath, so everything underneath must already be gone. Fading the rep feedback page out and then the Workout complete card (each its own
+ * animation) showed two screens flashing before the tab appeared (Ari 2026-11-22).
+ */
+export function warmHideNow(kinds: WarmKind[]) {
+  for (const k of kinds) {
+    instantHide[k] = true; set(k, { active: false } as any);
+    // a page that was not on screen never consumes the flag: it must not make some later, normal hide instant
+    setTimeout(() => { instantHide[k] = false; }, 800);
+  }
+}
 /** Done with this page for good: drop it and warm a fresh one for next time. */
 export function warmRelease(k: WarmKind, delayMs = 0) {
   if (delayMs > 0) {
@@ -339,7 +353,9 @@ function Layer({ k }: { k: WarmKind }) {
       wasShown.current = false;
       if (__DEV__) console.log(`[warm:${k}] ${SLIDES_OUT[k] ? 'slide OUT' : 'hidden'} -> parked off-screen, opacity 0, behind navigator`);
       const park = () => { setShown(false); tx.setValue(FADES[k] ? 0 : screenW); fade.setValue(0); };
-      if (FADES[k] && SLIDES_OUT[k]) Animated.timing(fade, { toValue: 0, duration: FADE_OUT_MS, easing: Easing.in(Easing.quad), useNativeDriver: true }).start(({ finished }) => { if (finished || !wasShown.current) park(); });
+      const instant = !!instantHide[k]; instantHide[k] = false;
+      if (instant) { if (__DEV__) console.log(`[warm:${k}] hidden INSTANTLY (leaving for good, no fade)`); park(); }
+      else if (FADES[k] && SLIDES_OUT[k]) Animated.timing(fade, { toValue: 0, duration: FADE_OUT_MS, easing: Easing.in(Easing.quad), useNativeDriver: true }).start(({ finished }) => { if (finished || !wasShown.current) park(); });
       else if (SLIDES_OUT[k]) Animated.timing(tx, { toValue: screenW, duration: SLIDE_OUT_MS, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(({ finished }) => { if (finished || !wasShown.current) park(); });
       else park();
     }

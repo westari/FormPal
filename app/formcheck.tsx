@@ -647,6 +647,28 @@ function TrackingMeter({ target, show, layout, guideText, spin, onHighChange, co
   );
 }
 
+// The demo drawer's peek strip, drawn natively so it is there from the very first frame (see drawerReady). Same look as instepdrawer.html's own top: the dark
+// card, the small handle, "Demo video" and the exercise chip.
+function DrawerPeekPlaceholder({ name }: { name: string }) {
+  return (
+    <View pointerEvents="none" style={dp.wrap}>
+      <View style={dp.handle} />
+      <View style={dp.row}>
+        <Text style={dp.title}>Demo video</Text>
+        <View style={dp.chip}><Text style={dp.chipTxt}>{name}</Text></View>
+      </View>
+    </View>
+  );
+}
+const dp = StyleSheet.create({
+  wrap:    { ...StyleSheet.absoluteFillObject, backgroundColor: '#111114' },
+  handle:  { width: 38, height: 5, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.55)', marginTop: 6, alignSelf: 'center' },
+  row:     { paddingTop: 8, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  title:   { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 18, letterSpacing: -0.4, color: '#FFFFFF' },
+  chip:    { borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.92)', paddingVertical: 4, paddingHorizontal: 10 },
+  chipTxt: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 12, color: '#6e6e77' },
+});
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function FormCheckScreen() {
   const router = useRouter();
@@ -793,6 +815,11 @@ export default function FormCheckScreen() {
   // CSS-driven version had. 0 = fully open, DRAWER_PEEK_Y = only the
   // header peeking above the bottom edge.
   const drawerY = useRef(new Animated.Value(DRAWER_PEEK_Y)).current;
+  // The demo drawer's page (instepdrawer.html) takes a few seconds to load on a fresh screen, and its bare WebView is WHITE until it paints: a white card sat
+  // over the demo strip for about 5 s (Ari 2026-11-22). The strip is drawn natively from the first frame (DrawerPeekPlaceholder, the same dark card, handle,
+  // title and chip as the page), the page loads hidden behind it from the moment the screen opens, and shows once it has loaded.
+  const [drawerReady, setDrawerReady] = useState(false);
+  const screenOpenedAt = useRef(Date.now());
   // Real accumulated paused time (ms), so the elapsed-time HUD can freeze
   // while the drawer's open and resume from where it left off afterward,
   // instead of jumping forward by however long the drawer was open — see
@@ -1925,19 +1952,21 @@ export default function FormCheckScreen() {
           ]}
         />
       )}
-      {stopButtonActive && (
+      {phase !== 'review' && (
         <Animated.View
           style={{
             position: 'absolute', left: 0, right: 0, bottom: 0, height: DRAWER_HEIGHT,
-            borderRadius: 30, overflow: 'hidden',
+            borderRadius: 30, overflow: 'hidden', backgroundColor: '#111114',
             transform: [{ translateY: drawerY }],
           }}
         >
+          <DrawerPeekPlaceholder name={EXERCISE_DEFINITIONS[exerciseType]?.displayName ?? ''} />
           <WebView
             ref={demoDrawerRef}
             source={IN_STEP_DRAWER_HTML}
             originWhitelist={['*']}
-            style={{ flex: 1, backgroundColor: '#ffffff' }}
+            style={{ flex: 1, backgroundColor: '#111114', opacity: drawerReady ? 1 : 0 }}
+            onLoadEnd={() => { if (!drawerReady) { setDrawerReady(true); console.log('[DRAWER] demo page loaded ' + (Date.now() - screenOpenedAt.current) + ' ms after the screen opened (the strip was drawn natively from the first frame)'); } }}
             injectedJavaScriptBeforeContentLoaded={demoDrawerDataJs}
             onMessage={(e) => {
               const m = e.nativeEvent.data;
@@ -1954,8 +1983,8 @@ export default function FormCheckScreen() {
             // This file is still under active, frequent editing — without
             // this, the WebView can keep serving an old cached response
             // after a reload, which looks exactly like "nothing changed"
-            // even though the file on disk did.
-            cacheEnabled={false}
+            // even though the file on disk did. (A changed design file is a new asset URL with a new hash, so the cache cannot serve an old one.)
+            cacheEnabled
           />
           {/* The actual drag target — see drawerPanResponder's own comment. */}
           <View
