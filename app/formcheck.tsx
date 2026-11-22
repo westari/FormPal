@@ -60,7 +60,7 @@ import { getExerciseDef } from '../constants/exercises';
 import { createSetupGuide, SETUP_TUNING, type SetupDecision } from '../lib/setupGuide';
 import { createAttemptDetector, type DetectorEvent } from '../lib/attemptDetector';
 import { hapticError, hapticMain, hapticSelect, hapticWarning } from '../lib/haptics';
-import { METER_MAX_RATE, METER_SETUP_RATE, isFrameHint, showVerdict, showFrameHint, JUDGED_QUIET_MS, meterTarget, createMeterSmoother, trackingIsHigh, NO_PERSON_CUE, createSteadyGate, READY_STEADY_MS, createCounterSignal, READY_COUNTER_WINDOW_MS, READY_COUNTER_MIN_SAMPLES, type CounterSignal } from '../lib/liveTracking';
+import { METER_MAX_RATE, METER_SETUP_RATE, METER_PERSON_FLOOR, SETUP_NO_PERSON_HINTS, isFrameHint, showVerdict, showFrameHint, JUDGED_QUIET_MS, meterTarget, createMeterSmoother, trackingIsHigh, NO_PERSON_CUE, createSteadyGate, READY_STEADY_MS, createCounterSignal, READY_COUNTER_WINDOW_MS, READY_COUNTER_MIN_SAMPLES, type CounterSignal } from '../lib/liveTracking';
 import { useAudioSettingsStore } from '../store/audioSettingsStore';
 import { useFormTheme, type FormTheme } from '../lib/activeTheme';
 import type { DebugStatsEvent, RepEvent, ExerciseType } from '../modules/athlt-camera/src/index';
@@ -479,7 +479,7 @@ function WorkoutHud({
       <View style={{ position: 'absolute', top: layout.timer.top, left: layout.timer.left, width: layout.timer.width, height: layout.timer.height }}>
         <HudGlass radius={layout.timer.height / 2} style={{ width: layout.timer.width, height: layout.timer.height }}>
           <View style={wh.timerRow}>
-            <SymbolView name="stopwatch" size={16} weight="medium" tintColor="#FFFFFF" type="monochrome" style={{ width: 16, height: 16 }} />
+            <SymbolView name="timer" size={15} weight="medium" tintColor="#FFFFFF" type="monochrome" style={{ width: 17, height: 17 }} />
             <Text style={wh.timerTxt}>{m}:{String(sec).padStart(2, '0')}</Text>
           </View>
         </HudGlass>
@@ -593,6 +593,8 @@ function TrackingMeter({ target, show, layout, guideText, spin, onHighChange, co
         if (confidence.current !== null) tgt = Math.min(tgt, confidence.current);
         else if (counter.seen()) tgt = counter.score(now);
       }
+      // a person is in the picture whenever the target is above 0 (0 = nobody): the number never goes under the floor (Ari 2026-11-22)
+      if (targetRef.current > 0 && tgt < METER_PERSON_FLOOR) tgt = METER_PERSON_FLOOR;
       // never a jump: at most a few points a second while tracking (the setup meter may move faster while the person is still getting into place)
       const d = smoother.tick(tgt, now, activeRef.current ? METER_MAX_RATE : METER_SETUP_RATE);
       setDisplay((prev) => (prev === d ? prev : d));
@@ -760,6 +762,10 @@ export default function FormCheckScreen() {
   const [setupHint,         setSetupHint]         = useState('');
   const setupHintRef = useRef('');
   setupHintRef.current = setupHint;
+  // Vision's own "a person is in the picture", read DURING setup too (native sends setup updates only when the rep metric can be measured, so a person
+  // it sees but cannot measure left the old "Get in frame" hint and a 0 on screen: the 2026-11-22 My Workout goblet squat). undefined = no word yet.
+  const [setupPersonSeen, setSetupPersonSeen] = useState<boolean | undefined>(undefined);
+  const setupPersonRef = useRef<{ seen: boolean | undefined; at: number; frames: number }>({ seen: undefined, at: 0, frames: 0 });
 
   const [feedback, setFeedback] = useState<{ good: boolean; reason: string; seq: number } | null>(null);
   const feedbackSeq    = useRef(0);
@@ -1165,6 +1171,29 @@ export default function FormCheckScreen() {
     };
   }, []);
 
+  // ── Setup: is a person in the picture? (Vision's own answer) ───────────────
+  // Native's setup updates only come when the rep metric can be measured. For a squat filmed too close (legs cut off) a person IS seen but no update
+  // ever arrives, so the last "Get in frame" hint stayed on screen and the number stayed 0 (My Workout, 2026-11-22). onDebugStats still flows every
+  // second with personDetected, so the setup now reads it too: a person seen = the stale "nobody" hint is dropped, the number is at least 25, and the
+  // Guide asks him to step back instead of staying on "Step into view".
+  useEffect(() => {
+    if (notLinked) return;
+    if (phase !== 'starting' && phase !== 'setup') return;
+    const sub = addDebugStatsListener((e: DebugStatsEvent) => {
+      const seen = !!e.personDetected;
+      const before = setupPersonRef.current.seen;
+      setupPersonRef.current = { seen, at: Date.now(), frames: e.totalFramesReceived };
+      if (before !== seen) console.log('[SETUP-SEEN] Vision says a person is ' + (seen ? 'IN' : 'NOT in') + ' the picture (frames received ' + e.totalFramesReceived + ', analysed ' + e.totalFramesAnalyzed + ')');
+      setSetupPersonSeen((prev) => (prev === seen ? prev : seen));
+      if (seen && SETUP_NO_PERSON_HINTS.includes(setupHintRef.current)) {
+        console.log('[SETUP-SEEN] dropping the old "' + setupHintRef.current + '" hint: Vision sees a person but native has no joint update for this exercise yet');
+        if (hintTimer.current) { clearTimeout(hintTimer.current); hintTimer.current = null; }
+        setSetupHint('');
+      }
+    });
+    return () => sub.remove();
+  }, [phase]);
+
   // ── Tracking listeners ────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -1475,7 +1504,7 @@ export default function FormCheckScreen() {
     const id = setInterval(() => {
       const now = Date.now();
       const hintLine = guideLine(setupHintRef.current, exerciseType);
-      const frameHint = statsRef.current?.personDetected === false || isFrameHint(setupHintRef.current);
+      const frameHint = statsRef.current?.personDetected === false || setupPersonRef.current.seen === false || (isFrameHint(setupHintRef.current) && setupPersonRef.current.seen !== true);
       const dec = setupGuideRef.current.update({
         now, seen: counterRef.seen(),
         healthy: counterRef.healthy(now, 1200, 3),
@@ -1497,6 +1526,7 @@ export default function FormCheckScreen() {
     isActive: isTracking || isStopping,
     setupAllVisible, setupHoldProgress, setupHint,
     personDetected: stats?.personDetected,
+    setupPersonSeen,
     trackingCue: stats?.trackingCue,
     outOfPlaneCue: stats?.outOfPlaneCue,
     repDiag,
@@ -2216,7 +2246,7 @@ const wh = StyleSheet.create({
   pillRow: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   barWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   barInner: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 4 },
-  setGlow:  { shadowColor: '#34C759', shadowOpacity: 0.85, shadowRadius: 8, shadowOffset: { width: 0, height: 0 } },
+  setGlow:  { shadowColor: '#FFFFFF', shadowOpacity: 0.6, shadowRadius: 7, shadowOffset: { width: 0, height: 0 } },   // done / current sets: white with a soft WHITE glow (no green, Ari 2026-11-22)
   setFill:  { position: 'absolute', top: 3, left: 3, right: 3, bottom: 3, borderRadius: 6, backgroundColor: '#FFFFFF' },
   seg:      { flex: 1, height: 18, borderRadius: 9 },
   segOn:    { backgroundColor: '#FFFFFF', shadowColor: '#34C759', shadowOpacity: 0.85, shadowRadius: 8, shadowOffset: { width: 0, height: 0 } },

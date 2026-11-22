@@ -56,7 +56,7 @@ export const CONFIDENCE = {
   stuckAttempts: 2,         // ... or this many attempts that did not count
   stuckStart: 78,           // PLACEHOLDER: the cap when it starts (below 80)
   stuckFallPerSec: 3,       // ... then it keeps falling
-  stuckFloor: 15,
+  stuckFloor: 25,           // never lower than METER_PERSON_FLOOR while a person is seen (Ari 2026-11-22)
   clearVisibleMin: 85,      // PLACEHOLDER: the camera's own visibility score at or above this (and no fresh path cut) = every needed joint is clearly seen = NOT a camera problem
   countingFloor: 90,        // trying AND reps counting: 90-100
   countRecentSec: 7,        // a rep counts as "counting" for this long (about 2 reps of rhythm)

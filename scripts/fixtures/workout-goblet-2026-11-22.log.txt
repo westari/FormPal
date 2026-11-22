@@ -1,0 +1,14 @@
+16:42:15.003 [log] [AWAKE] camera screen open, app state active, keep-awake held every 15s
+16:42:15.004 [log] [BRIGHTNESS] expo-brightness is NOT in this build: the flash cannot raise the brightness (old build)
+16:42:15.021 [log] [AWAKE] screen lock re-applied (released and taken again), the screen cannot dim
+16:42:15.035 [log] [DEF-LOOKUP] id=gobletSquat found=yes overrides=none
+16:42:15.036 [log] [DEBUG] [UNIV] relevant joints: leftAnkle, leftHip, leftKnee, rightAnkle, rightHip, rightKnee
+16:42:15.036 [log] [DEBUG] [DEF-LOAD] loaded 'gobletSquat' from JSON: repMetric=average formChecks=3 cameraSetup=ok calibration=ok source=JSON
+16:42:15.036 [log] [DEBUG] [STD-LOAD] received standard for 'gobletSquat': peak=110.0 start=155.0 minRange=45.0 staticChecks=2 reviewed=false
+16:42:15.036 [log] [DEBUG] [STD] ⚠ 'gobletSquat' standard NOT YET HUMAN-REVIEWED — verify numbers on-device
+16:42:15.036 [log] [DEBUG] [STD] standard loaded: peak≤110.0°  start≥155.0°  minRange≥45.0°
+16:42:15.239 [log] [SETUP-GUIDE] fit: "Step back further" (confidence cap 35, placeholder numbers)
+16:42:16.047 [log] [GUIDE] setup line now "Step into view" (wanted "Step into view")
+16:42:30.017 [log] [AWAKE] screen lock re-applied (released and taken again), the screen cannot dim
+16:42:45.020 [log] [AWAKE] screen lock re-applied (released and taken again), the screen cannot dim
+16:42:56.982 [log] [AWAKE] app state active -> inactive (the screen locked or the app was covered: this is NOT the keep-awake failing silently, check the lines just before)
