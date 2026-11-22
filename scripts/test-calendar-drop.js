@@ -1,10 +1,9 @@
 #!/usr/bin/env node
 /**
  * scripts/test-calendar-drop.js
- * Home's calendar (components/CalendarSheet.tsx), rendered with react-native-web in Chromium at phone size (390x844) over a busy page that
- * looks like Home. The phone screenshot showed the real Liquid Glass letting the pills, "Today" and the workout card show through the
- * calendar. Liquid Glass is replaced here by a FULLY CLEAR layer (the worst case), so what is measured is what the calendar itself does:
- * a near-solid base under the glass, the card inside the screen, hanging from the arrow, nothing of the page showing through, 6 rows at most.
+ * Home's calendar (components/CalendarSheet.tsx, rebuilt 2026-11-22), rendered with react-native-web in Chromium at phone size (390x844)
+ * over a busy page that looks like Home. Liquid Glass is replaced by a FULLY CLEAR layer (the worst case), so what is measured is what
+ * the calendar itself does. Also checks the glass standard (components/StandardGlass.tsx) is exactly the Finish pill's glass.
  * Screenshots: .scratch/cal-open.png, .scratch/cal-closed.png
  */
 const Module = require('module');
@@ -19,6 +18,8 @@ const { pathToFileURL } = require('url');
 let failed = 0;
 const check = (n, ok, d) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${d ? '  -> ' + d : ''}`); if (!ok) failed++; };
 const h = React.createElement;
+const ROOT = path.join(__dirname, '..');
+const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8').split('\r\n').join('\n');
 
 const ClearGlass = ({ style }) => h(RNW.View, { style: [style, { backgroundColor: 'rgba(255,255,255,0)' }], testID: 'clear-glass' });
 const FAKE = {
@@ -26,20 +27,20 @@ const FAKE = {
   react: React,
   'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 62, bottom: 34, left: 0, right: 0 }) },
   'expo-symbols': { SymbolView: ({ style }) => h(RNW.View, { style }) },
+  'expo-status-bar': { StatusBar: () => null },
 };
 const prev = Module._load;
 Module._load = function (r) {
   if (FAKE[r]) return FAKE[r];
-  if (/\/LiquidGlass$/.test(r)) return { __esModule: true, default: ClearGlass };
+  if (/\/LiquidGlass$/.test(r)) return { __esModule: true, default: ClearGlass, LiquidGlassButton: ClearGlass };
   return prev.apply(this, arguments);
 };
 
 (async () => {
   const Cal = require('../components/CalendarSheet.tsx').default;
   const browser = await chromium.launch();
-  const dir = path.join(__dirname, '..', '.scratch'); fs.mkdirSync(dir, { recursive: true });
+  const dir = path.join(ROOT, '.scratch'); fs.mkdirSync(dir, { recursive: true });
   const stamps = [Date.now(), Date.now() - 86400000 * 3, Date.now() - 86400000 * 10];
-  // a busy page behind it, like Home: big text where the calendar will sit
   const Behind = () => h(RNW.View, { style: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: '#eeeef1' } },
     h(RNW.Text, { style: { position: 'absolute', left: 26, top: 130, fontSize: 40, fontWeight: '800', color: '#111114' } }, 'Sunday, Nov 15'),
     h(RNW.View, { style: { position: 'absolute', left: 14, top: 222, width: 362, height: 50, borderRadius: 25, backgroundColor: '#fff' } }, h(RNW.Text, { style: { fontSize: 20, fontWeight: '700', color: '#111', margin: 14 } }, 'Energy Feeling strong')),
@@ -47,7 +48,7 @@ Module._load = function (r) {
     h(RNW.View, { style: { position: 'absolute', left: 14, top: 360, width: 362, height: 420, borderRadius: 28, backgroundColor: '#fff' } }, h(RNW.Text, { style: { fontSize: 50, fontWeight: '800', color: '#000', margin: 40 } }, 'My workout 8888 8888')));
   const shoot = async (open, file) => {
     const { AppRegistry } = RNW;
-    const tree = h(RNW.View, { style: { flex: 1 } }, h(Behind), h(Cal, { open, onClose: () => {}, timestamps: stamps, anchor: { top: 205, cx: 296 } }));
+    const tree = h(RNW.View, { style: { flex: 1 } }, h(Behind), h(Cal, { open, onClose: () => {}, timestamps: stamps }));
     AppRegistry.registerComponent('App', () => () => tree);
     const { element, getStyleElement } = AppRegistry.getApplication('App');
     const css = renderToString(getStyleElement()), html = renderToString(element);
@@ -57,46 +58,47 @@ Module._load = function (r) {
     await page.screenshot({ path: file + '.png' });
     return page;
   };
+  const csrc = read('components/CalendarSheet.tsx');
   const p = await shoot(true, path.join(dir, 'cal-open'));
   const m = await p.evaluate(() => {
     const card = document.querySelector('[data-testid="calendar-drop"]'); if (!card) return null;
-    const r = card.getBoundingClientRect(), base = document.querySelector('[data-testid="calendar-base"]');
-    if (!base) { const spots0 = [[60, 232], [60, 330], [120, 420], [200, 480], [150, 500]].map(([x, y]) => { const el = document.elementFromPoint(x, y); return card.contains(el) || el === card; }); const days0 = [...card.querySelectorAll('div')].filter((d) => /^\d{1,2}$/.test((d.textContent || '').trim()) && d.children.length === 0).length; return { r: [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)], vw: innerWidth, vh: innerHeight, alpha: null, spots: spots0, days: days0, text: card.innerText.split(String.fromCharCode(10)).join(' | ').slice(0, 90), glassBelowBase: false }; }
-    const bg = getComputedStyle(base).backgroundColor, a = bg.startsWith('rgba') ? parseFloat(bg.split(',')[3]) : 1;
-    // what is on top at the spots where the page's own text sits (the card must cover them)
-    const spots = [[60, 232], [60, 330], [120, 420], [200, 480], [150, 500]].map(([x, y]) => { const el = document.elementFromPoint(x, y); return card.contains(el) || el === card; });
+    const r = card.getBoundingClientRect();
+    const spots = [[60, 140], [60, 232], [60, 330], [300, 250], [200, 370]].map(([x, y]) => { const el = document.elementFromPoint(x, y); return card.contains(el) || el === card; });
     const days = [...card.querySelectorAll('div')].filter((d) => /^\d{1,2}$/.test((d.textContent || '').trim()) && d.children.length === 0).length;
-    return { r: [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)], vw: innerWidth, vh: innerHeight, alpha: a, spots, days, text: card.innerText.replace(/\n+/g, ' | ').slice(0, 90), glassBelowBase: (() => { const kids = [...base.parentElement.children]; return kids.indexOf(base) < kids.findIndex((k) => k.getAttribute('data-testid') === 'clear-glass'); })() };
+    const outside = document.querySelector('[data-testid="calendar-outside"]');
+    return { top: Math.round(r.top), bottom: Math.round(r.bottom), left: Math.round(r.left), w: Math.round(r.width), vw: innerWidth, vh: innerHeight, spots, days, text: card.innerText.replace(/\n+/g, ' | ').slice(0, 90), outsideBg: getComputedStyle(outside).backgroundColor, dimmed: [...document.querySelectorAll('div')].filter((d) => /rgba\(17, 17, 20, 0\.[0-9]+\)/.test(getComputedStyle(d).backgroundColor) && d.getBoundingClientRect().height > 300).length };
   });
   console.log('      open:', JSON.stringify(m));
-  check('1: the calendar is drawn at phone size, inside the screen (14px each side), hanging just under the date (top ~211)', m && m.r[0] === 14 && m.r[2] === 362 && m.r[1] >= 205 && m.r[1] <= 225 && m.r[1] + m.r[3] < m.vh - 150, JSON.stringify(m && m.r));
-  const csrc = fs.readFileSync(path.join(__dirname, '..', 'components', 'CalendarSheet.tsx'), 'utf8'), bsrc = fs.readFileSync(path.join(__dirname, '..', 'components', 'GlassTabBar.tsx'), 'utf8');
-  const glassProps = (src, re) => { const m = re.exec(src); return m ? { variant: /variant="(\w+)"/.exec(m[0])[1], scheme: /colorScheme="(\w+)"/.exec(m[0])[1], fallback: /fallbackColor="([^"]+)"/.exec(m[0])[1], tint: /tintColor=/.test(m[0]) } : null; };
-  const calG = glassProps(csrc, /<LiquidGlass radius=\{28\}[^>]*>/), barG = glassProps(bsrc, /<LiquidGlass radius=\{TAB_BAR_H \/ 2\}[^>]*>/);
-  check('1: the calendar uses the EXACT Liquid Glass settings of the tab bar (same component, variant "regular", colour scheme "light", same fallback colour), plus one light tint (white 20%) to be a little stronger and easier to read', !!calG && !!barG && calG.variant === barG.variant && calG.scheme === barG.scheme && calG.fallback === barG.fallback && calG.tint, JSON.stringify([calG, barG]));
-  check('1: NO white base and NO frost: there is no base layer in the card and no white tint or blur layer anywhere (the glass itself softens what is behind)', m && m.glassBelowBase === false && !/calendar-base|s\.base|base:/.test(csrc) && !/tintColor="rgba\(255/.test(csrc) && !/BlurView|backdropFilter/.test(csrc), JSON.stringify(m && [m.glassBelowBase]));
-  const fonts = await p.evaluate(() => { const card = document.querySelector('[data-testid="calendar-drop"]'); const t = [...card.querySelectorAll('div')].filter((d) => d.children.length === 0 && d.textContent.trim().length > 0); const fam = [...new Set(t.map((d) => getComputedStyle(d).fontFamily.split(',')[0].replace(/["']/g, '')))]; return { fam, weights: [...new Set(t.map((d) => getComputedStyle(d).fontWeight))], colors: [...new Set(t.map((d) => getComputedStyle(d).color))] }; });
-  check('1: text is the system font (no custom font family; SF Pro on the phone), clean weights 500 to 700, dark text for contrast', /fontFamily: SYS/.test(csrc) && /Platform\.select\(\{ ios: 'System'/.test(csrc) && !/PlusJakarta|Bricolage/.test(csrc) && !/fontWeight: '800'|fontWeight: '900'/.test(csrc) && /const INK = '#111114'/.test(csrc), JSON.stringify(fonts));
-  const pop = await p.evaluate(() => {
-    const card = document.querySelector('[data-testid="calendar-drop"]'), caret = document.querySelector('[data-testid="calendar-caret"]'), outside = document.querySelector('[data-testid="calendar-outside"]');
-    const cr = card.getBoundingClientRect(), kr = caret.getBoundingClientRect();
-    return { caretCx: Math.round(kr.left + kr.width / 2), caretTop: Math.round(kr.top), cardTop: Math.round(cr.top), outsideBg: getComputedStyle(outside).backgroundColor, outsideTop: Math.round(outside.getBoundingClientRect().top), dimmed: [...document.querySelectorAll('div')].filter((d) => /rgba\(17, 17, 20, 0\.[0-9]+\)/.test(getComputedStyle(d).backgroundColor) && d.getBoundingClientRect().height > 300).length };
-  });
-  check('1: a little pointer sits on the top edge, centred under the date arrow (x 296), with its tip above the card', Math.abs(pop.caretCx - 296) <= 2 && pop.caretTop < pop.cardTop, JSON.stringify(pop));
-  check('1: NO dim and NO blur on the rest of the screen: the layer that catches an outside tap is fully transparent and nothing big is tinted', /rgba\(0, 0, 0, 0\)|transparent/.test(pop.outsideBg) && pop.dimmed === 0, JSON.stringify(pop));
-  const src = fs.readFileSync(path.join(__dirname, '..', 'components', 'CalendarSheet.tsx'), 'utf8');
-  check('1: it opens and closes fast (about 200ms / 150ms) with the native driver', /CAL_OPEN_MS = 200/.test(src) && /CAL_CLOSE_MS = 150/.test(src) && !/useNativeDriver: false/.test(src) && !/<Modal/.test(src) && /@callstack|LiquidGlass/.test(src));
-  check('1: the card (not the page) is what you touch and see at every spot where the page had text', m && m.spots.every(Boolean), JSON.stringify(m && m.spots));
-  check('1: the month, "days trained" line and all 30 days of November are there', m && /\d+ days? trained|No workouts/.test(m.text) && m.days >= 28, m && m.text);
+  check('3: ONE panel hangs from the very top of the screen, full width, its top edge above the screen (only the bottom corners show), and ends well above the bottom', m && m.left === 0 && m.w === 390 && m.top < 0 && m.bottom > 300 && m.bottom < m.vh - 150, JSON.stringify(m && [m.left, m.w, m.top, m.bottom]));
+  check('3: the panel (not the page) is what you touch and see at every spot where the page had text', m && m.spots.every(Boolean), JSON.stringify(m && m.spots));
+  check('3: the month, the "days trained" line and all days of the month are there', m && /\d+ days? trained|No workouts/.test(m.text) && m.days >= 28, m && m.text);
+  check('3: nothing is dimmed or blurred: the layer that catches an outside tap is transparent', m && /rgba\(0, 0, 0, 0\)|transparent/.test(m.outsideBg) && m.dimmed === 0, JSON.stringify(m && [m.outsideBg, m.dimmed]));
+  // 1: the glass standard is the Finish pill's glass
+  const sg = read('components/StandardGlass.tsx'), fc = read('app/formcheck.tsx');
+  const finish = /<LiquidGlassButton[\s\S]{0,400}?<Text style=\{s\.finishTxt\}>Finish/.exec(fc);
+  const fin = finish && { scheme: /colorScheme="(\w+)"/.exec(finish[0])[1], fallback: /fallbackColor="([^"]+)"/.exec(finish[0])[1], tint: /tintColor=/.test(finish[0]), variant: /variant=/.test(finish[0]) };
+  const std = { scheme: /colorScheme: '(\w+)'/.exec(sg)[1], fallback: /fallbackColor: '([^']+)'/.exec(sg)[1], variant: /variant: '(\w+)'/.exec(sg)[1] };
+  check('1: the glass standard is EXACTLY the Finish pill glass (same colour scheme, same fallback fill, "regular" variant = the LiquidGlass default, no tint)', !!fin && fin.scheme === std.scheme && fin.fallback === std.fallback && !fin.tint && !fin.variant && std.variant === 'regular', JSON.stringify([fin, std]));
+  check('1: the standard has no tint option, so nothing can drift from the Finish look', !/tintColor: /.test(sg) && /'tintColor'/.test(sg));
+  check('3: the calendar panel is the glass standard (StandardGlass) and uses no other glass, blur or white base', /<StandardGlass radius=\{RADIUS\}/.test(csrc) && !/<LiquidGlass/.test(csrc) && !/BlurView|backdropFilter|GLASS_TINT/.test(csrc) && !/<Modal/.test(csrc));
+  check('3: white text on the dark glass (the standard ink), system font', /STANDARD_GLASS_INK/.test(csrc) && /Platform\.select\(\{ ios: 'System'/.test(csrc) && !/PlusJakarta|Bricolage/.test(csrc));
+  check('3: it slides with the native driver (smooth), opens in about 340ms and closes in about 260ms', /CAL_OPEN_MS = 340/.test(csrc) && /CAL_CLOSE_MS = 260/.test(csrc) && !/useNativeDriver: false/.test(csrc));
+  check('3: a tap on a day closes it, a tap outside closes it, the date tap toggles it (Home)', /onPress=\{c\.day != null \? onClose/.test(csrc) && /onPress=\{onClose\} accessibilityLabel="Close calendar"/.test(csrc) && /setCalOpen\(o => !o\)/.test(read('app/(tabs)/index.tsx')));
+  check('3: right on the first open: the panel is drawn on screen but invisible (opacity ~0) right after Home appears so the glass has painted once, then parks above the screen', /WARM_MS/.test(csrc) && /parkedWarm \? 0\.004 : 1/.test(csrc) && /translateY: parkedWarm \? 0 : slide/.test(csrc));
   await p.close();
   const c = await shoot(false, path.join(dir, 'cal-closed'));
   const hid = await c.evaluate(() => { const card = document.querySelector('[data-testid="calendar-drop"]'); const out = document.querySelector('[data-testid="calendar-outside"]'); return { there: !!card, op: card ? parseFloat(getComputedStyle(card).opacity) : null, outPe: out ? getComputedStyle(out).pointerEvents : null, rootPe: card ? getComputedStyle(card.parentElement).pointerEvents : null }; });
-  check('1: closed: the calendar stays built (so the glass is ready for the first open) but is invisible (opacity ~0), and touches go straight through it', hid.there && hid.op < 0.01 && hid.outPe === 'none' && hid.rootPe === 'none', JSON.stringify(hid));
-  check('2: it is drawn from the start, not created at the first tap: the component has no "mounted" switch and always renders the card (the glass view exists before it is ever opened)', !/setMounted|if \(!mounted/.test(csrc) && /GLASS_TINT = 'rgba\(255,255,255,0\.2\)'/.test(csrc));
-  // today's circle: the number sits exactly in the middle of the circle
+  check('3: closed (first moments): the panel is built and drawn but invisible (opacity ~0), and touches go straight through it', hid.there && hid.op < 0.01 && hid.outPe === 'none' && hid.rootPe === 'none', JSON.stringify(hid));
+  await c.close();
+  // today's circle: centred in its cell, the number exactly in the middle of the circle
   const o2 = await shoot(true, path.join(dir, 'cal-open2'));
-  const circ = await o2.evaluate(() => { const card = document.querySelector('[data-testid="calendar-drop"]'); const day = new Date().getDate(); const t = [...card.querySelectorAll('div')].filter((d) => d.children.length === 0 && d.textContent.trim() === String(day)).pop(); const w = t.parentElement; const rt = (() => { const r = document.createRange(); r.selectNodeContents(t); return r.getBoundingClientRect(); })(), rw = w.getBoundingClientRect(); return { dx: (rt.left + rt.width / 2) - (rw.left + rw.width / 2), dy: (rt.top + rt.height / 2) - (rw.top + rw.height / 2), w: Math.round(rw.width), h: Math.round(rw.height) }; });
-  check('2: the circle around today is a true circle (38 x 38) and the date number is exactly in its middle (within 1.5px)', circ.w === 38 && circ.h === 38 && Math.abs(circ.dx) <= 1.5 && Math.abs(circ.dy) <= 1.5, JSON.stringify(circ));
-  await c.close(); await browser.close();
+  const circ = await o2.evaluate(() => {
+    const card = document.querySelector('[data-testid="calendar-drop"]'); const today = card.querySelector('[data-testid="calendar-today"]');
+    const t = [...today.querySelectorAll('div')].find((d) => d.children.length === 0 && /^\d+$/.test(d.textContent.trim())); const cell = today.parentElement;
+    const rg = document.createRange(); rg.selectNodeContents(t); const rt = rg.getBoundingClientRect(), rw = today.getBoundingClientRect(), rc = cell.getBoundingClientRect();
+    return { dx: (rt.left + rt.width / 2) - (rw.left + rw.width / 2), dy: (rt.top + rt.height / 2) - (rw.top + rw.height / 2), cx: (rw.left + rw.width / 2) - (rc.left + rc.width / 2), cy: (rw.top + rw.height / 2) - (rc.top + rc.height / 2), w: Math.round(rw.width), h: Math.round(rw.height) };
+  });
+  check('3: today is circled: a true circle (38 x 38), centred in its cell, the number exactly in its middle (within 1.5px)', circ.w === 38 && circ.h === 38 && Math.abs(circ.dx) <= 1.5 && Math.abs(circ.dy) <= 1.5 && Math.abs(circ.cx) <= 0.6 && Math.abs(circ.cy) <= 0.6, JSON.stringify(circ));
+  await o2.close(); await browser.close();
   console.log(failed ? `${failed} FAILED` : 'ALL PASSED'); process.exit(failed ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

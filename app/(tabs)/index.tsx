@@ -563,7 +563,6 @@ export default function HomeScreen() {
   // one picture per recent workout (same code as the Progress tab): a video frame, else its muscle icon
   const [thumbs, setThumbs] = useState<{ thumb: string | null; fallback: string | null; logged?: boolean; ts?: number }[]>([]);
   const [calOpen, setCalOpen] = useState(false);          // the calendar dropped down from the date (tap the date or its arrow)
-  const [calAnchor, setCalAnchor] = useState<{ top: number; cx: number } | null>(null);
   const [workoutTimes, setWorkoutTimes] = useState<number[]>([]); // every saved workout's time, for the calendar's dots
   const [reloadTick, setReloadTick] = useState(0);
   // the date's arrow points up while the calendar is dropped down
@@ -632,7 +631,7 @@ export default function HomeScreen() {
           if (msg.type === 'ready') { markTabReady('index'); onReady(); return; }
           if (msg.type === 'start') { router.push('/workout' as any); return; }
           if (msg.type === 'cue') { router.push('/cue' as any); return; }
-          if (msg.type === 'calendar') { if (typeof (msg as any).top === 'number') setCalAnchor({ top: (msg as any).top, cx: typeof (msg as any).cx === 'number' ? (msg as any).cx : 60 }); setCalOpen(o => !o); return; }
+          if (msg.type === 'calendar') { setCalOpen(o => !o); return; }
           if (msg.type === 'streak') { router.push({ pathname: '/streak-screen', params: { from: 'tab', dest: '/(tabs)' } } as any); return; }
           if (msg.type === 'ring' && (msg as any).id) { router.push(`/goal/${encodeURIComponent(String((msg as any).id))}` as any); return; }
           if (msg.type === 'moves') { router.push('/learn-moves' as any); return; }
@@ -672,7 +671,7 @@ export default function HomeScreen() {
         cacheEnabled={false}
       />
       </Animated.View>
-      <CalendarSheet open={calOpen} onClose={() => setCalOpen(false)} timestamps={workoutTimes} anchor={calAnchor} />
+      <CalendarSheet open={calOpen} onClose={() => setCalOpen(false)} timestamps={workoutTimes} />
     </View>
   );
 }

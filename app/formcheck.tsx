@@ -1337,14 +1337,12 @@ export default function FormCheckScreen() {
     // End-of-set calibration summary + suggested thresholds from the real range.
     for (const l of calibRef.current.flushSummary()) sessionLogRef.current.push(l);
 
-    if (DEBUG_LOG_ENABLED && sessionLogRef.current.length > 0) {
-      // Store nav params and show review; Done button will call doNavigate.
-      pendingNavRef.current = navParams;
-      setPhase('review');
-    } else {
-      postLag('formcheck: navigating to the next screen');
-      doNavigate(navParams);
-    }
+    // Round 7 (Ari): the SESSION LOG screen is no longer part of what the user sees. Finish goes straight to the next screen. The log is still
+    // collected exactly as before (every line is in sessionLogRef and is forwarded to the dev log as [DEBUG] / [REP] / [CALIB] lines), so it is
+    // kept quietly; this one line says how much was kept.
+    if (DEBUG_LOG_ENABLED && sessionLogRef.current.length > 0) console.log(`[SESSION-LOG] ${sessionLogRef.current.length} lines kept quietly for this set (${navParams.reps} reps, ${navParams.goodReps} good), no review screen`);
+    postLag('formcheck: navigating to the next screen');
+    doNavigate(navParams);
   }, [doNavigate, returnTo, repCounterOnly]);
 
   const handleReviewDone = useCallback(() => {

@@ -238,7 +238,8 @@ export const CREATE_WORKOUT_DOM_JS = String.raw`
       if (!st && anchor) {
         st = document.createElement('div'); st.setAttribute('data-cw-starter', '1');
         st.style.cssText = 'padding:14px 14px 0;';
-        anchor.parentElement.insertBefore(st, anchor.nextElementSibling);
+        // (round 7) the "Add exercise" card and the exercises you picked sit RIGHT UNDER the search bar; this starter block comes after them
+        anchor.parentElement.appendChild(st);
         window.__cwGroup = window.__cwGroup || '';
         window.__cwMore = false;
       }
@@ -264,8 +265,9 @@ export const CREATE_WORKOUT_DOM_JS = String.raw`
             var on = !!added[n];
             return '<div data-cw-row="' + i + '" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 0;cursor:pointer;' + (i ? 'border-top:1px solid rgba(17,17,20,0.07);' : '') + '">'
               + '<div style="font-size:15px;font-weight:600;letter-spacing:-0.2px;color:#111114;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>'
-              + '<div style="flex:none;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;line-height:0;background:' + (on ? '#111114' : '#f4f4f7') + ';">'
-              + '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="' + (on ? 'M2.6 6.4 5 8.8l4.4-5' : 'M6 2.2v7.6M2.2 6h7.6') + '" stroke="' + (on ? '#ffffff' : '#111114') + '" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"></path></svg></div></div>';
+              // (round 7) no little circles: a plain grey plus, or a plain dark check once it is added
+              + '<div data-cw-mark="1" style="flex:none;width:20px;height:20px;display:flex;align-items:center;justify-content:center;line-height:0;">'
+              + '<svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="' + (on ? 'M2.6 6.4 5 8.8l4.4-5' : 'M6 2.2v7.6M2.2 6h7.6') + '" stroke="' + (on ? '#111114' : '#9a9aa4') + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></div></div>';
           }).join('');
           var more = names.length > 8 ? '<div data-cw-more="1" style="padding:12px 0 8px;text-align:center;font-size:13.5px;font-weight:700;color:#5f5f69;cursor:pointer;border-top:1px solid rgba(17,17,20,0.07);">' + (window.__cwMore ? 'Show fewer' : 'Show all ' + names.length) + '</div>' : '';
           st.innerHTML = '<div style="font-size:13px;font-weight:600;color:#6e6e77;padding:0 4px 8px;">Start from a muscle group</div>'

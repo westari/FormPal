@@ -1,11 +1,11 @@
 /**
  * lib/goalDetail.ts
  *
- * The data behind the goal pages (tap a ring on Home): the goal in depth: this week by day, the past weeks, and what counts. Pure maths
+ * The data behind the goal pages (tap a ring on Home): the goal in depth: this week by day and the past weeks. Pure maths
  * (tested), built on lib/homeRings.ts so the page and the ring can never disagree.
  */
 import { groupIntoWorkouts, workoutSessions, type SessionEntry } from './sessionLog';
-import { weekBounds, weeklyGoalLabel } from './weeklyGoal';
+import { weekBounds } from './weeklyGoal';
 import { homeRings, FORM_GOAL, MUSCLE_TOTAL, type Ring } from './homeRings';
 import { workedMuscles } from './muscleRanksData';
 import { MUSCLE_DISPLAY_ORDER } from '../components/MuscleTierMap';
@@ -24,7 +24,6 @@ export interface GoalDetail {
   summary: string;
   days: DayCell[];
   weeks: WeekCell[];
-  counts: string[];
   /** muscles page only: the 11 muscles and whether each was trained this week */
   muscles?: { name: string; hit: boolean }[];
 }
@@ -34,27 +33,6 @@ const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct
 const pretty = (m: string) => m.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase()).trim();
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
 const DAY = 86400000;
-
-const COUNTS: Record<GoalId, string[]> = {
-  workouts: [
-    'A workout counts when you finish it with the camera, or when you log a session by hand.',
-    'Form checks are practice. They do not count.',
-    'The week runs Monday to Sunday and starts again at 0 on Monday.',
-    'Extra workouts beyond your goal show as a bonus; the ring stops at full.',
-  ],
-  form: [
-    'Your form score is the share of clean reps in this week\'s workouts, counted rep by rep.',
-    'Only exercises the camera judged count. Sessions you typed in have no form score.',
-    `The ring is full at ${FORM_GOAL}% or more.`,
-    'Form checks are practice. They do not count.',
-  ],
-  muscles: [
-    `The muscles are the ${MUSCLE_TOTAL} on your muscle map.`,
-    'A muscle counts once an exercise you did this week works it (main or helping).',
-    'Camera workouts and logged sessions count. Form checks do not.',
-    'The week runs Monday to Sunday and starts again at 0 on Monday.',
-  ],
-};
 
 export function goalDetail(id: GoalId, allSessions: SessionEntry[], weeklyGoal: number, now: number = Date.now()): GoalDetail {
   const { start } = weekBounds(now);
@@ -98,16 +76,16 @@ export function goalDetail(id: GoalId, allSessions: SessionEntry[], weeklyGoal: 
   if (id === 'workouts') {
     title = 'Workouts';
     summary = ring.value >= ring.goal ? `Goal reached: ${ring.value} of ${ring.goal} workouts this week${ring.value > ring.goal ? ` (+${ring.value - ring.goal} bonus)` : ''}` : `${ring.value} of ${ring.goal} workouts this week, ${left} to go`;
-    return { id, title, ring, summary, days, weeks, counts: [`Your weekly goal is ${weeklyGoalLabel(ring.goal)}. You can change it in Profile.`, ...COUNTS.workouts] };
+    return { id, title, ring, summary, days, weeks };
   }
   if (id === 'form') {
     title = 'Form';
     summary = ring.value === 0 ? 'No form-checked reps yet this week' : ring.value >= FORM_GOAL ? `${ring.value}% clean reps this week: goal reached` : `${ring.value}% clean reps this week, ${FORM_GOAL - ring.value} points to the ${FORM_GOAL}% goal`;
-    return { id, title, ring, summary, days, weeks, counts: COUNTS.form };
+    return { id, title, ring, summary, days, weeks };
   }
   title = 'Muscles';
   const hit = new Set<string>();
   for (const g of groupIntoWorkouts(sessions.filter(s => s.ts >= start && s.ts < weekBounds(now).end))) for (const w of workedMuscles(g.entries)) hit.add(w.muscle);
   summary = ring.value >= MUSCLE_TOTAL ? `All ${MUSCLE_TOTAL} muscles trained this week` : `${ring.value} of ${MUSCLE_TOTAL} muscles trained this week, ${left} to go`;
-  return { id, title, ring, summary, days, weeks, counts: COUNTS.muscles, muscles: MUSCLE_DISPLAY_ORDER.map(m => ({ name: pretty(String(m)), hit: hit.has(m) })) };
+  return { id, title, ring, summary, days, weeks, muscles: MUSCLE_DISPLAY_ORDER.map(m => ({ name: pretty(String(m)), hit: hit.has(m) })) };
 }

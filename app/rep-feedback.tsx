@@ -78,7 +78,6 @@ export default function RepFeedbackScreen() {
     exerciseName?: string; videoUri?: string; repEvents?: string; practice?: string;
   }>();
   const isPractice = practice === '1';
-  const [practiceDone, setPracticeDone] = useState(false);   // the short done screen after a form check, before Home
   const leaving = useRef(false);   // Finish / back can only leave ONCE (the 2026-11-15 loop: Finish -> Form check complete -> rep feedback -> ...)
 
   // DIAGNOSTIC — full mount/unmount + WebView lifecycle logging, kept per
@@ -266,16 +265,15 @@ export default function RepFeedbackScreen() {
       hapticFinish(); // the one strong haptic in the app: Heavy impact + Success
       if (isPractice) {
         // A form check (practice) ends here: a short done screen (Ari's done screen, components/DoneHost.tsx), then HOME, once.
-        // Not back to the recap (that is what looped), no Today's progress, no streak. The warm page is hidden first (it is drawn above the screens).
-        warmDeactivate('repfeedback');
-        setPracticeDone(true);
+        // Not back to the recap (that is what looped), no Today's progress, no streak. Round 7: the done screen shows AT ONCE over this screen and the white rep
+        // feedback card STAYS under it (it used to be hidden first, which showed what was behind it); it is hidden only when Continue is tapped.
         // the done screen (Ari's design, components/DoneHost.tsx): "Form check complete" and this form check's real numbers, then HOME
         let evs: { good?: boolean }[] = [];
         try { evs = repEventsParam ? JSON.parse(repEventsParam) : []; } catch { evs = []; }
         showDone({
           title: DONE_TITLES.formCheck,
           subtitle: formCheckDoneLine({ exerciseName, reps: evs.length, goodReps: evs.filter(e => e && e.good).length }),
-          onContinue: () => router.dismissAll(),
+          onContinue: () => { warmDeactivate('repfeedback'); router.dismissAll(); },
         });
         return;
       }
@@ -324,7 +322,7 @@ export default function RepFeedbackScreen() {
 
   return (
     <View style={styles.root}>
-      <StatusBar style={practiceDone ? 'dark' : 'light'} />
+      <StatusBar style="light" />
       {/* Native video — a real AVPlayer, its own process, nothing to do
           with the WebView (see file header). Sits BEHIND the WebView; the
           WebView's own background goes transparent above so this shows

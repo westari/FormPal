@@ -32,13 +32,13 @@ check('4, 5, 6 and 7 days a week never have two rest days in a row', [4, 5, 6, 7
 const sun = new Date(2026, 10, 15, 12);
 const planA = mkPlan(4, sun);
 let td = buildTrainData(planA, [], { top: 62, bottom: 34 }, sun);
-const label = (d) => d.missed ? 'Missed' : d.rest ? 'Rest' : d.done ? 'Done' : 'Plan';
+const label = (d) => (d.missed || d.tag) ? 'Missed' : d.rest ? 'Rest' : d.done ? 'Done' : 'Plan'; // round 7: this week's missed workout is a normal card with a Missed tag
 const strip = td.days.map((d) => d.short + ':' + label(d)).join(' ');
 console.log('      4 days, nothing done :', strip);
 // days: Tue 10, Wed 11, Thu 12, Fri 13, Sat 14, Sun 15 (today), Mon 16 (tomorrow)
 check('a planned day you skipped says "Missed" (Tue, Thu, Sat), a plan rest day says "Rest day" (Wed, Fri)', td.days.slice(0, 5).map(label).join() === 'Missed,Rest,Missed,Rest,Missed', strip);
-check('Missed cards are not called "Rest day"', td.days.filter((d) => d.missed).every((d) => d.name === 'Missed' && !/Rest/.test(d.name)));
-check('today (Sunday) is a plan rest day: "Rest day", and tomorrow (Monday) is the next plan workout', td.days[5].rest && td.days[5].name === 'Rest day' && td.days[6].name === 'Full body A', td.days[5].name + ' / ' + td.days[6].name);
+check('Missed cards are not called "Rest day"', td.days.filter((d) => d.missed || d.tag).every((d) => (d.tag ? d.cta === 'Do it today' : d.name === 'Missed') && !/Rest/.test(d.name)));
+check('today (Sunday) is a plan rest day with workouts missed this week, so Train suggests the missed workout first (round 7), and tomorrow (Monday) is the next plan workout', !td.days[5].rest && td.days[5].tag === 'Missed' && td.days[6].name === 'Full body A', td.days[5].name + ' / ' + td.days[6].name);
 check('no two "Rest day" cards in a row anywhere in the strip', td.days.every((d, i) => !(d.name === 'Rest day' && td.days[i + 1] && td.days[i + 1].name === 'Rest day')), strip);
 
 // worked out Tue and Thu: those are Done, the rest as before
@@ -57,7 +57,7 @@ td = buildTrainData(null, [], { top: 62, bottom: 34 }, mon);
 check('no plan: nothing is Missed and nothing is a plan rest day', td.days.every((d) => !d.missed), td.days.map((d) => d.name).join(' | '));
 // 7 days a week: no rest days at all except... none
 td = buildTrainData(mkPlan(7, sun), [], { top: 62, bottom: 34 }, sun);
-check('7 days a week: no rest days, every skipped day is Missed', td.days.slice(0, 5).every((d) => d.missed) && !td.days[5].rest && !td.days[6].rest, td.days.map(label).join());
+check('7 days a week: no rest days, every skipped day is Missed', td.days.slice(0, 5).every((d) => d.missed || d.tag) && !td.days[5].rest && !td.days[6].rest, td.days.map(label).join());
 
 // ── the real page: a Missed card and a Rest card are drawn ──
 (async () => {

@@ -9,7 +9,7 @@
  * the workout name over "52 min · 8 exercises", one white rounded card per exercise (picture square, name,
  * "4 sets · 8 reps", pencil) and the black "Start workout" pill floating at the bottom. Real data: the plan's workout.
  */
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Animated, Easing } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -69,7 +69,8 @@ function Stepper({ label, value, min, max, onChange }: { label: string; value: n
   );
 }
 
-function ExCard({ name, sets, reps, onEdit }: { name: string; sets: number; reps: number; onEdit: () => void }) {
+// Memoised (round 7): opening the Edit sheet re-renders this screen; the cards did not change, so they are not drawn again.
+const ExCard = React.memo(function ExCard({ index, name, sets, reps, onEdit }: { index: number; name: string; sets: number; reps: number; onEdit: (i: number) => void }) {
   return (
     <View style={s.card}>
       <LinearGradient colors={['#ffffff', '#fbfbfd']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { borderRadius: 26 }]} />
@@ -78,12 +79,12 @@ function ExCard({ name, sets, reps, onEdit }: { name: string; sets: number; reps
         <Text style={s.exName} numberOfLines={1}>{name}</Text>
         <Text style={s.exMeta} numberOfLines={1}>{plural(sets, 'set')} · {plural(reps, 'rep')}</Text>
       </View>
-      <Pressable hitSlop={14} onPress={onEdit} accessibilityRole="button" accessibilityLabel={`Edit sets and reps for ${name}`}>
+      <Pressable hitSlop={14} onPress={() => onEdit(index)} accessibilityRole="button" accessibilityLabel={`Edit sets and reps for ${name}`}>
         <SymbolView name="pencil" size={20} weight="regular" tintColor={INK} type="monochrome" style={s.pencil} />
       </Pressable>
     </View>
   );
-}
+});
 
 /** The header starts BELOW the notch / status bar with real breathing room (it sat right up against it before). */
 export const SHEET_MS = 220;
@@ -122,26 +123,32 @@ export default function WorkoutPreviewScreen() {
   const slide = useRef(new Animated.Value(0)).current;
   const lastEditing = useRef<number | null>(null);
   if (editing != null) lastEditing.current = editing;
-  useEffect(() => {
-    const to = editing != null ? 1 : 0;
+  // The sheet's 2 native animations are started in the SAME moment as the tap / close (round 7), not from an effect after the screen has been
+  // drawn again: opening used to wait for a full re-render first, which was the lag. (They run on the native side, so the re-render that
+  // follows cannot slow them down.)
+  const runSheet = (to: 0 | 1) => {
     Animated.parallel([
       Animated.timing(dim, { toValue: to, duration: SHEET_MS, easing: to ? Easing.out(Easing.quad) : Easing.in(Easing.quad), useNativeDriver: true }),
       Animated.timing(slide, { toValue: to, duration: SHEET_MS, easing: to ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic), useNativeDriver: true }),
     ]).start();
-  }, [editing]); // eslint-disable-line react-hooks/exhaustive-deps
-  const workout = baseWorkout ? { ...baseWorkout, exercises: baseWorkout.exercises.map((e, i) => edits[i] ? { ...e, targetSets: edits[i].sets, targetReps: edits[i].reps } : e) } : baseWorkout;
-  const openEdit = (i: number) => {
-    if (!workout) return;
-    Haptics.selectionAsync();
-    setDraft({ sets: workout.exercises[i].targetSets, reps: workout.exercises[i].targetReps });
-    setEditing(i);
   };
+  const workout = baseWorkout ? { ...baseWorkout, exercises: baseWorkout.exercises.map((e, i) => edits[i] ? { ...e, targetSets: edits[i].sets, targetReps: edits[i].reps } : e) } : baseWorkout;
+  const workoutRef = useRef(workout); workoutRef.current = workout;
+  const openEdit = useCallback((i: number) => {
+    const w = workoutRef.current;
+    if (!w) return;
+    runSheet(1); // first: the sheet starts moving at once
+    setDraft({ sets: w.exercises[i].targetSets, reps: w.exercises[i].targetReps });
+    setEditing(i);
+    Haptics.selectionAsync();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const closeEdit = () => { runSheet(0); setEditing(null); };
   const saveEdit = () => {
     if (editing == null || !workout) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setEdits(prev => ({ ...prev, [editing]: draft }));
     if (!tplId && workout.id) void setTargets(workout.id, editing, draft.sets, draft.reps);
-    setEditing(null);
+    closeEdit();
   };
   const previewOnly = preview === '1'; // a day that is not today: look, no Start button
   const isTemplate = !!tplId && !!workout && workout.id === tplId;
@@ -197,7 +204,7 @@ export default function WorkoutPreviewScreen() {
         showsVerticalScrollIndicator={false}
       >
         {workout.exercises.map((ex, i) => (
-          <ExCard key={ex.exerciseId + ':' + i} name={ex.displayName} sets={ex.targetSets} reps={ex.targetReps} onEdit={() => openEdit(i)} />
+          <ExCard key={ex.exerciseId + ':' + i} index={i} name={ex.displayName} sets={ex.targetSets} reps={ex.targetReps} onEdit={openEdit} />
         ))}
       </ScrollView>
 
@@ -217,16 +224,16 @@ export default function WorkoutPreviewScreen() {
 
       <View style={StyleSheet.absoluteFill} pointerEvents={editing != null ? 'auto' : 'none'} testID="edit-layer">
         <Animated.View style={[StyleSheet.absoluteFill, s.sheetBack, { opacity: dim }]} testID="edit-dim" pointerEvents={editing != null ? 'auto' : 'none'}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setEditing(null)} accessibilityLabel="Close" />
+          <Pressable style={StyleSheet.absoluteFill} onPress={closeEdit} accessibilityLabel="Close" />
         </Animated.View>
         {/* The same sheet as the Edit Workout sheet on Home: a floating white sheet (8px from the sides and the bottom, 40px corners), the grab
             bar, a 20px bold title with a round close button, grey rounded rows (#f6f6f8, 20px corners) with white round controls, and the
             black Done pill. */}
         <Animated.View style={[s.sheet, { bottom: 8 + Math.max(insets.bottom - 8, 0), transform: [{ translateY: slide.interpolate({ inputRange: [0, 1], outputRange: [420, 0] }) }] }]} testID="edit-sheet">
-          <Pressable onPress={() => setEditing(null)} style={s.grabHit} accessibilityLabel="Close grab bar"><View style={s.grab} /></Pressable>
+          <Pressable onPress={closeEdit} style={s.grabHit} accessibilityLabel="Close grab bar"><View style={s.grab} /></Pressable>
           <View style={s.sheetHead}>
             <Text style={s.sheetTitle} numberOfLines={1}>{lastEditing.current != null ? workout.exercises[lastEditing.current]?.displayName : ''}</Text>
-            <Pressable onPress={() => setEditing(null)} style={s.closeBtn} accessibilityRole="button" accessibilityLabel="Close">
+            <Pressable onPress={closeEdit} style={s.closeBtn} accessibilityRole="button" accessibilityLabel="Close">
               <SymbolView name="xmark" size={12} weight="bold" tintColor={INK} type="monochrome" style={{ width: 12, height: 12 }} />
             </Pressable>
           </View>

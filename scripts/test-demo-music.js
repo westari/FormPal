@@ -170,7 +170,7 @@ const connectMusicInject = new Function('dcScaleFitJs', ts.transpileModule(music
   check('7: the app starts the clock only when the music overlay is gone (active = musicGate done) and injects window.__demoStart then', /active=\{musicGate === 'done'\}/.test(run) && /window\.__demoStart && window\.__demoStart\(\)/.test(run) && /if \(!active\) return;/.test(run));
   // ───────────── 6: the music screen arrival ─────────────
   check('6: the demo web view is created only AFTER the music page has drawn (350ms later), so the two web views are no longer built at the same moment on arrival', /isDemoStep && currentEx && demoAllowed && \(/.test(run) && /setTimeout\(\(\) => setDemoAllowed\(true\), 350\)/.test(run) && /if \(!musicPageShown\) return;/.test(run));
-  check('6: the music page fades in when it is final (160ms) instead of popping, and the app logs how long it took ("[MUSIC] page drawn Nms after the screen opened")', /toValue: 1, duration: 160/.test(run) && /\[MUSIC\] page drawn/.test(run));
+  check('6: the music page eases in when it is final (round 7: 420ms fade with a small rise) instead of popping, and the app logs how long it took ("[MUSIC] page drawn Nms after the screen opened")', /toValue: 1, duration: MUSIC_ENTER_MS/.test(run) && /MUSIC_ENTER_MS = 420/.test(run) && /\[MUSIC\] page drawn/.test(run));
   check('10: Continue waits for the demo underneath to be drawn (1.5s at most) before the overlay fades, so the demo is never half-loaded when it appears', /demoReady=\{demoDrawn \|\| !isDemoStep\}/.test(run) && /setTimeout\(\(\) => setWaitedOut\(true\), 1500\)/.test(run) && /demoReady \|\| waitedOut/.test(run));
   // ───────────── 11: timed steps ─────────────
   const ph = demoTimeline('curl', cues, {});

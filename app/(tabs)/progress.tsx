@@ -83,6 +83,8 @@ export default function ProgressScreen() {
     webRef.current?.injectJavaScript(js);
   }, []);
 
+  const unitsKgRef = useRef(false); // Profile > Units (kg or lb), read ahead so the done screen needs no wait
+  useEffect(() => { void loadUnitsKg().then(v => { unitsKgRef.current = v; }); }, []);
   const load = useCallback(async () => {
     const [sessions, weights, photos] = await Promise.all([getAllSessions(), getWeightLog(), listProgressPhotos()]);
     photosRef.current = photos.map(p => ({ id: p.id, uri: p.uri }));
@@ -157,6 +159,7 @@ export default function ProgressScreen() {
   }, [load]);
   useEffect(() => { lag.mark('mount'); void prefetch(); }, [prefetch, lag]);
   useFocusEffect(useCallback(() => {
+    void loadUnitsKg().then(v => { unitsKgRef.current = v; });
     lag.mark('shown');
     lag.revisit(revealedRef.current);
     if (firstShown.current) { firstShown.current = false; if (dataRef.current && artReady.current) push(true); }
@@ -177,12 +180,10 @@ export default function ProgressScreen() {
         // this just persists it, then re-syncs from storage.
         if (!msg.dateKey || !msg.weightLb) break;
         const [y, m, d] = msg.dateKey.split('-').map(Number);
-        logWeight(msg.weightLb, new Date(y, m - 1, d)).then(async () => {
-          load();
-          // the done screen (Ari's design, components/DoneHost.tsx): "Weight logged" and the real change since last time
-          const kg = await loadUnitsKg();
-          showDone({ title: DONE_TITLES.weight, subtitle: weightDoneLine({ weightLb: msg.weightLb as number, prevLb: typeof (msg as any).prevLb === 'number' ? (msg as any).prevLb : null, kg }), onContinue: () => {} });
-        }).catch(() => {});
+        // The done screen ("Weight logged", Ari's design, components/DoneHost.tsx) shows AT ONCE, in the same moment as Submit (round 7): the line is built
+        // from what is already known (this weight, the one before it, the unit), and the weight is saved behind it.
+        showDone({ title: DONE_TITLES.weight, subtitle: weightDoneLine({ weightLb: msg.weightLb as number, prevLb: typeof (msg as any).prevLb === 'number' ? (msg as any).prevLb : null, kg: unitsKgRef.current }), onContinue: () => {} });
+        logWeight(msg.weightLb, new Date(y, m - 1, d)).then(() => { void load(); }).catch(() => {});
         break;
       }
       case 'workoutMenu':

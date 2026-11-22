@@ -6,7 +6,9 @@
  */
 import { create } from 'zustand';
 
-export interface DonePayload { title: string; subtitle: string; onContinue: () => void }
+/** `subtitle` may be a Promise: the done screen then starts at ONCE with the title and the grey line fills in when the real line is ready (the line appears
+ *  at about 2.2s into the animation, so it has that long to be worked out; if it fails the line is left out). */
+export interface DonePayload { title: string; subtitle: string | Promise<string>; onContinue: () => void }
 interface DoneState { payload: (DonePayload & { nonce: number }) | null; show: (p: DonePayload) => void; hide: () => void }
 
 let nonce = 0;

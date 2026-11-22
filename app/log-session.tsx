@@ -43,10 +43,11 @@ export default function LogSessionScreen() {
       await appendSessions(entries, 'log-session (Save session pressed)');
       console.log('[LOG-SESSION] saved ' + entries.length + ' exercises - showing the done screen');
       // the done screen (Ari's design, components/DoneHost.tsx): "Session logged", what was logged and where the week stands; Continue opens Today's progress
-      const week = await currentWeek();
+      // shown AT ONCE (round 7); the grey line (it needs the week count) fills in when it is ready
+      const exCount = new Set(entries.map(e => e.exerciseId)).size, repCount = entries.reduce((a, e) => a + e.reps, 0);
       showDone({
         title: DONE_TITLES.logged,
-        subtitle: loggedDoneLine({ exercises: new Set(entries.map(e => e.exerciseId)).size, reps: entries.reduce((a, e) => a + e.reps, 0), week }),
+        subtitle: currentWeek().then(week => loggedDoneLine({ exercises: exCount, reps: repCount, week })).catch(() => loggedDoneLine({ exercises: exCount, reps: repCount })),
         onContinue: () => {
           console.log('[LOG-SESSION] done screen finished - opening the Today progress page');
           router.replace({ pathname: '/recap' as any, params: { mode: 'logged', ts: String(ts) } });

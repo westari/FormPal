@@ -31,7 +31,7 @@ const check = (n, ok, d) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${d ? ' 
   check('an unknown workout changes nothing', usePlanStore.getState().plan.workouts.every(w => w.exercises.every(e => e.targetSets !== 9)));
 
   const w = fs.readFileSync(path.join(__dirname, '..', 'app', 'workout', 'index.tsx'), 'utf8');
-  check('each card has a pencil button that opens the sheet', /onEdit=\{\(\) => openEdit\(i\)\}/.test(w) && /onPress=\{onEdit\}/.test(w));
+  check('each card has a pencil button that opens the sheet', /index=\{i\}/.test(w) && /onEdit=\{openEdit\}/.test(w) && /onPress=\{\(\) => onEdit\(index\)\}/.test(w));
   check('the sheet has Sets and Reps steppers and a Save button', /label="Sets"/.test(w) && /label="Reps"/.test(w) && /accessibilityLabel="Save"/.test(w));
   check('Save writes to the plan workout (not for a template) and Start uses the edited numbers', /setTargets\(workout\.id, editing, draft\.sets, draft\.reps\)/.test(w) && /startSess\(workout\)/.test(w));
   console.log(failed ? `${failed} FAILED` : 'ALL PASSED'); process.exit(failed ? 1 : 0);

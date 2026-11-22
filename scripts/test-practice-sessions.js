@@ -41,7 +41,7 @@ const sessions = [
   const plan = { id: 'p', profile: { goal: 'general', experience: 'beginner', daysPerWeek: 7, location: 'gym' }, splitType: 'fullBody', currentWorkoutIndex: 0, generatedAt: now - 30 * DAY, progressionState: {},
     workouts: [{ id: 'w0', sessionNumber: 1, splitLabel: 'Full body A', rationale: '', exercises: [{ exerciseId: 'squat', displayName: 'Squat', targetSets: 3, targetReps: 10, restSeconds: 60, currentVariationId: 'squat' }], completed: false }] };
   const td = buildTrainData(plan, sessions, { top: 62, bottom: 34 }, new Date(now));
-  check('12: Train has no "done" card for a practice day (today is still the planned workout, yesterday is Missed, not done)', !td.days[5].done && td.days[5].name === 'Full body A' && !td.days[4].done && td.days[4].missed && td.streak === 0, td.days.map((d) => d.short + ':' + (d.done ? 'done' : d.missed ? 'missed' : d.rest ? 'rest' : 'plan')).join(' '));
+  check('12: Train has no "done" card for a practice day (today is still the planned workout, yesterday is Missed, not done)', !td.days[5].done && td.days[5].name === 'Full body A' && !td.days[4].done && (td.days[4].missed || td.days[4].tag === 'Missed') && td.streak === 0, td.days.map((d) => d.short + ':' + (d.done ? 'done' : (d.missed || d.tag) ? 'missed' : d.rest ? 'rest' : 'plan')).join(' '));
   check('12: the 3-days-ago workout IS a done card', td.days[2].done === true);
 
   // Progress data

@@ -1,76 +1,68 @@
 /**
  * components/CalendarSheet.tsx
  *
- * Home's calendar. It drops DOWN from the header, attached to the little arrow beside the date (not a sheet from the bottom):
- * a real Liquid Glass card under the date that grows out of the arrow (scale + fade from the arrow's x), one month at a time
- * (small arrows go to the previous / next month), today in a dark circle, a dot under every day you trained. Tap the arrow again
- * (the page reports it) or the dim area below to close. The month maths is in lib/calendarMonth.ts.
- * `anchor` is where the page says the date block ends (top, screen points) and where its arrow is (cx).
+ * Home's calendar (rebuilt 2026-11-22). Tap the date: ONE panel of the glass standard (components/StandardGlass.tsx = the Finish pill's
+ * Liquid Glass) slides DOWN from the top of the screen with the month grid, today in a circle centred in its cell, a dot under every day
+ * you trained. Tap a day, the dim area below, or the date again and it slides back up. Month arrows go to the previous / next month.
+ *
+ * First open: the panel is drawn ON screen but invisible for a moment right after Home appears (WARM_MS), so the native glass has really
+ * been built and painted once before the first tap. Then it parks above the screen. A glass view that is built at the first tap shows its
+ * plain fallback colour for a moment: that was the "old look" on the first open.
+ * The month maths is in lib/calendarMonth.ts.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SymbolView } from 'expo-symbols';
-import LiquidGlass from './LiquidGlass';
+import { StatusBar } from 'expo-status-bar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import StandardGlass, { STANDARD_GLASS_INK, STANDARD_GLASS_MUTED } from './StandardGlass';
 import { monthGrid, trainedDays, MONTH_NAMES, WEEKDAY_LETTERS } from '../lib/calendarMonth';
 
-const INK = '#111114';
-const MUTED = '#55555f';
 const SYS = Platform.select({ ios: 'System', default: undefined }); // SF Pro
 const ACCENT = '#f2701c';
-const SIDE = 14;
-// A slightly stronger glass (easier to read): the tab bar's glass plus a light tint of its own colour. Not a white card: the glass itself is unchanged.
-export const GLASS_TINT = 'rgba(255,255,255,0.2)';
-export const CAL_OPEN_MS = 200;
-export const CAL_CLOSE_MS = 150;
-const CARET = 18; // the little pointer on the top edge, pointing up at the date's arrow
+export const CAL_OPEN_MS = 340;
+export const CAL_CLOSE_MS = 260;
+export const WARM_MS = 800;
+const BLEED = 60; // the panel reaches this far ABOVE the screen so its top corners are never seen: only the bottom corners are round
+const RADIUS = 30;
 
-export interface CalendarAnchor { top: number; cx: number }
-
-export default function CalendarSheet({ open, onClose, timestamps, anchor }: { open: boolean; onClose: () => void; timestamps: number[]; anchor: CalendarAnchor | null }) {
-  const { width } = useWindowDimensions();
+export default function CalendarSheet({ open, onClose, timestamps }: { open: boolean; onClose: () => void; timestamps: number[]; anchor?: unknown }) {
+  const insets = useSafeAreaInsets();
   const now = new Date();
   const [ym, setYm] = useState({ y: now.getFullYear(), m: now.getMonth() });
+  const [h, setH] = useState(720);            // the panel's real height (measured); the guess is taller than it will be
+  const [warm, setWarm] = useState(true);      // true only right after mount: drawn on screen, invisible (see the note above)
   const prog = useRef(new Animated.Value(open ? 1 : 0)).current;
+  useEffect(() => { const t = setTimeout(() => setWarm(false), WARM_MS); return () => clearTimeout(t); }, []);
   useEffect(() => {
     if (open) {
+      setWarm(false);
       const n = new Date(); setYm({ y: n.getFullYear(), m: n.getMonth() });
-      Animated.timing(prog, { toValue: 1, duration: CAL_OPEN_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+      Animated.timing(prog, { toValue: 1, duration: CAL_OPEN_MS, easing: Easing.bezier(0.22, 1, 0.36, 1), useNativeDriver: true }).start();
     } else {
-      Animated.timing(prog, { toValue: 0, duration: CAL_CLOSE_MS, easing: Easing.in(Easing.quad), useNativeDriver: true }).start();
+      Animated.timing(prog, { toValue: 0, duration: CAL_CLOSE_MS, easing: Easing.bezier(0.4, 0, 0.6, 1), useNativeDriver: true }).start();
     }
   }, [open, prog]);
   const trained = useMemo(() => trainedDays(timestamps), [timestamps]);
   const weeks = useMemo(() => monthGrid(ym.y, ym.m, trained, new Date()), [ym, trained]);
   const step = (d: number) => setYm((c) => { const t = new Date(c.y, c.m + d, 1); return { y: t.getFullYear(), m: t.getMonth() }; });
   const monthCount = weeks.flat().filter((c) => c.trained).length;
-  // The calendar is drawn from the moment Home is on screen (invisible, nothing touches it) so the native glass is already built and rendered
-  // when it is first opened. It used to be created at the first tap, and a glass view that is still being built shows its plain fallback
-  // colour: that was the "old look" on the first open (later opens were fine because the view already existed).
-  const a = anchor ?? { top: 200, cx: 250 };
-
-  const top = a.top + 12; // leaves room for the pointer between the arrow and the card
-  const cardW = width - SIDE * 2;
-  const caretX = Math.max(26, Math.min(cardW - 26, a.cx - SIDE)); // the pointer sits right under the arrow
-  const scale = prog.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] });
-  const slide = prog.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] });
+  const slide = prog.interpolate({ inputRange: [0, 1], outputRange: [-h, 0] });
+  const parkedWarm = warm && !open;
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents={open ? 'box-none' : 'none'}>
-      {/* Nothing is dimmed or blurred. This invisible layer under the calendar only catches a tap outside it (the header stays tappable). */}
-      <Pressable style={[s.outside, { top }]} onPress={onClose} accessibilityLabel="Close calendar" testID="calendar-outside" pointerEvents={open ? 'auto' : 'none'} />
+      {open && <StatusBar style="light" animated />}
+      {/* Nothing is dimmed. This invisible layer only catches a tap outside the panel. */}
+      <Pressable style={s.outside} onPress={onClose} accessibilityLabel="Close calendar" testID="calendar-outside" pointerEvents={open ? 'auto' : 'none'} />
       <Animated.View
-        style={[s.pop, { top, left: SIDE, width: cardW, opacity: prog.interpolate({ inputRange: [0, 1], outputRange: [0.004, 1] }), transform: [{ translateY: slide }, { scale }], transformOrigin: `${caretX}px 0px` } as any]}
         testID="calendar-drop"
+        onLayout={(e) => { const hh = Math.round(e.nativeEvent.layout.height); if (hh > 0 && hh !== h) setH(hh); }}
+        style={[s.panel, { top: -BLEED, opacity: parkedWarm ? 0.004 : 1, transform: [{ translateY: parkedWarm ? 0 : slide }] }]}
       >
-        {/* the pointer: a small rounded diamond whose top half stands out above the card, centred under the arrow */}
-        <View style={[s.caret, { left: caretX - CARET / 2 }]} testID="calendar-caret" pointerEvents="none">
-          <LiquidGlass radius={4} variant="regular" colorScheme="light" tintColor={GLASS_TINT} fallbackColor="rgba(255,255,255,0.82)" style={StyleSheet.absoluteFill} />
-        </View>
-        <View style={s.card}>
-          {/* The EXACT Liquid Glass of the tab bar (components/GlassTabBar.tsx): the same component, variant "regular", colour scheme "light" and
-              fallback colour. No white base, no tint, no frost: what is behind is softened by the glass itself. */}
-          <LiquidGlass radius={28} variant="regular" colorScheme="light" tintColor={GLASS_TINT} fallbackColor="rgba(255,255,255,0.82)" style={StyleSheet.absoluteFill} pointerEvents="none" />
-        <View style={s.inner}>
+        {/* The glass standard (the Finish pill's glass). Its top corners are above the screen, so it reads as a panel hanging from the top. */}
+        <StandardGlass radius={RADIUS} style={StyleSheet.absoluteFill} pointerEvents="none" />
+        <View style={[s.inner, { paddingTop: BLEED + insets.top + 10 }]}>
           <View style={s.head}>
             <View>
               <Text style={s.title}>{MONTH_NAMES[ym.m]} {ym.y}</Text>
@@ -78,10 +70,10 @@ export default function CalendarSheet({ open, onClose, timestamps, anchor }: { o
             </View>
             <View style={s.arrows}>
               <Pressable onPress={() => step(-1)} hitSlop={10} style={s.arrow} accessibilityLabel="Previous month">
-                <SymbolView name={'chevron.left' as any} size={15} weight="semibold" tintColor={INK} type="monochrome" style={s.sym} />
+                <SymbolView name={'chevron.left' as any} size={15} weight="semibold" tintColor={STANDARD_GLASS_INK} type="monochrome" style={s.sym} />
               </Pressable>
               <Pressable onPress={() => step(1)} hitSlop={10} style={s.arrow} accessibilityLabel="Next month">
-                <SymbolView name={'chevron.right' as any} size={15} weight="semibold" tintColor={INK} type="monochrome" style={s.sym} />
+                <SymbolView name={'chevron.right' as any} size={15} weight="semibold" tintColor={STANDARD_GLASS_INK} type="monochrome" style={s.sym} />
               </Pressable>
             </View>
           </View>
@@ -91,18 +83,17 @@ export default function CalendarSheet({ open, onClose, timestamps, anchor }: { o
           {weeks.map((w, wi) => (
             <View key={wi} style={s.row}>
               {w.map((c, ci) => (
-                <View key={ci} style={s.cell}>
+                <Pressable key={ci} style={s.cell} onPress={c.day != null ? onClose : undefined} disabled={c.day == null} accessibilityLabel={c.day != null ? 'Day ' + c.day : undefined}>
                   {c.day != null && (
-                    <View style={[s.dayWrap, c.today && s.todayCircle]}>
+                    <View style={[s.dayWrap, c.today && s.todayCircle]} testID={c.today ? 'calendar-today' : undefined}>
                       <Text style={[s.day, c.today && s.todayText]}>{c.day}</Text>
-                      <View style={[s.dot, { opacity: c.trained ? 1 : 0, backgroundColor: c.today ? '#fff' : ACCENT }]} />
+                      <View style={[s.dot, { opacity: c.trained ? 1 : 0, backgroundColor: c.today ? '#111114' : ACCENT }]} />
                     </View>
                   )}
-                </View>
+                </Pressable>
               ))}
             </View>
           ))}
-        </View>
         </View>
       </Animated.View>
     </View>
@@ -110,23 +101,22 @@ export default function CalendarSheet({ open, onClose, timestamps, anchor }: { o
 }
 
 const s = StyleSheet.create({
-  outside: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: 'transparent' },
-  pop: { position: 'absolute', shadowColor: '#28325a', shadowOpacity: 0.16, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
-  card: { borderRadius: 28, overflow: 'hidden' },
-  caret: { position: 'absolute', top: -CARET / 2 + 2, width: CARET, height: CARET, borderRadius: 4, overflow: 'hidden', transform: [{ rotate: '45deg' }] },
-  inner: { paddingHorizontal: 14, paddingTop: 16, paddingBottom: 10 },
+  outside: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'transparent' },
+  panel: { position: 'absolute', left: 0, right: 0, borderRadius: RADIUS, overflow: 'hidden' },
+  inner: { paddingHorizontal: 18, paddingBottom: 16 },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 6, marginBottom: 8 },
-  title: { fontFamily: SYS, fontSize: 19, fontWeight: '700', color: INK },
-  sub: { fontFamily: SYS, fontSize: 13, fontWeight: '500', color: MUTED, marginTop: 2 },
+  title: { fontFamily: SYS, fontSize: 20, fontWeight: '700', color: STANDARD_GLASS_INK },
+  sub: { fontFamily: SYS, fontSize: 13, fontWeight: '500', color: STANDARD_GLASS_MUTED, marginTop: 2 },
   arrows: { flexDirection: 'row', gap: 8 },
-  arrow: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(17,17,20,0.06)', alignItems: 'center', justifyContent: 'center' },
+  arrow: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.14)', alignItems: 'center', justifyContent: 'center' },
   sym: { width: 15, height: 15 },
   row: { flexDirection: 'row' },
-  wd: { flex: 1, textAlign: 'center', fontFamily: SYS, fontSize: 12, fontWeight: '600', color: MUTED, paddingVertical: 5 },
+  wd: { flex: 1, textAlign: 'center', fontFamily: SYS, fontSize: 12, fontWeight: '600', color: STANDARD_GLASS_MUTED, paddingVertical: 5 },
   cell: { flex: 1, height: 46, alignItems: 'center', justifyContent: 'center' },
+  // today's circle: the cell is centred both ways and the circle is the same size both ways, so the circle sits exactly on the cell's middle
   dayWrap: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
-  todayCircle: { backgroundColor: INK },
-  day: { fontFamily: SYS, fontSize: 17, fontWeight: '500', color: INK },
-  todayText: { color: '#fff', fontWeight: '700' },
+  todayCircle: { backgroundColor: '#FFFFFF' },
+  day: { fontFamily: SYS, fontSize: 17, lineHeight: 22, fontWeight: '500', color: STANDARD_GLASS_INK, textAlign: 'center' },
+  todayText: { color: '#111114', fontWeight: '700' },
   dot: { position: 'absolute', bottom: 3, width: 5, height: 5, borderRadius: 2.5 },
 });

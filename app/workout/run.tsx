@@ -325,7 +325,7 @@ function ConnectMusicOverlay({ onContinue, onPageShown, demoReady }: { onContinu
   }, [pending, demoReady, waitedOut]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <Animated.View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: '#ffffff', opacity: fade, zIndex: 100 }} testID="music-overlay">
-      <Animated.View style={{ flex: 1, opacity: pageFade }}>
+      <Animated.View style={{ flex: 1, opacity: pageFade, transform: [{ translateY: pageFade.interpolate({ inputRange: [0, 1], outputRange: [MUSIC_ENTER_RISE, 0] }) }] }} testID="music-enter">
       <WebView
         source={CONNECT_MUSIC_HTML}
         originWhitelist={['*']}
@@ -336,7 +336,8 @@ function ConnectMusicOverlay({ onContinue, onPageShown, demoReady }: { onContinu
           const m = e.nativeEvent.data;
           if (m === 'musicShown') {
             if (__DEV__) console.log('[MUSIC] page drawn ' + (Date.now() - mountedAt) + 'ms after the screen opened');
-            Animated.timing(pageFade, { toValue: 1, duration: 160, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
+            // a small, smooth entrance (round 7): the page eases up a few points while it fades in (native driver, so nothing can make it choppy)
+            Animated.timing(pageFade, { toValue: 1, duration: MUSIC_ENTER_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
             onPageShown();
           } else if (m.indexOf('musicContinue:') === 0 && pending == null) {
             setPending(m.slice('musicContinue:'.length) === '1');
@@ -356,6 +357,8 @@ function ConnectMusicOverlay({ onContinue, onPageShown, demoReady }: { onContinu
   );
 }
 export const MUSIC_FADE_MS = 180;
+export const MUSIC_ENTER_MS = 420;   // the entrance of the music page
+export const MUSIC_ENTER_RISE = 14;  // points it rises while arriving
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 

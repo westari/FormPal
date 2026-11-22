@@ -182,6 +182,7 @@ export default function RecapScreen() {
   // only ever trigger one push. Reset when this screen regains focus
   // (i.e. the user came back from rep-feedback and might tap again).
   const navigatingToFeedback = useRef(false);
+  const allSetsFromRepFeedback = useRef(false);
   useFocusEffect(
     useCallback(() => {
       navigatingToFeedback.current = false;
@@ -192,6 +193,7 @@ export default function RecapScreen() {
       // simplest way to signal that across the two screens.
       if (repFeedbackSignal.openAllSets) {
         repFeedbackSignal.openAllSets = false;
+        allSetsFromRepFeedback.current = true; // Back from All sets returns to the rep feedback it was opened from (round 7), not to the summary
         setView('allsets');
       }
       if (repFeedbackSignal.finishedReview) {
@@ -304,24 +306,19 @@ export default function RecapScreen() {
   useEffect(() => {
     if (!doneIntro || doneShown.current || !data) return;
     doneShown.current = true;
-    let cancelled = false;
-    (async () => {
-      // the real line under the title: reps and clean reps, time, a new best, or how close the week is to the goal
+    // Round 7: the done screen starts AT ONCE; the real grey line (reps and clean reps, time, a new best, or how close the week is to the goal)
+    // is worked out behind it (this workout is saved first, so the week count includes it) and fills in when it is ready.
+    const line = (async () => {
       let newBestPct: number | null = null, week: { count: number; goal: number } | null = null;
       try {
-        await persistRef.current; // (this workout is saved first, so the week count includes it)
+        await persistRef.current;
         week = await currentWeek();
         const nb = isNewBestForm(await getAllSessions(), data.ts);
         if (nb.best) newBestPct = nb.pct;
       } catch { /* the line still has the reps */ }
-      if (cancelled) return;
-      showDone({
-        title: DONE_TITLES.workout,
-        subtitle: workoutDoneLine({ reps: data.totalReps, goodReps: data.totalGoodReps, scored: data.hasFormData !== false && data.pct > 0, durationSec: data.durationSec, newBestPct, week }),
-        onContinue: () => setDoneIntro(false),
-      });
+      return workoutDoneLine({ reps: data.totalReps, goodReps: data.totalGoodReps, scored: data.hasFormData !== false && data.pct > 0, durationSec: data.durationSec, newBestPct, week });
     })();
-    return () => { cancelled = true; };
+    showDone({ title: DONE_TITLES.workout, subtitle: line, onContinue: () => setDoneIntro(false) });
   }, [doneIntro, data]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     repFeedbackSignal.onFinishReview = () => {
@@ -825,8 +822,12 @@ export default function RecapScreen() {
     }
     else if ((msg as any).type === 'tileRect') { const m = msg as any; setTileRect(m.none ? null : { l: m.l, t: m.t, w: m.w, h: m.h, vt: m.vt, vb: m.vb }); }
     else if ((msg as any).type === 'openSet') onWebMsg.current({ type: 'viewRepFeedback' });
-    else if (msg.type === 'viewAllSets') setView('allsets');
-    else if (msg.type === 'closeAllSets') setView('summary');
+    else if (msg.type === 'viewAllSets') { allSetsFromRepFeedback.current = false; setView('allsets'); }
+    else if (msg.type === 'closeAllSets') {
+      setView('summary');
+      // opened from the rep feedback ("All sets" there): Back goes BACK to the rep feedback, where he was, not to the complete screen
+      if (allSetsFromRepFeedback.current) { allSetsFromRepFeedback.current = false; postLag('recap: All sets back -> returning to the rep feedback'); onWebMsg.current({ type: 'viewRepFeedback' }); }
+    }
     else if (msg.type === 'closeRanks') { if (isLoggedMode) void handleDoneRanks(); else setView('summary'); }
     else if (msg.type === 'doneRanks') void handleDoneRanks();
   };

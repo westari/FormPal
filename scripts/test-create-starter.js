@@ -31,6 +31,16 @@ check('data: every group exercise really trains that group in the catalogue', DS
   check('the six chips sit on ONE row', await page.evaluate(() => { const t = [...document.querySelectorAll('[data-cw-chip]')].map((c) => Math.round(c.getBoundingClientRect().top)); return new Set(t).size === 1 && document.querySelector('[data-cw-chip="core"]').getBoundingClientRect().right <= innerWidth - 10; }));
 check('it fits the phone width (no sideways overflow)', s && s.left >= 0 && s.left + s.width <= s.vw && await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
   await shot('create-starter-popular');
+  // round 7: order and no circles
+  const lay = await page.evaluate(() => {
+    const top = (e) => e ? Math.round(e.getBoundingClientRect().top) : null;
+    const search = document.querySelector('input[placeholder="Search to add an exercise"]');
+    const add = document.querySelector('[data-ds-add]'), st = document.querySelector('[data-cw-starter]');
+    const circles = [...st.querySelectorAll('*')].filter((e) => { const cs = getComputedStyle(e); const r = e.getBoundingClientRect(); return r.width > 0 && r.width < 40 && Math.abs(r.width - r.height) < 2 && /50%|9999|14px|10px/.test(cs.borderRadius) && cs.backgroundColor !== 'rgba(0, 0, 0, 0)'; }).length;
+    return { search: top(search.parentElement), add: top(add), starter: top(st), circles };
+  });
+  check('round 7: the "Add exercise" card is RIGHT UNDER the search bar and the starter block comes after it (not above it)', lay.add > lay.search && lay.add < lay.starter && lay.starter - lay.add < 400, JSON.stringify(lay));
+  check('round 7: the starter rows have NO little circles (a plain plus or check)', lay.circles === 0 && await page.evaluate(() => document.querySelectorAll('[data-cw-row] [data-cw-mark]').length > 0), JSON.stringify(lay));
   for (const g of DS.CREATE_GROUPS) {
     await page.evaluate((id) => document.querySelector('[data-cw-chip="' + id + '"]').click(), g.id); await page.waitForTimeout(350);
     s = await state();
@@ -49,6 +59,8 @@ check('it fits the phone width (no sideways overflow)', s && s.left >= 0 && s.le
   const cur = await page.evaluate(() => (window.__athltCurrent || { items: [] }).items.map((i) => i.n));
   check('tapping an exercise adds it to the workout (and its button turns into a check)', cur.join() === first && await page.evaluate(() => !!document.querySelector('[data-cw-row="0"] path[d^="M2.6"]')), cur.join() + ' / ' + first);
   await shot('create-starter-added');
+  const order2 = await page.evaluate(() => { const picked = [...document.querySelectorAll('div')].find((d) => /^1$/.test(d.textContent.trim()) && d.style.fontSize === '12.5px'); const st = document.querySelector('[data-cw-starter]'); const search = document.querySelector('input[placeholder="Search to add an exercise"]'); return { picked: picked ? Math.round(picked.getBoundingClientRect().top) : null, starter: Math.round(st.getBoundingClientRect().top), search: Math.round(search.getBoundingClientRect().top) }; });
+  check('round 7: a picked exercise shows right under the search bar, ABOVE the starter block', order2.picked != null && order2.picked > order2.search && order2.picked < order2.starter, JSON.stringify(order2));
   await page.evaluate(() => document.querySelector('[data-cw-row="0"]').click()); await page.waitForTimeout(400);
   check('tapping it again takes it out', (await page.evaluate(() => window.__athltCurrent.items.length)) === 0);
   // chip off again -> Popular

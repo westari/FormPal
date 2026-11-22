@@ -32,7 +32,7 @@ check('past weeks: this week and the 7 before it (8 rows), the first is "This we
 check('past weeks Workouts: last week 2/4, two weeks ago 1/4, older weeks 0/4', W.weeks[1].text === '2/4' && W.weeks[2].text === '1/4' && W.weeks.slice(3).every((w) => w.text === '0/4'), W.weeks.map((w) => w.text).join());
 check('past weeks Form: last week (7+9)/20 = 80%, two weeks ago 100%', F.weeks[1].text === '80%' && F.weeks[2].text === '100%', F.weeks.map((w) => w.text).join());
 check('past week labels are real dates like "Nov 2 – 8"', /^Nov 2 – 8$/.test(W.weeks[1].label) && /^Oct 26 – Nov 1$/.test(W.weeks[2].label), W.weeks[1].label + ' / ' + W.weeks[2].label);
-check('"What counts" explains each goal in plain words (practice does not count; the week is Monday to Sunday; the 90% goal; the 11 muscles)', W.counts.some((t) => /Form checks are practice/.test(t)) && W.counts.some((t) => /4 workouts a week/.test(t)) && F.counts.some((t) => /90%/.test(t)) && M.counts.some((t) => /11 on your muscle map/.test(t)));
+check('item 2 (round 7): "What counts" is gone from the data: no counts field on any goal', !('counts' in W) && !('counts' in F) && !('counts' in M));
 const E = G.goalDetail('workouts', [], 3, now);
 check('empty state at 0: 0/3, all days "0" up to today, no crash', E.ring.text === '0/3' && E.days.slice(0, 4).every((d) => d.text === '0') && E.weeks.every((w) => w.text === '0/3') && /0 of 3 workouts this week, 3 to go/.test(E.summary), E.summary);
 check('only the three goal ids are valid; anything else falls back to Workouts in the screen', G.isGoalId('form') && !G.isGoalId('x') && /isGoalId\(id\) \? id : 'workouts'/.test(fs.readFileSync(path.join(__dirname, '..', 'app', 'goal', '[id].tsx'), 'utf8')));
@@ -51,6 +51,9 @@ check('only the three goal ids are valid; anything else falls back to Workouts i
   await h.browser.close();
   const idx = fs.readFileSync(path.join(__dirname, '..', 'app', '(tabs)', 'index.tsx'), 'utf8'), scr = fs.readFileSync(path.join(__dirname, '..', 'app', 'goal', '[id].tsx'), 'utf8');
   check('1: Home opens /goal/<id> for a ring tap', /msg as any\)\.type === 'ring'|msg\.type === 'ring'/.test(idx) && /router\.push\(`\/goal\/\$\{encodeURIComponent/.test(idx));
-  check('1: the page shows the big ring, "This week" by day, "Past weeks", "What counts" (and the 11 muscles on Muscles), with the ring colours and the white tile style of Home', ['This week', 'Past weeks', 'What counts', 'goal-days', 'goal-weeks', 'goal-counts', 'goal-muscles', 'GOAL_COLORS', 'GlassBackButton', "backgroundColor: '#ffffff', borderRadius: 24"].every((x) => scr.includes(x)));
+  check('1: the page shows the big ring, "This week" by day, "Past weeks" (and the 11 muscles on Muscles), with the ring colours and the white tile style of Home', ['This week', 'Past weeks', 'goal-days', 'goal-weeks', 'goal-muscles', 'GOAL_COLORS', 'GlassBackButton', "backgroundColor: '#ffffff', borderRadius: 24"].every((x) => scr.includes(x)));
+  check('2 (round 7): "What counts" is removed completely from the page', !/What counts|goal-counts|d\.counts/.test(scr));
+  const bodyStart = scr.indexOf('<ScrollView'), headStart = scr.indexOf('testID="goal-header"');
+  check('2 (round 7): the back button and the title are INSIDE the scroll view (they scroll away with the page), not a pinned bar, and there is no border under them', bodyStart > 0 && headStart > bodyStart && !/borderBottom|headerBorder|hairline.*header/i.test(scr.slice(scr.indexOf('const s = StyleSheet.create'), scr.indexOf('body:'))));
   console.log(failed ? `${failed} FAILED` : 'ALL PASSED'); process.exit(failed ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

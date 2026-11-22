@@ -110,6 +110,9 @@ export const TRAIN_LOGIC_EXT = `function (Orig) {
         var x = d.days[i];
         if (x) {
           c.href = x.href; c.restHref = x.restHref;
+          // a missed workout: the soft "Missed" tag in the card's corner and the button "Do it today" (the black button, with the play icon)
+          if (x.tag) { c.label = x.tag; }
+          if (x.cta) { c.cta = x.cta; c.play = true; c.bg = '#111114'; c.fg = '#ffffff'; c.ring = 'none'; }
           // the Edit sheet opens on THIS card's own exercises (two cards can share a name)
           var open = c.edit;
           c.edit = function (e) { open(e); self.setState({ editList: x.rows.map(function (r) { return r.slice(); }) }); };
@@ -437,9 +440,31 @@ export const TRAIN_WEB_INJECT = `
       }
     }
   }
+  // A missed workout keeps its normal workout card; its corner tag says "Missed" in a soft warm colour (set once per card, only when it differs)
+  function missedTags() {
+    var d = D(), r = rail();
+    if (!d || !d.days || !r) return;
+    for (var i = 0; i < r.children.length && i < d.days.length; i++) {
+      if (!d.days[i].tag) continue;
+      var ds = r.children[i].querySelectorAll('div');
+      for (var j = 0; j < ds.length; j++) {
+        var e = ds[j];
+        if (e.style.fontSize === '12.5px' && e.style.borderRadius === '999px' && (e.textContent || '').trim() === d.days[i].tag) {
+          if (e.getAttribute('data-missed-tag') !== '1') {
+            e.setAttribute('data-missed-tag', '1');
+            e.style.setProperty('color', '#b4601c', 'important');
+            e.style.setProperty('background', '#fff1e2', 'important');
+            e.style.setProperty('box-shadow', 'inset 0 0 0 0.5px rgba(214,120,40,0.28), 0 6px 14px -8px rgba(214,120,40,0.35)', 'important');
+          }
+          break;
+        }
+      }
+    }
+  }
   function tick() {
     ensureCss();
     missedTitles();
+    missedTags();
     done.fit = fit();
     done.header = header();
     done.sheets = sheets();
@@ -627,7 +652,8 @@ export default function TrainScreen() {
         else if (to === 'log') router.push('/log-session' as any);
         else if (to === 'myworkouts') router.push('/my-workouts' as any);
         else if (to === 'streak') router.push({ pathname: '/streak-screen', params: { count: String(streakRef.current), from: 'tab', dest: '/(tabs)/train' } } as any);
-        else if (to.startsWith('preview:')) router.push({ pathname: '/workout', params: { id: to.slice('preview:'.length), preview: '1' } } as any);
+        else if (to.startsWith('missed:')) router.push({ pathname: '/workout', params: { id: to.slice('missed:'.length) } } as any); // "Do it today": that workout's page with the Start button
+        else if (to.startsWith('preview:'))router.push({ pathname: '/workout', params: { id: to.slice('preview:'.length), preview: '1' } } as any);
         else if (to.startsWith('recap:')) router.push({ pathname: '/recap', params: { ts: to.slice('recap:'.length) } } as any);
         return;
       }

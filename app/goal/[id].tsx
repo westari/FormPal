@@ -1,7 +1,7 @@
 /**
  * app/goal/[id].tsx
  *
- * A goal in depth (tap a ring on Home): the big ring, where you are, this week by day, the past weeks and what counts. The cards are the
+ * A goal in depth (tap a ring on Home): the big ring, where you are, this week by day and the past weeks. The cards are the
  * same soft white tiles as the rings on Home, the ring colours are the rings' own. Data: lib/goalDetail.ts (the same maths as the rings).
  */
 import React, { useCallback, useState } from 'react';
@@ -54,12 +54,14 @@ export default function GoalScreen() {
   return (
     <View style={s.root}>
       <LinearGradient colors={['#ebebef', '#f4f4f6', '#fafafb', '#ffffff']} locations={[0, 0.26, 0.6, 1]} style={StyleSheet.absoluteFill} pointerEvents="none" />
-      <View style={[s.header, { paddingTop: Math.max(insets.top, 47) + 14 }]}>
-        <GlassBackButton onPress={() => router.back()} />
-        <Text style={s.title}>{d ? d.title : gid === 'form' ? 'Form' : gid === 'muscles' ? 'Muscles' : 'Workouts'}</Text>
-      </View>
-      {d ? (
-        <ScrollView contentContainerStyle={[s.body, { paddingBottom: insets.bottom + 40 }]} showsVerticalScrollIndicator={false}>
+      {/* The back button and the title are the FIRST thing inside the scroll view: they scroll away with the page (no pinned bar, no border). */}
+      <ScrollView testID="goal-scroll" contentContainerStyle={{ paddingBottom: insets.bottom + 40 }} showsVerticalScrollIndicator={false}>
+        <View style={[s.header, { paddingTop: Math.max(insets.top, 47) + 14 }]} testID="goal-header">
+          <GlassBackButton onPress={() => router.back()} />
+          <Text style={s.title}>{d ? d.title : gid === 'form' ? 'Form' : gid === 'muscles' ? 'Muscles' : 'Workouts'}</Text>
+        </View>
+        {d ? (
+        <View style={s.body}>
           <View style={[s.card, s.hero]}>
             <BigRing d={d} />
             <Text style={s.summary}>{d.summary}</Text>
@@ -103,18 +105,9 @@ export default function GoalScreen() {
               </View>
             ))}
           </View>
-
-          <Text style={s.h2}>What counts</Text>
-          <View style={s.card} testID="goal-counts">
-            {d.counts.map((t, i) => (
-              <View key={i} style={[s.countRow, i > 0 && s.weekLine]}>
-                <View style={[s.dot, { backgroundColor: col[1] }]} />
-                <Text style={s.countTxt}>{t}</Text>
-              </View>
-            ))}
-          </View>
-        </ScrollView>
-      ) : null}
+        </View>
+        ) : null}
+      </ScrollView>
     </View>
   );
 }
@@ -147,7 +140,4 @@ const s = StyleSheet.create({
   weekTrack: { flex: 1, height: 10, borderRadius: 5, backgroundColor: TRACK, overflow: 'hidden' },
   weekFill: { height: '100%', borderRadius: 5 },
   weekVal: { width: 44, textAlign: 'right', fontFamily: FONT.displayBold, fontSize: 14, color: INK },
-  countRow: { flexDirection: 'row', gap: 12, paddingVertical: 11, alignItems: 'flex-start' },
-  dot: { width: 8, height: 8, borderRadius: 4, marginTop: 7 },
-  countTxt: { flex: 1, fontFamily: FONT.display, fontSize: 15, lineHeight: 21, color: INK },
 });

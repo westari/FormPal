@@ -13,6 +13,7 @@ import { EXERCISE_CATALOG } from '../constants/exercises';
 import { searchExercises } from './exerciseSearch';
 import { groupIntoWorkouts, calcStreak, workoutSessions, type SessionEntry, type WorkoutGroup } from './sessionLog';
 import { addableExercises } from './planEdit';
+import { weekBounds } from './weeklyGoal';
 import type { Plan, Workout } from '../types/plan';
 
 export interface TrainDay {
@@ -21,7 +22,9 @@ export interface TrainDay {
   meta: string;           // "38 min · 4 exercises" | "Recover for Wednesday"
   done?: boolean;
   rest?: boolean;
-  missed?: boolean;       // a planned workout day that passed with nothing done (its card says "Missed", not "Rest day")
+  missed?: boolean;       // an OLD planned day (an earlier week, or already made up): a small rest-style card that says "Missed", never "Rest day"
+  tag?: string;           // a soft tag on a normal workout card: "Missed" (this week's missed workout, still available: button "Do it today")
+  cta?: string;           // the main button's words when they are not the design's own ("Do it today")
   href: string;           // what the main button does ("tr:start" | "tr:recap:<ts>" | "tr:preview:<workout id>" | "tr:myworkouts" | "tr:none")
   restHref: string;       // what a rest card's button does
   rows: [string, string][]; // what the Edit sheet shows for this card
@@ -110,6 +113,42 @@ export function practiceLibrary(): { lib: [string, string][]; libIds: Record<str
   return { lib, libIds };
 }
 
+/**
+ * THIS WEEK's missed workouts (Monday to Sunday: they all clear when a new week starts), oldest first.
+ * A missed workout = a day this week, before today, that the plan trains on (and that is not before the plan existed) with nothing done.
+ * It stays missed until a workout is done on top of the planned ones: the day's own workout does not count twice, so a workout done on a
+ * rest day, or a second one on a training day, makes up the OLDEST missed workout that came before it.
+ * WHICH workout was missed: the plan is a queue where currentWorkoutIndex is the next one; the next planned day (today, or the next
+ * training day) gets that one and every earlier planned day steps one back in the queue.
+ */
+export interface MissedWorkout { date: Date; workout: Workout }
+export function missedThisWeek(plan: Plan | null, groups: WorkoutGroup[], now: Date = new Date()): MissedWorkout[] {
+  if (!plan || !plan.workouts.length) return [];
+  const today = dayStart(now);
+  const n = plan.workouts.length;
+  const cur = Math.max(0, Math.min(n - 1, plan.currentWorkoutIndex ?? 0));
+  const planStart = dayStart(new Date(plan.generatedAt || 0)).getTime();
+  const count = new Map<string, number>();
+  for (const g of groups) { const k = keyOf(new Date(g.ts)); count.set(k, (count.get(k) ?? 0) + 1); }
+  const monday = new Date(weekBounds(today.getTime()).start);
+  // the next planned day: today if the plan trains today, else the next training day
+  let anchor = today;
+  for (let i = 0; i < 8 && !isTrainingDay(plan, anchor); i++) anchor = addDays(anchor, 1);
+  const queue: Date[] = [];
+  for (let d = new Date(monday); d.getTime() <= today.getTime(); d = addDays(d, 1)) {
+    const planned = isTrainingDay(plan, d) && d.getTime() >= planStart;
+    const done = count.get(keyOf(d)) ?? 0;
+    if (planned && done === 0 && d.getTime() < today.getTime()) queue.push(new Date(d));
+    const surplus = Math.max(0, done - (isTrainingDay(plan, d) ? 1 : 0));
+    for (let s = 0; s < surplus && queue.length; s++) queue.shift();
+  }
+  return queue.map((date) => {
+    let k = 0;
+    for (let d = new Date(date); d.getTime() < anchor.getTime(); d = addDays(d, 1)) if (isTrainingDay(plan, d)) k++;
+    return { date, workout: plan.workouts[(((cur - k) % n) + n) % n] };
+  });
+}
+
 export function buildTrainData(
   plan: Plan | null,
   allSessions: SessionEntry[],
@@ -132,6 +171,13 @@ export function buildTrainData(
   const tomorrowW = cur >= 0 && isTrainingDay(plan, tomorrowDate) ? workouts[todayDone || !todayPlanned ? cur : (cur + 1) % workouts.length] : null;
   const planStart = plan ? dayStart(new Date(plan.generatedAt || 0)).getTime() : 0;
 
+  const missedList = missedThisWeek(plan, groups, now);
+  const missedByDay = new Map(missedList.map(m => [keyOf(m.date), m.workout] as const));
+  /** a normal workout card for a missed workout: the soft "Missed" tag and the button "Do it today" (starts THAT workout today) */
+  const missedCard = (date: Date, w: Workout): TrainDay => {
+    moves[w.splitLabel] = moves[w.splitLabel] ?? plannedRows(w);
+    return { short: SHORT[date.getDay()], name: w.splitLabel, meta: plannedMeta(w), tag: 'Missed', cta: 'Do it today', href: `tr:missed:${w.id}`, restHref: 'tr:none', rows: plannedRows(w), wid: w.id };
+  };
   const moves: Record<string, [string, string][]> = {};
   const days: TrainDay[] = [];
   const cal: [string, number][] = [];
@@ -148,6 +194,9 @@ export function buildTrainData(
       if (todayW) {
         moves[todayW.splitLabel] = plannedRows(todayW);
         days.push({ short: SHORT[date.getDay()], name: todayW.splitLabel, meta: plannedMeta(todayW), href: 'tr:start', restHref: 'tr:start', rows: plannedRows(todayW), wid: todayW.id });
+      } else if (!todayDone && missedList.length) {
+        // a rest day with a workout missed earlier this week: Train suggests the missed workout first (the oldest one)
+        days.push(missedCard(date, missedList[0].workout));
       } else {
         days.push({ short: SHORT[date.getDay()], name: 'Rest day', meta: cur < 0 ? 'Build a plan to get started' : 'Recover for ' + LONG[tomorrowDate.getDay()], rest: true, href: 'tr:start', restHref: 'tr:start', rows: [] });
       }
@@ -158,8 +207,11 @@ export function buildTrainData(
       } else {
         days.push({ short: SHORT[date.getDay()], name: 'Rest day', meta: 'Recover for ' + LONG[addDays(date, 1).getDay()], rest: true, href: 'tr:none', restHref: 'tr:none', rows: [] });
       }
+    } else if (missedByDay.has(keyOf(date))) {
+      // this week's missed workout: its normal workout card, a soft "Missed" tag, "Do it today"
+      days.push(missedCard(date, missedByDay.get(keyOf(date))!));
     } else if (plan && isTrainingDay(plan, date) && date.getTime() >= planStart) {
-      // a workout the plan had for that day and nothing was done: Missed (never "Rest day")
+      // an older planned day (an earlier week, or already made up) with nothing done on it: Missed (never "Rest day")
       days.push({ short: SHORT[date.getDay()], name: 'Missed', meta: 'Planned workout, not done', rest: true, missed: true, href: 'tr:none', restHref: 'tr:log', rows: [] });
     } else if (plan && !isTrainingDay(plan, date)) {
       days.push({ short: SHORT[date.getDay()], name: 'Rest day', meta: 'Recover for ' + nextName, rest: true, href: 'tr:none', restHref: 'tr:log', rows: [] });
