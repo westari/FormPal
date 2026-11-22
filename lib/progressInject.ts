@@ -241,6 +241,7 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
         saveWeigh: function (e) {
           e.preventDefault();
           if (window.__athltDone || window.__athltConfirm) return; // a moment is already showing
+          if (window.__athltSubmitting && Date.now() - window.__athltSubmitting < 20000) return; // already submitted: the done screen is on its way (one tap, one save)
           var v = parseFloat(typed || '');
           if (!(v > 0) || v > 1500) return;
           v = Math.round(v * 10) / 10;
@@ -257,10 +258,17 @@ export const PROGRESS_LOGIC_EXT = String.raw`function (Orig) {
               .concat([{ d: key, w: v }]).sort(function (a, b) { return a.d < b.d ? -1 : 1; });
             // prevLb: the weight before this date (for "down 3.7 lb since last time" on the done screen the app now shows)
             post({ type: 'logWeight', dateKey: key, weightLb: v, prevLb: prev ? prev.w : null });
-            // The sheet closes and the graph updates behind. The "weight logged" moment is now the app's one done screen
-            // (components/DoneHost.tsx, Ari's design), shown by the app when this message arrives.
+            // (round 8) The weight screen STAYS on screen. The app's one done screen (components/DoneHost.tsx, Ari's design) is shown by the app when
+            // this message arrives and its wash sweeps over THIS screen, so Progress is never seen in between. When Continue is tapped on the done
+            // screen the app calls __athltFinishWeigh, which closes the sheet (the graph is already updated behind it).
+            window.__athltSubmitting = Date.now();
+            window.__athltWeighSelf = self;
+          };
+          window.__athltFinishWeigh = function () {
+            window.__athltSubmitting = 0;
             window.__athltEditing = false;
-            self.setState({ weigh: false, logged: false, wIn: '', dateOpen: false });
+            var me = window.__athltWeighSelf || self;
+            me.setState({ weigh: false, logged: false, wIn: '', dateOpen: false });
           };
           // far from the last weight: ask first
           var daysSince = ref ? Math.abs(parseKey(key).getTime() - parseKey(ref.d).getTime()) / DAY : 0;
@@ -1207,8 +1215,29 @@ export const PROGRESS_DOM_JS = String.raw`
   }
   // The native side can ask again at any time (e.g. after a reload) and gets an answer right away.
   window.__athltCheckReady = function () { var ok = pageIsReal(apply()); setPageReady(ok); if (ok) { reported = true; post({ type: 'ready' }); } return ok; };
+  // MUSCLE MAP back button (round 8): the design's white round button is hidden and the app draws its standard Liquid Glass back button in its
+  // place (components/GlassBackButton.tsx, drawn above the page). The page tells the app when the Muscle Map page is open and where the button was
+  // (read after the page's 300ms slide-in has finished, so the position is final), and the app's tap comes back through __prMapBack.
+  var mapSeen = 0, lastMap = '';
+  function mapBack() {
+    var link = null, as = document.querySelectorAll('a[aria-label="Back"]');
+    for (var i = 0; i < as.length; i++) { var t = as[i].nextElementSibling; if (t && (t.textContent || '').trim() === 'Muscle Map') { link = as[i]; break; } }
+    var msg;
+    if (link) {
+      if (link.style.visibility !== 'hidden') link.style.setProperty('visibility', 'hidden', 'important');
+      window.__prMapLink = link;
+      if (!mapSeen) mapSeen = Date.now();
+      if (Date.now() - mapSeen < 340) { msg = null; if (!window.__prMapWait) window.__prMapWait = setTimeout(function () { window.__prMapWait = 0; mapBack(); }, 360 - (Date.now() - mapSeen)); }
+      else { var r = link.getBoundingClientRect(); msg = { type: 'mapBack', open: true, l: Math.round(r.left * 10) / 10, t: Math.round(r.top * 10) / 10, w: Math.round(r.width * 10) / 10, h: Math.round(r.height * 10) / 10 }; }
+    } else { mapSeen = 0; msg = { type: 'mapBack', open: false }; }
+    if (!msg) return;
+    var sig = JSON.stringify(msg);
+    if (sig !== lastMap) { lastMap = sig; post(msg); }
+  }
+  window.__prMapBack = function () { var l = window.__prMapLink; if (l && l.isConnected) l.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })); };
   function tick() {
     var r = apply();
+    try { mapBack(); } catch (e) {}
     if (!window.__athltData && Date.now() - lastAsk > 700) { lastAsk = Date.now(); post({ type: 'needData' }); }
     // Once revealed, the page stays revealed (taps and re-renders must never hide it again); the gate only
     // applies to the first reveal.
@@ -1227,7 +1256,7 @@ export const PROGRESS_DOM_JS = String.raw`
   // that lands a frame after the screen shows is the "glitch" (keypad jumping up, photos popping in, labels appearing).
   var syncing = false;
   try { new MutationObserver(function () {
-    if (reported && !syncing) { syncing = true; try { apply(); } catch (e) {} syncing = false; }
+    if (reported && !syncing) { syncing = true; try { apply(); mapBack(); } catch (e) {} syncing = false; }
     schedule();
   }).observe(document, { childList: true, subtree: true, attributes: false }); } catch (e) {}
   window.addEventListener('resize', schedule);

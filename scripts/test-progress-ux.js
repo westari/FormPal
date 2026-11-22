@@ -71,7 +71,8 @@ const png = (c) => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http:
   check('12. Muscle Map: the body map and ONE short line ("Work on triceps this week") are there', mm.svgs >= 2 && /^(Work on .+ this week|Train to find your weak spot)$/.test(mm.text.trim()) && mm.oneLine && mm.oneLine.h < mm.oneLine.lh * 1.6, JSON.stringify(mm));
 
   await shot('ux_musclemap');
-  await tapAt(`() => document.querySelector('#dc-root a[aria-label="Back"]') || [...document.querySelectorAll('#dc-root a')].find(x => x.querySelector('path[d^="M19 12H5"]'))`);
+  // (round 8) the Muscle Map's own white back button is hidden; the app's glass button calls this
+  await p.evaluate(() => window.__prMapBack && window.__prMapBack());
   await p.waitForTimeout(700);
 
   // ── 13. Log weight sheet ──
@@ -117,7 +118,11 @@ const png = (c) => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http:
   check('14. After Submit the page shows no moment of its own (the app done screen "Weight logged" replaces it); the message carries the weight before this one (prevLb 182.1) for "down 3.7 lb since last time"', !lg && post.prevLb === 182.1, JSON.stringify(post));
   check('14. The weight was saved (sent to the app once)', msgs.filter(m => m.type === 'logWeight').length === posts0 + 1 && post.weightLb === 178.4, JSON.stringify(post));
   await shot('ux_weight_logged');
-  await p.waitForTimeout(2200);
+  await p.waitForTimeout(600);
+  const stay = await p.evaluate(() => !!document.querySelector('#dc-root div[style*="z-index: 60"]'));
+  check('14 (round 8). After Submit the weight screen STAYS on screen (the app wash covers THIS screen; Progress is never seen in between), and a second Submit does nothing', stay && msgs.filter(m => m.type === 'logWeight').length === posts0 + 1);
+  await p.evaluate(() => window.__athltFinishWeigh()); // (the app calls this when Continue is tapped on the done screen)
+  await p.waitForTimeout(900);
   const after = await p.evaluate(() => ({ moment: !!document.getElementById('__athlt_logged'), sheet: !!document.querySelector('#dc-root div[style*="z-index: 60"]'), chartText: [...document.querySelectorAll('#dc-root svg text')].map(t => t.textContent).join(' '), now: [...document.querySelectorAll('#dc-root div')].filter(d => /· 178\.4/.test(d.textContent || '') && (d.textContent || '').length < 30).length }));
   check('14. Then it returns to Progress by itself, with the updated graph (178.4 on it)', !after.moment && !after.sheet && /178\.4/.test(after.chartText + ' ' + after.now), JSON.stringify(after).slice(0, 160));
   await shot('ux_weight_back');
@@ -185,7 +190,8 @@ const png = (c) => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http:
   await submitTap(); await p.waitForTimeout(800);
   const lg2 = await p.evaluate(() => { const e = document.getElementById('__athlt_logged'); return e ? e.innerText.replace(/\s+/g, ' ').trim() : null; });
   check('3. Saving the edit REPLACES today\'s entry (one send, same date, new number 179.2)', !lg2 && msgs.filter(m => m.type === 'logWeight').pop().weightLb === 179.2 && msgs.filter(m => m.type === 'logWeight').length === nPosts + 1 && msgs.filter(m => m.type === 'logWeight').pop().dateKey === post.dateKey, lg2);
-  // 4. it fades away: sample the overlay's opacity every frame after it starts leaving
+  // 4. (round 8) the app closes the weight screen when Continue is tapped on the done screen
+  await p.evaluate(() => window.__athltFinishWeigh());
   await p.waitForTimeout(1050);
   await p.evaluate(() => window.__probe(() => { const e = document.getElementById('__athlt_logged'); return { has: !!e, op: e ? parseFloat(getComputedStyle(e).opacity) : -1, sheet: !!document.querySelector('#dc-root div[style*="z-index: 60"]') }; }));
   await p.waitForTimeout(1200);
@@ -229,7 +235,8 @@ const png = (c) => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http:
   const w1 = msgs.filter(m => m.type === 'haptic').length;
   await submitTap(); await p.waitForTimeout(500);
   check('2. A normal change (179.2 to 180) does not ask', !(await p.evaluate(() => document.getElementById('__athlt_confirm'))) && msgs.filter(m => m.type === 'logWeight').length === np + 1 && !msgs.filter(m => m.type === 'haptic').slice(w1).some(m => m.kind === 'success'));
-  await p.waitForTimeout(2600);
+  await p.evaluate(() => window.__athltFinishWeigh()); // (the app closes the weight screen on Continue)
+  await p.waitForTimeout(1200);
   // a far weight confirmed with "Yes" is saved
   await tapAt(`() => [...document.querySelectorAll('#dc-root a')].find(a => /Edit today's weight/.test(a.innerText))`);
   await p.waitForTimeout(800);
@@ -238,6 +245,7 @@ const png = (c) => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http:
   await submitTap(); await p.waitForTimeout(400);
   await tapAt(`() => document.querySelector('#__athlt_confirm [data-cf="yes"]')`); await p.waitForTimeout(500);
   check('2. "Yes, it\'s right" saves the far weight (20 lb)', msgs.filter(m => m.type === 'logWeight').pop().weightLb === 20);
+  await p.evaluate(() => window.__athltFinishWeigh()); await p.waitForTimeout(900);
   await p.waitForTimeout(2800);
 
   // ── 16 / 17. past workouts: the picture, and the tap ──

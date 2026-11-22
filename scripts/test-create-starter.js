@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * scripts/test-create-starter.js
- * Create workout is not just a search bar: six muscle-group chips (Chest, Back, Legs, Shoulders, Arms, Core) show that group's REAL
+ * Create workout is not just a search bar: a small tappable body map (round 8: the Progress tab's muscle map, front and back; the six groups Chest, Back, Legs, Shoulders, Arms, Core) shows that group's REAL
  * exercises, and a short "Popular" list shows by default. Real createworkout.html + the shipped injection + the real catalogue.
  */
 const { openDesign, catalog, EXERCISE_CATALOG } = require('./lib/design-harness.js');
@@ -20,15 +20,17 @@ check('data: every group exercise really trains that group in the catalogue', DS
   const shot = (n) => page.screenshot({ path: require('path').join(__dirname, '..', '.scratch', n + '.png') });
   const state = () => page.evaluate(() => {
     const st = document.querySelector('[data-cw-starter]'); if (!st) return null;
-    const chips = [...st.querySelectorAll('[data-cw-chip]')].map((c) => ({ t: c.textContent, on: getComputedStyle(c).backgroundColor === 'rgb(17, 17, 20)' }));
+    const lit = [...new Set([...st.querySelectorAll('[data-grp]')].filter((c) => c.getAttribute('fill') === '#111114').map((c) => c.getAttribute('data-grp')))];
+    const chips = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'].map((g) => ({ t: g, has: st.querySelectorAll('[data-grp="' + g + '"]').length, on: lit.includes(g) }));
     const rows = [...st.querySelectorAll('[data-cw-row]')].map((r) => r.firstChild.textContent);
     const heading = [...st.children].find((c) => /Popular| exercises$/.test(c.textContent) && c.children.length === 0);
     const r = st.getBoundingClientRect();
     return { chips, rows, heading: heading && heading.textContent, vis: getComputedStyle(st).display !== 'none', left: Math.round(r.left), width: Math.round(r.width), vw: innerWidth };
   });
   let s = await state();
-  check('the empty Create workout shows the starter: 6 chips and the Popular list (not an empty screen)', s && s.vis && s.chips.map((c) => c.t).join() === 'Chest,Back,Legs,Shoulders,Arms,Core' && s.heading === 'Popular' && s.rows.join() === data.popular.join(), JSON.stringify(s));
-  check('the six chips sit on ONE row', await page.evaluate(() => { const t = [...document.querySelectorAll('[data-cw-chip]')].map((c) => Math.round(c.getBoundingClientRect().top)); return new Set(t).size === 1 && document.querySelector('[data-cw-chip="core"]').getBoundingClientRect().right <= innerWidth - 10; }));
+  check('the empty Create workout shows the starter: the body map (all six groups tappable) and the Popular list (not an empty screen)', s && s.vis && s.chips.every((c) => c.has > 0) && s.heading === 'Popular' && s.rows.join() === data.popular.join(), JSON.stringify(s));
+  check('round 8: the map is SMALL (about 150px tall), front and back side by side, inside the phone width, and it replaces the chips (no chips, no circles)', await page.evaluate(() => { const m = document.querySelector('[data-cw-map]'); const r = m.getBoundingClientRect(); return r.height <= 160 && r.right <= innerWidth && m.querySelectorAll('svg').length === 2 && !document.querySelector('[data-cw-chip]'); }));
+  check('round 8: it is the Progress tab muscle map style: a pale silhouette, a dark body outline, thin muscle outlines (same colours)', await page.evaluate(() => { const svg = document.querySelector('[data-cw-map] svg'); const paths = [...svg.querySelectorAll('path')]; const sil = paths[0], outline = paths[paths.length - 1]; return sil.getAttribute('fill') === '#F1F2F6' && outline.getAttribute('stroke') === '#454B5C' && outline.getAttribute('fill') === 'none' && paths.slice(1, -1).every((p) => p.getAttribute('stroke') === '#69708A'); }));
 check('it fits the phone width (no sideways overflow)', s && s.left >= 0 && s.left + s.width <= s.vw && await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
   await shot('create-starter-popular');
   // round 7: order and no circles
@@ -42,18 +44,18 @@ check('it fits the phone width (no sideways overflow)', s && s.left >= 0 && s.le
   check('round 7: the "Add exercise" card is RIGHT UNDER the search bar and the starter block comes after it (not above it)', lay.add > lay.search && lay.add < lay.starter && lay.starter - lay.add < 400, JSON.stringify(lay));
   check('round 7: the starter rows have NO little circles (a plain plus or check)', lay.circles === 0 && await page.evaluate(() => document.querySelectorAll('[data-cw-row] [data-cw-mark]').length > 0), JSON.stringify(lay));
   for (const g of DS.CREATE_GROUPS) {
-    await page.evaluate((id) => document.querySelector('[data-cw-chip="' + id + '"]').click(), g.id); await page.waitForTimeout(350);
+    await page.evaluate((id) => document.querySelector('[data-grp="' + id + '"]').dispatchEvent(new MouseEvent('click', { bubbles: true })), g.id); await page.waitForTimeout(350);
     s = await state();
     const want = data.groups[g.id].slice(0, 8);
-    check(`chip "${g.label}" turns dark and lists that group's real exercises (${want.length}${data.groups[g.id].length > 8 ? ' of ' + data.groups[g.id].length : ''})`, s.chips.filter((c) => c.on).map((c) => c.t).join() === g.label && s.heading === g.label + ' exercises' && s.rows.join() === want.join(), s.rows.join(', '));
+    check(`chip "${g.label}" turns dark and lists that group's real exercises (${want.length}${data.groups[g.id].length > 8 ? ' of ' + data.groups[g.id].length : ''})`, s.chips.filter((c) => c.on).map((c) => c.t).join() === g.id && s.heading === g.label + ' exercises' && s.rows.join() === want.join(), s.rows.join(', '));
   }
   await shot('create-starter-core');
   // "Show all"
-  await page.evaluate(() => document.querySelector('[data-cw-chip="legs"]').click()); await page.waitForTimeout(300);
+  await page.evaluate(() => document.querySelector('[data-grp=\"legs\"]').dispatchEvent(new MouseEvent('click', { bubbles: true }))); await page.waitForTimeout(300);
   const more = await page.evaluate(() => !!document.querySelector('[data-cw-more]'));
   if (more) { await page.evaluate(() => document.querySelector('[data-cw-more]').click()); await page.waitForTimeout(300); s = await state(); check('"Show all" lists the whole group', s.rows.join() === data.groups.legs.join(), String(s.rows.length)); }
   // add from the list
-  await page.evaluate(() => document.querySelector('[data-cw-chip="chest"]').click()); await page.waitForTimeout(300);
+  await page.evaluate(() => document.querySelector('[data-grp=\"chest\"]').dispatchEvent(new MouseEvent('click', { bubbles: true }))); await page.waitForTimeout(300);
   const first = (await state()).rows[0];
   await page.evaluate(() => document.querySelector('[data-cw-row="0"]').click()); await page.waitForTimeout(500);
   const cur = await page.evaluate(() => (window.__athltCurrent || { items: [] }).items.map((i) => i.n));
@@ -64,7 +66,7 @@ check('it fits the phone width (no sideways overflow)', s && s.left >= 0 && s.le
   await page.evaluate(() => document.querySelector('[data-cw-row="0"]').click()); await page.waitForTimeout(400);
   check('tapping it again takes it out', (await page.evaluate(() => window.__athltCurrent.items.length)) === 0);
   // chip off again -> Popular
-  await page.evaluate(() => document.querySelector('[data-cw-chip="chest"]').click()); await page.waitForTimeout(300);
+  await page.evaluate(() => document.querySelector('[data-grp=\"chest\"]').dispatchEvent(new MouseEvent('click', { bubbles: true }))); await page.waitForTimeout(300);
   check('tapping the chosen chip again goes back to Popular', (await state()).heading === 'Popular');
   // search stays and takes over
   await page.fill('input[placeholder="Search to add an exercise"]', 'squat'); await page.waitForTimeout(500);

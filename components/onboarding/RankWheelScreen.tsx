@@ -13,6 +13,7 @@ import { View, Text, StyleSheet, Pressable, Animated, Dimensions, Platform, Scro
 import * as Haptics from '../../lib/haptics';
 import { SymbolView } from 'expo-symbols';
 import { LiquidGlassButton } from '../LiquidGlass';
+import OnbBackButton from './OnbBackButton';
 import { PJS } from '../../constants/theme';
 
 const ACCENT = '#2E7DFF';
@@ -96,16 +97,7 @@ export default function RankWheelScreen({
           — that's what was pushing the button "way down" and crowding the
           title underneath it. */}
       <View style={s.headerRow}>
-        <LiquidGlassButton
-          onPress={() => { void Haptics.selectionAsync(); onBack(); }}
-          hitSlop={12}
-          radius={17}
-          variant="regular"
-          fallbackColor="rgba(255,255,255,0.92)"
-          style={s.backBtn}
-        >
-          <SymbolView name="chevron.left" size={15} tintColor="#1b1f27" type="monochrome" style={{ width: 15, height: 15 }} />
-        </LiquidGlassButton>
+        <OnbBackButton onPress={() => { void Haptics.selectionAsync(); onBack(); }} />
         {progress != null && (
           <View style={{ flex: 1, paddingHorizontal: 12 }}>
             <View style={s.progTrack}><View style={[s.progFill, { width: `${progress * 100}%` }]} /></View>

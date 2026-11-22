@@ -18,6 +18,7 @@ import { View, Text, StyleSheet, Pressable, Animated, Easing, Platform } from 'r
 import * as Haptics from '../../lib/haptics';
 import { SymbolView } from 'expo-symbols';
 import { LiquidGlassButton } from '../LiquidGlass';
+import OnbBackButton from './OnbBackButton';
 import { PJS } from '../../constants/theme';
 
 // Same 7-tier ladder + shields RankWheelScreen uses, kept in landed order
@@ -104,16 +105,7 @@ export default function RankRevealScreen({
     <View style={[s.root, { paddingTop: topInset }]}>
       {/* back button */}
       <Animated.View style={[s.backWrap, { top: topInset + 8, opacity: backIn }]} pointerEvents="box-none">
-        <LiquidGlassButton
-          onPress={() => { void Haptics.selectionAsync(); onBack(); }}
-          hitSlop={12}
-          radius={17}
-          variant="regular"
-          fallbackColor="rgba(255,255,255,0.92)"
-          style={s.backBtn}
-        >
-          <SymbolView name="chevron.left" size={15} tintColor="#1b1f27" type="monochrome" style={{ width: 15, height: 15 }} />
-        </LiquidGlassButton>
+        <OnbBackButton onPress={() => { void Haptics.selectionAsync(); onBack(); }} />
       </Animated.View>
 
       <View style={s.narrationWrap}>

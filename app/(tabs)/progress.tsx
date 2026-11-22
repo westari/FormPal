@@ -23,6 +23,7 @@ import { View, StyleSheet, Modal, Pressable, Image, Animated } from 'react-nativ
 import { useRevealFade } from '../../lib/useRevealFade';
 import { createTabLag } from '../../lib/tabLag';
 import { tabBarCover } from '../../lib/tabBarMetrics';
+import GlassBackButton, { GLASS_BACK_SIZE } from '../../components/GlassBackButton';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
@@ -83,6 +84,10 @@ export default function ProgressScreen() {
     webRef.current?.injectJavaScript(js);
   }, []);
 
+  // The Muscle Map page's back button is the app's standard Liquid Glass back button (round 8), drawn above the page where the design's white one was
+  const [mapBack, setMapBack] = useState<{ l: number; t: number; w: number; h: number } | null>(null);
+  const mapBackFade = useRef(new Animated.Value(0)).current;
+  useEffect(() => { mapBackFade.setValue(0); if (mapBack) Animated.timing(mapBackFade, { toValue: 1, duration: 200, useNativeDriver: true }).start(); }, [!!mapBack]); // eslint-disable-line react-hooks/exhaustive-deps
   const unitsKgRef = useRef(false); // Profile > Units (kg or lb), read ahead so the done screen needs no wait
   useEffect(() => { void loadUnitsKg().then(v => { unitsKgRef.current = v; }); }, []);
   const load = useCallback(async () => {
@@ -173,6 +178,7 @@ export default function ProgressScreen() {
       case 'ready': lag.mark('ready'); markTabReady('progress'); onReady(); break;
       case 'pageConsole': if (__DEV__) console.log('[progress-page]', msg.msg); break;
       case 'haptic': hapticKind((msg as any).kind); break;
+      case 'mapBack': { const m = msg as any; setMapBack(m.open ? { l: m.l, t: m.t, w: m.w, h: m.h } : null); break; }
       // (the first picture needs the art: until it is in, load() pushes the moment it is, so no half-filled first paint)
       case 'needData': lag.mark('asked'); if (artReady.current) { lag.mark('pushed'); push(true); } break;
       case 'logWeight': {
@@ -180,9 +186,9 @@ export default function ProgressScreen() {
         // this just persists it, then re-syncs from storage.
         if (!msg.dateKey || !msg.weightLb) break;
         const [y, m, d] = msg.dateKey.split('-').map(Number);
-        // The done screen ("Weight logged", Ari's design, components/DoneHost.tsx) shows AT ONCE, in the same moment as Submit (round 7): the line is built
+        // The done screen ("Weight logged", Ari's design, components/DoneHost.tsx) shows AT ONCE, in the same moment as Submit (round 7); the weight screen STAYS under its wash and closes when Continue is tapped (round 8): the line is built
         // from what is already known (this weight, the one before it, the unit), and the weight is saved behind it.
-        showDone({ title: DONE_TITLES.weight, subtitle: weightDoneLine({ weightLb: msg.weightLb as number, prevLb: typeof (msg as any).prevLb === 'number' ? (msg as any).prevLb : null, kg: unitsKgRef.current }), onContinue: () => {} });
+        showDone({ title: DONE_TITLES.weight, subtitle: weightDoneLine({ weightLb: msg.weightLb as number, prevLb: typeof (msg as any).prevLb === 'number' ? (msg as any).prevLb : null, kg: unitsKgRef.current }), onContinue: () => { webRef.current?.injectJavaScript('window.__athltFinishWeigh && window.__athltFinishWeigh(); true;'); } });
         logWeight(msg.weightLb, new Date(y, m - 1, d)).then(() => { void load(); }).catch(() => {});
         break;
       }
@@ -230,6 +236,14 @@ export default function ProgressScreen() {
         cacheEnabled={false}
       />
       </Animated.View>
+      {mapBack && (
+        <Animated.View
+          style={{ position: 'absolute', left: mapBack.l + mapBack.w / 2 - GLASS_BACK_SIZE / 2, top: mapBack.t + mapBack.h / 2 - GLASS_BACK_SIZE / 2, opacity: mapBackFade }}
+          testID="muscle-map-back"
+        >
+          <GlassBackButton onPress={() => { Haptics.selectionAsync(); webRef.current?.injectJavaScript('window.__prMapBack && window.__prMapBack(); true;'); }} />
+        </Animated.View>
+      )}
       <Modal visible={viewing != null} transparent animationType="fade" onRequestClose={() => setViewing(null)}>
         <Pressable style={styles.viewer} onPress={() => setViewing(null)}>
           {viewing ? <Image source={{ uri: viewing }} style={styles.viewerImg} resizeMode="contain" /> : null}

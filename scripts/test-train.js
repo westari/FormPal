@@ -214,7 +214,7 @@ async function openTab(browser, { width = 402, height = 874, insets = INS, datas
     await p.waitForTimeout(150);
     const si = await p.evaluate(() => { const r = document.querySelector('input[placeholder^="Search"]').getBoundingClientRect(); return { x: r.x + 30, y: r.y + r.height / 2 }; });
     await p.touchscreen.tap(si.x, si.y);
-    await p.keyboard.press('Control+A'); await p.keyboard.type(text); await p.waitForTimeout(400);
+    await p.evaluate((t) => window.__trSetQuery(t), text); await p.waitForTimeout(400); // (round 8: what is typed in the app's docked search bar is sent to the page like this)
   };
   const rows = () => p.evaluate(() => [...document.querySelectorAll('[aria-label="Check form"]')].map(b => { let e = b; for (let i = 0; i < 4 && e; i++, e = e.parentElement) if (e.innerText && e.innerText.length > 4) return e.innerText.replace(/\s+/g, ' ').trim(); return ''; }));
   check('no exercise list until you search (as designed)', (await rows()).length === 0);
