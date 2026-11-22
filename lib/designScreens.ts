@@ -16,6 +16,7 @@
  *
  * Page code is plain ES5-ish strings in String.raw. NEVER put a backtick or a dollar-brace inside them.
  */
+import { createBodyMapSvg } from './createBodyMap';
 import { CONSOLE_FORWARD_JS, DC_VIEWPORT_JS, DC_SETTLE_JS } from './dcWebviewHelpers';
 import { dcLogicPatchJs, athltSetDataJs } from './dcLogicPatch';
 import { NO_ZOOM_JS } from './noZoom';
@@ -256,11 +257,12 @@ export const CREATE_WORKOUT_DOM_JS = String.raw`
           st.__sig = sig;
           st.style.display = typing ? 'none' : 'block';
           var label = grp ? (dd.groupLabels.filter(function (g) { return g.id === grp; })[0] || { label: grp }).label + ' exercises' : 'Popular';
-          var chips = dd.groupLabels.map(function (g) {
-            var on = g.id === grp;
-            return '<div data-cw-chip="' + g.id + '" style="height:32px;padding:0 8px;border-radius:999px;display:flex;align-items:center;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;'
-              + (on ? 'background:#111114;color:#ffffff;box-shadow:0 8px 16px -8px rgba(17,17,20,0.5);' : 'background:#ffffff;color:#111114;box-shadow:inset 0 1px 0 #ffffff,0 6px 14px -8px rgba(40,50,90,0.3);') + '">' + g.label + '</div>';
-          }).join('');
+          // (round 8) the groups are a small tappable body map (the Progress tab's muscle map), front and back: tap a muscle to start from its group
+          var gl = grp ? (dd.groupLabels.filter(function (g) { return g.id === grp; })[0] || { label: grp }).label : '';
+          var mapCard = '<div style="border-radius:24px;padding:12px 14px 10px;background:#ffffff;box-shadow:0 12px 28px -14px rgba(40,50,90,0.24),0 2px 6px -2px rgba(40,50,90,0.08);">'
+            + '<div data-cw-map="1" style="display:flex;justify-content:center;gap:22px;height:150px;">'
+            + '<div style="width:86px;height:150px;">' + (dd.map ? dd.map.front : '') + '</div><div style="width:86px;height:150px;">' + (dd.map ? dd.map.back : '') + '</div></div>'
+            + '<div style="text-align:center;font-size:13px;font-weight:600;color:#6e6e77;padding-top:8px;">' + (grp ? gl + ' selected. Tap it again to clear.' : 'Tap a muscle to start from it') + '</div></div>';
           var rows = shown.map(function (n, i) {
             var on = !!added[n];
             return '<div data-cw-row="' + i + '" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 0;cursor:pointer;' + (i ? 'border-top:1px solid rgba(17,17,20,0.07);' : '') + '">'
@@ -271,9 +273,12 @@ export const CREATE_WORKOUT_DOM_JS = String.raw`
           }).join('');
           var more = names.length > 8 ? '<div data-cw-more="1" style="padding:12px 0 8px;text-align:center;font-size:13.5px;font-weight:700;color:#5f5f69;cursor:pointer;border-top:1px solid rgba(17,17,20,0.07);">' + (window.__cwMore ? 'Show fewer' : 'Show all ' + names.length) + '</div>' : '';
           st.innerHTML = '<div style="font-size:13px;font-weight:600;color:#6e6e77;padding:0 4px 8px;">Start from a muscle group</div>'
-            + '<div style="display:flex;flex-wrap:nowrap;gap:5px;">' + chips + '</div>'
+            + mapCard
             + '<div style="font-size:21px;font-weight:700;letter-spacing:-0.6px;color:#111114;padding:18px 4px 10px;">' + label + '</div>'
             + '<div style="border-radius:24px;padding:4px 16px;background:#ffffff;box-shadow:0 12px 28px -14px rgba(40,50,90,0.24),0 2px 6px -2px rgba(40,50,90,0.08);">' + rows + more + '</div>';
+          // the chosen group's muscles turn dark on the map
+          var mp = st.querySelectorAll('[data-grp]');
+          for (var q = 0; q < mp.length; q++) mp[q].setAttribute('fill', mp[q].getAttribute('data-grp') === grp ? '#111114' : '#E3E4EA');
           var rowEls = st.querySelectorAll('[data-cw-row]');
           for (var r = 0; r < rowEls.length; r++) rowEls[r].firstChild.textContent = shown[r];
         }
@@ -281,8 +286,8 @@ export const CREATE_WORKOUT_DOM_JS = String.raw`
           st.__wired = true;
           st.addEventListener('click', function (ev) {
             var t = ev.target;
-            var chip = t.closest && t.closest('[data-cw-chip]');
-            if (chip) { var id = chip.getAttribute('data-cw-chip'); window.__cwGroup = window.__cwGroup === id ? '' : id; window.__cwMore = false; st.__sig = ''; if (window.__athltBump) window.__athltBump(); return; }
+            var chip = t.closest && t.closest('[data-grp]');
+            if (chip) { var id = chip.getAttribute('data-grp'); window.__cwGroup = window.__cwGroup === id ? '' : id; window.__cwMore = false; st.__sig = ''; if (window.__athltBump) window.__athltBump(); return; }
             var mo = t.closest && t.closest('[data-cw-more]');
             if (mo) { window.__cwMore = !window.__cwMore; st.__sig = ''; if (window.__athltBump) window.__athltBump(); return; }
             var row = t.closest && t.closest('[data-cw-row]');
@@ -785,5 +790,6 @@ export function popularExercises(catalog: CatalogItem[], limit = 8): string[] {
 }
 export function createWorkoutData(catalog: CatalogItem[]) {
   const groups = Object.fromEntries(CREATE_GROUPS.map(g => [g.id, groupExercises(catalog, g.id)]));
-  return { catalog, popular: popularExercises(catalog), groups, groupLabels: CREATE_GROUPS };
+  // the small tappable body map (lib/createBodyMap.ts): front and back, every muscle tagged with its group
+  return { catalog, popular: popularExercises(catalog), groups, groupLabels: CREATE_GROUPS, map: { front: createBodyMapSvg('front'), back: createBodyMapSvg('back') } };
 }

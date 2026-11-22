@@ -28,7 +28,8 @@
 
 import { markTabReady, markTabLoading } from '../../lib/tabReady';
 import React, { useCallback, useRef, useState, useEffect } from 'react';
-import { View, StyleSheet, Animated, Easing } from 'react-native';
+import { View, StyleSheet, Animated, Easing, Keyboard, TextInput, Pressable, Platform } from 'react-native';
+import { SymbolView } from 'expo-symbols';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { createTabLag } from '../../lib/tabLag';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -440,7 +441,7 @@ export const TRAIN_WEB_INJECT = `
       }
     }
   }
-  // A missed workout keeps its normal workout card; its corner tag says "Missed" in a soft warm colour (set once per card, only when it differs)
+  // A missed workout keeps its normal workout card; its corner tag says "Missed" in plain iOS red (set once per card, only when it differs)
   function missedTags() {
     var d = D(), r = rail();
     if (!d || !d.days || !r) return;
@@ -452,9 +453,11 @@ export const TRAIN_WEB_INJECT = `
         if (e.style.fontSize === '12.5px' && e.style.borderRadius === '999px' && (e.textContent || '').trim() === d.days[i].tag) {
           if (e.getAttribute('data-missed-tag') !== '1') {
             e.setAttribute('data-missed-tag', '1');
-            e.style.setProperty('color', '#b4601c', 'important');
-            e.style.setProperty('background', '#fff1e2', 'important');
-            e.style.setProperty('box-shadow', 'inset 0 0 0 0.5px rgba(214,120,40,0.28), 0 6px 14px -8px rgba(214,120,40,0.35)', 'important');
+            // plain iOS system red, clean and small (round 8): red words on the design's own white pill, a little smaller than the other tags
+            e.style.setProperty('color', '#FF3B30', 'important');
+            e.style.setProperty('font-size', '11.5px', 'important');
+            e.style.setProperty('height', '22px', 'important');
+            e.style.setProperty('padding', '0 8px', 'important');
           }
           break;
         }
@@ -463,6 +466,7 @@ export const TRAIN_WEB_INJECT = `
   }
   function tick() {
     ensureCss();
+    lockSearch();
     missedTitles();
     missedTags();
     done.fit = fit();
@@ -493,12 +497,42 @@ export const TRAIN_WEB_INJECT = `
   function schedule() { ensureCss(); clearTimeout(deb); deb = setTimeout(tick, 60); }
   try { new MutationObserver(schedule).observe(document, { childList: true, subtree: true }); } catch (e) {}
   window.addEventListener('resize', schedule);
-  // a tapped search box is brought above the keyboard (after the page has resized for it)
+  // PRACTICE SEARCH (round 8): the page's own search box NEVER takes focus. A focused box inside the page makes iOS shift the whole page and the page
+  // re-lay itself out (the jump and the flicker). A tap on it asks the app for its own docked search bar instead, which rises with the keyboard
+  // by itself while the page stays exactly where it is (see TrainScreen). What is typed there is sent back here (__trSetQuery).
+  var SEARCH_PH = 'Search 120+ exercises';
+  function searchInput() { return document.querySelector('input[placeholder="' + SEARCH_PH + '"]'); }
+  function lockSearch() {
+    var i = searchInput();
+    if (!i) return;
+    if (!i.hasAttribute('readonly')) { i.setAttribute('readonly', 'readonly'); i.setAttribute('inputmode', 'none'); i.style.setProperty('caret-color', 'transparent', 'important'); i.style.setProperty('cursor', 'pointer', 'important'); }
+  }
+  function inSearchBox(t) { var i = searchInput(); return !!(i && t && (t === i || (i.parentElement && i.parentElement.contains(t)))); }
+  document.addEventListener('click', function (ev) {
+    if (!inSearchBox(ev.target)) return;
+    ev.preventDefault(); ev.stopPropagation();
+    var i = searchInput();
+    try { i.blur(); } catch (e) {}
+    post({ type: 'search', value: i.value || '' });
+  }, true);
+  ['pointerdown', 'mousedown', 'touchstart'].forEach(function (n) { document.addEventListener(n, function (ev) { if (inSearchBox(ev.target)) ev.preventDefault(); }, true); });
   document.addEventListener('focusin', function (e) {
     var t = e.target;
     if (!t || t.tagName !== 'INPUT') return;
+    if (t.getAttribute('placeholder') === SEARCH_PH) { try { t.blur(); } catch (err) {} return; }
+    // (the Cue chat box) a tapped box is brought above the keyboard (after the page has resized for it)
     [320, 700].forEach(function (ms) { setTimeout(function () { try { if (document.activeElement === t) t.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (err) {} }, ms); });
   }, true);
+  // what was typed in the app's search bar becomes the page's query (the design's own search state: the results list is the design's)
+  window.__trSetQuery = function (q) { if (window.__trSelf) window.__trSelf.setState({ query: String(q || '') }); };
+  // once, when the first letter makes results appear: one smooth scroll so the results sit above the keyboard (nothing moves before that)
+  window.__trReveal = function () {
+    var i = searchInput(); if (!i) return;
+    var sc = i.closest('[data-scroll]'); if (!sc) return;
+    var r = i.parentElement.getBoundingClientRect();
+    var to = Math.max(0, sc.scrollTop + r.top - window.innerHeight * 0.16);
+    try { sc.scrollTo({ top: to, behavior: 'smooth' }); } catch (e) { sc.scrollTop = to; }
+  };
   window.__trainTick = tick;
   setInterval(tick, 400);
   tick();
@@ -623,9 +657,31 @@ export default function TrainScreen() {
     } catch (e) { tlog('ERROR saving the edit:', e && (e as Error).message ? (e as Error).message : String(e)); }
   }, [pushData]);
 
+  // THE DOCKED SEARCH BAR (round 8). The page's own search box never takes focus (that made the whole page jump and flicker); a tap on it opens this bar,
+  // which rises with the keyboard by itself (a native transform, on the UI thread) while the page stays exactly where it is. Typing here fills the
+  // design's own search (the results list is the design's). Nothing else moves.
+  const [search, setSearch] = useState<{ text: string } | null>(null);
+  const kbH = useRef(new Animated.Value(0)).current;
+  const searchRevealed = useRef(false);
+  useEffect(() => {
+    const show = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', (e) => {
+      Animated.timing(kbH, { toValue: e.endCoordinates.height, duration: e.duration || 250, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    });
+    const hide = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', (e) => {
+      Animated.timing(kbH, { toValue: 0, duration: (e && e.duration) || 220, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start(({ finished }) => { if (finished) setSearch(null); });
+    });
+    return () => { show.remove(); hide.remove(); };
+  }, [kbH]);
+  const closeSearch = useCallback(() => { Keyboard.dismiss(); setTimeout(() => setSearch(null), 400); }, []);
+  const onSearchText = useCallback((t: string) => {
+    setSearch({ text: t });
+    webRef.current?.injectJavaScript(`window.__trSetQuery && window.__trSetQuery(${JSON.stringify(t)}); true;`);
+    if (t.trim() && !searchRevealed.current) { searchRevealed.current = true; setTimeout(() => webRef.current?.injectJavaScript('window.__trReveal && window.__trReveal(); true;'), 120); }
+  }, []);
+
   function onMsg(raw: string) {
     pongAt.current = Date.now();
-    let m: { type?: string; to?: string; id?: string; fp?: string; text?: string; level?: string; msg?: string; wid?: string; rows?: [string, string][] };
+    let m: { type?: string; to?: string; id?: string; fp?: string; text?: string; value?: string; level?: string; msg?: string; wid?: string; rows?: [string, string][] };
     try { m = JSON.parse(raw); } catch { return; }
     switch (m.type) {
       case 'pong': return;
@@ -635,6 +691,7 @@ export default function TrainScreen() {
       case 'notReady': tlog('page NOT ready after 3s, parts:', JSON.stringify((m as any).parts)); return;
       case 'needData': tlog('page asked for data;', dataJsRef.current ? 'sending' : 'not loaded yet'); if (imgsJsRef.current) webRef.current?.injectJavaScript(imgsJsRef.current); if (dataJsRef.current) webRef.current?.injectJavaScript(dataJsRef.current); return;
       case 'logicReady': return;
+      case 'search': searchRevealed.current = false; setSearch({ text: m.value ?? '' }); tlog('search bar opened (docked above the keyboard)'); return;
       case 'pageConsole': if (m.level === 'error' || m.level === 'warn') tlog('page ' + m.level + ':', m.msg); return;
       case 'homeCueSend': if (m.text) void handleCueSend(m.text); return;
       case 'saveEdit':
@@ -689,11 +746,40 @@ export default function TrainScreen() {
         cacheEnabled={false}
       />
       </Animated.View>
+      {search && (
+        <>
+          {/* a tap anywhere else closes it */}
+          <Pressable style={StyleSheet.absoluteFill} onPress={closeSearch} accessibilityLabel="Close search" testID="train-search-dismiss" />
+          <Animated.View
+            style={[s.searchBar, { opacity: kbH.interpolate({ inputRange: [0, 40], outputRange: [0, 1], extrapolate: 'clamp' }), transform: [{ translateY: Animated.multiply(kbH, -1) }] }]}
+            testID="train-search-bar"
+          >
+            <SymbolView name={'magnifyingglass' as any} size={17} weight="semibold" tintColor="#8e8e96" type="monochrome" style={s.searchIcon} />
+            <TextInput
+              style={s.searchInput}
+              value={search.text}
+              onChangeText={onSearchText}
+              placeholder="Search 120+ exercises"
+              placeholderTextColor="#a2a2aa"
+              autoFocus
+              autoCorrect={false}
+              autoCapitalize="none"
+              returnKeyType="search"
+              onSubmitEditing={closeSearch}
+              clearButtonMode="while-editing"
+            />
+          </Animated.View>
+        </>
+      )}
     </View>
   );
 }
 
 const s = StyleSheet.create({
+  // the docked search bar: the design's own search pill (white, round, soft shadow), parked at the bottom and lifted by the keyboard's height
+  searchBar: { position: 'absolute', left: 14, right: 14, bottom: 12, height: 48, borderRadius: 24, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#ffffff', boxShadow: '0 8px 18px -8px rgba(40,50,90,0.28), 0 1px 3px -1px rgba(40,50,90,0.1)' } as any,
+  searchIcon: { width: 17, height: 17 },
+  searchInput: { flex: 1, minWidth: 0, fontSize: 16, fontWeight: '500', color: '#111114', padding: 0 },
   root: { flex: 1, backgroundColor: '#eeeef1' },
   web:  { flex: 1, backgroundColor: '#eeeef1' },
 });

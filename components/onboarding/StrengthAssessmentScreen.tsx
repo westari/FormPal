@@ -25,6 +25,7 @@ import { Picker } from '@react-native-picker/picker';
 import * as Haptics from '../../lib/haptics';
 import { SymbolView } from 'expo-symbols';
 import { LiquidGlassButton } from '../LiquidGlass';
+import OnbBackButton from './OnbBackButton';
 import { PJS } from '../../constants/theme';
 import { PUSHUP_ICON, PULLUP_ICON, SQUAT_ICON } from '../../assets/onboarding/onbIcons';
 
@@ -73,16 +74,7 @@ export default function StrengthAssessmentScreen({
   return (
     <View style={[s.root, { paddingTop: topInset }]}>
       <View style={[s.backWrap, { top: topInset + 8 }]} pointerEvents="box-none">
-        <LiquidGlassButton
-          onPress={() => { void Haptics.selectionAsync(); onBack(); }}
-          hitSlop={12}
-          radius={17}
-          variant="regular"
-          fallbackColor="rgba(255,255,255,0.92)"
-          style={s.backBtn}
-        >
-          <SymbolView name="chevron.left" size={15} tintColor="#1b1f27" type="monochrome" style={{ width: 15, height: 15 }} />
-        </LiquidGlassButton>
+        <OnbBackButton onPress={() => { void Haptics.selectionAsync(); onBack(); }} />
       </View>
 
       <View style={s.header}>

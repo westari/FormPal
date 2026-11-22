@@ -84,6 +84,27 @@ check('the design file greatjobanimation.html is used as it is (no edits: git se
     return { gapL: (t.left - (tl.left + 2 * S)) / S, gapR: ((tr.left + 26 * S) - t.right) / S, gapTop: ((t.top + t.height / 2) - (tl.top + 2 * S)) / S - 11, gapBottom: ((bl.top + 26 * S) - (t.top + t.height / 2)) / S - 11, w: t.width / S };
   });
   check('round 7 BRACKETS: they sit closer around the title text: sideways about ' + BRACKET_SIDE_GAP + 'px (the design: about 33), up and down about ' + BRACKET_TOP_GAP + 'px (the design: about 31), the same on every side', Math.abs(br.gapL - BRACKET_SIDE_GAP) < 2.5 && Math.abs(br.gapR - BRACKET_SIDE_GAP) < 2.5 && br.gapTop < 24 && br.gapBottom < 24 && br.gapTop > 12, JSON.stringify(br));
+  // round 8: the bracket ANIMATION is the design's own, exactly; only the end place is closer
+  const anim = await page.evaluate(() => {
+    const box = document.body.firstElementChild, br = [...box.querySelectorAll('div')].filter((d) => /nw-bracket/.test(d.getAttribute('style') || ''));
+    return br.map((d) => { const cs = getComputedStyle(d); return { name: cs.animationName, dur: cs.animationDuration, delay: cs.animationDelay, fn: cs.animationTimingFunction, left: parseFloat(d.style.left), top: parseFloat(d.style.top), dx0: parseFloat(d.style.getPropertyValue('--dx0')), dy0: parseFloat(d.style.getPropertyValue('--dy0')), sx: d.style.getPropertyValue('--sx').trim(), sy: d.style.getPropertyValue('--sy').trim() }; });
+  });
+  const cssText = await page.evaluate(() => document.getElementById('__done_css').textContent);
+  check('round 8 BRACKETS: the design\'s bracket animation is untouched: same keyframes (nw-bracket, not redefined), 1620ms linear, 1050ms delay, same shake directions', anim.length === 4 && anim.every((a) => a.name === 'nw-bracket' && a.dur === '1.62s' && a.delay === '1.05s' && a.fn === 'linear') && !/nw-bracket/.test(cssText) && anim.map((a) => a.sx + a.sy).join() === '-1-1,1-1,-11,11', JSON.stringify(anim.map((a) => [a.name, a.dur, a.delay, a.sx + a.sy])));
+  check('round 8 BRACKETS: each bracket STARTS exactly where the design starts it (x 161 / 201, y 370 / 410), so the same small viewfinder unfolds, it only ends closer', anim.every((a, i) => Math.abs(a.left + a.dx0 - [161, 201, 161, 201][i]) < 0.1 && Math.abs(a.top + a.dy0 - [370, 370, 410, 410][i]) < 0.1), JSON.stringify(anim.map((a) => [a.left + a.dx0, a.top + a.dy0])));
+  // tangled check: at no moment of the animation do two brackets overlap or cross
+  const tang = await page.evaluate(async () => {
+    const box = document.body.firstElementChild, br = [...box.querySelectorAll('div')].filter((d) => /nw-bracket/.test(d.getAttribute('style') || ''));
+    const anims = document.getAnimations().filter((a) => br.includes(a.effect.target));
+    const worst = []; const hit = (a, b) => !(a.right <= b.left + 0.5 || b.right <= a.left + 0.5 || a.bottom <= b.top + 0.5 || b.bottom <= a.top + 0.5);
+    for (let t = 1050; t <= 2670; t += 60) {
+      anims.forEach((a) => { a.pause(); a.currentTime = t; });
+      const r = br.map((d) => d.getBoundingClientRect());
+      for (let i = 0; i < 4; i++) for (let j = i + 1; j < 4; j++) if (hit(r[i], r[j])) worst.push([t, i, j]);
+    }
+    return { n: anims.length, overlaps: worst.slice(0, 5) };
+  });
+  check('round 8 BRACKETS: no tangle: at no moment of the whole animation do two brackets overlap or cross each other', tang.n === 4 && tang.overlaps.length === 0, JSON.stringify(tang));
   const btn = await page.evaluate(() => { const a = document.querySelector('a'); const r = a.getBoundingClientRect(); return { op: parseFloat(getComputedStyle(a).opacity), x: r.x + r.width / 2, y: r.y + r.height / 2, text: a.textContent.trim() }; });
   check('about 3 seconds in the Continue button is there (about 2.7s in the design)', btn.op === 1 && btn.text === 'Continue', JSON.stringify(btn));
   await page.screenshot({ path: path.join(ROOT, '.scratch', 'done-screen.png') });

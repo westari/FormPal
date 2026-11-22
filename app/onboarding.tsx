@@ -21,6 +21,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import AppBackground from '../components/AppBackground';
 import { LiquidGlassButton } from '../components/LiquidGlass';
 import GlassBackButton from '../components/GlassBackButton';
+import OnbBackButton from '../components/onboarding/OnbBackButton';
 import RankWheelScreen from '../components/onboarding/RankWheelScreen';
 import SaveProgressScreen from '../components/onboarding/SaveProgressScreen';
 import TryForFreeScreen from '../components/onboarding/TryForFreeScreen';
@@ -1604,6 +1605,21 @@ window.__dcFitBoth=1;
 })();
 `;
 
+// (round 8) Reports how far the page has scrolled, so the native back button + progress bar (drawn above the page) can scroll away with it instead of floating
+// over the text. Only the page's main scroll counts (the window, or a scroller as tall as most of the screen). One message per frame at most.
+const ONB_SCROLL_REPORT_JS = `(function(){
+  if (window.__onbScroll) return; window.__onbScroll = 1;
+  var last = 0, raf = 0, val = 0;
+  document.addEventListener('scroll', function(e){
+    var t = e.target, v;
+    if (t === document || t === document.documentElement || t === document.body) v = window.scrollY || (document.scrollingElement && document.scrollingElement.scrollTop) || 0;
+    else { if (!t || (t.clientHeight || 0) < window.innerHeight * 0.5) return; v = t.scrollTop || 0; }
+    val = Math.round(v);
+    if (raf) return;
+    raf = requestAnimationFrame(function(){ raf = 0; if (val !== last) { last = val; try { window.ReactNativeWebView.postMessage('onbscroll:' + val); } catch (err) {} } });
+  }, true);
+})(); true;`;
+
 function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditValue, onStrengthVals, onCustomMessage, topInset, progress, extraJs: extraJsProp, extraJsBeforeLoad, poolActive, htmlOverride }: {
   htmlKey: keyof typeof ONB_HTML;
   onAdvance: () => void;
@@ -1643,6 +1659,8 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
   const inPool = poolActive !== undefined;
   const fade = useRef(new Animated.Value(0)).current;
   const backFade = useRef(new Animated.Value(0)).current;
+  // (round 8) the back button + progress bar are part of the page: when the page scrolls, they scroll away with it (the page reports its scroll, this moves them)
+  const headerY = useRef(new Animated.Value(0)).current;
   const webRef = useRef<WebView>(null);
   // BUG FOUND (explicit ask: "tell me what's actually causing the white
   // screen"): for standalone (non-pooled) screens, this container used to
@@ -1750,10 +1768,11 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
           source={htmlOverride != null ? { html: htmlOverride } : (ONB_HTML[htmlKey] as any)}
           originWhitelist={['*']}
           injectedJavaScriptBeforeContentLoaded={isDcPage ? VIEWPORT_JS + '\n' + CUE_ORB_JS + '\n' + (KEEP_FX_KEYS.includes(htmlKey) ? KEEP_FX_JS + '\n' : '') + (extraJsBeforeLoad ?? '') : undefined}
-          injectedJavaScript={extraJs ? baseInject + '\n' + extraJs : baseInject}
+          injectedJavaScript={(extraJs ? baseInject + '\n' + extraJs : baseInject) + '\n' + ONB_SCROLL_REPORT_JS}
           onLoadEnd={() => setWebReady(true)}
           onMessage={(e) => {
             const m = e.nativeEvent.data;
+            if (m.indexOf('onbscroll:') === 0) { headerY.setValue(-Number(m.slice(10)) || 0); return; }
             if (m === '__tap' || m === '__tick') { Haptics.selectionAsync(); return; }
             if (m === 'rendered') { reveal(); return; }
             if (m.indexOf('editinfo') === 0) { onEditInfo?.(m.split(':')[1] || 'weight'); return; }
@@ -1797,7 +1816,9 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
           after the flex:1 WebView its absolute child was being measured from
           the bottom of the screen and pushed off. In pool mode only the
           active page shows its back control. */}
-      {(inPool && !poolActive) ? null : (htmlKey === 'paywall' || htmlKey === 'giftOffer') ? (
+      {(inPool && !poolActive) ? null : (
+      <Animated.View pointerEvents="box-none" style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 80, transform: [{ translateY: headerY }] }} testID="onb-header-scroll">
+      {(htmlKey === 'paywall' || htmlKey === 'giftOffer') ? (
         // Paywall and gift offer: the standard glass BACK button top-left (Ari 2026-11-22: it was an X), same spot as every other page's back button.
         // The paywall also has a plain grey "Restore" top-right. NO progress bar here (a stray black line, earlier ask).
         <Animated.View
@@ -1823,16 +1844,7 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
           style={{ position: 'absolute', top: topInset + 12, left: 0, right: 0, zIndex: 80, opacity: backFade }}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20 }}>
-            <LiquidGlassButton
-              onPress={() => { Haptics.selectionAsync(); onBack(); }}
-              hitSlop={12}
-              radius={17}
-              variant={isDcPage ? 'regular' : 'clear'}
-              fallbackColor={isDcPage ? 'rgba(255,255,255,0.92)' : 'rgba(0,0,0,0.35)'}
-              style={[web.backCircle, isDcPage && web.backCircleDc]}
-            >
-              <SymbolView name="chevron.left" size={15} tintColor={isDcPage ? '#1b1f27' : '#fff'} type="monochrome" style={{ width: 15, height: 15 }} />
-            </LiquidGlassButton>
+            <OnbBackButton onPress={() => { Haptics.selectionAsync(); onBack(); }} scheme={isDcPage ? 'light' : 'dark'} />
             {progress != null && (
               <View style={{ flex: 1, paddingHorizontal: 12 }}>
                 <View style={s.pt}><View style={[s.pf, { width: `${progress * 100}%` }]} /></View>
@@ -1840,6 +1852,8 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
             )}
           </View>
         </Animated.View>
+      )}
+      </Animated.View>
       )}
     </Animated.View>
   );
@@ -2442,9 +2456,7 @@ function buildPlan(a: Record<string, any>): { focus: string; exercises: WorkoutE
 function SimpleProgressHeader({ progress, onBack }: { progress: number; onBack: () => void }) {
   return (
     <View style={s.qh}>
-      <LiquidGlassButton onPress={onBack} hitSlop={12} radius={17} variant="regular" fallbackColor="rgba(255,255,255,0.92)" style={s.bb}>
-        <SymbolView name="chevron.left" size={15} tintColor="#1b1f27" type="monochrome" style={{ width: 15, height: 15 }} />
-      </LiquidGlassButton>
+      <OnbBackButton onPress={onBack} />
       <View style={s.pc}>
         <View style={s.pt}><View style={[s.pf, { width: `${progress * 100}%` }]} /></View>
       </View>
@@ -3261,7 +3273,7 @@ type AppState =
   | 'rankWheel' | 'rankAssess' | 'rankReveal'
   // Recovery Route is removed from the flow — rankReveal goes straight to
   // thankYou now, 2 more native beats, then plan-generation.
-  | 'thankYou' | 'connectHealth' | 'notifications'
+  | 'thankYou' | 'connectHealth'
   // Real design artboard (readytobuild.html) — one more beat right before
   // plan generation actually kicks off.
   | 'readyToBuild'
@@ -3402,11 +3414,11 @@ export default function OnboardingScreen() {
       // start startingPoint (nothing but select/multiselect steps in
       // between, all covered by the same fallthrough render below —
       // content is static, no risk of it going stale by the time it's
-      // actually shown), 'notifications' precedes readyToBuild.
+      // actually shown), 'connectHealth' precedes readyToBuild.
       if (!next.giveGoodHands && currentStep?.id === 'accomplish') { next.giveGoodHands = true; changed = true; }
       if (!next.notAlone && currentStep?.id === 'formConfidence') { next.notAlone = true; changed = true; }
       if (!next.startingPoint && currentStep?.id === 'formConfidence') { next.startingPoint = true; changed = true; }
-      if (!next.readyToBuild && appState === 'notifications') { next.readyToBuild = true; changed = true; }
+      if (!next.readyToBuild && appState === 'connectHealth') { next.readyToBuild = true; changed = true; }
       return changed ? next : prev;
     });
   }, [currentStep?.id, appState]);
@@ -3436,7 +3448,7 @@ export default function OnboardingScreen() {
   // everything after the last question.
   const RANK_POST_FLOW: AppState[] = [
     'startingPoint', 'rankWheel', 'rankAssess', 'rankReveal',
-    'thankYou', 'connectHealth', 'notifications', 'readyToBuild',
+    'thankYou', 'connectHealth', 'readyToBuild',
     'generatePlan', 'planReady', 'saveProgress', 'tryForFree', 'trialTimeline', 'webPaywall',
   ];
   const TOTAL_FLOW_LEN = visibleSteps.length + RANK_POST_FLOW.length;
@@ -3667,16 +3679,7 @@ export default function OnboardingScreen() {
 
     const header = (
       <View style={s.qh}>
-        <LiquidGlassButton
-          onPress={goBack}
-          hitSlop={12}
-          radius={17}
-          variant="regular"
-          fallbackColor="rgba(255,255,255,0.92)"
-          style={s.bb}
-        >
-          <SymbolView name="chevron.left" size={15} tintColor="#1b1f27" type="monochrome" style={{ width: 15, height: 15 }} />
-        </LiquidGlassButton>
+        <OnbBackButton onPress={goBack} />
         <View style={s.pc}>
           <View style={s.pt}><View style={[s.pf, { width: `${progress * 100}%` }]} /></View>
         </View>
@@ -3916,7 +3919,7 @@ export default function OnboardingScreen() {
             onAdvanceStep={() => advance(answers)}
             onBackStep={goBack}
             onAdvanceReadyToBuild={() => setAppState('generatePlan')}
-            onBackReadyToBuild={() => setAppState('notifications')}
+            onBackReadyToBuild={() => setAppState('connectHealth')}
             onAdvanceStartingPoint={() => setAppState('rankWheel')}
             onBackStartingPoint={() => setAppState('onboarding')}
           />
@@ -3966,7 +3969,7 @@ export default function OnboardingScreen() {
             onAdvanceStep={() => advance(answers)}
             onBackStep={goBack}
             onAdvanceReadyToBuild={() => setAppState('generatePlan')}
-            onBackReadyToBuild={() => setAppState('notifications')}
+            onBackReadyToBuild={() => setAppState('connectHealth')}
             onAdvanceStartingPoint={() => setAppState('rankWheel')}
             onBackStartingPoint={() => setAppState('onboarding')}
           />
@@ -3991,9 +3994,7 @@ export default function OnboardingScreen() {
             pointerEvents="none"
           />
           <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom + 24, paddingHorizontal: 28 }}>
-            <TouchableOpacity onPress={goBack} style={[s.bb, { backgroundColor: 'rgba(255,255,255,0.14)', borderColor: 'transparent' }]}>
-              <Sym name="chevron.left" size={16} color="#fff" />
-            </TouchableOpacity>
+            <OnbBackButton onPress={goBack} scheme="dark" />
             <View style={{ flex: 1 }} />
             <Text style={h.title}>{noOrphan(st.question)}</Text>
             {!!st.subtitle && <Text style={h.sub}>{st.subtitle}</Text>}
@@ -4057,17 +4058,19 @@ export default function OnboardingScreen() {
     return (
       <OnboardingBackground>
         <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
-          {header}
-          <Animated.View style={{ flex: 1, opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
+          {/* (round 8) the back button + progress bar + question are part of the scrolling page: they scroll away with the options, never float over them */}
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingBottom: 140, flexGrow: 1 }}
+            showsVerticalScrollIndicator={false}
+          >
+            {header}
+            <Animated.View style={{ flexGrow: 1, opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
             <View style={s.qBlock}>
               <Text style={s.qq}>{noOrphan(st.question)}</Text>
               {!!st.subtitle && <Text style={s.qqSub}>{st.subtitle}</Text>}
             </View>
-            <ScrollView
-              style={{ flex: 1 }}
-              contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 140, flexGrow: 1, justifyContent: 'center' }}
-              showsVerticalScrollIndicator={false}
-            >
+            <View style={{ paddingHorizontal: 24, flexGrow: 1, justifyContent: 'center' }}>
               {_opts.map((o, i) => {
                 const sel = isSel(o.label);
                 const sym = o.sfSymbol || 'person.fill';
@@ -4095,8 +4098,9 @@ export default function OnboardingScreen() {
                   </AnimatedOption>
                 );
               })}
-            </ScrollView>
-          </Animated.View>
+            </View>
+            </Animated.View>
+          </ScrollView>
           <View style={s.bn}>
             <TouchableOpacity
               style={[s.cb, !stepReady && s.cbDisabled]}
@@ -4128,7 +4132,7 @@ export default function OnboardingScreen() {
           onAdvanceStep={() => advance(answers)}
           onBackStep={goBack}
           onAdvanceReadyToBuild={() => setAppState('generatePlan')}
-          onBackReadyToBuild={() => setAppState('notifications')}
+          onBackReadyToBuild={() => setAppState('connectHealth')}
           onAdvanceStartingPoint={() => setAppState('rankWheel')}
           onBackStartingPoint={() => setAppState('onboarding')}
         />
@@ -4166,51 +4170,12 @@ export default function OnboardingScreen() {
             <Text style={s.placeholderTitle}>Connect Apple Health</Text>
           </View>
           <View style={s.bn}>
-            <TouchableOpacity style={s.cb} onPress={() => setAppState('notifications')} activeOpacity={0.85}>
+            <TouchableOpacity style={s.cb} onPress={() => setAppState('readyToBuild')} activeOpacity={0.85}>
               <Text style={s.ct}>Continue</Text>
             </TouchableOpacity>
           </View>
         </View>
-      </OnboardingBackground>
-    );
-  }
-
-  if (appState === 'notifications') {
-    return (
-      <OnboardingBackground>
-        <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
-          <SimpleProgressHeader progress={progress} onBack={() => setAppState('connectHealth')} />
-          <NotificationBanner topOffset={insets.top} />
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
-            <View style={nq.iconWrap}>
-              <Sym name="bell.fill" size={28} color="#fff" />
-            </View>
-            <Text style={[s.giveTitle, { marginTop: 22 }]}>Don't miss a session.</Text>
-            <Text style={s.giveSub}>We'll remind you when it's time to train and let you know how your form is trending.</Text>
-          </View>
-          <View style={s.bn}>
-            <TouchableOpacity
-              style={s.cb}
-              activeOpacity={0.85}
-              onPress={() => {
-                // TODO(notifications): expo-notifications isn't installed
-                // yet (`npx expo install expo-notifications` + a rebuild —
-                // this is a native module, a JS-only install won't take
-                // effect in an already-running dev client). Wire the real
-                // Notifications.requestPermissionsAsync() call in here once
-                // that's done; for now this just advances.
-                haptic(Haptics.ImpactFeedbackStyle.Medium);
-                setAppState('readyToBuild');
-              }}
-            >
-              <Text style={s.ct}>Enable notifications</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setAppState('readyToBuild')} hitSlop={10} style={{ alignItems: 'center', paddingTop: 14 }}>
-              <Text style={{ fontSize: 14, fontWeight: W.semi, color: L.textSub }}>Not now</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-        {/* Starts readyToBuild's prewarm here, one screen early — see
+        {/* Starts readyToBuild's prewarm here, one screen early (it used to start on the notifications screen that is now gone) - see
             ShadowPrewarmPool. Invisible/non-interactive until active. */}
         <ShadowPrewarmPool
           activeKey={null}
@@ -4220,7 +4185,7 @@ export default function OnboardingScreen() {
           onAdvanceStep={() => advance(answers)}
           onBackStep={goBack}
           onAdvanceReadyToBuild={() => setAppState('generatePlan')}
-          onBackReadyToBuild={() => setAppState('notifications')}
+          onBackReadyToBuild={() => setAppState('connectHealth')}
           onAdvanceStartingPoint={() => setAppState('rankWheel')}
           onBackStartingPoint={() => setAppState('onboarding')}
         />
@@ -4228,9 +4193,12 @@ export default function OnboardingScreen() {
     );
   }
 
+  // (round 8) The native notifications screen (the one with the bell) is gone: the app already has one notification screen, so Connect Health goes
+  // straight to the ready-to-build beat.
+
   // Real design artboard (readytobuild.html) — one more beat right before
   // generatePlan actually starts building the plan. Shadow-pooled (see
-  // ShadowPrewarmPool) — prewarmed one screen early, while 'notifications'
+  // ShadowPrewarmPool) — prewarmed one screen early, while 'connectHealth'
   // was showing, instead of cold-mounting fresh here.
   if (appState === 'readyToBuild') {
     return (
@@ -4242,7 +4210,7 @@ export default function OnboardingScreen() {
         onAdvanceStep={() => advance(answers)}
         onBackStep={goBack}
         onAdvanceReadyToBuild={() => setAppState('generatePlan')}
-        onBackReadyToBuild={() => setAppState('notifications')}
+        onBackReadyToBuild={() => setAppState('connectHealth')}
         onAdvanceStartingPoint={() => setAppState('rankWheel')}
         onBackStartingPoint={() => setAppState('onboarding')}
       />
@@ -4264,7 +4232,7 @@ export default function OnboardingScreen() {
         onAdvanceStep={() => advance(answers)}
         onBackStep={goBack}
         onAdvanceReadyToBuild={() => setAppState('generatePlan')}
-        onBackReadyToBuild={() => setAppState('notifications')}
+        onBackReadyToBuild={() => setAppState('connectHealth')}
         onAdvanceStartingPoint={() => setAppState('rankWheel')}
         onBackStartingPoint={() => setAppState('onboarding')}
       />
@@ -4489,7 +4457,7 @@ export default function OnboardingScreen() {
             topInset={insets.top}
             progress={progress}
             onAdvance={() => setAppState('planReady')}
-            onBack={() => setAppState('notifications')}
+            onBack={() => setAppState('connectHealth')}
           />
         )}
         {appState === 'saveProgress' && (

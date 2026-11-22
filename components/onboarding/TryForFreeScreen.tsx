@@ -13,6 +13,7 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import * as Haptics from '../../lib/haptics';
 import { SymbolView } from 'expo-symbols';
 import { LiquidGlassButton } from '../LiquidGlass';
+import OnbBackButton from './OnbBackButton';
 import { PJS } from '../../constants/theme';
 
 const DEMO_VIDEO = require('../../assets/videos/demovid.mov');
@@ -48,16 +49,7 @@ export default function TryForFreeScreen({
     <Animated.View style={{ flex: 1, opacity: fade }}>
       <Animated.View style={[s.backWrap, { top: topInset + 8, right: progress != null ? 20 : undefined }]} pointerEvents="box-none">
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <LiquidGlassButton
-            onPress={() => { Haptics.selectionAsync(); onBack(); }}
-            hitSlop={12}
-            radius={17}
-            variant="regular"
-            fallbackColor="rgba(255,255,255,0.92)"
-            style={s.backBtn}
-          >
-            <SymbolView name="chevron.left" size={15} tintColor="#1b1f27" type="monochrome" style={{ width: 15, height: 15 }} />
-          </LiquidGlassButton>
+          <OnbBackButton onPress={() => { Haptics.selectionAsync(); onBack(); }} />
           {progress != null && (
             <View style={{ flex: 1, paddingHorizontal: 12 }}>
               <View style={s.progTrack}><View style={[s.progFill, { width: `${progress * 100}%` }]} /></View>
@@ -76,7 +68,7 @@ export default function TryForFreeScreen({
           />
         </View>
 
-        <Text style={s.h1}>Try FormPal for free</Text>
+        <Text style={s.h1}>We want you to try FormPal for free</Text>
         <Text style={s.sub}>
           Full access to your plan and live form-check for 3 days. We'll remind you before it ends. Cancel anytime.
         </Text>

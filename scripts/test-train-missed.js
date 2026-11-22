@@ -91,15 +91,15 @@ check('days before the plan existed are never "missed"', before.length === 1 && 
   const dom = await p.evaluate(() => {
     const rail = [...document.querySelectorAll('div[data-scroll]')].find(x => x.style.overflowX === 'auto' && x.children.length === 7);
     return [...rail.children].map((c) => {
-      const pill = [...c.querySelectorAll('div')].find(e => e.style.fontSize === '12.5px' && e.style.borderRadius === '999px');
+      const pill = [...c.querySelectorAll('div')].find(e => /^(12\.5|11\.5)px$/.test(e.style.fontSize) && e.style.borderRadius === '999px');
       const a = c.querySelector('a[href^="tr:"]');
-      return { text: c.innerText.replace(/\s+/g, ' ').trim(), pill: pill ? pill.textContent.trim() : null, pillColor: pill ? getComputedStyle(pill).color : null, href: a ? a.getAttribute('href') : null, hasRest: /Rest day/.test(c.innerText) };
+      return { text: c.innerText.replace(/\s+/g, ' ').trim(), pill: pill ? pill.textContent.trim() : null, pillColor: pill ? getComputedStyle(pill).color : null, pillH: pill ? Math.round(pill.getBoundingClientRect().height) : null, pillSize: pill ? getComputedStyle(pill).fontSize : null, href: a ? a.getAttribute('href') : null, hasRest: /Rest day/.test(c.innerText) };
     });
   });
   console.log('      cards:', dom.map(c => c.text.slice(0, 60)).join(' || '));
   check('page: today\'s card (a rest day) shows the missed Lower Body as a normal workout card: tag Missed, minutes and exercises, button "Do it today"', /^Missed Lower Body \d+ min · 2 exercises/.test(dom[5].text) && /Do it today/.test(dom[5].text) && dom[5].pill === 'Missed' && dom[5].href === 'tr:missed:wA' && !dom[5].hasRest, dom[5].text.slice(0, 90));
   check('page: Wednesday\'s and Monday\'s cards are the same kind of card with the same tag and button', [2, 4].every(i => dom[i].pill === 'Missed' && /Do it today/.test(dom[i].text) && !dom[i].hasRest), JSON.stringify([dom[2].text.slice(0, 50), dom[4].text.slice(0, 50)]));
-  check('page: the tag is a soft warm colour, not the plain black of the other tags', dom[5].pillColor === 'rgb(180, 96, 28)', dom[5].pillColor);
+  check('page (round 8): the tag is plain iOS system red (#FF3B30), not orange or burgundy, and small', dom[5].pillColor === 'rgb(255, 59, 48)' && dom[5].pillH <= 23 && dom[5].pillSize === '11.5px', JSON.stringify([dom[5].pillColor, dom[5].pillH, dom[5].pillSize]));
   check('page: no card of a planned day says "Rest day" (only real rest days do)', !dom[2].hasRest && !dom[4].hasRest && !dom[5].hasRest);
   const rail = await p.evaluate(() => 1);
   await p.evaluate(() => { const r = [...document.querySelectorAll('div[data-scroll]')].find(x => x.style.overflowX === 'auto' && x.children.length === 7); const a = r.children[5].querySelector('a[href="tr:missed:wA"]'); a.click(); });

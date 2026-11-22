@@ -65,3 +65,12 @@ New: `test-paywall-screens.js`, `test-formcheck-open-and-leave.js`. Full suite r
 - Nothing here has been seen on a phone. The paywall and trial reminder renders are real Chromium, not a WKWebView, so fonts and the glass back button will look slightly different.
 - Items 4 and 5 are native-WebView / navigation behaviour I could only check in the source.
 - The Swift is still not compiled (section 1 lists my doubts).
+
+---
+# Merge with Window A's onboarding work (2026-11-22)
+- Merged origin/overnight-build into work-b. One conflict, `app/onboarding.tsx`, three places, all resolved so both sides work:
+  1. Imports: both `GlassBackButton` (paywall / gift offer) and `OnbBackButton` (normal onboarding screens).
+  2. WebView scripts: before load = `VIEWPORT_JS`, `CUE_ORB_JS`, `KEEP_FX_JS` (for trial reminder, paywall, gift offer) and the page's own before-load script; after load = the page script plus `ONB_SCROLL_REPORT_JS`. Both `KEEP_FX_JS` and `ONB_SCROLL_REPORT_JS` are injected.
+  3. Header: Window A's wrapper that scrolls with the page (`headerY`, `onb-header-scroll`) around everything. Inside it: paywall and gift offer = glass back button (no X), plus Restore on the paywall, no progress bar there; every other screen = Window A's `OnbBackButton` with the progress bar.
+- Whole test suite run: the only failure was my own `test-paywall-screens.js`, which looked for the old header text. Updated it (it now also checks that the scrolling header, `ONB_SCROLL_REPORT_JS`, `KEEP_FX_JS` and `OnbBackButton` are all there). It passes. TypeScript: only the old `opaque` WebView error is left.
+- Nothing else touched. Not seen on a phone.

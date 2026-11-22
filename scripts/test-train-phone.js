@@ -106,8 +106,8 @@ const railOf = `[...document.querySelectorAll('div[data-scroll]')].find(x => x.s
       await p.evaluate(() => { const i = document.querySelector('input[placeholder^="Search"]'); i.scrollIntoView({ block: 'center' }); });
       await p.waitForTimeout(150);
       const si = await p.evaluate(() => { const r = document.querySelector('input[placeholder^="Search"]').getBoundingClientRect(); return { x: r.x + 30, y: r.y + r.height / 2 }; });
-      await p.touchscreen.tap(si.x, si.y); await p.keyboard.press('Control+A'); await p.keyboard.press('Backspace');
-      if (t) await p.keyboard.type(t); await p.waitForTimeout(350);
+      await p.touchscreen.tap(si.x, si.y);
+      await p.evaluate((q) => window.__trSetQuery(q), t || ''); await p.waitForTimeout(350); // (round 8: typed in the app's docked bar, sent to the page)
     };
     const names = () => p.evaluate(() => [...document.querySelectorAll('[aria-label="Check form"]')].map(bn => { let e = bn; for (let i = 0; i < 4 && e; i++, e = e.parentElement) { const n = e.querySelector('div[style*="font-size: 15px"]'); if (n) return n.textContent.trim(); } return ''; }));
     const { EXERCISE_CATALOG } = require('../constants/exercises.ts');

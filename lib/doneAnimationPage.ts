@@ -6,7 +6,8 @@
  *    over the REAL screen that was just on screen;
  *  - the wash (round 7): the design clips a growing circle, which the phone draws on the main thread (choppy). It is now the SAME wash drawn as a
  *    big round layer that grows with a transform (the phone's GPU does it, smooth), a little slower (1000ms, was 700ms);
- *  - the brackets (round 7) sit closer around the title text (measured from the real words);
+ *  - the brackets sit closer around the title text (measured from the real words). The design's bracket ANIMATION is not changed at all (round 8:
+ *    the keyframes, timing and start places are the design's; only where they end is closer);
  *  - the design's words are replaced: the title, the grey line and the Continue button's tap;
  *  - the 390 x 844 canvas is scaled to the screen;
  *  - the page is loaded and fitted BEFORE it is needed (a spare, see components/DoneHost.tsx), with every animation held (data-go) until the
@@ -82,7 +83,16 @@ export const DONE_PREP_JS = `(function(){
     var L = Math.round((cx - w / 2 - SIDE - 2) * 10) / 10, R = Math.round((cx + w / 2 + SIDE - 26) * 10) / 10;
     var mid = 404, T = Math.round((mid - 11 - TOP - 2) * 10) / 10, B = Math.round((mid + 11 + TOP - 26) * 10) / 10; // the text line is about 22px tall around y 404
     var pos = [[L, T], [R, T], [L, B], [R, B]];
-    for (var i = 0; i < 4; i++) { els.br[i].style.setProperty('left', pos[i][0] + 'px', 'important'); els.br[i].style.setProperty('top', pos[i][1] + 'px', 'important'); }
+    // The design's bracket animation is used EXACTLY as it is (its keyframes, timing and shake are not touched). It starts each bracket at the final
+    // position plus (--dx0, --dy0) and unfolds it out to the final position. Only the final position is closer to the words, so --dx0 / --dy0 are set
+    // so each bracket still STARTS exactly where the design starts it (left 35+126=161 and 327-126=201, top 360+10=370 and 420-10=410): the same
+    // small viewfinder in the middle, unfolding out to the closer corners. (Brackets that start at the old place and end closer never cross or overlap.)
+    var START_X = [161, 201, 161, 201], START_Y = [370, 370, 410, 410];
+    for (var i = 0; i < 4; i++) {
+      var b = els.br[i];
+      b.style.setProperty('left', pos[i][0] + 'px', 'important'); b.style.setProperty('top', pos[i][1] + 'px', 'important');
+      b.style.setProperty('--dx0', (START_X[i] - pos[i][0]) + 'px'); b.style.setProperty('--dy0', (START_Y[i] - pos[i][1]) + 'px');
+    }
   }
   var pendingLine = null, lineWaiting = false;
   function setLine(t){ if (!els) return; if (t) { els.subEl.textContent = t; els.subEl.style.removeProperty('display'); } else els.subEl.style.setProperty('display', 'none', 'important'); }

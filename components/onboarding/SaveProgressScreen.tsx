@@ -23,6 +23,7 @@ import * as Haptics from '../../lib/haptics';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { SymbolView } from 'expo-symbols';
 import { LiquidGlassButton } from '../LiquidGlass';
+import OnbBackButton from './OnbBackButton';
 import { PJS } from '../../constants/theme';
 import { supabase } from '../../constants/supabase';
 import { saveOnboardingAnswersToCloud, loadAllUserDataFromCloud } from '../../lib/formpalSync';
@@ -145,16 +146,7 @@ export default function SaveProgressScreen({
     <View style={[s.root, { paddingTop: topInset }]}>
     <Animated.View style={{ flex: 1, opacity: fade }}>
       <View style={s.headerRow}>
-        <LiquidGlassButton
-          onPress={() => { Haptics.selectionAsync(); emailMode ? setEmailMode(false) : onBack(); }}
-          hitSlop={12}
-          radius={17}
-          variant="regular"
-          fallbackColor="rgba(255,255,255,0.92)"
-          style={s.backBtn}
-        >
-          <SymbolView name="chevron.left" size={15} tintColor="#1b1f27" type="monochrome" style={{ width: 15, height: 15 }} />
-        </LiquidGlassButton>
+        <OnbBackButton onPress={() => { Haptics.selectionAsync(); emailMode ? setEmailMode(false) : onBack(); }} />
         {progress != null && (
           <View style={{ flex: 1, paddingHorizontal: 12 }}>
             <View style={s.progTrack}><View style={[s.progFill, { width: `${progress * 100}%` }]} /></View>

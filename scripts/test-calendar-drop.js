@@ -21,7 +21,7 @@ const h = React.createElement;
 const ROOT = path.join(__dirname, '..');
 const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8').split('\r\n').join('\n');
 
-const ClearGlass = ({ style }) => h(RNW.View, { style: [style, { backgroundColor: 'rgba(255,255,255,0)' }], testID: 'clear-glass' });
+const ClearGlass = ({ style, children }) => h(RNW.View, { style: [style, { backgroundColor: 'rgba(255,255,255,0)' }], testID: 'clear-glass' }, children); // (the real glass holds the month inside it)
 const FAKE = {
   'react-native': new Proxy(RNW, { get: (t, k) => (k === 'useWindowDimensions' ? () => ({ width: 390, height: 844, scale: 2, fontScale: 1 }) : t[k]) }),
   react: React,
@@ -84,11 +84,11 @@ Module._load = function (r) {
   check('3: white text on the dark glass (the standard ink), system font', /STANDARD_GLASS_INK/.test(csrc) && /Platform\.select\(\{ ios: 'System'/.test(csrc) && !/PlusJakarta|Bricolage/.test(csrc));
   check('3: it slides with the native driver (smooth), opens in about 340ms and closes in about 260ms', /CAL_OPEN_MS = 340/.test(csrc) && /CAL_CLOSE_MS = 260/.test(csrc) && !/useNativeDriver: false/.test(csrc));
   check('3: a tap on a day closes it, a tap outside closes it, the date tap toggles it (Home)', /onPress=\{c\.day != null \? onClose/.test(csrc) && /onPress=\{onClose\} accessibilityLabel="Close calendar"/.test(csrc) && /setCalOpen\(o => !o\)/.test(read('app/(tabs)/index.tsx')));
-  check('3: right on the first open: the panel is drawn on screen but invisible (opacity ~0) right after Home appears so the glass has painted once, then parks above the screen', /WARM_MS/.test(csrc) && /parkedWarm \? 0\.004 : 1/.test(csrc) && /translateY: parkedWarm \? 0 : slide/.test(csrc));
+  check('3: right on the first open: the panel is always mounted (the native glass exists and has painted before it is opened), parked above the screen, and no parent fades or clips it (round 8)', !/WARM_MS|parkedWarm/.test(csrc) && /useRef\(new Animated\.Value\(open \? 1 : 0\)\)/.test(csrc) && !/opacity: /.test(/panel: \{[^}]*\}/.exec(csrc)[0]));
   await p.close();
   const c = await shoot(false, path.join(dir, 'cal-closed'));
-  const hid = await c.evaluate(() => { const card = document.querySelector('[data-testid="calendar-drop"]'); const out = document.querySelector('[data-testid="calendar-outside"]'); return { there: !!card, op: card ? parseFloat(getComputedStyle(card).opacity) : null, outPe: out ? getComputedStyle(out).pointerEvents : null, rootPe: card ? getComputedStyle(card.parentElement).pointerEvents : null }; });
-  check('3: closed (first moments): the panel is built and drawn but invisible (opacity ~0), and touches go straight through it', hid.there && hid.op < 0.01 && hid.outPe === 'none' && hid.rootPe === 'none', JSON.stringify(hid));
+  const hid = await c.evaluate(() => { const card = document.querySelector('[data-testid="calendar-drop"]'); const out = document.querySelector('[data-testid="calendar-outside"]'); const r = card && card.getBoundingClientRect(); return { there: !!card, bottom: r ? Math.round(r.bottom) : null, outPe: out ? getComputedStyle(out).pointerEvents : null, rootPe: card ? getComputedStyle(card.parentElement).pointerEvents : null }; });
+  check('3: closed: the panel is built but parked ABOVE the screen (its bottom edge is off the top), and touches go straight through', hid.there && hid.bottom <= 0 && hid.outPe === 'none' && hid.rootPe === 'none', JSON.stringify(hid));
   await c.close();
   // today's circle: centred in its cell, the number exactly in the middle of the circle
   const o2 = await shoot(true, path.join(dir, 'cal-open2'));

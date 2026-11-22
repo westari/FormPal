@@ -5,9 +5,12 @@
  * Liquid Glass) slides DOWN from the top of the screen with the month grid, today in a circle centred in its cell, a dot under every day
  * you trained. Tap a day, the dim area below, or the date again and it slides back up. Month arrows go to the previous / next month.
  *
- * First open: the panel is drawn ON screen but invisible for a moment right after Home appears (WARM_MS), so the native glass has really
- * been built and painted once before the first tap. Then it parks above the screen. A glass view that is built at the first tap shows its
- * plain fallback colour for a moment: that was the "old look" on the first open.
+ * IT IS THE FINISH PILL'S GLASS, NOT AN IMITATION (round 8). The Finish pill on the camera screen is components/LiquidGlass.tsx's real native
+ * Liquid Glass view (@callstack/liquid-glass, Apple's UIGlassEffect): variant "regular", colour scheme "dark", no tint. The panel is that same
+ * native view with the same settings (through components/StandardGlass.tsx), and it holds the month grid INSIDE it, exactly as the Finish
+ * pill holds its word. Nothing sits above it that could turn the glass flat: no opacity, no clipping (overflow) and no mask on any parent
+ * (a native glass view inside a faded or clipped parent draws as a plain colour). It is always mounted, parked above the screen, so the
+ * native view already exists and has painted when it is first opened.
  * The month maths is in lib/calendarMonth.ts.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -22,7 +25,6 @@ const SYS = Platform.select({ ios: 'System', default: undefined }); // SF Pro
 const ACCENT = '#f2701c';
 export const CAL_OPEN_MS = 340;
 export const CAL_CLOSE_MS = 260;
-export const WARM_MS = 800;
 const BLEED = 60; // the panel reaches this far ABOVE the screen so its top corners are never seen: only the bottom corners are round
 const RADIUS = 30;
 
@@ -31,12 +33,9 @@ export default function CalendarSheet({ open, onClose, timestamps }: { open: boo
   const now = new Date();
   const [ym, setYm] = useState({ y: now.getFullYear(), m: now.getMonth() });
   const [h, setH] = useState(720);            // the panel's real height (measured); the guess is taller than it will be
-  const [warm, setWarm] = useState(true);      // true only right after mount: drawn on screen, invisible (see the note above)
   const prog = useRef(new Animated.Value(open ? 1 : 0)).current;
-  useEffect(() => { const t = setTimeout(() => setWarm(false), WARM_MS); return () => clearTimeout(t); }, []);
   useEffect(() => {
     if (open) {
-      setWarm(false);
       const n = new Date(); setYm({ y: n.getFullYear(), m: n.getMonth() });
       Animated.timing(prog, { toValue: 1, duration: CAL_OPEN_MS, easing: Easing.bezier(0.22, 1, 0.36, 1), useNativeDriver: true }).start();
     } else {
@@ -48,7 +47,6 @@ export default function CalendarSheet({ open, onClose, timestamps }: { open: boo
   const step = (d: number) => setYm((c) => { const t = new Date(c.y, c.m + d, 1); return { y: t.getFullYear(), m: t.getMonth() }; });
   const monthCount = weeks.flat().filter((c) => c.trained).length;
   const slide = prog.interpolate({ inputRange: [0, 1], outputRange: [-h, 0] });
-  const parkedWarm = warm && !open;
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents={open ? 'box-none' : 'none'}>
@@ -58,11 +56,10 @@ export default function CalendarSheet({ open, onClose, timestamps }: { open: boo
       <Animated.View
         testID="calendar-drop"
         onLayout={(e) => { const hh = Math.round(e.nativeEvent.layout.height); if (hh > 0 && hh !== h) setH(hh); }}
-        style={[s.panel, { top: -BLEED, opacity: parkedWarm ? 0.004 : 1, transform: [{ translateY: parkedWarm ? 0 : slide }] }]}
+        style={[s.panel, { top: -BLEED, transform: [{ translateY: slide }] }]}
       >
-        {/* The glass standard (the Finish pill's glass). Its top corners are above the screen, so it reads as a panel hanging from the top. */}
-        <StandardGlass radius={RADIUS} style={StyleSheet.absoluteFill} pointerEvents="none" />
-        <View style={[s.inner, { paddingTop: BLEED + insets.top + 10 }]}>
+        {/* The glass standard (the Finish pill's glass). It is the panel itself, with the month inside it. Its top corners are above the screen. */}
+        <StandardGlass radius={RADIUS} style={[s.inner, { paddingTop: BLEED + insets.top + 10 }]}>
           <View style={s.head}>
             <View>
               <Text style={s.title}>{MONTH_NAMES[ym.m]} {ym.y}</Text>
@@ -94,7 +91,7 @@ export default function CalendarSheet({ open, onClose, timestamps }: { open: boo
               ))}
             </View>
           ))}
-        </View>
+        </StandardGlass>
       </Animated.View>
     </View>
   );
@@ -102,7 +99,8 @@ export default function CalendarSheet({ open, onClose, timestamps }: { open: boo
 
 const s = StyleSheet.create({
   outside: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'transparent' },
-  panel: { position: 'absolute', left: 0, right: 0, borderRadius: RADIUS, overflow: 'hidden' },
+  // no opacity, no overflow, no border radius here: a native glass view inside a faded or clipped parent draws flat
+  panel: { position: 'absolute', left: 0, right: 0 },
   inner: { paddingHorizontal: 18, paddingBottom: 16 },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 6, marginBottom: 8 },
   title: { fontFamily: SYS, fontSize: 20, fontWeight: '700', color: STANDARD_GLASS_INK },

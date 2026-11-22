@@ -27,20 +27,18 @@ const check = (n, ok, d) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${d ? ' 
   check('before the keyboard the canvas is the full 844 tall', (await canvasH()) === 844, String(await canvasH()));
   await p.evaluate(() => { const sc = document.querySelector('div[data-scroll]'); sc.scrollTop = sc.scrollHeight; });
   await p.waitForTimeout(300);
-  await p.click('input[placeholder*="Search"]');
-  await p.setViewportSize({ width: 390, height: 508 }); // the keyboard comes up
-  await p.waitForTimeout(900);
+  // round 8: the page's own search box never takes focus, so the keyboard never resizes the page: a tap opens the app's docked bar instead
+  await p.click('input[placeholder*="Search"]'); await p.waitForTimeout(600);
   const kb = await state();
-  check('12: with the keyboard up the page is only as tall as the visible area (nothing hidden behind the keyboard)', (await canvasH()) <= 520, String(await canvasH()));
-  check('12: the search box is fully inside the visible area, above the keyboard', kb.top >= 0 && kb.bottom <= kb.innerH - 20, JSON.stringify(kb));
+  check('12 (round 8): after a tap on the search bar the page is untouched: still the full 844 canvas, nothing focused in the page', (await canvasH()) === 844 && await p.evaluate(() => document.activeElement.tagName !== 'INPUT'), String(await canvasH()));
+  check('12 (round 8): the tap asked the app for its docked search bar (message "search")', msgs.some(m => m.type === 'search'));
   await p.screenshot({ path: path.join(OUT, 'search-focused.png') });
-  await p.keyboard.type('squat'); await p.waitForTimeout(700);
+  await p.evaluate(() => { window.__trSetQuery('squat'); window.__trReveal(); }); await p.waitForTimeout(1200);
   const res = await p.evaluate(() => { const rows = [...document.querySelectorAll('div')].filter(d => /Squat/i.test(d.textContent) && d.style.fontSize === '15px' && d.style.fontWeight === '600'); const r = rows[0] && rows[0].getBoundingClientRect(); const i = document.querySelector('input[placeholder*="Search"]').getBoundingClientRect(); return { n: rows.length, first: r && [Math.round(r.top), Math.round(r.bottom)], inputBottom: i.bottom, innerH: innerHeight }; });
   console.log('      results:', JSON.stringify(res));
   check('12: typing shows results below the search box, and the first one is inside the visible area (scrollable, not cut off)', res.n > 0 && res.first && res.first[1] <= res.innerH);
   await p.screenshot({ path: path.join(OUT, 'search-typed.png') });
-  await p.setViewportSize({ width: 390, height: 844 }); // keyboard down
-  await p.waitForTimeout(700);
+  await p.waitForTimeout(300);
   check('12: with the keyboard down the page is the full 844 tall again', (await canvasH()) === 844, String(await canvasH()));
   await b.close();
   console.log(failed ? `${failed} FAILED` : 'ALL PASSED'); process.exit(failed ? 1 : 0);
