@@ -22,7 +22,7 @@ check('every onboarding back button is the standard glass back button (OnbBackBu
 check('and in the onboarding screens (rank reveal, rank wheel, save progress, strength); NOT in Try for free: from building the plan onward there is no back button (round 10)', comps.every(([n, t]) => (n === 'TryForFreeScreen' ? !/<OnbBackButton /.test(t) : /<OnbBackButton /.test(t))), comps.map(([n, t]) => n + ':' + (t.match(/<OnbBackButton /g) || []).length).join(' '));
 check('no old hand-made back button is left (no chevron.left drawn inside a LiquidGlassButton in any onboarding screen)', !/<LiquidGlassButton[^>]*>\s*<SymbolView name="chevron\.left"/.test(ob) && comps.every(([n, t]) => !/<LiquidGlassButton[^>]*>\s*<SymbolView name="chevron\.left"/.test(t)));
 const ob1 = read('components/onboarding/OnbBackButton.tsx');
-check('OnbBackButton is the app's GlassBackButton (the standard real glass look) in a 34 x 34 box (so the progress bar and everything below stay exactly where they were)', ob1.includes("import GlassBackButton from '../GlassBackButton'") && /ONB_BACK_BOX = 34/.test(ob1) && ob1.includes('<GlassBackButton onPress={onPress} scheme="standard"'));
+check('OnbBackButton is the GlassBackButton (the standard real glass look) in a 34 x 34 box (so the progress bar and everything below stay exactly where they were)', ob1.includes("import GlassBackButton from '../GlassBackButton'") && /ONB_BACK_BOX = 34/.test(ob1) && ob1.includes('<GlassBackButton onPress={onPress} scheme="standard"'));
 check('the paywall / gift X close buttons are left alone (they are not back buttons)', /name="xmark" size=\{14\}/.test(ob));
 
 // ── notifications screen ──
