@@ -9,7 +9,7 @@
  * the workout name over "52 min · 8 exercises", one white rounded card per exercise (picture square, name,
  * "4 sets · 8 reps", pencil) and the black "Start workout" pill floating at the bottom. Real data: the plan's workout.
  */
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Animated, Easing } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -134,14 +134,19 @@ export default function WorkoutPreviewScreen() {
   };
   const workout = baseWorkout ? { ...baseWorkout, exercises: baseWorkout.exercises.map((e, i) => edits[i] ? { ...e, targetSets: edits[i].sets, targetReps: edits[i].reps } : e) } : baseWorkout;
   const workoutRef = useRef(workout); workoutRef.current = workout;
+  const tapAt = useRef(0);
   const openEdit = useCallback((i: number) => {
     const w = workoutRef.current;
     if (!w) return;
+    tapAt.current = Date.now();
     runSheet(1); // first: the sheet starts moving at once
+    if (__DEV__) console.log('[PREVIEW] edit sheet: pencil tapped, slide started ' + (Date.now() - tapAt.current) + 'ms after the tap (the slide itself runs on the native side)');
     setDraft({ sets: w.exercises[i].targetSets, reps: w.exercises[i].targetReps });
     setEditing(i);
     Haptics.selectionAsync();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // proof on the phone: how long after the tap the screen finished drawing again with the sheet's content (the JS side of opening)
+  useLayoutEffect(() => { if (editing != null && tapAt.current && __DEV__) console.log('[PREVIEW] edit sheet: screen redrawn ' + (Date.now() - tapAt.current) + 'ms after the tap'); }, [editing]);
   const closeEdit = () => { runSheet(0); setEditing(null); };
   const saveEdit = () => {
     if (editing == null || !workout) return;
@@ -229,7 +234,7 @@ export default function WorkoutPreviewScreen() {
         {/* The same sheet as the Edit Workout sheet on Home: a floating white sheet (8px from the sides and the bottom, 40px corners), the grab
             bar, a 20px bold title with a round close button, grey rounded rows (#f6f6f8, 20px corners) with white round controls, and the
             black Done pill. */}
-        <Animated.View style={[s.sheet, { bottom: 8 + Math.max(insets.bottom - 8, 0), transform: [{ translateY: slide.interpolate({ inputRange: [0, 1], outputRange: [420, 0] }) }] }]} testID="edit-sheet">
+        <Animated.View shouldRasterizeIOS renderToHardwareTextureAndroid style={[s.sheet, { bottom: 8 + Math.max(insets.bottom - 8, 0), transform: [{ translateY: slide.interpolate({ inputRange: [0, 1], outputRange: [420, 0] }) }] }]} testID="edit-sheet">
           <Pressable onPress={closeEdit} style={s.grabHit} accessibilityLabel="Close grab bar"><View style={s.grab} /></Pressable>
           <View style={s.sheetHead}>
             <Text style={s.sheetTitle} numberOfLines={1}>{lastEditing.current != null ? workout.exercises[lastEditing.current]?.displayName : ''}</Text>
@@ -291,8 +296,10 @@ const s = StyleSheet.create({
 
   sheetBack: { backgroundColor: 'rgba(17,17,20,0.35)' },
   sheet: {
-    position: 'absolute', left: 8, right: 8, borderRadius: 40, overflow: 'hidden', backgroundColor: '#ffffff',
-    boxShadow: '0 -8px 24px -12px rgba(40,50,90,0.3)',
+    // Round 11 (the lag, measured where it can be): while the sheet slides, the phone used to redraw its soft shadow and its rounded clip on EVERY frame (a blurred
+    // shadow and an overflow clip on a moving view are drawn again each frame). Now there is no clip (the rows sit well inside the corners) and no blurred shadow
+    // (the dimmed screen behind it already separates it), and the sheet is drawn once and then only moved (shouldRasterizeIOS on the view).
+    position: 'absolute', left: 8, right: 8, borderRadius: 40, backgroundColor: '#ffffff',
   } as any,
   grabHit: { paddingTop: 10, paddingBottom: 4, alignItems: 'center' },
   grab: { width: 38, height: 5, borderRadius: 3, backgroundColor: '#dcdce1' },

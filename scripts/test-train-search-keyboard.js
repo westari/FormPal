@@ -33,7 +33,7 @@ const check = (n, ok, d) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${d ? ' 
   check('12 (round 8): after a tap on the search bar the page is untouched: still the full 844 canvas, nothing focused in the page', (await canvasH()) === 844 && await p.evaluate(() => document.activeElement.tagName !== 'INPUT'), String(await canvasH()));
   check('12 (round 8): the tap asked the app for its docked search bar (message "search")', msgs.some(m => m.type === 'search'));
   await p.screenshot({ path: path.join(OUT, 'search-focused.png') });
-  await p.evaluate(() => { window.__trSetQuery('squat'); window.__trReveal(); }); await p.waitForTimeout(1200);
+  await p.evaluate(() => { window.__trSetQuery('squat'); }); await p.waitForTimeout(1200);
   const res = await p.evaluate(() => { const rows = [...document.querySelectorAll('div')].filter(d => /Squat/i.test(d.textContent) && d.style.fontSize === '15px' && d.style.fontWeight === '600'); const r = rows[0] && rows[0].getBoundingClientRect(); const i = document.querySelector('input[placeholder*="Search"]').getBoundingClientRect(); return { n: rows.length, first: r && [Math.round(r.top), Math.round(r.bottom)], inputBottom: i.bottom, innerH: innerHeight }; });
   console.log('      results:', JSON.stringify(res));
   check('12: typing shows results below the search box, and the first one is inside the visible area (scrollable, not cut off)', res.n > 0 && res.first && res.first[1] <= res.innerH);

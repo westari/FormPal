@@ -259,10 +259,18 @@ export const CREATE_WORKOUT_DOM_JS = String.raw`
           var label = grp ? (dd.groupLabels.filter(function (g) { return g.id === grp; })[0] || { label: grp }).label + ' exercises' : 'Popular';
           // (round 8) the groups are a small tappable body map (the Progress tab's muscle map), front and back: tap a muscle to start from its group
           var gl = grp ? (dd.groupLabels.filter(function (g) { return g.id === grp; })[0] || { label: grp }).label : '';
-          var mapCard = '<div style="border-radius:24px;padding:12px 14px 10px;background:#ffffff;box-shadow:0 12px 28px -14px rgba(40,50,90,0.24),0 2px 6px -2px rgba(40,50,90,0.08);">'
-            + '<div data-cw-map="1" style="display:flex;justify-content:center;gap:18px;height:250px;">'
-            + '<div style="width:142px;height:250px;">' + (dd.map ? dd.map.front : '') + '</div><div style="width:142px;height:250px;">' + (dd.map ? dd.map.back : '') + '</div></div>'
-            + '<div style="text-align:center;font-size:13px;font-weight:600;color:#6e6e77;padding-top:8px;">' + (grp ? gl + ' selected. Tap it again to clear.' : 'Tap a muscle to start from it') + '</div></div>';
+          // (round 11) a cleaner, more premium card: a soft light backdrop, each figure lifted by a gentle shadow, small FRONT / BACK labels, and a pill that
+          // names the chosen group (tap the pill to clear it) instead of a sentence
+          var lab = 'text-align:center;font-size:10.5px;font-weight:700;letter-spacing:1.4px;color:#a3a3ad;padding-top:6px;';
+          var fig = 'width:142px;filter:drop-shadow(0 10px 14px rgba(30,40,70,0.14));';
+          var mapCard = '<div style="border-radius:26px;padding:16px 14px 14px;background:radial-gradient(90% 70% at 50% 0%, #ffffff 0%, #f6f6f9 100%);box-shadow:inset 0 0 0 0.5px rgba(255,255,255,0.9),0 14px 30px -16px rgba(40,50,90,0.26),0 2px 6px -2px rgba(40,50,90,0.08);">'
+            + '<div data-cw-map="1" style="display:flex;justify-content:center;gap:18px;">'
+            + '<div><div style="' + fig + 'height:250px;">' + (dd.map ? dd.map.front : '') + '</div><div style="' + lab + '">FRONT</div></div>'
+            + '<div><div style="' + fig + 'height:250px;">' + (dd.map ? dd.map.back : '') + '</div><div style="' + lab + '">BACK</div></div></div>'
+            + '<div style="display:flex;justify-content:center;padding-top:12px;min-height:30px;">'
+            + (grp ? '<div data-cw-clear="1" style="height:30px;padding:0 8px 0 14px;border-radius:999px;background:#111114;color:#ffffff;font-size:13px;font-weight:700;letter-spacing:-0.1px;display:flex;align-items:center;gap:8px;cursor:pointer;box-shadow:0 8px 16px -8px rgba(17,17,20,0.5);">' + gl + '<span style="width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,0.18);display:flex;align-items:center;justify-content:center;font-size:11px;line-height:1;">&#10005;</span></div>'
+                  : '<div style="font-size:13px;font-weight:600;color:#8a8a94;display:flex;align-items:center;">Tap a muscle to start from it</div>')
+            + '</div></div>';
           var rows = shown.map(function (n, i) {
             var on = !!added[n];
             return '<div data-cw-row="' + i + '" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 0;cursor:pointer;' + (i ? 'border-top:1px solid rgba(17,17,20,0.07);' : '') + '">'
@@ -286,6 +294,7 @@ export const CREATE_WORKOUT_DOM_JS = String.raw`
           st.__wired = true;
           st.addEventListener('click', function (ev) {
             var t = ev.target;
+            if (t.closest && t.closest('[data-cw-clear]')) { window.__cwGroup = ''; window.__cwMore = false; st.__sig = ''; if (window.__athltBump) window.__athltBump(); return; }
             var chip = t.closest && t.closest('[data-grp]');
             if (chip) { var id = chip.getAttribute('data-grp'); window.__cwGroup = window.__cwGroup === id ? '' : id; window.__cwMore = false; st.__sig = ''; if (window.__athltBump) window.__athltBump(); return; }
             var mo = t.closest && t.closest('[data-cw-more]');

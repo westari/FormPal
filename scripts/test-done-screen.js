@@ -18,7 +18,7 @@ let failed = 0;
 const check = (n, ok, d) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${d ? '  -> ' + d : ''}`); if (!ok) failed++; };
 
 // ── the titles ──
-check('titles by situation: Workout complete / Form check complete / Session logged / Workout created / Weight logged', JSON.stringify(I.DONE_TITLES) === JSON.stringify({ workout: 'Workout complete', formCheck: 'Form check complete', logged: 'Session logged', created: 'Workout created', weight: 'Weight logged' }));
+check('titles by situation: Workout complete / Form check complete! / Session logged / Workout created / Weight logged! (round 11: exclamation marks on the form check and weight titles)', JSON.stringify(I.DONE_TITLES) === JSON.stringify({ workout: 'Workout complete', formCheck: 'Form check complete!', logged: 'Session logged', created: 'Workout created', weight: 'Weight logged!' }));
 
 // ── the real lines ──
 check('workout: reps and clean-rep %, time, and the week: "27 reps, 89% clean in 12 min. 3 of 4 this week."', I.workoutDoneLine({ reps: 27, goodReps: 24, scored: true, durationSec: 720, week: { count: 3, goal: 4 } }) === '27 reps, 89% clean in 12 min. 3 of 4 this week.', I.workoutDoneLine({ reps: 27, goodReps: 24, scored: true, durationSec: 720, week: { count: 3, goal: 4 } }));

@@ -55,24 +55,22 @@ const data = { ...buildTrainData(plan, [], INS, new Date(2026, 10, 18, 9)), inse
   check('a real tap on the search bar asks the app for its docked bar (message "search")', msgs.some(m => m.type === 'search'), JSON.stringify(msgs.filter(m => m.type === 'search')));
   check('the page\'s box did NOT take focus (nothing focused in the page)', after.active !== 'INPUT', after.active);
   check('NOTHING moved: same scroll position, same canvas scale and height, same page height, the bar is where it was', after.scrollTop === before.scrollTop && after.canvasTf === before.canvasTf && after.canvasH === before.canvasH && after.bodyH === before.bodyH && after.winScroll === before.winScroll, JSON.stringify([before, after]));
-  // typing in the app's bar fills the design's own search
-  await p.evaluate(() => window.__trSetQuery('squat')); await p.waitForTimeout(500);
-  const typed = await p.evaluate(() => { const i = document.querySelector('input[placeholder="Search 120+ exercises"]'); return { value: i.value, rows: [...document.querySelectorAll('[aria-label="Check form"]')].length, text: /squat/i.test(document.body.innerText) }; });
-  check('what is typed in the app\'s bar becomes the design\'s own search: the box shows it and the real results appear', typed.value === 'squat' && typed.rows > 0 && typed.text, JSON.stringify(typed));
+  // the page's box reports where it is, and is hidden while the app's bar sits on top of it (it keeps its place: nothing moves)
+  const sm = msgs.find((m) => m.type === 'search');
+  check('round 11: the tap sends the box real place (left, top, width, height) so the app bar can start exactly on top of it', sm && sm.rect && Math.abs(sm.rect.top - (before.y - sm.rect.height / 2)) < 2 && sm.rect.width > 300 && sm.rect.height > 40, JSON.stringify(sm));
+  await p.evaluate(() => window.__trSearchHide(true)); await p.waitForTimeout(100);
+  const hid = await p.evaluate(() => { const i = document.querySelector('input[placeholder="Search 120+ exercises"]'); const r = i.parentElement.getBoundingClientRect(); return { vis: getComputedStyle(i.parentElement).visibility, top: Math.round(r.top) }; });
   const mid = await snap();
-  check('typing alone moves nothing either (the scroll happens only when the app asks for it)', mid.scrollTop === before.scrollTop && mid.canvasTf === before.canvasTf, JSON.stringify([before.scrollTop, mid.scrollTop]));
-  await p.evaluate(() => window.__trReveal()); await p.waitForTimeout(1200);
-  const rev = await snap();
-  check('the one reveal scroll puts the search and its results up in the visible area above the keyboard (it is lifted toward the top), and the canvas is untouched', rev.y < 874 * 0.4 && rev.canvasTf === before.canvasTf && rev.canvasH === before.canvasH, JSON.stringify([rev.y, rev.scrollTop]));
-  await p.evaluate(() => window.__trSetQuery('')); await p.waitForTimeout(300);
-  check('clearing it brings the page back to the normal list', await p.evaluate(() => document.querySelector('input[placeholder="Search 120+ exercises"]').value === ''));
+  check('round 11: while the app bar is on top, the page own box is only hidden (visibility): it does not move, nothing around it changes and the scroll position is the same', hid.vis === 'hidden' && mid.scrollTop === before.scrollTop && mid.canvasTf === before.canvasTf && mid.canvasH === before.canvasH && Math.abs(hid.top - Math.round(sm.rect.top)) <= 1, JSON.stringify([hid, mid.scrollTop, before.scrollTop]));
+  await p.evaluate(() => window.__trSearchHide(false)); await p.waitForTimeout(100);
+  check('round 11: it is shown again when the search closes', await p.evaluate(() => getComputedStyle(document.querySelector('input[placeholder="Search 120+ exercises"]').parentElement).visibility) === 'visible');
   await browser.close();
 
-  // ── the native side (source order; the phone log line proves it live: "[TRAIN] search bar opened (docked above the keyboard)") ──
+  // ── the native side (source order; the phone log line proves it live: "[TRAIN] search opened: the bar is on the page own box and rises with the keyboard") ──
   const src = fs.readFileSync(path.join(ROOT, 'app', '(tabs)', 'train.tsx'), 'utf8').split('\r\n').join('\n');
-  check('app: the docked bar rises with the keyboard by a NATIVE transform (translateY from the keyboard height, native driver), no layout change and no KeyboardAvoidingView', /translateY: Animated\.multiply\(kbH, -1\)/.test(src) && /keyboardWillShow/.test(src) && /useNativeDriver: true/.test(src.slice(src.indexOf('keyboardWillShow'), src.indexOf('keyboardWillShow') + 400)) && !/KeyboardAvoidingView/.test(src));
-  check('app: the bar fades in with the keyboard (no flash at the bottom of the screen before it rises) and a tap outside closes it', /opacity: kbH\.interpolate\(\{ inputRange: \[0, 40\], outputRange: \[0, 1\]/.test(src) && /train-search-dismiss/.test(src) && /returnKeyType="search"/.test(src));
-  check('app: typing is sent to the page\'s search and the one reveal scroll is asked for once, at the first letter', /__trSetQuery/.test(src) && /searchRevealed\.current = true/.test(src) && /__trReveal/.test(src));
-  check('app: opening it logs a [TRAIN] line', /search bar opened \(docked above the keyboard\)/.test(src));
+  check('app: the bar starts EXACTLY on the page box (its top set to the box top before it is shown) and rises with the keyboard by a native transform with the keyboard own duration (like a normal iOS search)', /barY\.setValue\(r\.top\)/.test(src) && /keyboardWillShow/.test(src) && /toValue: screenH - e\.endCoordinates\.height - BAR_GAP - BAR_H, duration: e\.duration \|\| 250/.test(src) && /useNativeDriver: true/.test(src.slice(src.indexOf('keyboardWillShow'), src.indexOf('keyboardWillShow') + 500)) && /translateY: barY/.test(src) && !/KeyboardAvoidingView/.test(src));
+  check('app: and when it closes the bar slides back down onto the page box with the keyboard, then the page box is shown again', /toValue: y0Ref\.current, duration: \(e && e\.duration\) \|\| 250/.test(src) && /__trSearchHide\(false\)/.test(src));
+  check('app: the results are listed in a card right above the bar from the app own catalogue list (rankExercises), each row opens the form check; the PAGE is never scrolled and never sent the text (no reveal scroll, no query pushed)', /rankExercises\(libRef\.current\.lib, search\.text, 8\)/.test(src) && /router\.push\(`\/formcheck\?exercise=\$\{id\}`/.test(src) && !/__trReveal/.test(src) && !/injectJavaScript\(`window\.__trSetQuery/.test(src));
+  check('app: the bar has the page own look (white pill, 48px) and opening logs a [TRAIN] line', /searchBar: \{ height: 48, borderRadius: 24/.test(src) && /search opened: the bar is on the page/.test(src));
   console.log(failed ? `${failed} FAILED` : 'ALL PASSED'); process.exit(failed ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

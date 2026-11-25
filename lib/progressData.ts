@@ -13,7 +13,7 @@ import {
   type SessionEntry, type MuscleTiers, type Tier,
 } from './sessionLog';
 import { computeOverallStanding, MUSCLE_DISPLAY_ORDER } from '../components/MuscleTierMap';
-import { bodyMapSvg } from './bodyMapSvg'; // the clean map (soft silhouette, no per-muscle lines). The busier outlined drawing is lib/progressBodyMap.ts, not used.
+import { bodyMapOutlinedSvg } from './bodyMapSvg'; // the one shared muscle map, outlined in the shared ink (round 11: the same look as Create workout's map)
 import type { WeightEntry } from './weightLog';
 
 export const MUSCLE_LABEL: Record<Muscle, string> = {
@@ -167,7 +167,7 @@ export function buildProgressData(
       streak: calcStreak(sessions), hi: meta.hi, lo: meta.lo, ink: meta.ink, emblem: null,
     },
     muscles, weakest,
-    bodyMap: { front: bodyMapSvg(tiers, 'front'), back: bodyMapSvg(tiers, 'back') },
+    bodyMap: { front: bodyMapOutlinedSvg(tiers, 'front'), back: bodyMapOutlinedSvg(tiers, 'back') },
     ladder: TIER_ORDER.map(t => ({
       name: cap(t), tier: t, img: null,
       state: !tier ? 'locked' : t === tier ? 'you' : tierIndex(t) < tierIndex(tier) ? 'done' : 'locked',

@@ -28,7 +28,7 @@
 
 import { markTabReady, markTabLoading } from '../../lib/tabReady';
 import React, { useCallback, useRef, useState, useEffect } from 'react';
-import { View, StyleSheet, Animated, Easing, Keyboard, TextInput, Pressable, Platform } from 'react-native';
+import { View, Text, StyleSheet, Animated, Easing, Keyboard, TextInput, Pressable, Platform, useWindowDimensions } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { createTabLag } from '../../lib/tabLag';
@@ -47,7 +47,7 @@ import { HOME_CUE_REAL_JS } from './index';
 import { loadPlan } from '../../lib/planStorage';
 import { getAllSessions } from '../../lib/sessionLog';
 import { askCue } from '../../lib/cueApi';
-import { buildTrainData, type TrainData } from '../../lib/trainData';
+import { buildTrainData, rankExercises, type TrainData } from '../../lib/trainData';
 import { ADD_PICKER_JS } from '../../lib/addExercisePicker';
 import { HAPTIC_PAGE_JS, hapticKind } from '../../lib/haptics';
 import { extractTrainImages } from '../../lib/trainTemplate';
@@ -497,9 +497,10 @@ export const TRAIN_WEB_INJECT = `
   function schedule() { ensureCss(); clearTimeout(deb); deb = setTimeout(tick, 60); }
   try { new MutationObserver(schedule).observe(document, { childList: true, subtree: true }); } catch (e) {}
   window.addEventListener('resize', schedule);
-  // PRACTICE SEARCH (round 8): the page's own search box NEVER takes focus. A focused box inside the page makes iOS shift the whole page and the page
-  // re-lay itself out (the jump and the flicker). A tap on it asks the app for its own docked search bar instead, which rises with the keyboard
-  // by itself while the page stays exactly where it is (see TrainScreen). What is typed there is sent back here (__trSetQuery).
+  // PRACTICE SEARCH (round 11). The page's own search box NEVER takes focus (a focused box inside the page makes iOS shift the whole page and the page re-lay
+  // itself out: the jump and the flicker). A tap on it asks the app for its own search, like a normal iOS search: the app draws a bar exactly where this box is,
+  // slides it up with the keyboard, and lists the results above it. The page does not move, scroll or change at all; this box is only hidden while the app's bar is
+  // on top of it (__trSearchHide) so it never shows twice.
   var SEARCH_PH = 'Search 120+ exercises';
   function searchInput() { return document.querySelector('input[placeholder="' + SEARCH_PH + '"]'); }
   function lockSearch() {
@@ -513,7 +514,8 @@ export const TRAIN_WEB_INJECT = `
     ev.preventDefault(); ev.stopPropagation();
     var i = searchInput();
     try { i.blur(); } catch (e) {}
-    post({ type: 'search', value: i.value || '' });
+    var r = i.parentElement.getBoundingClientRect();
+    post({ type: 'search', value: i.value || '', rect: { left: r.left, top: r.top, width: r.width, height: r.height } });
   }, true);
   ['pointerdown', 'mousedown', 'touchstart'].forEach(function (n) { document.addEventListener(n, function (ev) { if (inSearchBox(ev.target)) ev.preventDefault(); }, true); });
   document.addEventListener('focusin', function (e) {
@@ -523,16 +525,10 @@ export const TRAIN_WEB_INJECT = `
     // (the Cue chat box) a tapped box is brought above the keyboard (after the page has resized for it)
     [320, 700].forEach(function (ms) { setTimeout(function () { try { if (document.activeElement === t) t.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (err) {} }, ms); });
   }, true);
-  // what was typed in the app's search bar becomes the page's query (the design's own search state: the results list is the design's)
+  // (the design's own results list can still be driven from outside, for tests: the app's search no longer uses it)
   window.__trSetQuery = function (q) { if (window.__trSelf) window.__trSelf.setState({ query: String(q || '') }); };
-  // once, when the first letter makes results appear: one smooth scroll so the results sit above the keyboard (nothing moves before that)
-  window.__trReveal = function () {
-    var i = searchInput(); if (!i) return;
-    var sc = i.closest('[data-scroll]'); if (!sc) return;
-    var r = i.parentElement.getBoundingClientRect();
-    var to = Math.max(0, sc.scrollTop + r.top - window.innerHeight * 0.16);
-    try { sc.scrollTo({ top: to, behavior: 'smooth' }); } catch (e) { sc.scrollTop = to; }
-  };
+  // the page's own search pill is hidden while the app's bar sits on top of it (it keeps its place, so nothing moves)
+  window.__trSearchHide = function (on) { var i = searchInput(); if (i && i.parentElement) i.parentElement.style.setProperty('visibility', on ? 'hidden' : 'visible', 'important'); };
   window.__trainTick = tick;
   setInterval(tick, 400);
   tick();
@@ -622,6 +618,7 @@ export default function TrainScreen() {
     }
     const js = athltSetDataJs(td);
     streakRef.current = td.streak;
+    libRef.current = { lib: td.lib, ids: td.libIds };
     // same data as the page already has: send nothing (re-sending it on every tab visit made the page redraw: a small glitch)
     if (js === dataJsRef.current) { tlog('data unchanged, not pushed again'); return; }
     dataJsRef.current = js;
@@ -657,31 +654,51 @@ export default function TrainScreen() {
     } catch (e) { tlog('ERROR saving the edit:', e && (e as Error).message ? (e as Error).message : String(e)); }
   }, [pushData]);
 
-  // THE DOCKED SEARCH BAR (round 8). The page's own search box never takes focus (that made the whole page jump and flicker); a tap on it opens this bar,
-  // which rises with the keyboard by itself (a native transform, on the UI thread) while the page stays exactly where it is. Typing here fills the
-  // design's own search (the results list is the design's). Nothing else moves.
-  const [search, setSearch] = useState<{ text: string } | null>(null);
-  const kbH = useRef(new Animated.Value(0)).current;
-  const searchRevealed = useRef(false);
+  // THE SEARCH (round 11): a normal iOS search. A tap on the page's search box opens the app's own bar exactly on top of it (same place, same look); the bar slides
+  // up with the keyboard (a native transform, on the UI thread, with the keyboard's own duration), the matching exercises are listed in a card above it, and when it
+  // closes the bar slides back down onto the page's box. The page itself does not move, scroll or change at all.
+  const { height: screenH } = useWindowDimensions();
+  const [search, setSearch] = useState<{ text: string; left: number; width: number; y0: number } | null>(null);
+  const barY = useRef(new Animated.Value(0)).current;       // the bar's top edge (screen points), moved by the native driver
+  const kbHeight = useRef(0);
+  const searchOpen = useRef(false);
+  const y0Ref = useRef(0);
+  const libRef = useRef<{ lib: [string, string][]; ids: Record<string, string> }>({ lib: [], ids: {} });
+  const BAR_H = 48, BAR_GAP = 12;
   useEffect(() => {
     const show = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', (e) => {
-      Animated.timing(kbH, { toValue: e.endCoordinates.height, duration: e.duration || 250, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+      kbHeight.current = e.endCoordinates.height;
+      if (!searchOpen.current) return;
+      Animated.timing(barY, { toValue: screenH - e.endCoordinates.height - BAR_GAP - BAR_H, duration: e.duration || 250, easing: Easing.bezier(0.25, 0.1, 0.25, 1), useNativeDriver: true }).start();
     });
     const hide = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', (e) => {
-      Animated.timing(kbH, { toValue: 0, duration: (e && e.duration) || 220, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start(({ finished }) => { if (finished) setSearch(null); });
+      if (!searchOpen.current) return;
+      searchOpen.current = false;
+      Animated.timing(barY, { toValue: y0Ref.current, duration: (e && e.duration) || 250, easing: Easing.bezier(0.25, 0.1, 0.25, 1), useNativeDriver: true }).start(() => {
+        setSearch(null); webRef.current?.injectJavaScript('window.__trSearchHide && window.__trSearchHide(false); true;');
+      });
     });
     return () => { show.remove(); hide.remove(); };
-  }, [kbH]);
-  const closeSearch = useCallback(() => { Keyboard.dismiss(); setTimeout(() => setSearch(null), 400); }, []);
-  const onSearchText = useCallback((t: string) => {
-    setSearch({ text: t });
-    webRef.current?.injectJavaScript(`window.__trSetQuery && window.__trSetQuery(${JSON.stringify(t)}); true;`);
-    if (t.trim() && !searchRevealed.current) { searchRevealed.current = true; setTimeout(() => webRef.current?.injectJavaScript('window.__trReveal && window.__trReveal(); true;'), 120); }
-  }, []);
+  }, [barY, screenH]);
+  const closeSearch = useCallback(() => { Keyboard.dismiss(); }, []);
+  const openSearch = useCallback((m: { value?: string; rect?: { left: number; top: number; width: number } }) => {
+    const r = m.rect ?? { left: 14, top: screenH - 200, width: 362 };
+    y0Ref.current = r.top; barY.setValue(r.top); searchOpen.current = true;
+    setSearch({ text: m.value ?? '', left: r.left, width: r.width, y0: r.top });
+    webRef.current?.injectJavaScript('window.__trSearchHide && window.__trSearchHide(true); true;');
+    tlog('search opened: the bar is on the page\'s own box and rises with the keyboard');
+  }, [barY, screenH]);
+  const results = React.useMemo(() => (search && search.text.trim() ? rankExercises(libRef.current.lib, search.text, 8) : []), [search]);
+  const onPickResult = useCallback((name: string) => {
+    const id = libRef.current.ids[name];
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Keyboard.dismiss();
+    if (id) setTimeout(() => router.push(`/formcheck?exercise=${id}` as any), 120);
+  }, [router]);
 
   function onMsg(raw: string) {
     pongAt.current = Date.now();
-    let m: { type?: string; to?: string; id?: string; fp?: string; text?: string; value?: string; level?: string; msg?: string; wid?: string; rows?: [string, string][] };
+    let m: { type?: string; to?: string; id?: string; fp?: string; text?: string; value?: string; rect?: { left: number; top: number; width: number; height: number }; level?: string; msg?: string; wid?: string; rows?: [string, string][] };
     try { m = JSON.parse(raw); } catch { return; }
     switch (m.type) {
       case 'pong': return;
@@ -691,7 +708,7 @@ export default function TrainScreen() {
       case 'notReady': tlog('page NOT ready after 3s, parts:', JSON.stringify((m as any).parts)); return;
       case 'needData': tlog('page asked for data;', dataJsRef.current ? 'sending' : 'not loaded yet'); if (imgsJsRef.current) webRef.current?.injectJavaScript(imgsJsRef.current); if (dataJsRef.current) webRef.current?.injectJavaScript(dataJsRef.current); return;
       case 'logicReady': return;
-      case 'search': searchRevealed.current = false; setSearch({ text: m.value ?? '' }); tlog('search bar opened (docked above the keyboard)'); return;
+      case 'search': openSearch(m as any); return;
       case 'pageConsole': if (m.level === 'error' || m.level === 'warn') tlog('page ' + m.level + ':', m.msg); return;
       case 'homeCueSend': if (m.text) void handleCueSend(m.text); return;
       case 'saveEdit':
@@ -750,24 +767,38 @@ export default function TrainScreen() {
         <>
           {/* a tap anywhere else closes it */}
           <Pressable style={StyleSheet.absoluteFill} onPress={closeSearch} accessibilityLabel="Close search" testID="train-search-dismiss" />
-          <Animated.View
-            style={[s.searchBar, { opacity: kbH.interpolate({ inputRange: [0, 40], outputRange: [0, 1], extrapolate: 'clamp' }), transform: [{ translateY: Animated.multiply(kbH, -1) }] }]}
-            testID="train-search-bar"
-          >
-            <SymbolView name={'magnifyingglass' as any} size={17} weight="semibold" tintColor="#8e8e96" type="monochrome" style={s.searchIcon} />
-            <TextInput
-              style={s.searchInput}
-              value={search.text}
-              onChangeText={onSearchText}
-              placeholder="Search 120+ exercises"
-              placeholderTextColor="#a2a2aa"
-              autoFocus
-              autoCorrect={false}
-              autoCapitalize="none"
-              returnKeyType="search"
-              onSubmitEditing={closeSearch}
-              clearButtonMode="while-editing"
-            />
+          <Animated.View style={{ position: 'absolute', left: search.left, width: search.width, top: 0, height: BAR_H, transform: [{ translateY: barY }] }} testID="train-search-bar" pointerEvents="box-none">
+            {results.length > 0 ? (
+              <View style={s.resCard} testID="train-search-results">
+                {results.map((r, i) => (
+                  <Pressable key={r[0]} onPress={() => onPickResult(r[0])} style={[s.resRow, i > 0 && s.resLine]} accessibilityLabel={'Check form: ' + r[0]}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.resName} numberOfLines={1}>{r[0]}</Text>
+                      <Text style={s.resSub} numberOfLines={1}>{r[1]}</Text>
+                    </View>
+                    <Text style={s.resGo}>Check form</Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : search.text.trim() ? (
+              <View style={[s.resCard, { paddingVertical: 16 }]}><Text style={s.resEmpty}>No exercises match that.</Text></View>
+            ) : null}
+            <View style={s.searchBar}>
+              <SymbolView name={'magnifyingglass' as any} size={17} weight="semibold" tintColor="#8e8e96" type="monochrome" style={s.searchIcon} />
+              <TextInput
+                style={s.searchInput}
+                value={search.text}
+                onChangeText={(t) => setSearch((c) => (c ? { ...c, text: t } : c))}
+                placeholder="Search 120+ exercises"
+                placeholderTextColor="#a2a2aa"
+                autoFocus
+                autoCorrect={false}
+                autoCapitalize="none"
+                returnKeyType="search"
+                onSubmitEditing={closeSearch}
+                clearButtonMode="while-editing"
+              />
+            </View>
           </Animated.View>
         </>
       )}
@@ -777,7 +808,15 @@ export default function TrainScreen() {
 
 const s = StyleSheet.create({
   // the docked search bar: the design's own search pill (white, round, soft shadow), parked at the bottom and lifted by the keyboard's height
-  searchBar: { position: 'absolute', left: 14, right: 14, bottom: 12, height: 48, borderRadius: 24, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#ffffff', boxShadow: '0 8px 18px -8px rgba(40,50,90,0.28), 0 1px 3px -1px rgba(40,50,90,0.1)' } as any,
+  searchBar: { height: 48, borderRadius: 24, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#ffffff', boxShadow: '0 8px 18px -8px rgba(40,50,90,0.28), 0 1px 3px -1px rgba(40,50,90,0.1)' } as any,
+  // the results: a white card sitting right above the bar (it grows upward from the bar)
+  resCard: { position: 'absolute', left: 0, right: 0, bottom: 48 + 10, borderRadius: 24, backgroundColor: '#ffffff', paddingHorizontal: 16, paddingVertical: 4, boxShadow: '0 14px 30px -12px rgba(40,50,90,0.30), 0 2px 6px -2px rgba(40,50,90,0.10)' } as any,
+  resRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 10 },
+  resLine: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(17,17,20,0.12)' },
+  resName: { fontSize: 15.5, fontWeight: '600', color: '#111114', letterSpacing: -0.2 },
+  resSub: { fontSize: 12.5, fontWeight: '500', color: '#7a7a84', marginTop: 1 },
+  resGo: { fontSize: 13.5, fontWeight: '700', color: '#2E7DFF' },
+  resEmpty: { fontSize: 14, fontWeight: '500', color: '#5f5f69', textAlign: 'center' },
   searchIcon: { width: 17, height: 17 },
   searchInput: { flex: 1, minWidth: 0, fontSize: 16, fontWeight: '500', color: '#111114', padding: 0 },
   root: { flex: 1, backgroundColor: '#eeeef1' },

@@ -50,23 +50,23 @@ check('GLASS_SUPPORTED is true in this setup (the real native path, not the flat
 tag = 'finish';
 renderToString(h(LG.LiquidGlassButton, { onPress: () => {}, radius: 20, colorScheme: finProps.colorScheme, fallbackColor: finProps.fallbackColor, style: { width: 80, height: 40 } }, h(RNW.Text, null, 'Finish')));
 tag = 'calendar';
-const html = renderToString(h(RNW.View, { style: { flex: 1 } }, h(Cal, { open: true, onClose: () => {}, timestamps: [Date.now()] })));
+const html = renderToString(h(RNW.View, { style: { flex: 1 } }, h(Cal, { timestamps: [Date.now()] })));
 tag = 'none';
 
 const F = calls.find((c) => c.tag === 'finish'), C = calls.filter((c) => c.tag === 'calendar');
 console.log('      Finish  :', JSON.stringify(F));
 console.log('      Calendar:', JSON.stringify(C));
 check('the Finish pill goes through the native glass view (effect + colour scheme given to it)', !!F && !!F.effect && !!F.colorScheme);
-check('the calendar panel goes through the SAME native glass view: exactly one native glass view is drawn for the whole panel', C.length === 1);
-check('same native view and material: LiquidGlassView with the same effect ("regular") as the Finish pill', C.length === 1 && C[0].effect === F.effect && F.effect === 'regular');
-check('round 10: the look is the LIGHT scheme on purpose (dark glass over the white Home page read as gray): the calendar is "light", the Finish pill stays "dark"', C.length === 1 && C[0].colorScheme === 'light' && F.colorScheme === 'dark' && finProps.colorScheme === 'dark');
-check('same tint: none on either (the Finish pill has no tint, so neither has the calendar)', C.length === 1 && C[0].tintColor === undefined && F.tintColor === undefined && !finProps.hasTint && !finProps.hasVariant);
-check('the fallback fill (only used where there is no real glass) is the light one (the tab bar glass fill)', /fallbackColor: 'rgba\(255,255,255,0\.82\)'/.test(read('components/CalendarSheet.tsx')));
+check('the calendar goes through the SAME native glass view: two native glass views are drawn, the panel and its little pointer', C.length === 2);
+check('same native view and material: LiquidGlassView with the same effect ("regular") as the Finish pill', C.length === 2 && C.every((c) => c.effect === F.effect) && F.effect === 'regular');
+check('round 10: the look is the LIGHT scheme on purpose (dark glass over the white Home page read as gray): the calendar is "light", the Finish pill stays "dark"', C.length === 2 && C.every((c) => c.colorScheme === 'light') && F.colorScheme === 'dark' && finProps.colorScheme === 'dark');
+check('same tint: none on either (the Finish pill has no tint, so neither has the calendar)', C.length === 2 && C.every((c) => c.tintColor === undefined) && F.tintColor === undefined && !finProps.hasTint && !finProps.hasVariant);
+check('the fallback fill (only used where there is no real glass) is the light one (the tab bar glass fill)', /fallbackColor: 'rgba\(255,255,255,0\.86\)'/.test(read('components/CalendarSheet.tsx')));
 
 // what sits above the glass could flatten it: nothing may (no opacity, no overflow, no mask on any parent of the native view)
 const csrc = read('components/CalendarSheet.tsx');
-const panelStyle = /panel: \{[^}]*\}/.exec(csrc)[0];
-check('no parent of the calendar glass fades, clips or masks it: no opacity, no overflow, no borderRadius, no mask on the panel wrapper, and nothing in its animated style but the slide', !/opacity|overflow|mask/.test(panelStyle) && /style=\{\[s\.panel, \{ top: -BLEED, transform: \[\{ translateY: slide \}\] \}\]\}/.test(csrc) && !/opacity: parkedWarm|WARM_MS/.test(csrc));
-check('the month is INSIDE the glass view (as the word is inside the Finish pill): the native glass view contains the title and the days', /<LiquidGlass radius=\{RADIUS\}[^>]*style=\{\[s\.inner/.test(csrc) && /<\/LiquidGlass>/.test(csrc) && /native-glass[^]*November|native-glass[^]*Nov|native-glass[^]*January|native-glass[^]*December/.test(html.replace(/<[^>]+>/g, (m) => (/data-testid="native-glass"/.test(m) ? m : ''))));
+const panelStyle = /pop: \{.*\}/.exec(csrc)[0];
+check('no parent of the calendar glass fades, clips or masks it: no opacity, no overflow, no mask on the popover wrapper, and its animated style is only a move (translate and scale)', !/opacity|overflow|mask/.test(panelStyle) && /transform: \[\{ translateY: ty \}, \{ scale: sc \}\]/.test(csrc));
+check('the month is INSIDE the glass view (as the word is inside the Finish pill): the native glass view contains the title and the days', /<LiquidGlass radius=\{RADIUS\}[^>]*style=\{s\.inner\}/.test(csrc) && /<\/LiquidGlass>/.test(csrc) && /native-glass[^]*November|native-glass[^]*Nov|native-glass[^]*January|native-glass[^]*December/.test(html.replace(/<[^>]+>/g, (m) => (/data-testid="native-glass"/.test(m) ? m : ''))));
 check('it is not a blur or an imitation: no BlurView, no backdropFilter, no hand-painted gradient glass in the calendar', !/BlurView|backdropFilter|GlassSurface|expo-blur|LinearGradient/.test(csrc));
 console.log(failed ? `\n${failed} FAILED` : '\nall passed'); process.exit(failed ? 1 : 0);

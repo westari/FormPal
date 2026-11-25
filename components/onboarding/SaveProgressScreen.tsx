@@ -1,9 +1,10 @@
 /**
  * components/onboarding/SaveProgressScreen.tsx
  *
- * "Save your progress" (rebuilt round 10 to Ari's reference): a dark space screen (components/onboarding/SpaceBackground.tsx: stars and the lit edge of a planet),
- * the FormPal logo in the middle, then big pill buttons at the bottom: "Continue with Apple" (white), "Continue with email" (dark grey), and the two footer
- * links. The button you used last time carries a small "Last used" tag (remembered on this phone).
+ * "Save your progress" (rebuilt round 10, background changed round 11): a dark GYM screen (components/onboarding/GymBackground.tsx: the back wall of a gym in low
+ * light, a dumbbell rack, barbells, kettlebells), the REAL FormPal logo (assets/images/formpal-logo.png) a little below the middle, then big pill buttons at the
+ * bottom: "Continue with Apple" (white), "Continue with email" (dark grey), and the two footer links. The button you used last time carries a small "Last used" tag.
+ * No back button except on the e-mail form (it needs a way back to the choices).
  * There is no Google button: Google sign-in is not built, and a button that does nothing is worse than none (the earlier instruction was "No Google for now").
  *
  * Real auth (unchanged): Apple via expo-apple-authentication + Supabase signInWithIdToken, email via Supabase signUp/signInWithPassword. On success it pushes
@@ -18,7 +19,7 @@ import * as Haptics from '../../lib/haptics';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { SymbolView } from 'expo-symbols';
 import OnbBackButton from './OnbBackButton';
-import SpaceBackground, { SPACE_BG } from './SpaceBackground';
+import GymBackground, { GYM_BG } from './GymBackground';
 import FormPalLogo from './FormPalLogo';
 import { PJS } from '../../constants/theme';
 import { supabase } from '../../constants/supabase';
@@ -137,7 +138,7 @@ export default function SaveProgressScreen({
     // root carries the opaque dark background and is NEVER animated (opacity on the same view as the background would fade it out and expose the
     // navigator's own dark colour behind it as a flash).
     <View style={[s.root, { paddingTop: topInset }]}>
-      <SpaceBackground />
+      <GymBackground />
       <Animated.View style={{ flex: 1, opacity: fade }}>
         <View style={s.headerRow}>
           {/* (Ari 2026-11-25) No back button and no progress bar from "building your plan" onward. The ONE exception is the
@@ -151,7 +152,7 @@ export default function SaveProgressScreen({
         </View>
 
         <View style={s.logoWrap} pointerEvents="none">
-          <FormPalLogo size={36} />
+          <FormPalLogo size={132} />
         </View>
 
         {!emailMode ? (
@@ -160,7 +161,7 @@ export default function SaveProgressScreen({
               <Pressable style={s.white} onPress={handleApple} disabled={loading} testID="save-apple">
                 {loading ? <ActivityIndicator color="#111114" /> : (
                   <>
-                    <SymbolView name="apple.logo" size={18} tintColor="#111114" type="monochrome" style={{ width: 18, height: 18, marginRight: 10 }} />
+                    <SymbolView name="apple.logo" size={26} tintColor="#111114" type="monochrome" style={{ width: 26, height: 26, marginRight: 10, marginTop: -2 }} />
                     <Text style={s.whiteTxt}>Continue with Apple</Text>
                   </>
                 )}
@@ -227,7 +228,7 @@ export default function SaveProgressScreen({
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: SPACE_BG },
+  root: { flex: 1, backgroundColor: GYM_BG },
 
   headerRow: { paddingTop: 8, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center' },
   skipBtn: { paddingHorizontal: 14, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.14)' },
@@ -235,8 +236,8 @@ const s = StyleSheet.create({
   progTrack: { height: 4, backgroundColor: 'rgba(255,255,255,0.16)', borderRadius: 2, overflow: 'hidden' },
   progFill:  { height: 4, backgroundColor: '#ffffff', borderRadius: 2 },
 
-  // the logo sits where the reference's does: a little below the middle, over the dark of the planet
-  logoWrap: { position: 'absolute', left: 0, right: 0, top: '53%', alignItems: 'center' },
+  // the real FormPal logo, a little above the buttons, over the dark floor of the gym
+  logoWrap: { position: 'absolute', left: 0, right: 0, top: '47%', alignItems: 'center' },
 
   // everything below the logo is pushed to the bottom
   body: { flex: 1, justifyContent: 'flex-end', paddingHorizontal: 20 },

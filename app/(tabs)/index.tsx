@@ -51,7 +51,7 @@ import { plannedMeta } from '../../lib/trainData';
 import { tabBarCover } from '../../lib/tabBarMetrics';
 import { TAB_HEADER_JS } from '../../lib/tabHeader';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import CalendarSheet from '../../components/CalendarSheet';
+import CalendarSheet, { type CalendarHandle } from '../../components/CalendarSheet';
 import { resolveWeeklyGoal } from '../../lib/weeklyGoal';
 import { homeRings, ringDoneKey, ringsToCelebrate } from '../../lib/homeRings';
 import { HOME_RINGS_JS } from '../../lib/homeRingsPage';
@@ -562,13 +562,14 @@ export default function HomeScreen() {
   const { fade, revealedRef, onReady, onLoadStart, onLoadEnd, hide } = useRevealFade(m => { if (__DEV__) console.log('[HOME]', m); });
   // one picture per recent workout (same code as the Progress tab): a video frame, else its muscle icon
   const [thumbs, setThumbs] = useState<{ thumb: string | null; fallback: string | null; logged?: boolean; ts?: number }[]>([]);
-  const [calOpen, setCalOpen] = useState(false);          // the calendar dropped down from the date (tap the date or its arrow)
+  // The calendar popover under the date's arrow (tap the date or its arrow). Held by a ref (round 11): opening it never re-renders Home, so it opens at once.
+  const calRef = useRef<CalendarHandle>(null);
   const [workoutTimes, setWorkoutTimes] = useState<number[]>([]); // every saved workout's time, for the calendar's dots
   const [reloadTick, setReloadTick] = useState(0);
   // the date's arrow points up while the calendar is dropped down
-  React.useEffect(() => { webRef.current?.injectJavaScript(`window.__fpChevron && window.__fpChevron(${calOpen}); true;`); }, [calOpen]);
+  const onCalOpenChange = useCallback((open: boolean) => { webRef.current?.injectJavaScript(`window.__fpChevron && window.__fpChevron(${open}); true;`); }, []);
   // leaving Home closes it
-  useFocusEffect(useCallback(() => () => setCalOpen(false), [])); // bumped after a workout is deleted: the page's data is built again
+  useFocusEffect(useCallback(() => () => calRef.current?.close(), [])); // bumped after a workout is deleted: the page's data is built again
 
   const homeLag = useRef(createTabLag('home')).current;
   useFocusEffect(useCallback(() => {
@@ -631,7 +632,7 @@ export default function HomeScreen() {
           if (msg.type === 'ready') { markTabReady('index'); onReady(); return; }
           if (msg.type === 'start') { router.push('/workout' as any); return; }
           if (msg.type === 'cue') { router.push('/cue' as any); return; }
-          if (msg.type === 'calendar') { setCalOpen(o => !o); return; }
+          if (msg.type === 'calendar') { calRef.current?.toggle(typeof (msg as any).top === 'number' ? { top: (msg as any).top, cx: typeof (msg as any).cx === 'number' ? (msg as any).cx : 250 } : null); return; }
           if (msg.type === 'streak') { router.push({ pathname: '/streak-screen', params: { from: 'tab', dest: '/(tabs)' } } as any); return; }
           if (msg.type === 'ring' && (msg as any).id) { router.push(`/goal/${encodeURIComponent(String((msg as any).id))}` as any); return; }
           if (msg.type === 'moves') { router.push('/learn-moves' as any); return; }
@@ -671,7 +672,7 @@ export default function HomeScreen() {
         cacheEnabled={false}
       />
       </Animated.View>
-      <CalendarSheet open={calOpen} onClose={() => setCalOpen(false)} timestamps={workoutTimes} />
+      <CalendarSheet ref={calRef} timestamps={workoutTimes} onOpenChange={onCalOpenChange} />
     </View>
   );
 }

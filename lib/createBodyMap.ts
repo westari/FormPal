@@ -10,7 +10,7 @@
  *   back  -> lats, traps, lower back                                core -> abs
  *   legs  -> quads, hamstrings, glutes, calves
  */
-import { bodyMapTappableSvg } from './bodyMapSvg';
+import { bodyMapTappableSvg, MAP_INK } from './bodyMapSvg';
 
 /** fragment id (without its "-2" style number, lower case) -> Create workout group */
 export const GROUP_OF_FRAGMENT: Record<string, string> = {
@@ -20,7 +20,7 @@ export const GROUP_OF_FRAGMENT: Record<string, string> = {
 export const groupOfId = (id: string): string | null => GROUP_OF_FRAGMENT[id.replace(/-\d+$/, '').toLowerCase()] ?? null;
 
 /** The SAME muscle map as the Progress tab and the after-workout screens (lib/bodyMapSvg.ts), outlined, every muscle tappable. Dark outlines on everything. */
-export const CREATE_MAP_INK = '#23262f';
+export const CREATE_MAP_INK = MAP_INK; // (shared with the Progress tab's map: one ink)
 export function createBodyMapSvg(side: 'front' | 'back'): string {
   return bodyMapTappableSvg(side, { groupOf: groupOfId, ink: CREATE_MAP_INK });
 }

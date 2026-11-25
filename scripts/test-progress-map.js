@@ -29,10 +29,10 @@ const check = (name, ok, detail) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${na
     });
   });
   check('rank card shows both figures', info.length === 2, JSON.stringify(info));
-  // the clean look it had before the busy outlined drawing (git 5017668): soft silhouette, muscles separated by a thin white seam
-  check('clean map: NO dark body-outline layer on top (the last layer is a muscle, not a dark outline)', info.every((i) => i.lastFill !== 'none' && i.lastStroke === '#ffffff'), JSON.stringify(info[0]));
-  check('clean map: muscles have a thin white seam, not dark per-muscle outlines', info.every((i) => i.midStroke === '#ffffff' && i.midW === '0.9' && i.n > 20), `${info[0].n} paths`);
-  check('clean map: no #454B5C / #69708A strokes anywhere', await page.evaluate(() => !/#454B5C|#69708A/i.test(document.querySelector('div[aria-label="Body map space"]').innerHTML)));
+  // round 11: the same black outlines as Create workout's map (one shared drawing function and one shared ink)
+  check('outlined map: the LAST layer is the dark body outline (no fill), in the shared ink #23262f', info.every((i) => i.lastFill === 'none' && i.lastStroke === '#23262f'), JSON.stringify(info[0]));
+  check('outlined map: every muscle has its own outline in the same ink (and there are many muscles)', info.every((i) => i.midStroke === '#23262f' && i.n > 20), `${info[0].n} paths, mid stroke ${info[0].midStroke}`);
+  check('it is EXACTLY the same drawing as the Create workout map: same shared function and same ink (no other outline colours anywhere)', await page.evaluate(() => !/#454B5C|#69708A/i.test(document.querySelector('div[aria-label="Body map space"]').innerHTML)) && /bodyMapOutlinedSvg/.test(require('fs').readFileSync(path.join(ROOT, 'lib', 'progressData.ts'), 'utf8')) && /MAP_INK/.test(require('fs').readFileSync(path.join(ROOT, 'lib', 'createBodyMap.ts'), 'utf8')));
   // tier colour reaches the figure
   const fills = await page.evaluate(() => [...new Set([...document.querySelector('div[aria-label="Body map space"]').querySelectorAll('path')].map((p) => p.getAttribute('fill')))]);
   check('ranked muscles are tier-coloured (more than the neutral grey)', fills.filter((f) => f && f !== 'none' && f !== '#E3E4EA' && f !== '#F1F2F6').length >= 3, fills.join(' '));

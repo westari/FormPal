@@ -10,10 +10,10 @@ import { weekProgress } from './weeklyGoal';
 export type DoneKind = 'workout' | 'formCheck' | 'logged' | 'created' | 'weight';
 export const DONE_TITLES: Record<DoneKind, string> = {
   workout: 'Workout complete',
-  formCheck: 'Form check complete',
+  formCheck: 'Form check complete!',
   logged: 'Session logged',
   created: 'Workout created',
-  weight: 'Weight logged',
+  weight: 'Weight logged!',
 };
 
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;

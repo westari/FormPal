@@ -50,7 +50,7 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import VideoControls from '../components/VideoControls';
 import LiquidGlass from '../components/LiquidGlass';
 import { repFeedbackDataJs } from '../lib/repFeedbackInject';
-import { warmPrepare, warmActivate, warmDeactivate, warmHideNow, warmRelease, warmSetBg, warmSetOverlay, warmInject } from '../components/WarmSurfaces';
+import { warmPrepare, warmActivate, warmDeactivate, warmHideNow, warmRelease, warmSetBg, warmSetOverlay, warmInject, SLIDE_IN_MS } from '../components/WarmSurfaces';
 import { repFeedbackSignal } from '../lib/repFeedbackSignal';
 
 import { postLag } from '../lib/postLag';
@@ -261,12 +261,13 @@ export default function RepFeedbackScreen() {
     else if (msg.type === 'close') router.back();
     else if (msg.type === 'repShown') { currentRep.current = Math.max(0, Number((msg as any).idx) || 0); }
     else if (msg.type === 'openAllSets') {
-      // The All sets page is put on screen UNDER this one right now (recap.tsx's onOpenAllSets, the same trick as Finish review), then this page
-      // goes: All sets is simply there as this one leaves, no flash of the summary page in between (round 10). It remembers the rep for the way back.
+      // The All sets page slides in over this one (recap.tsx's onOpenAllSets switches its view at once; components/WarmSurfaces.tsx slides it in on top), and
+      // this screen goes only after the slide, so the summary page is never seen in between. It remembers the rep for the way back.
       repFeedbackSignal.repIdx = currentRep.current;
       repFeedbackSignal.openAllSets = true;
       repFeedbackSignal.onOpenAllSets?.();
-      router.back();
+      // All sets slides in OVER this screen like a pushed screen; this one stays under it until the slide is over, then goes (nothing is seen of it leaving)
+      setTimeout(() => router.back(), SLIDE_IN_MS + 80);
     }
     else if (msg.type === 'finishReview') {
       postLag('rep feedback: Finish review tapped');

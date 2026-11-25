@@ -19,7 +19,7 @@ check('the page underneath follows the covering page: -30% of the screen when it
 // the interpolation itself, on the real numbers
 const screenW = 390, P = 0.3, at = (tx) => -screenW * P * (1 - Math.min(1, Math.max(0, tx / screenW)));
 check('math: covering page parked -> under page at 0; half way -> -58px; fully in -> -117px', at(screenW) === 0 && Math.round(at(screenW / 2)) === -58 && Math.round(at(0)) === -117, [at(screenW), at(screenW / 2), at(0)].map(Math.round).join(' / '));
-check('EVERY post-workout page is a FADE page (recap, All sets, rep feedback, the muscle page / Finish review): nothing comes in sideways', /export const FADES[^=]*= \{ recap: true, allsets: true, ranks: true, repfeedback: true \}/.test(w));
+check('the post-workout pages (recap, rep feedback, the muscle page / Finish review) are FADE pages; ALL SETS (round 11, Ari: a clean normal screen transition) slides in like a pushed screen', /export const FADES[^=]*= \{ recap: true, allsets: false, ranks: true, repfeedback: true \}/.test(w));
 check('a fading page opens by animating opacity 0 -> 1 with the sideways position pinned at 0 (never a translate)', /FADES\[k\]\) \{[\s\S]{0,200}tx\.setValue\(0\);\s*fade\.setValue\(0\);\s*setShown\(true\);\s*Animated\.timing\(fade, \{ toValue: 1, duration: FADE_IN_MS/.test(w));
 check('a fading page closes by fading out (All sets), not by sliding', /FADES\[k\] && SLIDES_OUT\[k\]\) Animated\.timing\(fade, \{ toValue: 0, duration: FADE_OUT_MS/.test(w));
 check('a fading page never moves the page under it (it does not register a sliding value)', /if \(!FADES\[k\]\) TX\[k\] = tx/.test(w));

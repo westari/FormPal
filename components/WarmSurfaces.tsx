@@ -45,15 +45,18 @@ import { hapticKind, hapticSelect } from '../lib/haptics';
 import { NO_ZOOM_JS } from '../lib/noZoom';
 
 export type WarmKind = 'recap' | 'repfeedback' | 'ranks' | 'allsets';
-const KINDS: WarmKind[] = ['recap', 'allsets', 'ranks', 'repfeedback']; // later = drawn on top
+// later = drawn on top. All sets is on top of everything (round 11): it opens as a normal screen push over whatever is on screen (the rep feedback or the summary).
+const KINDS: WarmKind[] = ['recap', 'ranks', 'repfeedback', 'allsets'];
 
 // Pages that slide back OUT to the right when they close (a pop). The summary
 // never does: it is only ever covered by the others.
 const SLIDES_OUT: PerKindLite<boolean> = { recap: false, allsets: true, ranks: true, repfeedback: true };
-const SLIDE_IN_MS = 320, SLIDE_OUT_MS = 260;
+export const SLIDE_IN_MS = 320, SLIDE_OUT_MS = 260;
 // Every post-workout page (Workout complete, All sets, rep feedback, the muscle page / Finish review) opens and closes with a
 // plain fade: no sideways motion at all, and the page under it stays put.
-export const FADES: PerKindLite<boolean> = { recap: true, allsets: true, ranks: true, repfeedback: true };
+// All sets is NOT a fade page any more (round 11, Ari: "make it a clean, normal screen transition"): it slides in from the right like any pushed screen, the page under it moves back a little
+// (parallax), and Back slides it out again. Every other post-workout page still fades.
+export const FADES: PerKindLite<boolean> = { recap: true, allsets: false, ranks: true, repfeedback: true };
 export const FADE_IN_MS = 220, FADE_OUT_MS = 160;
 // How far the page underneath moves left while another slides over it (a third of the screen, like a normal iOS push).
 const PARALLAX = 0.3;

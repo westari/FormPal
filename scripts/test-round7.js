@@ -22,9 +22,11 @@ check('7: the phone log proves it: "[LAG] recap: All sets back -> returning to t
 
 // ── 8 ──
 const wp = read('app/workout/index.tsx');
-check('8: the sheet\'s two native animations start INSIDE openEdit (the tap), before the screen is drawn again, not from an effect after it', /const runSheet = \(to: 0 \| 1\) =>/.test(wp) && /const openEdit = useCallback\(\(i: number\) => \{[\s\S]{0,200}runSheet\(1\);[\s\S]{0,250}setEditing\(i\);/.test(wp) && !/useEffect\(\(\) => \{\s*const to = editing != null/.test(wp));
+check('8: the sheet\'s two native animations start INSIDE openEdit (the tap), before the screen is drawn again, not from an effect after it', /const runSheet = \(to: 0 \| 1\) =>/.test(wp) && /const openEdit = useCallback\(\(i: number\) => \{[\s\S]{0,200}runSheet\(1\);[\s\S]{0,700}setEditing\(i\);/.test(wp) && !/useEffect\(\(\) => \{\s*const to = editing != null/.test(wp));
 check('8: closing (Done, the X, the grab bar, the dim) starts the closing animation at once too', /const closeEdit = \(\) => \{ runSheet\(0\); setEditing\(null\); \};/.test(wp) && !/setEditing\(null\)/.test(wp.replace('const closeEdit = () => { runSheet(0); setEditing(null); };', '')));
 check('8: the exercise cards are memoised (opening the sheet does not draw them again) and the open handler never changes', /const ExCard = React\.memo\(function ExCard/.test(wp) && /onEdit=\{openEdit\}/.test(wp) && /useCallback\(\(i: number\) =>/.test(wp));
+check('8 (round 11): the sliding sheet is cheap to draw: no overflow clip and no blurred shadow on it (both are redrawn every frame while it moves), and it is rasterised once (shouldRasterizeIOS)', /<Animated\.View shouldRasterizeIOS[^>]*testID="edit-sheet"/.test(wp) && !/overflow: 'hidden'/.test(wp.slice(wp.indexOf('  sheet: {'), wp.indexOf('grabHit'))) && !/boxShadow/.test(wp.slice(wp.indexOf('  sheet: {'), wp.indexOf('grabHit'))));
+check('8 (round 11): the phone log proves the cause next time: "[PREVIEW] edit sheet: pencil tapped, slide started Nms after the tap" and "screen redrawn Nms after the tap"', /\[PREVIEW\] edit sheet: pencil tapped, slide started/.test(wp) && /\[PREVIEW\] edit sheet: screen redrawn/.test(wp));
 check('8: still two native-driver animations of 220ms, no Modal', /SHEET_MS = 220/.test(wp) && !/<Modal/.test(wp) && (wp.match(/useNativeDriver: true/g) || []).length >= 2);
 
 // ── 9 ──

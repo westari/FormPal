@@ -78,7 +78,7 @@ export function bodyMapParts(tiers: MuscleTiers, side: 'front' | 'back', outline
     const mStroke = outlined ? (opts.ink ?? MUSCLE_OUTLINE_STROKE) : '#ffffff';
     const mWidth = outlined ? MUSCLE_OUTLINE_WIDTH : 0.9;
     const g = opts.groupOf ? opts.groupOf(id) : null;
-    const dm = (muscleById[id] ? ` data-m="${muscleById[id]}"` : '') + (g ? ` data-grp="${g}" style="cursor:pointer"` : '');
+    const dm = (muscleById[id] ? ` data-m="${muscleById[id]}"` : '') + (g ? ` data-grp="${g}" style="cursor:pointer;transition:fill 180ms ease"` : '');
     parts.push(`<path d="${table[id]}" fill="${fill}"${dm} stroke="${mStroke}" stroke-width="${mWidth}" stroke-linejoin="round"/>`);
   }
   if (silhouette && outlined) {
@@ -90,6 +90,14 @@ export function bodyMapParts(tiers: MuscleTiers, side: 'front' | 'back', outline
 /** Create workout's tappable map: the SAME drawing, outlined, one side. */
 export function bodyMapTappableSvg(side: 'front' | 'back', opts: MapOpts): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${MUSCLE_MAP_VIEWBOX[side]}" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:100%;">${bodyMapParts({}, side, true, opts)}</svg>`;
+}
+
+/** The ink of the outlines on the app's two big muscle maps (Progress tab and Create workout): the same dark outline on the body and on every muscle. */
+export const MAP_INK = '#23262f';
+
+/** The Progress tab's map (round 11): the same drawing as Create workout's, outlined in the shared ink; ranked muscles keep their tier colours. */
+export function bodyMapOutlinedSvg(tiers: MuscleTiers, side: 'front' | 'back'): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${MUSCLE_MAP_VIEWBOX[side]}" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:100%;">${bodyMapParts(tiers, side, true, { ink: MAP_INK })}</svg>`;
 }
 
 export function bodyMapSvg(tiers: MuscleTiers, side: 'front' | 'back'): string {
