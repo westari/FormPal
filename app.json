@@ -40,7 +40,8 @@
       "expo-dev-client",
       "expo-audio",
       "expo-camera",
-      "./plugins/withoutAppleSignIn"
+      "./plugins/withoutAppleSignIn",
+      "./plugins/withoutPushEntitlement"
     ],
     "experiments": {
       "typedRoutes": true
