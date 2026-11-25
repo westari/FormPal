@@ -74,3 +74,31 @@ New: `test-paywall-screens.js`, `test-formcheck-open-and-leave.js`. Full suite r
   3. Header: Window A's wrapper that scrolls with the page (`headerY`, `onb-header-scroll`) around everything. Inside it: paywall and gift offer = glass back button (no X), plus Restore on the paywall, no progress bar there; every other screen = Window A's `OnbBackButton` with the progress bar.
 - Whole test suite run: the only failure was my own `test-paywall-screens.js`, which looked for the old header text. Updated it (it now also checks that the scrolling header, `ONB_SCROLL_REPORT_JS`, `KEEP_FX_JS` and `OnbBackButton` are all there). It passes. TypeScript: only the old `opaque` WebView error is left.
 - Nothing else touched. Not seen on a phone.
+
+---
+# Trial reminder and paywall, round 3 (2026-11-25)
+Merged origin/overnight-build first (already up to date). Kept to the trial reminder, paywall, gift offer and their files (plus `lib/trialReminder.ts`, `package.json`, `GlassBackButton`). Pictures: `reports\paywall-round3.png` (paywall at the start, 3 s in, after the scroll, and on Pro Max).
+
+## 1. Trial reminder title: done
+The title is now just "We'll remind you before / your trial ends." The line "You're ready to start training!" is hidden (the design file itself is not edited, a small injected script hides that one line). Checked at iPhone 15, 16, 15 Pro Max and 16 Pro Max.
+
+## 2. "Remind me 2 days / 1 day before" really works: done in code, NEEDS A NEW NATIVE BUILD
+- **expo-notifications was NOT in the app** (not in package.json, not in node_modules, no notification code). I installed it (`npm install expo-notifications@~0.32.17 --legacy-peer-deps --save`, the version Expo SDK 54 wants). **The notifications module is native code, so the phone will only schedule real reminders after the next iOS Dev Build.** On the current build every call is a quiet no-op with a log line (`[TRIAL-REMINDER] ... not in this build`), nothing crashes.
+- What it does (`lib/trialReminder.ts`): the page reports the pick (`remindpick:2` / `remindpick:1`, default 2 like the page). Tapping Continue on that screen asks iOS for notification permission. When he taps "Start free for 7 days" on the paywall (the moment the trial starts), it cancels any earlier trial reminder and schedules ONE local notification at the same time of day: 5 days later for "2 days before" ("Your free trial ends in 2 days"), 6 days later for "1 day before" ("Your free trial ends tomorrow"), body "Keep training with your plan, or cancel anytime in Settings before it renews." If he closes the paywall without starting the trial, nothing is scheduled. If notifications are refused, nothing is scheduled.
+- The choice is one or the other (the design is a pick-one list), so one notification is scheduled.
+- Test: `scripts\test-trial-reminder.js` (a fake notifications module: right dates, one notification, cancels the old one, asks permission, refused, module missing, plus the page really posts the pick when tapped).
+- On the phone after the new build: pick "1 day", finish onboarding, and look for `[TRIAL-REMINDER] scheduled "Your free trial ends tomorrow" for <date>` in the log. To test fast, change `TRIAL_DAYS` in `lib/trialReminder.ts` temporarily.
+
+## 3. Paywall
+- **Top cut off, plain white: fixed.** The page sat below the status bar with a white strip above it. The strip is now the page's own top colour (#f4f4f7), so the page fills to the very top (paywall and gift offer).
+- **Back button: now the real standard glass.** Before it used the "light" glass, which over a light page is just a white circle. `GlassBackButton` has a new `standard` look that uses the exact recipe of the camera Finish pill (`StandardGlass`: dark real glass, same fallback colour), chevron white. A test compares it with the Finish pill's values. I cannot show real Liquid Glass in my screenshots, so look at it on the phone.
+- **Cue orb: now the shared one.** The paywall's own orb is replaced by the same orb drawing everything else uses (`cueOrbSvg` from `lib/cueOrb.ts`, with its glossy highlight and halo), kept in place if the page redraws.
+- **The list: fixed.** It now starts at "as well as" with the rows after it hidden. About 5 seconds after the paywall appears (the app starts the clock when the paywall page becomes visible, not when it loads hidden in the background) the rest fades in and the list scrolls down smoothly (1.7 s, eased). A touch on the list cancels the wait and shows everything. Checked at the four sizes: at 3.5 s nothing has moved, then it scrolls in many small steps to the end.
+
+## Tests
+New: `test-trial-reminder.js` and `scripts/lib/paywall-harness.js` (pulls the app's real injected scripts out of onboarding.tsx so tests run the exact code). Full suite result in my final message.
+
+## Not verified / honest limits
+- No phone test. Real Liquid Glass and the real notification need the phone and the new build.
+- The Swift side is unchanged this round, but the next iOS build now includes expo-notifications, so it is a bigger native change than the last one.
+- Full suite: everything passes except `test-tab-headers.js` ("Home title is the live date": it expects a long date like "Thursday, November 12" and the Home header now shows "Wed, Nov 25"). That is Window A's Home header, not touched by me, so I left it for Window A.

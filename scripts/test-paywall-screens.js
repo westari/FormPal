@@ -33,8 +33,7 @@ check('the three pages keep their masks and blur (KEEP_FX_KEYS), set before the 
 // ── rendered ──
 const a = src.indexOf('const DC_CTA_RE = '), b = src.indexOf('\n`;', src.indexOf('const DC_PAGE_INJECT = `')) + 3;
 const DC = new Function(src.slice(a, b).replace(/^const /gm, 'var ') + '\nreturn DC_PAGE_INJECT;')();
-const ta = src.indexOf('const PAYWALL_TIDY_JS = `'), tb = src.indexOf('`;', ta) + 2;
-const TIDY = new Function(src.slice(ta, tb).replace(/^const /, 'var ') + '\nreturn PAYWALL_TIDY_JS;')();
+const TIDY = require('./lib/paywall-harness.js').TIDY;
 const sizes = [{ n: 'iPhone 15', w: 393, h: 852, top: 59 }, { n: 'iPhone 16', w: 402, h: 874, top: 62 }, { n: 'iPhone 15 Pro Max', w: 430, h: 932, top: 59 }, { n: 'iPhone 16 Pro Max', w: 440, h: 956, top: 62 }];
 
 async function open(br, file, s, keepFx) {
