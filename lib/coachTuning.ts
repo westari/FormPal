@@ -58,6 +58,7 @@ export const CONFIDENCE = {
   stuckFallPerSec: 3,       // ... then it keeps falling
   stuckFloor: 25,           // never lower than METER_PERSON_FLOOR while a person is seen (Ari 2026-11-22)
   clearVisibleMin: 85,      // PLACEHOLDER: the camera's own visibility score at or above this (and no fresh path cut) = every needed joint is clearly seen = NOT a camera problem
+  unreliableCap: 45,        // PLACEHOLDER: the number while the engine is rejecting reps for unreliable tracking
   countingFloor: 90,        // trying AND reps counting: 90-100
   countRecentSec: 7,        // a rep counts as "counting" for this long (about 2 reps of rhythm)
   releaseSec: 8,            // once it has started falling it only recovers when a rep counts, or the user has not been trying for this long (no flicker back to 100 in a pause)
@@ -84,7 +85,7 @@ export const GUIDE = {
 
 export const COACH = {
   minMatchForVerdict: 55,   // no check / X unless Movement Match is at least this (HIGH)
-  oneVerdictPerSec: 1.2,    // an X for a missed stroke never comes closer than this after another verdict (a counted rep always gets its check)
+  oneVerdictPerSec: 0.35,   // only stops ONE stroke being judged twice. It used to be 1.2 s: a half rep that came within 1.2 s of the verdict before it got NOTHING (reps about 1.2 s apart = several silent reps in a row, 2026-11-25). A new verdict replaces the one on screen.
   minAttemptStrokeR: 0.4,   // PLACEHOLDER: a stroke smaller than this many rep spans (R) is a wiggle, not a half rep: no X (Ari: standing still got "Go lower")
   attemptMinMatch: 35,      // an X for a missed stroke needs Movement Match at least this (not LOW); HIGH is no longer needed when the stroke itself is big (a half rep dips the score)
 };

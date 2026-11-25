@@ -57,6 +57,8 @@ import { createMovementMatch } from '../lib/movementMatch';
 import { createCameraConfidence } from '../lib/cameraConfidence';
 import { createGuide, createCoach, createCalmLine, createCueHold, createStartReps, guideLine, GUIDE_LINES, handsMatter } from '../lib/guideCoach';
 import { getExerciseDef } from '../constants/exercises';
+import { crossDue, backAtStart, CROSS_MAX_WAIT_MS } from '../lib/verdictTiming';
+import { createSilentWatch } from '../lib/noSilentReps';
 import { createSetupGuide, SETUP_TUNING, type SetupDecision } from '../lib/setupGuide';
 import { createAttemptDetector, type DetectorEvent } from '../lib/attemptDetector';
 import { hapticError, hapticMain, hapticSelect, hapticWarning } from '../lib/haptics';
@@ -462,15 +464,15 @@ function WorkoutHud({
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFillObject}>
       {/* Set bars: each set is its OWN thin Liquid Glass pill, spread out with gaps (Ari 2026-11-16 evening). Finished and current sets have a bright white
-          fill with a soft green glow, upcoming sets are plain dim glass. */}
+          fill, upcoming sets a dim white fill. NO COLOUR (Ari 2026-11-25: there was still a hint of green / yellow): the fills are plain views drawn ON TOP of the glass shell,
+          never children of the glass (a child of real glass is tinted by the camera picture behind it). */}
       <View style={{ position: 'absolute', top: layout.bar.top, left: layout.bar.left, width: layout.bar.width, height: layout.bar.height, flexDirection: 'row', gap: HUD_BAR_GAP }}>
         {Array.from({ length: targetSets }).map((_, i) => {
           const on = i <= completedSets;
           return (
             <View key={i} style={[{ flex: 1, height: layout.bar.height }, on ? wh.setGlow : null]}>
-              <HudGlass radius={layout.bar.height / 2} style={{ flex: 1, height: layout.bar.height }}>
-                {on && <View style={wh.setFill} />}
-              </HudGlass>
+              <HudGlass radius={layout.bar.height / 2} style={{ flex: 1, height: layout.bar.height }} />
+              <View pointerEvents="none" style={[wh.setFill, on ? wh.setFillOn : wh.setFillOff]} />
             </View>
           );
         })}
@@ -969,6 +971,12 @@ export default function FormCheckScreen() {
     return () => clearTimeout(t);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const guideProblemLogged = useRef(false);
+  // VERDICT TIMING AND NO SILENT REPS (Ari 2026-11-25), see lib/verdictTiming.ts and lib/noSilentReps.ts
+  const silentWatch = useRef(createSilentWatch()).current;
+  const pendingCrossRef = useRef<{ reason: string; at: number; reached: number; needed: number } | null>(null);
+  const lastMetricRef = useRef<{ v: number; t: number } | null>(null);
+  const unreliableAtRef = useRef(0);
+  const deliverCrossRef = useRef<(reason: string, at: number, why: string, value: number | null) => void>(() => {});
   const guideProblemRef = useRef(false);   // a camera-problem Guide line is on screen right now: the number follows it down at the quick rate
   const confidenceRef = useRef<number | null>(null);   // the live camera confidence (0-100), read by the meter
   const lastCountAtRef = useRef(0);                      // when the last rep counted (native or soft)
@@ -1010,6 +1018,8 @@ export default function FormCheckScreen() {
     const sub = addDebugLogListener(e => {
       console.log('[DEBUG]', e.message);
       if (e.message.indexOf('[AWAKE] native') === 0) nativeBuildSeen.current = 'new';
+      { const mv = /^\[METRIC\][^\n]*? value=([-\d.]+)/.exec(e.message) || /^\[REP-TRACE\][^\n]*?angle=([-\d.]+)/.exec(e.message); if (mv) lastMetricRef.current = { v: parseFloat(mv[1]), t: Date.now() }; }
+      if (/^\[REP\] rejected .{1,3} tracking unreliable/.test(e.message)) { unreliableAtRef.current = Date.now(); console.log('[CAMERA] the engine rejected a rep: tracking unreliable (the camera cannot judge it): the number drops and the Guide says why'); }
       counterRef.feedLog(e.message, Date.now());
       matchRef.feed(e.message);
       // Full session buffer: every line, no limit — feeds the post-session review only.
@@ -1026,6 +1036,7 @@ export default function FormCheckScreen() {
       // Attempts: only while really tracking (after Go), never during setup or the Ready wait
       if (trackingActiveRef.current && !readyPendingRef.current) {
         const evs = attemptRef.current.feed(e.message);
+        if (evs.length) { for (const ev of evs) if (ev.kind === 'attempt') silentWatch.noteAttempt({ n: ev.n, outcome: ev.outcome, blocker: ev.blocker }, Date.now(), Date.now() - unreliableAtRef.current < 3000); }
         if (evs.length) { for (const ev of evs) if (ev.kind === 'attempt') sessionLogRef.current.push(`[ATTEMPT] #${ev.n} score=${ev.score} low=${ev.low.toFixed(1)} high=${ev.high.toFixed(1)} outcome=${ev.outcome} blocker=${ev.blocker}`); onAttemptRef.current(evs); }
       }
       // Parse [METRIC] lines for live push-up readout
@@ -1118,7 +1129,7 @@ export default function FormCheckScreen() {
               calibRef.current.reset();
               repDiagRef.current.reset();
               attemptRef.current.reset();
-              matchRef.reset(); confRef.reset(); guideEngine.reset(); coachRef.reset();
+              matchRef.reset(); confRef.reset(); guideEngine.reset(); coachRef.reset(); silentWatch.reset(); pendingCrossRef.current = null;
               confidenceRef.current = null; lastCountAtRef.current = 0; missedSinceCountRef.current = 0; setGuideTrack(null);
               softRepsRef.current = 0; softGoodRef.current = 0; lastNativeRep.current = null; nativeRepsRef.current = 0; nativeGoodRef.current = 0;
               setAttemptCue(null);
@@ -1234,6 +1245,22 @@ export default function FormCheckScreen() {
     return () => sub.remove();
   }, [phase]);
 
+  // THE ONE PLACE A CROSS IS SHOWN. A half rep arrives from the engine the moment the stroke turns at its shallow bottom, which is EARLIER than a check (the engine
+  // reports a counted rep only once the arms are back at the start position): the cross is held until the metric is back at the start zone (lib/verdictTiming.ts).
+  deliverCrossRef.current = (reason, at, why, value) => {
+    const now = Date.now();
+    silentWatch.noteAnswered(now);
+    // the camera cannot judge it while the Guide is saying so (the number is already capped) or nobody is seen
+    if (statsRef.current?.personDetected === false || guideProblemRef.current) { console.log('[CUE] missed attempt but NO X shown: the camera cannot judge it (' + (guideProblemRef.current ? 'the Guide shows a camera problem' : 'no person') + ')'); return; }
+    const cv = coachRef.verdict({ now, match: matchRef.result(), source: 'missed', missedReason: reason });
+    if (cv.show !== 'x') return;
+    lastJudgedAt.current = now;
+    setTimeout(() => setJudgedTick(t => t + 1), JUDGED_QUIET_MS + 50);
+    setFeedback({ good: false, reason: cv.reason, seq: ++feedbackSeq.current });
+    hapticWarning();
+    console.log('[TIMING] cross shown ' + (now - at) + ' ms after the engine event, when ' + why + (value !== null ? ' (metric ' + value.toFixed(1) + ')' : ''));
+  };
+
   // ── Tracking listeners ────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -1253,9 +1280,13 @@ export default function FormCheckScreen() {
       // Never a check / X while the screen is also saying "step into frame": if the camera cannot see the person well
       // enough to give a frame hint, it cannot judge the rep either. The rep still counts; only the verdict is withheld.
       const frameHintNow = repDiagRef.current.message() ?? statsRef.current?.trackingCue ?? null;
-      const verdictOk = showVerdict(frameHintNow, statsRef.current?.personDetected);
+      // (Ari 2026-11-25) a COUNTED rep always gets its verdict unless nobody is in the picture: it used to be withheld by the camera's raw frame hint even when the Guide
+      // ignored that hint (the metric kept flowing), which left reps with no check, no cross and a number that did not move.
+      const verdictOk = statsRef.current?.personDetected !== false;
+      silentWatch.noteAnswered(Date.now());
+      if (pendingCrossRef.current) { const old = pendingCrossRef.current; pendingCrossRef.current = null; deliverCrossRef.current(old.reason, old.at, 'a counted rep arrived', lastMetricRef.current ? lastMetricRef.current.v : null); }
       if (!verdictOk) {
-        console.log(`[CUE] rep counted but NO check/X shown: the frame hint "${frameHintNow ?? 'no person'}" is up (cannot judge what is not seen)`);
+        console.log(`[CUE] rep counted but NO check/X shown: nobody is in the picture (frame hint "${frameHintNow ?? 'no person'}")`);
         const timeSecH = startTimestamp.current != null ? (Date.now() - startTimestamp.current) / 1000 : 0;
         repEvents.current.push({ timeSec: timeSecH, good: rep.good, reason: rep.reason });
         return;
@@ -1295,14 +1326,11 @@ export default function FormCheckScreen() {
       if (demoOpenRef.current || repCounterOnly) return;
       missedSinceCountRef.current += 1;
       console.log('[ATTEMPT-MISSED] from the engine: ' + ev.reason + ' reached=' + ev.reached.toFixed(1) + ' needed=' + ev.needed.toFixed(1));
-      const hint = repDiagRef.current.message() ?? statsRef.current?.trackingCue ?? null;
-      if (!showVerdict(hint, statsRef.current?.personDetected)) { console.log('[CUE] missed attempt but NO X shown: the frame hint "' + (hint ?? 'no person') + '" is up'); return; }
-      const cv = coachRef.verdict({ now: Date.now(), match: matchRef.result(), source: 'missed', missedReason: ev.reason });
-      if (cv.show !== 'x') return;
-      lastJudgedAt.current = Date.now();
-      setTimeout(() => setJudgedTick(t => t + 1), JUDGED_QUIET_MS + 50);
-      setFeedback({ good: false, reason: cv.reason, seq: ++feedbackSeq.current });
-      hapticWarning();
+      // hold the cross until the arms are back at the start position (the same moment a check lands); a second event flushes the first so nothing is lost
+      const now0 = Date.now();
+      if (pendingCrossRef.current) { const old = pendingCrossRef.current; pendingCrossRef.current = null; deliverCrossRef.current(old.reason, old.at, 'a newer stroke arrived', lastMetricRef.current ? lastMetricRef.current.v : null); }
+      pendingCrossRef.current = { reason: ev.reason, at: now0, reached: ev.reached, needed: ev.needed };
+      console.log('[TIMING] engine event at the turn of a half rep (metric ' + (lastMetricRef.current ? lastMetricRef.current.v.toFixed(1) : '?') + '): the cross waits for the arms to be back at the start position (at most ' + CROSS_MAX_WAIT_MS + ' ms)');
     });
     const dbgSub = addDebugStatsListener((e: DebugStatsEvent) => {
       if (demoOpenRef.current) return;
@@ -1631,9 +1659,24 @@ export default function FormCheckScreen() {
       const now = Date.now();
       const m = matchRef.result();
       attemptRef.current.setPathCut(m.cut);
-      const conf = confRef.update({ now, visibility: counterRef.score(now), match: m, lastCountAt: lastCountAtRef.current, lastJudgedAt: lastJudgedAt.current, missedSinceCount: missedSinceCountRef.current });
-      confidenceRef.current = conf.value;   // (capped below once the Guide's decision is known)
       const rej = attemptRef.current.recentReject(8000);
+      const conf = confRef.update({ now, visibility: counterRef.score(now), match: m, lastCountAt: lastCountAtRef.current, lastJudgedAt: lastJudgedAt.current, missedSinceCount: missedSinceCountRef.current, unreliableRecently: rej.lowQuality });
+      confidenceRef.current = conf.value;   // (capped below once the Guide's decision is known)
+      // a held cross is shown the moment the arms are back at the start position (or after the most it may wait); a stroke with no verdict at all gets its cross here
+      {
+        const pc = pendingCrossRef.current;
+        if (pc) {
+          const lm = lastMetricRef.current;
+          const def = EXERCISE_DEFINITIONS[exerciseType] as any;
+          const lines = def && typeof def.topAngle === 'number' && typeof def.repExitThreshold === 'number' ? { topAngle: def.topAngle, repExitThreshold: def.repExitThreshold } : null;
+          const val = lm && now - lm.t < 700 ? lm.v : null;
+          const d = lines ? crossDue(pc, now, val, lines) : { due: true, why: 'no start line for this exercise' };
+          if (d.due) { pendingCrossRef.current = null; deliverCrossRef.current(pc.reason, pc.at, d.why, val); }
+        }
+        const sil = silentWatch.tick(now, { notTrying: m.haveData && m.notTrying, engineRejectedUnreliable: now - unreliableAtRef.current < 8000 || !!m.cut });
+        if (sil && sil.kind === 'cross') { console.log('[SILENT] stroke #' + sil.n + ' ended with no verdict from the engine: the screen gives it its cross (' + sil.reason + ')'); deliverCrossRef.current(sil.reason, now - 1300, 'no verdict came for stroke #' + sil.n, null); }
+        else if (sil && sil.kind === 'camera') console.log('[SILENT] stroke #' + sil.n + ' ended with no verdict because tracking was unreliable: the camera cannot judge it (the number drops, the Guide says why)');
+      }
       const rawCue = isFloor ? null : (statsRef.current?.trackingCue || null);
       const noPersonNow = statsRef.current?.personDetected === false;
       const cueHeld = frameCueHold.feed(now, (!!rawCue && isFrameHint(rawCue)) || noPersonNow);
@@ -2292,11 +2335,11 @@ const wh = StyleSheet.create({
   pillRow: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   barWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   barInner: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 4 },
-  setGlow:  { shadowColor: '#FFFFFF', shadowOpacity: 0.6, shadowRadius: 7, shadowOffset: { width: 0, height: 0 } },   // done / current sets: white with a soft WHITE glow (no green, Ari 2026-11-22)
-  setFill:  { position: 'absolute', top: 3, left: 3, right: 3, bottom: 3, borderRadius: 6, backgroundColor: '#FFFFFF' },
+  setGlow:  { shadowColor: '#FFFFFF', shadowOpacity: 0.45, shadowRadius: 6, shadowOffset: { width: 0, height: 0 } },   // done / current sets: white with a soft WHITE glow (no green, Ari 2026-11-22)
+  setFill:  { position: 'absolute', top: 3, left: 3, right: 3, bottom: 3, borderRadius: 6 },
+  setFillOn:  { backgroundColor: '#FFFFFF' },                      // pure white: done and current sets
+  setFillOff: { backgroundColor: 'rgba(255,255,255,0.30)' },       // the same white, dimmed: upcoming sets
   seg:      { flex: 1, height: 18, borderRadius: 9 },
-  segOn:    { backgroundColor: '#FFFFFF', shadowColor: '#34C759', shadowOpacity: 0.85, shadowRadius: 8, shadowOffset: { width: 0, height: 0 } },
-  segOff:   { backgroundColor: 'rgba(255,255,255,0.14)' },
   timerRow: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   timerTxt: { fontSize: 16, lineHeight: 20, fontWeight: '500', color: '#FFFFFF', fontVariant: ['tabular-nums'] },
   // the rep count at the bottom centre (Ari's design): the number large and bold, "/ 10" smaller and grey

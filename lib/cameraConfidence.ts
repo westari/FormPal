@@ -31,6 +31,8 @@ export interface ConfidenceInputs {
   lastJudgedAt?: number;
   /** attempts (strokes) that did not count since the last counted rep */
   missedSinceCount: number;
+  /** the engine REJECTED a rep because its tracking was unreliable a moment ago ("[REP] rejected - tracking unreliable"): the camera really cannot judge that rep */
+  unreliableRecently?: boolean;
 }
 
 export interface ConfidenceResult {
@@ -40,7 +42,7 @@ export interface ConfidenceResult {
   stuck: boolean;
   /** seconds since "trying with no rep counted" began (0 when not stuck) */
   stuckSec: number;
-  cap: 'none' | 'stuck' | 'cut' | 'floor';
+  cap: 'none' | 'stuck' | 'cut' | 'floor' | 'unreliable';
   why: string;
 }
 
@@ -71,7 +73,7 @@ export function createCameraConfidence(opts: { log?: (m: string) => void } = {})
       const ago = i.match.cutAgo ?? { top: Infinity, bottom: Infinity, frame: Infinity };
       const freshEndCut = ((i.match.cut === 'top' || i.match.cut === 'both') && ago.top <= G.cutFreshSec) || ((i.match.cut === 'bottom' || i.match.cut === 'both') && ago.bottom <= G.cutFreshSec);
       const freshCut = freshEndCut || (i.match.cut === 'frame' && ago.frame <= G.frameCutFreshSec);
-      const cameraProblem = i.visibility < C.clearVisibleMin || freshCut;
+      const cameraProblem = i.visibility < C.clearVisibleMin || freshCut || !!i.unreliableRecently;
       const onset = trying && !counting && cameraProblem && (tryAcc >= C.stuckAfterSec || i.missedSinceCount >= C.stuckAttempts);
       if (counting || !cameraProblem) stuckSince = 0;
       else if (onset && !stuckSince) stuckSince = i.now;
@@ -89,9 +91,11 @@ export function createCameraConfidence(opts: { log?: (m: string) => void } = {})
         value = C.cutCap; cap = 'cut';
         why = `trying, and the rep path is cut off at the ${i.match.cut} (the camera never sees the whole rep)`;
       }
+      // The engine could not judge a rep because tracking was unreliable: the number drops to match (and the Guide says why), counting or not (Ari 2026-11-25)
+      if (i.unreliableRecently && value > C.unreliableCap) { value = C.unreliableCap; cap = 'unreliable'; why = 'the engine rejected a rep: tracking was unreliable, the camera cannot judge it'; }
       // Reps are counting = the camera plainly sees you: 90+, whatever else flickers (Ari 2026-11-16: it dropped to 35 while reps were being counted).
       // Only a person who is really out of the picture (the path cut at the frame edge) is exempt.
-      if (counting && !stuck && i.match.cut !== 'frame' && value < C.countingFloor) {
+      if (counting && !stuck && !i.unreliableRecently && i.match.cut !== 'frame' && value < C.countingFloor) {
         value = C.countingFloor; cap = 'floor';
         why = `reps are counting, so 90+ (the camera sees ${i.visibility})`;
       }

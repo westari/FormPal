@@ -1,0 +1,45 @@
+2026-11-25T20:17:05.135Z [session] start
+20:17:05.143 [warn] The native view manager for module(ARBodyExperiment_ARBodyExperimentView) ) from NativeViewManagerAdapter isn't exported by expo-modules-core. Views of this type may not render correctly. Exported view managers: [ExpoVideo, SymbolModule_SymbolView, ExpoRouterNativeLinkPreview_NativeLinkPreviewContentView, ExpoAppleAuthentication_AppleAuthenticationButton, ExpoRouterNativeLinkPreview, ExpoRouterNativeLinkPreview_NativeLinkPreviewView, ExpoLinearGradient, ExpoBlurView, ExpoImage_ImageView, ExpoImage, ExpoAppleAuthentication, ExpoVideo_VideoView, SymbolModule, ExpoGlassEffect, ExpoCamera, ExpoLinearGradient_LinearGradientView, ExpoCamera_CameraView, ExpoVideo_VideoAirPlayButtonView, ExpoGlassEffect_GlassView, ExpoBlurView_BlurView, ATHLTCamera, ATHLTCamera_ATHLTCameraView, ExpoGlassEffect_GlassContainer, ExpoRouterNativeLinkPreview_LinkPreviewNativeActionView].
+20:17:05.148 [log] [cue] build cue-6
+20:17:05.158 [log] [formcheck] build fc-7
+20:17:05.466 [log] [VideoControls] build vc-8
+20:17:05.468 [log] [recap] build warm-5
+20:17:05.468 [log] [recap-debug] build warm-5 loaded 3:17:05 PM
+20:17:05.468 [log] [rep-feedback] build warm-5
+20:17:05.562 [warn] [Layout children]: No route named "workout/run" exists in nested children: ["analyze-video","ar-experiment","audio-settings","calibrate","camera-tips","create-workout","cue","customize","exercise-picker","feedback-preview","formcheck","index","learn-moves","log-session","muscle-ranks","my-workouts","onboarding-test","onboarding","progress-photo-screen","recap","rep-feedback","streak-screen","(tabs)","goal/[id]","move/[id]","workout"]
+20:17:05.593 [log] [LAUNCH] first screen allowed 458ms after the app code started | fonts: loaded
+20:17:05.593 [log] [LAUNCH] fonts loaded 458ms after the app code started
+20:17:05.608 [log] [TABS] layout mounted, tabs: index, train, plus, progress, profile | inactive tabs detached natively (web views stay loaded)
+20:17:05.688 [log] [TRAIN] mounted train-4
+20:17:05.688 [log] [TRAIN] html file: name traintab.html | md5 6e71acbc | uri ?unstable_path=.%2Fassets%2Fapp%20screens/traintab.html?platform=ios&hash=6e71acbc518f4149c049ed6b4eb39908
+20:17:05.690 [log] [TAB-LAG] progress mounted (data prefetch starts now)
+20:17:05.692 [log] [TAB-LAG] profile mounted (data prefetch starts now)
+20:17:05.722 [log] [TRAIN] rendered; container 402x874
+20:17:05.758 [log] [TAB-LAG] profile data ready 67ms after mount (before the tab was shown)
+20:17:05.789 [log] [TAB-LAG] progress data ready 99ms after mount (before the tab was shown)
+20:17:09.747 [log] [TRAIN] focused; insets 62 34
+20:17:09.844 [log] [TAB-LAG] home shown again | page already visible: yes
+20:17:09.847 [log] [TRAIN] data loaded: plan 18 workouts | sessions 126
+20:17:09.850 [log] [TRAIN] data pushed to page; today = Upper Body | streak 0 | my workouts 3
+20:17:09.856 [log] [TRAIN] html images: flame ok, 4 photos
+20:17:09.892 [log] [TRAIN] html file: size 450139 chars | fnv e448ea90
+20:17:09.927 [log] [TRAIN] web view load start
+20:17:09.927 [log] [PROFILE] web view load start +4270ms after mount
+20:17:09.957 [log] [TRAIN] page asked for data; sending
+20:17:10.808 [log] [PROFILE] page asked for data; sending
+20:17:10.808 [log] [TRAIN] web view load end #1
+20:17:10.808 [log] [PROFILE] web view load end
+20:17:10.808 [log] [TRAIN] page ready (layout + data + logic all in place, page still)
+20:17:10.808 [log] [TRAIN] page fingerprint: cards=7 quickStart=1 myWorkouts=1 practice=1 oldHero=0 title=Train
+20:17:10.824 [log] [PROFILE] page asked for data; sending
+20:17:10.825 [warn] [Layout children]: No route named "workout/run" exists in nested children: ["analyze-video","ar-experiment","audio-settings","calibrate","camera-tips","create-workout","cue","customize","exercise-picker","feedback-preview","formcheck","index","learn-moves","log-session","muscle-ranks","my-workouts","onboarding-test","onboarding","progress-photo-screen","recap","rep-feedback","streak-screen","(tabs)","goal/[id]","move/[id]","workout"]
+20:17:10.854 [log] [TAB-LAG] cover lifted 5194ms after the tab bar mounted | all four pages ready: NO (hard stop at 2500ms)
+20:17:11.701 [log] [TAB-LAG] progress first open: shown -> ready 1935ms | data ready 3978ms BEFORE the tab was shown | page load start +161ms, load end +1042ms, asked for data +1027ms, data pushed +1027ms, ready +1935ms
+20:17:11.701 [log] [PROFILE] page ready +6044ms after mount
+20:17:11.701 [log] [TAB-LAG] profile first open: shown -> ready 1886ms | data ready 4057ms BEFORE the tab was shown | page load start +112ms, load end +993ms, asked for data +992ms, data pushed +993ms, ready +1886ms
+20:17:11.757 [log] [DONE] spare page loaded and ready
+20:17:12.544 [log] [TAB-LAG] profile shown again 15ms after the tap | page already visible: yes
+20:17:15.858 [log] [TRAIN] unmounted
+20:18:49.300 [log] [TRIAL-REMINDER] expo-notifications is not in this build: no reminder can be asked for or scheduled (needs the new iOS build)
+20:19:36.290 [log] [TRIAL-REMINDER] not scheduled: expo-notifications is not in this build (needs the new iOS build)
+20:19:36.312 [log] [TABS] layout mounted, tabs: index, train, plus, progress, profile | inactive tabs detached natively (web views stay loaded)

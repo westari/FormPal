@@ -140,3 +140,51 @@ Last round I hid the warm pages at once. What still flashed was the recap screen
 ## Not verified
 - Nothing has been seen on a phone: real Liquid Glass (back buttons, the bubble), the form-check exit flash and the new build's crosses need your phone. The first thing to look for in the next log is the `[BUILD] native camera:` line.
 - Full suite: everything passes except `test-tab-headers.js` (it expects a long Home date like "Thursday, November 12"; Home now shows "Wed, Nov 25": Window A's header, untouched by me). I updated three checks in Window A's `test-onboarding-r8.js` that pinned the old scrolling header and the old back button.
+
+
+---
+# Round 11 (2026-11-25, night): rep timing, missed reps, set bars, form check exit, app start, plan ready, paywall
+Merged origin/overnight-build first (clean).
+
+## IMPORTANT: the attached latest.log has NO camera session
+It is a fresh Metro session (20:17 UTC) with only app start and the onboarding / trial reminder screens. No `[REP]`, `[ATTEMPT]`, `[COACH]`, `[ATTEMPT-MISSED]` or `[LEAVE]` lines. So I could NOT measure the real new-build delays or find the three silent reps in it (each Metro restart replaces the file). What I did instead: found the real causes in the code, proved them by replaying the three newest real camera logs we do have, fixed them, and added log lines that give the exact numbers next time. Send me the log of the camera session (before restarting Metro) and I will tune with real numbers.
+
+## 1. Rep timing (check late, cross early)
+- **Why the cross is early:** the engine reports a half rep the moment the stroke TURNS at its shallow bottom (`finishAttempt`: the arms have only started back up). A counted rep is reported only when the arms are back (exit line held for 3 frames, plus the start-position gate). So the cross always lands before the check would have.
+- **Fix (JS, works at once through Metro, no build):** the cross is now HELD until the metric is back in the start zone (the top 40% of the way from the exit line to the start value: 73.6 for shoulder press), at most 1.1 s, then shown. A second event or a counted rep flushes a held cross, so nothing is lost (`lib/verdictTiming.ts`). In the replays the hold is only 0.1 to 0.2 s because the log has the metric just 3 times a second; on the phone it is measured properly.
+- **Checks:** I cannot see from the code why they are later than before, and without a log I will not guess a number. Likely suspect: the new start-position gate (a counted rep waits until the elbows are back below the shoulders). I did not change it. Every verdict now logs `[TIMING] ...`, for example `[TIMING] cross shown N ms after the engine event, when the arms are back at the start position (metric X)`, so the next log gives the real delays.
+
+## 2. Missed reps (major): found 4 ways a real attempt got NOTHING, all fixed
+1. The Coach dropped a half-rep cross if it came within **1.2 s** of the verdict before it. Reps about 1.2 s apart = several silent reps in a row. Now 0.35 s (it only stops one stroke being judged twice).
+2. A **counted** rep got no check while the camera's raw "step back" hint was up, even when the Guide itself ignored that hint (the metric kept flowing). That is "3 reps, no check, no cross, number unchanged". Now a counted rep always gets its check unless nobody is in the picture.
+3. The engine **rejects** some reps (movement guard, gate, unreliable tracking) with no event at all. Now every stroke the screen's attempt detector sees end as missed or rejected, with no verdict from the engine within 1.3 s, gets its cross from the screen (reason from the detector: "Go lower" / "Go higher" / "Full movement"). Never silence (`lib/noSilentReps.ts`).
+4. An unknown missed reason was also dropped silently: now it is a cross "Full movement".
+- **If the camera truly cannot judge it** (the engine rejected a rep for unreliable tracking, or the rep path is cut): no cross, the number is capped at 45 at once (even while reps count) and the Guide says why ("Keep your whole body in view" / "Find more light" ...). Log: `[CAMERA] the engine rejected a rep: tracking unreliable ...`.
+- **Proof by replay** (`scripts\test-verdict-flow.js`, three real logs): BEFORE, strokes with no verdict: Nov 25: 5 of 11 (2 in a row); Nov 16b: 5 of 19 (2 in a row); Nov 16: 2 of 13. AFTER: 0 in all three.
+- A silent stroke logs `[SILENT] stroke #N ended with no verdict ... the screen gives it its cross`.
+
+## 3. Set bars: pure white
+The "hint of green / yellow" was the glass tinting the white fill (the fill was a child of the real glass pill, and real glass is tinted by the camera picture behind it). The fills are now plain views on TOP of the glass: pure #FFFFFF for done and current sets, the same white at 30% for upcoming sets. No colour is left in those styles (a test checks).
+
+## 4. Form check Done: fixed for good (needs your eyes)
+Cause: the exit (hide the pages, pop the stack) ran on Continue, while the done screen was already fading, so for a few frames the dark recap screen showed through. Now the exit runs BEHIND the done screen: about 1.3 s after it starts it fully covers everything (a new optional `onCovered` of the done screen) and the stack is popped then. Continue only fades the done screen away over the tab he started from. If Continue were tapped first, it does the exit itself.
+- **Log lines to look for:** `[DONE] covering the screen under it: the caller may leave behind it now`, then `[LEAVE] form check exit behind the done screen: ...`, then `[warm:...] hidden INSTANTLY`. I could not check them: the attached log has none (no camera session).
+
+## 5. App start: white screen for about 5 s
+From the log: fonts ready 0.46 s after the app code started and the splash was hidden at once, but the tab pages (web views) were ready only at 5.7 s (Train) and 6.6 s (Profile). In between the screen showed empty white pages. Nothing is blocking the JS thread: the web views simply take that long to load and draw. Fix: the app's own splash (cream, not white) now stays until all four tab pages are drawn, with an 8 s backstop. `[LAUNCH] splash hidden N ms after ...` says when and why. Test: `test-app-start.js`. (The real fix for the slow pages themselves is a bigger job: say if you want it.)
+
+## 6. Plan ready, Target card
+- No target (he skipped the goal): the card shows a dash "–", not an empty box.
+- The arrow now hovers just above the dot (its tip is 4 units above the dot's outer edge) instead of touching it; the card stays centred on the arrow.
+
+## 7. Paywall
+- **Back button real glass: found the real cause.** Real glass cannot be drawn inside a view whose opacity is animated, and the back button sat inside the page's fading container AND inside its own fade-in. The system drew a flat disc. The header is now a sibling of the fading page with no animated opacity anywhere around it (the normal onboarding back button too), and it is ONE standard glass button (the Finish pill's glass), no glass nested in glass. A soft shadow outside the glass makes it visible on the light page.
+- **Auto-scroll not happening: made much more robust and visible.** The app asks the page 3 times after the paywall appears (the page ignores a repeat), the page finds its list itself if it was not ready, and it steps with a plain timer (requestAnimationFrame can be paused while a page is hidden in the pool). The page reports what it does. Look for `[PAYWALL] the paywall appeared ...` and `[PAYWALL] auto-scroll: asked: the list was found (scrolls N px), waiting 5 s` / `scrolling N px over 6 s` / `done`. If it still does not scroll, that log says why.
+- **White at the bottom and sides when scrolling the whole screen: fixed.** The paywall and the gift offer no longer rubber-band (nothing to bounce: it is one full screen with its own inner list), and the page colour also lives on an oversized fixed backdrop plus `overscroll-behavior:none`, so anything drawn beyond the page is the page colour.
+- Tests: `test-paywall-screens.js`, `test-trial-reminder.js` (iPhone 15, 16, 15 Pro Max, 16 Pro Max).
+
+## Tests
+New: `test-verdict-flow.js`, `test-app-start.js`. Updated for the new behaviour: `test-one-judge.js` (verdicts may now come 0.3 s apart, and from the screen's fallback cross), `test-movement-match.js`, `test-camera-hud-layout.js`, `test-paywall-screens.js`, `test-trial-reminder.js`, `test-onboarding-*`, `test-save-progress.js` (Save your progress has no back button / bar any more), `test-done-screen.js`, `test-formcheck-open-and-leave.js`, `test-goal-target-marker.js`.
+
+## Not verified
+- Nothing seen on a phone. Real glass, the exit flash, the splash and the paywall scroll need your phone. The first thing to send me is the camera-session log (the new `[TIMING]`, `[SILENT]`, `[CAMERA]`, `[LEAVE]`, `[PAYWALL]` lines).

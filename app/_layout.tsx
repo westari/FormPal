@@ -13,6 +13,7 @@ import { setMusicSkipCache } from '../lib/musicGate';
 import { usePlanStore } from '../store/planStore';
 import { installDevLogger } from '../lib/devLogger';
 import { installPressHaptics } from '../lib/haptics';
+import { useTabReadyVersion, allTabsReady } from '../lib/tabReady';
 import {
   useFonts,
   BricolageGrotesque_300Light,
@@ -30,6 +31,7 @@ import {
 
 const JS_STARTED_AT = Date.now();
 const FONT_WAIT_MS = 1500;
+const SPLASH_BACKSTOP_MS = 8000;   // the splash never stays longer than this, whatever the pages do
 installDevLogger();
 installPressHaptics(); // every normal press gets the Light haptic unless it makes its own (lib/haptics.ts)
 
@@ -76,12 +78,20 @@ export default function RootLayout() {
   const [fontWaitOver, setFontWaitOver] = useState(false);
   useEffect(() => { const t = setTimeout(() => setFontWaitOver(true), FONT_WAIT_MS); return () => clearTimeout(t); }, []);
   const ready = fontsLoaded || !!fontError || fontWaitOver;
+  // THE SPLASH STAYS UP UNTIL THE TAB PAGES HAVE REALLY PAINTED (Ari 2026-11-25: about 5 s of a white screen before the app showed). The log: the fonts were ready 0.5 s after the
+  // app code started and the splash was hidden then, but the four tab pages (web views) only reported "ready" 5 s later (Train: 05.7 s to 10.8 s), so the screen showed the
+  // empty white web views in between. Now the splash (the app's own cream splash, not white) covers that wait, with a backstop so it can never hang.
+  useTabReadyVersion();
+  const firstPageUp = allTabsReady();   // all four tab pages drawn: the tab bar's own white cover (page coloured) has nothing left to cover either
+  const [splashBackstop, setSplashBackstop] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setSplashBackstop(true), SPLASH_BACKSTOP_MS); return () => clearTimeout(t); }, []);
   useEffect(() => {
-    if (ready) {
+    if (ready && (firstPageUp || splashBackstop)) {
       if (__DEV__) console.log('[LAUNCH] first screen allowed ' + (Date.now() - JS_STARTED_AT) + 'ms after the app code started | fonts: ' + (fontsLoaded ? 'loaded' : fontError ? 'failed' : 'NOT loaded yet (hard stop after ' + FONT_WAIT_MS + 'ms)'));
       void SplashScreen.hideAsync();
+      if (__DEV__) console.log('[LAUNCH] splash hidden ' + (Date.now() - JS_STARTED_AT) + 'ms after the app code started (' + (firstPageUp ? 'all four tab pages have painted' : 'backstop') + ')');
     }
-  }, [ready, fontsLoaded, fontError]);
+  }, [ready, fontsLoaded, fontError, firstPageUp, splashBackstop]);
   useEffect(() => { if (fontsLoaded && __DEV__) console.log('[LAUNCH] fonts loaded ' + (Date.now() - JS_STARTED_AT) + 'ms after the app code started'); }, [fontsLoaded]);
 
   useEffect(() => { void pruneOldVideos(); }, []);

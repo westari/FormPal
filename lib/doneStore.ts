@@ -8,7 +8,12 @@ import { create } from 'zustand';
 
 /** `subtitle` may be a Promise: the done screen then starts at ONCE with the title and the grey line fills in when the real line is ready (the line appears
  *  at about 2.2s into the animation, so it has that long to be worked out; if it fails the line is left out). */
-export interface DonePayload { title: string; subtitle: string | Promise<string>; onContinue: () => void }
+export interface DonePayload {
+  title: string; subtitle: string | Promise<string>; onContinue: () => void;
+  /** Optional: runs ONCE while the done screen is fully covering what is under it (about 1.3 s after it starts, long before Continue can be tapped), so a screen can leave
+   *  (pop its stack) BEHIND the done screen. Then Continue only fades the done screen away over the final screen: nothing flashes in between (Ari 2026-11-25). */
+  onCovered?: () => void;
+}
 interface DoneState { payload: (DonePayload & { nonce: number }) | null; show: (p: DonePayload) => void; hide: () => void }
 
 let nonce = 0;

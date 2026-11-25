@@ -24,6 +24,7 @@ import { hapticSuccess, hapticMain } from '../lib/haptics';
 const DONE_HTML = require('../assets/app screens/greatjobanimation.html');
 export const DONE_HAPTIC_MS = 1950;      // when the title has appeared (the design's title starts at 1830ms and takes 700ms)
 export const DONE_FADE_MS = 240;
+export const DONE_COVERED_MS = 1300;   // after the page says it is shown, the wash has covered the screen under it: payload.onCovered runs then
 export const DONE_SPARE_AFTER_MS = 2500; // the first spare is made this long after the app starts (not during launch)
 export const DONE_NEVER_LOADED_MS = 5000; // safety net only: a page that never says it is shown within this long after it was asked to play
 
@@ -37,6 +38,7 @@ function DoneView({ payload, onSpent }: { payload: Live | null; onSpent: () => v
   const startedFor = useRef<number | null>(null);
   const shownRef = useRef(false);
   const left = useRef(false);
+  const coveredRef = useRef(false);
   const payloadRef = useRef<Live | null>(payload);
   payloadRef.current = payload;
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -44,7 +46,7 @@ function DoneView({ payload, onSpent }: { payload: Live | null; onSpent: () => v
   const leave = () => {
     if (left.current) return; left.current = true;
     timers.current.forEach(clearTimeout);
-    payloadRef.current?.onContinue();
+    payloadRef.current?.onContinue();   // (a caller that already left in onCovered makes this a no-op)
     Animated.timing(fade, { toValue: 0, duration: DONE_FADE_MS, easing: Easing.out(Easing.quad), useNativeDriver: true }).start(() => { hideDone(); onSpent(); });
   };
   const play = (p: Live) => {
@@ -90,6 +92,7 @@ function DoneView({ payload, onSpent }: { payload: Live | null; onSpent: () => v
             const p = payloadRef.current;
             if (__DEV__) console.log('[DONE] shown: "' + (p ? p.title : '') + '" | ' + (p ? (typeof p.subtitle === 'string' ? p.subtitle : '(the line fills in when it is ready)') : ''));
             timers.current.push(setTimeout(() => hapticSuccess(), DONE_HAPTIC_MS));
+            timers.current.push(setTimeout(() => { if (coveredRef.current) return; coveredRef.current = true; if (__DEV__) console.log('[DONE] covering the screen under it: the caller may leave behind it now'); try { payloadRef.current?.onCovered?.(); } catch { /* the caller's problem, never the done screen's */ } }, DONE_COVERED_MS));
           } else if (m === 'doneContinue') {
             if (shownRef.current) { hapticMain(); leave(); }   // (round 10) a tap on Continue buzzes, like every main button in the app
           }

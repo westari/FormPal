@@ -64,5 +64,9 @@ check('formcheck: Start your reps is wired once (createStartReps), never reset',
 check('formcheck: the demo video drawer is still there', /instepdrawer\.html/.test(fc) && /DRAWER_PEEK_HEIGHT/.test(fc));
 check('formcheck: the five glass pieces are real Liquid Glass (HudGlass / LiquidGlassButton), never a flat card', (fc.match(/<HudGlass/g) || []).length >= 4 && (fc.match(/<LiquidGlassButton/g) || []).length >= 4);
 check('formcheck: brackets are 42 pt arms, 3 pt thick, 20 pt radius', /const SIZE = 42, BW = 3, R = 20;/.test(fc));
+// round 10 (2026-11-25): the set bars are pure white, no colour
+const setLines = fc.split('\n').filter((l) => /^\s+(setGlow|setFill|setFillOn|setFillOff):/.test(l));
+check('set bars: done and current = pure white (#FFFFFF), upcoming = the same white dimmed; the fills are plain views drawn ON TOP of the glass, never children of it (a child of real glass is tinted by the picture behind: the hint of green / yellow)', setLines.length === 4 && fc.includes("setFillOn:  { backgroundColor: '#FFFFFF' }") && fc.includes("setFillOff: { backgroundColor: 'rgba(255,255,255,0.30)' }") && fc.includes('<HudGlass radius={layout.bar.height / 2} style={{ flex: 1, height: layout.bar.height }} />') && fc.includes('<View pointerEvents="none" style={[wh.setFill, on ? wh.setFillOn : wh.setFillOff]} />'));
+check('set bars: no green or yellow colour in the set bar styles (only white and rgba 255,255,255)', setLines.every((l) => !/#(?!FFFFFF)[0-9a-f]{3,6}/i.test(l) && !/rgba\((?!255,255,255)/.test(l)) && !fc.includes('34C759'));
 console.log(failed ? '\n' + failed + ' FAILED' : '\nall passed');
 process.exit(failed ? 1 : 0);

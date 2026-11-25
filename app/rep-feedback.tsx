@@ -280,13 +280,21 @@ export default function RepFeedbackScreen() {
         // the done screen (Ari's design, components/DoneHost.tsx): "Form check complete" and this form check's real numbers, then HOME
         let evs: { good?: boolean }[] = [];
         try { evs = repEventsParam ? JSON.parse(repEventsParam) : []; } catch { evs = []; }
+        let exited = false;
+        const leaveBehind = (when: string) => {
+          if (exited) return; exited = true;
+          console.log('[LEAVE] form check exit ' + when + ': warm pages hidden at once, recap video hidden, stack popped to the tabs (no flash: the done screen covers it)');
+          warmHideNow(['repfeedback', 'recap', 'ranks', 'allsets']); repFeedbackSignal.onLeaveNow?.(); router.dismissAll();
+        };
         showDone({
           title: DONE_TITLES.formCheck,
           subtitle: formCheckDoneLine({ exerciseName, reps: evs.length, goodReps: evs.filter(e => e && e.good).length }),
-          // Continue: the done screen now fades away over whatever is underneath, so everything underneath is hidden THIS frame (no fade of its own) and the
-          // stack is popped back to the tabs, to the tab he started from. Before, the rep feedback page faded out, then the Workout complete card showed for a
-          // moment, then the tab: a couple of screens flashing.
-          onContinue: () => { console.log('[LEAVE] form check Continue: warm pages hidden at once, stack popped to the tabs, no flash'); warmHideNow(['repfeedback', 'recap', 'ranks', 'allsets']); repFeedbackSignal.onLeaveNow?.(); router.dismissAll(); },
+          // THE EXIT HAPPENS BEHIND THE DONE SCREEN (Ari 2026-11-25: the Continue exit still showed the wrong screen for a moment before the tab). About 1.3 s after the done
+          // screen starts it fully covers what is under it, so the stack is popped THEN (onCovered): the rep feedback page and the recap (its native video included) are
+          // hidden at once, and the stack goes back to the tabs, to the tab he started from. Continue then only fades the done screen away over that tab. (If Continue
+          // were ever tapped before that, it does the same exit itself.) The log says exactly when: [LEAVE] ...
+          onCovered: () => leaveBehind('behind the done screen'),
+          onContinue: () => leaveBehind('on Continue'),
         });
         return;
       }
