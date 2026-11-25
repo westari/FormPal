@@ -28,7 +28,7 @@ export default function GlassBackButton({ onPress, scheme = 'light' }: { onPress
       style={{ width: GLASS_BACK_SIZE, height: GLASS_BACK_SIZE, alignItems: 'center', justifyContent: 'center' }}
     >
       {/* the exact arrow every back button in the app uses (the design files' own): a 10 x 17 chevron, 2.4 stroke, round ends */}
-      <Svg width={BACK_ARROW.w} height={BACK_ARROW.h} viewBox="0 0 10 17" fill="none">
+      <Svg width={BACK_ARROW.w} height={BACK_ARROW.h} viewBox="0 0 10 17" fill="none" style={{ transform: [{ translateX: -1.5 }] }}>
         <Path d={BACK_ARROW.d} stroke={dark ? '#ffffff' : '#111114'} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" />
       </Svg>
     </LiquidGlassButton>

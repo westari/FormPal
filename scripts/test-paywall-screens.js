@@ -22,11 +22,11 @@ const src = fs.readFileSync(path.join(__dirname, '..', 'app', 'onboarding.tsx'),
 
 // ── static ──
 const a0 = src.indexOf("{(htmlKey === 'paywall' || htmlKey === 'giftOffer') ? (");
-const a1 = src.indexOf('// Same top offset the native question header', a0);
+const a1 = src.indexOf(') : noHeader ? null : (', a0);
 const block = src.slice(a0, a1);
-check('paywall and gift offer: the back control is the standard glass back button (GlassBackButton), at the same top as every other page', a0 > 0 && block.includes('<GlassBackButton') && block.includes('top: topInset + 12') && src.includes("import GlassBackButton from '../components/GlassBackButton';"));
+check('paywall and gift offer: the back control is the standard glass back button (GlassBackButton) inside a clear glass bubble, top-left, and not inside anything that moves with the page', a0 > 0 && block.includes('<GlassBackButton') && block.includes('variant="clear"') && block.includes('top: topInset + 5') && src.includes("import GlassBackButton from '../components/GlassBackButton';") && !block.includes('headerY'));
 check('paywall and gift offer: NO X (xmark) any more in that block', !/xmark/.test(block));
-check('the header scrolls with the page too (Window A: headerY / ONB_SCROLL_REPORT_JS) and both injections are on the WebView', src.includes('translateY: headerY') && (src.includes("' + ONB_SCROLL_REPORT_JS}") || src.includes(": ONB_SCROLL_REPORT_JS)}")) && src.includes('KEEP_FX_JS + ') && src.includes('<OnbBackButton'));
+check('both scripts are on the WebView: the scroll report (it only fades the back button now) and the keep-effects flag; normal onboarding screens keep their native back button', src.includes('ONB_SCROLL_REPORT_JS') && src.includes('KEEP_FX_JS + ') && src.includes('<OnbBackButton'));
 check('the paywall keeps its Restore', block.includes('Restore'));
 check('the three pages keep their masks and blur (KEEP_FX_KEYS), set before the page loads', /KEEP_FX_KEYS: string\[\] = \['trialTimeline', 'paywall', 'giftOffer'\]/.test(src) && src.includes("(KEEP_FX_KEYS.includes(htmlKey) ? KEEP_FX_JS + '\\n' : '')") && src.includes("(window.__dcKeepFx ? '' : '[style*=\"mask-image\"]"));
 

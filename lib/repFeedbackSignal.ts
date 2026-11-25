@@ -24,4 +24,7 @@ export const repFeedbackSignal: {
   onOpenAllSets: (() => void) | null;
   /** The rep the rep feedback was on when All sets was opened, so Back from All sets returns to that rep (not rep 1). */
   repIdx: number;
-} = { finishedReview: false, openAllSets: false, onFinishReview: null, onOpenAllSets: null, repIdx: 0 };
+  /** Set by recap.tsx while mounted. A form check's Continue calls it first: the recap's own native video (it sits behind the warm page) is hidden and paused at once,
+   *  so it cannot flash while the done screen fades away (Ari 2026-11-25: "it flashes the workout complete video screen, then the tab"). */
+  onLeaveNow: (() => void) | null;
+} = { finishedReview: false, openAllSets: false, onFinishReview: null, onOpenAllSets: null, repIdx: 0, onLeaveNow: null };

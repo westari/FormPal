@@ -87,12 +87,13 @@ function run(events, opts = {}) {
       const cueHeld = cueHold.feed(now, !!rawCue || st.lost);
       const streamHealthy = counter.seen() && counter.healthy(now, 1500, 2);
       const cueProven = cueHeld && !streamHealthy;
-      const meter = meterS.tick(c.value, now, meterPrimed ? LT.METER_MAX_RATE : 1e6);   // (on the phone the setup meter is already high when tracking starts)
-      meterPrimed = true;
+      let meter = 0;   // (on the phone the setup meter is already high when tracking starts)
       const g = guide.decide({
         now, exerciseId, personMissing: st.lost && cueProven, nativeCue: cueProven ? rawCue : null, outOfPlaneCue: null, diag: rd.message(),
         match: m, stuck: c.stuck, rejectedLowQuality: rej.lowQuality, rejectedDark: rej.dark, rejectedJoints: rej.joints, facing: opts.facing,
       });
+      meter = meterS.tick(LT.capForGuide(c.value, !!g.line && g.reason !== 'none'), now, meterPrimed ? (!!g.line && g.reason !== 'none' ? LT.METER_GUIDE_RATE : LT.METER_MAX_RATE) : 1e6);   // the Guide and the number agree (a camera-problem line caps it)
+      meterPrimed = true;
       rows.push({ t: now - 1e12, meter, cueRaw: rawCue, cueHeld, cueProven, match: m, conf: c, guide: g.line, guideWhy: g.why, guideReason: g.reason, guideEvidence: g.evidence });
       // old
       counterO.setFlags({ diag: !!rdO.message(), cue: false });

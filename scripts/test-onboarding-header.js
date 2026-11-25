@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * scripts/test-onboarding-header.js  (round 9, item 1)
- * The onboarding top bar (back button + progress bar) is PART OF THE PAGE on the design-page screens: it scrolls with the page on the very same frame,
+ * The onboarding PROGRESS BAR is PART OF THE PAGE on the design-page screens (round 10: the BACK BUTTON is real native Liquid Glass again, fixed, and fades away when the page scrolls): it scrolls with the page on the very same frame,
  * so it cannot trail, jitter or drift over the text. Real onboarding pages (the shipped scale-to-fit code + the shipped header code, extracted from
  * app/onboarding.tsx) in Chromium. A fast flick = many large scroll jumps and real mouse-wheel flicks, sampled on every frame.
  */
@@ -45,8 +45,8 @@ const esc = (s) => JSON.stringify(s).slice(1, -1);
   check('the bar is in the page exactly once, placed absolutely (not fixed) in the document, so it belongs to the page and scrolls with it', info.n === 1 && info.parent === 'BODY' && info.pos === 'absolute', JSON.stringify(info));
   check('the page really scrolls here (tall page on a short phone), so the test means something', info.scrollable > 150, 'scrolls ' + info.scrollable + 'px');
   check('the progress bar shows the real progress (62%)', info.fill === '62%', info.fill);
-  const geo = await page.evaluate(() => { const b = document.getElementById('__onb_back').getBoundingClientRect(), t = document.getElementById('__onb_prog').parentElement.getBoundingClientRect(); return { bw: b.width, bh: b.height, bl: b.left, bt: b.top, trackTop: t.top, trackH: t.height, trackL: t.left }; });
-  check('the back button is a 40px round button at the left (17px in, like before) and the progress track is 4px tall, vertically centred with it', geo.bw === 40 && geo.bh === 40 && Math.abs(geo.bl - 17) < 0.6 && geo.trackH === 4 && Math.abs((geo.trackTop + 2) - (geo.bt + 20)) < 1, JSON.stringify(geo));
+  const geo = await page.evaluate(() => { const t = document.getElementById('__onb_prog').parentElement.getBoundingClientRect(); return { hasBack: !!document.getElementById('__onb_back'), trackL: t.left, trackH: t.height, trackTop: t.top }; });
+  check('the page has NO back button of its own any more (a web page cannot draw real Liquid Glass: the back button is native), and the progress track is 4px tall, where it always was (starts 66px in, centred on the old button row: 29px from the top)', !geo.hasBack && geo.trackH === 4 && Math.abs(geo.trackL - 66) < 1 && Math.abs((geo.trackTop + 2) - 29) < 0.6, JSON.stringify(geo));
   const text0 = await page.evaluate(() => { const h = document.getElementById('__onb_hdr').getBoundingClientRect(); const hits = [...document.querySelectorAll('#dc-root div,#dc-root span,#dc-root p,#dc-root a')].filter((e) => { if (e.children.length) return false; if (!(e.textContent || '').trim()) return false; const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.bottom > h.top + 3 && r.top < h.bottom - 3 && r.right > h.left && r.left < h.right; }).map((e) => e.textContent.trim().slice(0, 30)); return hits; });
   check('at the top of the page the bar does not sit on any text', text0.length === 0, JSON.stringify(text0));
 
@@ -76,11 +76,9 @@ const esc = (s) => JSON.stringify(s).slice(1, -1);
   await page.evaluate(() => window.scrollTo(0, 400)); await page.waitForTimeout(100);
   const down = await page.evaluate(() => document.getElementById('__onb_hdr').getBoundingClientRect().bottom);
   check('scrolled down 400px the bar is gone off the top with the page (not floating over the text)', down < 0, String(down));
-  // tap on back
+  // the header never catches a tap (pointer-events none): the native glass back button sits above the page
   await page.evaluate(() => window.scrollTo(0, 0)); await page.waitForTimeout(100);
-  const bp = await page.evaluate(() => { const r = document.getElementById('__onb_back').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
-  await page.mouse.click(bp.x, bp.y); await page.waitForTimeout(150);
-  check('a tap on the back button posts "onbback" (the app goes back)', msgs.includes('onbback') && !msgs.includes('advance'), JSON.stringify(msgs));
+  check('the header strip does not catch taps (pointer-events none), so the page underneath stays tappable', await page.evaluate(() => getComputedStyle(document.getElementById('__onb_hdr')).pointerEvents) === 'none');
   await page.evaluate(() => window.__onbSetProgress(0.8)); check('the app can move the progress later (page.__onbSetProgress)', await page.evaluate(() => document.getElementById('__onb_prog').style.width) === '80%');
   await page.screenshot({ path: path.join(ROOT, '.scratch', 'onb-header-top.png'), clip: { x: 0, y: 0, width: 390, height: 260 } });
   await page.evaluate(() => document.getElementById('__onb_hdr').remove()); await page.waitForTimeout(700);
@@ -91,17 +89,17 @@ const esc = (s) => JSON.stringify(s).slice(1, -1);
   for (const key of ['startingpoint', 'goodhandsv2', 'formconfidence']) {
     const f = path.join(ROOT, 'assets', 'app screens', key + '.html');
     const { page: p2 } = await open(f, { h: 844 });
-    const g = await p2.evaluate(() => { const b = document.getElementById('__onb_back'); if (!b) return null; const r = b.getBoundingClientRect(); return { l: r.left, t: r.top, n: document.querySelectorAll('#__onb_hdr').length }; });
-    check(`${key}: the bar is there, once, at the same place (17px from the left, 9px from the top of the page)`, !!g && g.n === 1 && Math.abs(g.l - 17) < 0.6 && Math.abs(g.t - 9) < 0.6, JSON.stringify(g));
+    const g = await p2.evaluate(() => { const w = document.getElementById('__onb_prog_wrap'); if (!w) return null; const r = w.getBoundingClientRect(); return { l: r.left, t: r.top, n: document.querySelectorAll('#__onb_hdr').length, back: !!document.getElementById('__onb_back') }; });
+    check(`${key}: the progress bar is there, once, at the same place (54px from the left, 27px from the top of the page), and there is no web back button`, !!g && g.n === 1 && !g.back && Math.abs(g.l - 54) < 1 && Math.abs(g.t - 27) < 1.5, JSON.stringify(g));
     await p2.close();
   }
 
   // ── the app side (source order) ──
   const ob = read('app/onboarding.tsx');
-  check('app: the native bar is NOT drawn for the in-page screens any more (so there is nothing left to trail), only for the trial reminder, paywall and gift offer which another window owns', /\) : inPageHeader \? null : \(/.test(ob) && /ONB_INPAGE_HEADER_EXCLUDE: string\[\] = \['trialTimeline', 'paywall', 'giftOffer'\]/.test(ob));
+  check('app: the back button is NATIVE real glass (OnbBackButton) on every in-page screen, it fades away when the page scrolls (no tracking of the scroll), and the native bar is drawn only where the page has none', ob.includes('<OnbBackButton onPress') && ob.includes('opacity: Animated.multiply(backFade, backScroll)') && ob.includes('{!inPageHeader && progress != null && (') && !ob.includes('translateY: headerY'));
   check('app: the page\'s back tap goes back (onbback -> onBack), handled before anything that could advance', /if \(m === 'onbback'\) \{ Haptics\.selectionAsync\(\); onBack\(\); return; \}/.test(ob) && ob.indexOf("m === 'onbback'") < ob.indexOf("if (m === '__tap' || m === '__tick')"));
-  check('app: the scroll-follow messages are kept only for the three screens left alone (the others do not send them)', /\(inPageHeader \? onbHeaderJs\(progress \?\? null, !isDcPage\) : ONB_SCROLL_REPORT_JS\)/.test(ob));
-  check('app: the three screens left alone (trial reminder, paywall, gift offer) are excluded from the in-page bar and keep their native header branch', /ONB_INPAGE_HEADER_EXCLUDE: string\[\] = \['trialTimeline', 'paywall', 'giftOffer'\]/.test(ob) && /htmlKey === 'paywall' \|\| htmlKey === 'giftOffer'/.test(ob));
+  check('app: the page scroll report is injected on every page (it only drives the back button fade, it no longer moves anything)', ob.includes("onbHeaderJs(progress ?? null, !isDcPage) + '\\n' + ONB_SCROLL_REPORT_JS : ONB_SCROLL_REPORT_JS)") && ob.includes('const hide = (Number(m.slice(10)) || 0) > 12;'));
+  check('app: no back button and no bar from "building your plan" onward (generatePlan, planReady, trialTimeline), and the two native screens after them have none either', ob.includes("const ONB_NO_HEADER_KEYS: string[] = ['generatePlan', 'planReady', 'trialTimeline'];") && ob.includes('!ONB_INPAGE_HEADER_EXCLUDE.includes(htmlKey) && !noHeader') && !read('components/onboarding/TryForFreeScreen.tsx').includes('<OnbBackButton onPress') && !read('components/onboarding/TryForFreeScreen.tsx').includes('progress != null &&') && !/emailMode ? <OnbBackButton/.test('') && read('components/onboarding/SaveProgressScreen.tsx').includes('{emailMode ? <OnbBackButton'));
   await browser.close();
   console.log(failed ? `${failed} FAILED` : 'ALL PASSED'); process.exit(failed ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

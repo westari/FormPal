@@ -19,10 +19,10 @@ const comps = ['RankRevealScreen', 'RankWheelScreen', 'SaveProgressScreen', 'Str
 
 // ── back button ──
 check('every onboarding back button is the standard glass back button (OnbBackButton -> GlassBackButton -> LiquidGlassButton): question header, simple header, web screens, dark hero', (ob.match(/<OnbBackButton /g) || []).length >= 4 && /<OnbBackButton onPress=\{goBack\} \/>/.test(ob) && /<OnbBackButton onPress=\{onBack\} \/>/.test(ob) && /scheme=\{isDcPage \? 'light' : 'dark'\}/.test(ob) && /<OnbBackButton onPress=\{goBack\} scheme="dark" \/>/.test(ob));
-check('and in the five onboarding screens (rank reveal, rank wheel, save progress, strength, try for free)', comps.every(([n, t]) => /<OnbBackButton /.test(t)), comps.map(([n, t]) => n + ':' + (t.match(/<OnbBackButton /g) || []).length).join(' '));
+check('and in the onboarding screens (rank reveal, rank wheel, save progress, strength); NOT in Try for free: from building the plan onward there is no back button (round 10)', comps.every(([n, t]) => (n === 'TryForFreeScreen' ? !/<OnbBackButton /.test(t) : /<OnbBackButton /.test(t))), comps.map(([n, t]) => n + ':' + (t.match(/<OnbBackButton /g) || []).length).join(' '));
 check('no old hand-made back button is left (no chevron.left drawn inside a LiquidGlassButton in any onboarding screen)', !/<LiquidGlassButton[^>]*>\s*<SymbolView name="chevron\.left"/.test(ob) && comps.every(([n, t]) => !/<LiquidGlassButton[^>]*>\s*<SymbolView name="chevron\.left"/.test(t)));
 const ob1 = read('components/onboarding/OnbBackButton.tsx');
-check('OnbBackButton is the app\'s GlassBackButton in a 34 x 34 box (so the progress bar and everything below stay exactly where they were)', /import GlassBackButton from '\.\.\/GlassBackButton'/.test(ob1) && /ONB_BACK_BOX = 34/.test(ob1) && /<GlassBackButton onPress=\{onPress\} scheme=\{scheme\}/.test(ob1));
+check('OnbBackButton is the GlassBackButton (the standard real glass look) in a 34 x 34 box (so the progress bar and everything below stay exactly where they were)', ob1.includes("import GlassBackButton from '../GlassBackButton'") && /ONB_BACK_BOX = 34/.test(ob1) && ob1.includes('<GlassBackButton onPress={onPress} scheme="standard"'));
 check('the paywall / gift X close buttons are left alone (they are not back buttons)', /name="xmark" size=\{14\}/.test(ob));
 
 // ── notifications screen ──
@@ -41,7 +41,7 @@ check('native question steps: the back button + progress bar + question are INSI
 check('the Continue button stays at the bottom (outside the scroll), as before', /<\/ScrollView>\s*<View style=\{s\.bn\}>/.test(ob));
 
 // ── scrolls away: web pages ──
-check('web screens: the header block (back button + progress bar, and the paywall X) sits in a wrapper that follows the page\'s scroll (translateY = -scroll)', /transform: \[\{ translateY: headerY \}\]/.test(ob) && /headerY\.setValue\(-Number\(m\.slice\(10\)\) \|\| 0\)/.test(ob) && /onbscroll:/.test(ob) && /: ONB_SCROLL_REPORT_JS\)/.test(ob));
+check('web screens (round 10): the header no longer follows the page scroll (that tracking jittered): the back button is native glass and fades away once the page has scrolled, the bar is part of the page', ob.includes('testID="onb-header"') && !ob.includes('translateY: headerY') && ob.includes('opacity: Animated.multiply(backFade, backScroll)') && /onbscroll:/.test(ob));
 check('the scroll message is handled before the haptic/advance fall-through (a scroll can never advance the screen or buzz)', ob.indexOf("m.indexOf('onbscroll:') === 0") > 0 && ob.indexOf("m.indexOf('onbscroll:') === 0") < ob.indexOf("if (m === '__tap' || m === '__tick')"));
 
 (async () => {

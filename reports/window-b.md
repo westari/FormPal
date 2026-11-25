@@ -102,3 +102,41 @@ New: `test-trial-reminder.js` and `scripts/lib/paywall-harness.js` (pulls the ap
 - No phone test. Real Liquid Glass and the real notification need the phone and the new build.
 - The Swift side is unchanged this round, but the next iOS build now includes expo-notifications, so it is a bigger native change than the last one.
 - Full suite: everything passes except `test-tab-headers.js` ("Home title is the live date": it expects a long date like "Thursday, November 12" and the Home header now shows "Wed, Nov 25"). That is Window A's Home header, not touched by me, so I left it for Window A.
+
+---
+# Round 10 (2026-11-25, evening): half reps, Guide vs number, form-check exit, onboarding, paywall
+Merged origin/overnight-build first (clean). Pictures: `reports\paywall-round10.png`.
+
+## 1. HALF REPS: no cross on the "new" build. Found: the log was written by the OLD native binary.
+The attached log (`scripts\fixtures\shoulder-press-2026-11-25.log.txt`) has **no `[ATTEMPT-MISSED]` line, no `[REP-QUALITY]` line and no `[AWAKE] native` line**. Those three are printed only by the NEW native camera. It also says `expo-brightness is NOT in this build` and `expo-notifications is not in this build`. Both modules are in the Nov 16, Nov 22 and Nov 25 iOS builds (I checked the commits of the GitHub runs), so the binary on the phone is older than all of them. And the test session ran 19:21 to 19:27 UTC while the newest iOS Dev Build (run 45681813423) only finished at 19:26:48 UTC: it could not have been installed yet.
+- **The JS is new, the native camera on the phone is still the old one.** So no cross could ever show. There is no half-rep bug in the new build to fix from this log.
+- **Proof the cross works the moment the new native sends its event:** I replayed this very log through the mirror of the new native tracker: the 6 full reps get their checks and the half reps get crosses "Go lower" (5 of them in this window, none withheld). Test: `scripts\test-half-reps-newbuild.js`.
+- **So nobody has to guess again:** the camera screen now prints, 8 seconds after it opens, `[BUILD] native camera: NEW build (...)` or `[BUILD] native camera: OLD build (no native [AWAKE] line arrived ...)`. After you install the new build, look for `NEW` in the log. If it says OLD, the install did not take.
+- To install: GitHub Actions "iOS Dev Build" run 45681813423 (success) is the one to install.
+
+## 2. The Guide and the number agree: done
+In the log the Guide said "Step back further" (the camera's cue) while the number stayed 99-100. Now whenever the Guide shows a camera-problem line the number is capped at 55 and follows the line down at 12 points a second (a few seconds, never a cliff), and comes back slowly (6 a second) once the line is gone. A log line says it: `[CONFIDENCE] the Guide says "..." so the number is capped at 55`. The person-seen floor (25) still holds. Replay test in `test-half-reps-newbuild.js`; the old "never more than 6 points a second" tests now allow 12 while such a line is up.
+
+## 3. Form check Done -> Continue flashing: fixed further
+Last round I hid the warm pages at once. What still flashed was the recap screen's own native video (the "workout complete video screen"), which sits behind the page. Continue now also hides and pauses that video in the same frame (`repFeedbackSignal.onLeaveNow`) before the stack is popped. Proof on the phone: `[LEAVE] form check Continue ...` and `[warm:...] hidden INSTANTLY`. Test: `test-formcheck-open-and-leave.js`.
+
+## 4. Onboarding
+- **Back button = real glass, chevron nudged left:** the in-page imitation (a web page cannot draw Liquid Glass) is gone. The back button is the native standard glass (the camera Finish pill's recipe) on every onboarding page, and the chevron is moved 1.5 pt left in the shared back button.
+- **No back button and no bar from "building your plan" onward:** generatePlan, planReady, trialTimeline, Save your progress and Try for free have neither. (Save your progress keeps one back button only inside its e-mail form, to get back to the sign-in choices; the paywall and gift offer keep theirs because it is how you leave them.)
+- **Progress bar not glitchy any more:** it is flat and part of the page (it scrolls with it on the page's own frame, nothing tracks it). The back button does not track the scroll either: it fades away once the page has scrolled a little (it does not need to stay).
+- **Try for free:** its header is gone, so the "moved down a lot" problem is gone with it.
+- **Plan ready, Target card:** the arrow is now ALWAYS in the middle of the card. The whole card moves so the arrow points at the end of the line (it may reach past the chart card, only the screen edge stops it; on a very narrow screen the card gets a little smaller instead of the arrow sliding). Checked at 360, 390 and 430 wide for five goals.
+- **"Your info" for a skipped onboarding:** skipped answers are blank (weight, height, age, experience and the goal row); the design's sample values (184 lb, 5'11", 27, Beginner, 195 lb) no longer leak through. The pencil on a blank row still opens the edit. Tested with nothing, some and all answers. Note (not changed, not asked): the big title above ("Your goal is to gain 0 lbs by Dec 2") still uses made-up defaults when nothing is answered.
+- Tests: `test-onboarding-round10.js` (new), `test-onboarding-header.js` and `test-goal-target-marker.js` rewritten for the new behaviour.
+
+## 5. Paywall
+- **Back button hard to see:** it now sits inside a clear glass bubble (54 pt, real Liquid Glass "clear" with a soft shadow) around the standard glass button. Real glass cannot be shown in my screenshots: look at it on the phone.
+- **Cue orb STILL old: found why.** The page runs a pass that freezes every short looping animation (to save battery); it froze the paywall's orb, so it sat still and looked like the old orb while the Home orb breathes and glows. The orb is now exempt, and the same orb rules the Home tab uses are re-applied after the page loads (my last round's static drawing is gone). The test checks the orb's animations are RUNNING (breathing, glow, morph) at four phone sizes; the picture strip shows the orb at three moments.
+- **Auto-scroll too fast:** now 6 seconds, eased start and end, never faster than about 80 px a second (it was 1.7 s). A touch on the list cancels it and shows everything.
+- **"Improve your rank" pokes out:** the rows after "as well as" are now hidden from the very first paint (a style set before the page loads, instead of waiting for the page's own script to find them), and fade in when the scroll starts.
+- **Restore moves when you scroll:** the header no longer follows the page at all, so Restore (and the back button) stay exactly where they are.
+- Checked at iPhone 15, 16, 15 Pro Max and 16 Pro Max: `test-trial-reminder.js` and `test-paywall-screens.js`.
+
+## Not verified
+- Nothing has been seen on a phone: real Liquid Glass (back buttons, the bubble), the form-check exit flash and the new build's crosses need your phone. The first thing to look for in the next log is the `[BUILD] native camera:` line.
+- Full suite: everything passes except `test-tab-headers.js` (it expects a long Home date like "Thursday, November 12"; Home now shows "Wed, Nov 25": Window A's header, untouched by me). I updated three checks in Window A's `test-onboarding-r8.js` that pinned the old scrolling header and the old back button.

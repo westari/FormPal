@@ -60,7 +60,7 @@ import { getExerciseDef } from '../constants/exercises';
 import { createSetupGuide, SETUP_TUNING, type SetupDecision } from '../lib/setupGuide';
 import { createAttemptDetector, type DetectorEvent } from '../lib/attemptDetector';
 import { hapticError, hapticMain, hapticSelect, hapticWarning } from '../lib/haptics';
-import { METER_MAX_RATE, METER_SETUP_RATE, METER_PERSON_FLOOR, SETUP_NO_PERSON_HINTS, isFrameHint, showVerdict, showFrameHint, JUDGED_QUIET_MS, meterTarget, createMeterSmoother, trackingIsHigh, NO_PERSON_CUE, createSteadyGate, READY_STEADY_MS, createCounterSignal, READY_COUNTER_WINDOW_MS, READY_COUNTER_MIN_SAMPLES, type CounterSignal } from '../lib/liveTracking';
+import { METER_MAX_RATE, METER_SETUP_RATE, METER_PERSON_FLOOR, GUIDE_PROBLEM_CAP, METER_GUIDE_RATE, capForGuide, SETUP_NO_PERSON_HINTS, isFrameHint, showVerdict, showFrameHint, JUDGED_QUIET_MS, meterTarget, createMeterSmoother, trackingIsHigh, NO_PERSON_CUE, createSteadyGate, READY_STEADY_MS, createCounterSignal, READY_COUNTER_WINDOW_MS, READY_COUNTER_MIN_SAMPLES, type CounterSignal } from '../lib/liveTracking';
 import { useAudioSettingsStore } from '../store/audioSettingsStore';
 import { useFormTheme, type FormTheme } from '../lib/activeTheme';
 import type { DebugStatsEvent, RepEvent, ExerciseType } from '../modules/athlt-camera/src/index';
@@ -563,7 +563,9 @@ const ri = StyleSheet.create({
 // createMeterSmoother in lib/liveTracking.ts — in its own state, so its ticks
 // never re-render the whole camera screen. Always mounted (renders nothing when
 // !show) so the "is it high yet" report that gates "Ready. Go!" keeps working.
-function TrackingMeter({ target, show, layout, guideText, spin, onHighChange, counter, counterActive, flags, confidence }: {
+function TrackingMeter({ target, show, layout, guideText, spin, onHighChange, counter, counterActive, flags, confidence, guideProblem }: {
+  /** true while the Guide shows a camera-problem line: the number follows it down quickly (and recovers slowly once the line is gone) */
+  guideProblem: { current: boolean };
   target: number; show: boolean; layout: HudLayout; guideText: string | null; spin?: Animated.AnimatedInterpolation<string>;
   onHighChange: (high: boolean) => void;
   counter: CounterSignal; counterActive: boolean; flags: { diag: boolean; cue: boolean };
@@ -596,13 +598,13 @@ function TrackingMeter({ target, show, layout, guideText, spin, onHighChange, co
       // a person is in the picture whenever the target is above 0 (0 = nobody): the number never goes under the floor (Ari 2026-11-22)
       if (targetRef.current > 0 && tgt < METER_PERSON_FLOOR) tgt = METER_PERSON_FLOOR;
       // never a jump: at most a few points a second while tracking (the setup meter may move faster while the person is still getting into place)
-      const d = smoother.tick(tgt, now, activeRef.current ? METER_MAX_RATE : METER_SETUP_RATE);
+      const d = smoother.tick(tgt, now, activeRef.current ? (guideProblem.current ? METER_GUIDE_RATE : METER_MAX_RATE) : METER_SETUP_RATE);
       setDisplay((prev) => (prev === d ? prev : d));
       const high = trackingIsHigh(d, smoother.effectiveTarget);
       if (high !== highRef.current) { highRef.current = high; onHighChange(high); }
     }, 33);
     return () => clearInterval(id);
-  }, [smoother, onHighChange, counter, confidence]);
+  }, [smoother, onHighChange, counter, confidence, guideProblem]);
   // the explanation closes by itself
   useEffect(() => {
     if (!infoOpen) return;
@@ -958,6 +960,16 @@ export default function FormCheckScreen() {
   const startRepsEngine = useRef(createStartReps({ log: (m: string) => tagLog(m) })).current;
   const goAtRef = useRef(0);
   const coachRef = useRef(createCoach({ log: (m: string) => tagLog(m) })).current;
+  // Which native camera is on the phone? The NEW native camera prints "[AWAKE] native: ..." as soon as the session starts (and is the only one that can send
+  // onAttemptMissed, the half-rep cross). The OLD one never does. So the log says it plainly (the 2026-11-25 log had neither: the new build was not installed yet).
+  const nativeBuildSeen = useRef<'new' | 'unknown'>('unknown');
+  useEffect(() => {
+    if (notLinked) return;
+    const t = setTimeout(() => { console.log(nativeBuildSeen.current === 'new' ? '[BUILD] native camera: NEW build (it sends onAttemptMissed, so half reps get a cross)' : '[BUILD] native camera: OLD build (no native [AWAKE] line arrived 8 s after the camera opened): half-rep crosses cannot show on this binary, install the newest iOS Dev Build'); }, 8000);
+    return () => clearTimeout(t);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const guideProblemLogged = useRef(false);
+  const guideProblemRef = useRef(false);   // a camera-problem Guide line is on screen right now: the number follows it down at the quick rate
   const confidenceRef = useRef<number | null>(null);   // the live camera confidence (0-100), read by the meter
   const lastCountAtRef = useRef(0);                      // when the last rep counted (native or soft)
   const missedSinceCountRef = useRef(0);                 // attempts that did not count since then
@@ -997,6 +1009,7 @@ export default function FormCheckScreen() {
     if (!DEBUG_LOG_ENABLED || notLinked) return;
     const sub = addDebugLogListener(e => {
       console.log('[DEBUG]', e.message);
+      if (e.message.indexOf('[AWAKE] native') === 0) nativeBuildSeen.current = 'new';
       counterRef.feedLog(e.message, Date.now());
       matchRef.feed(e.message);
       // Full session buffer: every line, no limit — feeds the post-session review only.
@@ -1619,7 +1632,7 @@ export default function FormCheckScreen() {
       const m = matchRef.result();
       attemptRef.current.setPathCut(m.cut);
       const conf = confRef.update({ now, visibility: counterRef.score(now), match: m, lastCountAt: lastCountAtRef.current, lastJudgedAt: lastJudgedAt.current, missedSinceCount: missedSinceCountRef.current });
-      confidenceRef.current = conf.value;
+      confidenceRef.current = conf.value;   // (capped below once the Guide's decision is known)
       const rej = attemptRef.current.recentReject(8000);
       const rawCue = isFloor ? null : (statsRef.current?.trackingCue || null);
       const noPersonNow = statsRef.current?.personDetected === false;
@@ -1647,6 +1660,11 @@ export default function FormCheckScreen() {
         trying: m.trying, personHere: !noPersonNow && streamHealthy,
       });
       const shown = line ?? startLine;
+      // THE GUIDE AND THE NUMBER AGREE: a camera-problem line on screen caps the number (it falls toward it at the smoothing speed)
+      const guideShowsProblem = !!line && dec.reason !== 'none';
+      confidenceRef.current = capForGuide(conf.value, guideShowsProblem);
+      guideProblemRef.current = guideShowsProblem;
+      if (guideShowsProblem !== guideProblemLogged.current) { guideProblemLogged.current = guideShowsProblem; console.log(guideShowsProblem ? '[CONFIDENCE] the Guide says "' + line + '" so the number is capped at ' + GUIDE_PROBLEM_CAP + ' (it falls with the line)' : '[CONFIDENCE] the Guide line is gone: the number is free again'); }
       setGuideTrack(prev => (prev === shown ? prev : shown));
     }, 200);
     return () => clearInterval(id);
@@ -1845,6 +1863,7 @@ export default function FormCheckScreen() {
         counterActive={isTracking}
         flags={{ diag: !!repDiag, cue: !!(stats?.trackingCue || stats?.outOfPlaneCue) }}
         confidence={confidenceRef}
+        guideProblem={guideProblemRef}
       />
 
       {/* Error */}

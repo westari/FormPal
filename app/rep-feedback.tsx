@@ -286,7 +286,7 @@ export default function RepFeedbackScreen() {
           // Continue: the done screen now fades away over whatever is underneath, so everything underneath is hidden THIS frame (no fade of its own) and the
           // stack is popped back to the tabs, to the tab he started from. Before, the rep feedback page faded out, then the Workout complete card showed for a
           // moment, then the tab: a couple of screens flashing.
-          onContinue: () => { console.log('[LEAVE] form check Continue: warm pages hidden at once, stack popped to the tabs, no flash'); warmHideNow(['repfeedback', 'recap', 'ranks', 'allsets']); router.dismissAll(); },
+          onContinue: () => { console.log('[LEAVE] form check Continue: warm pages hidden at once, stack popped to the tabs, no flash'); warmHideNow(['repfeedback', 'recap', 'ranks', 'allsets']); repFeedbackSignal.onLeaveNow?.(); router.dismissAll(); },
         });
         return;
       }

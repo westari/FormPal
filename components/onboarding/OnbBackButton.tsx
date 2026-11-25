@@ -11,10 +11,12 @@ import GlassBackButton from '../GlassBackButton';
 
 export const ONB_BACK_BOX = 34;
 
-export default function OnbBackButton({ onPress, scheme = 'light' }: { onPress: () => void; scheme?: 'light' | 'dark' }) {
+// (Ari 2026-11-25) always THE standard glass (components/StandardGlass.tsx: the camera Finish pill's real dark glass, white chevron): the old light glass over a light page read
+// as a plain white disc. `scheme` is kept only so existing callers still compile.
+export default function OnbBackButton({ onPress }: { onPress: () => void; scheme?: 'light' | 'dark' }) {
   return (
     <View style={{ width: ONB_BACK_BOX, height: ONB_BACK_BOX, alignItems: 'center', justifyContent: 'center' }}>
-      <GlassBackButton onPress={onPress} scheme={scheme} />
+      <GlassBackButton onPress={onPress} scheme="standard" />
     </View>
   );
 }
