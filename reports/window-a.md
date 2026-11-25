@@ -1,91 +1,51 @@
-# Window A report (round 8, Ari's phone test)
+# Window A report (round 9)
 
-Branch work-a. I ran git fetch and merged origin/overnight-build first.
+Branch work-a. I ran git fetch and merged origin/overnight-build first. I did not touch the trial reminder, paywall or gift offer screens.
 
-All eight items are done in code and tested as far as this computer can test them. What needs your phone is written under each item.
+## 1. Onboarding top bar: DONE (moved INTO the page)
 
-## 1. Calendar: now the Finish pill's real glass, shown side by side
+Why it glitched: the back button and progress bar were drawn by the app above the web page, and moved with the page by a message sent each frame. A message always arrives after the page has already moved, so the bar trailed, jittered and drifted over the text on a fast flick. That cannot be made perfect, so I did what you said: the bar is now part of the page.
 
-I traced exactly how the Finish pill draws its glass, and put the calendar on the same thing.
+What changed:
+- On every design-page onboarding screen except the three left alone (see below), the back button and progress bar are built inside the page, placed at the top of the document. They scroll with the page on the very same frame, so there is nothing to lag.
+- Same place and size as before: 40px round back button 17px from the left, a 4px progress bar next to it, same fill (the real progress). A tap on back goes back; the app can still move the progress.
+- If the page ever rebuilds itself and the bar disappears, it is put back.
+- The native app-drawn bar is no longer drawn for those pages, so nothing is left to trail.
+- The list question screens (native) were already inside their scroll view from last round and are unchanged. Screens that do not scroll look the same.
 
-Finish pill (`app/formcheck.tsx`):
-`LiquidGlassButton` -> `LiquidGlass` (`components/LiquidGlass.tsx`) -> the native view `LiquidGlassView` from `@callstack/liquid-glass` (Apple's UIGlassEffect), with `effect="regular"`, `colorScheme="dark"`, no tint.
+Proof (`scripts/test-onboarding-header.js`, runs the real shipped code on the real plan-ready page, which scrolls 1066px on a short phone):
+- Fast flick: 200 big scroll jumps (40 to 400px each), sampled every frame: the bar is exactly where the page puts it every time (worst error 0.000px).
+- Real mouse-wheel flicks up and down, sampled every frame: worst error 0.000px.
+- Scrolled down 400px, the bar is off the top with the page, not floating over text. At the top it does not sit on any text.
+- Checked on the plan-ready, starting-point, good-hands and form-confidence pages: one bar, same spot.
 
-Calendar (`components/CalendarSheet.tsx`):
-`StandardGlass` (`components/StandardGlass.tsx`) -> `LiquidGlass` -> the same native `LiquidGlassView`, `effect="regular"`, `colorScheme="dark"`, no tint.
+One trade-off, honestly: a web page cannot hold a real native Liquid Glass view, so on these design pages the back button is a light round button (white, soft shadow, the same chevron) instead of real glass. On the native onboarding screens it is still the standard glass button. If you would rather keep real glass on the design pages, the only exact way is a bar that stays fixed at the top with the page starting below it (it would not scroll away, and the page would be about 50px shorter). Tell me if you want that instead.
 
-A new test (`scripts/test-glass-same.js`) proves it. It replaces the native module with a recorder, runs the real `LiquidGlass.tsx` as if on an iPhone with iOS 26, builds the Finish pill from the real props in `formcheck.tsx`, renders the calendar open, and compares:
+Left alone on purpose (another window owns them): the trial reminder, paywall and gift offer keep their own bar exactly as it was, including its scroll-follow. If that trailing shows up there, it needs the same change from that window.
 
-| | Finish pill | Calendar |
-|---|---|---|
-| native view | LiquidGlassView | LiquidGlassView (one, for the whole panel) |
-| effect | regular | regular |
-| colour scheme | dark | dark |
-| tint | none | none |
-| fallback fill | rgba(40,41,48,0.55) | rgba(40,41,48,0.55) |
-| interactive (touch shimmer) | true | false |
+## 2. Goal graph target marker: DONE
 
-Why it looked like an imitation, and what I changed:
-- Last round the glass was a separate layer under the month, and its parent had `overflow: hidden`, a corner radius and an `opacity` that I faded for the first-open trick. A native glass view inside a faded or clipped parent draws as a plain colour. That is the most likely cause of "not liquid glass at all".
-- Now the panel IS the glass view, with the month inside it (the same way the word "Finish" is inside the Finish pill). Nothing above it fades, clips or masks it (a test checks the wrapper has no opacity, overflow, corner radius or mask). The first-open trick that needed the opacity is gone; the panel is always mounted, parked above the screen, so the native view exists before the first open.
-- The one difference is `interactive` (the shimmer when you touch it). I left it off on the calendar so a day tap is never taken by the glass. The look (effect, scheme, tint) is identical.
+This is the "Estimated progress" graph on the plan-ready screen ("TARGET 160 lb").
 
-NEEDS YOUR PHONE: I cannot see real Liquid Glass here. If it still looks flat on the phone, the next thing I would check is the log line `[GLASS] real Liquid Glass: ON` at app start. Also, dark glass over the white Home page will look grey, because glass shows what is behind it and the page behind is white (the Finish pill sits over the camera picture).
+What was wrong, found by measuring:
+- The badge was placed with a hand-made scale that ignores how the picture really fits its box (a 300 by 190 picture in a wider box is centred with empty bands at the sides). It landed 20 to 40px off, and on a long label it ran past the card's right edge.
+- For muscle gain the design's own dot and triangle sit at x 256, which is on the line but not at its end (the line runs on to x 292).
 
-## 2. Train "Missed" tag: DONE
-Plain iOS system red (#FF3B30), 11.5px, 22px tall, on the design's own white pill. Tested on the real page (computed colour `rgb(255, 59, 48)`).
+Fix: the end point is read off the line itself (its last point). The end dot and the little triangle are drawn exactly on it, and the badge is placed from the picture's real screen transform, centred over the end and kept inside the card (if it has to shift left near the right edge, the triangle still points at the exact end). It is placed again on every pass, on resize, and when the web font arrives.
 
-## 3. Create Workout "Start from a muscle group": DONE
-- It is now a small tappable body map, front and back side by side (150px tall), in the same style as the Progress tab muscle map: pale silhouette, dark body outline, thin muscle outlines, same colours. Code: `lib/createBodyMap.ts`.
-- Tap a muscle and that group's muscles turn dark and its real exercise list shows below ("Chest exercises" and so on). Tap it again to clear. The six groups are the same as before: chest, back, legs, shoulders, arms, core (arms = biceps, triceps, forearms; back = lats, traps, lower back; legs = quads, hamstrings, glutes, calves; shoulders include rear delts; core = abs).
-- No chips, no circles, no plus-sign circles. The exercise rows keep the plain plus / check from last round.
+Proof (`scripts/test-goal-target-marker.js`): five targets (lose 200 to 160, lose 300 to 99.5, gain 150 to 195, gain 120 to 1000, same weight 160 to 160) on three phone widths (360, 390, 430), both falling and rising lines. For each: the end dot is within 0.6px of the line's last point, the triangle tip is directly above it, the badge sits on the triangle and fully inside the card, the start dot is on the first point. With the old code the same test fails 21 times; with the fix it passes.
 
-## 4. Practice exercise search jump and flicker: DONE in code
-- Cause: the page's own search box took focus, so iOS shifted the whole page and the page re-laid itself out when the keyboard came up.
-- Fix: the page's search box can no longer take focus (read only). Tapping it opens a docked search bar drawn by the app. It rises with the keyboard by a native transform (on the UI thread), fades in with it (no flash at the bottom), and a tap outside closes it. What you type goes into the design's own search, so the results list is the design's own.
-- Tested on the real page: after a real tap, the scroll position, canvas scale, canvas height and page height are all identical, and nothing in the page has focus.
-- One honest detail: when you type the first letter, the page does ONE smooth scroll so the results sit above the keyboard (otherwise they would be hidden behind it). Before that, nothing moves.
-- NEEDS YOUR PHONE: that it feels right. Log line: `[TRAIN] search bar opened (docked above the keyboard)`.
-
-## 5. Muscle map back button: DONE
-- On the Progress tab's Muscle Map page the design's white round button is hidden and the app's standard Liquid Glass back button (`GlassBackButton`) is drawn above the page in its place, fading in after the page's slide-in. Tapping it goes back through the page.
-- I did only the Muscle Map page. Past Workouts and Progress Photos on that tab still have the design's white back button. Say so if you want those the same.
-
-## 6. Weight log done screen: DONE
-- Submit no longer closes the weight screen. The weight screen STAYS on screen, the done screen's wash sweeps over it, and only when you tap Continue does the weight screen close back to Progress. Progress is never seen in between. A second Submit tap does nothing.
-
-## 7. Done screen brackets: DONE
-- Back to the design's own bracket animation, exactly: same keyframes, 1620ms, 1050ms delay, same shake. The only change is where they end: closer to the words (about 18px sideways, 20px up and down).
-- Why round 7 looked tangled: I had moved the end places closer but left the design's start offsets, so the left and right brackets started in the wrong places and crossed. Now each bracket starts exactly where the design starts it and unfolds to the closer end place.
-- Proof: the test steps through the whole animation every 60ms and checks no two brackets ever overlap. With the round 7 values the same check finds 26 overlaps; now it finds 0.
-
-## 8. Onboarding: DONE
-- Back button next to the progress bar: the standard Liquid Glass back button on every onboarding screen (question steps, the Connect Health header, all the design-page screens, the five native screens, and the dark intro). It sits in the same 34 x 34 box as before so the progress bar does not move. The X buttons on the paywall and gift offer are left alone (they are close buttons).
-- Removed the native "Don't miss a session" notification screen. Connect Health goes straight to the ready-to-build screen, Back returns to Connect Health, and the ready-to-build page is still prewarmed one screen early.
-- "We want you to try FormPal for free" is in.
-- Progress bar scrolls away:
-  - Question steps with lists: the back button, progress bar and question are now the first thing inside the scroll view, so they scroll away with the options. The Continue button stays at the bottom.
-  - Design-page screens (web pages): the page tells the app how far it scrolled and the header (back button and progress bar) moves up with it. Only the page's main scroll counts.
-  - Screens that do not scroll are unchanged.
-- NEEDS YOUR PHONE: the web-page version follows the scroll through a message each frame, so it may trail the page by a frame on a fast flick.
-
-## Problem I hit and how I fixed it
-My first edit script for `onboarding.tsx` matched the wrong place and duplicated a big block. I kept a copy of the broken file in my scratch folder and restored the file from git (it had no other changes), then redid the edit correctly. Nothing of yours was lost.
+Honest limit: the line's shape is the design's own fixed curve (it does not stretch with the number). The marker follows its end for any weight and date, as asked.
 
 ## Tests
-New: `test-glass-same.js`, `test-train-search.js`, `test-muscle-map-back.js`, `test-onboarding-r8.js`. Rewritten or updated: `test-calendar-drop`, `test-home-header-taps`, `test-train-missed` (red tag), `test-create-starter` (body map), `test-done-screen` (brackets, no tangle), `test-progress-ux` (weight screen stays, Muscle Map back), `test-train`, `test-train-phone`, `test-train-search-keyboard` (they typed into the page's search box, which now hands over to the app's docked bar). The full suite passes except `test-rep-feedback-injection.js`, which was already failing (it needs an untracked file in `.scratch`).
-`npx tsc --noEmit`: no new errors in files I touched (the only one in `onboarding.tsx` is the old `opaque` on a web view).
+New: `test-onboarding-header.js`, `test-goal-target-marker.js`, helper `scripts/lib/onboarding-extract.js` (pulls the shipped page code out of `onboarding.tsx` so tests run the real thing). Updated: `test-onboarding-r8.js`.
+`npx tsc --noEmit`: no new errors (the one in `onboarding.tsx` is the old `opaque` on a web view).
 
 ## Blocked commands
 None.
 
 ## Files for you to delete (I did not)
-- `components/DoneScreen.tsx`, `components/SavedCheck.tsx` (no longer used)
-- `lib/doneTimeline.ts` (check first, possibly unused)
-- `scripts/_dbg.js`, `scripts/_hdr.js`, `scripts/_hdr2.js`, `scripts/_ux_explore.js`, `scripts/_ux_prof.js`, `scripts/_ux_prof2.js`, `train_wk_webkit.png`
-- In `app/formcheck.tsx`: `SessionLogReview` and `handleReviewDone` (unused since last round)
-- In `app/onboarding.tsx`: `NotificationBanner` and the `nq` styles are no longer used (the notification screen is gone)
+Same list as last time: `components/DoneScreen.tsx`, `components/SavedCheck.tsx`, `lib/doneTimeline.ts` (check first), the `scripts/_*.js` scratch files, `train_wk_webkit.png`, the unused `SessionLogReview` and `handleReviewDone` in `app/formcheck.tsx`, and the unused `NotificationBanner` and `nq` styles in `app/onboarding.tsx`.
 
 ## Questions
-- Item 1: if the calendar still looks flat on the phone, send me the `[GLASS]` log line from app start.
-- Item 5: do you want Past Workouts and Progress Photos on the Progress tab to get the glass back button too?
+- Item 1: are you fine with a light round back button (not real glass) on the design-page onboarding screens, so it can scroll with the page exactly? If not, I can do the fixed glass bar with the page below it.

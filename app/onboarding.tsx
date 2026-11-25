@@ -730,44 +730,35 @@ function planReadyInject(a: Record<string, any>): string {
         circleEl.setAttribute('cy', pt.y.toFixed(1));
         return pt;
       }
-      // BUG FOUND: the badge was positioned with fixed magic-number
-      // offsets (-44, -70) reverse-engineered from the untouched muscle-
-      // gain default — correct ONLY for that one exact point. For any
-      // other point (fat loss's repositioned endpoint) it was never
-      // actually centered, just offset by the same fixed amount from a
-      // totally different spot — reported as "the target card is
-      // broken." Measures the badge's REAL rendered width/height and
-      // centers it horizontally on the point every time, with its bottom
-      // edge a fixed gap above the point so the triangle (drawn right
-      // under it, same gap) reads as connecting card to dot.
-      var BADGE_GAP = 10;
-      function placeBadge(pt){
-        if (!badge || !pt || !svg.parentElement) return null;
-        var svgRect = svg.getBoundingClientRect();
-        var hostRect = svg.parentElement.getBoundingClientRect();
-        var vb = { w: 300, h: 190 }; // the artboard's own fixed viewBox
-        var scaleX = svgRect.width / vb.w, scaleY = svgRect.height / vb.h;
-        var px = (svgRect.left - hostRect.left) + pt.x * scaleX;
-        var py = (svgRect.top  - hostRect.top)  + pt.y * scaleY;
-        var bw = badge.offsetWidth || 88, bh = badge.offsetHeight || 54;
-        badge.style.left = (px - bw / 2) + 'px';
-        badge.style.top  = Math.max(4, py - bh - BADGE_GAP) + 'px';
-        return pt;
-      }
-      // Small triangle pointing down from the badge at the graph — back
-      // per explicit ask ("add back the triangle, it used to be there").
-      // Drawn in the SAME SVG coordinate space as the point itself (not
-      // screen pixels like the badge), directly above the dot with the
-      // same BADGE_GAP — lines up with the badge's now-precisely-centered
-      // bottom edge above it. Muscle gain (default, untouched graph)
-      // already has its own correctly-placed default, no change needed.
-      // Recomp still hides it — no single target badge there, two lines
-      // instead.
-      function placeTri(pt){
-        if (!badgeTriEl || !pt) return;
-        var cx = pt.x, cy = pt.y - (BADGE_GAP / ((svg.getBoundingClientRect().height / 190) || 1));
-        badgeTriEl.setAttribute('d', 'M'+(cx-6).toFixed(1)+' '+(cy-11).toFixed(1)+' L'+(cx+6).toFixed(1)+' '+(cy-11).toFixed(1)+' L'+cx.toFixed(1)+' '+cy.toFixed(1)+' Z');
-        badgeTriEl.style.display = '';
+      // (round 9) THE TARGET MARKER SITS EXACTLY AT THE END OF THE LINE, for any target weight, date and goal kind.
+      // Before: (1) the badge was placed with a hand-made scale (svg width / 300) that ignores how the svg really fits its box (a 300 x 190
+      // picture drawn in a wider, 190px tall box is centred with empty bands at the sides), so it landed 20 to 40px off; (2) the muscle-gain
+      // graph kept the design's own hard-coded dot and triangle at x 256, which is on the line but NOT at its end (the line runs on to x 292).
+      // Now the end point is read off the line itself (its very last point), the dot and the little triangle are drawn exactly on it in the
+      // svg's own units, and the badge is placed from the svg's real screen transform (getScreenCTM), centred over the point and kept inside the
+      // card (the triangle still points at the exact end when the badge has to shift left near the right edge). It runs again whenever the
+      // size can change (resize, web font arriving, every apply pass).
+      var endPt = null;
+      function placeTarget(){
+        if (KIND === 'recomp' || !endPt) return;
+        if (badgeTriEl) {
+          var tx = endPt.x, ty = endPt.y;
+          badgeTriEl.setAttribute('d', 'M'+(tx-6).toFixed(1)+' '+(ty-14.6).toFixed(1)+' L'+(tx+6).toFixed(1)+' '+(ty-14.6).toFixed(1)+' L'+tx.toFixed(1)+' '+(ty-3.6).toFixed(1)+' Z');
+          badgeTriEl.style.display = '';
+          badgeTriEl.style.transformOrigin = tx.toFixed(1)+'px '+(ty-9).toFixed(1)+'px';
+        }
+        var host = svg.parentElement;
+        if (!badge || !host) return;
+        var ctm = svg.getScreenCTM();
+        if (!ctm) return;
+        var pp = svg.createSVGPoint(); pp.x = endPt.x; pp.y = endPt.y - 12.6; // the triangle's base line
+        var q = pp.matrixTransform(ctm);
+        var hr = host.getBoundingClientRect();
+        var hw = host.offsetWidth || hr.width, k = (hr.width / hw) || 1;   // (the page may be scaled to fit the screen)
+        var cx = (q.x - hr.left) / k, by = (q.y - hr.top) / k;
+        var bw = badge.offsetWidth || 88, bh = badge.offsetHeight || 48;
+        badge.style.left = Math.max(2, Math.min(hw - bw - 2, cx - bw / 2)) + 'px';
+        badge.style.top  = Math.max(2, by - bh) + 'px';
       }
 
       if (KIND === 'recomp') {
@@ -904,26 +895,31 @@ function planReadyInject(a: Record<string, any>): string {
           svg.appendChild(txt);
         });
         hit++;
-      } else if (KIND === 'fat') {
-        // Only fat loss actually needs the markers recomputed — swapping
-        // the line's own 'd' to the falling variant is what makes the
-        // ORIGINAL hardcoded start/end dot + badge position (tuned for the
-        // rising default) wrong in the first place ("the dot at the start
-        // is broken"). Muscle gain never touches this path below, so its
-        // already-correct, designer-placed defaults stay exactly as-is.
-        if (lineEl && fillEl) {
+      } else {
+        // Fat loss swaps the line to the falling shape; muscle gain keeps the design's own rising line. Either way the start and end dots and the
+        // target marker are put on the line's real first and last points.
+        if (KIND === 'fat' && lineEl && fillEl) {
           lineEl.setAttribute('d', ${JSON.stringify(PR_LINE_D_DOWN)});
           fillEl.setAttribute('d', ${JSON.stringify(PR_FILL_D_DOWN)});
         }
+        lineEl = lineEl || svg.querySelector('path[style*="pr-draw"]');
         if (lineEl) {
           placeAlong(lineEl, startDot, true);
-          var endPt = placeAlong(lineEl, endDot, false);
-          placeBadge(endPt);
-          placeTri(endPt);
+          endPt = placeAlong(lineEl, endDot, false);
         }
       }
+      window.__formpalPlaceTarget = placeTarget;
+      placeTarget();
       svg.__formpalGraphDone = true;
       hit++;
+    }
+
+    // the target marker is placed again on every pass (and on resize / when the web font arrives): the badge's width can change after the first pass
+    if (window.__formpalPlaceTarget) window.__formpalPlaceTarget();
+    if (!window.__formpalTargetWired) {
+      window.__formpalTargetWired = 1;
+      window.addEventListener('resize', function(){ if (window.__formpalPlaceTarget) window.__formpalPlaceTarget(); });
+      try { if (document.fonts && document.fonts.ready) document.fonts.ready.then(function(){ if (window.__formpalPlaceTarget) window.__formpalPlaceTarget(); }); } catch (e) {}
     }
 
     // The "GOAL" info tile (5th tile added to the grid) is removed again —
@@ -1605,6 +1601,41 @@ window.__dcFitBoth=1;
 })();
 `;
 
+// (round 9) THE TOP BAR IS PART OF THE PAGE. Drawing it natively above the page and moving it from the page's scroll messages could never be exact (a message
+// per frame always trails the page, so it jittered and drifted over the text on a fast flick). Now the back button and the progress bar are built INSIDE the page
+// (an absolutely placed element at the top of the document), so they scroll as part of it, on the same frame, with nothing to lag or drift. Tapping back posts
+// 'onbback'. The page fills the bar from __onbSetProgress. (The trial reminder, the paywall and the gift offer keep their native header: another window owns them.)
+const ONB_INPAGE_HEADER_EXCLUDE: string[] = ['trialTimeline', 'paywall', 'giftOffer'];
+function onbHeaderJs(progress: number | null, dark: boolean): string {
+  return `(function(){
+  var DARK = ${dark ? 'true' : 'false'}, P0 = ${progress == null ? 'null' : progress};
+  function build(){
+    if (!document.body) return null;
+    var h = document.getElementById('__onb_hdr');
+    if (h) return h;
+    h = document.createElement('div'); h.id = '__onb_hdr';
+    // top: 12px = where the native bar sat (the web view already starts below the status bar); absolute, NOT fixed: it moves with the document
+    h.style.cssText = 'position:absolute;top:12px;left:0;right:0;height:34px;z-index:2147483000;display:flex;align-items:center;padding:0 20px;box-sizing:border-box;pointer-events:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;';
+    var bg = DARK ? 'rgba(60,62,72,0.55)' : 'rgba(255,255,255,0.82)', bd = DARK ? 'transparent' : 'rgba(0,0,0,0.10)', fg = DARK ? '#ffffff' : '#111114';
+    var b = document.createElement('a'); b.setAttribute('role', 'button'); b.setAttribute('aria-label', 'Back'); b.id = '__onb_back';
+    b.style.cssText = 'pointer-events:auto;flex:none;width:40px;height:40px;margin:-3px 0 -3px -3px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-sizing:border-box;background:' + bg + ';border:0.5px solid ' + bd + ';box-shadow:0 2px 8px rgba(0,0,0,0.10);-webkit-tap-highlight-color:transparent;';
+    b.innerHTML = '<svg width="10" height="17" viewBox="0 0 10 17" fill="none" style="display:block"><path d="M8.2 1.8 1.8 8.5l6.4 6.7" stroke="' + fg + '" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    b.addEventListener('click', function(ev){ ev.preventDefault(); ev.stopPropagation(); try { window.ReactNativeWebView.postMessage('onbback'); } catch (e) {} }, true);
+    h.appendChild(b);
+    var w = document.createElement('div'); w.id = '__onb_prog_wrap'; w.style.cssText = 'flex:1;padding:0 12px;display:' + (P0 == null ? 'none' : 'block') + ';';
+    var t = document.createElement('div'); t.style.cssText = 'height:4px;background:rgba(17,24,39,0.08);border-radius:2px;overflow:hidden;';
+    var f = document.createElement('div'); f.id = '__onb_prog'; f.style.cssText = 'height:4px;background:#111114;border-radius:2px;width:' + ((P0 || 0) * 100) + '%;';
+    t.appendChild(f); w.appendChild(t); h.appendChild(w);
+    document.body.appendChild(h);
+    return h;
+  }
+  window.__onbSetProgress = function(p){ var f = document.getElementById('__onb_prog'), w = document.getElementById('__onb_prog_wrap'); if (!f || !w) return; if (p == null) { w.style.display = 'none'; return; } w.style.display = 'block'; f.style.width = (p * 100) + '%'; };
+  build();
+  // the page's own script may rebuild the body: put the bar back if it went
+  if (!window.__onbHdrWatch) { window.__onbHdrWatch = setInterval(build, 400); try { new MutationObserver(function(){ if (!document.getElementById('__onb_hdr')) build(); }).observe(document.documentElement, { childList: true, subtree: false }); } catch (e) {} }
+})(); true;`;
+}
+
 // (round 8) Reports how far the page has scrolled, so the native back button + progress bar (drawn above the page) can scroll away with it instead of floating
 // over the text. Only the page's main scroll counts (the window, or a scroller as tall as most of the screen). One message per frame at most.
 const ONB_SCROLL_REPORT_JS = `(function(){
@@ -1659,6 +1690,8 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
   const inPool = poolActive !== undefined;
   const fade = useRef(new Animated.Value(0)).current;
   const backFade = useRef(new Animated.Value(0)).current;
+  useEffect(() => { if (inPageHeaderRef.current) webRef.current?.injectJavaScript('window.__onbSetProgress && window.__onbSetProgress(' + (progress == null ? 'null' : progress) + '); true;'); }, [progress]); // eslint-disable-line react-hooks/exhaustive-deps
+  const inPageHeaderRef = useRef(!ONB_INPAGE_HEADER_EXCLUDE.includes(htmlKey));
   // (round 8) the back button + progress bar are part of the page: when the page scrolls, they scroll away with it (the page reports its scroll, this moves them)
   const headerY = useRef(new Animated.Value(0)).current;
   const webRef = useRef<WebView>(null);
@@ -1736,6 +1769,7 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isDcPage = DC_PAGE_KEYS.includes(htmlKey);
+  const inPageHeader = !ONB_INPAGE_HEADER_EXCLUDE.includes(htmlKey);   // (round 9) the back button + progress bar live inside the page
   const baseInject = isDcPage ? DC_PAGE_INJECT : ONBOARDING_WEB_INJECT;
   // planReady stays width-fit (its info rows scroll). Everything else fits
   // to height too so the whole artboard — CTA + "Replay" / footnote under
@@ -1768,10 +1802,11 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
           source={htmlOverride != null ? { html: htmlOverride } : (ONB_HTML[htmlKey] as any)}
           originWhitelist={['*']}
           injectedJavaScriptBeforeContentLoaded={isDcPage ? VIEWPORT_JS + '\n' + CUE_ORB_JS + '\n' + (KEEP_FX_KEYS.includes(htmlKey) ? KEEP_FX_JS + '\n' : '') + (extraJsBeforeLoad ?? '') : undefined}
-          injectedJavaScript={(extraJs ? baseInject + '\n' + extraJs : baseInject) + '\n' + ONB_SCROLL_REPORT_JS}
+          injectedJavaScript={(extraJs ? baseInject + '\n' + extraJs : baseInject) + '\n' + (inPageHeader ? onbHeaderJs(progress ?? null, !isDcPage) : ONB_SCROLL_REPORT_JS)}
           onLoadEnd={() => setWebReady(true)}
           onMessage={(e) => {
             const m = e.nativeEvent.data;
+            if (m === 'onbback') { Haptics.selectionAsync(); onBack(); return; }
             if (m.indexOf('onbscroll:') === 0) { headerY.setValue(-Number(m.slice(10)) || 0); return; }
             if (m === '__tap' || m === '__tick') { Haptics.selectionAsync(); return; }
             if (m === 'rendered') { reveal(); return; }
@@ -1835,7 +1870,7 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
             </TouchableOpacity>
           ) : null}
         </Animated.View>
-      ) : (
+      ) : inPageHeader ? null : (
         <Animated.View
           pointerEvents="box-none"
           // Same top offset the native question header's back button lands

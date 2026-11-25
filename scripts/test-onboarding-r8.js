@@ -41,7 +41,7 @@ check('native question steps: the back button + progress bar + question are INSI
 check('the Continue button stays at the bottom (outside the scroll), as before', /<\/ScrollView>\s*<View style=\{s\.bn\}>/.test(ob));
 
 // ── scrolls away: web pages ──
-check('web screens: the header block (back button + progress bar, and the paywall X) sits in a wrapper that follows the page\'s scroll (translateY = -scroll)', /transform: \[\{ translateY: headerY \}\]/.test(ob) && /headerY\.setValue\(-Number\(m\.slice\(10\)\) \|\| 0\)/.test(ob) && /onbscroll:/.test(ob) && /\+ ONB_SCROLL_REPORT_JS\}/.test(ob));
+check('web screens: the header block (back button + progress bar, and the paywall X) sits in a wrapper that follows the page\'s scroll (translateY = -scroll)', /transform: \[\{ translateY: headerY \}\]/.test(ob) && /headerY\.setValue\(-Number\(m\.slice\(10\)\) \|\| 0\)/.test(ob) && /onbscroll:/.test(ob) && /: ONB_SCROLL_REPORT_JS\)/.test(ob));
 check('the scroll message is handled before the haptic/advance fall-through (a scroll can never advance the screen or buzz)', ob.indexOf("m.indexOf('onbscroll:') === 0") > 0 && ob.indexOf("m.indexOf('onbscroll:') === 0") < ob.indexOf("if (m === '__tap' || m === '__tick')"));
 
 (async () => {
