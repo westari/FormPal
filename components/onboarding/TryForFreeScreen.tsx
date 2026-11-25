@@ -47,16 +47,7 @@ export default function TryForFreeScreen({
     // the Stack navigator's dark contentStyle behind it as a black flash.
     <View style={[s.root, { paddingTop: topInset }]}>
     <Animated.View style={{ flex: 1, opacity: fade }}>
-      <Animated.View style={[s.backWrap, { top: topInset + 8, right: progress != null ? 20 : undefined }]} pointerEvents="box-none">
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <OnbBackButton onPress={() => { Haptics.selectionAsync(); onBack(); }} />
-          {progress != null && (
-            <View style={{ flex: 1, paddingHorizontal: 12 }}>
-              <View style={s.progTrack}><View style={[s.progFill, { width: `${progress * 100}%` }]} /></View>
-            </View>
-          )}
-        </View>
-      </Animated.View>
+      {/* (Ari 2026-11-25) No back button and no progress bar here any more: from "building your plan" onward there is no going back. */}
 
       <View style={s.body}>
         <View style={s.videoCard}>

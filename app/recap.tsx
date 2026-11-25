@@ -335,6 +335,11 @@ export default function RecapScreen() {
   // `null` until `data` loads and then the real path once it does is safe.
   const videoPlayer = useVideoPlayer(data?.videoUri ?? null, (p) => { p.loop = true; p.muted = false; });
   const videoFade = useRef(new Animated.Value(0)).current;
+  // a form check's Continue (rep-feedback.tsx) is about to pop the stack: hide and pause this screen's own video at once so it cannot flash (lib/repFeedbackSignal.ts)
+  useEffect(() => {
+    repFeedbackSignal.onLeaveNow = () => { try { videoFade.stopAnimation(); videoFade.setValue(0); videoPlayer.pause(); } catch { /* already gone */ } };
+    return () => { repFeedbackSignal.onLeaveNow = null; };
+  }, [videoPlayer, videoFade]);
   const videoViewRef = useRef<VideoView>(null);
   // BUG FOUND ("black top", "video glitches on start"): the WebView's own
   // background was going transparent as soon as `hasVideo` was true — a

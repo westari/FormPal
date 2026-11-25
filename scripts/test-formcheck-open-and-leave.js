@@ -32,7 +32,7 @@ check('opening and dragging the drawer still work (pan handler, drawerY, scrim u
 console.log('--- 5. Finish -> Continue goes straight back, no flashes ---');
 const oc = rf.indexOf('onContinue: () => {', rf.indexOf('title: DONE_TITLES.formCheck'));
 const ocLine = rf.slice(oc, rf.indexOf('\n', oc));
-check("Continue hides every warm page at once (warmHideNow) and then pops the stack with dismissAll", /warmHideNow\(\['repfeedback', 'recap', 'ranks', 'allsets'\]\); router\.dismissAll\(\)/.test(ocLine), ocLine);
+check("Continue hides every warm page at once (warmHideNow) and then pops the stack with dismissAll", /warmHideNow\(\['repfeedback', 'recap', 'ranks', 'allsets'\]\); repFeedbackSignal\.onLeaveNow\?\.\(\); router\.dismissAll\(\)/.test(ocLine) && read('app/recap.tsx').includes('repFeedbackSignal.onLeaveNow = () => { try { videoFade.stopAnimation(); videoFade.setValue(0); videoPlayer.pause();'), ocLine);
 check('...it no longer fades the rep feedback page out first (warmDeactivate then dismissAll)', !/warmDeactivate\('repfeedback'\); router\.dismissAll/.test(ocLine));
 check('WarmSurfaces: warmHideNow marks the layers and a marked layer is parked in the same frame (no fade, no slide)', /export function warmHideNow\(kinds: WarmKind\[\]\)/.test(ws) && /const instant = !!instantHide\[k\]; instantHide\[k\] = false;/.test(ws) && /if \(instant\) \{[^\n]*park\(\); \}\n\s*else if \(FADES\[k\] && SLIDES_OUT\[k\]\)/.test(ws));
 check('a page that was not on screen cannot leave a stale "instant" mark that makes a later normal hide instant', /setTimeout\(\(\) => \{ instantHide\[k\] = false; \}, 800\)/.test(ws));

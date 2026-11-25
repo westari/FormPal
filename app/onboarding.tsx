@@ -21,6 +21,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import AppBackground from '../components/AppBackground';
 import { LiquidGlassButton } from '../components/LiquidGlass';
 import GlassBackButton from '../components/GlassBackButton';
+import LiquidGlass from '../components/LiquidGlass';
 import OnbBackButton from '../components/onboarding/OnbBackButton';
 import RankWheelScreen from '../components/onboarding/RankWheelScreen';
 import SaveProgressScreen from '../components/onboarding/SaveProgressScreen';
@@ -30,7 +31,7 @@ import { FONT, W, Col, Elev } from '../constants/theme';
 import { computeGoalPlan } from '../lib/onboardingGoals';
 import { hasGiftOfferBeenShown, markGiftOfferShown } from '../lib/giftOffer';
 import { loadPlan } from '../lib/planStorage';
-import { CUE_ORB_JS, cueOrbSvg } from '../lib/cueOrb';
+import { CUE_ORB_JS, CUE_ORB_CSS } from '../lib/cueOrb';
 import { setTrialReminderPick, askTrialReminderPermission, scheduleTrialReminder } from '../lib/trialReminder';
 import type { Plan as PlanT } from '../types/plan';
 // BUG FOUND (device crash, confirmed via the real error overlay — "Cannot
@@ -636,16 +637,19 @@ function planReadyInject(a: Record<string, any>): string {
   const ag = a.age != null ? String(a.age) : '';
   const ex = typeof a.experience === 'string' ? a.experience : '';
   const days = parseInt(String(a.daysPerWeek ?? '3 days'), 10) || 3;
+  // "Your info" shows ONLY what he answered (Ari 2026-11-25): a skipped answer is blank, never the design's sample value (184 lb, 5'11", 27, Beginner, 195 lb) or a made-up default.
+  const goalRow = goal.kind === 'recomp' ? (typeof a.mainGoal === 'string' && a.mainGoal ? goal.shortGoal : '') : (typeof a.goalWeight === 'number' ? goal.shortGoal : '');
   return `
 (function(){
   function post(m){ try{ window.ReactNativeWebView.postMessage(m); }catch(e){} }
   var MAP = {
-    '195 lb': ${JSON.stringify(goal.shortGoal)},
+    '195 lb': ${JSON.stringify(goalRow)},
     '184 lb': ${JSON.stringify(wStr)},
     "5'11\\"": ${JSON.stringify(h)},
     '27':     ${JSON.stringify(ag)},
     'Beginner': ${JSON.stringify(ex)}
   };
+  var FIELD_OF = { '195 lb': 'goal', '184 lb': 'weight', "5'11\\"": 'height', '27': 'age', 'Beginner': 'experience' };
   var GOAL_VALUE = ${JSON.stringify(goal.shortGoal)};
   var MILESTONE_LINE = ${JSON.stringify('Hit 90% clean form by ' + goal.milestoneDateLabel)};
   var GOAL_DATE_LABEL = ${JSON.stringify(goal.goalDateLabel)};
@@ -690,7 +694,12 @@ function planReadyInject(a: Record<string, any>): string {
       var el=all[i];
       if(el.children.length) continue;
       var t=(el.textContent||'').trim();
-      if(MAP[t] != null && MAP[t] !== '' && el.textContent.trim() !== MAP[t]){ el.textContent=MAP[t]; hit++; }
+      if(Object.prototype.hasOwnProperty.call(MAP,t) && el.textContent.trim() !== MAP[t]){
+        // a skipped answer is BLANK: the row keeps its pencil and a tap target where the value would be (data-pr-field lets the pencil find it)
+        el.textContent=MAP[t]; el.setAttribute('data-pr-field', FIELD_OF[t]);
+        if(MAP[t]==='') { el.style.setProperty('display','inline-block','important'); el.style.setProperty('min-width','56px','important'); el.style.setProperty('min-height','1.2em','important'); }
+        hit++;
+      }
     }
 
     // Graph: direction + start/end markers depend on the real goal kind.
@@ -758,7 +767,14 @@ function planReadyInject(a: Record<string, any>): string {
         var hw = host.offsetWidth || hr.width, k = (hr.width / hw) || 1;   // (the page may be scaled to fit the screen)
         var cx = (q.x - hr.left) / k, by = (q.y - hr.top) / k;
         var bw = badge.offsetWidth || 88, bh = badge.offsetHeight || 48;
-        badge.style.left = Math.max(2, Math.min(hw - bw - 2, cx - bw / 2)) + 'px';
+        // (Ari 2026-11-25) THE ARROW IS ALWAYS IN THE MIDDLE OF THE CARD: the whole card moves so its arrow points at the end of the line (it used to stay inside
+        // the chart card and slide the arrow to the side, like a chat bubble). It may now reach past the chart card; only the screen edge stops it.
+        var pageMin = (-hr.left) / k + 6, pageMax = (window.innerWidth - hr.left) / k - 6;
+        // on a very narrow screen the full-size card would not fit on both sides of the arrow: the card gets a little smaller instead of the arrow sliding
+        var avail = Math.min(cx - pageMin, pageMax - cx), fit = Math.min(1, Math.max(0.5, (2 * avail) / bw));
+        badge.style.setProperty('scale', fit < 1 ? fit.toFixed(3) : '1');
+        badge.style.transformOrigin = '50% 100%';
+        badge.style.left = (cx - bw / 2) + 'px';
         badge.style.top  = Math.max(2, by - bh) + 'px';
       }
 
@@ -1333,6 +1349,7 @@ const DC_PAGE_INJECT = `
         return /^[0-9]{1,3}\\s?(lb|kg)$/i.test(t) || (t.indexOf('"')>=0 && t.indexOf("'")>=0)
             || /^[0-9]{1,3}$/.test(t) || /^(Beginner|Some experience|Intermediate|Advanced)$/.test(t);
       }
+      function isField(e){ return !!(e.getAttribute && e.getAttribute('data-pr-field') && e.getAttribute('data-pr-field') !== 'goal'); }
       var host=sv.parentElement, sp=null;
       for(var p=0;p<6 && host && !sp;p++,host=host.parentElement){
         var c=host.querySelector && host.querySelector('span.sc-interp');
@@ -1340,12 +1357,12 @@ const DC_PAGE_INJECT = `
         var leaves=host.querySelectorAll ? host.querySelectorAll('div,span,p') : [];
         for(var q=0;q<leaves.length;q++){
           if(leaves[q].children.length) continue;
-          if(valueShape((leaves[q].textContent||'').trim())){ sp=leaves[q]; break; }
+          if(valueShape((leaves[q].textContent||'').trim()) || isField(leaves[q])){ sp=leaves[q]; break; }
         }
       }
       if(!sp){ continue; }
       var v=(sp.textContent||'').trim();
-      var field = /lb|kg/i.test(v) ? 'weight' : (v.indexOf('"')>=0 ? 'height' : (/^[0-9]{1,3}$/.test(v) ? 'age' : 'experience'));
+      var field = isField(sp) ? sp.getAttribute('data-pr-field') : /lb|kg/i.test(v) ? 'weight' : (v.indexOf('"')>=0 ? 'height' : (/^[0-9]{1,3}$/.test(v) ? 'age' : 'experience'));
       sv.style.setProperty('padding','12px','important');
       sv.style.setProperty('margin','-12px','important');
       sv.style.setProperty('box-sizing','content-box','important');
@@ -1471,6 +1488,8 @@ const DC_PAGE_INJECT = `
           // loop). Only freeze the short decorative pulses/drifts/spins.
           var dur=parseFloat(cs.animationDuration||'0');
           if(dur>=18) continue;
+          // the Cue orb breathes, glows and drifts everywhere else in the app: do not freeze it (Ari 2026-11-25: the paywall's orb looked like the old, still one)
+          if(all[i].closest && all[i].closest('[style*="hm-orb"]')) continue;
           all[i].style.setProperty('animation','none','important'); k++;
         }
       }catch(e){}
@@ -1560,13 +1579,15 @@ const KEEP_FX_JS = 'window.__dcKeepFx=1;';
 // artboard (no pale strips), and on the PAYWALL: the Cue orb is the shared one (lib/cueOrb.ts), and the feature list does not show everything at once any more.
 // The list is the design's scroll list under a faded footer. It now starts at "as well as" (the rows after it are hidden), and about 5 s after the paywall appears
 // (the app calls window.__pwAutoScroll) the rest fades in while the list scrolls down smoothly by itself. A touch on the list cancels the wait and shows it all.
+// Paywall and gift offer: the design's own X chip is hidden (the standard glass back button replaces it), the page colour continues behind the artboard (no pale
+// strips), and on the PAYWALL: the Cue orb is the shared one (the SAME style rules the Home tab uses, lib/cueOrb.ts, re-applied here after the page has loaded and no
+// longer frozen), and the feature list does not show everything at once: it starts at "as well as" (the rows after it are hidden by PAYWALL_EARLY_JS), and about 5 s
+// after the paywall appears (the app calls window.__pwAutoScroll) the rest fades in while the list scrolls down SLOWLY and smoothly by itself (6 s). A touch on the
+// list cancels the wait and shows it all.
 const PAYWALL_TIDY_JS = `(function(){
   var st=document.createElement('style');
-  st.textContent='#dc-root a[aria-label="Close"]{visibility:hidden!important;pointer-events:none!important;}'
-    + '#dc-root div[style*="hm-orb-breathe"] > div:not([data-cue-orb-svg]){display:none!important;}'
-    + '#dc-root [data-pw-late]{transition:opacity 450ms ease!important;}';
+  st.textContent='#dc-root a[aria-label="Close"]{visibility:hidden!important;pointer-events:none!important;}' + ${JSON.stringify(CUE_ORB_CSS)};
   (document.head||document.documentElement).appendChild(st);
-  var ORB=${JSON.stringify(cueOrbSvg())};
   var tries=0;
   (function bg(){
     var r=document.getElementById('dc-root'); var d=r&&r.querySelector('div[style*="width: 390px"]');
@@ -1574,18 +1595,7 @@ const PAYWALL_TIDY_JS = `(function(){
     if(b){ var h=document.documentElement.style; h.setProperty('background',b,'important'); h.setProperty('background-repeat','no-repeat','important'); h.setProperty('background-size','100% 100%','important'); h.setProperty('background-attachment','fixed','important'); document.body.style.setProperty('background','transparent','important'); return; }
     if(tries++<40) setTimeout(bg,100);
   })();
-  // the shared Cue orb in place of the design's own (kept re-applied: the page may redraw it)
-  function orb(){
-    var r=document.getElementById('dc-root'); if(!r) return;
-    var os=r.querySelectorAll('div[style*="hm-orb-breathe"]');
-    for(var i=0;i<os.length;i++){ var o=os[i]; if(o.getAttribute('data-cue-orb')) continue; o.setAttribute('data-cue-orb','1');
-      var w=document.createElement('div'); w.setAttribute('data-cue-orb-svg','1'); w.style.cssText='position:absolute;left:-5px;top:-5px;width:44px;height:44px;pointer-events:none;'; w.innerHTML=ORB; o.appendChild(w);
-      var cs=w.firstElementChild; if(cs){ cs.style.width='44px'; cs.style.height='44px'; } }
-  }
-  try{ new MutationObserver(orb).observe(document.documentElement,{childList:true,subtree:true}); }catch(e){}
-  orb();
-  // the list
-  var late=[], shown=false, scr=null, timer=null, auto=false;
+  var late=[], scr=null, timer=null, raf=0;
   function findList(){
     scr=document.querySelector('#dc-root [data-scroll]'); if(!scr) return false;
     var lab=Array.prototype.find.call(scr.querySelectorAll('div,span'),function(e){ return !e.children.length && (e.textContent||'').trim()==='as well as'; });
@@ -1593,27 +1603,37 @@ const PAYWALL_TIDY_JS = `(function(){
     var row=lab; while(row.parentElement && row.parentElement!==scr) row=row.parentElement;
     if(!row.parentElement) return false;
     var sib=row.nextElementSibling; late=[]; while(sib){ late.push(sib); sib=sib.nextElementSibling; }
-    late.forEach(function(e){ e.setAttribute('data-pw-late','1'); if(!shown) e.style.setProperty('opacity','0','important'); });
-    ['touchstart','wheel','mousedown'].forEach(function(ev){ scr.addEventListener(ev,function(){ if(timer){clearTimeout(timer);timer=null;} showLate(); },{passive:true}); });
+    late.forEach(function(e){ e.setAttribute('data-pw-late','1'); });
+    ['touchstart','wheel','mousedown'].forEach(function(ev){ scr.addEventListener(ev,function(){ if(timer){clearTimeout(timer);timer=null;} if(raf){cancelAnimationFrame(raf);raf=0;} showLate(); },{passive:true}); });
     return late.length>0;
   }
-  function showLate(){ shown=true; late.forEach(function(e){ e.style.removeProperty('opacity'); }); }
+  function showLate(){ if(scr) scr.setAttribute('data-pw-shown','1'); }
+  function hideLate(){ if(scr) scr.removeAttribute('data-pw-shown'); }
   var lt=0; (function wait(){ if(!findList() && lt++<60) setTimeout(wait,100); })();
-  function ease(t){ return t<0.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2; }
+  function ease(t){ return -(Math.cos(Math.PI*t)-1)/2; }
   window.__pwAutoScroll=function(){
-    if(timer){ clearTimeout(timer); }
+    if(timer){ clearTimeout(timer); } if(raf){ cancelAnimationFrame(raf); raf=0; }
     if(!scr) findList();
     if(scr){ scr.scrollTop=0; }
-    shown=false; late.forEach(function(e){ e.style.setProperty('opacity','0','important'); });
+    hideLate();
     timer=setTimeout(function(){
       timer=null; if(!scr) return; showLate();
-      var from=scr.scrollTop, to=Math.max(0,scr.scrollHeight-scr.clientHeight), t0=null, dur=1700; auto=true;
-      function step(ts){ if(t0===null) t0=ts; var p=Math.min(1,(ts-t0)/dur); scr.scrollTop=from+(to-from)*ease(p); if(p<1) requestAnimationFrame(step); }
-      requestAnimationFrame(step);
+      var from=scr.scrollTop, to=Math.max(0,scr.scrollHeight-scr.clientHeight), t0=null, dur=6000;
+      function step(ts){ if(t0===null) t0=ts; var p=Math.min(1,(ts-t0)/dur); scr.scrollTop=from+(to-from)*ease(p); if(p<1) raf=requestAnimationFrame(step); else raf=0; }
+      raf=requestAnimationFrame(step);
     },5000);
   };
   true;
 })();`;
+
+// Runs BEFORE the paywall page loads: the rows after "as well as" are hidden from the very first paint (they used to show until the page's own script found them and poked
+// out under the plan cards). PAYWALL_TIDY_JS reveals them (data-pw-shown) when the list starts to scroll.
+const PAYWALL_EARLY_JS = `(function(){
+  if (window.__pwEarly) return; window.__pwEarly = 1;
+  var CSS = '#dc-root [data-scroll]:not([data-pw-shown]) > div:last-child{opacity:0!important;}#dc-root [data-scroll] > div:last-child{transition:opacity 1200ms ease!important;}';
+  function add(){ if (document.getElementById('__pw_early')) return; var h = document.head || document.documentElement; if (!h) return; var s = document.createElement('style'); s.id = '__pw_early'; s.textContent = CSS; h.appendChild(s); }
+  add(); try { new MutationObserver(add).observe(document, { childList: true, subtree: true }); } catch (e) {}
+})(); true;`;
 
 // Trial reminder (Ari 2026-11-25): the title is just "We'll remind you before your trial ends." (the first line, "You're ready to start training!", is hidden), and the
 // choice is REPORTED to the app ("remindpick:2" / "remindpick:1") so the real notification can be scheduled (lib/trialReminder.ts).
@@ -1671,6 +1691,9 @@ window.__dcFitBoth=1;
 // (an absolutely placed element at the top of the document), so they scroll as part of it, on the same frame, with nothing to lag or drift. Tapping back posts
 // 'onbback'. The page fills the bar from __onbSetProgress. (The trial reminder, the paywall and the gift offer keep their native header: another window owns them.)
 const ONB_INPAGE_HEADER_EXCLUDE: string[] = ['trialTimeline', 'paywall', 'giftOffer'];
+// (Ari 2026-11-25) NO BACK BUTTON AND NO PROGRESS BAR from "we're building your plan" onward: no going back once the plan is being built.
+// (Save your progress and Try for free are native screens: see their own files. The paywall and the gift offer keep their own header: it is how you leave them.)
+const ONB_NO_HEADER_KEYS: string[] = ['generatePlan', 'planReady', 'trialTimeline'];
 function onbHeaderJs(progress: number | null, dark: boolean): string {
   return `(function(){
   var DARK = ${dark ? 'true' : 'false'}, P0 = ${progress == null ? 'null' : progress};
@@ -1681,11 +1704,9 @@ function onbHeaderJs(progress: number | null, dark: boolean): string {
     h = document.createElement('div'); h.id = '__onb_hdr';
     // top: 12px = where the native bar sat (the web view already starts below the status bar); absolute, NOT fixed: it moves with the document
     h.style.cssText = 'position:absolute;top:12px;left:0;right:0;height:34px;z-index:2147483000;display:flex;align-items:center;padding:0 20px;box-sizing:border-box;pointer-events:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;';
-    var bg = DARK ? 'rgba(60,62,72,0.55)' : 'rgba(255,255,255,0.82)', bd = DARK ? 'transparent' : 'rgba(0,0,0,0.10)', fg = DARK ? '#ffffff' : '#111114';
-    var b = document.createElement('a'); b.setAttribute('role', 'button'); b.setAttribute('aria-label', 'Back'); b.id = '__onb_back';
-    b.style.cssText = 'pointer-events:auto;flex:none;width:40px;height:40px;margin:-3px 0 -3px -3px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-sizing:border-box;background:' + bg + ';border:0.5px solid ' + bd + ';box-shadow:0 2px 8px rgba(0,0,0,0.10);-webkit-tap-highlight-color:transparent;';
-    b.innerHTML = '<svg width="10" height="17" viewBox="0 0 10 17" fill="none" style="display:block"><path d="M8.2 1.8 1.8 8.5l6.4 6.7" stroke="' + fg + '" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-    b.addEventListener('click', function(ev){ ev.preventDefault(); ev.stopPropagation(); try { window.ReactNativeWebView.postMessage('onbback'); } catch (e) {} }, true);
+    // (Ari 2026-11-25) the BACK BUTTON is real Liquid Glass again, drawn natively over the page (a web page cannot draw glass); only the progress bar is part of the page.
+    // This spacer is the back button's box, so the bar starts where it always did.
+    var b = document.createElement('div'); b.style.cssText = 'flex:none;width:34px;height:34px;pointer-events:none;';
     h.appendChild(b);
     var w = document.createElement('div'); w.id = '__onb_prog_wrap'; w.style.cssText = 'flex:1;padding:0 12px;display:' + (P0 == null ? 'none' : 'block') + ';';
     var t = document.createElement('div'); t.style.cssText = 'height:4px;background:rgba(17,24,39,0.08);border-radius:2px;overflow:hidden;';
@@ -1756,9 +1777,11 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
   const fade = useRef(new Animated.Value(0)).current;
   const backFade = useRef(new Animated.Value(0)).current;
   useEffect(() => { if (inPageHeaderRef.current) webRef.current?.injectJavaScript('window.__onbSetProgress && window.__onbSetProgress(' + (progress == null ? 'null' : progress) + '); true;'); }, [progress]); // eslint-disable-line react-hooks/exhaustive-deps
-  const inPageHeaderRef = useRef(!ONB_INPAGE_HEADER_EXCLUDE.includes(htmlKey));
+  const inPageHeaderRef = useRef(!ONB_INPAGE_HEADER_EXCLUDE.includes(htmlKey) && !ONB_NO_HEADER_KEYS.includes(htmlKey));
   // (round 8) the back button + progress bar are part of the page: when the page scrolls, they scroll away with it (the page reports its scroll, this moves them)
-  const headerY = useRef(new Animated.Value(0)).current;
+  const backScroll = useRef(new Animated.Value(1)).current;   // 1 = the page is at the top, 0 = scrolled: the back button fades away (it does not need to stay)
+  const backHiddenRef = useRef(false);
+  const [backHidden, setBackHidden] = useState(false);
   const webRef = useRef<WebView>(null);
   // the paywall list scrolls by itself about 5 s after the paywall APPEARS (the page was loaded earlier, hidden, in the pool)
   useEffect(() => {
@@ -1841,7 +1864,8 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isDcPage = DC_PAGE_KEYS.includes(htmlKey);
-  const inPageHeader = !ONB_INPAGE_HEADER_EXCLUDE.includes(htmlKey);   // (round 9) the back button + progress bar live inside the page
+  const noHeader = ONB_NO_HEADER_KEYS.includes(htmlKey);
+  const inPageHeader = !ONB_INPAGE_HEADER_EXCLUDE.includes(htmlKey) && !noHeader;   // (round 9) the back button + progress bar live inside the page
   // the strip above the page (under the status bar) is the page's own top colour, not white: the page fills to the top of the screen (Ari 2026-11-25)
   const pageBg = (htmlKey === 'paywall' || htmlKey === 'giftOffer') ? '#f4f4f7' : '#ffffff';
   const baseInject = isDcPage ? DC_PAGE_INJECT : ONBOARDING_WEB_INJECT;
@@ -1876,13 +1900,17 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
           ref={webRef}
           source={htmlOverride != null ? { html: htmlOverride } : (ONB_HTML[htmlKey] as any)}
           originWhitelist={['*']}
-          injectedJavaScriptBeforeContentLoaded={isDcPage ? VIEWPORT_JS + '\n' + CUE_ORB_JS + '\n' + (KEEP_FX_KEYS.includes(htmlKey) ? KEEP_FX_JS + '\n' : '') + (extraJsBeforeLoad ?? '') : undefined}
-          injectedJavaScript={(extraJs ? baseInject + '\n' + extraJs : baseInject) + '\n' + (inPageHeader ? onbHeaderJs(progress ?? null, !isDcPage) : ONB_SCROLL_REPORT_JS)}
+          injectedJavaScriptBeforeContentLoaded={isDcPage ? VIEWPORT_JS + '\n' + CUE_ORB_JS + '\n' + (KEEP_FX_KEYS.includes(htmlKey) ? KEEP_FX_JS + '\n' : '') + (htmlKey === 'paywall' ? PAYWALL_EARLY_JS + '\n' : '') + (extraJsBeforeLoad ?? '') : undefined}
+          injectedJavaScript={(extraJs ? baseInject + '\n' + extraJs : baseInject) + '\n' + (inPageHeader ? onbHeaderJs(progress ?? null, !isDcPage) + '\n' + ONB_SCROLL_REPORT_JS : ONB_SCROLL_REPORT_JS)}
           onLoadEnd={() => setWebReady(true)}
           onMessage={(e) => {
             const m = e.nativeEvent.data;
             if (m === 'onbback') { Haptics.selectionAsync(); onBack(); return; }
-            if (m.indexOf('onbscroll:') === 0) { headerY.setValue(-Number(m.slice(10)) || 0); return; }
+            if (m.indexOf('onbscroll:') === 0) {
+              const hide = (Number(m.slice(10)) || 0) > 12;
+              if (hide !== backHiddenRef.current) { backHiddenRef.current = hide; setBackHidden(hide); Animated.timing(backScroll, { toValue: hide ? 0 : 1, duration: 160, useNativeDriver: true }).start(); }
+              return;
+            }
             if (m === '__tap' || m === '__tick') { Haptics.selectionAsync(); return; }
             if (m === 'rendered') { reveal(); return; }
             if (m.indexOf('remindpick:') === 0) { setTrialReminderPick(Number(m.slice(11))); return; }
@@ -1928,35 +1956,40 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
           the bottom of the screen and pushed off. In pool mode only the
           active page shows its back control. */}
       {(inPool && !poolActive) ? null : (
-      <Animated.View pointerEvents="box-none" style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 80, transform: [{ translateY: headerY }] }} testID="onb-header-scroll">
+      <View pointerEvents="box-none" style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 80 }} testID="onb-header">
       {(htmlKey === 'paywall' || htmlKey === 'giftOffer') ? (
-        // Paywall and gift offer: the standard glass BACK button top-left (Ari 2026-11-22: it was an X), same spot as every other page's back button.
-        // The paywall also has a plain grey "Restore" top-right. NO progress bar here (a stray black line, earlier ask).
+        // Paywall and gift offer: the standard glass BACK button top-left, inside a clear glass bubble so it can be seen on the light page (Ari 2026-11-25).
+        // The paywall also has a plain grey "Restore" top-right. Both stay exactly where they are when the page scrolls. NO progress bar here.
         <Animated.View
           pointerEvents="box-none"
-          style={{ position: 'absolute', top: topInset + 12, left: 0, right: 0, zIndex: 80, opacity: backFade, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20 }}
+          style={{ position: 'absolute', top: topInset + 5, left: 0, right: 0, zIndex: 80, opacity: backFade, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 13 }}
         >
-          <GlassBackButton onPress={() => { Haptics.selectionAsync(); onBack(); }} scheme="standard" />
+          <View style={{ shadowColor: '#000', shadowOpacity: 0.14, shadowRadius: 9, shadowOffset: { width: 0, height: 3 } }}>
+            <LiquidGlass radius={27} variant="clear" colorScheme="light" style={{ width: 54, height: 54, alignItems: 'center', justifyContent: 'center' }}>
+              <GlassBackButton onPress={() => { Haptics.selectionAsync(); onBack(); }} scheme="standard" />
+            </LiquidGlass>
+          </View>
           {htmlKey === 'paywall' ? (
             <TouchableOpacity
               onPress={() => { Haptics.selectionAsync(); Alert.alert('Restore purchases', 'No previous subscription found on this Apple ID.'); }}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              style={{ paddingRight: 7 }}
             >
               <Text style={web.restoreTxt}>Restore</Text>
             </TouchableOpacity>
           ) : null}
         </Animated.View>
-      ) : inPageHeader ? null : (
+      ) : noHeader ? null : (
         <Animated.View
-          pointerEvents="box-none"
-          // Same top offset the native question header's back button lands
-          // at (insets.top + that row's own 12px paddingVertical) —
-          // explicit "back button must never move" fix, this was 4px off.
-          style={{ position: 'absolute', top: topInset + 12, left: 0, right: 0, zIndex: 80, opacity: backFade }}
+          pointerEvents={backHidden ? 'none' : 'box-none'}
+          // Same top offset the native question header's back button lands at (insets.top + that row's own 12px paddingVertical). Real glass, drawn natively
+          // over the page; it fades away once the page scrolls (it does not need to stay on screen). The progress bar is part of the page (or, on a native
+          // page, drawn here).
+          style={{ position: 'absolute', top: topInset + 12, left: 0, right: 0, zIndex: 80, opacity: Animated.multiply(backFade, backScroll) }}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20 }}>
             <OnbBackButton onPress={() => { Haptics.selectionAsync(); onBack(); }} scheme={isDcPage ? 'light' : 'dark'} />
-            {progress != null && (
+            {!inPageHeader && progress != null && (
               <View style={{ flex: 1, paddingHorizontal: 12 }}>
                 <View style={s.pt}><View style={[s.pf, { width: `${progress * 100}%` }]} /></View>
               </View>
@@ -1964,7 +1997,7 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
           </View>
         </Animated.View>
       )}
-      </Animated.View>
+      </View>
       )}
     </Animated.View>
   );

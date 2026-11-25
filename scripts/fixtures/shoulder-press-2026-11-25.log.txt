@@ -1,0 +1,1121 @@
+2026-11-25T19:18:00.520Z [session] start
+19:18:00.529 [warn] The native view manager for module(ARBodyExperiment_ARBodyExperimentView) ) from NativeViewManagerAdapter isn't exported by expo-modules-core. Views of this type may not render correctly. Exported view managers: [ExpoVideo, SymbolModule_SymbolView, ExpoRouterNativeLinkPreview_NativeLinkPreviewContentView, ExpoRouterNativeLinkPreview, ExpoRouterNativeLinkPreview_NativeLinkPreviewView, ExpoLinearGradient, ExpoBlurView, ExpoImage_ImageView, ExpoImage, ExpoVideo_VideoView, ExpoVideo_VideoAirPlayButtonView, SymbolModule, ExpoGlassEffect, ExpoLinearGradient_LinearGradientView, ExpoGlassEffect_GlassView, ATHLTCamera, ExpoBlurView_BlurView, ATHLTCamera_ATHLTCameraView, ExpoGlassEffect_GlassContainer, ExpoRouterNativeLinkPreview_LinkPreviewNativeActionView].
+19:18:00.533 [log] [cue] build cue-6
+19:18:00.543 [log] [formcheck] build fc-7
+19:18:00.844 [warn] The native view manager for module(ExpoAppleAuthentication) ) from NativeViewManagerAdapter isn't exported by expo-modules-core. Views of this type may not render correctly. Exported view managers: [ExpoVideo, SymbolModule_SymbolView, ExpoRouterNativeLinkPreview_NativeLinkPreviewContentView, ExpoRouterNativeLinkPreview, ExpoRouterNativeLinkPreview_NativeLinkPreviewView, ExpoLinearGradient, ExpoBlurView, ExpoImage_ImageView, ExpoImage, ExpoVideo_VideoView, ExpoVideo_VideoAirPlayButtonView, SymbolModule, ExpoGlassEffect, ExpoLinearGradient_LinearGradientView, ExpoGlassEffect_GlassView, ATHLTCamera, ExpoBlurView_BlurView, ATHLTCamera_ATHLTCameraView, ExpoGlassEffect_GlassContainer, ExpoRouterNativeLinkPreview_LinkPreviewNativeActionView].
+19:18:00.849 [log] [VideoControls] build vc-8
+19:18:00.854 [log] [recap] build warm-5
+19:18:00.854 [log] [recap-debug] build warm-5 loaded 2:18:00 PM
+19:18:00.854 [log] [rep-feedback] build warm-5
+19:18:00.854 [log] [rep-feedback-debug] build warm-5 loaded 2:18:00 PM
+19:18:00.974 [warn] [Layout children]: No route named "workout/run" exists in nested children: ["analyze-video","ar-experiment","audio-settings","calibrate","camera-tips","create-workout","cue","customize","exercise-picker","feedback-preview","formcheck","index","learn-moves","log-session","muscle-ranks","my-workouts","onboarding-test","onboarding","progress-photo-screen","recap","rep-feedback","streak-screen","(tabs)","goal/[id]","move/[id]","workout"]
+19:18:01.004 [log] [LAUNCH] first screen allowed 484ms after the app code started | fonts: loaded
+19:18:01.004 [log] [LAUNCH] fonts loaded 484ms after the app code started
+19:18:01.019 [log] [TABS] layout mounted, tabs: index, train, plus, progress, profile | inactive tabs detached natively (web views stay loaded)
+19:18:01.101 [log] [TRAIN] mounted train-4
+19:18:01.101 [log] [TRAIN] html file: name traintab.html | md5 6e71acbc | uri ?unstable_path=.%2Fassets%2Fapp%20screens/traintab.html?platform=ios&hash=6e71acbc518f4149c049ed6b4eb39908
+19:18:01.103 [log] [TAB-LAG] progress mounted (data prefetch starts now)
+19:18:01.105 [log] [TAB-LAG] profile mounted (data prefetch starts now)
+19:18:01.135 [log] [TRAIN] rendered; container 402x874
+19:18:01.184 [log] [TAB-LAG] profile data ready 80ms after mount (before the tab was shown)
+19:18:01.191 [log] [TAB-LAG] progress data ready 88ms after mount (before the tab was shown)
+19:18:02.006 [log] [THUMB] clip already gone, cannot keep it 1793562362803
+19:18:02.008 [log] [THUMB] clip already gone, cannot keep it 1793565085549
+19:18:02.009 [log] [THUMB] clip already gone, cannot keep it 1793649685649
+19:18:02.011 [log] [THUMB] clip already gone, cannot keep it 1793651336103
+19:18:02.012 [log] [THUMB] clip already gone, cannot keep it 1793721086555
+19:18:02.014 [log] [THUMB] clip already gone, cannot keep it 1793721137332
+19:18:02.015 [log] [THUMB] clip already gone, cannot keep it 1793723526676
+19:18:02.017 [log] [THUMB] clip already gone, cannot keep it 1793723568725
+19:18:02.018 [log] [THUMB] clip already gone, cannot keep it 1793724307566
+19:18:02.020 [log] [THUMB] clip already gone, cannot keep it 1793744661268
+19:18:02.021 [log] [THUMB] clip already gone, cannot keep it 1793919900492
+19:18:02.023 [log] [THUMB] clip already gone, cannot keep it 1793920145227
+19:18:02.024 [log] [THUMB] clip already gone, cannot keep it 1793921943401
+19:18:02.026 [log] [THUMB] clip already gone, cannot keep it 1793923975496
+19:18:02.027 [log] [THUMB] clip already gone, cannot keep it 1794167843217
+19:18:02.029 [log] [THUMB] clip already gone, cannot keep it 1794349832025
+19:18:02.813 [log] [THUMB] clip already gone, cannot keep it 1793562362803
+19:18:02.814 [log] [THUMB] clip already gone, cannot keep it 1793565085549
+19:18:02.816 [log] [THUMB] clip already gone, cannot keep it 1793649685649
+19:18:02.817 [log] [THUMB] clip already gone, cannot keep it 1793651336103
+19:18:02.819 [log] [THUMB] clip already gone, cannot keep it 1793721086555
+19:18:02.821 [log] [THUMB] clip already gone, cannot keep it 1793721137332
+19:18:02.823 [log] [THUMB] clip already gone, cannot keep it 1793723526676
+19:18:02.824 [log] [THUMB] clip already gone, cannot keep it 1793723568725
+19:18:02.826 [log] [THUMB] clip already gone, cannot keep it 1793724307566
+19:18:02.827 [log] [THUMB] clip already gone, cannot keep it 1793744661268
+19:18:02.829 [log] [THUMB] clip already gone, cannot keep it 1793919900492
+19:18:02.830 [log] [THUMB] clip already gone, cannot keep it 1793920145227
+19:18:02.831 [log] [THUMB] clip already gone, cannot keep it 1793921943401
+19:18:02.833 [log] [THUMB] clip already gone, cannot keep it 1793923975496
+19:18:02.834 [log] [THUMB] clip already gone, cannot keep it 1794167843217
+19:18:02.836 [log] [THUMB] clip already gone, cannot keep it 1794349832025
+19:18:02.874 [log] [TRAIN] focused; insets 62 34
+19:18:02.963 [log] [TAB-LAG] home shown again | page already visible: NO (it is loading again)
+19:18:02.992 [log] [TRAIN] data loaded: plan 18 workouts | sessions 124
+19:18:02.997 [log] [TRAIN] data pushed to page; today = Upper Body | streak 0 | my workouts 3
+19:18:03.005 [log] [TRAIN] html images: flame ok, 4 photos
+19:18:03.037 [log] [TRAIN] html file: size 450139 chars | fnv e448ea90
+19:18:03.856 [log] [THUMB] clip already gone, cannot keep it 1793562362803
+19:18:03.859 [log] [THUMB] clip already gone, cannot keep it 1793565085549
+19:18:03.861 [log] [THUMB] clip already gone, cannot keep it 1793649685649
+19:18:03.862 [log] [THUMB] clip already gone, cannot keep it 1793651336103
+19:18:03.864 [log] [THUMB] clip already gone, cannot keep it 1793721086555
+19:18:03.865 [log] [THUMB] clip already gone, cannot keep it 1793721137332
+19:18:03.867 [log] [THUMB] clip already gone, cannot keep it 1793723526676
+19:18:03.868 [log] [THUMB] clip already gone, cannot keep it 1793723568725
+19:18:03.870 [log] [THUMB] clip already gone, cannot keep it 1793724307566
+19:18:03.871 [log] [THUMB] clip already gone, cannot keep it 1793744661268
+19:18:03.873 [log] [THUMB] clip already gone, cannot keep it 1793919900492
+19:18:03.875 [log] [THUMB] clip already gone, cannot keep it 1793920145227
+19:18:03.876 [log] [THUMB] clip already gone, cannot keep it 1793921943401
+19:18:03.878 [log] [THUMB] clip already gone, cannot keep it 1793923975496
+19:18:03.880 [log] [THUMB] clip already gone, cannot keep it 1794167843217
+19:18:03.881 [log] [THUMB] clip already gone, cannot keep it 1794349832025
+19:18:03.883 [log] [TRAIN] web view load start
+19:18:03.883 [log] [PROFILE] web view load start +2816ms after mount
+19:18:03.884 [log] [TRAIN] page asked for data; sending
+19:18:03.884 [log] [PROFILE] page asked for data; sending
+19:18:03.900 [log] [TRAIN] web view load end #1
+19:18:03.901 [log] [PROFILE] web view load end
+19:18:03.918 [log] [PROFILE] page asked for data; sending
+19:18:03.918 [log] [TRAIN] page asked for data; sending
+19:18:03.919 [warn] [Layout children]: No route named "workout/run" exists in nested children: ["analyze-video","ar-experiment","audio-settings","calibrate","camera-tips","create-workout","cue","customize","exercise-picker","feedback-preview","formcheck","index","learn-moves","log-session","muscle-ranks","my-workouts","onboarding-test","onboarding","progress-photo-screen","recap","rep-feedback","streak-screen","(tabs)","goal/[id]","move/[id]","workout"]
+19:18:03.985 [log] [THUMB] clip file is gone for workout 1794349833313
+19:18:03.988 [log] [THUMB] clip file is gone for workout 1793923976716
+19:18:03.991 [log] [THUMB] clip file is gone for workout 1793921944474
+19:18:03.995 [log] [THUMB] clip file is gone for workout 1793920145846
+19:18:03.998 [log] [THUMB] clip file is gone for workout 1793919916365
+19:18:04.001 [log] [THUMB] clip file is gone for workout 1793744662253
+19:18:04.003 [log] [THUMB] clip file is gone for workout 1793724308690
+19:18:04.006 [log] [THUMB] clip file is gone for workout 1793723569135
+19:18:04.010 [log] [THUMB] clip file is gone for workout 1793723527690
+19:18:04.012 [log] [THUMB] clip file is gone for workout 1793721138056
+19:18:04.017 [log] [THUMB] clip file is gone for workout 1793721087511
+19:18:04.020 [log] [THUMB] clip file is gone for workout 1793651337215
+19:18:04.022 [log] [THUMB] clip file is gone for workout 1793649742758
+19:18:04.026 [log] [THUMB] clip file is gone for workout 1793565086253
+19:18:04.029 [log] [THUMB] clip file is gone for workout 1793562364013
+19:18:04.765 [log] [THUMB] clip already gone, cannot keep it 1793562362803
+19:18:04.768 [log] [THUMB] clip already gone, cannot keep it 1793565085549
+19:18:04.769 [log] [THUMB] clip already gone, cannot keep it 1793649685649
+19:18:04.771 [log] [THUMB] clip already gone, cannot keep it 1793651336103
+19:18:04.772 [log] [THUMB] clip already gone, cannot keep it 1793721086555
+19:18:04.774 [log] [THUMB] clip already gone, cannot keep it 1793721137332
+19:18:04.775 [log] [THUMB] clip already gone, cannot keep it 1793723526676
+19:18:04.777 [log] [THUMB] clip already gone, cannot keep it 1793723568725
+19:18:04.778 [log] [THUMB] clip already gone, cannot keep it 1793724307566
+19:18:04.780 [log] [THUMB] clip already gone, cannot keep it 1793744661268
+19:18:04.781 [log] [THUMB] clip already gone, cannot keep it 1793919900492
+19:18:04.783 [log] [THUMB] clip already gone, cannot keep it 1793920145227
+19:18:04.784 [log] [THUMB] clip already gone, cannot keep it 1793921943401
+19:18:04.786 [log] [THUMB] clip already gone, cannot keep it 1793923975496
+19:18:04.788 [log] [THUMB] clip already gone, cannot keep it 1794167843217
+19:18:04.789 [log] [THUMB] clip already gone, cannot keep it 1794349832025
+19:18:04.791 [log] [THUMB] no clip logged for workout 1792943478451 | nearest logged clip 1793562362803 is 618884s from it (window: 1792943410s..+5s)
+19:18:04.791 [log] [THUMB] no clip logged for workout 1792943410423 | nearest logged clip 1793562362803 is 618952s from it (window: 1792706594s..+5s)
+19:18:04.791 [log] [THUMB] no clip logged for workout 1792706593536 | nearest logged clip 1793562362803 is 855769s from it (window: 0s..+5s)
+19:18:04.791 [log] [PROFILE] page ready +3724ms after mount
+19:18:04.791 [log] [TAB-LAG] profile first open: shown -> ready 1858ms | data ready 1749ms BEFORE the tab was shown | page load start +950ms, load end +968ms, asked for data +951ms, data pushed +951ms, ready +1858ms
+19:18:04.791 [log] [TRAIN] page ready (layout + data + logic all in place, page still)
+19:18:04.792 [log] [TRAIN] page fingerprint: cards=7 quickStart=1 myWorkouts=1 practice=1 oldHero=0 title=Train
+19:18:04.792 [log] [TAB-LAG] progress first open: shown -> ready 1897ms | data ready 1705ms BEFORE the tab was shown | page load start +988ms, load end +1006ms, asked for data +989ms, data pushed +989ms, ready +1897ms
+19:18:04.818 [log] [THUMB] clip file is gone for workout 1794349833313
+19:18:04.821 [log] [THUMB] clip file is gone for workout 1793923976716
+19:18:04.823 [log] [THUMB] clip file is gone for workout 1793921944474
+19:18:04.826 [log] [THUMB] clip file is gone for workout 1793920145846
+19:18:04.829 [log] [THUMB] clip file is gone for workout 1793919916365
+19:18:04.831 [log] [THUMB] clip file is gone for workout 1793744662253
+19:18:04.834 [log] [THUMB] clip file is gone for workout 1793724308690
+19:18:04.837 [log] [THUMB] clip file is gone for workout 1793723569135
+19:18:04.839 [log] [THUMB] clip file is gone for workout 1793723527690
+19:18:04.842 [log] [THUMB] clip file is gone for workout 1793721138056
+19:18:04.845 [log] [THUMB] clip file is gone for workout 1793721087511
+19:18:04.848 [log] [THUMB] clip file is gone for workout 1793651337215
+19:18:04.850 [log] [THUMB] clip file is gone for workout 1793649742758
+19:18:04.853 [log] [THUMB] clip file is gone for workout 1793565086253
+19:18:04.855 [log] [THUMB] clip file is gone for workout 1793562364013
+19:18:05.566 [log] [THUMB] clip already gone, cannot keep it 1793562362803
+19:18:05.567 [log] [THUMB] clip already gone, cannot keep it 1793565085549
+19:18:05.569 [log] [THUMB] clip already gone, cannot keep it 1793649685649
+19:18:05.570 [log] [THUMB] clip already gone, cannot keep it 1793651336103
+19:18:05.572 [log] [THUMB] clip already gone, cannot keep it 1793721086555
+19:18:05.573 [log] [THUMB] clip already gone, cannot keep it 1793721137332
+19:18:05.575 [log] [THUMB] clip already gone, cannot keep it 1793723526676
+19:18:05.577 [log] [THUMB] clip already gone, cannot keep it 1793723568725
+19:18:05.579 [log] [THUMB] clip already gone, cannot keep it 1793724307566
+19:18:05.580 [log] [THUMB] clip already gone, cannot keep it 1793744661268
+19:18:05.582 [log] [THUMB] clip already gone, cannot keep it 1793919900492
+19:18:05.583 [log] [THUMB] clip already gone, cannot keep it 1793920145227
+19:18:05.585 [log] [THUMB] clip already gone, cannot keep it 1793921943401
+19:18:05.586 [log] [THUMB] clip already gone, cannot keep it 1793923975496
+19:18:05.588 [log] [THUMB] clip already gone, cannot keep it 1794167843217
+19:18:05.589 [log] [THUMB] clip already gone, cannot keep it 1794349832025
+19:18:05.591 [log] [THUMB] no clip logged for workout 1792943478451 | nearest logged clip 1793562362803 is 618884s from it (window: 1792943410s..+5s)
+19:18:05.591 [log] [THUMB] no clip logged for workout 1792943410423 | nearest logged clip 1793562362803 is 618952s from it (window: 1792706594s..+5s)
+19:18:05.591 [log] [THUMB] no clip logged for workout 1792706593536 | nearest logged clip 1793562362803 is 855769s from it (window: 0s..+5s)
+19:18:05.628 [log] [TAB-LAG] cover lifted 4557ms after the tab bar mounted | all four pages ready: yes
+19:18:05.701 [log] [DONE] spare page loaded and ready
+19:18:06.818 [log] [warm:recap] warm (epoch 0)
+19:19:00.745 [log] [TAB-LAG] home shown again | page already visible: yes
+19:19:04.766 [log] [TAB-LAG] home shown again | page already visible: yes
+19:19:05.946 [log] [TRAIN] focused; insets 62 34
+19:19:05.947 [log] [TAB-LAG] train shown again 25ms after the tap | page already visible: yes
+19:19:05.958 [log] [TRAIN] data loaded: plan 18 workouts | sessions 124
+19:19:05.959 [log] [TRAIN] data unchanged, not pushed again
+19:19:36.036 [log] [TRAIN] focused; insets 62 34
+19:19:36.037 [log] [TAB-LAG] train shown again 30115ms after the tap | page already visible: yes
+19:19:36.041 [log] [TRAIN] data loaded: plan 18 workouts | sessions 124
+19:19:36.043 [log] [TRAIN] data unchanged, not pushed again
+19:19:59.377 [log] [TRAIN] focused; insets 62 34
+19:19:59.377 [log] [TAB-LAG] train shown again 53456ms after the tap | page already visible: yes
+19:19:59.382 [log] [TRAIN] data loaded: plan 18 workouts | sessions 124
+19:19:59.384 [log] [TRAIN] data unchanged, not pushed again
+19:20:01.300 [log] [TAB-LAG] progress shown again 18ms after the tap | page already visible: yes
+19:20:02.130 [log] [THUMB] clip already gone, cannot keep it 1793562362803
+19:20:02.131 [log] [THUMB] clip already gone, cannot keep it 1793565085549
+19:20:02.133 [log] [THUMB] clip already gone, cannot keep it 1793649685649
+19:20:02.134 [log] [THUMB] clip already gone, cannot keep it 1793651336103
+19:20:02.136 [log] [THUMB] clip already gone, cannot keep it 1793721086555
+19:20:02.138 [log] [THUMB] clip already gone, cannot keep it 1793721137332
+19:20:02.140 [log] [THUMB] clip already gone, cannot keep it 1793723526676
+19:20:02.141 [log] [THUMB] clip already gone, cannot keep it 1793723568725
+19:20:02.143 [log] [THUMB] clip already gone, cannot keep it 1793724307566
+19:20:02.144 [log] [THUMB] clip already gone, cannot keep it 1793744661268
+19:20:02.146 [log] [THUMB] clip already gone, cannot keep it 1793919900492
+19:20:02.148 [log] [THUMB] clip already gone, cannot keep it 1793920145227
+19:20:02.149 [log] [THUMB] clip already gone, cannot keep it 1793921943401
+19:20:02.150 [log] [THUMB] clip already gone, cannot keep it 1793923975496
+19:20:02.152 [log] [THUMB] clip already gone, cannot keep it 1794167843217
+19:20:02.153 [log] [THUMB] clip already gone, cannot keep it 1794349832025
+19:20:02.159 [log] [THUMB] clip file is gone for workout 1794349833313
+19:20:02.162 [log] [THUMB] clip file is gone for workout 1793923976716
+19:20:02.164 [log] [THUMB] clip file is gone for workout 1793921944474
+19:20:02.167 [log] [THUMB] clip file is gone for workout 1793920145846
+19:20:02.170 [log] [THUMB] clip file is gone for workout 1793919916365
+19:20:02.173 [log] [THUMB] clip file is gone for workout 1793744662253
+19:20:02.175 [log] [THUMB] clip file is gone for workout 1793724308690
+19:20:02.178 [log] [THUMB] clip file is gone for workout 1793723569135
+19:20:02.181 [log] [THUMB] clip file is gone for workout 1793723527690
+19:20:02.183 [log] [THUMB] clip file is gone for workout 1793721138056
+19:20:02.186 [log] [THUMB] clip file is gone for workout 1793721087511
+19:20:02.189 [log] [THUMB] clip file is gone for workout 1793651337215
+19:20:02.191 [log] [THUMB] clip file is gone for workout 1793649742758
+19:20:02.194 [log] [THUMB] clip file is gone for workout 1793565086253
+19:20:02.196 [log] [THUMB] clip file is gone for workout 1793562364013
+19:20:02.897 [log] [THUMB] clip already gone, cannot keep it 1793562362803
+19:20:02.898 [log] [THUMB] clip already gone, cannot keep it 1793565085549
+19:20:02.900 [log] [THUMB] clip already gone, cannot keep it 1793649685649
+19:20:02.901 [log] [THUMB] clip already gone, cannot keep it 1793651336103
+19:20:02.903 [log] [THUMB] clip already gone, cannot keep it 1793721086555
+19:20:02.905 [log] [THUMB] clip already gone, cannot keep it 1793721137332
+19:20:02.907 [log] [THUMB] clip already gone, cannot keep it 1793723526676
+19:20:02.909 [log] [THUMB] clip already gone, cannot keep it 1793723568725
+19:20:02.910 [log] [THUMB] clip already gone, cannot keep it 1793724307566
+19:20:02.912 [log] [THUMB] clip already gone, cannot keep it 1793744661268
+19:20:02.913 [log] [THUMB] clip already gone, cannot keep it 1793919900492
+19:20:02.914 [log] [THUMB] clip already gone, cannot keep it 1793920145227
+19:20:02.916 [log] [THUMB] clip already gone, cannot keep it 1793921943401
+19:20:02.917 [log] [THUMB] clip already gone, cannot keep it 1793923975496
+19:20:02.919 [log] [THUMB] clip already gone, cannot keep it 1794167843217
+19:20:02.920 [log] [THUMB] clip already gone, cannot keep it 1794349832025
+19:20:02.923 [log] [THUMB] no clip logged for workout 1792943478451 | nearest logged clip 1793562362803 is 618884s from it (window: 1792943410s..+5s)
+19:20:02.923 [log] [THUMB] no clip logged for workout 1792943410423 | nearest logged clip 1793562362803 is 618952s from it (window: 1792706594s..+5s)
+19:20:02.923 [log] [THUMB] no clip logged for workout 1792706593536 | nearest logged clip 1793562362803 is 855769s from it (window: 0s..+5s)
+19:20:02.926 [log] [THUMB] clip file is gone for workout 1794349833313
+19:20:02.929 [log] [THUMB] clip file is gone for workout 1793923976716
+19:20:02.931 [log] [THUMB] clip file is gone for workout 1793921944474
+19:20:02.934 [log] [THUMB] clip file is gone for workout 1793920145846
+19:20:02.937 [log] [THUMB] clip file is gone for workout 1793919916365
+19:20:02.939 [log] [THUMB] clip file is gone for workout 1793744662253
+19:20:02.942 [log] [THUMB] clip file is gone for workout 1793724308690
+19:20:02.944 [log] [THUMB] clip file is gone for workout 1793723569135
+19:20:02.947 [log] [THUMB] clip file is gone for workout 1793723527690
+19:20:02.950 [log] [THUMB] clip file is gone for workout 1793721138056
+19:20:02.952 [log] [THUMB] clip file is gone for workout 1793721087511
+19:20:02.955 [log] [THUMB] clip file is gone for workout 1793651337215
+19:20:02.957 [log] [THUMB] clip file is gone for workout 1793649742758
+19:20:02.960 [log] [THUMB] clip file is gone for workout 1793565086253
+19:20:02.962 [log] [THUMB] clip file is gone for workout 1793562364013
+19:20:03.672 [log] [THUMB] clip already gone, cannot keep it 1793562362803
+19:20:03.674 [log] [THUMB] clip already gone, cannot keep it 1793565085549
+19:20:03.676 [log] [THUMB] clip already gone, cannot keep it 1793649685649
+19:20:03.677 [log] [THUMB] clip already gone, cannot keep it 1793651336103
+19:20:03.678 [log] [THUMB] clip already gone, cannot keep it 1793721086555
+19:20:03.680 [log] [THUMB] clip already gone, cannot keep it 1793721137332
+19:20:03.682 [log] [THUMB] clip already gone, cannot keep it 1793723526676
+19:20:03.683 [log] [THUMB] clip already gone, cannot keep it 1793723568725
+19:20:03.685 [log] [THUMB] clip already gone, cannot keep it 1793724307566
+19:20:03.686 [log] [THUMB] clip already gone, cannot keep it 1793744661268
+19:20:03.688 [log] [THUMB] clip already gone, cannot keep it 1793919900492
+19:20:03.690 [log] [THUMB] clip already gone, cannot keep it 1793920145227
+19:20:03.691 [log] [THUMB] clip already gone, cannot keep it 1793921943401
+19:20:03.693 [log] [THUMB] clip already gone, cannot keep it 1793923975496
+19:20:03.694 [log] [THUMB] clip already gone, cannot keep it 1794167843217
+19:20:03.696 [log] [THUMB] clip already gone, cannot keep it 1794349832025
+19:20:03.706 [log] [THUMB] no clip logged for workout 1792943478451 | nearest logged clip 1793562362803 is 618884s from it (window: 1792943410s..+5s)
+19:20:03.707 [log] [THUMB] no clip logged for workout 1792943410423 | nearest logged clip 1793562362803 is 618952s from it (window: 1792706594s..+5s)
+19:20:03.707 [log] [THUMB] no clip logged for workout 1792706593536 | nearest logged clip 1793562362803 is 855769s from it (window: 0s..+5s)
+19:20:36.036 [log] [DONE] shown: "Weight logged" | 400.0 lb, down 100.0 lb since last time.
+19:20:36.836 [log] [THUMB] clip already gone, cannot keep it 1793562362803
+19:20:36.837 [log] [THUMB] clip already gone, cannot keep it 1793565085549
+19:20:36.839 [log] [THUMB] clip already gone, cannot keep it 1793649685649
+19:20:36.840 [log] [THUMB] clip already gone, cannot keep it 1793651336103
+19:20:36.842 [log] [THUMB] clip already gone, cannot keep it 1793721086555
+19:20:36.844 [log] [THUMB] clip already gone, cannot keep it 1793721137332
+19:20:36.846 [log] [THUMB] clip already gone, cannot keep it 1793723526676
+19:20:36.847 [log] [THUMB] clip already gone, cannot keep it 1793723568725
+19:20:36.849 [log] [THUMB] clip already gone, cannot keep it 1793724307566
+19:20:36.850 [log] [THUMB] clip already gone, cannot keep it 1793744661268
+19:20:36.852 [log] [THUMB] clip already gone, cannot keep it 1793919900492
+19:20:36.854 [log] [THUMB] clip already gone, cannot keep it 1793920145227
+19:20:36.855 [log] [THUMB] clip already gone, cannot keep it 1793921943401
+19:20:36.857 [log] [THUMB] clip already gone, cannot keep it 1793923975496
+19:20:36.858 [log] [THUMB] clip already gone, cannot keep it 1794167843217
+19:20:36.860 [log] [THUMB] clip already gone, cannot keep it 1794349832025
+19:20:36.865 [log] [THUMB] clip file is gone for workout 1794349833313
+19:20:36.868 [log] [THUMB] clip file is gone for workout 1793923976716
+19:20:36.871 [log] [THUMB] clip file is gone for workout 1793921944474
+19:20:36.874 [log] [THUMB] clip file is gone for workout 1793920145846
+19:20:36.876 [log] [THUMB] clip file is gone for workout 1793919916365
+19:20:36.879 [log] [THUMB] clip file is gone for workout 1793744662253
+19:20:36.881 [log] [THUMB] clip file is gone for workout 1793724308690
+19:20:36.884 [log] [THUMB] clip file is gone for workout 1793723569135
+19:20:36.887 [log] [THUMB] clip file is gone for workout 1793723527690
+19:20:36.890 [log] [THUMB] clip file is gone for workout 1793721138056
+19:20:36.893 [log] [THUMB] clip file is gone for workout 1793721087511
+19:20:36.895 [log] [THUMB] clip file is gone for workout 1793651337215
+19:20:36.898 [log] [THUMB] clip file is gone for workout 1793649742758
+19:20:36.900 [log] [THUMB] clip file is gone for workout 1793565086253
+19:20:36.903 [log] [THUMB] clip file is gone for workout 1793562364013
+19:20:37.623 [log] [THUMB] clip already gone, cannot keep it 1793562362803
+19:20:37.625 [log] [THUMB] clip already gone, cannot keep it 1793565085549
+19:20:37.626 [log] [THUMB] clip already gone, cannot keep it 1793649685649
+19:20:37.628 [log] [THUMB] clip already gone, cannot keep it 1793651336103
+19:20:37.629 [log] [THUMB] clip already gone, cannot keep it 1793721086555
+19:20:37.631 [log] [THUMB] clip already gone, cannot keep it 1793721137332
+19:20:37.633 [log] [THUMB] clip already gone, cannot keep it 1793723526676
+19:20:37.634 [log] [THUMB] clip already gone, cannot keep it 1793723568725
+19:20:37.636 [log] [THUMB] clip already gone, cannot keep it 1793724307566
+19:20:37.638 [log] [THUMB] clip already gone, cannot keep it 1793744661268
+19:20:37.639 [log] [THUMB] clip already gone, cannot keep it 1793919900492
+19:20:37.641 [log] [THUMB] clip already gone, cannot keep it 1793920145227
+19:20:37.642 [log] [THUMB] clip already gone, cannot keep it 1793921943401
+19:20:37.644 [log] [THUMB] clip already gone, cannot keep it 1793923975496
+19:20:37.645 [log] [THUMB] clip already gone, cannot keep it 1794167843217
+19:20:37.647 [log] [THUMB] clip already gone, cannot keep it 1794349832025
+19:20:37.648 [log] [THUMB] no clip logged for workout 1792943478451 | nearest logged clip 1793562362803 is 618884s from it (window: 1792943410s..+5s)
+19:20:37.648 [log] [THUMB] no clip logged for workout 1792943410423 | nearest logged clip 1793562362803 is 618952s from it (window: 1792706594s..+5s)
+19:20:37.649 [log] [THUMB] no clip logged for workout 1792706593536 | nearest logged clip 1793562362803 is 855769s from it (window: 0s..+5s)
+19:20:37.651 [log] [THUMB] clip file is gone for workout 1794349833313
+19:20:37.655 [log] [THUMB] clip file is gone for workout 1793923976716
+19:20:37.657 [log] [THUMB] clip file is gone for workout 1793921944474
+19:20:37.660 [log] [THUMB] clip file is gone for workout 1793920145846
+19:20:37.662 [log] [THUMB] clip file is gone for workout 1793919916365
+19:20:37.665 [log] [THUMB] clip file is gone for workout 1793744662253
+19:20:37.667 [log] [THUMB] clip file is gone for workout 1793724308690
+19:20:37.670 [log] [THUMB] clip file is gone for workout 1793723569135
+19:20:37.673 [log] [THUMB] clip file is gone for workout 1793723527690
+19:20:37.676 [log] [THUMB] clip file is gone for workout 1793721138056
+19:20:37.678 [log] [THUMB] clip file is gone for workout 1793721087511
+19:20:37.681 [log] [THUMB] clip file is gone for workout 1793651337215
+19:20:37.683 [log] [THUMB] clip file is gone for workout 1793649742758
+19:20:37.686 [log] [THUMB] clip file is gone for workout 1793565086253
+19:20:37.689 [log] [THUMB] clip file is gone for workout 1793562364013
+19:20:38.404 [log] [THUMB] clip already gone, cannot keep it 1793562362803
+19:20:38.406 [log] [THUMB] clip already gone, cannot keep it 1793565085549
+19:20:38.407 [log] [THUMB] clip already gone, cannot keep it 1793649685649
+19:20:38.409 [log] [THUMB] clip already gone, cannot keep it 1793651336103
+19:20:38.410 [log] [THUMB] clip already gone, cannot keep it 1793721086555
+19:20:38.412 [log] [THUMB] clip already gone, cannot keep it 1793721137332
+19:20:38.413 [log] [THUMB] clip already gone, cannot keep it 1793723526676
+19:20:38.415 [log] [THUMB] clip already gone, cannot keep it 1793723568725
+19:20:38.416 [log] [THUMB] clip already gone, cannot keep it 1793724307566
+19:20:38.418 [log] [THUMB] clip already gone, cannot keep it 1793744661268
+19:20:38.419 [log] [THUMB] clip already gone, cannot keep it 1793919900492
+19:20:38.422 [log] [THUMB] clip already gone, cannot keep it 1793920145227
+19:20:38.423 [log] [THUMB] clip already gone, cannot keep it 1793921943401
+19:20:38.425 [log] [THUMB] clip already gone, cannot keep it 1793923975496
+19:20:38.426 [log] [THUMB] clip already gone, cannot keep it 1794167843217
+19:20:38.428 [log] [THUMB] clip already gone, cannot keep it 1794349832025
+19:20:38.429 [log] [THUMB] no clip logged for workout 1792943478451 | nearest logged clip 1793562362803 is 618884s from it (window: 1792943410s..+5s)
+19:20:38.429 [log] [THUMB] no clip logged for workout 1792943410423 | nearest logged clip 1793562362803 is 618952s from it (window: 1792706594s..+5s)
+19:20:38.429 [log] [THUMB] no clip logged for workout 1792706593536 | nearest logged clip 1793562362803 is 855769s from it (window: 0s..+5s)
+19:20:50.461 [log] [DONE] spare page loaded and ready
+19:20:58.968 [log] [TAB-LAG] profile shown again 18ms after the tap | page already visible: yes
+19:21:03.671 [log] [TAB-LAG] profile shown again 4721ms after the tap | page already visible: yes
+19:21:06.787 [warn] Unable to get the view config for %s from module &s default view ATHLTCamera_ATHLTCameraView
+19:21:06.803 [log] [AWAKE] camera screen open, app state active, keep-awake held every 15s
+19:21:06.804 [log] [BRIGHTNESS] expo-brightness is NOT in this build: the flash cannot raise the brightness (old build)
+19:21:06.815 [log] [AWAKE] screen lock re-applied (released and taken again), the screen cannot dim
+19:21:07.182 [log] [DEBUG] [UNIV-DBG] reset() called
+19:21:07.184 [log] [DEF-LOOKUP] id=shoulderPress found=yes overrides=none
+19:21:07.184 [log] [DEBUG] [UNIV] relevant joints: leftElbow, leftShoulder, rightElbow, rightShoulder
+19:21:07.185 [log] [DEBUG] [UNIV] relevant joints: leftElbow, leftShoulder, rightElbow, rightShoulder
+19:21:07.185 [log] [DEBUG] [DEF-LOAD] loaded 'shoulderPress' from JSON: repMetric=bestSide formChecks=4 cameraSetup=ok calibration=ok source=JSON
+19:21:07.186 [log] [DEBUG] [STD-LOAD] received standard for 'shoulderPress': peak=65.0 start=65.0 minRange=0.0 staticChecks=0 reviewed=false
+19:21:07.186 [log] [DEBUG] [STD] ⚠ 'shoulderPress' standard NOT YET HUMAN-REVIEWED — verify numbers on-device
+19:21:07.186 [log] [DEBUG] [STD] standard loaded: peak≤65.0°  start≥65.0°  minRange≥0.0°
+19:21:07.392 [log] [SETUP-GUIDE] fit: "Step back further" (confidence cap 35, placeholder numbers)
+19:21:07.535 [log] [DRAWER] demo page loaded 753 ms after the screen opened (the strip was drawn natively from the first frame)
+19:21:07.571 [log] [SETUP-SEEN] Vision says a person is NOT in the picture (frames received 6, analysed 1)
+19:21:08.042 [log] [GUIDE] setup line now "Step into view" (wanted "Step into view")
+19:21:09.646 [log] [SETUP-SEEN] Vision says a person is IN the picture (frames received 61, analysed 20)
+19:21:09.646 [log] [SETUP-SEEN] dropping the old "Get in frame" hint: Vision sees a person but native has no joint update for this exercise yet
+19:21:10.327 [log] [DEBUG] [METRIC] shoulderPress value=63.5223 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+19:21:10.334 [log] [DEBUG] [SETUP-TRACE] shoulderPress pending — missing []
+19:21:10.417 [log] [DEBUG] [SETUP-TRACE] shoulderPress pending — missing []
+19:21:10.525 [log] [DEBUG] [SETUP] shoulderPress rep metric trackable — starting 2.0s hold at timestamp=1795634470.525089
+19:21:10.622 [log] [DEBUG] [SETUP-TRACE] shoulderPress hold flicker 1/6 — missing [], timer held
+19:21:10.623 [log] [READY-GATE] steady run broken (body not fully tracked or frames stopped) — counting again from zero
+19:21:10.730 [log] [DEBUG] [METRIC] shoulderPress value=81.9506 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+19:21:10.730 [log] [DEBUG] [SETUP-TRACE] shoulderPress hold flicker 2/6 — missing [], timer held
+19:21:10.832 [log] [DEBUG] [SETUP-TRACE] shoulderPress hold flicker 3/6 — missing [rightElbow], timer held
+19:21:10.936 [log] [DEBUG] [SETUP-TRACE] shoulderPress hold flicker 4/6 — missing [rightElbow], timer held
+19:21:11.033 [log] [DEBUG] [SETUP-TRACE] shoulderPress hold flicker 5/6 — missing [rightElbow], timer held
+19:21:11.135 [log] [DEBUG] [METRIC] shoulderPress value=82.1914 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+19:21:11.135 [log] [DEBUG] [SETUP] shoulderPress hold broken — missing [rightElbow]
+19:21:11.209 [log] [SETUP-GUIDE] ready: "Hold still" (confidence cap 100, placeholder numbers)
+19:21:11.231 [log] [DEBUG] [SETUP-TRACE] shoulderPress pending — missing [rightElbow]
+19:21:11.332 [log] [DEBUG] [SETUP-TRACE] shoulderPress pending — missing [rightElbow]
+19:21:11.434 [log] [DEBUG] [SETUP-TRACE] shoulderPress pending — missing [rightElbow]
+19:21:11.609 [log] [SETUP-GUIDE] fit: "Back up" (confidence cap 35, placeholder numbers)
+19:21:11.739 [log] [DEBUG] [METRIC] shoulderPress value=63.8767 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+19:21:11.739 [log] [DEBUG] [SETUP] shoulderPress rep metric trackable — starting 2.0s hold at timestamp=1795634471.738986
+19:21:11.809 [log] [SETUP-GUIDE] ready: "Hold still" (confidence cap 100, placeholder numbers)
+19:21:11.831 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.0916 holdProgress=0.05 start=1795634471.738986 now=1795634471.830596
+19:21:11.929 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.1902 holdProgress=0.10 start=1795634471.738986 now=1795634471.9291449
+19:21:12.026 [log] [SETUP-GUIDE] fit: "Back up" (confidence cap 35, placeholder numbers)
+19:21:12.031 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.2896 holdProgress=0.14 start=1795634471.738986 now=1795634472.0286021
+19:21:12.129 [log] [DEBUG] [METRIC] shoulderPress value=67.5539 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+19:21:12.130 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.3879 holdProgress=0.19 start=1795634471.738986 now=1795634472.126895
+19:21:12.226 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.4869 holdProgress=0.24 start=1795634471.738986 now=1795634472.2259212
+19:21:12.242 [log] [SETUP-GUIDE] ready: "Hold still" (confidence cap 100, placeholder numbers)
+19:21:12.329 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.5902 holdProgress=0.30 start=1795634471.738986 now=1795634472.329152
+19:21:12.442 [log] [SETUP-GUIDE] fit: "Step back further" (confidence cap 35, placeholder numbers)
+19:21:12.529 [log] [DEBUG] [METRIC] shoulderPress value=65.8837 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+19:21:12.529 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.7890 holdProgress=0.39 start=1795634471.738986 now=1795634472.527958
+19:21:12.631 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.8926 holdProgress=0.45 start=1795634471.738986 now=1795634472.631563
+19:21:12.642 [log] [SETUP-GUIDE] ready: "Hold still" (confidence cap 100, placeholder numbers)
+19:21:12.731 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=0.9922 holdProgress=0.50 start=1795634471.738986 now=1795634472.73123
+19:21:12.831 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.0925 holdProgress=0.55 start=1795634471.738986 now=1795634472.831493
+19:21:12.934 [log] [DEBUG] [METRIC] shoulderPress value=64.0573 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+19:21:12.934 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.1948 holdProgress=0.60 start=1795634471.738986 now=1795634472.9337711
+19:21:13.031 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.2927 holdProgress=0.65 start=1795634471.738986 now=1795634473.031677
+19:21:13.132 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.3936 holdProgress=0.70 start=1795634471.738986 now=1795634473.132626
+19:21:13.234 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.4952 holdProgress=0.75 start=1795634471.738986 now=1795634473.2341828
+19:21:13.333 [log] [DEBUG] [METRIC] shoulderPress value=65.0968 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+19:21:13.334 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.5946 holdProgress=0.80 start=1795634471.738986 now=1795634473.33357
+19:21:13.433 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.6938 holdProgress=0.85 start=1795634471.738986 now=1795634473.4327831
+19:21:13.531 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.7927 holdProgress=0.90 start=1795634471.738986 now=1795634473.531701
+19:21:13.532 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=30 ts_epoch=1795634474
+19:21:13.631 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.8926 holdProgress=0.95 start=1795634471.738986 now=1795634473.631602
+19:21:13.730 [log] [DEBUG] [METRIC] shoulderPress value=64.9949 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=setup
+19:21:13.730 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=1.9915 holdProgress=1.00 start=1795634471.738986 now=1795634473.730463
+19:21:13.832 [log] [DEBUG] [SETUP-TRACE] shoulderPress elapsed=2.0937 holdProgress=1.00 start=1795634471.738986 now=1795634473.8326411
+19:21:13.832 [log] [DEBUG] [SETUP] shoulderPress PASSED — entering ACTIVE
+19:21:13.833 [log] [READY-GATE] native setup passed; steady so far 2094ms, need 1000ms (placeholder)
+19:21:13.839 [log] [READY-GATE] Ready: native setup passed, every joint visible, in position on the exercise's path, and steady 2100ms >= 1000ms (placeholder)
+19:21:14.019 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=65.7248 settleCandidateTop=65.7248 framesSeen=1
+19:21:14.118 [log] [DEBUG] [METRIC] shoulderPress value=61.3070 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:14.118 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=61.3070 settleCandidateTop=65.7248 framesSeen=2
+19:21:14.216 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=60.5011 settleCandidateTop=65.7248 framesSeen=3
+19:21:14.324 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=60.8922 settleCandidateTop=65.7248 framesSeen=4
+19:21:14.420 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=69.3812 settleCandidateTop=69.3812 framesSeen=5
+19:21:14.528 [log] [DEBUG] [METRIC] shoulderPress value=69.6134 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:14.529 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=69.6134 settleCandidateTop=69.6134 framesSeen=6
+19:21:14.629 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=69.0486 settleCandidateTop=69.6134 framesSeen=7
+19:21:14.734 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=62.1945 settleCandidateTop=69.6134 framesSeen=8
+19:21:14.734 [log] [DEBUG] [SETTLE] top stable (value=62.194) — rep counting active
+19:21:14.934 [log] [DEBUG] [METRIC] shoulderPress value=61.2553 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:15.358 [log] [DEBUG] [METRIC] shoulderPress value=60.5054 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:15.359 [log] [DEBUG] [UNIV-DBG] reset() called
+19:21:15.429 [log] [DEBUG] [METRIC] shoulderPress value=61.3868 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=waiting phase=waiting
+19:21:15.528 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=61.4655 settleCandidateTop=61.4655 framesSeen=1
+19:21:15.579 [log] [CONFIDENCE] 98 (the camera sees 98) match=0 counting=no (PLACEHOLDER numbers)
+19:21:15.580 [log] [GUIDE] says nothing (nothing to fix: no camera problem is proven)
+19:21:15.628 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=61.7428 settleCandidateTop=61.7428 framesSeen=2
+19:21:15.732 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=61.2606 settleCandidateTop=61.7428 framesSeen=3
+19:21:15.833 [log] [DEBUG] [METRIC] shoulderPress value=68.9042 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:15.833 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=68.9042 settleCandidateTop=68.9042 framesSeen=4
+19:21:15.930 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=67.7519 settleCandidateTop=68.9042 framesSeen=5
+19:21:16.034 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=58.2251 settleCandidateTop=68.9042 framesSeen=6
+19:21:16.133 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=61.1562 settleCandidateTop=68.9042 framesSeen=7
+19:21:16.237 [log] [DEBUG] [METRIC] shoulderPress value=63.4235 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:16.238 [log] [DEBUG] [SETTLE-TRACE] shoulderPress angle=63.4235 settleCandidateTop=68.9042 framesSeen=8
+19:21:16.238 [log] [DEBUG] [SETTLE] top stable (value=63.423) — rep counting active
+19:21:16.410 [log] [CONFIDENCE] 100 (the camera sees 100) match=0 counting=no (PLACEHOLDER numbers)
+19:21:16.630 [log] [DEBUG] [METRIC] shoulderPress value=81.5533 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:16.827 [log] [CONFIDENCE] 99 (the camera sees 99) match=0 counting=no (PLACEHOLDER numbers)
+19:21:17.028 [log] [DEBUG] [METRIC] shoulderPress value=38.1605 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:17.235 [log] [DEBUG] [REP-TRACE] shoulderPress angle=54.8699 repMinAngle=35.7812 framesSincePoseGap=6
+19:21:17.244 [log] [MOVE-MATCH] score=85 TRYING (motion 100, rhythm n/a, range 62, position 100) spread=0.50R onPath=100% period=n/a cut=none (top 0, bottom 0, frame 0) samples=6 (PLACEHOLDER numbers)
+19:21:17.244 [log] [CONFIDENCE] 100 (the camera sees 100) match=85 counting=no (PLACEHOLDER numbers)
+19:21:17.331 [log] [DEBUG] [REP-TRACE] shoulderPress angle=75.5872 repMinAngle=35.7812 framesSincePoseGap=7
+19:21:17.427 [log] [DEBUG] [METRIC] shoulderPress value=89.4037 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:21:17.427 [log] [DEBUG] [REP-TRACE] shoulderPress angle=89.4037 repMinAngle=35.7812 framesSincePoseGap=7
+19:21:17.460 [log] [MOVE-MATCH] score=96 TRYING (motion 100, rhythm n/a, range 90, position 100) spread=0.72R onPath=100% period=n/a cut=none (top 0, bottom 0, frame 0) samples=7 (PLACEHOLDER numbers)
+19:21:17.531 [log] [DEBUG] [REP-TRACE] shoulderPress angle=83.8754 repMinAngle=35.7812 framesSincePoseGap=7
+19:21:17.531 [log] [DEBUG] [UNIV-DBG] rep #1: buffer=21 frames windowStart_epoch=1795634470 repEnd_epoch=1795634478 window=21 frames
+19:21:17.532 [log] [DEBUG] [STD] rep #1 ref: peak=35.8° start=87.7°  (standard: peak≤65.0° start≥65.0°)
+19:21:17.532 [log] [DEBUG] [UNIV] rep #1: CALIBRATING (1/3 good)  range=53.622  dur=0.70s  jerk=26766.25463
+19:21:17.532 [log] [DEBUG] [REP] #1 top=87.7 bottom=35.8 thr=55.0 swing=51.9 ROM=ok cue=GOOD
+19:21:17.533 [log] [DEBUG] [CALIB] rep 1  min=35.8 max=87.7 range=51.9 dur=0.70s  → COUNTED (rom=OK, cue=GOOD)  [thr in use: enter=50 exit=58 goodROM=55 top=84]
+19:21:17.533 [log] [COACH] CHECK because a rep counted with good form (match 89)
+19:21:17.546 [log] [DEBUG] [REP #1] GOOD ✓  peak=35.8°
+  (no form checks)
+  planarity=PASS  n/a
+  cue=GOOD
+19:21:17.547 [log] [DEBUG] [COMPARE] shoulderPress rep#1  2D=35.8°  boneGated=35.8°  blazePose3D=81.8°  | lElb(z=-0.28 v=1.00) rElb(z=-0.26 v=0.99) lWri(z=-0.44 v=0.99) rWri(z=-0.37 v=0.98) | AV=9ms BP=22ms
+19:21:17.829 [log] [DEBUG] [METRIC] shoulderPress value=71.0776 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:17.877 [log] [CONFIDENCE] 99 (the camera sees 99) match=100 counting=yes (PLACEHOLDER numbers)
+19:21:18.077 [log] [GUIDE] says "Step back further" because evidence: the camera says "Step back into frame"
+19:21:18.242 [log] [DEBUG] [METRIC] shoulderPress value=73.1485 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:18.277 [log] [CONFIDENCE] 100 (the camera sees 100) match=88 counting=yes (PLACEHOLDER numbers)
+19:21:18.332 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=30 ts_epoch=1795634478
+19:21:18.631 [log] [DEBUG] [METRIC] shoulderPress value=51.2950 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:18.632 [log] [ATTEMPT] #1 score=95 low=38.2 high=89.4 period=0.0s outcome=counted blocker=none (enter=50 exit=58)
+19:21:19.040 [log] [DEBUG] [METRIC] shoulderPress value=77.3061 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:19.433 [log] [DEBUG] [METRIC] shoulderPress value=83.6663 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:19.727 [log] [GUIDE] says nothing (nothing to fix: every joint is seen all through the stroke; the strokes are just short (a form problem, the Coach's job))
+19:21:19.838 [log] [DEBUG] [METRIC] shoulderPress value=83.9236 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:20.241 [log] [DEBUG] [METRIC] shoulderPress value=79.0813 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:20.344 [log] [MOVE-MATCH] score=83 TRYING (motion 100, rhythm 32, range 100, position 100) spread=0.83R onPath=100% period=1.8s cut=none (top 0, bottom 0, frame 0) samples=15 (PLACEHOLDER numbers)
+19:21:20.344 [log] [CONFIDENCE] 100 (the camera sees 100) match=83 counting=yes (PLACEHOLDER numbers)
+19:21:20.631 [log] [DEBUG] [METRIC] shoulderPress value=70.9642 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:21.040 [log] [DEBUG] [METRIC] shoulderPress value=56.0889 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:21.340 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=60 ts_epoch=1795634481
+19:21:21.341 [log] [ATTEMPT] #2 score=100 low=51.3 high=83.9 period=2.8s outcome=missed blocker=bottom-short (enter=50 exit=58)
+19:21:21.432 [log] [DEBUG] [METRIC] shoulderPress value=84.6788 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:21.811 [log] [AWAKE] screen lock re-applied (released and taken again), the screen cannot dim
+19:21:21.840 [log] [DEBUG] [METRIC] shoulderPress value=75.7699 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:21.978 [log] [GUIDE] says "Step back further" because evidence: the camera says "Step back into frame"
+19:21:22.237 [log] [DEBUG] [METRIC] shoulderPress value=75.7219 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:22.378 [log] [CONFIDENCE] 100 (the camera sees 100) match=79 counting=yes (PLACEHOLDER numbers)
+19:21:22.637 [log] [DEBUG] [METRIC] shoulderPress value=81.7022 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:22.638 [log] [ATTEMPT] #3 score=100 low=56.1 high=84.7 period=1.2s outcome=missed blocker=bottom-short (enter=50 exit=58)
+19:21:23.044 [log] [DEBUG] [METRIC] shoulderPress value=82.7618 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:23.395 [log] [MOVE-MATCH] score=77 TRYING (motion 100, rhythm 15, range 94, position 100) spread=0.75R onPath=100% period=1.8s cut=none (top 0, bottom 0, frame 0) samples=22 (PLACEHOLDER numbers)
+19:21:23.432 [log] [DEBUG] [METRIC] shoulderPress value=67.5843 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:23.836 [log] [DEBUG] [METRIC] shoulderPress value=85.5544 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:24.242 [log] [DEBUG] [METRIC] shoulderPress value=77.4934 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:24.337 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=90 ts_epoch=1795634484
+19:21:24.395 [log] [CONFIDENCE] 100 (the camera sees 100) match=78 counting=yes (PLACEHOLDER numbers)
+19:21:24.639 [log] [DEBUG] [METRIC] shoulderPress value=77.5940 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:24.995 [log] [GUIDE] says nothing (nothing to fix: every joint is seen all through the stroke; the strokes are just short (a form problem, the Coach's job))
+19:21:25.031 [log] [DEBUG] [METRIC] shoulderPress value=74.6240 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:25.031 [log] [ATTEMPT] #4 score=81 low=67.6 high=85.6 period=2.4s outcome=missed blocker=bottom-short (enter=50 exit=58)
+19:21:25.031 [log] [ATTEMPT] STUCK 3 attempts in a row / 7s with no rep: blocker=bottom-short -> "Go lower"
+19:21:25.433 [log] [DEBUG] [METRIC] shoulderPress value=77.2927 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:25.849 [log] [DEBUG] [METRIC] shoulderPress value=78.4829 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:26.240 [log] [DEBUG] [METRIC] shoulderPress value=77.6414 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:26.395 [log] [MOVE-MATCH] score=80 TRYING (motion 100, rhythm 39, range 83, position 100) spread=0.67R onPath=100% period=4.0s cut=none (top 0, bottom 0, frame 0) samples=27 (PLACEHOLDER numbers)
+19:21:26.395 [log] [CONFIDENCE] 100 (the camera sees 100) match=80 counting=no (PLACEHOLDER numbers)
+19:21:26.639 [log] [DEBUG] [METRIC] shoulderPress value=78.6428 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:27.037 [log] [DEBUG] [METRIC] shoulderPress value=78.6957 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:27.340 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=120 ts_epoch=1795634487
+19:21:27.432 [log] [DEBUG] [METRIC] shoulderPress value=79.6102 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:27.841 [log] [DEBUG] [METRIC] shoulderPress value=76.6570 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:28.137 [log] [DEBUG] [REP-TRACE] shoulderPress angle=30.0292 repMinAngle=41.1767 framesSincePoseGap=12
+19:21:28.212 [log] [CONFIDENCE] 94 (the camera sees 94) match=77 counting=no (PLACEHOLDER numbers)
+19:21:28.239 [log] [DEBUG] [METRIC] shoulderPress value=49.3601 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:21:28.239 [log] [DEBUG] [REP-TRACE] shoulderPress angle=49.3601 repMinAngle=30.0292 framesSincePoseGap=13
+19:21:28.332 [log] [DEBUG] [REP-TRACE] shoulderPress angle=61.1962 repMinAngle=30.0292 framesSincePoseGap=14
+19:21:28.431 [log] [DEBUG] [REP-TRACE] shoulderPress angle=79.7016 repMinAngle=30.0292 framesSincePoseGap=15
+19:21:28.536 [log] [DEBUG] [REP-TRACE] shoulderPress angle=87.6352 repMinAngle=30.0292 framesSincePoseGap=16
+19:21:28.536 [log] [DEBUG] [UNIV-DBG] rep #2: buffer=131 frames windowStart_epoch=1795634481 repEnd_epoch=1795634489 window=80 frames
+19:21:28.536 [log] [DEBUG] [STD] rep #2 ref: peak=30.0° start=88.5°  (standard: peak≤65.0° start≥65.0°)
+19:21:28.536 [log] [DEBUG] [UNIV] rep #2: CALIBRATING (2/3 good)  range=58.449  dur=7.09s  jerk=3803.76660
+19:21:28.536 [log] [DEBUG] [REP] #2 top=89.4 bottom=30.0 thr=55.0 swing=59.4 ROM=ok cue=GOOD
+19:21:28.537 [log] [DEBUG] [CALIB] rep 2  min=30 max=89.4 range=59.4 dur=7.09s  → COUNTED (rom=OK, cue=GOOD)  [thr in use: enter=50 exit=58 goodROM=55 top=84]
+19:21:28.537 [log] [COACH] CHECK because a rep counted with good form (match 79)
+19:21:28.537 [log] [DEBUG] [REP #2] GOOD ✓  peak=30.0°
+  (no form checks)
+  planarity=PASS  n/a
+  cue=GOOD
+19:21:28.537 [log] [DEBUG] [COMPARE] shoulderPress rep#2  2D=30.0°  boneGated=30.0°  blazePose3D=78.8°  | lElb(z=-0.28 v=1.00) rElb(z=-0.22 v=0.99) lWri(z=-0.41 v=0.98) rWri(z=-0.34 v=0.97) | AV=10ms BP=23ms
+19:21:28.619 [log] [DEBUG] [METRIC] shoulderPress value=82.5594 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:28.829 [log] [CONFIDENCE] 100 (the camera sees 100) match=74 counting=yes (PLACEHOLDER numbers)
+19:21:29.029 [log] [MOVE-MATCH] score=56 TRYING (motion 100, rhythm 15, range 47, position 100) spread=0.37R onPath=100% period=4.8s cut=none (top 0, bottom 0, frame 0) samples=27 (PLACEHOLDER numbers)
+19:21:29.029 [log] [CONFIDENCE] 99 (the camera sees 99) match=56 counting=yes (PLACEHOLDER numbers)
+19:21:29.029 [log] [GUIDE] says nothing (nothing to fix: every joint is seen all through the stroke; the strokes are just short (a form problem, the Coach's job))
+19:21:29.036 [log] [DEBUG] [METRIC] shoulderPress value=81.5499 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:29.247 [log] [MOVE-MATCH] score=67 TRYING (motion 100, rhythm 23, range 55, position 100) spread=0.44R onPath=100% period=4.8s cut=none (top 0, bottom 0, frame 0) samples=27 (PLACEHOLDER numbers)
+19:21:29.247 [log] [CONFIDENCE] 100 (the camera sees 100) match=67 counting=yes (PLACEHOLDER numbers)
+19:21:29.429 [log] [DEBUG] [METRIC] shoulderPress value=56.8068 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:29.838 [log] [DEBUG] [METRIC] shoulderPress value=86.3327 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:30.237 [log] [DEBUG] [METRIC] shoulderPress value=83.8652 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:30.237 [log] [ATTEMPT] #5 score=100 low=30.0 high=82.6 period=5.2s outcome=counted blocker=none (enter=50 exit=58)
+19:21:30.279 [log] [MOVE-MATCH] score=77 TRYING (motion 100, rhythm 36, range 75, position 100) spread=0.60R onPath=100% period=1.3s cut=none (top 0, bottom 0, frame 0) samples=27 (PLACEHOLDER numbers)
+19:21:30.335 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=150 ts_epoch=1795634490
+19:21:30.639 [log] [DEBUG] [METRIC] shoulderPress value=70.8651 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:31.050 [log] [DEBUG] [METRIC] shoulderPress value=77.8017 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:31.279 [log] [MOVE-MATCH] score=66 TRYING (motion 100, rhythm 60, range 47, position 100) spread=0.37R onPath=100% period=6.0s cut=none (top 0, bottom 0, frame 0) samples=27 (PLACEHOLDER numbers)
+19:21:31.279 [log] [CONFIDENCE] 100 (the camera sees 100) match=66 counting=yes (PLACEHOLDER numbers)
+19:21:31.433 [log] [DEBUG] [METRIC] shoulderPress value=84.3759 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:31.433 [log] [ATTEMPT] #6 score=100 low=56.8 high=86.3 period=1.2s outcome=missed blocker=bottom-short (enter=50 exit=58)
+19:21:31.479 [log] [MOVE-MATCH] score=80 TRYING (motion 100, rhythm 69, range 60, position 100) spread=0.48R onPath=100% period=6.0s cut=none (top 0, bottom 0, frame 0) samples=27 (PLACEHOLDER numbers)
+19:21:31.843 [log] [DEBUG] [METRIC] shoulderPress value=79.8134 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:32.258 [log] [DEBUG] [METRIC] shoulderPress value=49.3543 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:21:32.258 [log] [DEBUG] [REP-TRACE] shoulderPress angle=49.3543 repMinAngle=46.0626 framesSincePoseGap=53
+19:21:32.313 [log] [CONFIDENCE] 94 (the camera sees 94) match=82 counting=yes (PLACEHOLDER numbers)
+19:21:32.339 [log] [DEBUG] [REP-TRACE] shoulderPress angle=65.4002 repMinAngle=46.0626 framesSincePoseGap=54
+19:21:32.433 [log] [DEBUG] [REP-TRACE] shoulderPress angle=75.8477 repMinAngle=46.0626 framesSincePoseGap=55
+19:21:32.540 [log] [DEBUG] [REP-TRACE] shoulderPress angle=88.0272 repMinAngle=46.0626 framesSincePoseGap=56
+19:21:32.540 [log] [DEBUG] [UNIV-DBG] rep #3: buffer=171 frames windowStart_epoch=1795634485 repEnd_epoch=1795634493 window=79 frames
+19:21:32.540 [log] [DEBUG] [STD] rep #3 ref: peak=46.1° start=89.6°  (standard: peak≤65.0° start≥65.0°)
+19:21:32.540 [log] [DEBUG] [UNIV] rep #3: CALIBRATING (3/3 good)  range=43.549  dur=0.69s  jerk=14450.46924
+19:21:32.540 [log] [DEBUG] [UNIV] ─── BASELINE SET ───
+19:21:32.540 [log] [DEBUG] [UNIV] range=51.874  dur=2.83s  jerk=15006.83015
+19:21:32.540 [log] [DEBUG] [UNIV] anchors: none
+19:21:32.540 [log] [DEBUG] [STD] ─── BASELINE vs STANDARD ('shoulderPress') ───
+19:21:32.541 [log] [DEBUG] [STD] avg peak=37.3° (standard: ≤65.0°)  avg start=88.6° (standard: ≥65.0°)
+19:21:32.541 [log] [DEBUG] [STD] peak ROM ✓ (37.3° ≤ 65.0°)
+19:21:32.541 [log] [DEBUG] [STD] start position ✓ (88.6° ≥ 65.0°)
+19:21:32.541 [log] [DEBUG] [STD] baseline meets standard ✓ — relative (Layer 1) signals are the active floor
+19:21:32.541 [log] [DEBUG] [STD] ⚠ verify these numbers on-device before trusting cues (reviewed=false)
+19:21:32.541 [log] [DEBUG] [UNIV] flagging begins next rep
+19:21:32.541 [log] [DEBUG] [REP] #3 top=89.6 bottom=46.1 thr=55.0 swing=43.5 ROM=ok cue=GOOD
+19:21:32.541 [log] [DEBUG] [CALIB] rep 3  min=46.1 max=89.6 range=43.5 dur=0.69s  → COUNTED (rom=OK, cue=GOOD)  [thr in use: enter=50 exit=58 goodROM=55 top=84]
+19:21:32.541 [log] [COACH] CHECK because a rep counted with good form (match 85)
+19:21:32.542 [log] [DEBUG] [REP #3] GOOD ✓  peak=46.1°
+  (no form checks)
+  planarity=PASS  n/a
+  cue=GOOD
+19:21:32.542 [log] [DEBUG] [COMPARE] shoulderPress rep#3  2D=46.1°  boneGated=46.1°  blazePose3D=74.4°  | lElb(z=-0.20 v=1.00) rElb(z=-0.16 v=1.00) lWri(z=-0.31 v=0.99) rWri(z=-0.24 v=0.98) | AV=11ms BP=23ms
+19:21:32.624 [log] [DEBUG] [METRIC] shoulderPress value=85.0334 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:32.730 [log] [CONFIDENCE] 100 (the camera sees 100) match=80 counting=yes (PLACEHOLDER numbers)
+19:21:33.039 [log] [DEBUG] [METRIC] shoulderPress value=78.2547 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:33.039 [log] [ATTEMPT] #7 score=71 low=70.9 high=84.4 period=1.6s outcome=counted blocker=none (enter=50 exit=58)
+19:21:33.130 [log] [GUIDE] says nothing (nothing to fix: every joint is seen all through the stroke; the strokes are just short (a form problem, the Coach's job))
+19:21:33.342 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=180 ts_epoch=1795634493
+19:21:33.430 [log] [DEBUG] [METRIC] shoulderPress value=61.3370 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:33.632 [log] [DEBUG] [REP-TRACE] shoulderPress angle=33.9822 repMinAngle=48.1190 framesSincePoseGap=67
+19:21:33.733 [log] [DEBUG] [REP-TRACE] shoulderPress angle=39.3343 repMinAngle=33.9822 framesSincePoseGap=68
+19:21:33.746 [log] [MOVE-MATCH] score=97 TRYING (motion 100, rhythm 88, range 100, position 100) spread=1.08R onPath=100% period=5.5s cut=none (top 0, bottom 0, frame 0) samples=30 (PLACEHOLDER numbers)
+19:21:33.746 [log] [CONFIDENCE] 94 (the camera sees 94) match=97 counting=yes (PLACEHOLDER numbers)
+19:21:33.834 [log] [DEBUG] [METRIC] shoulderPress value=53.8955 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:21:33.835 [log] [DEBUG] [REP-TRACE] shoulderPress angle=53.8955 repMinAngle=33.9822 framesSincePoseGap=69
+19:21:33.934 [log] [DEBUG] [REP-TRACE] shoulderPress angle=72.4103 repMinAngle=33.9822 framesSincePoseGap=70
+19:21:33.948 [log] [CONFIDENCE] 96 (the camera sees 96) match=98 counting=yes (PLACEHOLDER numbers)
+19:21:34.032 [log] [DEBUG] [REP-TRACE] shoulderPress angle=79.3163 repMinAngle=33.9822 framesSincePoseGap=71
+19:21:34.137 [log] [DEBUG] [REP-TRACE] shoulderPress angle=88.9358 repMinAngle=33.9822 framesSincePoseGap=72
+19:21:34.137 [log] [DEBUG] [UNIV-DBG] rep #4: buffer=187 frames windowStart_epoch=1795634487 repEnd_epoch=1795634494 window=70 frames
+19:21:34.137 [log] [DEBUG] [UNIV] rep #4 | range=55.630 baseline=51.874 ratio=1.07
+19:21:34.137 [log] [DEBUG] [UNIV] rep #4 | dur=2.29s baseline=2.83s ratio=0.81
+19:21:34.138 [log] [DEBUG] [UNIV] rep #4 | jerk=11237.62740 baseline=15006.83015 ratio=0.75
+19:21:34.138 [log] [DEBUG] [UNIV] rep #4 | symmetry L=118.8° R=146.3° diff=19%
+19:21:34.138 [log] [DEBUG] [UNIV] rep #4 | anchors stable
+19:21:34.138 [log] [DEBUG] [UNIV] rep #4 | → CONSISTENT ✓
+19:21:34.138 [log] [DEBUG] [REP] #4 top=89.6 bottom=34.0 thr=55.0 swing=55.6 ROM=ok cue=GOOD
+19:21:34.138 [log] [DEBUG] [CALIB] rep 4  min=34 max=89.6 range=55.6 dur=2.29s  → COUNTED (rom=OK, cue=GOOD)  [thr in use: enter=50 exit=58 goodROM=55 top=84]
+19:21:34.138 [log] [COACH] CHECK because a rep counted with good form (match 98)
+19:21:34.138 [log] [DEBUG] [REP #4] GOOD ✓  peak=34.0°
+  (no form checks)
+  planarity=PASS  n/a
+  cue=GOOD
+19:21:34.139 [log] [DEBUG] [COMPARE] shoulderPress rep#4  2D=34.0°  boneGated=34.0°  blazePose3D=79.9°  | lElb(z=-0.24 v=1.00) rElb(z=-0.20 v=1.00) lWri(z=-0.35 v=0.99) rWri(z=-0.27 v=0.97) | AV=9ms BP=22ms
+19:21:34.181 [log] [CONFIDENCE] 97 (the camera sees 97) match=100 counting=yes (PLACEHOLDER numbers)
+19:21:34.221 [log] [DEBUG] [METRIC] shoulderPress value=85.2799 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:34.397 [log] [CONFIDENCE] 100 (the camera sees 100) match=98 counting=yes (PLACEHOLDER numbers)
+19:21:34.638 [log] [DEBUG] [METRIC] shoulderPress value=83.0631 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:35.046 [log] [DEBUG] [METRIC] shoulderPress value=63.8548 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:35.433 [log] [DEBUG] [METRIC] shoulderPress value=85.9624 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:35.840 [log] [DEBUG] [METRIC] shoulderPress value=87.7009 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:35.840 [log] [ATTEMPT] #8 score=100 low=39.3 high=85.3 period=2.8s outcome=counted blocker=none (enter=50 exit=58)
+19:21:36.244 [log] [DEBUG] [METRIC] shoulderPress value=57.2109 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:36.339 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=210 ts_epoch=1795634496
+19:21:36.447 [log] [CONFIDENCE] 100 (the camera sees 100) match=100 counting=yes (PLACEHOLDER numbers)
+19:21:36.642 [log] [DEBUG] [METRIC] shoulderPress value=89.7734 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:36.814 [log] [AWAKE] screen lock re-applied (released and taken again), the screen cannot dim
+19:21:36.864 [log] [MOVE-MATCH] score=100 TRYING (motion 100, rhythm 100, range 100, position 100) spread=0.88R onPath=100% period=5.5s cut=none (top 0, bottom 0, frame 0) samples=31 (PLACEHOLDER numbers)
+19:21:37.050 [log] [DEBUG] [METRIC] shoulderPress value=87.7724 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:37.050 [log] [ATTEMPT] #9 score=95 low=63.9 high=87.7 period=1.2s outcome=missed blocker=bottom-short (enter=50 exit=58)
+19:21:37.264 [log] [GUIDE] says nothing (nothing to fix: every joint is seen all through the stroke; the strokes are just short (a form problem, the Coach's job))
+19:21:37.434 [log] [DEBUG] [METRIC] shoulderPress value=55.9205 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:37.843 [log] [DEBUG] [METRIC] shoulderPress value=87.9098 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:38.254 [log] [DEBUG] [METRIC] shoulderPress value=84.2047 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:38.254 [log] [ATTEMPT] #10 score=100 low=57.2 high=89.8 period=1.2s outcome=missed blocker=bottom-short (enter=50 exit=58)
+19:21:38.481 [log] [CONFIDENCE] 100 (the camera sees 100) match=92 counting=yes (PLACEHOLDER numbers)
+19:21:38.638 [log] [DEBUG] [METRIC] shoulderPress value=57.4119 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:39.045 [log] [DEBUG] [METRIC] shoulderPress value=85.2075 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:39.346 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=240 ts_epoch=1795634499
+19:21:39.346 [log] [ATTEMPT] #11 score=100 low=55.9 high=87.9 period=1.2s outcome=missed blocker=bottom-short (enter=50 exit=58)
+19:21:39.346 [log] [ATTEMPT] STUCK 3 attempts in a row / 5s with no rep: blocker=bottom-short -> "Go lower"
+19:21:39.438 [log] [DEBUG] [METRIC] shoulderPress value=86.2065 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:39.844 [log] [DEBUG] [METRIC] shoulderPress value=50.3397 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:39.914 [log] [MOVE-MATCH] score=94 TRYING (motion 100, rhythm 77, range 100, position 100) spread=0.96R onPath=100% period=1.3s cut=none (top 0, bottom 0, frame 0) samples=29 (PLACEHOLDER numbers)
+19:21:40.246 [log] [DEBUG] [METRIC] shoulderPress value=82.6312 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:40.531 [log] [CONFIDENCE] 100 (the camera sees 100) match=94 counting=yes (PLACEHOLDER numbers)
+19:21:40.646 [log] [DEBUG] [METRIC] shoulderPress value=88.0829 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:40.646 [log] [ATTEMPT] #12 score=100 low=57.4 high=86.2 period=1.2s outcome=missed blocker=bottom-short (enter=50 exit=58)
+19:21:40.646 [log] [ATTEMPT] STUCK 4 attempts in a row / 6s with no rep: blocker=bottom-short -> "Go lower"
+19:21:41.049 [log] [DEBUG] [METRIC] shoulderPress value=40.6234 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:41.141 [log] [DEBUG] [REP-TRACE] shoulderPress angle=23.8722 repMinAngle=40.6234 framesSincePoseGap=105
+19:21:41.243 [log] [DEBUG] [REP-TRACE] shoulderPress angle=38.7700 repMinAngle=23.8722 framesSincePoseGap=105
+19:21:41.331 [log] [CONFIDENCE] 94 (the camera sees 94) match=97 counting=no (PLACEHOLDER numbers)
+19:21:41.331 [log] [GUIDE] says nothing (nothing to fix: every joint is seen all through the stroke; the strokes are just short (a form problem, the Coach's job))
+19:21:41.345 [log] [DEBUG] [REP-TRACE] shoulderPress angle=61.2301 repMinAngle=23.8722 framesSincePoseGap=105
+19:21:41.436 [log] [DEBUG] [METRIC] shoulderPress value=76.3840 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:21:41.436 [log] [DEBUG] [REP-TRACE] shoulderPress angle=76.3840 repMinAngle=23.8722 framesSincePoseGap=105
+19:21:41.539 [log] [DEBUG] [REP-TRACE] shoulderPress angle=85.3053 repMinAngle=23.8722 framesSincePoseGap=105
+19:21:41.539 [log] [DEBUG] [UNIV-DBG] rep #5: buffer=261 frames windowStart_epoch=1795634494 repEnd_epoch=1795634502 window=70 frames
+19:21:41.539 [log] [DEBUG] [UNIV] rep #5 | range=65.901 baseline=51.874 ratio=1.27
+19:21:41.539 [log] [DEBUG] [UNIV] rep #5 | dur=4.79s baseline=2.83s ratio=1.70 ← OFF
+19:21:41.539 [log] [DEBUG] [UNIV] rep #5 | jerk=8796.96659 baseline=15006.83015 ratio=0.59
+19:21:41.539 [log] [DEBUG] [UNIV] rep #5 | symmetry n/a (low confidence)
+19:21:41.539 [log] [DEBUG] [UNIV] rep #5 | anchors stable
+19:21:41.540 [log] [DEBUG] [UNIV] rep #5 | → SLOWING — rep slower than your baseline
+19:21:41.540 [log] [DEBUG] [REP] #5 top=89.8 bottom=23.9 thr=55.0 swing=65.9 ROM=ok cue=GOOD
+19:21:41.540 [log] [DEBUG] [CALIB] rep 5  min=23.9 max=89.8 range=65.9 dur=4.79s  → COUNTED (rom=OK, cue=GOOD)  [thr in use: enter=50 exit=58 goodROM=55 top=84]
+19:21:41.540 [log] [COACH] CHECK because a rep counted with good form (match 98)
+19:21:41.540 [log] [DEBUG] [REP #5] GOOD ✓  peak=23.9°
+  (no form checks)
+  planarity=PASS  n/a
+  cue=GOOD
+19:21:41.540 [log] [DEBUG] [COMPARE] shoulderPress rep#5  2D=23.9°  boneGated=23.9°  blazePose3D=76.0°  | lElb(z=-0.24 v=1.00) rElb(z=-0.17 v=1.00) lWri(z=-0.34 v=0.99) rWri(z=-0.30 v=0.99) | AV=10ms BP=22ms
+19:21:41.828 [log] [DEBUG] [METRIC] shoulderPress value=85.8417 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:41.828 [log] [ATTEMPT] #13 score=100 low=50.3 high=88.1 period=1.2s outcome=counted blocker=none (enter=50 exit=58)
+19:21:41.948 [log] [CONFIDENCE] 100 (the camera sees 100) match=97 counting=yes (PLACEHOLDER numbers)
+19:21:42.241 [log] [DEBUG] [METRIC] shoulderPress value=66.8523 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:42.337 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=270 ts_epoch=1795634502
+19:21:42.632 [log] [DEBUG] [METRIC] shoulderPress value=78.4858 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:42.998 [log] [MOVE-MATCH] score=98 TRYING (motion 100, rhythm 93, range 100, position 100) spread=1.00R onPath=100% period=2.5s cut=none (top 0, bottom 0, frame 0) samples=30 (PLACEHOLDER numbers)
+19:21:43.046 [log] [DEBUG] [METRIC] shoulderPress value=84.5465 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:43.046 [log] [ATTEMPT] #14 score=100 low=38.8 high=85.8 period=1.2s outcome=missed blocker=none (enter=50 exit=58)
+19:21:43.439 [log] [DEBUG] [METRIC] shoulderPress value=88.8867 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:43.842 [log] [DEBUG] [METRIC] shoulderPress value=61.2103 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:43.998 [log] [CONFIDENCE] 100 (the camera sees 100) match=98 counting=yes (PLACEHOLDER numbers)
+19:21:44.248 [log] [DEBUG] [METRIC] shoulderPress value=85.1204 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:44.636 [log] [DEBUG] [METRIC] shoulderPress value=85.4243 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:44.636 [log] [ATTEMPT] #15 score=91 low=66.9 high=88.9 period=1.6s outcome=missed blocker=bottom-short (enter=50 exit=58)
+19:21:45.044 [log] [DEBUG] [METRIC] shoulderPress value=55.0114 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:45.244 [log] [DEBUG] [REP-TRACE] shoulderPress angle=31.0757 repMinAngle=37.0326 framesSincePoseGap=105
+19:21:45.348 [log] [DEBUG] [REP-TRACE] shoulderPress angle=47.3085 repMinAngle=31.0757 framesSincePoseGap=105
+19:21:45.348 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=300 ts_epoch=1795634505
+19:21:45.399 [log] [CONFIDENCE] 94 (the camera sees 94) match=98 counting=yes (PLACEHOLDER numbers)
+19:21:45.399 [log] [GUIDE] says nothing (nothing to fix: every joint is seen all through the stroke; the strokes are just short (a form problem, the Coach's job))
+19:21:45.439 [log] [DEBUG] [METRIC] shoulderPress value=64.6019 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:21:45.439 [log] [DEBUG] [REP-TRACE] shoulderPress angle=64.6019 repMinAngle=31.0757 framesSincePoseGap=105
+19:21:45.539 [log] [DEBUG] [REP-TRACE] shoulderPress angle=78.5440 repMinAngle=31.0757 framesSincePoseGap=105
+19:21:45.644 [log] [DEBUG] [REP-TRACE] shoulderPress angle=89.7286 repMinAngle=31.0757 framesSincePoseGap=105
+19:21:45.645 [log] [ATTEMPT] #16 score=96 low=61.2 high=85.4 period=1.2s outcome=missed blocker=bottom-short (enter=50 exit=58)
+19:21:45.645 [log] [ATTEMPT] STUCK 3 attempts in a row / 4s with no rep: blocker=bottom-short -> "Go lower"
+19:21:45.645 [log] [DEBUG] [UNIV-DBG] rep #6: buffer=302 frames windowStart_epoch=1795634499 repEnd_epoch=1795634506 window=70 frames
+19:21:45.645 [log] [DEBUG] [UNIV] rep #6 | range=65.251 baseline=51.874 ratio=1.26
+19:21:45.645 [log] [DEBUG] [UNIV] rep #6 | dur=5.20s baseline=2.83s ratio=1.84 ← OFF
+19:21:45.645 [log] [DEBUG] [UNIV] rep #6 | jerk=9212.76549 baseline=15006.83015 ratio=0.61
+19:21:45.645 [log] [DEBUG] [UNIV] rep #6 | symmetry L=120.7° R=148.5° diff=19%
+19:21:45.645 [log] [DEBUG] [UNIV] rep #6 | anchors stable
+19:21:45.645 [log] [DEBUG] [UNIV] rep #6 | → SLOWING — rep slower than your baseline
+19:21:45.645 [log] [DEBUG] [REP] #6 top=89.8 bottom=31.1 thr=55.0 swing=58.7 ROM=ok cue=GOOD
+19:21:45.645 [log] [DEBUG] [CALIB] rep 6  min=31.1 max=89.8 range=58.7 dur=5.20s  → COUNTED (rom=OK, cue=GOOD)  [thr in use: enter=50 exit=58 goodROM=55 top=84]
+19:21:45.646 [log] [COACH] CHECK because a rep counted with good form (match 99)
+19:21:45.646 [log] [DEBUG] [REP #6] GOOD ✓  peak=31.1°
+  (no form checks)
+  planarity=PASS  n/a
+  cue=GOOD
+19:21:45.646 [log] [DEBUG] [COMPARE] shoulderPress rep#6  2D=31.1°  boneGated=31.1°  blazePose3D=71.0°  | lElb(z=-0.23 v=1.00) rElb(z=-0.17 v=0.99) lWri(z=-0.35 v=0.99) rWri(z=-0.27 v=0.98) | AV=11ms BP=25ms
+19:21:45.831 [log] [DEBUG] [METRIC] shoulderPress value=85.1644 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:46.015 [log] [MOVE-MATCH] score=95 TRYING (motion 100, rhythm 82, range 100, position 100) spread=1.00R onPath=100% period=1.3s cut=none (top 0, bottom 0, frame 0) samples=30 (PLACEHOLDER numbers)
+19:21:46.015 [log] [CONFIDENCE] 100 (the camera sees 100) match=95 counting=yes (PLACEHOLDER numbers)
+19:21:46.241 [log] [DEBUG] [METRIC] shoulderPress value=85.2278 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:46.643 [log] [DEBUG] [METRIC] shoulderPress value=71.9737 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top
+19:21:47.039 [log] [DEBUG] [METRIC] shoulderPress value=22.6956 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:21:47.040 [log] [DEBUG] [REP-TRACE] shoulderPress angle=22.6956 repMinAngle=43.3966 framesSincePoseGap=105
+19:21:47.136 [log] [DEBUG] [REP-TRACE] shoulderPress angle=7.4313 repMinAngle=22.6956 framesSincePoseGap=105
+19:21:47.216 [log] [MOVE-MATCH] score=80 TRYING (motion 100, rhythm 20, range 100, position 99) spread=0.94R onPath=98% period=6.0s cut=none (top 0, bottom 0, frame 0) samples=30 (PLACEHOLDER numbers)
+19:21:47.216 [log] [CONFIDENCE] 94 (the camera sees 94) match=80 counting=yes (PLACEHOLDER numbers)
+19:21:47.244 [log] [DEBUG] [REP-TRACE] shoulderPress angle=4.1469 repMinAngle=7.4313 framesSincePoseGap=105
+19:21:47.244 [log] [ATTEMPT] #17 score=100 low=47.3 high=89.7 period=1.6s outcome=counted blocker=none (enter=50 exit=58)
+19:21:47.343 [log] [DEBUG] [REP-TRACE] shoulderPress angle=1.6531 repMinAngle=4.1469 framesSincePoseGap=105
+19:21:47.416 [log] [CONFIDENCE] 95 (the camera sees 95) match=75 counting=yes (PLACEHOLDER numbers)
+19:21:47.440 [log] [DEBUG] [METRIC] shoulderPress value=2.5670 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:21:47.440 [log] [DEBUG] [REP-TRACE] shoulderPress angle=2.5670 repMinAngle=1.6531 framesSincePoseGap=105
+19:21:47.534 [log] [DEBUG] [REP-TRACE] shoulderPress angle=2.0377 repMinAngle=1.6531 framesSincePoseGap=105
+19:21:47.616 [log] [MOVE-MATCH] score=66 TRYING (motion 100, rhythm 17, range 100, position 96) spread=1.17R onPath=93% period=2.5s cut=none (top 0, bottom 0, frame 0) samples=31 (PLACEHOLDER numbers)
+19:21:47.637 [log] [DEBUG] [REP-TRACE] shoulderPress angle=0.1362 repMinAngle=1.6531 framesSincePoseGap=105
+19:21:47.741 [log] [DEBUG] [REP-TRACE] shoulderPress angle=0.2074 repMinAngle=0.1362 framesSincePoseGap=105
+19:21:47.816 [log] [MOVE-MATCH] score=56 TRYING (motion 100, rhythm 30, range 100, position 95) spread=1.14R onPath=90% period=2.5s cut=none (top 0, bottom 0, frame 0) samples=33 (PLACEHOLDER numbers)
+19:21:47.816 [log] [CONFIDENCE] 100 (the camera sees 100) match=56 counting=yes (PLACEHOLDER numbers)
+19:21:47.844 [log] [DEBUG] [METRIC] shoulderPress value=2.0360 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:21:47.845 [log] [DEBUG] [REP-TRACE] shoulderPress angle=2.0360 repMinAngle=0.1362 framesSincePoseGap=105
+19:21:47.940 [log] [DEBUG] [REP-TRACE] shoulderPress angle=3.7863 repMinAngle=0.1362 framesSincePoseGap=105
+19:21:48.016 [log] [MOVE-MATCH] score=41 unsure (motion 100, rhythm 19, range 100, position 94) spread=1.00R onPath=88% period=2.5s cut=none (top 0, bottom 0, frame 0) samples=33 (PLACEHOLDER numbers)
+19:21:48.038 [log] [DEBUG] [REP-TRACE] shoulderPress angle=5.0178 repMinAngle=0.1362 framesSincePoseGap=105
+19:21:48.144 [log] [DEBUG] [REP-TRACE] shoulderPress angle=6.3079 repMinAngle=0.1362 framesSincePoseGap=105
+19:21:48.243 [log] [DEBUG] [METRIC] shoulderPress value=6.8070 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:21:48.243 [log] [DEBUG] [REP-TRACE] shoulderPress angle=6.8070 repMinAngle=0.1362 framesSincePoseGap=105
+19:21:48.339 [log] [DEBUG] [REP-TRACE] shoulderPress angle=3.7024 repMinAngle=0.1362 framesSincePoseGap=105
+19:21:48.339 [log] [DEBUG] [UNIV-DBG] ingestFrame called, total frames buffered=330 ts_epoch=1795634508
+19:21:48.435 [log] [DEBUG] [REP-TRACE] shoulderPress angle=2.3811 repMinAngle=0.1362 framesSincePoseGap=105
+19:21:48.542 [log] [DEBUG] [REP-TRACE] shoulderPress angle=1.5205 repMinAngle=0.1362 framesSincePoseGap=105
+19:21:48.646 [log] [DEBUG] [METRIC] shoulderPress value=0.3705 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:21:48.646 [log] [DEBUG] [REP-TRACE] shoulderPress angle=0.3705 repMinAngle=0.1362 framesSincePoseGap=105
+19:21:49.043 [log] [DEBUG] [METRIC] shoulderPress value=6.3644 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=down phase=inRep
+19:21:49.043 [log] [DEBUG] [REP-TRACE] shoulderPress angle=6.3644 repMinAngle=0.1362 framesSincePoseGap=1
+19:21:49.141 [log] [DEBUG] [REP-TRACE] shoulderPress angle=3.4508 repMinAngle=0.1362 framesSincePoseGap=2
+19:21:49.216 [log] [CONFIDENCE] 90 (reps are counting, so 90+ (the camera sees 46)) match=40 counting=yes (PLACEHOLDER numbers)
+19:21:49.416 [log] [GUIDE] says nothing (evidence: the camera says "Step back into frame")
+19:21:49.616 [log] [GUIDE] says "Step back further" because evidence: the camera says "Step back into frame"
+19:21:49.944 [log] [DEBUG] [ACTIVITY] rep abandoned — person left frame (5 consecutive missing frames)
+19:21:51.083 [log] [MOVE-MATCH] score=40 unsure (motion 100, rhythm 0, range 100, position 66) spread=1.28R onPath=73% period=2.8s cut=none (top 0, bottom 1, frame 0) samples=31 (PLACEHOLDER numbers)
+19:21:51.300 [log] [CONFIDENCE] 90 (reps are counting, so 90+ (the camera sees 5)) match=40 counting=yes (PLACEHOLDER numbers)
+19:21:51.820 [log] [AWAKE] screen lock re-applied (released and taken again), the screen cannot dim
+19:21:52.159 [log] [POST-LAG] +0ms START Stop pressed (formcheck)
+19:21:52.255 [log] [POST-LAG] +96ms (d96ms) formcheck: native stopTracking returned (recording finished)
+19:21:52.255 [log] [VIDEO] stop: camera returned a clip (athlt_1795634475.mov), 37s tracked
+19:21:52.257 [log] [warm:recap] prefetched before navigation (solo)
+19:21:52.257 [log] [SESSION-LOG] 311 lines kept quietly for this set (6 reps, 6 good), no review screen
+19:21:52.257 [log] [POST-LAG] +98ms (d2ms) formcheck: navigating to the next screen
+19:21:52.257 [log] [warm:recap] prefetched before navigation (solo)
+19:21:52.263 [log] [warm:recap] injecting data (epoch 0)
+19:21:52.276 [log] [recap-debug] repEvents exerciseId= shoulderPress
+19:21:52.276 [log] [recap-debug] repEvent 0 good= true reason= "GOOD" -> what= "Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."
+19:21:52.276 [log] [recap-debug] repEvent 1 good= true reason= "GOOD" -> what= "Same full press again. Keep your body still and press it all the way up like that."
+19:21:52.276 [log] [recap-debug] repEvent 2 good= true reason= "GOOD" -> what= "That's the one. Straight arms overhead, no lean. Stay right there."
+19:21:52.276 [log] [recap-debug] repEvent 3 good= true reason= "GOOD" -> what= "Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."
+19:21:52.276 [log] [recap-debug] repEvent 4 good= true reason= "GOOD" -> what= "Same full press again. Keep your body still and press it all the way up like that."
+19:21:52.276 [log] [recap-debug] repEvent 5 good= true reason= "GOOD" -> what= "That's the one. Straight arms overhead, no lean. Stay right there."
+19:21:52.284 [log] [BRIGHTNESS] expo-brightness is NOT in this build: the flash cannot raise the brightness (old build)
+19:21:52.284 [log] [recap-debug] RecapScreen MOUNTED
+19:21:52.285 [log] [POST-LAG] +125ms (d27ms) recap: screen mounted (first render done)
+19:21:52.293 [log] [warm:recap] activated, waiting for ready (card not shown yet)
+19:21:52.294 [log] [POST-LAG] +135ms (d10ms) recap: mounting the All sets page (idle)
+19:21:52.300 [log] [SESSION-WRITE] source=recap-camera entries=1 new=1 :: Shoulder Press x6
+19:21:52.300 [log] [recap-debug] videoPlayer statusChange: loading
+19:21:52.319 [log] [POST-LAG] +160ms (d25ms) formcheck: camera teardown finished in the background (63ms, no longer blocks navigation)
+19:21:52.426 [log] [recap-debug] videoPlayer statusChange: readyToPlay
+19:21:52.429 [log] [recap-debug] videoPlayer playingChange: true currentTime= 0 duration= 36.84
+19:21:52.430 [log] [warm:recap:page] [recap-page] injected JS running, HAS_VIDEO= true
+19:21:52.430 [log] [warm:recap:page] [recap-page] sizeWired applied, ovLabel= true ovBody= true
+19:21:52.441 [log] [warm:recap] ready
+19:21:52.442 [log] [recap-debug] onMessage: ready current view= summary effectiveView= summary
+19:21:52.444 [log] [warm:recap] fade IN (220ms, no sideways motion)
+19:21:52.446 [log] [warm:recap] VISIBLE 165ms after the screen asked for it
+19:21:52.446 [log] [POST-LAG] +287ms (d127ms) recap page VISIBLE (165ms after the screen asked)
+19:21:52.457 [log] [recap] all-sets thumbnail OK at 2.202s in 170ms 640x1137
+19:21:52.603 [log] [warm:repfeedback] warm (epoch 0)
+19:21:52.605 [log] [warm:repfeedback] injecting data (epoch 0)
+19:21:52.607 [log] [warm:allsets] warm (epoch 0)
+19:21:52.613 [log] [warm:allsets] injecting data (epoch 0)
+19:21:52.615 [log] [warm:repfeedback:page] [rep-feedback-page] injected JS running, HAS_VIDEO= true reps= 6
+19:21:52.615 [log] [warm:repfeedback:page] [rep-feedback-page] old controls wiring: speedBtn= true fullscreenBtn= true
+19:21:52.615 [log] [warm:repfeedback:page] [rep-feedback-page] bodyEl found via sparkle-icon selector: true
+19:21:52.615 [log] [warm:repfeedback:page] [rep-feedback-page] track fillEl found= true thumbEl found= true
+19:21:52.615 [log] [warm:repfeedback:page] [rep-feedback-page] prev button found and wired
+19:21:52.615 [log] [warm:repfeedback:page] [rep-feedback-page] next button found and wired
+19:21:52.616 [log] [warm:repfeedback:page] [rep-feedback-page] card play/pause button found and wired
+19:21:52.616 [log] [warm:repfeedback:page] [rep-feedback-page] show(0) -> idx=0 rep= {"timeSec":2.202,"good":true,"what":"Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."} bodyEl found= true bodyEl.textContent after set= "Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."
+19:21:52.616 [log] [warm:repfeedback:page] [rep-feedback-page] ready, posting to RN
+19:21:52.616 [log] [warm:repfeedback] ready
+19:21:52.616 [log] [warm:repfeedback:page] [rep-feedback-page] card rect (immediate): {"x":-0.9312795996665955,"y":559.1943359375,"width":403.862548828125,"height":314.8056640625,"top":559.1943359375,"bottom":874} display= block visibility= visible opacity= 1 zIndex= 4 transform= none
+19:21:52.616 [log] [warm:repfeedback:page] [rep-feedback-page] bodyEl rect (immediate): {"x":19.779621124267578,"y":673.104248046875,"width":362.44073486328125,"height":90.0924072265625} text= "Arms fully overhead, steady. You pressed your arms straight "
+19:21:52.619 [log] [warm:allsets] ready
+19:21:52.662 [log] [warm:repfeedback:page] [rep-feedback-page] prev button found and wired
+19:21:52.912 [log] [warm:repfeedback:page] [rep-feedback-page] card rect (+300ms): {"x":-0.9312795996665955,"y":559.1943359375,"width":403.862548828125,"height":314.8056640625,"top":559.1943359375,"bottom":874} display= block visibility= visible opacity= 1 zIndex= 4 transform= none
+19:21:52.912 [log] [warm:repfeedback:page] [rep-feedback-page] bodyEl rect (+300ms): {"x":19.779621124267578,"y":673.104248046875,"width":362.44073486328125,"height":90.0924072265625} text= "Arms fully overhead, steady. You pressed your arms straight "
+19:21:57.578 [log] [recap-debug] onMessage: viewRepFeedback current view= summary effectiveView= summary
+19:21:57.579 [log] [recap-debug] router.push(/rep-feedback)
+19:21:57.625 [log] [rep-feedback-debug] parsed reps from route param: [{"timeSec":2.202,"good":true,"what":"Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."},{"timeSec":13.193,"good":true,"what":"Same full press again. Keep your body still and press it all the way up like that."},{"timeSec":17.198,"good":true,"what":"That's the one. Straight arms overhead, no lean. Stay right there."},{"timeSec":18.794,"good":true,"what":"Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."},{"timeSec":26.196,"good":true,"what":"Same full press again. Keep your body still and press it all the way up like that."},{"timeSec":30.302,"good":true,"what":"That's the one. Straight arms overhead, no lean. Stay right there."}]
+19:21:57.633 [log] [rep-feedback-debug] MOUNT, params: {"exerciseName":"Shoulder Press","videoUri":"file:///private/var/mobile/Containers/Data/Application/21A729A3-2DE5-462C-B480-DDDF69AD467A/tmp/athlt_1795634475.mov","repEventsLen":752}
+19:21:57.634 [log] [POST-LAG] +5474ms (d5187ms) rep feedback: screen mounted
+19:21:57.645 [log] [warm:repfeedback] fade IN (220ms, no sideways motion)
+19:21:57.648 [log] [warm:repfeedback] VISIBLE 16ms after the screen asked for it
+19:21:57.648 [log] [POST-LAG] +5489ms (d15ms) repfeedback page VISIBLE (17ms after the screen asked)
+19:21:57.655 [log] [recap-debug] videoPlayer playingChange: false currentTime= 5.18210775 duration= 36.84
+19:21:57.703 [log] [rep-feedback-debug] videoPlayer statusChange: readyToPlay
+19:21:57.707 [log] [warm:repfeedback:page] [rep-feedback-page] real duration received: 36.84
+19:21:57.711 [log] [rep-feedback-debug] videoPlayer playingChange: true currentTime= 0 duration= 36.84
+19:22:02.380 [log] [warm:repfeedback:page] [rep-feedback-page] NEXT tapped, idx before= 0
+19:22:02.380 [log] [warm:repfeedback:page] [rep-feedback-page] show(1) -> idx=1 rep= {"timeSec":13.193,"good":true,"what":"Same full press again. Keep your body still and press it all the way up like that."} bodyEl found= true bodyEl.textContent after set= "Same full press again. Keep your body still and press it all the way up like that."
+19:22:02.380 [log] [rep-feedback-debug] onMessage: seek
+19:22:02.381 [log] [rep-feedback-debug] seek message received, timeSec= 13.193 - videoPlayer.currentTime immediately after = 4.665238333
+19:22:02.708 [log] [warm:repfeedback:page] [rep-feedback-page] NEXT tapped, idx before= 1
+19:22:02.708 [log] [warm:repfeedback:page] [rep-feedback-page] show(2) -> idx=2 rep= {"timeSec":17.198,"good":true,"what":"That's the one. Straight arms overhead, no lean. Stay right there."} bodyEl found= true bodyEl.textContent after set= "That's the one. Straight arms overhead, no lean. Stay right there."
+19:22:02.709 [log] [rep-feedback-debug] onMessage: seek
+19:22:02.709 [log] [rep-feedback-debug] seek message received, timeSec= 17.198 - videoPlayer.currentTime immediately after = 13.506799208
+19:22:03.660 [log] [warm:repfeedback:page] [rep-feedback-page] show(3) -> idx=3 rep= {"timeSec":18.794,"good":true,"what":"Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."} bodyEl found= true bodyEl.textContent after set= "Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."
+19:22:03.661 [log] [rep-feedback-debug] onMessage: seek
+19:22:03.662 [log] [rep-feedback-debug] seek message received, timeSec= 18.794 - videoPlayer.currentTime immediately after = 18.134798041
+19:22:04.135 [log] [warm:repfeedback:page] [rep-feedback-page] show(4) -> idx=4 rep= {"timeSec":26.196,"good":true,"what":"Same full press again. Keep your body still and press it all the way up like that."} bodyEl found= true bodyEl.textContent after set= "Same full press again. Keep your body still and press it all the way up like that."
+19:22:04.135 [log] [rep-feedback-debug] onMessage: seek
+19:22:04.136 [log] [rep-feedback-debug] seek message received, timeSec= 26.196 - videoPlayer.currentTime immediately after = 19.253733041
+19:22:05.298 [log] [rep-feedback-debug] onMessage: openAllSets
+19:22:05.327 [log] [rep-feedback-debug] UNMOUNT
+19:22:05.343 [log] [warm:recap] hidden -> parked off-screen, opacity 0, behind navigator
+19:22:05.345 [log] [warm:repfeedback] slide OUT -> parked off-screen, opacity 0, behind navigator
+19:22:05.351 [log] [warm:allsets] fade IN (220ms, no sideways motion)
+19:22:05.355 [log] [warm:allsets] VISIBLE 12ms after the screen asked for it
+19:22:05.355 [log] [POST-LAG] +13196ms (d7707ms) allsets page VISIBLE (13ms after the screen asked)
+19:22:05.358 [log] [recap-debug] onMessage: tileRect current view= allsets effectiveView= allsets
+19:22:05.915 [log] [warm:repfeedback] warm (epoch 1)
+19:22:12.544 [log] [recap-debug] onMessage: closeAllSets current view= allsets effectiveView= allsets
+19:22:12.544 [log] [POST-LAG] +20385ms (d7189ms) recap: All sets back -> returning to the rep feedback
+19:22:12.545 [log] [recap-debug] onMessage: viewRepFeedback current view= allsets effectiveView= allsets
+19:22:12.545 [log] [recap-debug] router.push(/rep-feedback)
+19:22:12.591 [log] [rep-feedback-debug] parsed reps from route param: [{"timeSec":2.202,"good":true,"what":"Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."},{"timeSec":13.193,"good":true,"what":"Same full press again. Keep your body still and press it all the way up like that."},{"timeSec":17.198,"good":true,"what":"That's the one. Straight arms overhead, no lean. Stay right there."},{"timeSec":18.794,"good":true,"what":"Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."},{"timeSec":26.196,"good":true,"what":"Same full press again. Keep your body still and press it all the way up like that."},{"timeSec":30.302,"good":true,"what":"That's the one. Straight arms overhead, no lean. Stay right there."}]
+19:22:12.603 [log] [warm:recap] fade IN (220ms, no sideways motion)
+19:22:12.606 [log] [warm:allsets] slide OUT -> parked off-screen, opacity 0, behind navigator
+19:22:12.610 [log] [rep-feedback-debug] MOUNT, params: {"exerciseName":"Shoulder Press","videoUri":"file:///private/var/mobile/Containers/Data/Application/21A729A3-2DE5-462C-B480-DDDF69AD467A/tmp/athlt_1795634475.mov","repEventsLen":752}
+19:22:12.610 [log] [POST-LAG] +20451ms (d66ms) rep feedback: screen mounted
+19:22:12.613 [log] [warm:recap] VISIBLE 43ms after the screen asked for it
+19:22:12.614 [log] [POST-LAG] +20454ms (d3ms) recap page VISIBLE (43ms after the screen asked)
+19:22:12.629 [log] [warm:repfeedback] injecting data (epoch 1)
+19:22:12.630 [log] [warm:repfeedback] activated, waiting for ready (card not shown yet)
+19:22:12.636 [log] [warm:recap] hidden -> parked off-screen, opacity 0, behind navigator
+19:22:12.640 [log] [recap-debug] videoPlayer playingChange: true currentTime= 5.224145209 duration= 36.84
+19:22:12.641 [log] [recap-debug] videoPlayer playingChange: false currentTime= 5.224145209 duration= 36.84
+19:22:12.654 [log] [rep-feedback-debug] videoPlayer statusChange: readyToPlay
+19:22:12.666 [log] [warm:repfeedback:page] [rep-feedback-page] injected JS running, HAS_VIDEO= true reps= 6
+19:22:12.666 [log] [warm:repfeedback:page] [rep-feedback-page] old controls wiring: speedBtn= true fullscreenBtn= true
+19:22:12.666 [log] [warm:repfeedback:page] [rep-feedback-page] bodyEl found via sparkle-icon selector: true
+19:22:12.666 [log] [warm:repfeedback:page] [rep-feedback-page] track fillEl found= true thumbEl found= true
+19:22:12.666 [log] [warm:repfeedback:page] [rep-feedback-page] prev button found and wired
+19:22:12.667 [log] [warm:repfeedback:page] [rep-feedback-page] next button found and wired
+19:22:12.667 [log] [warm:repfeedback:page] [rep-feedback-page] card play/pause button found and wired
+19:22:12.667 [log] [warm:repfeedback:page] [rep-feedback-page] show(0) -> idx=0 rep= {"timeSec":2.202,"good":true,"what":"Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."} bodyEl found= true bodyEl.textContent after set= "Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."
+19:22:12.667 [log] [warm:repfeedback:page] [rep-feedback-page] ready, posting to RN
+19:22:12.668 [log] [warm:repfeedback] ready
+19:22:12.668 [log] [rep-feedback-debug] onMessage: ready
+19:22:12.668 [log] [warm:repfeedback:page] [rep-feedback-page] card rect (immediate): {"x":-0.9312795996665955,"y":559.1943359375,"width":403.862548828125,"height":314.8056640625,"top":559.1943359375,"bottom":874} display= block visibility= visible opacity= 1 zIndex= 4 transform= none
+19:22:12.668 [log] [warm:repfeedback:page] [rep-feedback-page] bodyEl rect (immediate): {"x":19.779621124267578,"y":673.104248046875,"width":362.44073486328125,"height":90.0924072265625} text= "Arms fully overhead, steady. You pressed your arms straight "
+19:22:12.668 [log] [warm:repfeedback:page] [rep-feedback-page] real duration received: 36.84
+19:22:12.674 [log] [warm:repfeedback] fade IN (220ms, no sideways motion)
+19:22:12.675 [log] [warm:repfeedback] VISIBLE 73ms after the screen asked for it
+19:22:12.676 [log] [POST-LAG] +20516ms (d62ms) repfeedback page VISIBLE (73ms after the screen asked)
+19:22:12.682 [log] [rep-feedback-debug] videoPlayer playingChange: true currentTime= 0.015314458 duration= 36.84
+19:22:12.685 [log] [warm:repfeedback:page] [rep-feedback-page] real duration received: 36.84
+19:22:12.705 [log] [warm:repfeedback:page] [rep-feedback-page] prev button found and wired
+19:22:12.956 [log] [warm:repfeedback:page] [rep-feedback-page] card rect (+300ms): {"x":-0.9312795996665955,"y":559.1943359375,"width":403.862548828125,"height":314.8056640625,"top":559.1943359375,"bottom":874} display= block visibility= visible opacity= 1 zIndex= 4 transform= none
+19:22:12.957 [log] [warm:repfeedback:page] [rep-feedback-page] bodyEl rect (+300ms): {"x":19.779621124267578,"y":673.104248046875,"width":362.44073486328125,"height":90.0924072265625} text= "Arms fully overhead, steady. You pressed your arms straight "
+19:22:39.670 [log] [warm:repfeedback:page] [rep-feedback-page] show(1) -> idx=1 rep= {"timeSec":13.193,"good":true,"what":"Same full press again. Keep your body still and press it all the way up like that."} bodyEl found= true bodyEl.textContent after set= "Same full press again. Keep your body still and press it all the way up like that."
+19:22:39.671 [log] [rep-feedback-debug] onMessage: seek
+19:22:39.672 [log] [rep-feedback-debug] seek message received, timeSec= 13.193 - videoPlayer.currentTime immediately after = 27.004224792
+19:22:40.183 [log] [warm:repfeedback:page] [rep-feedback-page] show(2) -> idx=2 rep= {"timeSec":17.198,"good":true,"what":"That's the one. Straight arms overhead, no lean. Stay right there."} bodyEl found= true bodyEl.textContent after set= "That's the one. Straight arms overhead, no lean. Stay right there."
+19:22:40.183 [log] [rep-feedback-debug] onMessage: seek
+19:22:40.183 [log] [rep-feedback-debug] seek message received, timeSec= 17.198 - videoPlayer.currentTime immediately after = 13.68955
+19:22:40.782 [log] [warm:repfeedback:page] [rep-feedback-page] show(3) -> idx=3 rep= {"timeSec":18.794,"good":true,"what":"Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."} bodyEl found= true bodyEl.textContent after set= "Arms fully overhead, steady. You pressed your arms straight up above your head without leaning your body."
+19:22:40.783 [log] [rep-feedback-debug] onMessage: seek
+19:22:40.784 [log] [rep-feedback-debug] seek message received, timeSec= 18.794 - videoPlayer.currentTime immediately after = 17.782149208
+19:22:42.884 [log] [warm:repfeedback:page] [rep-feedback-page] show(4) -> idx=4 rep= {"timeSec":26.196,"good":true,"what":"Same full press again. Keep your body still and press it all the way up like that."} bodyEl found= true bodyEl.textContent after set= "Same full press again. Keep your body still and press it all the way up like that."
+19:22:42.884 [log] [rep-feedback-debug] onMessage: seek
+19:22:42.885 [log] [rep-feedback-debug] seek message received, timeSec= 26.196 - videoPlayer.currentTime immediately after = 20.880564917
+19:22:43.601 [log] [warm:repfeedback:page] [rep-feedback-page] show(5) -> idx=5 rep= {"timeSec":30.302,"good":true,"what":"That's the one. Straight arms overhead, no lean. Stay right there."} bodyEl found= true bodyEl.textContent after set= "That's the one. Straight arms overhead, no lean. Stay right there."
+19:22:43.601 [log] [rep-feedback-debug] onMessage: seek
+19:22:43.603 [log] [rep-feedback-debug] seek message received, timeSec= 30.302 - videoPlayer.currentTime immediately after = 26.897931667
+19:22:44.669 [log] [rep-feedback-debug] onMessage: finishReview
+19:22:44.669 [log] [POST-LAG] +52510ms (d31994ms) rep feedback: Finish review tapped
+19:22:44.694 [log] [DONE] shown: "Form check complete" | Shoulder Press: 6 reps, 100% clean.
+19:22:50.170 [log] [rep-feedback-debug] videoPlayer playingChange: false currentTime= 0 duration= 36.84
+19:22:50.184 [log] [rep-feedback-debug] videoPlayer playingChange: true currentTime= 0 duration= 36.84
+19:23:27.049 [log] [rep-feedback-debug] videoPlayer playingChange: false currentTime= 0 duration= 36.84
+19:23:27.056 [log] [rep-feedback-debug] videoPlayer playingChange: true currentTime= 0 duration= 36.84
+19:23:28.308 [log] [LEAVE] form check Continue: warm pages hidden at once, stack popped to the tabs, no flash
+19:23:28.325 [log] [warm:repfeedback] slide OUT -> parked off-screen, opacity 0, behind navigator
+19:23:28.325 [log] [warm:repfeedback] hidden INSTANTLY (leaving for good, no fade)
+19:23:28.355 [log] [recap-debug] RecapScreen UNMOUNTED
+19:23:28.356 [log] [rep-feedback-debug] UNMOUNT
+19:23:28.357 [log] [TAB-LAG] profile shown again 149408ms after the tap | page already visible: yes
+19:23:28.539 [log] [warm:recap] warm (epoch 1)
+19:23:28.614 [log] [DONE] spare page loaded and ready
+19:23:41.467 [log] [TAB-LAG] home shown again 28ms after the tap | page already visible: yes
+19:23:43.459 [log] [TAB-LAG] profile shown again 21ms after the tap | page already visible: yes
+19:23:46.403 [log] [TRAIN] unmounted
+19:26:37.277 [log] [TRIAL-REMINDER] expo-notifications is not in this build: no reminder can be asked for or scheduled (needs the new iOS build)
+19:27:32.067 [log] [TRIAL-REMINDER] not scheduled: expo-notifications is not in this build (needs the new iOS build)
+19:27:32.090 [log] [TABS] layout mounted, tabs: index, train, plus, progress, profile | inactive tabs detached natively (web views stay loaded)
+19:27:32.152 [log] [TRAIN] mounted train-4
+19:27:32.152 [log] [TRAIN] html file: name traintab.html | md5 6e71acbc | uri ?unstable_path=.%2Fassets%2Fapp%20screens/traintab.html?platform=ios&hash=6e71acbc518f4149c049ed6b4eb39908
+19:27:32.153 [log] [TAB-LAG] progress mounted (data prefetch starts now)
+19:27:32.154 [log] [TAB-LAG] profile mounted (data prefetch starts now)
+19:27:32.184 [log] [TRAIN] rendered; container 402x874
+19:27:32.211 [log] [TAB-LAG] progress data ready 58ms after mount (before the tab was shown)
+19:27:32.286 [log] [TAB-LAG] profile data ready 133ms after mount (before the tab was shown)
+19:27:33.040 [log] [THUMB] clip already gone, cannot keep it 1793562362803
+19:27:33.042 [log] [THUMB] clip already gone, cannot keep it 1793565085549
+19:27:33.044 [log] [THUMB] clip already gone, cannot keep it 1793649685649
+19:27:33.046 [log] [THUMB] clip already gone, cannot keep it 1793651336103
+19:27:33.047 [log] [THUMB] clip already gone, cannot keep it 1793721086555
+19:27:33.049 [log] [THUMB] clip already gone, cannot keep it 1793721137332
+19:27:33.050 [log] [THUMB] clip already gone, cannot keep it 1793723526676
+19:27:33.052 [log] [THUMB] clip already gone, cannot keep it 1793723568725
+19:27:33.053 [log] [THUMB] clip already gone, cannot keep it 1793724307566
+19:27:33.055 [log] [THUMB] clip already gone, cannot keep it 1793744661268
+19:27:33.056 [log] [THUMB] clip already gone, cannot keep it 1793919900492
+19:27:33.058 [log] [THUMB] clip already gone, cannot keep it 1793920145227
+19:27:33.059 [log] [THUMB] clip already gone, cannot keep it 1793921943401
+19:27:33.061 [log] [THUMB] clip already gone, cannot keep it 1793923975496
+19:27:33.062 [log] [THUMB] clip already gone, cannot keep it 1794167843217
+19:27:33.064 [log] [THUMB] clip already gone, cannot keep it 1794349832025
+19:27:33.086 [log] [THUMB] clip file is gone for workout 1794349833313
+19:27:33.090 [log] [THUMB] clip file is gone for workout 1793923976716
+19:27:33.092 [log] [THUMB] clip file is gone for workout 1793921944474
+19:27:33.095 [log] [THUMB] clip file is gone for workout 1793920145846
+19:27:33.098 [log] [THUMB] clip file is gone for workout 1793919916365
+19:27:33.100 [log] [THUMB] clip file is gone for workout 1793744662253
+19:27:33.103 [log] [THUMB] clip file is gone for workout 1793724308690
+19:27:33.106 [log] [THUMB] clip file is gone for workout 1793723569135
+19:27:33.110 [log] [THUMB] clip file is gone for workout 1793723527690
+19:27:33.112 [log] [THUMB] clip file is gone for workout 1793721138056
+19:27:33.115 [log] [THUMB] clip file is gone for workout 1793721087511
+19:27:33.118 [log] [THUMB] clip file is gone for workout 1793651337215
+19:27:33.121 [log] [THUMB] clip file is gone for workout 1793649742758
+19:27:33.123 [log] [THUMB] clip file is gone for workout 1793565086253
+19:27:33.126 [log] [THUMB] clip file is gone for workout 1793562364013
+19:27:33.843 [log] [THUMB] clip already gone, cannot keep it 1793562362803
+19:27:33.844 [log] [THUMB] clip already gone, cannot keep it 1793565085549
+19:27:33.846 [log] [THUMB] clip already gone, cannot keep it 1793649685649
+19:27:33.847 [log] [THUMB] clip already gone, cannot keep it 1793651336103
+19:27:33.849 [log] [THUMB] clip already gone, cannot keep it 1793721086555
+19:27:33.850 [log] [THUMB] clip already gone, cannot keep it 1793721137332
+19:27:33.852 [log] [THUMB] clip already gone, cannot keep it 1793723526676
+19:27:33.854 [log] [THUMB] clip already gone, cannot keep it 1793723568725
+19:27:33.855 [log] [THUMB] clip already gone, cannot keep it 1793724307566
+19:27:33.858 [log] [THUMB] clip already gone, cannot keep it 1793744661268
+19:27:33.859 [log] [THUMB] clip already gone, cannot keep it 1793919900492
+19:27:33.861 [log] [THUMB] clip already gone, cannot keep it 1793920145227
+19:27:33.862 [log] [THUMB] clip already gone, cannot keep it 1793921943401
+19:27:33.864 [log] [THUMB] clip already gone, cannot keep it 1793923975496
+19:27:33.865 [log] [THUMB] clip already gone, cannot keep it 1794167843217
+19:27:33.867 [log] [THUMB] clip already gone, cannot keep it 1794349832025
+19:27:33.881 [log] [THUMB] no clip logged for workout 1792943478451 | nearest logged clip 1793562362803 is 618884s from it (window: 1792943410s..+5s)
+19:27:33.881 [log] [THUMB] no clip logged for workout 1792943410423 | nearest logged clip 1793562362803 is 618952s from it (window: 1792706594s..+5s)
+19:27:33.881 [log] [THUMB] no clip logged for workout 1792706593536 | nearest logged clip 1793562362803 is 855769s from it (window: 0s..+5s)
+19:27:33.884 [log] [THUMB] clip file is gone for workout 1794349833313
+19:27:33.887 [log] [THUMB] clip file is gone for workout 1793923976716
+19:27:33.890 [log] [THUMB] clip file is gone for workout 1793921944474
+19:27:33.892 [log] [THUMB] clip file is gone for workout 1793920145846
+19:27:33.896 [log] [THUMB] clip file is gone for workout 1793919916365
+19:27:33.898 [log] [THUMB] clip file is gone for workout 1793744662253
+19:27:33.901 [log] [THUMB] clip file is gone for workout 1793724308690
+19:27:33.903 [log] [THUMB] clip file is gone for workout 1793723569135
+19:27:33.906 [log] [THUMB] clip file is gone for workout 1793723527690
+19:27:33.908 [log] [THUMB] clip file is gone for workout 1793721138056
+19:27:33.911 [log] [THUMB] clip file is gone for workout 1793721087511
+19:27:33.914 [log] [THUMB] clip file is gone for workout 1793651337215
+19:27:33.917 [log] [THUMB] clip file is gone for workout 1793649742758
+19:27:33.919 [log] [THUMB] clip file is gone for workout 1793565086253
+19:27:33.922 [log] [THUMB] clip file is gone for workout 1793562364013
+19:27:34.646 [log] [THUMB] clip already gone, cannot keep it 1793562362803
+19:27:34.648 [log] [THUMB] clip already gone, cannot keep it 1793565085549
+19:27:34.650 [log] [THUMB] clip already gone, cannot keep it 1793649685649
+19:27:34.651 [log] [THUMB] clip already gone, cannot keep it 1793651336103
+19:27:34.653 [log] [THUMB] clip already gone, cannot keep it 1793721086555
+19:27:34.654 [log] [THUMB] clip already gone, cannot keep it 1793721137332
+19:27:34.656 [log] [THUMB] clip already gone, cannot keep it 1793723526676
+19:27:34.657 [log] [THUMB] clip already gone, cannot keep it 1793723568725
+19:27:34.659 [log] [THUMB] clip already gone, cannot keep it 1793724307566
+19:27:34.660 [log] [THUMB] clip already gone, cannot keep it 1793744661268
+19:27:34.662 [log] [THUMB] clip already gone, cannot keep it 1793919900492
+19:27:34.663 [log] [THUMB] clip already gone, cannot keep it 1793920145227
+19:27:34.665 [log] [THUMB] clip already gone, cannot keep it 1793921943401
+19:27:34.666 [log] [THUMB] clip already gone, cannot keep it 1793923975496
+19:27:34.668 [log] [THUMB] clip already gone, cannot keep it 1794167843217
+19:27:34.670 [log] [THUMB] clip already gone, cannot keep it 1794349832025
+19:27:34.672 [log] [THUMB] no clip logged for workout 1792943478451 | nearest logged clip 1793562362803 is 618884s from it (window: 1792943410s..+5s)
+19:27:34.672 [log] [THUMB] no clip logged for workout 1792943410423 | nearest logged clip 1793562362803 is 618952s from it (window: 1792706594s..+5s)
+19:27:34.672 [log] [THUMB] no clip logged for workout 1792706593536 | nearest logged clip 1793562362803 is 855769s from it (window: 0s..+5s)
+19:27:34.718 [log] [TRAIN] focused; insets 62 34
+19:27:34.813 [log] [TAB-LAG] home shown again | page already visible: yes
+19:27:34.819 [log] [TRAIN] data loaded: plan 18 workouts | sessions 125
+19:27:34.821 [log] [TRAIN] data pushed to page; today = Upper Body | streak 0 | my workouts 3
+19:27:34.832 [log] [TRAIN] html images: flame ok, 4 photos
+19:27:34.866 [log] [TRAIN] html file: size 450139 chars | fnv e448ea90
+19:27:34.896 [log] [TRAIN] web view load start
+19:27:34.897 [log] [PROFILE] web view load start +2764ms after mount
+19:27:34.937 [log] [TRAIN] page asked for data; sending
+19:27:34.938 [log] [PROFILE] page asked for data; sending
+19:27:35.778 [log] [THUMB] clip already gone, cannot keep it 1793562362803
+19:27:35.780 [log] [THUMB] clip already gone, cannot keep it 1793565085549
+19:27:35.781 [log] [THUMB] clip already gone, cannot keep it 1793649685649
+19:27:35.783 [log] [THUMB] clip already gone, cannot keep it 1793651336103
+19:27:35.784 [log] [THUMB] clip already gone, cannot keep it 1793721086555
+19:27:35.786 [log] [THUMB] clip already gone, cannot keep it 1793721137332
+19:27:35.789 [log] [THUMB] clip already gone, cannot keep it 1793723526676
+19:27:35.790 [log] [THUMB] clip already gone, cannot keep it 1793723568725
+19:27:35.792 [log] [THUMB] clip already gone, cannot keep it 1793724307566
+19:27:35.793 [log] [THUMB] clip already gone, cannot keep it 1793744661268
+19:27:35.795 [log] [THUMB] clip already gone, cannot keep it 1793919900492
+19:27:35.796 [log] [THUMB] clip already gone, cannot keep it 1793920145227
+19:27:35.798 [log] [THUMB] clip already gone, cannot keep it 1793921943401
+19:27:35.799 [log] [THUMB] clip already gone, cannot keep it 1793923975496
+19:27:35.801 [log] [THUMB] clip already gone, cannot keep it 1794167843217
+19:27:35.802 [log] [THUMB] clip already gone, cannot keep it 1794349832025
+19:27:35.806 [log] [TRAIN] web view load end #1
+19:27:35.806 [log] [PROFILE] web view load end
+19:27:35.806 [log] [PROFILE] page ready +3674ms after mount
+19:27:35.806 [log] [TAB-LAG] profile first open: shown -> ready 1027ms | data ready 2493ms BEFORE the tab was shown | page load start +117ms, load end +1027ms, asked for data +158ms, data pushed +159ms, ready +1027ms
+19:27:35.807 [log] [TRAIN] page ready (layout + data + logic all in place, page still)
+19:27:35.807 [log] [TRAIN] page fingerprint: cards=7 quickStart=1 myWorkouts=1 practice=1 oldHero=0 title=Train
+19:27:35.807 [log] [TAB-LAG] progress first open: shown -> ready 1072ms | data ready 2524ms BEFORE the tab was shown | page load start +161ms, load end +1071ms, asked for data +203ms, data pushed +203ms, ready +1072ms
+19:27:35.830 [log] [TAB-LAG] cover lifted 3697ms after the tab bar mounted | all four pages ready: yes
+19:27:35.835 [log] [THUMB] clip file is gone for workout 1794349833313
+19:27:35.838 [log] [THUMB] clip file is gone for workout 1793923976716
+19:27:35.841 [log] [THUMB] clip file is gone for workout 1793921944474
+19:27:35.843 [log] [THUMB] clip file is gone for workout 1793920145846
+19:27:35.846 [log] [THUMB] clip file is gone for workout 1793919916365
+19:27:35.848 [log] [THUMB] clip file is gone for workout 1793744662253
+19:27:35.851 [log] [THUMB] clip file is gone for workout 1793724308690
+19:27:35.854 [log] [THUMB] clip file is gone for workout 1793723569135
+19:27:35.857 [log] [THUMB] clip file is gone for workout 1793723527690
+19:27:35.860 [log] [THUMB] clip file is gone for workout 1793721138056
+19:27:35.862 [log] [THUMB] clip file is gone for workout 1793721087511
+19:27:35.865 [log] [THUMB] clip file is gone for workout 1793651337215
+19:27:35.867 [log] [THUMB] clip file is gone for workout 1793649742758
+19:27:35.870 [log] [THUMB] clip file is gone for workout 1793565086253
+19:27:35.873 [log] [THUMB] clip file is gone for workout 1793562364013
+19:27:36.596 [log] [THUMB] clip already gone, cannot keep it 1793562362803
+19:27:36.598 [log] [THUMB] clip already gone, cannot keep it 1793565085549
+19:27:36.600 [log] [THUMB] clip already gone, cannot keep it 1793649685649
+19:27:36.601 [log] [THUMB] clip already gone, cannot keep it 1793651336103
+19:27:36.603 [log] [THUMB] clip already gone, cannot keep it 1793721086555
+19:27:36.604 [log] [THUMB] clip already gone, cannot keep it 1793721137332
+19:27:36.606 [log] [THUMB] clip already gone, cannot keep it 1793723526676
+19:27:36.608 [log] [THUMB] clip already gone, cannot keep it 1793723568725
+19:27:36.610 [log] [THUMB] clip already gone, cannot keep it 1793724307566
+19:27:36.611 [log] [THUMB] clip already gone, cannot keep it 1793744661268
+19:27:36.613 [log] [THUMB] clip already gone, cannot keep it 1793919900492
+19:27:36.614 [log] [THUMB] clip already gone, cannot keep it 1793920145227
+19:27:36.616 [log] [THUMB] clip already gone, cannot keep it 1793921943401
+19:27:36.617 [log] [THUMB] clip already gone, cannot keep it 1793923975496
+19:27:36.619 [log] [THUMB] clip already gone, cannot keep it 1794167843217
+19:27:36.620 [log] [THUMB] clip already gone, cannot keep it 1794349832025
+19:27:36.622 [log] [THUMB] no clip logged for workout 1792943478451 | nearest logged clip 1793562362803 is 618884s from it (window: 1792943410s..+5s)
+19:27:36.622 [log] [THUMB] no clip logged for workout 1792943410423 | nearest logged clip 1793562362803 is 618952s from it (window: 1792706594s..+5s)
+19:27:36.622 [log] [THUMB] no clip logged for workout 1792706593536 | nearest logged clip 1793562362803 is 855769s from it (window: 0s..+5s)
+19:27:36.625 [log] [THUMB] clip file is gone for workout 1794349833313
+19:27:36.628 [log] [THUMB] clip file is gone for workout 1793923976716
+19:27:36.631 [log] [THUMB] clip file is gone for workout 1793921944474
+19:27:36.634 [log] [THUMB] clip file is gone for workout 1793920145846
+19:27:36.636 [log] [THUMB] clip file is gone for workout 1793919916365
+19:27:36.639 [log] [THUMB] clip file is gone for workout 1793744662253
+19:27:36.642 [log] [THUMB] clip file is gone for workout 1793724308690
+19:27:36.644 [log] [THUMB] clip file is gone for workout 1793723569135
+19:27:36.647 [log] [THUMB] clip file is gone for workout 1793723527690
+19:27:36.650 [log] [THUMB] clip file is gone for workout 1793721138056
+19:27:36.652 [log] [THUMB] clip file is gone for workout 1793721087511
+19:27:36.655 [log] [THUMB] clip file is gone for workout 1793651337215
+19:27:36.658 [log] [THUMB] clip file is gone for workout 1793649742758
+19:27:36.660 [log] [THUMB] clip file is gone for workout 1793565086253
+19:27:36.663 [log] [THUMB] clip file is gone for workout 1793562364013
+19:27:37.384 [log] [THUMB] clip already gone, cannot keep it 1793562362803
+19:27:37.385 [log] [THUMB] clip already gone, cannot keep it 1793565085549
+19:27:37.387 [log] [THUMB] clip already gone, cannot keep it 1793649685649
+19:27:37.389 [log] [THUMB] clip already gone, cannot keep it 1793651336103
+19:27:37.390 [log] [THUMB] clip already gone, cannot keep it 1793721086555
+19:27:37.392 [log] [THUMB] clip already gone, cannot keep it 1793721137332
+19:27:37.393 [log] [THUMB] clip already gone, cannot keep it 1793723526676
+19:27:37.395 [log] [THUMB] clip already gone, cannot keep it 1793723568725
+19:27:37.396 [log] [THUMB] clip already gone, cannot keep it 1793724307566
+19:27:37.398 [log] [THUMB] clip already gone, cannot keep it 1793744661268
+19:27:37.400 [log] [THUMB] clip already gone, cannot keep it 1793919900492
+19:27:37.401 [log] [THUMB] clip already gone, cannot keep it 1793920145227
+19:27:37.403 [log] [THUMB] clip already gone, cannot keep it 1793921943401
+19:27:37.405 [log] [THUMB] clip already gone, cannot keep it 1793923975496
+19:27:37.406 [log] [THUMB] clip already gone, cannot keep it 1794167843217
+19:27:37.408 [log] [THUMB] clip already gone, cannot keep it 1794349832025
+19:27:37.409 [log] [THUMB] no clip logged for workout 1792943478451 | nearest logged clip 1793562362803 is 618884s from it (window: 1792943410s..+5s)
+19:27:37.409 [log] [THUMB] no clip logged for workout 1792943410423 | nearest logged clip 1793562362803 is 618952s from it (window: 1792706594s..+5s)
+19:27:37.410 [log] [THUMB] no clip logged for workout 1792706593536 | nearest logged clip 1793562362803 is 855769s from it (window: 0s..+5s)

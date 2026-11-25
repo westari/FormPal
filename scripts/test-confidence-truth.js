@@ -72,13 +72,13 @@ if (process.env.DBG) {
 
 // 2. confidence
 check('BEFORE really was the bug: it fell below 50 several times and moved 40+ points in a second (this is the log)', steps(bConf) >= 40 && bConf.filter((x, i) => x.v < 50 && (i === 0 || bConf[i - 1].v >= 50)).length >= 2);
-check('AFTER: the number never moves more than 8 points in a second (the slew limit is 6 a second)', steps(meter) <= 8, steps(meter) + ' points');
+check('AFTER: the number never moves more than 14 points in a second (6 a second normally, 12 a second while a camera-problem Guide line is up: it follows the line down, never a cliff)', steps(meter) <= 14, steps(meter) + ' points');
 check('AFTER: standing still in view, the number stays high (90+) the whole time: the camera sees him the whole time (the metric arrived every 0.4 s)', Math.min(...meter.filter((x) => x.t > 3000 && x.t < 62000).map((x) => x.v)) >= 90, 'min ' + Math.min(...meter.filter((x) => x.t > 3000 && x.t < 62000).map((x) => x.v)));
 check('3. AFTER: while reps are counting the number is 90+ (every reading within 7 s of a counted rep)', res.rows.every((r) => !reps.some((e) => r.t >= e.t && r.t - e.t <= 7000) || r.conf.value >= 90), 'min ' + Math.min(...res.rows.filter((r) => reps.some((e) => r.t >= e.t && r.t - e.t <= 7000)).map((r) => r.conf.value)));
 const src = (f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8').split('\r\n').join('\n');
 const fc = src('app/formcheck.tsx'), lt = src('lib/liveTracking.ts');
 check('a hint never sets the number: no cap by a hint on the screen (capMeterTarget unused), no hint penalty in the counter score, no 35 / 55 caps in meterTarget', !fc.includes('capMeterTarget(') && !fc.includes('counter.setFlags') && /void flagVal;/.test(lt) && !/if \(i\.repDiag\) t = 35/.test(lt));
-check('the shown number is slew-limited while tracking (METER_MAX_RATE) and the number and the hint come from the same evidence (the same counter, the same metric stream)', /smoother\.tick\(tgt, now, activeRef\.current \? METER_MAX_RATE : METER_SETUP_RATE\)/.test(fc) && LT.METER_MAX_RATE <= 8);
+check('the shown number is slew-limited while tracking (METER_MAX_RATE, or METER_GUIDE_RATE while a camera-problem Guide line is up) and the number and the hint come from the same evidence (the same counter, the same metric stream)', fc.includes('smoother.tick(tgt, now, activeRef.current ? (guideProblem.current ? METER_GUIDE_RATE : METER_MAX_RATE) : METER_SETUP_RATE)') && LT.METER_MAX_RATE <= 8 && LT.METER_GUIDE_RATE <= 14);
 // the old rule still caps the number if someone brings it back: proof the test sees the difference
 check('(control) the OLD rule, replayed on the same cue periods, WOULD have slammed the number: a 35 cap while the cue is on', cueOn.length > 0 && LT.capMeterTarget(100, null, true) === 35);
 
@@ -91,7 +91,7 @@ check('(control) the OLD rule, replayed on the same cue periods, WOULD have slam
   const drop = r.rows.find((x) => x.t > lostAt && x.meter < 100 - 1) || null;
   const say = r.rows.find((x) => x.t > lostAt && x.guide);
   console.log(`  synthetic: person lost at ${(lostAt / 1000).toFixed(1)} s; the number starts to fall at ${drop ? (drop.t / 1000).toFixed(1) : '-'} s; the Guide speaks at ${say ? (say.t / 1000).toFixed(1) : 'never'} s ("${say ? say.guide : ''}")`);
-  check('a REAL loss of the person: the number falls slowly (never a cliff) and the Guide says why within about 1.5 s of the loss', !!say && say.t - lostAt <= 1700 && steps(r.rows.map((x) => ({ t: x.t, v: x.meter }))) <= 8, say ? ((say.t - lostAt) / 1000).toFixed(1) + ' s' : 'never');
+  check('a REAL loss of the person: the number falls slowly (never a cliff) and the Guide says why within about 1.5 s of the loss', !!say && say.t - lostAt <= 1700 && steps(r.rows.map((x) => ({ t: x.t, v: x.meter }))) <= 14, say ? ((say.t - lostAt) / 1000).toFixed(1) + ' s' : 'never');
   check('...and it says "Back up" (the person was in the picture and is lost), not "Step into view"', !!say && say.guide === GC.GUIDE_LINES.backUp, say && say.guide);
   const back = r.rows.filter((x) => x.t >= lostAt + 6000 + 1800);
   check('...and the line is HIDDEN again within about 1.8 s of the person coming back (the evidence is gone)', back.length > 0 && !back[back.length - 1].guide && back.some((x) => !x.guide), `${back.filter((x) => x.guide).length} of ${back.length} readings after that still showed a line`);

@@ -146,12 +146,10 @@ export default function SaveProgressScreen({
     <View style={[s.root, { paddingTop: topInset }]}>
     <Animated.View style={{ flex: 1, opacity: fade }}>
       <View style={s.headerRow}>
-        <OnbBackButton onPress={() => { Haptics.selectionAsync(); emailMode ? setEmailMode(false) : onBack(); }} />
-        {progress != null && (
-          <View style={{ flex: 1, paddingHorizontal: 12 }}>
-            <View style={s.progTrack}><View style={[s.progFill, { width: `${progress * 100}%` }]} /></View>
-          </View>
-        )}
+        {/* (Ari 2026-11-25) No back button and no progress bar from "building your plan" onward: no going back once the plan is being built. The ONE exception is the
+            e-mail form, which needs a way back to the sign-in choices (that is not going back in the flow). */}
+        {emailMode ? <OnbBackButton onPress={() => { Haptics.selectionAsync(); setEmailMode(false); }} /> : null}
+        <View style={{ flex: 1 }} />
         {/* TEMPORARY dev skip: goes past sign-in without an account. Remove before release. */}
         <Pressable onPress={() => { Haptics.selectionAsync(); onAdvance(); }} hitSlop={12} style={s.skipBtn}>
           <Text style={s.skipTxt}>Skip</Text>

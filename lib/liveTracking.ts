@@ -222,6 +222,12 @@ export const SETUP_NO_PERSON_HINTS = ['Get in frame', 'Get back in frame'];
 /** The lowest the camera number goes while Vision can see a person (Ari 2026-11-22). Near 0 only when nobody is in the picture. */
 export const METER_PERSON_FLOOR = 25;
 
+/** While the Guide is showing a CAMERA-problem line ("Step back further", "Keep your hands in view", ...), the number cannot read high (Ari 2026-11-25: the Guide said
+ *  "Step back further" while the number stayed 99-100). PLACEHOLDER: 55. The Guide and the number come from the same evidence and must agree. */
+export const GUIDE_PROBLEM_CAP = 55;
+export const METER_GUIDE_RATE = 12;   // points a second the number moves while such a line is up (a few seconds to reach the cap, never a cliff). PLACEHOLDER
+export function capForGuide(confidence: number, guideShowsProblem: boolean): number { return guideShowsProblem ? Math.min(confidence, GUIDE_PROBLEM_CAP) : confidence; }
+
 export interface MeterInputs {
   phase: string;                 // formcheck Phase
   isActive: boolean;             // tracking or stopping

@@ -20,4 +20,7 @@ export const repFeedbackSignal: {
   /** Set by recap.tsx while it is mounted: lets "Finish review" switch it to the muscle page right away,
    *  while the rep feedback page is still on screen, instead of waiting for the back transition to finish. */
   onFinishReview: (() => void) | null;
-} = { finishedReview: false, openAllSets: false, onFinishReview: null };
+  /** Set by recap.tsx while mounted. A form check's Continue calls it first: the recap's own native video (it sits behind the warm page) is hidden and paused at once,
+   *  so it cannot flash while the done screen fades away (Ari 2026-11-25: "it flashes the workout complete video screen, then the tab"). */
+  onLeaveNow: (() => void) | null;
+} = { finishedReview: false, openAllSets: false, onFinishReview: null, onLeaveNow: null };

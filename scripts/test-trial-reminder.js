@@ -74,10 +74,11 @@ const silent = () => {};
   const R = require('./lib/paywall-harness.js');
   const br = await chromium.launch();
   for (const s of R.sizes) {
-    const open = async (file) => {
+    const open = async (file, early) => {
       const ctx = await br.newContext({ viewport: { width: s.w, height: s.h - s.top }, deviceScaleFactor: 1 }); const pg = await ctx.newPage();
       await pg.addInitScript('window.ReactNativeWebView={postMessage:function(m){(window.__posts=window.__posts||[]).push(m)}};window.__dcFitBoth=1;window.__dcKeepFx=1;');
       await pg.addInitScript(R.CUE_ORB_JS);
+      if (early) await pg.addInitScript(R.EARLY);
       await pg.goto('file://' + path.resolve(__dirname, '..', 'assets', 'app screens', file + '.html').split(path.sep).join('/'));
       await pg.waitForTimeout(1500); await pg.evaluate(R.DC); return { pg, ctx };
     };
@@ -94,23 +95,25 @@ const silent = () => {};
     check(`${s.n} trial reminder: tapping "Remind me 1 day before" posts remindpick:1`, posts.includes('remindpick:1'), JSON.stringify(posts));
     await t.ctx.close();
 
-    const w = await open('paywallv2'); await w.pg.evaluate(R.TIDY); await w.pg.waitForTimeout(2500);
+    const w = await open('paywallv2', true); await w.pg.evaluate(R.TIDY); await w.pg.waitForTimeout(2500);
     const st = await w.pg.evaluate(() => {
       const late = Array.from(document.querySelectorAll('[data-pw-late]'));
-      const orb = document.querySelector('#dc-root [data-cue-orb-svg] svg');
+      const o = document.querySelector('#dc-root div[style*="hm-orb-breathe"]');
       const scr = document.querySelector('#dc-root [data-scroll]');
-      return { late: late.length, lateOp: late.map((e) => getComputedStyle(e).opacity), orb: !!orb, orbBox: orb ? Math.round(orb.getBoundingClientRect().width) : 0, top: scr.scrollTop };
+      const anims = o ? o.getAnimations({ subtree: true }).filter((x) => x.playState === 'running').map((x) => x.animationName || (x.effect && x.effect.getKeyframes ? 'kf' : '?')) : [];
+      return { late: late.length, lateOp: late.map((e) => getComputedStyle(e).opacity), orb: !!o, orbCss: o ? getComputedStyle(o).backgroundImage : '', anims, top: scr.scrollTop };
     });
-    check(`${s.n} paywall: at the start "as well as" shows and the rows after it are hidden`, st.late === 1 && st.lateOp.every((o) => o === '0') && st.top === 0, JSON.stringify(st));
-    check(`${s.n} paywall: the Cue orb is the shared SVG orb (not the design's own)`, st.orb && st.orbBox > 30, JSON.stringify(st));
+    check(`${s.n} paywall: at the start "as well as" shows and "Improve your rank" and the rows after it are fully hidden`, st.late === 1 && st.lateOp.every((o) => o === '0') && st.top === 0, JSON.stringify(st));
+    check(`${s.n} paywall: the Cue orb has the shared orb rules (the Home tab's) and its animations RUN (breathing, glow, morph), not frozen`, st.orb && st.orbCss === 'none' && st.anims.length >= 3, JSON.stringify(st));
     await w.pg.evaluate('window.__pwAutoScroll()'); await w.pg.waitForTimeout(3500);
     const mid = await w.pg.evaluate(() => ({ top: document.querySelector('#dc-root [data-scroll]').scrollTop, op: getComputedStyle(document.querySelector('[data-pw-late]')).opacity }));
     check(`${s.n} paywall: 3.5 s after it appears nothing has moved yet (it waits about 5 s)`, mid.top === 0 && mid.op === '0', JSON.stringify(mid));
-    const samples = []; for (let k = 0; k < 40; k++) { samples.push(await w.pg.evaluate(() => document.querySelector('#dc-root [data-scroll]').scrollTop)); await w.pg.waitForTimeout(100); }
-    const end = await w.pg.evaluate(() => ({ top: document.querySelector('#dc-root [data-scroll]').scrollTop, max: (() => { const e = document.querySelector('#dc-root [data-scroll]'); return e.scrollHeight - e.clientHeight; })(), op: getComputedStyle(document.querySelector('[data-pw-late]')).opacity }));
-    await w.pg.waitForTimeout(1500);
+    const samples = []; const t0 = Date.now(); for (let k = 0; k < 90; k++) { samples.push([Date.now() - t0, await w.pg.evaluate(() => document.querySelector('#dc-root [data-scroll]').scrollTop)]); await w.pg.waitForTimeout(100); }
     const fin = await w.pg.evaluate(() => { const e = document.querySelector('#dc-root [data-scroll]'); return { top: e.scrollTop, max: e.scrollHeight - e.clientHeight, op: getComputedStyle(document.querySelector('[data-pw-late]')).opacity }; });
-    check(`${s.n} paywall: after about 5 s it scrolls SMOOTHLY (many small steps, not one jump) to the end and the rest is visible`, fin.max > 100 && Math.abs(fin.top - fin.max) <= 2 && fin.op === '1' && samples.filter((v) => v > 0 && v < fin.max).length >= 5, JSON.stringify({ samples, end, fin }));
+    let peak = 0; for (let k = 1; k < samples.length; k++) { const dt = (samples[k][0] - samples[k - 1][0]) / 1000; if (dt > 0) peak = Math.max(peak, Math.abs(samples[k][1] - samples[k - 1][1]) / dt); }
+    const moving = samples.filter((x, k) => k > 0 && x[1] !== samples[k - 1][1]);
+    const movingSec = moving.length ? (moving[moving.length - 1][0] - moving[0][0]) / 1000 : 0;
+    check(`${s.n} paywall: it scrolls SLOWLY and smoothly: the whole move takes about 6 s (${movingSec.toFixed(1)} s), never faster than 110 px a second (peak ${Math.round(peak)}), many small steps`, fin.max > 100 && Math.abs(fin.top - fin.max) <= 2 && fin.op === '1' && movingSec >= 4.5 && peak <= 110 && moving.length >= 30, JSON.stringify({ fin, movingSec, peak, steps: moving.length }));
     await w.ctx.close();
   }
   await br.close();
