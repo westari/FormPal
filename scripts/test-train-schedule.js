@@ -38,7 +38,7 @@ console.log('      4 days, nothing done :', strip);
 // days: Tue 10, Wed 11, Thu 12, Fri 13, Sat 14, Sun 15 (today), Mon 16 (tomorrow)
 check('a planned day you skipped says "Missed" (Tue, Thu, Sat), a plan rest day says "Rest day" (Wed, Fri)', td.days.slice(0, 5).map(label).join() === 'Missed,Rest,Missed,Rest,Missed', strip);
 check('Missed cards are not called "Rest day"', td.days.filter((d) => d.missed || d.tag).every((d) => (d.tag ? d.cta === 'Do it today' : d.name === 'Missed') && !/Rest/.test(d.name)));
-check('today (Sunday) is a plan rest day with workouts missed this week, so Train suggests the missed workout first (round 7), and tomorrow (Monday) is the next plan workout', !td.days[5].rest && td.days[5].tag === 'Missed' && td.days[6].name === 'Full body A', td.days[5].name + ' / ' + td.days[6].name);
+check('today (Sunday) is a plan rest day with workouts missed this week, so Train suggests the missed workout first (round 7), and tomorrow (Monday) is the next plan workout', !td.days[5].rest && td.days[5].tag === undefined && td.days[5].cta === 'Do it today' && td.days[6].name === 'Full body A', td.days[5].name + ' / ' + td.days[6].name);
 check('no two "Rest day" cards in a row anywhere in the strip', td.days.every((d, i) => !(d.name === 'Rest day' && td.days[i + 1] && td.days[i + 1].name === 'Rest day')), strip);
 
 // worked out Tue and Thu: those are Done, the rest as before

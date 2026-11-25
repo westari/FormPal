@@ -183,6 +183,7 @@ export default function RecapScreen() {
   // (i.e. the user came back from rep-feedback and might tap again).
   const navigatingToFeedback = useRef(false);
   const allSetsFromRepFeedback = useRef(false);
+  const startRepRef = useRef(0); // the rep to open the rep feedback on (set when coming back from All sets)
   useFocusEffect(
     useCallback(() => {
       navigatingToFeedback.current = false;
@@ -321,10 +322,12 @@ export default function RecapScreen() {
     showDone({ title: DONE_TITLES.workout, subtitle: line, onContinue: () => setDoneIntro(false) });
   }, [doneIntro, data]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
+    // "All sets" on the rep feedback: this screen shows the All sets page at once, while the rep feedback is still on top (no flash of the summary)
+    repFeedbackSignal.onOpenAllSets = () => { allSetsFromRepFeedback.current = true; setView('allsets'); setFinishing(true); };
     repFeedbackSignal.onFinishReview = () => {
       postLag('recap: finish review -> switching to the muscle page'); setView('ranks'); setFinishing(true);
     };
-    return () => { repFeedbackSignal.onFinishReview = null; };
+    return () => { repFeedbackSignal.onFinishReview = null; repFeedbackSignal.onOpenAllSets = null; };
   }, []);
 
   // VIDEO — real native AVPlayer via expo-video, positioned full-screen
@@ -817,8 +820,10 @@ export default function RecapScreen() {
           videoUri: data.videoUri ?? '',
           repEvents: JSON.stringify(repEvents),
           practice: isPractice ? '1' : '',
+          startRep: String(startRepRef.current),
         },
       } as any);
+      startRepRef.current = 0; // (only the way back from All sets opens on a later rep)
     }
     else if ((msg as any).type === 'tileRect') { const m = msg as any; setTileRect(m.none ? null : { l: m.l, t: m.t, w: m.w, h: m.h, vt: m.vt, vb: m.vb }); }
     else if ((msg as any).type === 'openSet') onWebMsg.current({ type: 'viewRepFeedback' });
@@ -826,7 +831,7 @@ export default function RecapScreen() {
     else if (msg.type === 'closeAllSets') {
       setView('summary');
       // opened from the rep feedback ("All sets" there): Back goes BACK to the rep feedback, where he was, not to the complete screen
-      if (allSetsFromRepFeedback.current) { allSetsFromRepFeedback.current = false; postLag('recap: All sets back -> returning to the rep feedback'); onWebMsg.current({ type: 'viewRepFeedback' }); }
+      if (allSetsFromRepFeedback.current) { allSetsFromRepFeedback.current = false; startRepRef.current = repFeedbackSignal.repIdx; postLag('recap: All sets back -> returning to the rep feedback, rep ' + (startRepRef.current + 1)); onWebMsg.current({ type: 'viewRepFeedback' }); }
     }
     else if (msg.type === 'closeRanks') { if (isLoggedMode) void handleDoneRanks(); else setView('summary'); }
     else if (msg.type === 'doneRanks') void handleDoneRanks();

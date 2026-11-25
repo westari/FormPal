@@ -37,7 +37,15 @@ function muscleFill(lo: string, ink: string): string {
 
 // Inner markup (silhouette + muscle paths) for one side, shared by the single
 // and the side-by-side renderers below.
-function bodyMapParts(tiers: MuscleTiers, side: 'front' | 'back', outlined = false): string {
+export interface MapOpts {
+  /** Create workout: tag every muscle fragment with the group it belongs to (data-grp) so a tap can pick it, and make it clickable */
+  groupOf?: (fragmentId: string) => string | null;
+  /** one dark ink for every outline (the body and each muscle); default the after-workout map's own two blue-greys */
+  ink?: string;
+}
+// THE ONE MUSCLE MAP (round 10): the Progress tab, the after-workout screens and Create workout all draw it with this function (bodyMapSvg / bodyMapPairSvg
+// below are thin wrappers). Create workout passes `groupOf` (its muscles are tappable) and `ink` (dark outlines on everything).
+export function bodyMapParts(tiers: MuscleTiers, side: 'front' | 'back', outlined = false, opts: MapOpts = {}): string {
   const table = side === 'front' ? MUSCLE_MAP_FRONT_PATHS : MUSCLE_MAP_BACK_PATHS;
   // fragment id -> fill colour, for muscles ranked on THIS side
   const fillById: Record<string, string> = {};
@@ -67,15 +75,21 @@ function bodyMapParts(tiers: MuscleTiers, side: 'front' | 'back', outlined = fal
     const fill = fillById[id] ?? NEUTRAL;
     // Outlined figures give every muscle its OWN thin outline too (a soft
     // blue-grey, thinner than the body outline); plain maps keep the white seam.
-    const mStroke = outlined ? MUSCLE_OUTLINE_STROKE : '#ffffff';
+    const mStroke = outlined ? (opts.ink ?? MUSCLE_OUTLINE_STROKE) : '#ffffff';
     const mWidth = outlined ? MUSCLE_OUTLINE_WIDTH : 0.9;
-    const dm = muscleById[id] ? ` data-m="${muscleById[id]}"` : '';
+    const g = opts.groupOf ? opts.groupOf(id) : null;
+    const dm = (muscleById[id] ? ` data-m="${muscleById[id]}"` : '') + (g ? ` data-grp="${g}" style="cursor:pointer"` : '');
     parts.push(`<path d="${table[id]}" fill="${fill}"${dm} stroke="${mStroke}" stroke-width="${mWidth}" stroke-linejoin="round"/>`);
   }
   if (silhouette && outlined) {
-    parts.push(`<path d="${silhouette}" fill="none" stroke="${OUTLINE_STROKE}" stroke-width="${OUTLINE_WIDTH}" stroke-linejoin="round"/>`);
+    parts.push(`<path d="${silhouette}" fill="none" stroke="${opts.ink ?? OUTLINE_STROKE}" stroke-width="${OUTLINE_WIDTH}" stroke-linejoin="round" style="pointer-events:none"/>`);
   }
   return parts.join('');
+}
+
+/** Create workout's tappable map: the SAME drawing, outlined, one side. */
+export function bodyMapTappableSvg(side: 'front' | 'back', opts: MapOpts): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${MUSCLE_MAP_VIEWBOX[side]}" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:100%;">${bodyMapParts({}, side, true, opts)}</svg>`;
 }
 
 export function bodyMapSvg(tiers: MuscleTiers, side: 'front' | 'back'): string {

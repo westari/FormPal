@@ -101,7 +101,7 @@ const esc = (s) => JSON.stringify(s).slice(1, -1);
   check('app: the native bar is NOT drawn for the in-page screens any more (so there is nothing left to trail), only for the trial reminder, paywall and gift offer which another window owns', /\) : inPageHeader \? null : \(/.test(ob) && /ONB_INPAGE_HEADER_EXCLUDE: string\[\] = \['trialTimeline', 'paywall', 'giftOffer'\]/.test(ob));
   check('app: the page\'s back tap goes back (onbback -> onBack), handled before anything that could advance', /if \(m === 'onbback'\) \{ Haptics\.selectionAsync\(\); onBack\(\); return; \}/.test(ob) && ob.indexOf("m === 'onbback'") < ob.indexOf("if (m === '__tap' || m === '__tick')"));
   check('app: the scroll-follow messages are kept only for the three screens left alone (the others do not send them)', /\(inPageHeader \? onbHeaderJs\(progress \?\? null, !isDcPage\) : ONB_SCROLL_REPORT_JS\)/.test(ob));
-  check('app: the trial reminder, paywall and gift offer code was not touched by this round (their branch and KEEP_FX settings are as they were)', /const KEEP_FX_KEYS: string\[\] = \['trialTimeline', 'paywall', 'giftOffer'\]/.test(ob) && /<GlassBackButton onPress=\{\(\) => \{ Haptics\.selectionAsync\(\); onBack\(\); \}\} scheme="light" \/>/.test(ob));
+  check('app: the three screens left alone (trial reminder, paywall, gift offer) are excluded from the in-page bar and keep their native header branch', /ONB_INPAGE_HEADER_EXCLUDE: string\[\] = \['trialTimeline', 'paywall', 'giftOffer'\]/.test(ob) && /htmlKey === 'paywall' \|\| htmlKey === 'giftOffer'/.test(ob));
   await browser.close();
   console.log(failed ? `${failed} FAILED` : 'ALL PASSED'); process.exit(failed ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

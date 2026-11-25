@@ -124,8 +124,8 @@ const cardRect = (page) => page.evaluate(() => {
   });
   const seeksAfter = run.msgs.filter(m => m.type === 'seek');
   const b3 = await bar();
-  check('Next rep seeks to rep 2 (11s)', seeksAfter.length === 1 && seeksAfter[0].timeSec === 11, JSON.stringify(seeksAfter.map(s => s.timeSec)));
-  check('bar jumps to rep 2 (11/30 = 36.7%)', parseFloat(b3.fill) === 36.7, JSON.stringify(b3));
+  check('Next rep seeks to rep 2, 1.5s before its counted time (11s - 1.5s = 9.5s, round 10) so the rep plays', seeksAfter.length === 1 && seeksAfter[0].timeSec === 9.5, JSON.stringify(seeksAfter.map(s => s.timeSec)));
+  check('bar jumps to rep 2 (9.5/30 = 31.7%)', parseFloat(b3.fill) === 31.7, JSON.stringify(b3));
 
   // 3. speed menu
   const before = await page.evaluate(() => document.body.children.length);

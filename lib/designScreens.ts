@@ -260,8 +260,8 @@ export const CREATE_WORKOUT_DOM_JS = String.raw`
           // (round 8) the groups are a small tappable body map (the Progress tab's muscle map), front and back: tap a muscle to start from its group
           var gl = grp ? (dd.groupLabels.filter(function (g) { return g.id === grp; })[0] || { label: grp }).label : '';
           var mapCard = '<div style="border-radius:24px;padding:12px 14px 10px;background:#ffffff;box-shadow:0 12px 28px -14px rgba(40,50,90,0.24),0 2px 6px -2px rgba(40,50,90,0.08);">'
-            + '<div data-cw-map="1" style="display:flex;justify-content:center;gap:22px;height:150px;">'
-            + '<div style="width:86px;height:150px;">' + (dd.map ? dd.map.front : '') + '</div><div style="width:86px;height:150px;">' + (dd.map ? dd.map.back : '') + '</div></div>'
+            + '<div data-cw-map="1" style="display:flex;justify-content:center;gap:18px;height:250px;">'
+            + '<div style="width:142px;height:250px;">' + (dd.map ? dd.map.front : '') + '</div><div style="width:142px;height:250px;">' + (dd.map ? dd.map.back : '') + '</div></div>'
             + '<div style="text-align:center;font-size:13px;font-weight:600;color:#6e6e77;padding-top:8px;">' + (grp ? gl + ' selected. Tap it again to clear.' : 'Tap a muscle to start from it') + '</div></div>';
           var rows = shown.map(function (n, i) {
             var on = !!added[n];

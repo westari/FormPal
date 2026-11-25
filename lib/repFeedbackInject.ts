@@ -124,8 +124,11 @@ export function repFeedbackDataJs(opts: {
   exerciseName: string;
   hasVideo: boolean;
   reps: { timeSec: number; what: string }[];
+  /** the rep to open on (0 = the first): coming back from All sets lands on the rep you were on */
+  startIdx?: number;
 }): string {
   const { exerciseName, hasVideo, reps } = opts;
+  const startIdx = Math.max(0, Math.min(Math.max(0, reps.length - 1), Math.floor(opts.startIdx ?? 0)));
   return `
 (function(){
   function post(m){ try{ window.ReactNativeWebView.postMessage(JSON.stringify(m)); }catch(e){} }
@@ -135,6 +138,7 @@ export function repFeedbackDataJs(opts: {
   var HAS_VIDEO = ${JSON.stringify(hasVideo)};
   var PAGE_START = Date.now();
   var idx = 0;
+  var START_IDX = ${startIdx};
   var bgTransparent = false;
   var cardWidened = false;
   var oldControlsWired = false;
@@ -203,10 +207,24 @@ export function repFeedbackDataJs(opts: {
   // actually tracks real playback instead of sitting frozen at whatever
   // rep was last tapped. Ignored mid-drag so it doesn't fight the user's
   // own finger.
+  // BUG FIXED (round 10): "Next rep" near the end of the video made the bar jump BACKWARDS. A seek is asked of the native player and lands a moment later; the
+  // player keeps reporting its OLD time until then, and each of those old times moved the bar back to where it was. After a seek the old times are ignored
+  // until the player reports a time near the target (or 1.2s has passed). Also the seek goes a little BEFORE the rep (the rep time is when it was counted,
+  // i.e. when it ended), and never to the last half second, so the rep plays instead of the clip ending and looping to the start.
+  var REP_LEAD = 1.5, seekTarget = null, seekAt = 0;
   window.__fpSetCurrentTime = function(t){
+    if(seekTarget !== null){
+      if(Math.abs(t - seekTarget) < 1.0 || Date.now() - seekAt > 1200){ seekTarget = null; }
+      else { return; }
+    }
     REAL_CURRENT = t;
     if(!dragging) updateTrackFromCurrentTime();
   };
+  function repSeekTime(i){
+    var t = Math.max(0, REPS[i].timeSec - REP_LEAD);
+    if(REAL_DURATION > 0) t = Math.min(t, Math.max(0, REAL_DURATION - 0.5));
+    return t;
+  }
   function show(i, initial){
     if(REPS.length === 0){
       if(tagEl) tagEl.textContent = 'No reps recorded';
@@ -217,7 +235,13 @@ export function repFeedbackDataJs(opts: {
       return;
     }
     idx = Math.max(0, Math.min(REPS.length - 1, i));
-    if(tagEl) tagEl.textContent = 'Rep ' + (idx + 1);
+    if(tagEl){
+      tagEl.textContent = 'Rep ' + (idx + 1) + ' of ' + REPS.length;
+      // clear and easy to see (round 10): the design's little 22px pill is made a bit bigger
+      var pillEl = tagEl.parentElement;
+      if(pillEl && !pillEl.__big){ pillEl.__big = true; pillEl.style.setProperty('height','30px','important'); pillEl.style.setProperty('padding','0 13px','important'); pillEl.style.setProperty('border-radius','10px','important'); pillEl.style.setProperty('font-size','15px','important'); pillEl.style.setProperty('white-space','nowrap','important'); tagEl.style.setProperty('font-size','15px','important'); tagEl.style.setProperty('letter-spacing','-0.2px','important'); }
+    }
+    post({type:'repShown', idx: idx});
     setBodyText(REPS[idx].what);
     // DIAGNOSTIC — explicit ask: "its stored form result/score, which
     // branch repFeedbackText() picked, and the final text shown" (the
@@ -238,9 +262,10 @@ export function repFeedbackDataJs(opts: {
     // The first show() (page just opened) only fills in rep 1's TEXT — the
     // video and the bar both start at the beginning. Later taps/Next seek.
     if(!initial && REPS[idx]){
-      REAL_CURRENT = REPS[idx].timeSec;
+      var st = repSeekTime(idx);
+      REAL_CURRENT = st; seekTarget = st; seekAt = Date.now();
       updateTrackPosition();
-      post({type:'seek', timeSec: REPS[idx].timeSec});
+      post({type:'seek', timeSec: st});
     }
     // Explicit ask: "say 'next rep' until the final rep, then 'finish
     // review'" — relabeled every time the shown rep changes.
@@ -327,7 +352,7 @@ export function repFeedbackDataJs(opts: {
     var tagCands=document.querySelectorAll('#dc-root div[style*="border-radius: 7px"] span, #dc-root span');
     for(var j=0;j<tagCands.length;j++){
       var tt=(tagCands[j].textContent||'').trim();
-      if(/^Rep \\d+$/i.test(tt) || /^Set \\d+ of \\d+$/i.test(tt)){ tagEl=tagCands[j]; break; }
+      if(/^Rep \\d+( of \\d+)?$/i.test(tt) || /^Set \\d+ of \\d+$/i.test(tt)){ tagEl=tagCands[j]; break; }
     }
     // BUG FOUND (confirmed from device logs this round, not guessed): the
     // style-attribute selector ("padding-top: 12px; font-size: 17px;
@@ -540,7 +565,7 @@ export function repFeedbackDataJs(opts: {
     // bug it guarded against is prevented by fit() itself, and 'ready' is
     // judged from cumulative state so a deferred first apply() can't strand it.
     if(ok && window.__fpFitted && reportChrome() && !readyPosted){
-      show(0, true);
+      show(START_IDX, START_IDX === 0);
       readyPosted = true;
       console.log('[rep-feedback-page] ready, posting to RN');
       post({type:'ready'});

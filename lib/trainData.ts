@@ -174,9 +174,11 @@ export function buildTrainData(
   const missedList = missedThisWeek(plan, groups, now);
   const missedByDay = new Map(missedList.map(m => [keyOf(m.date), m.workout] as const));
   /** a normal workout card for a missed workout: the soft "Missed" tag and the button "Do it today" (starts THAT workout today) */
-  const missedCard = (date: Date, w: Workout): TrainDay => {
+  // A day is only missed AFTER it ends (round 10), so today's own card never says "Missed": when today is a rest day and an earlier day's workout was missed,
+  // today's card suggests that workout (label "Today", button "Do it today"); the "Missed" tag stays on the earlier day's own card.
+  const missedCard = (date: Date, w: Workout, asToday = false): TrainDay => {
     moves[w.splitLabel] = moves[w.splitLabel] ?? plannedRows(w);
-    return { short: SHORT[date.getDay()], name: w.splitLabel, meta: plannedMeta(w), tag: 'Missed', cta: 'Do it today', href: `tr:missed:${w.id}`, restHref: 'tr:none', rows: plannedRows(w), wid: w.id };
+    return { short: SHORT[date.getDay()], name: w.splitLabel, meta: plannedMeta(w), ...(asToday ? {} : { tag: 'Missed' }), cta: 'Do it today', href: `tr:missed:${w.id}`, restHref: 'tr:none', rows: plannedRows(w), wid: w.id };
   };
   const moves: Record<string, [string, string][]> = {};
   const days: TrainDay[] = [];
@@ -196,7 +198,7 @@ export function buildTrainData(
         days.push({ short: SHORT[date.getDay()], name: todayW.splitLabel, meta: plannedMeta(todayW), href: 'tr:start', restHref: 'tr:start', rows: plannedRows(todayW), wid: todayW.id });
       } else if (!todayDone && missedList.length) {
         // a rest day with a workout missed earlier this week: Train suggests the missed workout first (the oldest one)
-        days.push(missedCard(date, missedList[0].workout));
+        days.push(missedCard(date, missedList[0].workout, true));
       } else {
         days.push({ short: SHORT[date.getDay()], name: 'Rest day', meta: cur < 0 ? 'Build a plan to get started' : 'Recover for ' + LONG[tomorrowDate.getDay()], rest: true, href: 'tr:start', restHref: 'tr:start', rows: [] });
       }

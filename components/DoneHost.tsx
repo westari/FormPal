@@ -19,7 +19,7 @@ import { Animated, Easing, StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useDone, hideDone, type DonePayload } from '../lib/doneStore';
 import { DONE_BEFORE_JS, DONE_PREP_JS, doneStartJs, doneLineJs } from '../lib/doneAnimationPage';
-import { hapticSuccess } from '../lib/haptics';
+import { hapticSuccess, hapticMain } from '../lib/haptics';
 
 const DONE_HTML = require('../assets/app screens/greatjobanimation.html');
 export const DONE_HAPTIC_MS = 1950;      // when the title has appeared (the design's title starts at 1830ms and takes 700ms)
@@ -91,7 +91,7 @@ function DoneView({ payload, onSpent }: { payload: Live | null; onSpent: () => v
             if (__DEV__) console.log('[DONE] shown: "' + (p ? p.title : '') + '" | ' + (p ? (typeof p.subtitle === 'string' ? p.subtitle : '(the line fills in when it is ready)') : ''));
             timers.current.push(setTimeout(() => hapticSuccess(), DONE_HAPTIC_MS));
           } else if (m === 'doneContinue') {
-            if (shownRef.current) leave();
+            if (shownRef.current) { hapticMain(); leave(); }   // (round 10) a tap on Continue buzzes, like every main button in the app
           }
         }}
         allowFileAccess

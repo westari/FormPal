@@ -20,4 +20,8 @@ export const repFeedbackSignal: {
   /** Set by recap.tsx while it is mounted: lets "Finish review" switch it to the muscle page right away,
    *  while the rep feedback page is still on screen, instead of waiting for the back transition to finish. */
   onFinishReview: (() => void) | null;
-} = { finishedReview: false, openAllSets: false, onFinishReview: null };
+  /** Set by recap.tsx while it is mounted: "All sets" switches it to the All sets page right away, while the rep feedback page is still on screen. */
+  onOpenAllSets: (() => void) | null;
+  /** The rep the rep feedback was on when All sets was opened, so Back from All sets returns to that rep (not rep 1). */
+  repIdx: number;
+} = { finishedReview: false, openAllSets: false, onFinishReview: null, onOpenAllSets: null, repIdx: 0 };

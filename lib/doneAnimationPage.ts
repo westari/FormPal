@@ -88,6 +88,9 @@ export const DONE_PREP_JS = `(function(){
     // so each bracket still STARTS exactly where the design starts it (left 35+126=161 and 327-126=201, top 360+10=370 and 420-10=410): the same
     // small viewfinder in the middle, unfolding out to the closer corners. (Brackets that start at the old place and end closer never cross or overlap.)
     var START_X = [161, 201, 161, 201], START_Y = [370, 370, 410, 410];
+    // (round 10) The bracket's two ARMS were long: with the brackets this close to the words, the ends reached out and nearly touched the next bracket.
+    // Each arm is shortened (13 -> 6 long); the corner, its curve, the drawing, the animation and every position stay exactly as they were.
+    for (var j = 0; j < 4; j++) { var pth = els.br[j].querySelector('path'); if (pth) pth.setAttribute('d', 'M2 19V13A11 11 0 0 1 13 2h6'); }
     for (var i = 0; i < 4; i++) {
       var b = els.br[i];
       b.style.setProperty('left', pos[i][0] + 'px', 'important'); b.style.setProperty('top', pos[i][1] + 'px', 'important');

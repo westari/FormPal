@@ -74,9 +74,11 @@ export default function RepFeedbackScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const { exerciseName, videoUri, repEvents: repEventsParam, practice } = useLocalSearchParams<{
-    exerciseName?: string; videoUri?: string; repEvents?: string; practice?: string;
+  const { exerciseName, videoUri, repEvents: repEventsParam, practice, startRep } = useLocalSearchParams<{
+    exerciseName?: string; videoUri?: string; repEvents?: string; practice?: string; startRep?: string;
   }>();
+  // the rep shown right now (the page reports it): "All sets" remembers it, and coming back from All sets opens on it (round 10)
+  const currentRep = useRef(Math.max(0, parseInt(startRep ?? '0', 10) || 0));
   const isPractice = practice === '1';
   const leaving = useRef(false);   // Finish / back can only leave ONCE (the 2026-11-15 loop: Finish -> Form check complete -> rep feedback -> ...)
 
@@ -190,7 +192,7 @@ export default function RepFeedbackScreen() {
   // black frame between the screen appearing and the card.
   useLayoutEffect(() => {
     if (!videoUri) return;
-    warmPrepare('repfeedback', repFeedbackDataJs({ exerciseName: exerciseName ?? 'Exercise', hasVideo, reps }));
+    warmPrepare('repfeedback', repFeedbackDataJs({ exerciseName: exerciseName ?? 'Exercise', hasVideo, reps, startIdx: Math.max(0, parseInt(startRep ?? '0', 10) || 0) }));
     warmActivate('repfeedback', { onMessage: (m) => onWebMsg.current(m) });
     // Released a beat later so the card can finish sliding out with the screen.
     return () => { warmDeactivate('repfeedback'); warmRelease('repfeedback', 400); };
@@ -257,7 +259,15 @@ export default function RepFeedbackScreen() {
       if (__DEV__) console.log('[rep-feedback-debug] seek message received, timeSec=', t, '- videoPlayer.currentTime immediately after =', videoPlayer.currentTime);
     }
     else if (msg.type === 'close') router.back();
-    else if (msg.type === 'openAllSets') { repFeedbackSignal.openAllSets = true; router.back(); }
+    else if (msg.type === 'repShown') { currentRep.current = Math.max(0, Number((msg as any).idx) || 0); }
+    else if (msg.type === 'openAllSets') {
+      // The All sets page is put on screen UNDER this one right now (recap.tsx's onOpenAllSets, the same trick as Finish review), then this page
+      // goes: All sets is simply there as this one leaves, no flash of the summary page in between (round 10). It remembers the rep for the way back.
+      repFeedbackSignal.repIdx = currentRep.current;
+      repFeedbackSignal.openAllSets = true;
+      repFeedbackSignal.onOpenAllSets?.();
+      router.back();
+    }
     else if (msg.type === 'finishReview') {
       postLag('rep feedback: Finish review tapped');
       if (leaving.current) return;   // a second tap (or a second message) does nothing
