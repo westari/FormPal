@@ -30,7 +30,8 @@ import { FONT, W, Col, Elev } from '../constants/theme';
 import { computeGoalPlan } from '../lib/onboardingGoals';
 import { hasGiftOfferBeenShown, markGiftOfferShown } from '../lib/giftOffer';
 import { loadPlan } from '../lib/planStorage';
-import { CUE_ORB_JS } from '../lib/cueOrb';
+import { CUE_ORB_JS, cueOrbSvg } from '../lib/cueOrb';
+import { setTrialReminderPick, askTrialReminderPermission, scheduleTrialReminder } from '../lib/trialReminder';
 import type { Plan as PlanT } from '../types/plan';
 // BUG FOUND (device crash, confirmed via the real error overlay — "Cannot
 // find native module 'ExpoCamera'", thrown from a top-level `import {
@@ -1559,10 +1560,17 @@ const KEEP_FX_JS = 'window.__dcKeepFx=1;';
 // Paywall and gift offer (Ari 2026-11-22): (1) the design's own round X chip is hidden (it stayed on screen under the native X: two X buttons), the native
 // glass BACK button replaces it; (2) the page colour continues behind the artboard, so there is no pale strip down both sides when the artboard is scaled
 // to fit a shorter phone. (The feature list scrolling under the faded footer is the design itself, left as it is.)
+// Paywall and gift offer (Ari 2026-11-22 / 25): the design's own X chip is hidden (the standard glass back button replaces it), the page colour continues behind the
+// artboard (no pale strips), and on the PAYWALL: the Cue orb is the shared one (lib/cueOrb.ts), and the feature list does not show everything at once any more.
+// The list is the design's scroll list under a faded footer. It now starts at "as well as" (the rows after it are hidden), and about 5 s after the paywall appears
+// (the app calls window.__pwAutoScroll) the rest fades in while the list scrolls down smoothly by itself. A touch on the list cancels the wait and shows it all.
 const PAYWALL_TIDY_JS = `(function(){
   var st=document.createElement('style');
-  st.textContent='#dc-root a[aria-label="Close"]{visibility:hidden!important;pointer-events:none!important;}';
+  st.textContent='#dc-root a[aria-label="Close"]{visibility:hidden!important;pointer-events:none!important;}'
+    + '#dc-root div[style*="hm-orb-breathe"] > div:not([data-cue-orb-svg]){display:none!important;}'
+    + '#dc-root [data-pw-late]{transition:opacity 450ms ease!important;}';
   (document.head||document.documentElement).appendChild(st);
+  var ORB=${JSON.stringify(cueOrbSvg())};
   var tries=0;
   (function bg(){
     var r=document.getElementById('dc-root'); var d=r&&r.querySelector('div[style*="width: 390px"]');
@@ -1570,6 +1578,63 @@ const PAYWALL_TIDY_JS = `(function(){
     if(b){ var h=document.documentElement.style; h.setProperty('background',b,'important'); h.setProperty('background-repeat','no-repeat','important'); h.setProperty('background-size','100% 100%','important'); h.setProperty('background-attachment','fixed','important'); document.body.style.setProperty('background','transparent','important'); return; }
     if(tries++<40) setTimeout(bg,100);
   })();
+  // the shared Cue orb in place of the design's own (kept re-applied: the page may redraw it)
+  function orb(){
+    var r=document.getElementById('dc-root'); if(!r) return;
+    var os=r.querySelectorAll('div[style*="hm-orb-breathe"]');
+    for(var i=0;i<os.length;i++){ var o=os[i]; if(o.getAttribute('data-cue-orb')) continue; o.setAttribute('data-cue-orb','1');
+      var w=document.createElement('div'); w.setAttribute('data-cue-orb-svg','1'); w.style.cssText='position:absolute;left:-5px;top:-5px;width:44px;height:44px;pointer-events:none;'; w.innerHTML=ORB; o.appendChild(w);
+      var cs=w.firstElementChild; if(cs){ cs.style.width='44px'; cs.style.height='44px'; } }
+  }
+  try{ new MutationObserver(orb).observe(document.documentElement,{childList:true,subtree:true}); }catch(e){}
+  orb();
+  // the list
+  var late=[], shown=false, scr=null, timer=null, auto=false;
+  function findList(){
+    scr=document.querySelector('#dc-root [data-scroll]'); if(!scr) return false;
+    var lab=Array.prototype.find.call(scr.querySelectorAll('div,span'),function(e){ return !e.children.length && (e.textContent||'').trim()==='as well as'; });
+    if(!lab) return false;
+    var row=lab; while(row.parentElement && row.parentElement!==scr) row=row.parentElement;
+    if(!row.parentElement) return false;
+    var sib=row.nextElementSibling; late=[]; while(sib){ late.push(sib); sib=sib.nextElementSibling; }
+    late.forEach(function(e){ e.setAttribute('data-pw-late','1'); if(!shown) e.style.setProperty('opacity','0','important'); });
+    ['touchstart','wheel','mousedown'].forEach(function(ev){ scr.addEventListener(ev,function(){ if(timer){clearTimeout(timer);timer=null;} showLate(); },{passive:true}); });
+    return late.length>0;
+  }
+  function showLate(){ shown=true; late.forEach(function(e){ e.style.removeProperty('opacity'); }); }
+  var lt=0; (function wait(){ if(!findList() && lt++<60) setTimeout(wait,100); })();
+  function ease(t){ return t<0.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2; }
+  window.__pwAutoScroll=function(){
+    if(timer){ clearTimeout(timer); }
+    if(!scr) findList();
+    if(scr){ scr.scrollTop=0; }
+    shown=false; late.forEach(function(e){ e.style.setProperty('opacity','0','important'); });
+    timer=setTimeout(function(){
+      timer=null; if(!scr) return; showLate();
+      var from=scr.scrollTop, to=Math.max(0,scr.scrollHeight-scr.clientHeight), t0=null, dur=1700; auto=true;
+      function step(ts){ if(t0===null) t0=ts; var p=Math.min(1,(ts-t0)/dur); scr.scrollTop=from+(to-from)*ease(p); if(p<1) requestAnimationFrame(step); }
+      requestAnimationFrame(step);
+    },5000);
+  };
+  true;
+})();`;
+
+// Trial reminder (Ari 2026-11-25): the title is just "We'll remind you before your trial ends." (the first line, "You're ready to start training!", is hidden), and the
+// choice is REPORTED to the app ("remindpick:2" / "remindpick:1") so the real notification can be scheduled (lib/trialReminder.ts).
+const TRIAL_TIDY_JS = `(function(){
+  var t=0;
+  (function tidy(){
+    var r=document.getElementById('dc-root'); var done=false;
+    if(r){ var all=r.querySelectorAll('div'); for(var i=0;i<all.length;i++){ var e=all[i]; if(!e.children.length && (e.textContent||'').trim()==='You\\'re ready to start training!'){ e.style.setProperty('display','none','important'); done=true; } } }
+    if(!done && t++<80) setTimeout(tidy,100);
+  })();
+  document.addEventListener('click',function(ev){
+    var el=ev.target;
+    for(var i=0;el && i<8;i++,el=el.parentElement){
+      var m=/^Remind me (\\d) days? before$/.exec((el.textContent||'').trim());
+      if(m){ try{ window.ReactNativeWebView.postMessage('remindpick:'+m[1]); }catch(e){} return; }
+    }
+  },true);
   true;
 })();`;
 
@@ -1662,6 +1727,13 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
   // (round 8) the back button + progress bar are part of the page: when the page scrolls, they scroll away with it (the page reports its scroll, this moves them)
   const headerY = useRef(new Animated.Value(0)).current;
   const webRef = useRef<WebView>(null);
+  // the paywall list scrolls by itself about 5 s after the paywall APPEARS (the page was loaded earlier, hidden, in the pool)
+  useEffect(() => {
+    if (htmlKey !== 'paywall') return;
+    if (inPool && !poolActive) return;
+    const t = setTimeout(() => { webRef.current?.injectJavaScript('window.__pwAutoScroll && window.__pwAutoScroll(); true;'); }, 350);
+    return () => clearTimeout(t);
+  }, [htmlKey, inPool, poolActive]);
   // BUG FOUND (explicit ask: "tell me what's actually causing the white
   // screen"): for standalone (non-pooled) screens, this container used to
   // start at full opacity (1) IMMEDIATELY on mount — painting its own
@@ -1736,6 +1808,8 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isDcPage = DC_PAGE_KEYS.includes(htmlKey);
+  // the strip above the page (under the status bar) is the page's own top colour, not white: the page fills to the top of the screen (Ari 2026-11-25)
+  const pageBg = (htmlKey === 'paywall' || htmlKey === 'giftOffer') ? '#f4f4f7' : '#ffffff';
   const baseInject = isDcPage ? DC_PAGE_INJECT : ONBOARDING_WEB_INJECT;
   // planReady stays width-fit (its info rows scroll). Everything else fits
   // to height too so the whole artboard — CTA + "Replay" / footnote under
@@ -1748,6 +1822,7 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
   const dcExtra =
     htmlKey === 'generatePlan' ? GENERATE_PLAN_INJECT :
     htmlKey === 'paywall' || htmlKey === 'giftOffer' ? ((fitBothKeys.includes(htmlKey) ? FIT_BOTH_INJECT : '') + '\n' + PAYWALL_TIDY_JS) :
+    htmlKey === 'trialTimeline' ? (FIT_BOTH_INJECT + '\n' + TRIAL_TIDY_JS) :
     fitBothKeys.includes(htmlKey) ? FIT_BOTH_INJECT :
     undefined;
   const strengthExtra = htmlKey === 'strengthAssessment' ? STRENGTH_CAPTURE_JS : undefined;
@@ -1757,8 +1832,8 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
       pointerEvents={inPool && !poolActive ? 'none' : 'auto'}
       style={
         inPool
-          ? { ...StyleSheet.absoluteFillObject, backgroundColor: '#ffffff', opacity: containerFade }
-          : { flex: 1, backgroundColor: isDcPage ? '#ffffff' : '#f4f4f2', opacity: containerFade }
+          ? { ...StyleSheet.absoluteFillObject, backgroundColor: pageBg, opacity: containerFade }
+          : { flex: 1, backgroundColor: isDcPage ? pageBg : '#f4f4f2', opacity: containerFade }
       }
     >
       {!isDcPage && <AppBackground />}
@@ -1775,6 +1850,7 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
             if (m.indexOf('onbscroll:') === 0) { headerY.setValue(-Number(m.slice(10)) || 0); return; }
             if (m === '__tap' || m === '__tick') { Haptics.selectionAsync(); return; }
             if (m === 'rendered') { reveal(); return; }
+            if (m.indexOf('remindpick:') === 0) { setTrialReminderPick(Number(m.slice(11))); return; }
             if (m.indexOf('editinfo') === 0) { onEditInfo?.(m.split(':')[1] || 'weight'); return; }
             if (m.indexOf('editvalue:') === 0) {
               const parts = m.split(':');
@@ -1789,7 +1865,7 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             if (m === 'advance' || m === 'skip') onAdvance();
           }}
-          style={{ flex: 1, backgroundColor: isDcPage ? '#ffffff' : 'transparent' }}
+          style={{ flex: 1, backgroundColor: isDcPage ? pageBg : 'transparent' }}
           opaque={isDcPage}
           scrollEnabled
           bounces={isDcPage}
@@ -1825,7 +1901,7 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
           pointerEvents="box-none"
           style={{ position: 'absolute', top: topInset + 12, left: 0, right: 0, zIndex: 80, opacity: backFade, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20 }}
         >
-          <GlassBackButton onPress={() => { Haptics.selectionAsync(); onBack(); }} scheme="light" />
+          <GlassBackButton onPress={() => { Haptics.selectionAsync(); onBack(); }} scheme="standard" />
           {htmlKey === 'paywall' ? (
             <TouchableOpacity
               onPress={() => { Haptics.selectionAsync(); Alert.alert('Restore purchases', 'No previous subscription found on this Apple ID.'); }}
@@ -4419,10 +4495,10 @@ export default function OnboardingScreen() {
           }}
           onAdvance={(from) => {
             if (from === 'planReady') setAppState('saveProgress');
-            else if (from === 'trialTimeline') setAppState('webPaywall');
+            else if (from === 'trialTimeline') { void askTrialReminderPermission(); setAppState('webPaywall'); }
             // from === 'webPaywall' (the paywall's own CTA) — straight into
             // the app now, nothing runs after the paywall any more.
-            else { void finishOnboarding(); }
+            else { void scheduleTrialReminder(); void finishOnboarding(); }
           }}
           onBack={(from) => {
             if (from === 'planReady') setAppState('generatePlan');

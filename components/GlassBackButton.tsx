@@ -8,18 +8,20 @@
 import React from 'react';
 import Svg, { Path } from 'react-native-svg';
 import { LiquidGlassButton } from './LiquidGlass';
+import { STANDARD_GLASS } from './StandardGlass';
 
 export const GLASS_BACK_SIZE = 40;
 export const BACK_ARROW = { d: 'M8.2 1.8 1.8 8.5l6.4 6.7', w: 10, h: 17 };
 
-export default function GlassBackButton({ onPress, scheme = 'light' }: { onPress: () => void; scheme?: 'light' | 'dark' }) {
-  const dark = scheme === 'dark';
+export default function GlassBackButton({ onPress, scheme = 'light' }: { onPress: () => void; /** 'standard' = THE glass standard (components/StandardGlass.tsx: the camera Finish pill's real dark glass, white chevron) */ scheme?: 'light' | 'dark' | 'standard' }) {
+  const standard = scheme === 'standard';
+  const dark = scheme === 'dark' || standard;
   return (
     <LiquidGlassButton
       onPress={onPress}
       radius={GLASS_BACK_SIZE / 2}
-      colorScheme={scheme}
-      fallbackColor={dark ? 'rgba(60,62,72,0.55)' : 'rgba(255,255,255,0.82)'}
+      colorScheme={standard ? STANDARD_GLASS.colorScheme : scheme}
+      fallbackColor={standard ? STANDARD_GLASS.fallbackColor : dark ? 'rgba(60,62,72,0.55)' : 'rgba(255,255,255,0.82)'}
       hitSlop={10}
       accessibilityRole="button"
       accessibilityLabel="Back"
