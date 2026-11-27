@@ -41,7 +41,7 @@ check('native question steps: the back button + progress bar + question are INSI
 check('the Continue button stays at the bottom (outside the scroll), as before', /<\/ScrollView>\s*<View style=\{s\.bn\}>/.test(ob));
 
 // ── scrolls away: web pages ──
-check('web screens (round 10): the header no longer follows the page scroll (that tracking jittered): the back button is native glass and fades away once the page has scrolled, the bar is part of the page', ob.includes('testID="onb-header"') && !ob.includes('translateY: headerY') && ob.includes('opacity: Animated.multiply(backFade, backScroll)') && /onbscroll:/.test(ob));
+check('web screens (round 11): the header does not follow the page scroll and has no animated opacity (real glass): the back button is native glass in a sibling header, hidden once the page has scrolled, the bar is part of the page', ob.includes('testID="onb-header"') && !ob.includes('translateY: headerY') && ob.includes('(noHeader || !headerOn || backHidden) ? null : (') && /onbscroll:/.test(ob));
 check('the scroll message is handled before the haptic/advance fall-through (a scroll can never advance the screen or buzz)', ob.indexOf("m.indexOf('onbscroll:') === 0") > 0 && ob.indexOf("m.indexOf('onbscroll:') === 0") < ob.indexOf("if (m === '__tap' || m === '__tick')"));
 
 (async () => {

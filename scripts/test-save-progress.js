@@ -76,6 +76,7 @@ Module._load = function (r) { if (FAKE[r]) return FAKE[r]; return prev.apply(thi
   check('they sit at the bottom of the screen, with the footer links ("Privacy policy", "Terms of service") under them', m.email.r.b < m.priv.t && m.priv.t > 844 * 0.8 && m.terms.l > m.priv.r && m.terms.t === m.priv.t, JSON.stringify([m.email.r.b, m.priv, m.terms]));
   check('NO back button on the sign-in choices (it is only on the e-mail form), and no progress bar', m.back === undefined && !/BACKBTN/.test(m.txt));
   check('no Google button (Google sign-in is not built, a dead button is worse than none), and the old checkbox sentences are gone', !/Google/.test(m.txt) && !/I agree to FormPal|Send me tips/.test(m.txt));
+  check('round 11: Save your progress has NO back button and NO progress bar in its normal view (from building the plan onward there is no going back); only the e-mail form keeps a back button', read('components/onboarding/SaveProgressScreen.tsx').includes('{emailMode ? <OnbBackButton') && !read('components/onboarding/SaveProgressScreen.tsx').includes('progress != null && ('));
   await browser.close();
   const src = read('components/onboarding/SaveProgressScreen.tsx');
   check('"Last used": the method used is remembered on the phone after a successful sign-in and shown as a small tag on that button', /LAST_SIGNIN_KEY = 'formpal_last_signin'/.test(src) && (src.match(/rememberLast\('(apple|email)'\)/g) || []).length === 2 && /lastUsed === 'apple'/.test(src) && /lastUsed === 'email'/.test(src) && /Last used/.test(src));

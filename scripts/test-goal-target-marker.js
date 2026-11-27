@@ -61,13 +61,13 @@ const WIDTHS = [[390, 844], [360, 740], [430, 932]];
         const E1 = pt(end.x, end.y), D = pt(+dot.getAttribute('cx'), +dot.getAttribute('cy')), TIP = pt(tip.x, tip.y), BASE = pt(nums[0], nums[1]), S0 = pt(start.x, start.y);
         const startDot = circles[0];
         const SD = pt(+startDot.getAttribute('cx'), +startDot.getAttribute('cy'));
-        return { endX: E1.x, endY: E1.y, dotX: D.x, dotY: D.y, tipX: TIP.x, tipY: TIP.y, baseY: BASE.y, startDx: SD.x - S0.x, startDy: SD.y - S0.y,
+        return { dotR: (parseFloat(dot.getAttribute('r')) || 6) * ctm.a, endX: E1.x, endY: E1.y, dotX: D.x, dotY: D.y, tipX: TIP.x, tipY: TIP.y, baseY: BASE.y, startDx: SD.x - S0.x, startDy: SD.y - S0.y,
           badgeL: br.left, badgeR: br.right, badgeB: br.bottom, badgeT: br.top, cardL: card.left, cardR: card.right, cardT: card.top, text: badge.innerText.replace(/\s+/g, ' ').trim(), op: parseFloat(getComputedStyle(badge).opacity), kind: end.y > start.y ? 'down' : 'up' };
       });
       const dd = Math.hypot(m.dotX - m.endX, m.dotY - m.endY);
       const label = `${c.name} @${w}px`;
       check(`${label}: the end dot is exactly on the last point of the line (${dd.toFixed(2)}px)`, dd < 0.6, JSON.stringify({ end: [m.endX, m.endY].map(Math.round), dot: [m.dotX, m.dotY].map(Math.round) }));
-      check(`${label}: the triangle points at the end of the line: its tip is directly above it (same x within 0.6px, a few px above)`, Math.abs(m.tipX - m.endX) < 0.6 && m.endY - m.tipY > 2 && m.endY - m.tipY < 8, JSON.stringify({ tipX: m.tipX, endX: m.endX, up: m.endY - m.tipY }));
+      check(`${label}: the arrow HOVERS above the dot: its tip is directly above the end (same x within 0.6px) and clear of the dot's top edge by 1.5 to 10 px (it does not touch it)`, Math.abs(m.tipX - m.endX) < 0.6 && (m.endY - m.tipY - m.dotR) > 1.5 && (m.endY - m.tipY - m.dotR) < 10, JSON.stringify({ tipX: m.tipX, endX: m.endX, gap: m.endY - m.tipY - m.dotR }));
       check(`${label}: the arrow is ALWAYS in the middle of the TARGET card (card centre = arrow tip within 1px), the card sits right on top of the triangle, and it stays on the screen`, Math.abs(m.badgeB - m.baseY) < 4 && Math.abs((m.badgeL + m.badgeR) / 2 - m.tipX) <= 1 && m.badgeL >= 4 && m.badgeR <= w - 4, JSON.stringify({ badge: [m.badgeL, m.badgeR, m.badgeB].map(Math.round), centre: Math.round((m.badgeL + m.badgeR) / 2), card: [m.cardL, m.cardR].map(Math.round), tipX: Math.round(m.tipX) }));
       check(`${label}: the start dot is on the first point of the line`, Math.hypot(m.startDx, m.startDy) < 0.6);
       check(`${label}: the badge is shown (drawn in after the line) and says TARGET and the goal`, m.op > 0.9 && /TARGET/.test(m.text), m.text + ' op ' + m.op);

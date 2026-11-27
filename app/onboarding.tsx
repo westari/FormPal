@@ -732,6 +732,13 @@ function planReadyInject(a: Record<string, any>): string {
         }
       }
 
+      // NO TARGET (he skipped the goal): the Target card shows a dash, not an empty box (Ari 2026-11-25)
+      var GOAL_BLANK = ${JSON.stringify(goalRow === '')};
+      function dashTarget(){
+        if (!GOAL_BLANK || !badge) return;
+        var ls = badge.querySelectorAll('div,span');
+        for (var q=0;q<ls.length;q++){ if (ls[q].children.length) continue; var tt=(ls[q].textContent||'').trim(); if (tt.indexOf('TARGET')>=0) continue; if (tt !== '–') ls[q].textContent = '–'; }
+      }
       function placeAlong(path, circleEl, atStart){
         if (!path || !circleEl) return null;
         var len = path.getTotalLength();
@@ -750,18 +757,23 @@ function planReadyInject(a: Record<string, any>): string {
       // size can change (resize, web font arriving, every apply pass).
       var endPt = null;
       function placeTarget(){
+        dashTarget();
         if (KIND === 'recomp' || !endPt) return;
         if (badgeTriEl) {
           var tx = endPt.x, ty = endPt.y;
-          badgeTriEl.setAttribute('d', 'M'+(tx-6).toFixed(1)+' '+(ty-14.6).toFixed(1)+' L'+(tx+6).toFixed(1)+' '+(ty-14.6).toFixed(1)+' L'+tx.toFixed(1)+' '+(ty-3.6).toFixed(1)+' Z');
+          // (Ari 2026-11-25) THE ARROW HOVERS just above the dot, it does not touch it: its tip is 4 units above the dot's outer edge (the dot's radius + its stroke)
+          var dotR = (endDot ? (parseFloat(endDot.getAttribute('r')) || 6) + (parseFloat(endDot.getAttribute('stroke-width')) || 2.5) / 2 : 8);
+          var tipY = ty - dotR - 4, baseY = tipY - 11;
+          badgeTriEl.setAttribute('d', 'M'+(tx-6).toFixed(1)+' '+baseY.toFixed(1)+' L'+(tx+6).toFixed(1)+' '+baseY.toFixed(1)+' L'+tx.toFixed(1)+' '+tipY.toFixed(1)+' Z');
           badgeTriEl.style.display = '';
-          badgeTriEl.style.transformOrigin = tx.toFixed(1)+'px '+(ty-9).toFixed(1)+'px';
+          badgeTriEl.style.transformOrigin = tx.toFixed(1)+'px '+((tipY + baseY) / 2).toFixed(1)+'px';
+          endPt.baseY = baseY;
         }
         var host = svg.parentElement;
         if (!badge || !host) return;
         var ctm = svg.getScreenCTM();
         if (!ctm) return;
-        var pp = svg.createSVGPoint(); pp.x = endPt.x; pp.y = endPt.y - 12.6; // the triangle's base line
+        var pp = svg.createSVGPoint(); pp.x = endPt.x; pp.y = (endPt.baseY !== undefined ? endPt.baseY : endPt.y - 12.6); // the triangle's base line
         var q = pp.matrixTransform(ctm);
         var hr = host.getBoundingClientRect();
         var hw = host.offsetWidth || hr.width, k = (hr.width / hw) || 1;   // (the page may be scaled to fit the screen)
@@ -1588,6 +1600,19 @@ const PAYWALL_TIDY_JS = `(function(){
   var st=document.createElement('style');
   st.textContent='#dc-root a[aria-label="Close"]{visibility:hidden!important;pointer-events:none!important;}' + ${JSON.stringify(CUE_ORB_CSS)};
   (document.head||document.documentElement).appendChild(st);
+  // the page's own background also lives on a fixed layer far bigger than the screen, so whatever is drawn beyond the page (an overscroll, the sides on a wide phone) is the
+  // page's colour, never white
+  (function backdrop(){
+    var n=0;
+    (function mk(){
+      var r=document.getElementById('dc-root'); var d=r&&r.querySelector('div[style*="width: 390px"]'); var b=d&&d.style&&d.style.background;
+      if(!b){ if(n++<40) setTimeout(mk,100); return; }
+      if(document.getElementById('__pw_bg')) return;
+      var e=document.createElement('div'); e.id='__pw_bg'; e.style.cssText='position:fixed;left:-600px;right:-600px;top:-600px;bottom:-600px;z-index:-1;pointer-events:none;background:'+b+';background-size:100% 100%;background-repeat:no-repeat;';
+      document.body.appendChild(e);
+    })();
+  })();
+  st.textContent += 'html,body{overscroll-behavior:none!important;}';
   var tries=0;
   (function bg(){
     var r=document.getElementById('dc-root'); var d=r&&r.querySelector('div[style*="width: 390px"]');
@@ -1604,23 +1629,40 @@ const PAYWALL_TIDY_JS = `(function(){
     if(!row.parentElement) return false;
     var sib=row.nextElementSibling; late=[]; while(sib){ late.push(sib); sib=sib.nextElementSibling; }
     late.forEach(function(e){ e.setAttribute('data-pw-late','1'); });
-    ['touchstart','wheel','mousedown'].forEach(function(ev){ scr.addEventListener(ev,function(){ if(timer){clearTimeout(timer);timer=null;} if(raf){cancelAnimationFrame(raf);raf=0;} showLate(); },{passive:true}); });
+    ['touchstart','wheel','mousedown'].forEach(function(ev){ scr.addEventListener(ev,function(){ if(timer){clearTimeout(timer);timer=null;} if(raf){cancelAnimationFrame(raf);raf=0;} cancelled=true; showLate(); },{passive:true}); });
     return late.length>0;
   }
   function showLate(){ if(scr) scr.setAttribute('data-pw-shown','1'); }
   function hideLate(){ if(scr) scr.removeAttribute('data-pw-shown'); }
   var lt=0; (function wait(){ if(!findList() && lt++<60) setTimeout(wait,100); })();
   function ease(t){ return -(Math.cos(Math.PI*t)-1)/2; }
+  // THE AUTO-SCROLL (Ari 2026-11-25: it was not happening on his phone). More robust now: it can be asked for any number of times (a second call while it is waiting or
+  // running changes nothing), it finds the list itself if the page was not ready yet, it steps with a plain timer on the clock (requestAnimationFrame can be paused while
+  // the page is hidden in the pool), and it tells the app what it does (pwscroll:...) so the log shows it.
+  function say(m){ try{ window.ReactNativeWebView.postMessage('pwscroll:'+m); }catch(e){} }
+  var startedAt=0, running=false, cancelled=false;
   window.__pwAutoScroll=function(){
-    if(timer){ clearTimeout(timer); } if(raf){ cancelAnimationFrame(raf); raf=0; }
+    var now=Date.now();
+    if(startedAt && now-startedAt<14000){ say('asked again, ignored (already '+(running?'scrolling':'waiting')+')'); return; }
+    startedAt=now; running=false; cancelled=false;
+    if(timer){ clearTimeout(timer); timer=null; } if(raf){ cancelAnimationFrame(raf); raf=0; }
     if(!scr) findList();
     if(scr){ scr.scrollTop=0; }
     hideLate();
-    timer=setTimeout(function(){
-      timer=null; if(!scr) return; showLate();
-      var from=scr.scrollTop, to=Math.max(0,scr.scrollHeight-scr.clientHeight), t0=null, dur=6000;
-      function step(ts){ if(t0===null) t0=ts; var p=Math.min(1,(ts-t0)/dur); scr.scrollTop=from+(to-from)*ease(p); if(p<1) raf=requestAnimationFrame(step); else raf=0; }
-      raf=requestAnimationFrame(step);
+    say('asked: the list '+(scr?'was found (scrolls '+Math.round(scr.scrollHeight-scr.clientHeight)+' px)':'is NOT found yet')+', waiting 5 s');
+    timer=setTimeout(function begin(){
+      timer=null;
+      if(!scr) findList();
+      if(!scr){ say('no list to scroll'); return; }
+      showLate();
+      var from=scr.scrollTop, to=Math.max(0,scr.scrollHeight-scr.clientHeight), t0=Date.now(), dur=6000;
+      if(to<=2){ say('nothing to scroll (the list fits)'); return; }
+      running=true; say('scrolling '+Math.round(to-from)+' px over 6 s');
+      var iv=setInterval(function(){
+        if(cancelled){ clearInterval(iv); running=false; return; }
+        var p=Math.min(1,(Date.now()-t0)/dur); scr.scrollTop=from+(to-from)*ease(p);
+        if(p>=1){ clearInterval(iv); running=false; say('done'); }
+      },16);
     },5000);
   };
   true;
@@ -1775,7 +1817,7 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
 }) {
   const inPool = poolActive !== undefined;
   const fade = useRef(new Animated.Value(0)).current;
-  const backFade = useRef(new Animated.Value(0)).current;
+  const [headerOn, setHeaderOn] = useState(false);   // the header (back button, Restore) shows from 450 ms on: a plain switch, never an animated opacity (real glass)
   useEffect(() => { if (inPageHeaderRef.current) webRef.current?.injectJavaScript('window.__onbSetProgress && window.__onbSetProgress(' + (progress == null ? 'null' : progress) + '); true;'); }, [progress]); // eslint-disable-line react-hooks/exhaustive-deps
   const inPageHeaderRef = useRef(!ONB_INPAGE_HEADER_EXCLUDE.includes(htmlKey) && !ONB_NO_HEADER_KEYS.includes(htmlKey));
   // (round 8) the back button + progress bar are part of the page: when the page scrolls, they scroll away with it (the page reports its scroll, this moves them)
@@ -1787,8 +1829,11 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
   useEffect(() => {
     if (htmlKey !== 'paywall') return;
     if (inPool && !poolActive) return;
-    const t = setTimeout(() => { webRef.current?.injectJavaScript('window.__pwAutoScroll && window.__pwAutoScroll(); true;'); }, 350);
-    return () => clearTimeout(t);
+    // asked 3 times (0.35 s, 1.8 s, 3.5 s after the paywall appears): the page may still be loading; the page ignores a second ask while it is already waiting or scrolling
+    const ask = () => webRef.current?.injectJavaScript('(function(){ if (window.__pwAutoScroll) { window.__pwAutoScroll(); } else { try { window.ReactNativeWebView.postMessage("pwscroll:the page function is not there yet"); } catch (e) {} } })(); true;');
+    console.log('[PAYWALL] the paywall appeared: asking the page to start the 5 s auto-scroll');
+    const ts = [setTimeout(ask, 350), setTimeout(ask, 1800), setTimeout(ask, 3500)];
+    return () => ts.forEach(clearTimeout);
   }, [htmlKey, inPool, poolActive]);
   // BUG FOUND (explicit ask: "tell me what's actually causing the white
   // screen"): for standalone (non-pooled) screens, this container used to
@@ -1837,7 +1882,7 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
   // never be stuck without a way back.
   useEffect(() => {
     const b = setTimeout(() => {
-      Animated.timing(backFade, { toValue: 1, duration: 260, useNativeDriver: true }).start();
+      setHeaderOn(true);
     }, 450);
     return () => clearTimeout(b);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1885,14 +1930,13 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
     undefined;
   const strengthExtra = htmlKey === 'strengthAssessment' ? STRENGTH_CAPTURE_JS : undefined;
   const extraJs = [extraJsProp, dcExtra, strengthExtra].filter(Boolean).join('\n') || undefined;
+  // REAL GLASS CANNOT LIVE INSIDE A VIEW WHOSE OPACITY IS ANIMATED (Ari 2026-11-25: the back button was still not liquid glass: it sat inside the page's fading container and
+  // inside its own fade-in, both animated opacity, so the system drew a flat disc). The page fades; the header is a sibling of it and has no animated opacity at all.
   return (
+    <View pointerEvents={inPool && !poolActive ? 'none' : 'auto'} style={inPool ? StyleSheet.absoluteFillObject : { flex: 1 }}>
     <Animated.View
       pointerEvents={inPool && !poolActive ? 'none' : 'auto'}
-      style={
-        inPool
-          ? { ...StyleSheet.absoluteFillObject, backgroundColor: pageBg, opacity: containerFade }
-          : { flex: 1, backgroundColor: isDcPage ? pageBg : '#f4f4f2', opacity: containerFade }
-      }
+      style={{ ...StyleSheet.absoluteFillObject, backgroundColor: isDcPage ? pageBg : '#f4f4f2', opacity: containerFade }}
     >
       {!isDcPage && <AppBackground />}
       <Animated.View style={{ flex: 1, marginTop: topInset, opacity: fade }}>
@@ -1913,6 +1957,7 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
             }
             if (m === '__tap' || m === '__tick') { Haptics.selectionAsync(); return; }
             if (m === 'rendered') { reveal(); return; }
+            if (m.indexOf('pwscroll:') === 0) { console.log('[PAYWALL] auto-scroll: ' + m.slice(9)); return; }
             if (m.indexOf('remindpick:') === 0) { setTrialReminderPick(Number(m.slice(11))); return; }
             if (m.indexOf('editinfo') === 0) { onEditInfo?.(m.split(':')[1] || 'weight'); return; }
             if (m.indexOf('editvalue:') === 0) {
@@ -1931,7 +1976,11 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
           style={{ flex: 1, backgroundColor: isDcPage ? pageBg : 'transparent' }}
           opaque={isDcPage}
           scrollEnabled
-          bounces={isDcPage}
+          // The paywall and the gift offer do NOT rubber-band (Ari 2026-11-25: scrolling the whole screen showed white at the bottom and on the sides): the page is one
+          // full screen with its own inner list, so there is nothing to bounce. Everything else keeps its bounce.
+          bounces={isDcPage && htmlKey !== 'paywall' && htmlKey !== 'giftOffer'}
+          alwaysBounceHorizontal={false}
+          alwaysBounceVertical={isDcPage && htmlKey !== 'paywall' && htmlKey !== 'giftOffer'}
           decelerationRate="normal"
           nestedScrollEnabled
           overScrollMode="never"
@@ -1950,6 +1999,7 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
           cacheEnabled={htmlKey !== 'rankReveal'}
         />
       </Animated.View>
+    </Animated.View>
       {/* Absolute + anchored to the top of THIS screen — an RN View defaults
           to position:relative, so when the wrapper was a plain flow child
           after the flex:1 WebView its absolute child was being measured from
@@ -1960,32 +2010,34 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
       {(htmlKey === 'paywall' || htmlKey === 'giftOffer') ? (
         // Paywall and gift offer: the standard glass BACK button top-left, inside a clear glass bubble so it can be seen on the light page (Ari 2026-11-25).
         // The paywall also has a plain grey "Restore" top-right. Both stay exactly where they are when the page scrolls. NO progress bar here.
-        <Animated.View
+        headerOn ? (
+        <View
           pointerEvents="box-none"
-          style={{ position: 'absolute', top: topInset + 5, left: 0, right: 0, zIndex: 80, opacity: backFade, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 13 }}
+          style={{ position: 'absolute', top: topInset + 8, left: 0, right: 0, zIndex: 80, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 }}
         >
-          <View style={{ shadowColor: '#000', shadowOpacity: 0.14, shadowRadius: 9, shadowOffset: { width: 0, height: 3 } }}>
-            <LiquidGlass radius={27} variant="clear" colorScheme="light" style={{ width: 54, height: 54, alignItems: 'center', justifyContent: 'center' }}>
-              <GlassBackButton onPress={() => { Haptics.selectionAsync(); onBack(); }} scheme="standard" />
-            </LiquidGlass>
+          {/* the standard real glass back button, exactly the camera Finish pill's glass (components/StandardGlass.tsx), made a little bigger and given a soft shadow and a hairline
+              edge OUTSIDE the glass so it can be seen on the light page. No glass inside glass. */}
+          <View style={{ width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.22, shadowRadius: 9, shadowOffset: { width: 0, height: 3 } }}>
+            <GlassBackButton onPress={() => { Haptics.selectionAsync(); onBack(); }} scheme="standard" />
           </View>
           {htmlKey === 'paywall' ? (
             <TouchableOpacity
               onPress={() => { Haptics.selectionAsync(); Alert.alert('Restore purchases', 'No previous subscription found on this Apple ID.'); }}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              style={{ paddingRight: 7 }}
+              style={{ paddingRight: 4 }}
             >
               <Text style={web.restoreTxt}>Restore</Text>
             </TouchableOpacity>
           ) : null}
-        </Animated.View>
-      ) : noHeader ? null : (
-        <Animated.View
-          pointerEvents={backHidden ? 'none' : 'box-none'}
+        </View>
+        ) : null
+      ) : (noHeader || !headerOn || backHidden) ? null : (
+        <View
+          pointerEvents="box-none"
           // Same top offset the native question header's back button lands at (insets.top + that row's own 12px paddingVertical). Real glass, drawn natively
           // over the page; it fades away once the page scrolls (it does not need to stay on screen). The progress bar is part of the page (or, on a native
           // page, drawn here).
-          style={{ position: 'absolute', top: topInset + 12, left: 0, right: 0, zIndex: 80, opacity: Animated.multiply(backFade, backScroll) }}
+          style={{ position: 'absolute', top: topInset + 12, left: 0, right: 0, zIndex: 80 }}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20 }}>
             <OnbBackButton onPress={() => { Haptics.selectionAsync(); onBack(); }} scheme={isDcPage ? 'light' : 'dark'} />
@@ -1995,11 +2047,11 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
               </View>
             )}
           </View>
-        </Animated.View>
+        </View>
       )}
       </View>
       )}
-    </Animated.View>
+    </View>
   );
 }
 

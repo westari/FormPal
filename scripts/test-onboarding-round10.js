@@ -39,7 +39,8 @@ const esc = (s) => JSON.stringify(s).slice(1, -1);
   };
   const rowTexts = (page) => page.evaluate(() => {
     const leaves = Array.from(document.querySelectorAll('#dc-root div,#dc-root span')).filter((e) => !e.children.length);
-    const fields = {}; leaves.filter((e) => e.getAttribute('data-pr-field')).forEach((e) => { fields[e.getAttribute('data-pr-field')] = (e.textContent || '').trim(); });
+    const fields = {}; const inBadge = (e) => { let q = e.parentElement; for (let k = 0; k < 3 && q; k++, q = q.parentElement) if ((q.textContent || '').includes('TARGET') && (q.textContent || '').length < 30) return true; return false; };
+    leaves.filter((e) => e.getAttribute('data-pr-field') && !inBadge(e)).forEach((e) => { fields[e.getAttribute('data-pr-field')] = (e.textContent || '').trim(); });
     const texts = leaves.map((e) => (e.textContent || '').trim());
     return { fields, samples: ['184 lb', '195 lb', '27', 'Beginner'].filter((t) => texts.includes(t)).concat(texts.some((t) => t.includes("5'11")) ? ["5'11\""] : []) };
   });
@@ -48,7 +49,7 @@ const esc = (s) => JSON.stringify(s).slice(1, -1);
   let p = await load({});
   let r = await rowTexts(p);
   check('nothing answered: Weight, Height, Age and Experience are all blank', ['weight', 'height', 'age', 'experience'].every((k) => r.fields[k] === ''), JSON.stringify(r.fields));
-  check('nothing answered: the Goal row is blank too', r.fields.goal === '', JSON.stringify(r.fields));
+  check('nothing answered: the Goal row is blank too', (r.fields.goal === '' || r.fields.goal === '–'), JSON.stringify(r.fields));
   check('nothing answered: none of the design\'s sample values is left on the page (184 lb, 195 lb, 5\'11", 27, Beginner)', r.samples.length === 0, JSON.stringify(r.samples));
   // the pencil on a blank row still opens the in-place edit
   const edit = await p.evaluate(() => {
@@ -60,27 +61,31 @@ const esc = (s) => JSON.stringify(s).slice(1, -1);
     return { pencil: true, editable: blank.contentEditable === 'true', w: Math.round(blank.getBoundingClientRect().width) };
   });
   check('the pencil next to a blank value still works (tap opens the edit) and the blank has a tap area', edit.pencil && edit.editable && edit.w >= 40, JSON.stringify(edit));
+  const badgeTxt = await p.evaluate(() => { const svg = document.querySelector('#dc-root svg'); const b = [...svg.parentElement.querySelectorAll('div')].find((d) => (d.textContent || '').includes('TARGET') && d.querySelector('div')); return [...b.querySelectorAll('div,span')].filter((e) => !e.children.length).map((e) => (e.textContent || '').trim()); });
+  check('no target: the Target card shows a dash (the card is not empty)', badgeTxt.includes('–') && badgeTxt.some((t) => /TARGET/.test(t)), JSON.stringify(badgeTxt));
   await p.screenshot({ path: path.join(ROOT, '.scratch', 'plan-ready-blank.png') });
   await p.close();
 
   p = await load({ weight: 200, goalWeight: 180, mainGoal: 'Lose fat / Lose weight', age: 31, height: `5'9"`, experience: 'Intermediate' });
   r = await rowTexts(p);
+  const badgeTxt2 = await p.evaluate(() => { const svg = document.querySelector('#dc-root svg'); const bb = [...svg.parentElement.querySelectorAll('div')].find((d) => (d.textContent || '').includes('TARGET') && d.querySelector('div')); return [...bb.querySelectorAll('div,span')].filter((e) => !e.children.length).map((e) => (e.textContent || '').trim()); });
+  check('with a target the Target card shows it (no dash)', badgeTxt2.some((t) => /180/.test(t)) && !badgeTxt2.includes('–'), JSON.stringify(badgeTxt2));
   check('everything answered: his own answers show (weight, height, age, experience, goal)', r.fields.weight === '200 lb' && r.fields.height === `5'9"` && r.fields.age === '31' && r.fields.experience === 'Intermediate' && /180/.test(r.fields.goal), JSON.stringify(r.fields));
   await p.close();
   p = await load({ weight: 200, mainGoal: 'Build muscle' });
   r = await rowTexts(p);
-  check('only some answered: the answered ones show, the skipped ones are blank (weight 200 given; height, age, experience, goal skipped)', r.fields.weight === '200 lb' && r.fields.height === '' && r.fields.age === '' && r.fields.experience === '' && r.fields.goal === '', JSON.stringify(r.fields));
+  check('only some answered: the answered ones show, the skipped ones are blank (weight 200 given; height, age, experience, goal skipped)', r.fields.weight === '200 lb' && r.fields.height === '' && r.fields.age === '' && r.fields.experience === '' && (r.fields.goal === '' || r.fields.goal === '–'), JSON.stringify(r.fields));
   await p.close();
   await browser.close();
 
   console.log('--- the headers ---');
   const ob = read('app/onboarding.tsx');
-  check('no back button and no bar for generatePlan, planReady and trialTimeline', ob.includes("ONB_NO_HEADER_KEYS: string[] = ['generatePlan', 'planReady', 'trialTimeline']") && /\) : noHeader \? null : \(/.test(ob) && ob.includes('&& !noHeader;'));
+  check('no back button and no bar for generatePlan, planReady and trialTimeline', ob.includes("ONB_NO_HEADER_KEYS: string[] = ['generatePlan', 'planReady', 'trialTimeline']") && ob.includes('(noHeader || !headerOn || backHidden) ? null : (') && ob.includes('&& !noHeader;'));
   const sp = read('components/onboarding/SaveProgressScreen.tsx'), tf = read('components/onboarding/TryForFreeScreen.tsx');
   check('Save your progress: no back button and no bar (only its e-mail form keeps a way back to the sign-in choices); Try for free: none at all', sp.includes('{emailMode ? <OnbBackButton') && !sp.includes('progress != null && (') && !tf.includes('<OnbBackButton') && !tf.includes('progress != null &&'));
   const gb = read('components/GlassBackButton.tsx'), ob2 = read('components/onboarding/OnbBackButton.tsx');
   check('the onboarding back button is the standard real glass (not the light imitation) and the chevron is nudged a little left (1.5 pt)', ob2.includes('scheme="standard"') && gb.includes("STANDARD_GLASS.colorScheme") && gb.includes('translateX: -1.5'));
-  check('the paywall back button sits in a clear glass bubble and both it and Restore are fixed (nothing moves with the page)', ob.includes('variant="clear" colorScheme="light"') && !ob.includes('translateY: headerY') && !/headerY/.test(ob));
+  check('the paywall back button is the ONE standard real glass button, with a shadow outside the glass so it can be seen, and both it and Restore are fixed (nothing moves with the page)', ob.includes('shadowOpacity: 0.22, shadowRadius: 9') && !ob.includes('translateY: headerY') && !/headerY/.test(ob) && !ob.includes('variant="clear" colorScheme="light"'));
   check('the progress bar is part of the page (flat, scrolls with it), the back button fades away once the page has scrolled', ob.includes("var b = document.createElement('div'); b.style.cssText = 'flex:none;width:34px;height:34px;pointer-events:none;';") && ob.includes('toValue: hide ? 0 : 1'));
   console.log(failed ? `\n${failed} FAILED` : '\nall passed');
   process.exit(failed ? 1 : 0);

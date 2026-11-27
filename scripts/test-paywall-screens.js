@@ -22,9 +22,9 @@ const src = fs.readFileSync(path.join(__dirname, '..', 'app', 'onboarding.tsx'),
 
 // ── static ──
 const a0 = src.indexOf("{(htmlKey === 'paywall' || htmlKey === 'giftOffer') ? (");
-const a1 = src.indexOf(') : noHeader ? null : (', a0);
+const a1 = src.indexOf(') : (noHeader || !headerOn || backHidden) ? null : (', a0);
 const block = src.slice(a0, a1);
-check('paywall and gift offer: the back control is the standard glass back button (GlassBackButton) inside a clear glass bubble, top-left, and not inside anything that moves with the page', a0 > 0 && block.includes('<GlassBackButton') && block.includes('variant="clear"') && block.includes('top: topInset + 5') && src.includes("import GlassBackButton from '../components/GlassBackButton';") && !block.includes('headerY'));
+check('paywall and gift offer: the back control is the standard glass back button (GlassBackButton), top-left, outside everything that moves with the page', a0 > 0 && block.includes('<GlassBackButton') && block.includes('top: topInset + 8') && src.includes("import GlassBackButton from '../components/GlassBackButton';") && !block.includes('headerY'));
 check('paywall and gift offer: NO X (xmark) any more in that block', !/xmark/.test(block));
 check('both scripts are on the WebView: the scroll report (it only fades the back button now) and the keep-effects flag; normal onboarding screens keep their native back button', src.includes('ONB_SCROLL_REPORT_JS') && src.includes('KEEP_FX_JS + ') && src.includes('<OnbBackButton'));
 check('the paywall keeps its Restore', block.includes('Restore'));
@@ -42,6 +42,14 @@ async function open(br, file, s, keepFx) {
   await p.goto('file://' + path.resolve(__dirname, '..', 'assets', 'app screens', file + '.html').split(path.sep).join('/'));
   await p.waitForTimeout(1500); await p.evaluate(DC); return { p, ctx };
 }
+
+
+// ── round 10 (2026-11-25): the glass, the overscroll ──
+check('the paywall back button is ONE real glass button (the standard one, the Finish pill glass): no glass nested in glass, no animated opacity anywhere around it', block.includes('<GlassBackButton') && !block.includes('<LiquidGlass ') && !/opacity: (backFade|Animated)/.test(block) && !src.includes('backFade') && src.includes('const [headerOn, setHeaderOn] = useState(false);'));
+check('the header is a SIBLING of the fading page (real glass cannot live inside a view whose opacity is animated)', src.includes('        />' + String.fromCharCode(10) + '      </Animated.View>' + String.fromCharCode(10) + '    </Animated.View>' + String.fromCharCode(10) + '      {/* Absolute + anchored to the top of THIS screen') && src.includes("<View pointerEvents={inPool && !poolActive ? 'none' : 'auto'} style={inPool ? StyleSheet.absoluteFillObject : { flex: 1 }}>"));
+check('the paywall and the gift offer do not rubber-band (no white at the bottom or the sides when the whole screen is scrolled)', src.includes("bounces={isDcPage && htmlKey !== 'paywall' && htmlKey !== 'giftOffer'}") && src.includes('alwaysBounceHorizontal={false}') && src.includes('overscroll-behavior:none'));
+check('...and the page colour also lives on an oversized fixed backdrop (#__pw_bg) so anything drawn beyond the page is the page colour', src.includes("e.id='__pw_bg'") && src.includes('left:-600px;right:-600px;top:-600px;bottom:-600px'));
+check('the paywall appears: the app asks the page to auto-scroll three times (it ignores a repeat) and logs what the page says ([PAYWALL] auto-scroll: ...)', src.includes('const ts = [setTimeout(ask, 350), setTimeout(ask, 1800), setTimeout(ask, 3500)];') && src.includes("[PAYWALL] auto-scroll: '") && src.includes("say('asked again, ignored"));
 
 (async () => {
   const br = await chromium.launch();

@@ -362,6 +362,7 @@ export interface CoachVerdict { show: 'check' | 'x' | null; reason: string; why:
 export function missedWord(reason: string | undefined): string | null {
   if (reason === 'short_top') return 'Go higher';
   if (reason === 'short_bottom') return 'Go lower';
+  if (reason === 'rejected') return 'Full movement';   // the engine rejected the stroke (guards / gate): still a cross, never silence
   return null;
 }
 
@@ -385,8 +386,8 @@ export function createCoach(opts: { log?: (m: string) => void } = {}): Coach {
       if (i.source === 'missed') {
         // a missed stroke never stacks on a verdict that was just shown (a counted rep always gets its own)
         if (i.now - lastAt < K.oneVerdictPerSec * 1000) return out(i, { show: null, reason: '', why: 'a verdict was just shown' });
-        const word = missedWord(i.missedReason);
-        if (!word) return out(i, { show: null, reason: '', why: `unknown missed-stroke reason (${i.missedReason ?? 'none'})` });
+        // an unknown reason is still a cross ("Full movement"): a real attempt never gets silence
+        const word = missedWord(i.missedReason) ?? 'Full movement';
         return out(i, { show: 'x', reason: word, why: `the engine saw a stroke start like a rep and not count (${i.missedReason})` });
       }
       if (i.good) return out(i, { show: 'check', reason: '', why: 'a rep counted with good form' });

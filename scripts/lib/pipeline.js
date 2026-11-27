@@ -19,6 +19,8 @@ const AD = require('../../lib/attemptDetector.ts');
 const AD_OLD = require(path.join(__dirname, '..', 'fixtures', 'legacy-2026-11-11', 'attemptDetector.ts'));
 const RD = require('../../lib/repDiagnostics.ts');
 const MIRROR = require('./missed-attempt-mirror.js');
+const VT = require('../../lib/verdictTiming.ts');
+const NS = require('../../lib/noSilentReps.ts');
 
 /** A wall clock the pipeline reads (Date.now is what the real modules call). */
 function withClock(fn) {
@@ -60,14 +62,28 @@ function run(events, opts = {}) {
 
     // ONE JUDGE (2026-11-15): the attempt detector (det) feeds Movement Match / logs only. A half rep is judged by the MIRROR of the engine's own
     // missed-attempt tracker (scripts/lib/missed-attempt-mirror.js = ExerciseEngine.swift trackAttempt), through the same Coach path as a counted rep.
+    // (2026-11-25) the same flow as app/formcheck.tsx: a half rep's cross is HELD until the arms are back at the start position (lib/verdictTiming.ts), and a stroke the
+    // engine gave no verdict at all gets its cross from the screen (lib/noSilentReps.ts)
+    const silent = NS.createSilentWatch();
+    let pendingCross = null, lastMetric = null, lines = null, unreliableAt = -1e12;
+    const deliverCross = (reason, at, why, val, src) => {
+      const now = getClock();
+      silent.noteAnswered(now);
+      // the camera cannot judge it while the Guide says so (the number is already capped): the same rule as app/formcheck.tsx deliverCross
+      if (st.guideProblem) { verdicts.push({ t: now - 1e12, show: null, reason: '', src: src || 'missed', why: 'the Guide shows a camera problem: the camera cannot judge it', eventAt: at - 1e12, heldMs: now - at, metric: val }); return; }
+      const v = coach.verdict({ now, match: mm.result(), source: 'missed', missedReason: reason });
+      if (v.show) st.lastJudgedAt = now;
+      verdicts.push({ t: now - 1e12, show: v.show, reason: v.reason, src: src || 'missed', score: mm.result().score, eventAt: at - 1e12, heldMs: now - at, why, metric: val });
+    };
+    const flushCross = (why) => { if (pendingCross) { const p = pendingCross; pendingCross = null; deliverCross(p.reason, p.at, why, lastMetric ? lastMetric.v : null); } };
     const mirror = MIRROR.createMissedAttemptMirror({ onMissed: (m) => {
       const now = getClock();
       st.missed++;
-      const v = coach.verdict({ now, match: mm.result(), source: 'missed', missedReason: m.reason });
-      if (v.show) st.lastJudgedAt = now;
-      verdicts.push({ t: now - 1e12, show: v.show, reason: v.reason, src: 'missed', score: mm.result().score, size: m.size });
+      flushCross('a newer stroke arrived');
+      if (opts.immediateCross) { deliverCross(m.reason, now, 'immediate (the old behaviour)', lastMetric ? lastMetric.v : null); return; }
+      pendingCross = { reason: m.reason, at: now, size: m.size };
     } });
-    const onEvents = (_evs) => { /* the attempt detector judges nothing */ };
+    const onEvents = (evs) => { for (const ev of evs || []) if (ev.kind === 'attempt') silent.noteAttempt({ n: ev.n, outcome: ev.outcome, blocker: ev.blocker }, getClock(), getClock() - unreliableAt < 3000); };
     const oldEvents = (evs) => {
       for (const ev of evs) {
         if (ev.kind === 'attempt' && (ev.outcome === 'missed' || ev.outcome === 'rejected')) old.x.push({ t: getClock() - 1e12, text: 'X ' + ev.reason, src: 'attempt' });
@@ -80,8 +96,18 @@ function run(events, opts = {}) {
       const m = mm.result();
       det.setPathCut(m.cut);
       counter.setFlags({ diag: !!rd.message(), cue: false });
-      const c = conf.update({ now, visibility: counter.score(now), match: m, lastCountAt: st.lastCountAt, lastJudgedAt: st.lastJudgedAt > 0 ? st.lastJudgedAt : 0, missedSinceCount: st.missed });
       const rej = det.recentReject(8000);
+      const c = conf.update({ now, visibility: counter.score(now), match: m, lastCountAt: st.lastCountAt, lastJudgedAt: st.lastJudgedAt > 0 ? st.lastJudgedAt : 0, missedSinceCount: st.missed, unreliableRecently: rej.lowQuality });
+      if (pendingCross) {
+        const val = lastMetric && now - lastMetric.t < 700 ? lastMetric.v : null;
+        const d = lines ? VT.crossDue(pendingCross, now, val, lines) : { due: true, why: 'no start line' };
+        if (d.due) { const p = pendingCross; pendingCross = null; deliverCross(p.reason, p.at, d.why, val); }
+      }
+      if (!opts.immediateCross) {
+        const sil = silent.tick(now, { notTrying: m.haveData && m.notTrying, engineRejectedUnreliable: now - unreliableAt < 8000 || !!m.cut });
+        if (sil && sil.kind === 'cross') deliverCross(sil.reason, now - 1300, 'no verdict came for stroke #' + sil.n, null, 'silent');
+        else if (sil && sil.kind === 'camera') verdicts.push({ t: now - 1e12, show: null, reason: '', src: 'camera', why: 'tracking unreliable: the camera cannot judge stroke #' + sil.n });
+      }
       // the same evidence rule as app/formcheck.tsx: the camera's cue becomes words only when the metric stream backs it up
       const rawCue = opts.trackingCue ? opts.trackingCue(now - 1e12) : null;
       const cueHeld = cueHold.feed(now, !!rawCue || st.lost);
@@ -94,6 +120,7 @@ function run(events, opts = {}) {
       });
       meter = meterS.tick(LT.capForGuide(c.value, !!g.line && g.reason !== 'none'), now, meterPrimed ? (!!g.line && g.reason !== 'none' ? LT.METER_GUIDE_RATE : LT.METER_MAX_RATE) : 1e6);   // the Guide and the number agree (a camera-problem line caps it)
       meterPrimed = true;
+      st.guideProblem = !!g.line && g.reason !== 'none';
       rows.push({ t: now - 1e12, meter, cueRaw: rawCue, cueHeld, cueProven, match: m, conf: c, guide: g.line, guideWhy: g.why, guideReason: g.reason, guideEvidence: g.evidence });
       // old
       counterO.setFlags({ diag: !!rdO.message(), cue: false });
@@ -132,6 +159,9 @@ function run(events, opts = {}) {
         setClock(1e12 + events[i].t);
         counter.feedLog(line, getClock()); counterO.feedLog(line, getClock());
         mm.feed(line); rd.feed(line); rdO.feed(line);
+        { const mv = /^\[METRIC\][^\n]*? value=([-\d.]+)/.exec(line) || /^\[REP-TRACE\][^\n]*?angle=([-\d.]+)/.exec(line); if (mv) lastMetric = { v: parseFloat(mv[1]), t: getClock() };
+          const ml = /^\[METRIC\].*? exit=([-\d.]+) .*? top=([-\d.]+)/.exec(line); if (ml) lines = { repExitThreshold: parseFloat(ml[1]), topAngle: parseFloat(ml[2]) };
+          if (/^\[REP\] rejected .{1,3} tracking unreliable/.test(line)) unreliableAt = getClock(); }
         if (/^\[TRACK\] person lost/.test(line)) st.lost = true;
         if (/^\[TRACK\] person back/.test(line)) st.lost = false;
         if (line.startsWith('[METRIC]')) st.lost = false;
@@ -139,6 +169,7 @@ function run(events, opts = {}) {
         if (m) {
           st.lastCountAt = getClock(); st.missed = 0; st.native++;
           const good = m[2].trim() === 'GOOD';
+          silent.noteAnswered(getClock()); flushCross('a counted rep arrived');
           const bm = /bottom=([-\d.]+)/.exec(line);
           const v = coach.verdict({ now: getClock(), match: mm.result(), source: 'native', good, reason: good ? '' : m[2].trim(), onPath: mm.repOnPath(bm ? parseFloat(bm[1]) : undefined) });
           verdicts.push({ t: getClock() - 1e12, show: v.show, reason: v.reason, src: 'native', score: mm.result().score });
