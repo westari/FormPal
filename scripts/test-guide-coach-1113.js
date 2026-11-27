@@ -42,7 +42,7 @@ console.log(`replayed ${events.length} lines, ${(events[events.length - 1].t / 1
   check('STANDING STILL: no "Go lower" X while the arms rest flat at 73 (07:03 to 07:12 on this log; the old log gave one at 07:02:35)', !still.some((v) => v.t > 29700 && v.t < 38700), still.map((v) => (v.t / 1000).toFixed(1) + 's ' + v.reason).join(', '));
   // an X is never shown when the path has not moved for the last 2.5 s AND Movement Match is LOW
   const bad = res.verdicts.filter((v) => v.show === 'x' && v.src === 'missed').filter((v) => { const row = res.rows.reduce((a, b) => (Math.abs(b.t - v.t) < Math.abs(a.t - v.t) ? b : a)); return row.match.notTrying; });
-  check('no X while Movement Match says he is not trying', bad.length === 0);
+  check('no X while Movement Match says he is not trying', bad.length === 0, JSON.stringify(bad.map((v) => [v.t, v.reason, v.score, v.metric])));
 }
 // 5. a real half rep (the 07:37 slow press, 0.4R+) gets its X
 {

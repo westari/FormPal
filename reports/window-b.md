@@ -188,3 +188,43 @@ New: `test-verdict-flow.js`, `test-app-start.js`. Updated for the new behaviour:
 
 ## Not verified
 - Nothing seen on a phone. Real glass, the exit flash, the splash and the paywall scroll need your phone. The first thing to send me is the camera-session log (the new `[TIMING]`, `[SILENT]`, `[CAMERA]`, `[LEAVE]`, `[PAYWALL]` lines).
+
+---
+# Round 12 (2026-11-27): one rep = one result, stop judging when walking to the phone, Guide words, black back arrow, smooth paywall scroll, plan ready dashes
+Merged origin/overnight-build first (clean). The attached latest.log HAS a real camera session from the new native build this time (19:09:02 to 19:10:19, shoulder press), saved as `scripts/fixtures/shoulder-press-2026-11-27.log.txt`. Every camera fix below is proven by replaying it (`scripts/test-one-result.js`, BEFORE = round 11 code, AFTER = now).
+
+## 1. Camera: what the log showed and what changed
+The engine sent 16 "half rep" events. 9 were real half reps (the arms went down to 52-69). 7 were NOT reps: the arms only went down to 74.6-77.7, right after a check or cross, while settling back at the top (the engine ends a "stroke" after a turn of only about 4 degrees). The start position zone for shoulder press begins at 73.6, so the two groups are cleanly apart.
+
+a) **Two "Go lower" for one half rep.** Two causes:
+   - one of those small settling wobbles right after the cross fired a second cross (19:09:10.9, 13.3, 19.1, 35.2, 41.5, 46.9, 10:00.6);
+   - the screen's own fallback ("no result came for this stroke") checked the wrong time: the stroke detector reports a stroke up to 2.5 s late, after the engine's cross was already shown, so it gave the same stroke a second cross (19:09:23.9, 19:10:02.7).
+   Fix: a stroke must LEAVE the start position to be judged at all (engine events and the screen's own strokes). The fallback now checks whether anything was shown after the stroke's own low point, not after the late report. BEFORE: 7 strokes with two results. AFTER: 0.
+b) **A half rep got nothing.** At 19:09:29.4 a real half rep (down to 55.7) came after a 5 s rest; Movement Match was low only because of the rest (no rhythm yet) and the Coach withheld it. Now a real half rep that went at least halfway down and came back up is shown even then (a resting wobble at the top still is not). BEFORE: 1 real half rep with no cross. AFTER: 0. Two quick dips at 19:09:38.9 and 40.5 got no engine event at all; the screen's fallback gives one of them its cross. I added a native log line `[ATTEMPT-DROPPED]` so the next log shows if the engine drops quick half reps for being too short (needs the next native build; it only adds a log line).
+c) **Barely moving while a check / cross is showing fired feedback.** Same cause as the first part of a): those were the settling wobbles. They get nothing now and change nothing; the next real rep is judged normally (checked: every real half rep after a wobble still got its cross). Also, a held cross used the last metric reading from BEFORE the half rep (from the way down) and could show at the bottom of the rep; it now waits for a reading taken after the turn.
+d) **Walking to the phone kept firing results** (19:10:06.7 "Full movement", 09.2 check, 12.3 and 14.9 "Go higher"). When he walks up, the camera loses his pose again and again (3 times in 2.8 s here, then loses him). One lost pose alone happens mid-set too (seen in 3 older logs) and is ignored. Rule: the pose lost twice within 3 s, or nobody in the picture = out of position: nothing is judged (a rep still counts, it just gets no check or cross), until he is clearly seen again for 1 s. A stroke whose pose was lost after its low also gets no guessed cross. BEFORE: 4 results while walking. AFTER: 0. It never stopped judging during the set.
+- Result on this log: BEFORE 29 results, AFTER 17: all 7 counted reps get their check, all 9 real half reps get exactly one cross, nothing else.
+- New log lines: `[ONE-RESULT] ...` (ignored wobble, stopped judging / judging again, no check or cross because out of position).
+- Placeholders (from this log and the older ones, say if you want them tuned): start zone 73.6 (existing), "halfway down" 61.8, 2 pose losses in 3 s, 1 s clearly seen to come back.
+
+## 2. Guide wording
+- "Step into view" while setting up (Vision finds no body, he is at the phone, too close) now says **"Move back"**. The "too close" line during a set ("Back up") is also "Move back" now, one wording.
+- "Turn sideways to the phone" is now **"Turn your side to the camera"**.
+- **One line in the pill:** the pill was 240 pt wide, so its text room was only 174 pt and every 5-6 word line wrapped. It is now 316 pt (313 on the smallest iPhones) and the line is set to one line; it may shrink a little (never below 80%) only if a phone draws the text bigger than measured. Measured: the longest line, "Keep your whole body in view", fits on all six iPhone sizes (`test-guide-pill-one-line.js`).
+
+## 3. Back button (onboarding and paywall)
+Same real Liquid Glass, the arrow is now **black**. Where iOS has no glass, the flat fallback is a light disc so the black arrow still shows. (The workout / goal / muscle map back buttons are unchanged.)
+
+## 4. Paywall auto-scroll: smooth
+Cause of the choppiness: the old code moved the list in whole pixels from a timer that does not line up with the screen's frames, so in the slow start and end it stood still for a frame and then jumped (measured in Chromium: 43 frames standing still, up to 12.7 px off the curve). Now the rows glide with ONE eased CSS transition that the WebView runs on its own at the screen's frame rate (60 or 120), with sub-pixel steps; at the end the real scroll position is set to the same spot. Measured: every frame moves, 0 stalls, within 2.5 px of the eased curve, about 6 s, still waits 5 s first, a touch stops it exactly where it is (`test-paywall-smooth.js`).
+
+## 5. Plan ready
+- The "–" in the Target card is centred (it sat at the left of a 56 px box): now within 1 px of the card's centre.
+- "Your info" rows with no answer show "–". Tapping the pencil still edits it; typing a value replaces the dash; leaving it empty keeps the dash.
+- No goal weight: the title says "Your goal is to gain – lbs" (or "lose – lbs") instead of a made-up "0 lbs by Dec 4". With real numbers it is unchanged.
+
+## Tests
+New: `test-one-result.js` (the real 2026-11-27 log, BEFORE / AFTER for a, b, c, d), `test-paywall-smooth.js`, `test-guide-pill-one-line.js`. Updated for the new behaviour: `test-verdict-flow.js` (a stroke's result may come from its low point; the old window counted a duplicate cross as the answer), `test-half-reps-newbuild.js` (one of its 5 crosses was a settling wobble: 4 real ones remain), `test-movement-match.js` (reps counted while out of position are not judged on purpose; the pill line is one line), `test-confidence-truth.js`, `test-guide-coach-1113.js` (prints details), `test-setup-guide.js` ("Move back"), `test-onboarding-round10.js` (dashes, centred dash, title), `test-trial-reminder.js` (black arrow; the scroll is measured as what he sees), `test-workout-camera-start.js` ("Move back"). Full suite: 113 of 113 pass.
+
+## Needs your phone
+Everything in 1, 2 and 5 works through Metro (no build). The black arrow and the smooth scroll also work through Metro. Only the new `[ATTEMPT-DROPPED]` log line needs the next native build.

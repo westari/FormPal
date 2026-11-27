@@ -52,7 +52,7 @@ check('no word from Vision yet (undefined): the old rule, so nothing else change
 const guide = SG.createSetupGuide();
 const sawNobody = guide.update({ now: 1000, seen: false, healthy: false, frameHint: true, hintLine: GC.guideLine('Get in frame', 'gobletSquat'), handsExercise: false, expectSamples: true });
 const sawPerson = guide.update({ now: 1000, seen: false, healthy: false, frameHint: false, hintLine: null, handsExercise: false, expectSamples: true });
-check('BEFORE: the Guide says "Step into view" (it thinks nobody is there)', sawNobody.text === 'Step into view', sawNobody.text);
+check('BEFORE (nobody found): since 2026-11-27 the setup says "Move back" there, never "Step into view" (he starts at the phone: too close)', sawNobody.text === 'Move back', sawNobody.text);
 check('AFTER: Vision sees him, no metric samples: the Guide asks him to step back (the legs are cut off / too close), not "Step into view"', sawPerson.text === 'Step back further' && sawPerson.stage === 'fit', sawPerson.text);
 check('the Guide evidence table says when "Step back further" may show in setup (Vision sees a person, no metric)', /Vision SEES a person/.test(GC.GUIDE_EVIDENCE['Step back further'].evidence));
 

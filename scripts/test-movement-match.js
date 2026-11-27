@@ -219,8 +219,10 @@ for (const name of REAL) {
   check(`${name}: when reps are counting and Movement Match is HIGH (${counting.length} ticks) confidence is 90-100 (unless a frame hint caps it)`, counting.every((x) => x.conf.value >= 90 || x.match.cut === 'frame'), counting.filter((x) => x.conf.value < 90).length + ' ticks below 90');
   const notTrying = res.rows.filter((x) => x.match.haveData && x.match.notTrying);
   check(`${name}: when Movement Match is LOW (${notTrying.length} ticks) no check and no X is shown (${res.verdicts.filter((v) => v.show).length} verdicts, every one at a match of ${TUN.MOVEMENT_MATCH.low}+)`, res.verdicts.filter((v) => v.show && v.score < TUN.MOVEMENT_MATCH.low).length === 0);
-  const repsC = res.events.filter((e) => /^\[REP\] #\d+/.test(e.line)).length, nativeV = res.verdicts.filter((v) => v.src === 'native' && v.show).length;
-  check(`${name}: every rep the engine counted got a check or an X (${nativeV} of ${repsC}), except where the Guide's frame hint was up`, nativeV >= repsC - 1, `${nativeV}/${repsC}`);
+  // (2026-11-27) a rep counted while he is OUT OF POSITION (the pose lost again and again: walking to the phone) is not judged on purpose (test-one-result.js)
+  const outOfPos = res.verdicts.filter((v) => v.src === 'native' && !v.show && /out of position/.test(v.why || '')).length;
+  const repsC = res.events.filter((e) => /^\[REP\] #\d+/.test(e.line)).length - outOfPos, nativeV = res.verdicts.filter((v) => v.src === 'native' && v.show).length;
+  check(`${name}: every rep the engine counted got a check or an X (${nativeV} of ${repsC}), except where the Guide's frame hint was up${outOfPos ? ` (${outOfPos} more counted while out of position: not judged, on purpose)` : ''}`, nativeV >= repsC - 1, `${nativeV}/${repsC}`);
   check(`${name}: the Guide and the Coach never said the same thing`, guideAndCoachClash(res).length === 0, guideAndCoachClash(res).join(','));
   const guideBad = uniq(res.rows.map((x) => x.guide).filter(Boolean)).filter((w) => !GUIDE_SET.has(w.toLowerCase()));
   check(`${name}: everything the Guide said is a line from its own list`, guideBad.length === 0, guideBad.join(' | '));
@@ -314,7 +316,8 @@ console.log('\n--- 5. wiring in app/formcheck.tsx ---');
   check('Movement Match is fed every log line and everything resets at Go', fc.includes('matchRef.feed(e.message);') && fc.includes('matchRef.reset(); confRef.reset(); guideEngine.reset(); coachRef.reset();'));
   check('the 200ms tick wires match -> path cut -> confidence -> Guide', fc.includes('attemptRef.current.setPathCut(m.cut);') && fc.includes('const conf = confRef.update(') && fc.includes('guideEngine.decide('));
   check('the four log tags are produced by the pieces the screen uses ([MOVE-MATCH] [GUIDE] [COACH] [CONFIDENCE])', ['[MOVE-MATCH]', '[GUIDE]', '[COACH]', '[CONFIDENCE]'].every((t) => ['lib/movementMatch.ts', 'lib/guideCoach.ts', 'lib/cameraConfidence.ts'].some((f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8').includes(t))));
-  check('the cue card keeps the old layout: stars left (original size), centred text beside them, two lines at most', fc.includes('const icon = 22;') && fc.includes('numberOfLines={2}') && !fc.includes('adjustsFontSizeToFit') && fc.includes("trackingCueCard:  { alignSelf: 'center', maxWidth: 340, minWidth: 230 }"));
+  check('the cue card keeps the old layout: stars left (original size), centred text beside them, two lines at most', fc.includes('const icon = 22;') && fc.includes('<Text style={s.trackingCueText} numberOfLines={2}>') && fc.includes("trackingCueCard:  { alignSelf: 'center', maxWidth: 340, minWidth: 230 }"));
+  check('(2026-11-27) the Guide line in the camera pill is ONE line (a 5-word line never wraps after 4 words): wide pill, shrinks a little only if needed', fc.includes('<Text style={s.pillGuide} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>'));
   check('all numbers live in ONE tuning file and are labelled placeholders', fs.readFileSync(path.join(__dirname, '..', 'lib/coachTuning.ts'), 'utf8').includes('ALL NUMBERS ARE PLACEHOLDERS'));
 }
 

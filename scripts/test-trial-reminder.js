@@ -108,7 +108,7 @@ const silent = () => {};
     await w.pg.evaluate('window.__pwAutoScroll()'); await w.pg.waitForTimeout(3500);
     const mid = await w.pg.evaluate(() => ({ top: document.querySelector('#dc-root [data-scroll]').scrollTop, op: getComputedStyle(document.querySelector('[data-pw-late]')).opacity }));
     check(`${s.n} paywall: 3.5 s after it appears nothing has moved yet (it waits about 5 s)`, mid.top === 0 && mid.op === '0', JSON.stringify(mid));
-    const samples = []; const t0 = Date.now(); for (let k = 0; k < 90; k++) { samples.push([Date.now() - t0, await w.pg.evaluate(() => document.querySelector('#dc-root [data-scroll]').scrollTop)]); await w.pg.waitForTimeout(100); }
+    const samples = []; const t0 = Date.now(); for (let k = 0; k < 90; k++) { samples.push([Date.now() - t0, await w.pg.evaluate(() => { const e = document.querySelector('#dc-root [data-scroll]'); let off = 0; try { off = -new DOMMatrixReadOnly(getComputedStyle(e.children[0]).transform).m42; } catch (x) {} return e.scrollTop + off; })]); /* (2026-11-27) what he SEES: the scroll position plus the rows glide transform */ await w.pg.waitForTimeout(100); }
     const fin = await w.pg.evaluate(() => { const e = document.querySelector('#dc-root [data-scroll]'); return { top: e.scrollTop, max: e.scrollHeight - e.clientHeight, op: getComputedStyle(document.querySelector('[data-pw-late]')).opacity }; });
     let peak = 0; for (let k = 1; k < samples.length; k++) { const dt = (samples[k][0] - samples[k - 1][0]) / 1000; if (dt > 0) peak = Math.max(peak, Math.abs(samples[k][1] - samples[k - 1][1]) / dt); }
     const moving = samples.filter((x, k) => k > 0 && x[1] !== samples[k - 1][1]);
@@ -121,7 +121,9 @@ const silent = () => {};
   console.log('--- the paywall top, the back button ---');
   check('the page fills to the very top: the strip above the page (under the status bar) is the page\'s own colour, not white', ob.includes("const pageBg = (htmlKey === 'paywall' || htmlKey === 'giftOffer') ? '#f4f4f7' : '#ffffff';") && ob.includes('backgroundColor: isDcPage ? pageBg'));
   const gb = read('components/GlassBackButton.tsx');
-  check('the back button on the paywall and gift offer is the standard GlassBackButton with the STANDARD glass (the Finish pill\'s: dark real glass)', ob.includes('<GlassBackButton onPress') && ob.includes('scheme="standard"') && gb.includes("STANDARD_GLASS.colorScheme") && gb.includes('STANDARD_GLASS.fallbackColor'));
+  check('the back button on the paywall and gift offer is the standard GlassBackButton with the STANDARD glass (the Finish pill\'s: dark real glass)', ob.includes('<GlassBackButton onPress') && ob.includes('scheme="standard"') && gb.includes("STANDARD_GLASS.colorScheme"));
+  // (Ari 2026-11-27) same real glass, but the arrow is BLACK so it is easy to see (and the no-glass fallback is a light disc, so the black arrow shows there too)
+  check('the paywall / onboarding back button keeps the real Liquid Glass but its arrow is BLACK', gb.includes("export const STANDARD_BACK_ARROW_COLOR = '#000000';") && gb.includes("const arrow = standard ? STANDARD_BACK_ARROW_COLOR") && gb.includes('stroke={arrow}') && gb.includes('fallbackColor={standard ? LIGHT_FALLBACK'));
   const sg = read('components/StandardGlass.tsx'); const fcs = read('app/formcheck.tsx');
   check('...and that is the same recipe the camera Finish pill uses (dark scheme, fallback rgba(40,41,48,0.55))', /colorScheme: 'dark'/.test(sg) && sg.includes("rgba(40,41,48,0.55)") && /<LiquidGlassButton[^>]*\n[^\n]*onPress=\{\(\) => \{ hapticMain\(\); void handleStop\(\); \}\}[\s\S]{0,200}colorScheme="dark"[\s\S]{0,120}rgba\(40,41,48,0.55\)/.test(fcs));
   check('the auto-scroll starts when the paywall APPEARS (poolActive), not when its page loads hidden', ob.includes("if (htmlKey !== 'paywall') return;") && ob.includes('window.__pwAutoScroll();') && ob.includes('[PAYWALL] the paywall appeared'));

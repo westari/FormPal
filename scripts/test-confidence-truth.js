@@ -116,7 +116,8 @@ check('(control) the OLD rule, replayed on the same cue periods, WOULD have slam
   console.log('  engine reps: ' + reps.map((e) => (e.t / 1000).toFixed(0) + 's').join(' '));
   check('BEFORE: all 7 counted reps got a check, including #7 (bottom=1.0: his arms dropped to the side, reaching for the phone)', before.verdicts.length >= 7);
   check('AFTER: reps 1 to 6 (on the exercise path) each get ONE check', nat.slice(0, 6).every((v) => v.show === 'check') && nat.slice(0, 6).length === 6);
-  check('AFTER: rep #7 (bottom=1.0, far below the path) gets NO check and no X, and the log says why', !!last && !last.show && res.logs.some((l) => /went far below the exercise path/.test(l.m)));
+  // (2026-11-27) he is reaching for the phone there: since this round it is already caught as OUT OF POSITION (the camera's visibility fell) before the path rule
+  check('AFTER: rep #7 (bottom=1.0, far below the path) gets NO check and no X, and the log says why (out of position, or far below the exercise path)', !!last && !last.show && (/out of position/.test(last.why || '') || res.logs.some((l) => /went far below the exercise path/.test(l.m))), JSON.stringify(last));
   const mm = P.MMm.createMovementMatch({}); mm.feed('[METRIC] shoulderPress value=60 enter=50 exit=58 rom=55 top=84 state=up phase=top');
   check('Movement Match: a rep far below the path does not raise the score floor; one on the path does', mm.repOnPath(1.0) === false && mm.repOnPath(35.5) === true && mm.band().lo > 25 && mm.band().lo < 35, JSON.stringify(mm.band()));
   check('the Coach is told whether each rep stayed on the path (onPath) from the rep event on the phone', fc.includes("onPath: matchRef.repOnPath(rep.depthAngle)") && fc.includes('matchRef.noteRep(rep.depthAngle)'));

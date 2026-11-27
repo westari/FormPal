@@ -40,7 +40,10 @@ export interface SetupDecision { stage: SetupStage; text: string; cap: number; r
 
 export function createSetupGuide() {
   function update(i: SetupInputs): SetupDecision {
-    const fitText = i.hintLine ?? (i.handsExercise ? GUIDE_LINES.backHands : GUIDE_LINES.backBody);
+    // (Ari 2026-11-27) "Step into view" showed while he WAS in view, just too close: the camera starts with him standing at the phone (he just tapped it), and at
+    // that distance Vision often finds no body at all. While setting up, "nobody found" is therefore said as "Move back", never "Step into view".
+    const hinted = i.hintLine === GUIDE_LINES.intoPicture ? GUIDE_LINES.backUp : i.hintLine;
+    const fitText = hinted ?? (i.handsExercise ? GUIDE_LINES.backHands : GUIDE_LINES.backBody);
     const blind = i.expectSamples !== false && !i.seen;
     if (blind || (i.seen && !i.healthy) || i.frameHint) return { stage: 'fit', text: fitText, cap: SETUP_TUNING.capFit, ready: false };
     return { stage: 'ready', text: GUIDE_LINES.holdStill, cap: SETUP_TUNING.capReady, ready: true };

@@ -606,7 +606,9 @@ const PR_FILL_D_DOWN  = PR_LINE_D_DOWN + ' L292 160 L14 160 Z';
 // Recomp gets "Starting today." appended to the sentence itself — explicit
 // ask — since its two-line crossing graph doesn't carry the same "Starting
 // today" sub-line read as clearly as the single-line kinds do.
-function planReadyHeaderText(goal: ReturnType<typeof computeGoalPlan>): string {
+function planReadyHeaderText(goal: ReturnType<typeof computeGoalPlan>, noNumber = false): string {
+  // (Ari 2026-11-27) no goal weight (or no weight) answered: there is no real number, so the title says "Your goal is to gain – lbs" (no made-up "0 lbs by Dec 4")
+  if (noNumber && (goal.kind === 'fat' || goal.kind === 'muscle')) return `<span style="font-size: 38px;">Your goal is to ${goal.kind === 'fat' ? 'lose' : 'gain'} <span style="color: #2E7DFF;">– lbs</span></span>`;
   // Date is back — explicit ask: "by [date], date comes from the goal
   // helper using realistic rates" — goalDateLabel is exactly that
   // (computeGoalPlan's own rate-projected date, lib/onboardingGoals.ts).
@@ -629,6 +631,9 @@ function planReadyHeaderText(goal: ReturnType<typeof computeGoalPlan>): string {
   return `<span style="font-size: 38px;">Your goal is to gain <span style="color: #2E7DFF;">${goal.deltaLbs} lbs</span> by ${goal.goalDateLabel}</span>`;
 }
 
+/** no real goal number: the goal weight or the weight was not answered */
+function planReadyNoNumber(a: Record<string, any>): boolean { return typeof a.goalWeight !== 'number' || typeof a.weight !== 'number'; }
+
 function planReadyInject(a: Record<string, any>): string {
   const goal = computeGoalPlan(a);
   const w  = typeof a.weight === 'number' ? Math.round(a.weight) : 0;
@@ -639,15 +644,17 @@ function planReadyInject(a: Record<string, any>): string {
   const days = parseInt(String(a.daysPerWeek ?? '3 days'), 10) || 3;
   // "Your info" shows ONLY what he answered (Ari 2026-11-25): a skipped answer is blank, never the design's sample value (184 lb, 5'11", 27, Beginner, 195 lb) or a made-up default.
   const goalRow = goal.kind === 'recomp' ? (typeof a.mainGoal === 'string' && a.mainGoal ? goal.shortGoal : '') : (typeof a.goalWeight === 'number' ? goal.shortGoal : '');
+  // (Ari 2026-11-27) a row with no answer shows "–", not blank
+  const dash = (v: string) => v || '–';
   return `
 (function(){
   function post(m){ try{ window.ReactNativeWebView.postMessage(m); }catch(e){} }
   var MAP = {
-    '195 lb': ${JSON.stringify(goalRow)},
-    '184 lb': ${JSON.stringify(wStr)},
-    "5'11\\"": ${JSON.stringify(h)},
-    '27':     ${JSON.stringify(ag)},
-    'Beginner': ${JSON.stringify(ex)}
+    '195 lb': ${JSON.stringify(dash(goalRow))},
+    '184 lb': ${JSON.stringify(dash(wStr))},
+    "5'11\\"": ${JSON.stringify(dash(h))},
+    '27':     ${JSON.stringify(dash(ag))},
+    'Beginner': ${JSON.stringify(dash(ex))}
   };
   var FIELD_OF = { '195 lb': 'goal', '184 lb': 'weight', "5'11\\"": 'height', '27': 'age', 'Beginner': 'experience' };
   var GOAL_VALUE = ${JSON.stringify(goal.shortGoal)};
@@ -695,9 +702,10 @@ function planReadyInject(a: Record<string, any>): string {
       if(el.children.length) continue;
       var t=(el.textContent||'').trim();
       if(Object.prototype.hasOwnProperty.call(MAP,t) && el.textContent.trim() !== MAP[t]){
-        // a skipped answer is BLANK: the row keeps its pencil and a tap target where the value would be (data-pr-field lets the pencil find it)
+        // a skipped answer shows "–": the row keeps its pencil and a tap target where the value would be (data-pr-field lets the pencil find it). The Target card's
+        // dash gets no wide box: the card centres it (a 56px box with the dash at its left edge put it off centre, Ari 2026-11-27)
         el.textContent=MAP[t]; el.setAttribute('data-pr-field', FIELD_OF[t]);
-        if(MAP[t]==='') { el.style.setProperty('display','inline-block','important'); el.style.setProperty('min-width','56px','important'); el.style.setProperty('min-height','1.2em','important'); }
+        if(MAP[t]==='–' && FIELD_OF[t]!=='goal') { el.style.setProperty('display','inline-block','important'); el.style.setProperty('min-width','56px','important'); el.style.setProperty('min-height','1.2em','important'); }
         hit++;
       }
     }
@@ -1317,16 +1325,17 @@ const DC_PAGE_INJECT = `
     sp.style.removeProperty('border-radius');
     sp.style.removeProperty('padding');
     var raw=(sp.textContent||'').trim();
+    if(raw==='–') raw='';   // nothing typed over the dash
     if(field==='weight'){
       var num=(raw.match(/[0-9.]+/)||[''])[0];
-      if(num) sp.textContent=Math.round(parseFloat(num))+' lb';
+      sp.textContent=num ? Math.round(parseFloat(num))+' lb' : '–';
       post('editvalue:weight:'+encodeURIComponent(num));
     } else if(field==='age'){
       var a=(raw.match(/[0-9]+/)||[''])[0];
-      if(a) sp.textContent=a;
+      sp.textContent=a || '–';
       post('editvalue:age:'+encodeURIComponent(a));
     } else {
-      sp.textContent=raw;
+      sp.textContent=raw || '–';
       post('editvalue:height:'+encodeURIComponent(raw));
     }
   }
@@ -1629,13 +1638,30 @@ const PAYWALL_TIDY_JS = `(function(){
     if(!row.parentElement) return false;
     var sib=row.nextElementSibling; late=[]; while(sib){ late.push(sib); sib=sib.nextElementSibling; }
     late.forEach(function(e){ e.setAttribute('data-pw-late','1'); });
-    ['touchstart','wheel','mousedown'].forEach(function(ev){ scr.addEventListener(ev,function(){ if(timer){clearTimeout(timer);timer=null;} if(raf){cancelAnimationFrame(raf);raf=0;} cancelled=true; showLate(); },{passive:true}); });
+    ['touchstart','wheel','mousedown'].forEach(function(ev){ scr.addEventListener(ev,function(){ if(timer){clearTimeout(timer);timer=null;} if(raf){cancelAnimationFrame(raf);raf=0;} cancelled=true; stopGlide(); showLate(); },{passive:true}); });
     return late.length>0;
   }
   function showLate(){ if(scr) scr.setAttribute('data-pw-shown','1'); }
   function hideLate(){ if(scr) scr.removeAttribute('data-pw-shown'); }
   var lt=0; (function wait(){ if(!findList() && lt++<60) setTimeout(wait,100); })();
   function ease(t){ return -(Math.cos(Math.PI*t)-1)/2; }
+  // SMOOTH (Ari 2026-11-27: "works, but feels choppy"). Stepping scrollTop from a timer moved the list in whole pixels at times that do not line up with the
+  // screen's frames: at the slow start and end of the ease it stood still for a frame, then jumped a pixel. Now the list's rows GLIDE with one CSS transform
+  // transition (the same eased curve), which the WebView runs on its compositor at the screen's own frame rate (60 or 120 fps) with sub-pixel steps and no
+  // JavaScript per frame; at the end the real scroll position is set to the same place and the transform removed, so nothing visibly moves. A touch stops it
+  // exactly where it is.
+  var GLIDE_CURVE='cubic-bezier(0.37,0,0.63,1)';   // the CSS twin of ease() (ease-in-out sine)
+  var glide=null;
+  function rows(){ return scr ? Array.prototype.slice.call(scr.children) : []; }
+  function setRows(tr, tf){ rows().forEach(function(k){ k.style.setProperty('transition', tf, 'important'); k.style.setProperty('transform', tr, 'important'); k.style.setProperty('will-change', tr==='none' ? 'auto' : 'transform', 'important'); }); }
+  function offsetNow(){ var k=rows()[0]; if(!k) return 0; try{ var m=new DOMMatrixReadOnly(getComputedStyle(k).transform); return -m.m42; }catch(e){ return 0; } }
+  function stopGlide(){
+    if(!glide) return; var g=glide; glide=null; clearTimeout(g.end);
+    var off=offsetNow();
+    setRows('none', 'opacity 1200ms ease');
+    scr.scrollTop=g.from+off;
+    running=false;
+  }
   // THE AUTO-SCROLL (Ari 2026-11-25: it was not happening on his phone). More robust now: it can be asked for any number of times (a second call while it is waiting or
   // running changes nothing), it finds the list itself if the page was not ready yet, it steps with a plain timer on the clock (requestAnimationFrame can be paused while
   // the page is hidden in the pool), and it tells the app what it does (pwscroll:...) so the log shows it.
@@ -1657,12 +1683,17 @@ const PAYWALL_TIDY_JS = `(function(){
       showLate();
       var from=scr.scrollTop, to=Math.max(0,scr.scrollHeight-scr.clientHeight), t0=Date.now(), dur=6000;
       if(to<=2){ say('nothing to scroll (the list fits)'); return; }
-      running=true; say('scrolling '+Math.round(to-from)+' px over 6 s');
-      var iv=setInterval(function(){
-        if(cancelled){ clearInterval(iv); running=false; return; }
-        var p=Math.min(1,(Date.now()-t0)/dur); scr.scrollTop=from+(to-from)*ease(p);
-        if(p>=1){ clearInterval(iv); running=false; say('done'); }
-      },16);
+      running=true; say('scrolling '+Math.round(to-from)+' px over 6 s (one compositor transition, eased)');
+      var dist=to-from;
+      setRows('translate3d(0,0,0)', 'opacity 1200ms ease');
+      void scr.offsetHeight;   // the start position is drawn first, so the transition has a start
+      setRows('translate3d(0,'+(-dist)+'px,0)', 'transform '+dur+'ms '+GLIDE_CURVE+', opacity 1200ms ease');
+      glide={ from: from, to: to, end: setTimeout(function(){
+        if(!glide) return; glide=null;
+        setRows('none', 'opacity 1200ms ease');
+        scr.scrollTop=to;
+        running=false; say('done');
+      }, dur+40) };
     },5000);
   };
   true;
@@ -2130,7 +2161,7 @@ function DcPagePool({ activeKey, answers, topInset, progressFor, onAdvance, onBa
     // it's the only place they show that text).
     const subline = goal.kind === 'recomp' ? '' : 'Starting today';
     return rawPlanReadyHtml
-      .replace('{{HEADER}}', esc(planReadyHeaderText(goal)))
+      .replace('{{HEADER}}', esc(planReadyHeaderText(goal, planReadyNoNumber(answers))))
       .replace('{{SUBLINE}}', esc(subline));
   }, [rawPlanReadyHtml, answers]);
 
