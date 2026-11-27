@@ -50,6 +50,8 @@ export interface AttemptEvent {
   n: number;
   score: number;
   low: number; high: number; periodSec: number;
+  /** when the stroke reached its low (this detector's clock): lets the screen tell whether this stroke already had its result before it was reported */
+  lowAt: number;
   /** the stroke size in rep spans: (high - low) / R */
   strokeR: number;
   outcome: 'counted' | 'rejected' | 'missed' | 'soft';
@@ -225,7 +227,7 @@ export function createAttemptDetector(opts: { exerciseId?: string; now?: () => n
       // the engine threw it out: say which end fell short (or that it could not see you), same words as a missed one
       if (outcome === 'rejected') blocker = blockerFor(low.v, high.v);
     }
-    const ev: AttemptEvent = { kind: 'attempt', n: nAttempts, score, low: low.v, high: high.v, periodSec: period, strokeR: stroke, outcome, blocker, reason: outcome === 'missed' || outcome === 'rejected' ? blockerCue(blocker === 'none' ? 'bottom-short' : blocker, exerciseId) : '' };
+    const ev: AttemptEvent = { kind: 'attempt', n: nAttempts, score, low: low.v, high: high.v, lowAt: low.t, periodSec: period, strokeR: stroke, outcome, blocker, reason: outcome === 'missed' || outcome === 'rejected' ? blockerCue(blocker === 'none' ? 'bottom-short' : blocker, exerciseId) : '' };
     out.push(ev);
     opts.log?.(`[ATTEMPT] #${nAttempts} score=${score} low=${low.v.toFixed(1)} high=${high.v.toFixed(1)} period=${period.toFixed(1)}s outcome=${outcome} blocker=${blocker} (enter=${enter} exit=${exit}${adaptedLine ? ` adapted=${adaptedLine.enter.toFixed(1)}/${adaptedLine.exit.toFixed(1)}` : ''})`);
 

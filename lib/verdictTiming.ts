@@ -32,3 +32,25 @@ export function crossDue(p: PendingCross, now: number, value: number | null, d: 
   if (now - p.at >= CROSS_MAX_WAIT_MS) return { due: true, why: `waited the most (${CROSS_MAX_WAIT_MS} ms)` };
   return { due: false, why: '' };
 }
+
+/**
+ * (Ari 2026-11-27) BARELY MOVING IS NOT A REP. The engine ends a stroke after a turn of only 15% of the rep range (ExerciseEngine.trackAttempt), so a small wobble at the
+ * top right after a verdict (the arms settling, a little bounce) came out as a second "half rep" ("Go lower" twice for one rep, feedback while barely moving).
+ * A stroke counts as a rep attempt only if it LEFT the start zone (the same start zone the held cross waits for). In the 2026-11-27 log the wobbles reached
+ * 74.6 to 77.7 and every real half rep 52 to 69; the start zone for shoulder press begins at 73.6, between the two.
+ */
+export function leftStartZone(reached: number | null | undefined, d: StartLines): boolean {
+  if (reached === null || reached === undefined || !isFinite(reached)) return true;   // no number: never drop a verdict on a guess
+  return !backAtStart(reached, d);
+}
+
+/**
+ * A half rep that went at least HALFWAY down from the start zone to the rep line (shoulder press: 61.8, between 73.6 and 50). Only such a stroke may get its cross
+ * while Movement Match is low after a rest (Coach strokeOnPath): a resting wobble at the edge of the start zone (2026-11-13 log: dips to 70-72 while he stood at
+ * 74) never does. 2026-11-27: the half rep after a 5 s rest reached 55.7.
+ */
+export function deepHalfRep(reached: number | null | undefined, d: StartLines & { repEnterThreshold: number }): boolean {
+  if (reached === null || reached === undefined || !isFinite(reached)) return false;
+  const mid = (startLevel(d) + d.repEnterThreshold) / 2;
+  return d.topAngle >= d.repExitThreshold ? reached <= mid : reached >= mid;
+}

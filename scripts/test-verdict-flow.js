@@ -63,8 +63,12 @@ for (const [f, a, b, name] of SETS) {
   const rows = read(f).split('\n').filter(Boolean).map(parse).filter(Boolean).filter((r) => r.t >= a && r.t <= b);
   const sel = rows.slice(rows.findIndex((r) => /^\[METRIC\].*phase=(?!setup)/.test(r.line))); const t0 = sel[0].t;
   const ev = sel.map((r) => ({ t: r.t - t0, line: r.line }));
-  const atts = sel.filter((r) => /\[ATTEMPT\] #\d+ .*outcome=(missed|rejected)/.test(r.line)).map((r) => r.t - t0);
-  const stat = (res) => { const shown = res.verdicts.filter((v) => v.show).map((v) => v.t); let run = 0, worst = 0, silent = 0; for (const ta of atts) { if (shown.some((t) => t >= ta - 600 && t <= ta + 2300)) run = 0; else { run++; silent++; worst = Math.max(worst, run); } } return { silent, worst }; };
+  // (2026-11-27) the strokes are the replay's own detector strokes, with the time of their LOW: a stroke's result may come any time from its low (the engine's
+  // cross is shown when the arms are back) to 2.3 s after the detector reported it (the detector reports a stroke up to ~2 s late). Strokes that never left the
+  // start zone (barely moving) must get NOTHING. A second result for the same stroke is counted too (it was hidden by the old window).
+  const real = (res) => res.attempts.filter((x) => (x.outcome === 'missed' || x.outcome === 'rejected') && VT.leftStartZone(x.low, press));
+  const atts = real(P.run(ev, { exerciseId: 'shoulderPress' }));
+  const stat = (res) => { const shown = res.verdicts.filter((v) => v.show).map((v) => v.t); let run = 0, worst = 0, silent = 0; for (const x of real(res)) { if (shown.some((t) => t >= x.lowAt - 400 && t <= x.t + 2300)) run = 0; else { run++; silent++; worst = Math.max(worst, run); } } return { silent, worst }; };
   const before = stat(P.run(ev, { exerciseId: 'shoulderPress', immediateCross: true }));
   const resA = P.run(ev, { exerciseId: 'shoulderPress' });
   const after = stat(resA);
@@ -79,8 +83,8 @@ check('the bug reproduces on the old behaviour: BEFORE, at least one real log ha
 
 console.log('--- the screen wires it ---');
 const fc = read('app/formcheck.tsx');
-check('a half rep from the engine is HELD (pendingCrossRef) and delivered by the one place deliverCrossRef when the arms are back (crossDue) or after the most it may wait', fc.includes('pendingCrossRef.current = { reason: ev.reason') && fc.includes('crossDue(pc, now, val, lines)') && fc.includes('deliverCrossRef.current = (reason, at, why, value) =>'));
-check('a counted rep flushes a held cross first and is withheld ONLY when nobody is in the picture (not by the raw camera cue)', fc.includes("const verdictOk = statsRef.current?.personDetected !== false;") && fc.includes("deliverCrossRef.current(old.reason, old.at, 'a counted rep arrived'"));
+check('a half rep from the engine is HELD (pendingCrossRef) and delivered by the one place deliverCrossRef when the arms are back (crossDue) or after the most it may wait', fc.includes('pendingCrossRef.current = { reason: ev.reason') && fc.includes('crossDue(pc, now, val, lines)') && fc.includes('deliverCrossRef.current = (reason, at, why, value, strokeOnPath) =>'));
+check('a counted rep flushes a held cross first and is withheld ONLY when nobody is in the picture or he is out of position (2026-11-27), never by the raw camera cue', fc.includes("const verdictOk = statsRef.current?.personDetected !== false && !outOfPositionRef.current;") && fc.includes("deliverCrossRef.current(old.reason, old.at, 'a counted rep arrived'"));
 check('a stroke with no verdict gets its cross (silentWatch.tick) and an unreliable reject drops the number (unreliableRecently)', fc.includes('silentWatch.tick(now,') && fc.includes('unreliableRecently: rej.lowQuality') && fc.includes('[SILENT] stroke #'));
 check('the log says how long each verdict took: [TIMING] cross shown N ms after the engine event, when ...', fc.includes("[TIMING] cross shown '"));
 console.log(failed ? `\n${failed} FAILED` : '\nall passed');

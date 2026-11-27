@@ -49,7 +49,10 @@ const nativeReps = sel.filter((r) => /^\[REP\] #/.test(r.line)).length;
 const halfAttempts = sel.filter((r) => /\[ATTEMPT\] #\d+ .*outcome=missed/.test(r.line)).length;
 console.log(`  full reps ${nativeReps}; half-rep attempts in the log ${halfAttempts}; crosses in the replay ${xs.length}: ${xs.map((v) => (v.t / 1000).toFixed(1) + 's ' + v.reason).join(', ')}`);
 check('every counted rep still gets a check', res.verdicts.filter((v) => v.src === 'native' && v.show === 'check').length === nativeReps);
-check('the half reps get a cross "Go lower" from the new native event (5 or more in this log, none withheld)', xs.length >= 5 && xs.every((v) => /Go lower/.test(v.reason)) && res.verdicts.filter((v) => v.src === 'missed' && !v.show).length === 0, JSON.stringify(res.verdicts.filter((v) => v.src === 'missed')));
+// (2026-11-27) one of the five crosses this log used to give (13.4 s) came from a stroke that reached only 75: it never left the start zone (73.6), the arms settling
+// between two results. That is the "barely moving fires feedback" Ari reported: it gets nothing now (test-one-result.js), so 4 real half reps remain.
+check('the barely-moving stroke (reached 75, never out of the start zone) gets NO cross any more', res.ignored.some((x) => x.src === 'engine' && x.reached >= 73.6) && !xs.some((v) => v.t > 12500 && v.t < 14000), JSON.stringify(res.ignored));
+check('the half reps get a cross "Go lower" from the new native event (4 or more in this log, none withheld)', xs.length >= 4 && xs.every((v) => /Go lower/.test(v.reason)) && res.verdicts.filter((v) => v.src === 'missed' && !v.show).length === 0, JSON.stringify(res.verdicts.filter((v) => v.src === 'missed')));
 check('no check and no cross while he stands still (the stretch with no stroke gets no verdict)', true);
 
 console.log('--- 2. the Guide and the number agree ---');

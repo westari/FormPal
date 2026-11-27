@@ -27,7 +27,8 @@ const src = fs.readFileSync(path.join(__dirname, '..', 'app/formcheck.tsx'), 'ut
   const blind = g.update({ ...base, seen: false });
   check('no readings yet: ONE plain action ("Step back further"), not ready, confidence capped at 35', blind.stage === 'fit' && blind.text === 'Step back further' && !blind.ready && blind.cap === 35, `${blind.stage} "${blind.text}" ${blind.cap}`);
   const nobody = g.update({ ...base, seen: false, frameHint: true, hintLine: GC.GUIDE_LINES.intoPicture });
-  check('nobody in the picture: "Step into view"', nobody.text === 'Step into view' && !nobody.ready, nobody.text);
+  // (Ari 2026-11-27) "Step into view" showed while he WAS in view, just too close (the camera starts with him at the phone): in setup it is "Move back"
+  check('nobody found while setting up (he just tapped the phone: too close): "Move back", never "Step into view"', nobody.text === 'Move back' && !nobody.ready, nobody.text);
   const gap = g.update({ ...base, healthy: false });
   check('tracking not steady (pose gap): still "fit"', gap.stage === 'fit' && !gap.ready);
   const ok = g.update({ ...base });
@@ -88,7 +89,7 @@ const src = fs.readFileSync(path.join(__dirname, '..', 'app/formcheck.tsx'), 'ut
   const lines = [...new Set(GC.GUIDE_WORDS)].filter((x) => x !== 'Ready. Go!');
   const bad = /so your|shoulders|bring your|show\b|picture|position/i;
   check('every Guide line is ONE simple physical action (no "so your hands show", no "Bring your hands back to your shoulders")', lines.every((t) => !bad.test(t)), lines.filter((t) => bad.test(t)).join(' | '));
-  check('the Guide lines with evidence exist word for word (Step back further, Back up, Keep your hands in view ...); the lines the old build cannot prove are gone', L.backHands === 'Step back further' && L.backUp === 'Back up' && L.handsInView === 'Keep your hands in view' && L.raiseHands === undefined && L.lowerHands === undefined && L.closer === undefined && L.chestHeight === undefined && L.handsStart === undefined && L.startPos === undefined);
+  check('the Guide lines with evidence exist word for word (Step back further, Move back, Turn your side to the camera, Keep your hands in view ...); the lines the old build cannot prove are gone', L.backHands === 'Step back further' && L.backUp === 'Move back' && L.sideways === 'Turn your side to the camera' && L.handsInView === 'Keep your hands in view' && L.raiseHands === undefined && L.lowerHands === undefined && L.closer === undefined && L.chestHeight === undefined && L.handsStart === undefined && L.startPos === undefined);
   check('every line starts with a capital letter and has 2-6 words (a beginner reads it at a glance)', lines.every((t) => /^[A-Z]/.test(t) && t.split(' ').length >= 2 && t.split(' ').length <= 6), lines.filter((t) => !/^[A-Z]/.test(t) || t.split(' ').length > 6).join(' | '));
   check('every Guide line fits the card in two lines (35 characters or fewer)', lines.every((t) => t.length <= 35), lines.filter((t) => t.length > 35).join(' | '));
   const i0 = src.indexOf('trackingCueText: {');

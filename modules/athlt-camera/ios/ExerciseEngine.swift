@@ -576,7 +576,15 @@ final class ExerciseEngine {
     private func finishAttempt(range: Double, timestamp: Date) {
         let size = (atkStartPeak - atkLow) / range
         let seconds = atkStartTime.map { timestamp.timeIntervalSince($0) } ?? 0
-        guard size >= Self.ATTEMPT_MIN_FRACTION, atkFrames >= Self.ATTEMPT_MIN_FRAMES, seconds >= Self.ATTEMPT_MIN_SECONDS else { return }
+        guard size >= Self.ATTEMPT_MIN_FRACTION, atkFrames >= Self.ATTEMPT_MIN_FRAMES, seconds >= Self.ATTEMPT_MIN_SECONDS else {
+            // (2026-11-27) a real-sized stroke dropped only for being quick: say so, so the log shows whether fast half reps are lost here (two dips to about 55
+            // at 19:09:38.9 and 19:09:40.5 got no engine event at all)
+            if size >= Self.ATTEMPT_MIN_FRACTION {
+                let lowText = String(format: "%.1f", atkLow), sizeText = String(format: "%.2f", size), secText = String(format: "%.2f", seconds)
+                onDebugLog?("[ATTEMPT-DROPPED] \(def.id) low=\(lowText) size=\(sizeText)R frames=\(atkFrames) seconds=\(secText): too quick to count as a half rep (min \(Self.ATTEMPT_MIN_FRAMES) frames, \(Self.ATTEMPT_MIN_SECONDS) s, PLACEHOLDER)")
+            }
+            return
+        }
         // A stroke that stayed above the enter line never counts, so the bottom is short by construction; the top is short too when the stroke
         // started from a peak lower than the rep's own top. Report whichever end is further from its line (as a share of the range).
         let topNeeded = def.topAngle - Self.ATTEMPT_TOP_FRACTION * range

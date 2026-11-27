@@ -18,13 +18,13 @@ import type { MatchResult } from './movementMatch';
 // Each line = ONE simple physical action a first-time user understands at once (no "so your hands show").
 export const GUIDE_LINES = {
   intoPicture:  'Step into view',   // ONLY when nobody is in the picture
-  backUp:       'Back up',          // too close (Ari 2026-11-15)
+  backUp:       'Move back',        // too close: in view but too near the camera (Ari 2026-11-15 "Back up", 2026-11-27 "Move back")
   backHands:    'Step back further',
   backBody:     'Step back further',
   phoneBack:    'Move your phone back',
   handsInView:  'Keep your hands in view',
   bodyInView:   'Keep your whole body in view',
-  sideways:     'Turn sideways to the phone',
+  sideways:     'Turn your side to the camera',   // (Ari 2026-11-27: "Turn sideways to the phone" was confusing)
   facePhone:    'Face the phone',
   moreLight:    'Find more light',
   holdStill:    'Hold still',
@@ -180,12 +180,12 @@ export function createCalmLine(): CalmLine {
  */
 export const GUIDE_EVIDENCE: Record<string, { evidence: string; oldBuild: boolean }> = {
   'Step into view':               { evidence: 'Vision finds nobody in the picture AND the person was never seen before (personDetected false, metric samples silent)', oldBuild: true },
-  'Back up':                      { evidence: 'a person who WAS in the picture a moment ago is lost (personDetected false after being seen), or native says "Back up" / "too close" in setup', oldBuild: true },
+  'Move back':                    { evidence: 'a person who WAS in the picture a moment ago is lost (personDetected false after being seen), or native says "Back up" / "too close" in setup', oldBuild: true },
   'Step back further':            { evidence: 'while setting up: Vision SEES a person (onDebugStats.personDetected) but the rep metric is not measurable (no metric samples at all, so the exercise\'s joints are cut off or too close); or native says "Step back into frame" AND the metric samples really stop or pose gaps appear (a cue the samples contradict is ignored); or the path is cut at the frame edge', oldBuild: true },
   'Move your phone back':         { evidence: 'the rep path is cut at the frame edge or at BOTH ends (metric samples stop near both the top and the bottom)', oldBuild: true },
   'Keep your hands in view':      { evidence: 'metric samples stop near the TOP of the stroke (hands / arms lost there), or a rep was rejected and the poorly seen joints are the elbow / wrist', oldBuild: true },
   'Keep your whole body in view': { evidence: 'metric samples stop near the BOTTOM of the stroke, or a rep was rejected and the poorly seen joints are hips / knees / ankles', oldBuild: true },
-  'Turn sideways to the phone':   { evidence: 'native out-of-plane cue (the angle is foreshortened) for an exercise filmed from the side', oldBuild: true },
+  'Turn your side to the camera':   { evidence: 'native out-of-plane cue (the angle is foreshortened) for an exercise filmed from the side', oldBuild: true },
   'Face the phone':               { evidence: 'native out-of-plane cue (the angle is foreshortened) for an exercise filmed from the front', oldBuild: true },
   'Find more light':              { evidence: 'a rep was rejected and even the best joint confidence was under 0.45', oldBuild: true },
   'Start your reps':              { evidence: 'tracking began (Go) at least 6 s ago, the person is in the picture, NO rep has counted, NO stroke attempt and no check / X since Go. Shown once per camera screen, for 4 s; never again, and never once any rep has counted (so never in a rest between sets)', oldBuild: true },
@@ -355,6 +355,9 @@ export interface CoachInput {
   missedReason?: string;
   /** native rep: did it stay on the exercise's path? false = it went far below it (the arms dropped, reaching for the phone): not this exercise, so no check and no X */
   onPath?: boolean;
+  /** missed (Ari 2026-11-27): the engine's stroke went down the exercise's own path, out of the start zone and stopping short of the line (a real half rep). That stroke
+   *  is itself the proof he is doing the exercise, so a Movement Match that is low only because of the rest before it (no rhythm yet) does not hide its cross. */
+  strokeOnPath?: boolean;
 }
 export interface CoachVerdict { show: 'check' | 'x' | null; reason: string; why: string }
 
@@ -381,14 +384,15 @@ export function createCoach(opts: { log?: (m: string) => void } = {}): Coach {
   return {
     verdict(i) {
       const lowMatch = i.match.haveData && i.match.notTrying;
-      if (lowMatch) return out(i, { show: null, reason: '', why: 'Movement Match is LOW (not trying this exercise), so no check and no X' });
+      const provenStroke = i.source === 'missed' && i.strokeOnPath === true && i.missedReason === 'short_bottom';
+      if (lowMatch && !provenStroke) return out(i, { show: null, reason: '', why: 'Movement Match is LOW (not trying this exercise), so no check and no X' });
       if (i.source === 'native' && i.onPath === false) return out(i, { show: null, reason: '', why: 'the counted rep went far below the exercise path (arms dropped / reaching): it is not this exercise, so no check and no X' });
       if (i.source === 'missed') {
         // a missed stroke never stacks on a verdict that was just shown (a counted rep always gets its own)
         if (i.now - lastAt < K.oneVerdictPerSec * 1000) return out(i, { show: null, reason: '', why: 'a verdict was just shown' });
         // an unknown reason is still a cross ("Full movement"): a real attempt never gets silence
         const word = missedWord(i.missedReason) ?? 'Full movement';
-        return out(i, { show: 'x', reason: word, why: `the engine saw a stroke start like a rep and not count (${i.missedReason})` });
+        return out(i, { show: 'x', reason: word, why: `the engine saw a stroke start like a rep and not count (${i.missedReason})` + (lowMatch ? ' (Movement Match is low after a rest, but this stroke went down the exercise path: a real half rep)' : '') });
       }
       if (i.good) return out(i, { show: 'check', reason: '', why: 'a rep counted with good form' });
       const word = coachLine(i.reason) ?? 'Full movement';

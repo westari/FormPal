@@ -126,6 +126,10 @@ export interface CounterSignal {
   peak(nowMs: number, windowMs: number): number | null;
   /** True once any metric sample has arrived (without debug logging there are none, and nothing may wait on them). */
   seen(): boolean;
+  /** (2026-11-27) how many times the pose was lost (a pose gap, or the person lost) in the last `windowMs` */
+  gapsWithin(nowMs: number, windowMs: number): number;
+  /** (2026-11-27) when the pose was last lost, or 0 */
+  lastGapAt(): number;
   reset(): void;
 }
 
@@ -145,6 +149,8 @@ export const COUNTER_FLAG_TAU_MS = 500;
 
 export function createCounterSignal(): CounterSignal {
   let sampleAt = 0, gapAt = 0, unreliableAt = 0, prevGap: number | null = null, value: number | null = null;
+  let gapTimes: number[] = [];
+  const noteGap = (t: number) => { gapAt = t; gapTimes.push(t); if (gapTimes.length > 20) gapTimes = gapTimes.slice(-20); };
   let confQ = 1; // joint confidence quality (0..1) of the last rejected rep
   let samples: { t: number; v: number; tag: string }[] = [];
   let flagTarget = { diag: 0, cue: 0 }, flagVal = { diag: 0, cue: 0 }, flagAt = 0;
@@ -161,7 +167,7 @@ export function createCounterSignal(): CounterSignal {
       } else if (msg.startsWith('[REP-TRACE]')) {
         const m = /angle=([-\d.]+)/.exec(msg), g = /framesSincePoseGap=(\d+)/.exec(msg);
         if (m) note(now, parseFloat(m[1]), 'R');
-        if (g) { const n = +g[1]; if (prevGap !== null && n < prevGap) gapAt = now; prevGap = n; }
+        if (g) { const n = +g[1]; if (prevGap !== null && n < prevGap) noteGap(now); prevGap = n; }
       } else if (/^\[REP\] rejected\s+\S+\s+tracking unreliable/.test(msg)) {
         unreliableAt = now;
         const mids: number[] = [];
@@ -170,7 +176,7 @@ export function createCounterSignal(): CounterSignal {
         // Vision's joint confidence for a clearly visible arm sits around 0.7-0.9: map the average of what this rep had onto 0..1
         if (mids.length) confQ = clamp01(mids.reduce((x, y) => x + y, 0) / mids.length / 0.8);
       } else if (msg.startsWith('[TRACK] person lost')) {
-        gapAt = now;
+        noteGap(now);
       }
     },
     setFlags(f) { flagTarget = { diag: f.diag ? 1 : 0, cue: f.cue ? 1 : 0 }; },
@@ -211,7 +217,9 @@ export function createCounterSignal(): CounterSignal {
     lastValue() { return value; },
     peak(now, windowMs) { const r = samples.filter((x) => now - x.t <= windowMs); return r.length ? Math.max(...r.map((x) => x.v)) : null; },
     seen() { return sampleAt > 0; },
-    reset() { sampleAt = 0; gapAt = 0; unreliableAt = 0; prevGap = null; value = null; samples = []; confQ = 1; flagVal = { diag: 0, cue: 0 }; flagTarget = { diag: 0, cue: 0 }; flagAt = 0; },
+    gapsWithin(now, windowMs) { return gapTimes.filter((t) => now - t <= windowMs && t <= now).length; },
+    lastGapAt() { return gapAt; },
+    reset() { gapTimes = []; sampleAt = 0; gapAt = 0; unreliableAt = 0; prevGap = null; value = null; samples = []; confQ = 1; flagVal = { diag: 0, cue: 0 }; flagTarget = { diag: 0, cue: 0 }; flagAt = 0; },
   };
 }
 

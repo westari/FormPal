@@ -5,7 +5,7 @@
 require('./ts-node-loader.js')();
 const fs = require('fs'); const path = require('path');
 const { CUE_ORB_JS, CUE_ORB_CSS } = require('../../lib/cueOrb.ts');
-const src = fs.readFileSync(path.join(__dirname, '..', '..', 'app', 'onboarding.tsx'), 'utf8').split('\r\n').join('\n');
+const src = fs.readFileSync(process.env.PW_SRC || path.join(__dirname, '..', '..', 'app', 'onboarding.tsx'), 'utf8').split('\r\n').join('\n');
 const a = src.indexOf('const DC_CTA_RE = '), b = src.indexOf('\n`;', src.indexOf('const DC_PAGE_INJECT = `')) + 3;
 const DC = new Function(src.slice(a, b).replace(/^const /gm, 'var ') + '\nreturn DC_PAGE_INJECT;')();
 function grab(name) { const i = src.indexOf('const ' + name + ' = `'); const j = src.indexOf('`;', i) + 2; return new Function('CUE_ORB_CSS', src.slice(i, j).replace(/^const /, 'var ') + '\nreturn ' + name + ';')(CUE_ORB_CSS); }
