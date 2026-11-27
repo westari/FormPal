@@ -12,6 +12,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { CONSOLE_FORWARD_JS, DC_VIEWPORT_JS, dcScaleFitJs } from '../lib/dcWebviewHelpers';
 import { NO_ZOOM_JS } from '../lib/noZoom';
+import { hapticSuccess } from '../lib/haptics';
 import { decideProgressPhotoVariant } from '../lib/postWorkoutFlow';
 import { getAllSessions } from '../lib/sessionLog';
 import { streakInfo, streakPageJs, type StreakInfo } from '../lib/streakInfo';
@@ -84,7 +85,9 @@ export default function StreakScreen() {
         onLoadEnd={() => setLoads((n) => n + 1)}
         onMessage={(e) => {
           const m = e.nativeEvent.data;
-          if (m === 'ready') { setReady(true); return; }
+          // (round 13) the page comes alive as it is revealed: flame ignites, the number counts up, the streak days fill in (lib/streakInfo.ts __skPlay)
+          if (m === 'ready') { setReady(true); webRef.current?.injectJavaScript('window.__skPlay && window.__skPlay(); true;'); return; }
+          if (m === 'haptic') { hapticSuccess(); return; }
           if (m === 'advance') { void advance(); }
         }}
         allowFileAccess

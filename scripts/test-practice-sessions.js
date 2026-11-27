@@ -72,6 +72,12 @@ const sessions = [
   });
   console.log('      Form checks section:', JSON.stringify(sec));
   check('12 + round 12: the Progress page shows a "Form checks" list BELOW Past workouts with only the 2 NEWEST practice sets, then a "View all" row', sec && sec.rows === 2 && sec.below && /Practice Pushup Today/.test(sec.text) && /Today · 10 reps · 90% form/.test(sec.text) && /Yesterday · 10 reps/.test(sec.text) && /View all/.test(sec.text) && !/Old/.test(sec.text), sec && sec.text);
+  const sep = await page.evaluate(() => {
+    const all = document.querySelector('[data-fc-all]'), row = document.querySelector('[data-fc-ts]'), card = row.parentElement;
+    const r = all.getBoundingClientRect(), c = card.getBoundingClientRect(), cs = getComputedStyle(all);
+    return { inside: card.contains(all), gap: Math.round(r.top - c.bottom), bg: cs.backgroundColor, radius: cs.borderRadius, h: Math.round(r.height), text: all.textContent.trim(), centred: cs.justifyContent };
+  });
+  check('round 13: "View all" is its OWN button, clearly apart from the 2 form checks: outside their white card, below it with a gap, a grey pill (not white), centred, with the total', !sep.inside && sep.gap >= 8 && sep.bg !== 'rgb(255, 255, 255)' && parseFloat(sep.radius) >= 23 && sep.h >= 40 && sep.centred === 'center' && sep.text === 'View all 3 form checks', JSON.stringify(sep));
   const b0 = msgs.length;
   await page.evaluate(() => document.querySelector('[data-fc-all]').click());
   check('round 12: "View all" asks the app for the full list (formChecksAll)', msgs.slice(b0).some((x) => x.type === 'formChecksAll'), JSON.stringify(msgs.slice(b0)));
@@ -81,6 +87,7 @@ const sessions = [
   await page.evaluate(() => document.querySelector('[data-fc-ts]').click());
   const m = msgs.slice(before).find((x) => x.type === 'openWorkout');
   check('12: tapping a Form checks row opens that form check (its recap, with the rep feedback)', m && m.ts === pd.practice[0].ts, JSON.stringify(m));
+  await page.evaluate(() => document.querySelector('[data-athlt-formchecks]').scrollIntoView({ block: 'center' })); await page.waitForTimeout(200);
   await page.screenshot({ path: require('path').join(__dirname, '..', '.scratch', 'form-checks.png') });
   const pg = require('fs').readFileSync(require('path').join(__dirname, '..', 'app', '(tabs)', 'progress.tsx'), 'utf8'), fcs = require('fs').readFileSync(require('path').join(__dirname, '..', 'app', 'form-checks.tsx'), 'utf8');
   check('round 12: the app opens the full list screen (app/form-checks.tsx) which lists EVERY form check (the same rows, no limit) and opens a recap on tap', /case 'formChecksAll': .*router\.push\('\/form-checks'/.test(pg) && /formCheckRows\(s\)/.test(fcs) && /openRecap\(router, r\.ts\)/.test(fcs) && PD.formCheckRows(sessions, now).length === 3, String(PD.formCheckRows(sessions, now).length));

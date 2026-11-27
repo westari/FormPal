@@ -108,7 +108,8 @@ export const TRAIN_LOGIC_EXT = `function (Orig) {
       v.noWorkouts = d.myWorkouts.length === 0;
       v.hasWorkouts = !v.noWorkouts;
       // the week strip (round 12): a missed day gets its own small red icon under it (drawn by missedStripIcons below), never the rest-day moon
-      if (v.cal) v.cal = v.cal.map(function (c, i) { var x = d.days[i]; if (x && (x.missed || x.tag)) { c.moon = 0; c.fire = 0; } return c; });
+      // (round 13) and a finished workout day gets a small green check there (drawn by the same function)
+      if (v.cal) v.cal = v.cal.map(function (c, i) { var x = d.days[i]; if (x && (x.missed || x.tag || x.done)) { c.moon = 0; c.fire = 0; } return c; });
       v.days = v.days.map(function (c, i) {
         var x = d.days[i];
         if (x) {
@@ -469,6 +470,8 @@ export const TRAIN_WEB_INJECT = `
   // MISSED DAYS IN THE WEEK STRIP (round 12): rest days show the design's grey moon under the day; a missed day shows its own small red icon in the same spot
   // (a red disc with a white cross, the moon's size), added once per day cell and removed again if the day is no longer missed.
   var MISSED_ICON = '<svg width="11" height="11" viewBox="0 0 12 12" style="display:block"><circle cx="6" cy="6" r="5.6" fill="#FF3B30"/><path d="M4.1 4.1l3.8 3.8M7.9 4.1L4.1 7.9" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round"/></svg>';
+  // (round 13) a finished workout day: the same small disc in the same spot, iOS green with a white check
+  var DONE_ICON = '<svg width="11" height="11" viewBox="0 0 12 12" style="display:block"><circle cx="6" cy="6" r="5.6" fill="#34C759"/><path d="M3.6 6.2l1.7 1.7 3.2-3.5" stroke="#ffffff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   function missedStripIcons() {
     var d = D(); if (!d || !d.days) return;
     var cells = document.querySelectorAll('div[style*="height: 76px"][style*="border-radius: 22px"]');
@@ -477,10 +480,14 @@ export const TRAIN_WEB_INJECT = `
       var slot = null, kids = cells[i].querySelectorAll('div');
       for (var k = 0; k < kids.length; k++) { var st = kids[k].style; if (st.width === '12px' && st.height === '12px' && st.position === 'relative') { slot = kids[k]; break; } }
       if (!slot) continue;
-      var want = !!(d.days[i] && (d.days[i].missed || d.days[i].tag));
-      var have = slot.querySelector('[data-missed-ico]');
-      if (want && !have) { var e = document.createElement('div'); e.setAttribute('data-missed-ico', '1'); e.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;line-height:0;'; e.innerHTML = MISSED_ICON; slot.appendChild(e); }
-      else if (!want && have) have.parentNode.removeChild(have);
+      var x = d.days[i];
+      var want = x && x.done ? 'done' : x && (x.missed || x.tag) ? 'missed' : '';
+      var have = slot.querySelector('[data-day-ico]');
+      if (have && have.getAttribute('data-day-ico') !== want) { have.parentNode.removeChild(have); have = null; }
+      if (want && !have) {
+        var e = document.createElement('div'); e.setAttribute('data-day-ico', want); if (want === 'missed') e.setAttribute('data-missed-ico', '1'); else e.setAttribute('data-done-ico', '1');
+        e.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;line-height:0;'; e.innerHTML = want === 'done' ? DONE_ICON : MISSED_ICON; slot.appendChild(e);
+      }
     }
   }
   function tick() {

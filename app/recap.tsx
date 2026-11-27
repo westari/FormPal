@@ -81,7 +81,7 @@ import { generateSummary, recapPageData } from '../lib/recapPrefetch';
 import { postLag } from '../lib/postLag';
 import { repFeedbackDataJs } from '../lib/repFeedbackInject';
 import { athltSetDataJs } from '../lib/dcLogicPatch';
-import { warmInject, warmWant, warmPrepare, warmActivate, warmDeactivate, warmRelease, warmSetBg, warmSetOverlay, warmSetUnderlay } from '../components/WarmSurfaces';
+import { warmInject, warmWant, warmPrepare, warmActivate, warmDeactivate, warmRelease, warmSetBg, warmSetOverlay, warmSetUnderlay, SLIDE_IN_MS } from '../components/WarmSurfaces';
 import { useWorkoutSessionStore } from '../store/workoutSessionStore';
 import type { WorkoutSummary } from '../store/workoutSessionStore';
 import { usePlanStore } from '../store/planStore';
@@ -415,6 +415,15 @@ export default function RecapScreen() {
     if (!data?.videoUri) return;
     if (view === 'summary' && isFocused) {
       videoPlayer.play();
+    } else if (view === 'allsets' && isFocused) {
+      // (round 13) All sets slides in OVER the playing video. Pausing it and fading the full-screen video out at the same moment made the
+      // phone redraw the whole video layer under the two moving pages on every frame of the slide (the phone log: the pause landed right
+      // at the slide's start). The All sets page is opaque, so the video is simply paused once it is fully covered, with no fade.
+      const t = setTimeout(() => {
+        videoPlayer.pause(); videoFade.setValue(0);
+        if (__DEV__) console.log(`[recap] All sets fully in: video paused after the slide (${SLIDE_IN_MS + 60}ms)`);
+      }, SLIDE_IN_MS + 60);
+      return () => clearTimeout(t);
     } else {
       videoPlayer.pause();
       Animated.timing(videoFade, { toValue: 0, duration: 150, useNativeDriver: true }).start();
@@ -702,9 +711,11 @@ export default function RecapScreen() {
       <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
         {tileRect && (
           <View style={{ position: 'absolute', left: 0, right: 0, top: tileRect.vt, height: Math.max(0, tileRect.vb - tileRect.vt), overflow: 'hidden' }}>
-            <View style={{ position: 'absolute', left: tileRect.l, top: tileRect.t - tileRect.vt, width: tileRect.w, height: tileRect.h, borderRadius: 22, overflow: 'hidden', backgroundColor: '#18181c' }}>
-              {thumb && <ExpoImage source={thumb} style={StyleSheet.absoluteFill} contentFit="cover" />}
-            </View>
+            {/* (round 13) the rounded frame is ONE image layer with its own corner radius (no clipping view around it): a rounded clip around a
+                child is redrawn off-screen on every frame while the page slides, which was part of the All sets lag */}
+            {thumb
+              ? <ExpoImage source={thumb} style={{ position: 'absolute', left: tileRect.l, top: tileRect.t - tileRect.vt, width: tileRect.w, height: tileRect.h, borderRadius: 22, backgroundColor: '#18181c' }} contentFit="cover" />
+              : <View style={{ position: 'absolute', left: tileRect.l, top: tileRect.t - tileRect.vt, width: tileRect.w, height: tileRect.h, borderRadius: 22, backgroundColor: '#18181c' }} />}
           </View>
         )}
       </View>
@@ -830,7 +841,9 @@ export default function RecapScreen() {
       } as any);
       startRepRef.current = 0; // (only the way back from All sets opens on a later rep)
     }
-    else if ((msg as any).type === 'tileRect') { const m = msg as any; setTileRect(m.none ? null : { l: m.l, t: m.t, w: m.w, h: m.h, vt: m.vt, vb: m.vb }); }
+    // (round 13) the page re-sends the tile's place the moment it is shown (the phone log: right at the start of the slide). Same place = no change, so
+    // nothing under the page is rebuilt during the slide.
+    else if ((msg as any).type === 'tileRect') { const m = msg as any; setTileRect((c) => (m.none ? null : c && c.l === m.l && c.t === m.t && c.w === m.w && c.h === m.h && c.vt === m.vt && c.vb === m.vb ? c : { l: m.l, t: m.t, w: m.w, h: m.h, vt: m.vt, vb: m.vb })); }
     else if ((msg as any).type === 'openSet') onWebMsg.current({ type: 'viewRepFeedback' });
     else if (msg.type === 'viewAllSets') { allSetsFromRepFeedback.current = false; setView('allsets'); }
     else if (msg.type === 'closeAllSets') {

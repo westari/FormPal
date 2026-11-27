@@ -29,7 +29,7 @@ check('data: every group exercise really trains that group in the catalogue', DS
   });
   let s = await state();
   check('the empty Create workout shows the starter: the body map (all six groups tappable) and the Popular list (not an empty screen)', s && s.vis && s.chips.every((c) => c.has > 0) && s.heading === 'Popular' && s.rows.join() === data.popular.join(), JSON.stringify(s));
-  check('round 8: the map is SMALL (round 10: about 250px tall, big enough to tap), front and back side by side, inside the phone width, and it replaces the chips (no chips, no circles)', await page.evaluate(() => { const m = document.querySelector('[data-cw-map]'); const r = m.getBoundingClientRect(); return r.height >= 240 && r.height <= 290 && r.right <= innerWidth && m.querySelectorAll('svg').length === 2 && !document.querySelector('[data-cw-chip]'); }));
+  check('round 8: the map is SMALL (round 10: about 250px tall, big enough to tap), front and back side by side, inside the phone width, and it replaces the chips (no chips, no circles)', await page.evaluate(() => { const m = document.querySelector('[data-cw-map]'); const r = m.getBoundingClientRect(); return r.height >= 240 && r.height <= 320 && r.right <= innerWidth && m.querySelectorAll('svg').length === 2 && !document.querySelector('[data-cw-chip]'); }));
   check('round 10: it is THE shared muscle map (same drawing code as the Progress tab and the after-workout screens): pale silhouette, a dark body outline, an outline on EVERY muscle (the same dark ink), every muscle tappable', await page.evaluate(() => { const svg = document.querySelector('[data-cw-map] svg'); const paths = [...svg.querySelectorAll('path')]; const sil = paths[0], outline = paths[paths.length - 1]; const mus = paths.slice(1, -1); return sil.getAttribute('fill') === '#F1F2F6' && outline.getAttribute('stroke') === '#23262f' && outline.getAttribute('fill') === 'none' && mus.length > 10 && mus.every((p) => p.getAttribute('stroke') === '#23262f') && mus.filter((p) => p.getAttribute('data-grp')).length >= mus.length - 3; }));
   check('round 10: one shared component: the Create workout map and the Progress tab map are drawn by the same function (bodyMapParts in lib/bodyMapSvg.ts)', /bodyMapParts\(tiers, side\)/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'lib', 'bodyMapSvg.ts'), 'utf8')) && /bodyMapTappableSvg/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'lib', 'createBodyMap.ts'), 'utf8')));
 check('it fits the phone width (no sideways overflow)', s && s.left >= 0 && s.left + s.width <= s.vw && await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
@@ -98,6 +98,43 @@ check('it fits the phone width (no sideways overflow)', s && s.left >= 0 && s.le
     check('round 12: the map is built once: a tap never rebuilds the drawing (only recolours it), no fill fade, no shadow filter to redraw, touch-action manipulation', r.same && r.noAnim && r.ta === 'manipulation');
     check('round 12: clean, premium shapes: every shape is a smooth curve (no straight-line polygon corners) with an even, non-scaling outline', r.smooth && r.even);
     await shot('create-starter-map-r12');
+    await page.evaluate(() => { window.__cwGroup = ''; window.__cwRender(); });
+  }
+  // round 13: BIGGER map, GENEROUS tap areas, feedback on touch DOWN (real touch events, as a finger sends them)
+  {
+    await page.evaluate(() => { window.__cwGroup = ''; window.__cwRender(); document.querySelector('[data-cw-map]').scrollIntoView({ block: 'center' }); });
+    await page.waitForTimeout(200);
+    const ses = await page.context().newCDPSession(page);
+    const size = await page.evaluate(() => { const f = document.querySelector('[data-cw-map] svg').parentElement.getBoundingClientRect(); return [Math.round(f.width), Math.round(f.height)]; });
+    check('round 13: the map is bigger: each figure 160 x 280 (was 142 x 250), still inside the card and the screen', size[0] === 160 && size[1] === 280 && await page.evaluate(() => document.querySelector('[data-cw-map]').getBoundingClientRect().right <= innerWidth), JSON.stringify(size));
+    // a point just OUTSIDE the front figure's shoulder (the small delt cap), 12px out from its outer edge
+    const pt = await page.evaluate(() => {
+      const fig = document.querySelector('[data-cw-map] svg');
+      const sh = [...fig.querySelectorAll('[data-grp="shoulders"]')].map((p) => p.getBoundingClientRect()).sort((a, b) => a.left - b.left)[0];
+      const q = [...fig.querySelectorAll('[data-grp="legs"]')].map((p) => p.getBoundingClientRect()).sort((a, b) => b.width * b.height - a.width * a.height)[0];
+      return { leg: { x: q.left + q.width / 2, y: q.top + q.height / 2 }, on: { x: sh.left + sh.width / 2, y: sh.top + sh.height / 2 }, off: { x: sh.left - 12, y: sh.top + sh.height / 2 }, w: Math.round(sh.width), h: Math.round(sh.height) };
+    });
+    const lit = () => page.evaluate(() => [...new Set([...document.querySelectorAll('[data-cw-map] [data-grp]')].filter((p) => p.getAttribute('fill') !== '#E3E4EA').map((p) => p.getAttribute('data-grp') + ':' + p.getAttribute('fill')))]);
+    const t = (type, x, y) => ses.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' || type === 'touchCancel' ? [] : [{ x, y }] });
+    // touch DOWN only: feedback at once
+    await t('touchStart', pt.off.x, pt.off.y);
+    const down = await lit();
+    check('round 13: the moment a finger lands (touch DOWN, before lifting), the touched group turns dark grey', down.length === 1 && down[0] === 'shoulders:#55555e', JSON.stringify(down) + ' shoulder cap ' + pt.w + 'x' + pt.h + 'px');
+    await t('touchEnd');
+    await page.waitForTimeout(30);
+    const up = await lit();
+    const st1 = await state();
+    check('round 13: GENEROUS tap area: a touch 12px OUTSIDE the small shoulder cap still picks Shoulders (dark, pill, list) on finger-up', up.length === 1 && up[0] === 'shoulders:#111114' && st1.heading === 'Shoulders exercises', JSON.stringify(up) + ' ' + st1.heading);
+    await page.waitForTimeout(500);
+    check('round 13: the click WebKit sends after the touch does not undo the pick', (await state()).heading === 'Shoulders exercises');
+    // a scroll that starts on a muscle: pressed, then put back, nothing picked
+    await t('touchStart', pt.leg.x, pt.leg.y);
+    const d2 = await lit();
+    await t('touchMove', pt.leg.x, pt.leg.y - 40);
+    await t('touchEnd');
+    await page.waitForTimeout(100);
+    const after = await lit();
+    check('round 13: a finger that moves (a scroll) shows the press, then puts it back and changes nothing (Shoulders stays the pick)', d2.length === 2 && after.length === 1 && after[0] === 'shoulders:#111114', JSON.stringify([d2, after]));
     await page.evaluate(() => { window.__cwGroup = ''; window.__cwRender(); });
   }
   await browser.close();

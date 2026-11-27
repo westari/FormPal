@@ -1037,7 +1037,7 @@ export const PROGRESS_DOM_JS = String.raw`
       if (!(pw && pw.next)) return;
       if (!list.length) { if (sec && sec.style.display !== 'none') sec.style.display = 'none'; return; }
       // (round 12) only the 2 newest are listed here; a "View all" row opens the full list (the app's own screen, app/form-checks.tsx)
-      var SHOWN = 2, more = list.length > SHOWN;
+      var SHOWN = 2, more = list.length > SHOWN, total = list.length;
       list = list.slice(0, SHOWN);
       var sig = JSON.stringify(list.map(function (x) { return [x.ts, x.name, x.when, x.meta]; })) + (more ? '+' : '');
       if (!sec) {
@@ -1056,9 +1056,10 @@ export const PROGRESS_DOM_JS = String.raw`
       }).join('');
       sec.innerHTML = '<div style="padding:6px 22px 0;"><div style="font-size:21px;font-weight:700;letter-spacing:-0.6px;color:#111114;">Form checks</div>'
         + '<div style="font-size:13px;font-weight:500;color:#6e6e77;padding-top:3px;">Practice sets. They are not workouts.</div></div>'
-        + '<div style="padding:12px 14px 4px;"><div style="border-radius:26px;padding:4px 16px;background:#ffffff;box-shadow:0 0 0 1px rgba(17,17,20,0.04),0 14px 34px -16px rgba(40,50,90,0.22);">' + rows
-        + (more ? '<div data-fc-all="1" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 0;border-top:1px solid rgba(17,17,20,0.07);cursor:pointer;"><div style="font-size:15px;font-weight:700;letter-spacing:-0.2px;color:#111114;">View all</div><svg width="8" height="13" viewBox="0 0 8 13" fill="none" style="flex:0 0 auto;"><path d="M1.5 1.5 6.5 6.5l-5 5" stroke="#9a9aa2" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>' : '')
-        + '</div></div>';
+        + '<div style="padding:12px 14px 4px;"><div style="border-radius:26px;padding:4px 16px;background:#ffffff;box-shadow:0 0 0 1px rgba(17,17,20,0.04),0 14px 34px -16px rgba(40,50,90,0.22);">' + rows + '</div>'
+        // (round 13) "View all" is its OWN button under the card (a soft grey pill with the total), not a third row inside it, so it never reads as one more form check
+        + (more ? '<div data-fc-all="1" role="button" style="margin:12px 0 0;height:46px;border-radius:999px;background:rgba(17,17,20,0.06);display:flex;align-items:center;justify-content:center;gap:7px;cursor:pointer;-webkit-tap-highlight-color:transparent;"><div style="font-size:15px;font-weight:700;letter-spacing:-0.2px;color:#111114;">View all ' + total + ' form checks</div><svg width="7" height="12" viewBox="0 0 8 13" fill="none" style="flex:0 0 auto;"><path d="M1.5 1.5 6.5 6.5l-5 5" stroke="#111114" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>' : '')
+        + '</div>';
       var all = sec.querySelector('[data-fc-all]');
       if (all) all.addEventListener('click', function (ev) { ev.preventDefault(); ev.stopPropagation(); post({ type: 'formChecksAll' }); }, true);
       var els = sec.querySelectorAll('[data-fc-ts]');

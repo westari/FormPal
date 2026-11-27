@@ -262,16 +262,57 @@ export const CREATE_WORKOUT_DOM_JS = String.raw`
             // (round 8) the groups are a small tappable body map (the Progress tab's muscle map), front and back: tap a muscle to start from its group
             // (round 11) a soft light backdrop, small FRONT / BACK labels, and a pill that names the chosen group (tap the pill to clear it)
             var lab = 'text-align:center;font-size:10.5px;font-weight:700;letter-spacing:1.4px;color:#a3a3ad;padding-top:6px;';
-            var fig = 'width:142px;height:250px;';
+            // (round 13) bigger figures: 160 x 280 each (was 142 x 250), as wide as the card allows
+            var fig = 'width:160px;height:280px;';
             st.innerHTML = '<div style="font-size:13px;font-weight:600;color:#6e6e77;padding:0 4px 8px;">Start from a muscle group</div>'
               + '<div data-cw-card="1" style="border-radius:26px;padding:16px 14px 14px;background:radial-gradient(90% 70% at 50% 0%, #ffffff 0%, #f6f6f9 100%);box-shadow:inset 0 0 0 0.5px rgba(255,255,255,0.9),0 14px 30px -16px rgba(40,50,90,0.26),0 2px 6px -2px rgba(40,50,90,0.08);">'
-              + '<div data-cw-map="1" style="display:flex;justify-content:center;gap:18px;touch-action:manipulation;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;">'
+              + '<div data-cw-map="1" style="display:flex;justify-content:center;gap:12px;touch-action:manipulation;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;">'
               + '<div><div style="' + fig + '">' + dd.map.front + '</div><div style="' + lab + '">FRONT</div></div>'
               + '<div><div style="' + fig + '">' + dd.map.back + '</div><div style="' + lab + '">BACK</div></div></div>'
               + '<div data-cw-pillrow="1" style="display:flex;justify-content:center;padding-top:12px;min-height:30px;"></div></div>'
               + '<div data-cw-list="1"></div>';
             st.__map = st.querySelector('[data-cw-map]'); st.__paths = st.__map.querySelectorAll('[data-grp]');
             st.__pill = st.querySelector('[data-cw-pillrow]'); st.__list = st.querySelector('[data-cw-list]'); st.__mapGrp = null;
+            // (round 13) touch: GENEROUS tap areas and feedback on touch DOWN.
+            //  - a touch that is not exactly on a muscle picks the muscle nearest to it: rings of 8, 16 and 24px around the finger are tested and
+            //    the group hit most often in the closest ring wins (so the small shoulder caps are easy to hit, and the gaps between muscles count)
+            //  - the moment the finger lands, that group turns dark grey (pressed); lifting it without moving picks the group (dark, list, haptic);
+            //    a finger that moves (a scroll) puts the colours back and picks nothing
+            var groupAt = function (x, y) {
+              var hit = function (px, py) { var e = document.elementFromPoint(px, py); var g = e && e.closest ? e.closest('[data-grp]') : null; return g && st.__map.contains(g) ? g.getAttribute('data-grp') : ''; };
+              var g0 = hit(x, y); if (g0) return g0;
+              var R = [8, 16, 24];
+              for (var ri = 0; ri < R.length; ri++) {
+                var cnt = {}, best = '', bn = 0;
+                for (var a = 0; a < 16; a++) { var ang = a * Math.PI / 8, g = hit(x + R[ri] * Math.cos(ang), y + R[ri] * Math.sin(ang)); if (g) { cnt[g] = (cnt[g] || 0) + 1; if (cnt[g] > bn) { bn = cnt[g]; best = g; } } }
+                if (best) return best;
+              }
+              return '';
+            };
+            var paint = function (pressed) {
+              var sel = window.__cwGroup || '';
+              for (var q = 0; q < st.__paths.length; q++) { var gq = st.__paths[q].getAttribute('data-grp'); var f = gq === sel ? '#111114' : gq === pressed ? '#55555e' : '#E3E4EA'; if (st.__paths[q].getAttribute('fill') !== f) st.__paths[q].setAttribute('fill', f); }
+              st.__mapGrp = pressed ? null : sel;
+            };
+            var touch = null;
+            st.__map.addEventListener('touchstart', function (ev) {
+              if (ev.touches.length !== 1) { touch = null; return; }
+              var p = ev.touches[0], g = groupAt(p.clientX, p.clientY);
+              touch = g ? { x: p.clientX, y: p.clientY, g: g } : null;
+              if (g) paint(g);
+            }, { passive: true });
+            st.__map.addEventListener('touchmove', function (ev) {
+              if (!touch) return; var p = ev.touches[0];
+              if (Math.abs(p.clientX - touch.x) > 10 || Math.abs(p.clientY - touch.y) > 10) { touch = null; paint(''); }
+            }, { passive: true });
+            st.__map.addEventListener('touchcancel', function () { if (touch) { touch = null; paint(''); } }, { passive: true });
+            st.__map.addEventListener('touchend', function (ev) {
+              if (!touch) return; var g = touch.g; touch = null;
+              ev.preventDefault(); st.__tapAt = Date.now();
+              window.__cwGroup = window.__cwGroup === g ? '' : g; window.__cwMore = false;
+              window.__cwRender();
+              if (window.ReactNativeWebView) try { window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'haptic', kind: 'select' })); } catch (e) {}
+            }, { passive: false });
           }
           if (!st.__map) return;
           if (st.__mapGrp !== grp) {
@@ -307,6 +348,7 @@ export const CREATE_WORKOUT_DOM_JS = String.raw`
             var t = ev.target;
             if (t.closest && t.closest('[data-cw-clear]')) { window.__cwGroup = ''; window.__cwMore = false; window.__cwRender(); return; }
             var chip = t.closest && t.closest('[data-grp]');
+            if (chip && st.__tapAt && Date.now() - st.__tapAt < 800) return; // the click WebKit sends after a touch that was already handled
             if (chip) { var id = chip.getAttribute('data-grp'); window.__cwGroup = window.__cwGroup === id ? '' : id; window.__cwMore = false; window.__cwRender(); return; }
             var mo = t.closest && t.closest('[data-cw-more]');
             if (mo) { window.__cwMore = !window.__cwMore; window.__cwRender(); return; }

@@ -70,10 +70,25 @@ export const TAB_HEADER_JS = `
         t.appendChild(ic);
         block.style.cursor = 'pointer';
         block.style.webkitTapHighlightColor = 'transparent';
+        block.style.touchAction = 'manipulation';
+        // (round 13) the calendar opens on the FINGER UP itself (touchend), not on the 'click' that WebKit sends some time after it (it waits to rule
+        // out a double-tap / a scroll first). A finger that moved more than 10px is a scroll, not a tap. tapAt is the moment of the touch, so the app
+        // can log the real tap-to-animation time. The click that still follows a handled touch is ignored; a click with no touch (tests, pointer) still works.
+        var send = function (tapAt) {
+          var r = block.getBoundingClientRect(), c = ic.getBoundingClientRect();
+          try { window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'calendar', top: r.bottom, cx: c.left + c.width / 2, tapAt: tapAt, sentAt: Date.now() })); } catch (e) {}
+        };
+        var t0 = null, handledAt = 0;
+        block.addEventListener('touchstart', function (ev) { var p = ev.touches[0]; t0 = { x: p.clientX, y: p.clientY, at: Date.now() }; }, { passive: true, capture: true });
+        block.addEventListener('touchmove', function (ev) { if (!t0) return; var p = ev.touches[0]; if (Math.abs(p.clientX - t0.x) > 10 || Math.abs(p.clientY - t0.y) > 10) t0 = null; }, { passive: true, capture: true });
+        block.addEventListener('touchend', function (ev) {
+          if (!t0) return; var at = t0.at; t0 = null;
+          ev.preventDefault(); ev.stopPropagation(); handledAt = Date.now(); send(at);
+        }, { passive: false, capture: true });
         block.addEventListener('click', function(ev){
           ev.preventDefault(); ev.stopPropagation();
-          var r = block.getBoundingClientRect(), c = ic.getBoundingClientRect();
-          try { window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'calendar', top: r.bottom, cx: c.left + c.width / 2 })); } catch (e) {}
+          if (Date.now() - handledAt < 800) return;
+          send(Date.now());
         }, true);
       }
       // the design's own left-hand title goes away (hidden, not removed: the page's code may still write to it)
@@ -103,6 +118,14 @@ export const TAB_HEADER_JS = `
     if (!tn || tn.nodeType !== 3) { tn = document.createTextNode(txt); tEl.insertBefore(tn, tEl.firstChild); }
     else if (tn.nodeValue !== txt) tn.nodeValue = txt;
     if (tEl.style.fontSize !== fs + 'px') tEl.style.fontSize = fs + 'px';
+    if (CFG.live) {
+      // (round 13) tell the app where the arrow is BEFORE the first tap, so the calendar is already in place and the first open starts at once
+      var icn = block.querySelector('[data-fp-cal]');
+      if (icn) {
+        var rb = block.getBoundingClientRect(), rc = icn.getBoundingClientRect(), key = Math.round(rb.bottom) + ',' + Math.round(rc.left + rc.width / 2);
+        if (rb.height > 0 && window.__fpCalAt !== key) { window.__fpCalAt = key; try { window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'calendarAnchor', top: rb.bottom, cx: rc.left + rc.width / 2 })); } catch (e) {} }
+      }
+    }
     if (!h.__fpObs && window.MutationObserver) {
       h.__fpObs = new MutationObserver(function(){ if (!h.querySelector('[data-fp-title-block]')) apply(); });
       h.__fpObs.observe(h, { childList: true });

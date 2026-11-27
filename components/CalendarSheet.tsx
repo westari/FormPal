@@ -35,7 +35,7 @@ export const CAL_START_SCALE = 0.12; // it grows out of the arrow's point: it st
 export const CAL_PARK = -3000; // where it waits when it is closed (above the screen)
 
 export interface CalendarAnchor { top: number; cx: number }
-export interface CalendarHandle { toggle: (anchor?: CalendarAnchor | null) => void; close: () => void; isOpen: () => boolean }
+export interface CalendarHandle { toggle: (anchor?: CalendarAnchor | null, tapAt?: number) => void; prime: (anchor: CalendarAnchor) => void; close: () => void; isOpen: () => boolean }
 
 const CalendarSheet = forwardRef<CalendarHandle, { timestamps: number[]; onOpenChange?: (open: boolean) => void }>(function CalendarSheet({ timestamps, onOpenChange }, ref) {
   const { width } = useWindowDimensions();
@@ -61,15 +61,21 @@ const CalendarSheet = forwardRef<CalendarHandle, { timestamps: number[]; onOpenC
   }, [onOpenChange]);
   useImperativeHandle(ref, () => ({
     // The animation is started FIRST, in this very call; the state that follows only turns touches on and moves the pointer to the arrow.
-    toggle: (a) => {
+    // Round 13 (still "comes in late"): the grow is started FIRST, before any state change, and never waits a frame (it used to wait one frame on
+    // the first open to move to the arrow). The place is known before the first open (the page reports it once at load: prime()), so it is
+    // already right. Logs (dev): [CAL] tap -> message, message -> animation start, start -> next JS frame.
+    toggle: (a, tapAt) => {
+      const t0 = Date.now();
       if (openRef.current) { play(0); setState(false); return; }
-      const n = new Date(); setYm((c) => (c.y === n.getFullYear() && c.m === n.getMonth() ? c : { y: n.getFullYear(), m: n.getMonth() }));
+      const moved = !!a && (Math.abs(a.top - anchorRef.current.top) > 0.5 || Math.abs(a.cx - anchorRef.current.cx) > 0.5);
+      if (moved) { anchorRef.current = a!; setAnchor(a!); }
+      play(1);
+      const t1 = Date.now();
+      if (__DEV__) requestAnimationFrame(() => console.log(`[CAL] open: tap->message ${tapAt ? t0 - tapAt : '?'}ms, message->animation start ${t1 - t0}ms, start->next frame ${Date.now() - t1}ms, total tap->first frame ${tapAt ? Date.now() - tapAt : '?'}ms${moved ? ' (moved to a new place)' : ''}`));
       setState(true);
-      // Same place as last time (almost always): grow at once. A new place (the first open, or the header moved): place it first, grow on the next frame,
-      // so it never grows from the old spot.
-      if (a && (Math.abs(a.top - anchorRef.current.top) > 0.5 || Math.abs(a.cx - anchorRef.current.cx) > 0.5)) { anchorRef.current = a; setAnchor(a); requestAnimationFrame(() => play(1)); }
-      else play(1);
+      const n = new Date(); setYm((c) => (c.y === n.getFullYear() && c.m === n.getMonth() ? c : { y: n.getFullYear(), m: n.getMonth() }));
     },
+    prime: (a) => { if (openRef.current) return; if (Math.abs(a.top - anchorRef.current.top) > 0.5 || Math.abs(a.cx - anchorRef.current.cx) > 0.5) { anchorRef.current = a; setAnchor(a); } },
     close: () => { if (!openRef.current) return; play(0); setState(false); },
     isOpen: () => openRef.current,
   }), [play, setState]);
@@ -87,20 +93,10 @@ const CalendarSheet = forwardRef<CalendarHandle, { timestamps: number[]; onOpenC
   const sc = prog.interpolate({ inputRange: [0, 1], outputRange: [CAL_START_SCALE, 1] });
   const fadeIn = prog.interpolate({ inputRange: [0, 0.35, 1], outputRange: [0, 0.55, 1], extrapolate: 'clamp' });
 
-  return (
-    <View style={StyleSheet.absoluteFill} pointerEvents={open ? 'box-none' : 'none'}>
-      {/* Nothing is dimmed. This invisible layer only catches a tap outside the popover. */}
-      <Pressable style={s.outside} onPress={() => { play(0); setState(false); }} accessibilityLabel="Close calendar" testID="calendar-outside" pointerEvents={open ? 'auto' : 'none'} />
-      <Animated.View
-        testID="calendar-drop"
-        style={[s.pop, { top, left: SIDE, width: cardW, transform: [{ translateY: ty }, { scale: sc }], transformOrigin: `${caretX}px 0px` } as any]}
-      >
-        {/* the pointer: a small rounded diamond of the same glass, its top half standing out above the panel, centred under the arrow */}
-        <View style={[s.caret, { left: caretX - CARET / 2 }]} testID="calendar-caret" pointerEvents="none">
-          <LiquidGlass radius={4} variant={CAL_GLASS.variant} colorScheme={CAL_GLASS.colorScheme} fallbackColor={CAL_GLASS.fallbackColor} style={StyleSheet.absoluteFill} />
-        </View>
-        <LiquidGlass radius={RADIUS} variant={CAL_GLASS.variant} colorScheme={CAL_GLASS.colorScheme} fallbackColor={CAL_GLASS.fallbackColor} style={s.inner}>
-          <Animated.View style={{ opacity: fadeIn }} testID="calendar-content">
+  // (round 13) the month (header, weekdays, ~42 day cells) is built only when the month or the trained days change, NOT when the calendar opens or
+  // closes: opening only flips touches on, so nothing heavy is rendered in the frames the grow is starting.
+  const month = useMemo(() => (
+    <>
           <View style={s.head}>
             <View>
               <Text style={s.title}>{MONTH_NAMES[ym.m]} {ym.y}</Text>
@@ -132,6 +128,24 @@ const CalendarSheet = forwardRef<CalendarHandle, { timestamps: number[]; onOpenC
               ))}
             </View>
           ))}
+    </>
+  ), [ym, weeks, monthCount, play, setState]);
+
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents={open ? 'box-none' : 'none'}>
+      {/* Nothing is dimmed. This invisible layer only catches a tap outside the popover. */}
+      <Pressable style={s.outside} onPress={() => { play(0); setState(false); }} accessibilityLabel="Close calendar" testID="calendar-outside" pointerEvents={open ? 'auto' : 'none'} />
+      <Animated.View
+        testID="calendar-drop"
+        style={[s.pop, { top, left: SIDE, width: cardW, transform: [{ translateY: ty }, { scale: sc }], transformOrigin: `${caretX}px 0px` } as any]}
+      >
+        {/* the pointer: a small rounded diamond of the same glass, its top half standing out above the panel, centred under the arrow */}
+        <View style={[s.caret, { left: caretX - CARET / 2 }]} testID="calendar-caret" pointerEvents="none">
+          <LiquidGlass radius={4} variant={CAL_GLASS.variant} colorScheme={CAL_GLASS.colorScheme} fallbackColor={CAL_GLASS.fallbackColor} style={StyleSheet.absoluteFill} />
+        </View>
+        <LiquidGlass radius={RADIUS} variant={CAL_GLASS.variant} colorScheme={CAL_GLASS.colorScheme} fallbackColor={CAL_GLASS.fallbackColor} style={s.inner}>
+          <Animated.View style={{ opacity: fadeIn }} testID="calendar-content">
+          {month}
           </Animated.View>
         </LiquidGlass>
       </Animated.View>

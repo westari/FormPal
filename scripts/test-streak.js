@@ -126,6 +126,48 @@ check('the workout flow\'s own count wins if the session is not on disk yet (3, 
   const f2 = await p2.evaluate(() => { const n = document.querySelector('[data-streak-num]'); const r = n.getBoundingClientRect(); return { fonts: document.fonts.status, scale: window.__dcCanvasScale, num: n.textContent, numTop: Math.round(r.top), numLeft: Math.round(r.left), head: document.querySelector('#dc-root div[style*="font-size: 29px"]').textContent, headFont: getComputedStyle(n).fontFamily.split(',')[0] }; });
   check('2: at the moment the page is revealed the fonts are loaded, the page is scaled to the screen, and the number and headline are what they stay (the number only drifts with the slight sway of the flame, under 3px)', f1.fonts === 'loaded' && f1.scale > 0 && f1.num === f2.num && f1.head === f2.head && f1.scale === f2.scale && Math.abs(f1.numTop - f2.numTop) <= 3 && Math.abs(f1.numLeft - f2.numLeft) <= 3 && f1.num === '2' && f1.head === 'Day 2 streak!', JSON.stringify(f1) + ' vs ' + JSON.stringify(f2));
   await p2.close();
+  // round 13: ALIVE when revealed. A fresh page (2-day streak, trained today): play it the way the app does at reveal, and sample it over time.
+  {
+    const p3 = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+    await p3.exposeFunction('__rn', (m) => { (global.__skMsgs = global.__skMsgs || []).push(m); });
+    await p3.addInitScript(() => { window.ReactNativeWebView = { postMessage(m) { window.__rn(m); } }; });
+    await p3.addInitScript(H.DC_VIEWPORT_JS + H.DC_NO_ZOOM_JS);
+    await p3.goto(pathToFileURL(path.join(ROOT, 'assets', 'app screens', 'streak.html')).href, { waitUntil: 'load' });
+    await p3.evaluate(H.dcScaleFitJs('#ffffff') + streakPageJs(two));
+    await p3.waitForFunction(() => window.__streakApplied === true, null, { timeout: 8000 });
+    const s0 = await p3.evaluate(() => ({ num: document.querySelector('[data-streak-num]').textContent, on: document.querySelectorAll('[data-streak-day="1"] svg').length }));
+    check('round 13: before it is played, the page is already final (the number 2, the 2 streak days checked): a page that is never played is still right', s0.num === '2' && s0.on === 2, JSON.stringify(s0));
+    await p3.evaluate(() => window.__skPlay());
+    const samples = [];
+    const t0 = Date.now();
+    for (let k = 0; k < 16; k++) {
+      samples.push(await p3.evaluate((t) => {
+        const fw = document.querySelector('[data-vector-flame="out"]').parentElement, n = document.querySelector('[data-streak-num]');
+        const days = [...document.querySelectorAll('[data-streak-day="1"]')];
+        return { t, num: n.textContent, flame: getComputedStyle(fw).transform, flameAnim: getComputedStyle(fw).animationName, numScale: getComputedStyle(n).scale, filled: days.filter((d) => d.querySelector('svg')).length, glow: [...document.querySelectorAll('[data-sk-glow]')].map((g) => getComputedStyle(g).animationName)[0] };
+      }, Date.now() - t0));
+      await p3.waitForTimeout(90);
+    }
+    const nums = samples.map((x) => x.num), filled = samples.map((x) => x.filled);
+    console.log('      play:', samples.map((x) => `${x.t}ms n${x.num} d${x.filled} ${x.flame === 'none' ? 'f=' : 'f~'}`).join(' | '));
+    check('round 13: the flame IGNITES as the page is revealed (grows from 72% with a small overshoot, then rests), and the glow behind it breathes', samples[0].flameAnim === 'sk-ignite' && samples.some((x) => /matrix\(0\.[78]/.test(x.flame)) && samples[0].glow === 'sk-breathe', JSON.stringify([samples[0].flame, samples[2].flame, samples[0].glow]));
+    check('round 13: the number COUNTS UP to the streak: today was just trained, so it goes from yesterday\'s 1 to 2, then pops', nums[0] === '1' && nums[nums.length - 1] === '2' && nums.indexOf('2') > 1, nums.join(','));
+    check('round 13: the streak days in the week row fill in ONE BY ONE after the number starts (none at first, then 1, then 2)', filled[0] === 0 && filled.includes(1) && filled[filled.length - 1] === 2 && filled.indexOf(2) > filled.indexOf(1), filled.join(','));
+    const msgs = global.__skMsgs || [];
+    check('round 13: one success haptic with the number\'s pop', msgs.filter((m) => m === 'haptic').length === 1, JSON.stringify(msgs));
+    await p3.waitForTimeout(600);
+    const end = await p3.evaluate(() => { const today = document.querySelector('[data-streak-idx="2"]'); return { anim: today.style.animation, check: !!today.querySelector('path'), num: document.querySelector('[data-streak-num]').textContent }; });
+    check('round 13: it ends exactly on the final page (2, both days checked) and today\'s circle had its one ring pulse', end.num === '2' && end.check && /sk-ringpulse/.test(end.anim), JSON.stringify(end));
+    await p3.screenshot({ path: path.join(ROOT, '.scratch', 'streak-played.png') });
+    const ss2 = require('fs').readFileSync(path.join(ROOT, 'app', 'streak-screen.tsx'), 'utf8');
+    check('round 13: the app plays it the moment it reveals the page, and plays the haptic', /m === 'ready'\) \{ setReady\(true\); webRef\.current\?\.injectJavaScript\('window\.__skPlay/.test(ss2) && /m === 'haptic'\) \{ hapticSuccess\(\)/.test(ss2));
+    // a clear week row: on a day not trained yet, today's empty circle has an orange outline
+    await p3.evaluate(streakPageJs(alive).replace('window.__skPlayed', 'window.__x').replace(/if \(box.querySelector\('\[data-sk-stars\]'\)\) return;/, 'return;'));
+    await p3.waitForTimeout(300);
+    const ring = await p3.evaluate(() => { const c = document.querySelector('[data-streak-idx="2"]'); return { on: c.getAttribute('data-streak-day'), sh: c.style.getPropertyValue('box-shadow') }; });
+    check('round 13: clearer week row: today, not trained yet, is an empty circle with an orange outline', ring.on === '0' && /inset/.test(ring.sh) && /255, 178, 122|#ffb27a/i.test(ring.sh), JSON.stringify(ring));
+    await p3.close();
+  }
   await browser.close();
   console.log(failed ? `\n${failed} FAILED` : '\nall passed');
   process.exit(failed ? 1 : 0);

@@ -381,7 +381,8 @@ function Layer({ k }: { k: WarmKind }) {
       ]}
     >
       {/* a soft edge on the page that slides in, like a normal iOS push: a static gradient, never a live shadow (see edgeStyles) */}
-      {shown && !coveredByHigher && !FADES[k] ? <LinearGradient pointerEvents="none" colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.16)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={edgeStyles.pushEdge} /> : null}
+      {/* (round 13) mounted all the time on a sliding page (it is parked off-screen and invisible), so nothing is created as the slide starts */}
+      {!FADES[k] ? <LinearGradient pointerEvents="none" colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.16)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={edgeStyles.pushEdge} /> : null}
       <Animated.View style={[StyleSheet.absoluteFill, FADES[k] ? { opacity: fade } : null]}>
       {/* round 12: the underlay (All sets white base + video frame) stays mounted while the page is parked, so nothing is built in the same frame the slide starts */}
       {underlay ? <View style={StyleSheet.absoluteFill} pointerEvents="none">{underlay}</View> : null}

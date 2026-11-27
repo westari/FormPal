@@ -632,7 +632,8 @@ export default function HomeScreen() {
           if (msg.type === 'ready') { markTabReady('index'); onReady(); return; }
           if (msg.type === 'start') { router.push('/workout' as any); return; }
           if (msg.type === 'cue') { router.push('/cue' as any); return; }
-          if (msg.type === 'calendar') { calRef.current?.toggle(typeof (msg as any).top === 'number' ? { top: (msg as any).top, cx: typeof (msg as any).cx === 'number' ? (msg as any).cx : 250 } : null); return; }
+          if (msg.type === 'calendar') { calRef.current?.toggle(typeof (msg as any).top === 'number' ? { top: (msg as any).top, cx: typeof (msg as any).cx === 'number' ? (msg as any).cx : 250 } : null, (msg as any).tapAt); return; }
+          if (msg.type === 'calendarAnchor' && typeof (msg as any).top === 'number') { calRef.current?.prime({ top: (msg as any).top, cx: (msg as any).cx }); return; }
           if (msg.type === 'streak') { router.push({ pathname: '/streak-screen', params: { from: 'tab', dest: '/(tabs)' } } as any); return; }
           if (msg.type === 'ring' && (msg as any).id) { router.push(`/goal/${encodeURIComponent(String((msg as any).id))}` as any); return; }
           if (msg.type === 'moves') { router.push('/learn-moves' as any); return; }

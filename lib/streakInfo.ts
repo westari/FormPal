@@ -147,9 +147,10 @@ export function streakPageJs(info: StreakInfo): string {
     var CHECK = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M5 12.6 9.8 17.4 19 7.4" stroke="#ffffff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
     for (var i = 0; i < 7; i++) {
       var c = circles[i], on = !!I.week[i], label = c.previousElementSibling;
-      c.setAttribute('data-streak-day', on ? '1' : '0');
+      c.setAttribute('data-streak-day', on ? '1' : '0'); c.setAttribute('data-streak-idx', String(i));
       c.style.setProperty('background', on ? 'linear-gradient(180deg, #ffa24a 0%, #ff6a2b 100%)' : '#f1f1f4', 'important');
-      c.style.setProperty('box-shadow', 'none', 'important');
+      // (round 13) a clearer week row: today, not trained yet, is an empty circle with an orange outline (where today's check will go)
+      c.style.setProperty('box-shadow', !on && i === I.todayIdx ? 'inset 0 0 0 2px #ffb27a' : 'none', 'important');
       c.innerHTML = on ? CHECK : '';
       if (label) label.style.setProperty('color', i === I.todayIdx ? '#ff6a2b' : on ? '#ff8a3c' : '#9a9aa2', 'important');
     }
@@ -176,6 +177,66 @@ export function streakPageJs(info: StreakInfo): string {
     }
     return true;
   }
+  // ── Round 13: the page comes ALIVE the moment it is shown (the app calls window.__skPlay() as it reveals the page). Everything is already in its
+  // final state before that (so a page that is never played is still right); playing briefly puts the number and the streak days back and
+  // animates them in:
+  //   0ms     the flame ignites: grows from 72% with a small overshoot (650ms), then keeps its slow sway; the soft glow behind it starts breathing
+  //   250ms   the number counts up to the streak (from yesterday's number when today was just trained: the day you earned; else from 0), then pops
+  //   480ms+  the streak days in the week row fill in one by one (orange, a pop, the check draws itself); today's gets one soft ring pulse
+  //   end     one success haptic with the number's pop
+  // All motion is transform/opacity only (cheap), and nothing moves for people who turned on Reduce Motion.
+  window.__skPlay = function(){
+    if (window.__skPlayed) return; window.__skPlayed = true;
+    var calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (calm) return;
+    function post(m){ try { window.ReactNativeWebView.postMessage(m); } catch (e) {} }
+    if (!document.getElementById('sk-play-css')) {
+      var cs = document.createElement('style'); cs.id = 'sk-play-css';
+      cs.textContent = '@keyframes sk-ignite { 0% { opacity: 0.4; transform: scale(0.72); } 55% { opacity: 1; transform: scale(1.06); } 100% { opacity: 1; transform: scale(1); } }'
+        + '@keyframes sk-pop { 0% { scale: 1; } 40% { scale: 1.22; } 100% { scale: 1; } }'
+        + '@keyframes sk-daypop { 0% { scale: 0.6; } 55% { scale: 1.14; } 100% { scale: 1; } }'
+        + '@keyframes sk-draw { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }'
+        + '@keyframes sk-ringpulse { 0% { box-shadow: 0 0 0 0 rgba(255,106,43,0.45); } 100% { box-shadow: 0 0 0 12px rgba(255,106,43,0); } }'
+        + '@keyframes sk-breathe { 0%,100% { opacity: 0.45; transform: scale(0.96); } 50% { opacity: 0.75; transform: scale(1.04); } }';
+      document.head.appendChild(cs);
+    }
+    var masks = [].slice.call(document.querySelectorAll('#dc-root div[style*="mask"], #dc-root [data-vector-flame]'));
+    var out = document.querySelector('[data-vector-flame="out"]');
+    var flameWrap = out && out.parentElement;
+    if (flameWrap) { flameWrap.style.setProperty('transform-origin', '50% 85%'); flameWrap.style.setProperty('animation', 'sk-ignite 650ms cubic-bezier(.2,.9,.3,1.15) both', 'important'); }
+    var glows = document.querySelectorAll('[data-sk-glow]');
+    for (var g = 0; g < glows.length; g++) glows[g].style.setProperty('animation', 'sk-breathe 3.2s ease-in-out infinite', 'important');
+    // the number
+    var nEl = document.querySelector('[data-streak-num]');
+    var to = I.count, from = to <= 0 ? 0 : I.trainedToday ? to - 1 : 0;
+    if (nEl && to > 0) {
+      nEl.textContent = String(from);
+      var dur = to - from <= 1 ? 420 : Math.min(900, 380 + (to - from) * 40), t0 = 0;
+      setTimeout(function(){
+        var step = function(now){
+          if (!t0) t0 = now;
+          var u = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - u, 3), v = Math.round(from + (to - from) * e);
+          if (nEl.textContent !== String(v)) nEl.textContent = String(v);
+          if (u < 1) requestAnimationFrame(step);
+          else { nEl.style.setProperty('animation', 'sk-pop 420ms cubic-bezier(.3,1.4,.5,1) both', 'important'); post('haptic'); }
+        };
+        requestAnimationFrame(step);
+      }, 250);
+    }
+    // the week row
+    var circles = [].slice.call(document.querySelectorAll('[data-streak-day="1"]'));
+    var keep = circles.map(function(c){ return { bg: c.style.getPropertyValue('background'), html: c.innerHTML }; });
+    circles.forEach(function(c){ c.style.setProperty('background', '#f1f1f4', 'important'); c.innerHTML = ''; });
+    circles.forEach(function(c, i){
+      setTimeout(function(){
+        c.style.setProperty('background', keep[i].bg, 'important');
+        c.innerHTML = keep[i].html;
+        var path = c.querySelector('path'); if (path) { path.style.strokeDasharray = '24'; path.style.setProperty('animation', 'sk-draw 300ms ease-out 90ms both', 'important'); }
+        var isToday = c.getAttribute('data-streak-idx') === String(I.todayIdx);
+        c.style.setProperty('animation', 'sk-daypop 420ms cubic-bezier(.3,1.4,.5,1) both' + (isToday ? ', sk-ringpulse 900ms ease-out 380ms 1' : ''), 'important');
+      }, 480 + i * 90);
+    });
+  };
   if (!apply()) { var n = 0, iv = setInterval(function(){ if (apply() || ++n > 80) clearInterval(iv); }, 40); }
 })(); true;`;
 }
