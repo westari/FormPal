@@ -86,13 +86,27 @@ check('the workout flow\'s own count wins if the session is not on disk yet (3, 
       varies: ops[0].map((_, i) => ops.some((o) => Math.abs(o[i] - ops[0][i]) > 0.05)).filter(Boolean).length, sizes: new Set(els.map((e) => e.style.width)).size, minSize: Math.min(...els.map((e) => parseFloat(e.style.width))), maxSize: Math.max(...els.map((e) => parseFloat(e.style.width))), oldSpark };
   });
   console.log('      stars:', JSON.stringify(stars));
-  check('4: 6 to 8 sparkles around the fire (7)', stars.n >= 6 && stars.n <= 8, String(stars.n));
+  check('4 + round 12: 6 sparkles around the fire', stars.n === 6, String(stars.n));
   check('4: they are BIG: every sparkle is 20px or more on the 390-wide design (was 7 to 16), at least 6 different sizes up to 34px', stars.minSize >= 20 && stars.maxSize <= 34 && stars.sizes >= 4, JSON.stringify([stars.minSize, stars.maxSize, stars.sizes]));
   check('3: every star fades in and out forever (animation sk-star, infinite), each with its own duration and start time', stars.names.join() === 'sk-star' && stars.iter.join() === 'infinite' && stars.durs >= 5 && stars.delays >= 5, JSON.stringify(stars));
   check('3: they are really fading (opacity changes over time on most stars), different sizes, none on top of the flame, the old 3 sparkles and embers are gone', stars.varies >= 5 && stars.sizes >= 4 && stars.outside && stars.oldSpark === 0, JSON.stringify(stars));
-  // a star comes back somewhere else after each fade
-  const moved = await page.evaluate(async () => { const e = document.querySelector('[data-sk-star]'); const p0 = e.style.left + e.style.top; e.dispatchEvent(new Event('animationiteration')); const p1 = e.style.left + e.style.top; return p0 !== p1; });
-  check('3: after a fade out the star returns at a new place', moved);
+  // round 12: the stars are UPRIGHT (never tilted) and laid out cleanly: fixed places, three on each side of the flame, mirrored, and they stay put
+  const lay = await page.evaluate(async () => {
+    const els = [...document.querySelectorAll('[data-sk-star]')], fl = document.querySelector('[data-vector-flame="out"]').getBoundingClientRect(), mid = fl.left + fl.width / 2;
+    const kf = [...document.styleSheets].flatMap((sh) => { try { return [...sh.cssRules]; } catch (e) { return []; } }).find((r) => r.name === 'sk-star');
+    const rot = kf ? /rotate/.test(kf.cssText) : true;
+    const c = () => els.map((e) => { const r = e.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; });
+    const p0 = els.map((e) => e.style.left + e.style.top); await new Promise((r) => setTimeout(r, 2500)); const p1 = els.map((e) => e.style.left + e.style.top);
+    const pts = c(); const L = pts.filter((p) => p[0] < mid), R = pts.filter((p) => p[0] > mid);
+    const mirror = L.every((l) => R.some((r) => Math.abs((mid - l[0]) - (r[0] - mid)) < 40 && Math.abs(l[1] - r[1]) < 16));
+    const onScreen = pts.every((p) => p[0] > 20 && p[0] < innerWidth - 20);
+    return { rot, still: p0.join() === p1.join(), L: L.length, R: R.length, mirror, onScreen, pts: pts.map((p) => p.map(Math.round)) };
+  });
+  console.log('      layout:', JSON.stringify(lay));
+  check('round 12: the stars are upright (no rotation in their animation, only a fade and a gentle grow) and stay in their places', !lay.rot && lay.still, JSON.stringify(lay));
+  check('round 12: a clean, balanced layout: three on each side of the flame, mirrored left/right, all well inside the screen', lay.L === 3 && lay.R === 3 && lay.mirror && lay.onScreen, JSON.stringify(lay));
+  const ss = require('fs').readFileSync(path.join(ROOT, 'app', 'streak-screen.tsx'), 'utf8');
+  check('round 12: opening is not held up: the page starts loading at once (no blank screen while the sessions are read), the streak is handed in on every page load once the numbers are there', !/if \(!info\) return/.test(ss) && /onLoadEnd=\{\(\) => setLoads/.test(ss) && /injectJavaScript\(streakPageJs\(info\)\)/.test(ss));
   check('6: the streak number (2) is inside the flame, inside the cream belly, with room around it, and moves with the inner flame', live.num === '2' && live.inside && live.within && live.fits, JSON.stringify({ n: live.num, inside: live.inside, within: live.within, fits: live.fits }));
   const nudge = await page.evaluate(() => { const n = document.querySelector('[data-streak-num]'), inn = document.querySelector('[data-vector-flame="in"]'); const rg = document.createRange(); rg.selectNodeContents(n); const t = rg.getBoundingClientRect(), r = inn.getBoundingClientRect(); return { dx: (t.left + t.width / 2) - (r.left + r.width / 2), tf: n.style.transform }; });
   check('7: the number sits a little LEFT of the exact middle of the flame belly (looks centred; 2 to 6px left)', nudge.dx <= -2 && nudge.dx >= -6, JSON.stringify(nudge));

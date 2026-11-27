@@ -9,12 +9,13 @@
  * Nothing above the glass fades, clips or masks it (a native glass view inside a faded or clipped parent draws as a plain colour), so the popover never uses
  * opacity: it appears and disappears by MOVING (a transform on the native driver) and is parked far above the screen when closed.
  *
+ * GROWS FROM THE ARROW (round 12): scale from a tiny size at the pointer + the month fading in, 250ms, native driver (see play()).
  * INSTANT (round 11): Home no longer re-renders to open it. Home holds this component by a ref and calls toggle({ top, cx }) / close(); the animation starts in
  * that very call, on the native driver, before React has drawn anything again. The popover is always mounted (its glass exists and has painted before the first
  * open), the month only changes when you press an arrow, and the status bar is left alone.
  * The page says where the arrow is: `top` = the bottom edge of the date block, `cx` = the arrow's centre (screen points).
  */
-import React, { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import LiquidGlass from './LiquidGlass';
@@ -28,8 +29,9 @@ const ACCENT = '#f2701c';
 const SIDE = 14;
 const RADIUS = 28;
 const CARET = 18;   // the little pointer on the top edge
-export const CAL_OPEN_MS = 170;
-export const CAL_CLOSE_MS = 120;
+export const CAL_OPEN_MS = 250;
+export const CAL_CLOSE_MS = 180;
+export const CAL_START_SCALE = 0.12; // it grows out of the arrow's point: it starts this small, AT the pointer
 export const CAL_PARK = -3000; // where it waits when it is closed (above the screen)
 
 export interface CalendarAnchor { top: number; cx: number }
@@ -43,9 +45,15 @@ const CalendarSheet = forwardRef<CalendarHandle, { timestamps: number[]; onOpenC
   const [anchor, setAnchor] = useState<CalendarAnchor>({ top: 170, cx: 250 });
   const prog = useRef(new Animated.Value(0)).current;
   const openRef = useRef(false);
+  // Round 12 (Ari: "it just spawns in"): it now GROWS out of the arrow's point. The panel and its pointer scale up from a tiny size anchored at the pointer while
+  // the month inside fades in, 250ms on the native driver (60fps on the UI thread), with an iOS-like deceleration; closing is the same in reverse (180ms).
+  // The fade is on the CONTENT inside the glass, never on a parent of the glass (a faded parent turns native glass flat).
   const play = useCallback((to: 0 | 1) => {
-    Animated.timing(prog, { toValue: to, duration: to ? CAL_OPEN_MS : CAL_CLOSE_MS, easing: to ? Easing.out(Easing.cubic) : Easing.in(Easing.quad), useNativeDriver: true }).start();
+    Animated.timing(prog, { toValue: to, duration: to ? CAL_OPEN_MS : CAL_CLOSE_MS, easing: to ? Easing.bezier(0.2, 0.9, 0.25, 1) : Easing.bezier(0.4, 0, 0.7, 0.4), useNativeDriver: true }).start();
   }, [prog]);
+  // The value is handed to the native side once at mount (a zero-length run), so the FIRST open does not spend its first frames setting the animation up.
+  useEffect(() => { Animated.timing(prog, { toValue: 0, duration: 0, useNativeDriver: true }).start(); }, [prog]);
+  const anchorRef = useRef<CalendarAnchor>({ top: 170, cx: 250 });
   const setState = useCallback((next: boolean) => {
     openRef.current = next;
     setOpen(next);
@@ -55,9 +63,12 @@ const CalendarSheet = forwardRef<CalendarHandle, { timestamps: number[]; onOpenC
     // The animation is started FIRST, in this very call; the state that follows only turns touches on and moves the pointer to the arrow.
     toggle: (a) => {
       if (openRef.current) { play(0); setState(false); return; }
-      if (a) setAnchor(a);
       const n = new Date(); setYm((c) => (c.y === n.getFullYear() && c.m === n.getMonth() ? c : { y: n.getFullYear(), m: n.getMonth() }));
-      play(1); setState(true);
+      setState(true);
+      // Same place as last time (almost always): grow at once. A new place (the first open, or the header moved): place it first, grow on the next frame,
+      // so it never grows from the old spot.
+      if (a && (Math.abs(a.top - anchorRef.current.top) > 0.5 || Math.abs(a.cx - anchorRef.current.cx) > 0.5)) { anchorRef.current = a; setAnchor(a); requestAnimationFrame(() => play(1)); }
+      else play(1);
     },
     close: () => { if (!openRef.current) return; play(0); setState(false); },
     isOpen: () => openRef.current,
@@ -72,8 +83,9 @@ const CalendarSheet = forwardRef<CalendarHandle, { timestamps: number[]; onOpenC
   const cardW = width - SIDE * 2;
   const caretX = Math.max(26, Math.min(cardW - 26, anchor.cx - SIDE)); // the pointer sits right under the arrow
   // Parked far above the screen while closed; the instant it starts opening it is in place (a tiny progress already puts it on screen), then it settles.
-  const ty = prog.interpolate({ inputRange: [0, 0.0001, 1], outputRange: [CAL_PARK, -10, 0], extrapolate: 'clamp' });
-  const sc = prog.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] });
+  const ty = prog.interpolate({ inputRange: [0, 0.0001, 1], outputRange: [CAL_PARK, 0, 0], extrapolate: 'clamp' });
+  const sc = prog.interpolate({ inputRange: [0, 1], outputRange: [CAL_START_SCALE, 1] });
+  const fadeIn = prog.interpolate({ inputRange: [0, 0.35, 1], outputRange: [0, 0.55, 1], extrapolate: 'clamp' });
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents={open ? 'box-none' : 'none'}>
@@ -88,6 +100,7 @@ const CalendarSheet = forwardRef<CalendarHandle, { timestamps: number[]; onOpenC
           <LiquidGlass radius={4} variant={CAL_GLASS.variant} colorScheme={CAL_GLASS.colorScheme} fallbackColor={CAL_GLASS.fallbackColor} style={StyleSheet.absoluteFill} />
         </View>
         <LiquidGlass radius={RADIUS} variant={CAL_GLASS.variant} colorScheme={CAL_GLASS.colorScheme} fallbackColor={CAL_GLASS.fallbackColor} style={s.inner}>
+          <Animated.View style={{ opacity: fadeIn }} testID="calendar-content">
           <View style={s.head}>
             <View>
               <Text style={s.title}>{MONTH_NAMES[ym.m]} {ym.y}</Text>
@@ -119,6 +132,7 @@ const CalendarSheet = forwardRef<CalendarHandle, { timestamps: number[]; onOpenC
               ))}
             </View>
           ))}
+          </Animated.View>
         </LiquidGlass>
       </Animated.View>
     </View>

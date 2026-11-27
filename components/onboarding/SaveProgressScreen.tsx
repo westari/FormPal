@@ -1,9 +1,9 @@
 /**
  * components/onboarding/SaveProgressScreen.tsx
  *
- * "Save your progress" (rebuilt round 10, background changed round 11): a dark GYM screen (components/onboarding/GymBackground.tsx: the back wall of a gym in low
+ * "Save your progress" (rebuilt round 10; round 12: a plain dark gradient, no drawn background): the screen behind is a simple charcoal-to-black gradient; previously a drawn gym ( low
  * light, a dumbbell rack, barbells, kettlebells), the REAL FormPal logo (assets/images/formpal-logo.png) a little below the middle, then big pill buttons at the
- * bottom: "Continue with Apple" (white), "Continue with email" (dark grey), and the two footer links. The button you used last time carries a small "Last used" tag.
+ * bottom: "Continue with Apple" (white), "Continue with Email" (dark grey), and the two footer links. The button you used last time carries a small "Last used" tag.
  * No back button except on the e-mail form (it needs a way back to the choices).
  * There is no Google button: Google sign-in is not built, and a button that does nothing is worse than none (the earlier instruction was "No Google for now").
  *
@@ -19,7 +19,10 @@ import * as Haptics from '../../lib/haptics';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { SymbolView } from 'expo-symbols';
 import OnbBackButton from './OnbBackButton';
-import GymBackground, { GYM_BG } from './GymBackground';
+import { LinearGradient } from 'expo-linear-gradient';
+
+// Round 12 (Ari): no drawn background. A plain, clean dark gradient: a soft charcoal at the top easing into near-black at the bottom.
+const BG_TOP = '#26262c', BG_BOTTOM = '#0b0b0e';
 import FormPalLogo from './FormPalLogo';
 import { PJS } from '../../constants/theme';
 import { supabase } from '../../constants/supabase';
@@ -138,7 +141,7 @@ export default function SaveProgressScreen({
     // root carries the opaque dark background and is NEVER animated (opacity on the same view as the background would fade it out and expose the
     // navigator's own dark colour behind it as a flash).
     <View style={[s.root, { paddingTop: topInset }]}>
-      <GymBackground />
+      <LinearGradient colors={[BG_TOP, '#151518', BG_BOTTOM]} locations={[0, 0.55, 1]} style={StyleSheet.absoluteFill} pointerEvents="none" />
       <Animated.View style={{ flex: 1, opacity: fade }}>
         <View style={s.headerRow}>
           {/* (Ari 2026-11-25) No back button and no progress bar from "building your plan" onward. The ONE exception is the
@@ -171,7 +174,7 @@ export default function SaveProgressScreen({
 
             <View style={{ marginTop: 14 }}>
               <Pressable style={s.grey} onPress={() => { Haptics.selectionAsync(); setError(''); setEmailMode(true); }} testID="save-email">
-                <Text style={s.greyTxt}>Continue with email</Text>
+                <Text style={s.greyTxt}>Continue with Email</Text>
               </Pressable>
               {lastUsed === 'email' ? <View style={s.lastTag} pointerEvents="none"><Text style={s.lastTxt}>Last used</Text></View> : null}
             </View>
@@ -228,7 +231,7 @@ export default function SaveProgressScreen({
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: GYM_BG },
+  root: { flex: 1, backgroundColor: BG_BOTTOM },
 
   headerRow: { paddingTop: 8, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center' },
   skipBtn: { paddingHorizontal: 14, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.14)' },

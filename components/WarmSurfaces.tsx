@@ -31,6 +31,7 @@ import { useLaunchSettled } from '../lib/launchGate';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Animated, Easing, useWindowDimensions } from 'react-native';
 import { SymbolView } from 'expo-symbols';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LiquidGlassButton } from './LiquidGlass';
 import { WebView } from 'react-native-webview';
@@ -63,7 +64,9 @@ const PARALLAX = 0.3;
 // The sliding value of every layer, so a page can follow the one covering it.
 const TX: Partial<Record<WarmKind, Animated.Value>> = {};
 const edgeStyles = StyleSheet.create({
-  pushEdge: { shadowColor: '#000', shadowOpacity: 0.28, shadowRadius: 14, shadowOffset: { width: -4, height: 0 } },
+  // Round 12: NOT a shadow. A blurred shadow on a full-screen view that moves is recomputed by iOS on every frame of the slide (an
+  // offscreen pass), which is what made All sets lag. A fixed 16px gradient strip just left of the page looks the same and costs nothing.
+  pushEdge: { position: 'absolute', top: 0, bottom: 0, left: -16, width: 16 },
 });
 
 // Layering rules (also what scripts/test-ghost-card.js renders): a layer that is
@@ -375,12 +378,13 @@ function Layer({ k }: { k: WarmKind }) {
         // native driver then keeps the old animated value, which left the Workout complete card showing on top of rep feedback).
         // The fade is on an inner view (the page itself), so the glass buttons are never inside an animated-opacity view.
         { opacity: shown && !beneathHidden ? 1 : LAYER_OPACITY_HIDDEN, transform: [{ translateX: tx }, { translateX: underShift }] },
-        // a soft edge on the page that slides in, like a normal iOS push
-        shown && !coveredByHigher && !FADES[k] ? edgeStyles.pushEdge : null,
       ]}
     >
+      {/* a soft edge on the page that slides in, like a normal iOS push: a static gradient, never a live shadow (see edgeStyles) */}
+      {shown && !coveredByHigher && !FADES[k] ? <LinearGradient pointerEvents="none" colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.16)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={edgeStyles.pushEdge} /> : null}
       <Animated.View style={[StyleSheet.absoluteFill, FADES[k] ? { opacity: fade } : null]}>
-      {shown && underlay ? <View style={StyleSheet.absoluteFill} pointerEvents="none">{underlay}</View> : null}
+      {/* round 12: the underlay (All sets white base + video frame) stays mounted while the page is parked, so nothing is built in the same frame the slide starts */}
+      {underlay ? <View style={StyleSheet.absoluteFill} pointerEvents="none">{underlay}</View> : null}
       <WebView
         key={`${k}-${epoch}`}
         ref={ref}

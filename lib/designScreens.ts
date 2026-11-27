@@ -245,32 +245,47 @@ export const CREATE_WORKOUT_DOM_JS = String.raw`
         window.__cwMore = false;
       }
       if (st) {
-        var cur = window.__athltCurrent || { items: [] };
-        var added = {}; cur.items.forEach(function (it) { added[it.n] = 1; });
-        var typing = String(inp.value || '').trim().length > 0;
-        var grp = window.__cwGroup || '';
-        var names = grp ? (dd.groups[grp] || []) : dd.popular;
-        var cap = window.__cwMore ? names.length : 8;
-        var shown = names.slice(0, cap);
-        var sig = [typing ? 1 : 0, grp, cap, shown.join('|'), shown.map(function (n) { return added[n] ? 1 : 0; }).join('')].join('#');
-        if (st.__sig !== sig) {
+        // (round 12) taps are INSTANT: the map card is built ONCE and never rebuilt. A tap recolours the muscles and swaps the pill in
+        // place, in the tap itself (no 40ms wait for the page's next pass, no re-parsing the two big drawings, no shadow filter to redraw),
+        // and only the small list under it is rebuilt.
+        window.__cwRender = function () {
+          var cur = window.__athltCurrent || { items: [] };
+          var added = {}; cur.items.forEach(function (it) { added[it.n] = 1; });
+          var typing = String(inp.value || '').trim().length > 0;
+          var grp = window.__cwGroup || '';
+          var names = grp ? (dd.groups[grp] || []) : dd.popular;
+          var cap = window.__cwMore ? names.length : 8;
+          var shown = names.slice(0, cap);
+          var disp = typing ? 'none' : 'block';
+          if (st.style.display !== disp) st.style.display = disp;
+          if (!st.__map && dd.map) {
+            // (round 8) the groups are a small tappable body map (the Progress tab's muscle map), front and back: tap a muscle to start from its group
+            // (round 11) a soft light backdrop, small FRONT / BACK labels, and a pill that names the chosen group (tap the pill to clear it)
+            var lab = 'text-align:center;font-size:10.5px;font-weight:700;letter-spacing:1.4px;color:#a3a3ad;padding-top:6px;';
+            var fig = 'width:142px;height:250px;';
+            st.innerHTML = '<div style="font-size:13px;font-weight:600;color:#6e6e77;padding:0 4px 8px;">Start from a muscle group</div>'
+              + '<div data-cw-card="1" style="border-radius:26px;padding:16px 14px 14px;background:radial-gradient(90% 70% at 50% 0%, #ffffff 0%, #f6f6f9 100%);box-shadow:inset 0 0 0 0.5px rgba(255,255,255,0.9),0 14px 30px -16px rgba(40,50,90,0.26),0 2px 6px -2px rgba(40,50,90,0.08);">'
+              + '<div data-cw-map="1" style="display:flex;justify-content:center;gap:18px;touch-action:manipulation;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;">'
+              + '<div><div style="' + fig + '">' + dd.map.front + '</div><div style="' + lab + '">FRONT</div></div>'
+              + '<div><div style="' + fig + '">' + dd.map.back + '</div><div style="' + lab + '">BACK</div></div></div>'
+              + '<div data-cw-pillrow="1" style="display:flex;justify-content:center;padding-top:12px;min-height:30px;"></div></div>'
+              + '<div data-cw-list="1"></div>';
+            st.__map = st.querySelector('[data-cw-map]'); st.__paths = st.__map.querySelectorAll('[data-grp]');
+            st.__pill = st.querySelector('[data-cw-pillrow]'); st.__list = st.querySelector('[data-cw-list]'); st.__mapGrp = null;
+          }
+          if (!st.__map) return;
+          if (st.__mapGrp !== grp) {
+            st.__mapGrp = grp;
+            // the chosen group's muscles turn dark on the map
+            for (var q = 0; q < st.__paths.length; q++) { var f = st.__paths[q].getAttribute('data-grp') === grp ? '#111114' : '#E3E4EA'; if (st.__paths[q].getAttribute('fill') !== f) st.__paths[q].setAttribute('fill', f); }
+            var gl = grp ? (dd.groupLabels.filter(function (g) { return g.id === grp; })[0] || { label: grp }).label : '';
+            st.__pill.innerHTML = grp ? '<div data-cw-clear="1" style="height:30px;padding:0 8px 0 14px;border-radius:999px;background:#111114;color:#ffffff;font-size:13px;font-weight:700;letter-spacing:-0.1px;display:flex;align-items:center;gap:8px;cursor:pointer;box-shadow:0 8px 16px -8px rgba(17,17,20,0.5);">' + gl + '<span style="width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,0.18);display:flex;align-items:center;justify-content:center;font-size:11px;line-height:1;">&#10005;</span></div>'
+              : '<div style="font-size:13px;font-weight:600;color:#8a8a94;display:flex;align-items:center;">Tap a muscle to start from it</div>';
+          }
+          var sig = [grp, cap, shown.join('|'), shown.map(function (n) { return added[n] ? 1 : 0; }).join('')].join('#');
+          if (st.__sig === sig) return;
           st.__sig = sig;
-          st.style.display = typing ? 'none' : 'block';
           var label = grp ? (dd.groupLabels.filter(function (g) { return g.id === grp; })[0] || { label: grp }).label + ' exercises' : 'Popular';
-          // (round 8) the groups are a small tappable body map (the Progress tab's muscle map), front and back: tap a muscle to start from its group
-          var gl = grp ? (dd.groupLabels.filter(function (g) { return g.id === grp; })[0] || { label: grp }).label : '';
-          // (round 11) a cleaner, more premium card: a soft light backdrop, each figure lifted by a gentle shadow, small FRONT / BACK labels, and a pill that
-          // names the chosen group (tap the pill to clear it) instead of a sentence
-          var lab = 'text-align:center;font-size:10.5px;font-weight:700;letter-spacing:1.4px;color:#a3a3ad;padding-top:6px;';
-          var fig = 'width:142px;filter:drop-shadow(0 10px 14px rgba(30,40,70,0.14));';
-          var mapCard = '<div style="border-radius:26px;padding:16px 14px 14px;background:radial-gradient(90% 70% at 50% 0%, #ffffff 0%, #f6f6f9 100%);box-shadow:inset 0 0 0 0.5px rgba(255,255,255,0.9),0 14px 30px -16px rgba(40,50,90,0.26),0 2px 6px -2px rgba(40,50,90,0.08);">'
-            + '<div data-cw-map="1" style="display:flex;justify-content:center;gap:18px;">'
-            + '<div><div style="' + fig + 'height:250px;">' + (dd.map ? dd.map.front : '') + '</div><div style="' + lab + '">FRONT</div></div>'
-            + '<div><div style="' + fig + 'height:250px;">' + (dd.map ? dd.map.back : '') + '</div><div style="' + lab + '">BACK</div></div></div>'
-            + '<div style="display:flex;justify-content:center;padding-top:12px;min-height:30px;">'
-            + (grp ? '<div data-cw-clear="1" style="height:30px;padding:0 8px 0 14px;border-radius:999px;background:#111114;color:#ffffff;font-size:13px;font-weight:700;letter-spacing:-0.1px;display:flex;align-items:center;gap:8px;cursor:pointer;box-shadow:0 8px 16px -8px rgba(17,17,20,0.5);">' + gl + '<span style="width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,0.18);display:flex;align-items:center;justify-content:center;font-size:11px;line-height:1;">&#10005;</span></div>'
-                  : '<div style="font-size:13px;font-weight:600;color:#8a8a94;display:flex;align-items:center;">Tap a muscle to start from it</div>')
-            + '</div></div>';
           var rows = shown.map(function (n, i) {
             var on = !!added[n];
             return '<div data-cw-row="' + i + '" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 0;cursor:pointer;' + (i ? 'border-top:1px solid rgba(17,17,20,0.07);' : '') + '">'
@@ -280,25 +295,21 @@ export const CREATE_WORKOUT_DOM_JS = String.raw`
               + '<svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="' + (on ? 'M2.6 6.4 5 8.8l4.4-5' : 'M6 2.2v7.6M2.2 6h7.6') + '" stroke="' + (on ? '#111114' : '#9a9aa4') + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></div></div>';
           }).join('');
           var more = names.length > 8 ? '<div data-cw-more="1" style="padding:12px 0 8px;text-align:center;font-size:13.5px;font-weight:700;color:#5f5f69;cursor:pointer;border-top:1px solid rgba(17,17,20,0.07);">' + (window.__cwMore ? 'Show fewer' : 'Show all ' + names.length) + '</div>' : '';
-          st.innerHTML = '<div style="font-size:13px;font-weight:600;color:#6e6e77;padding:0 4px 8px;">Start from a muscle group</div>'
-            + mapCard
-            + '<div style="font-size:21px;font-weight:700;letter-spacing:-0.6px;color:#111114;padding:18px 4px 10px;">' + label + '</div>'
+          st.__list.innerHTML = '<div style="font-size:21px;font-weight:700;letter-spacing:-0.6px;color:#111114;padding:18px 4px 10px;">' + label + '</div>'
             + '<div style="border-radius:24px;padding:4px 16px;background:#ffffff;box-shadow:0 12px 28px -14px rgba(40,50,90,0.24),0 2px 6px -2px rgba(40,50,90,0.08);">' + rows + more + '</div>';
-          // the chosen group's muscles turn dark on the map
-          var mp = st.querySelectorAll('[data-grp]');
-          for (var q = 0; q < mp.length; q++) mp[q].setAttribute('fill', mp[q].getAttribute('data-grp') === grp ? '#111114' : '#E3E4EA');
-          var rowEls = st.querySelectorAll('[data-cw-row]');
+          var rowEls = st.__list.querySelectorAll('[data-cw-row]');
           for (var r = 0; r < rowEls.length; r++) rowEls[r].firstChild.textContent = shown[r];
-        }
+        };
+        window.__cwRender();
         if (!st.__wired) {
           st.__wired = true;
           st.addEventListener('click', function (ev) {
             var t = ev.target;
-            if (t.closest && t.closest('[data-cw-clear]')) { window.__cwGroup = ''; window.__cwMore = false; st.__sig = ''; if (window.__athltBump) window.__athltBump(); return; }
+            if (t.closest && t.closest('[data-cw-clear]')) { window.__cwGroup = ''; window.__cwMore = false; window.__cwRender(); return; }
             var chip = t.closest && t.closest('[data-grp]');
-            if (chip) { var id = chip.getAttribute('data-grp'); window.__cwGroup = window.__cwGroup === id ? '' : id; window.__cwMore = false; st.__sig = ''; if (window.__athltBump) window.__athltBump(); return; }
+            if (chip) { var id = chip.getAttribute('data-grp'); window.__cwGroup = window.__cwGroup === id ? '' : id; window.__cwMore = false; window.__cwRender(); return; }
             var mo = t.closest && t.closest('[data-cw-more]');
-            if (mo) { window.__cwMore = !window.__cwMore; st.__sig = ''; if (window.__athltBump) window.__athltBump(); return; }
+            if (mo) { window.__cwMore = !window.__cwMore; window.__cwRender(); return; }
             var row = t.closest && t.closest('[data-cw-row]');
             if (row && window.__cwSelf) { window.__cwSelf.toggle(row.firstChild.textContent); }
           }, true);

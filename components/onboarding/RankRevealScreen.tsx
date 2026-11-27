@@ -19,6 +19,7 @@ import * as Haptics from '../../lib/haptics';
 import { SymbolView } from 'expo-symbols';
 import { LiquidGlassButton } from '../LiquidGlass';
 import OnbBackButton from './OnbBackButton';
+import RankShield from './RankShield'; // (round 12) every shield at its own real shape: the Champion one is taller than wide and was squished into a square
 import { PJS } from '../../constants/theme';
 
 // Same 7-tier ladder + shields RankWheelScreen uses, kept in landed order
@@ -136,7 +137,7 @@ export default function RankRevealScreen({
             });
             return (
               <Animated.View key={i} style={[s.row, { opacity, transform: [{ scale }] }]}>
-                <Animated.Image source={r.img} resizeMode="contain" style={s.rowImg} />
+                <RankShield src={r.img} boxW={76} boxH={76} testID={'reel-shield-' + r.key} />
               </Animated.View>
             );
           })}

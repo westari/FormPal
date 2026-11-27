@@ -1,57 +1,62 @@
-# Window A report (round 11)
+# Window A report (round 12)
 
-Branch work-a. I ran git fetch and merged origin/overnight-build first. I did not edit `app/onboarding.tsx`.
+Branch work-a. I ran git fetch and merged origin/overnight-build first. I did not edit `app/onboarding.tsx` or the GlassBackButton.
 
-## 1. Calendar: a popover under the date arrow: DONE
-- It is a small popover again, attached to the arrow beside the date ("Wednesday, November 25 ⌄"): it hangs about 12px under that row, 14px in from each side, with a small pointer on its top edge sitting exactly under the arrow. It is not a panel from the top of the screen any more. The page tells the app where the arrow is, and the popover grows out of that point.
-- Font: the month title now uses no custom font family, so iOS shows its own system font (SF Pro), weight 600, 20px, like the app's other titles. (The old code named the family; now there is nothing to get wrong.)
-- Instant: it was laggy because opening changed Home's state, which re-rendered the whole Home screen first, and only then did an effect start the animation. Now Home holds the calendar by a ref and calls `toggle()`: the slide is started inside that very call on the native driver, Home does not re-render at all, the month only changes when you press an arrow, and the status bar is left alone. It opens in 170ms and closes in 120ms.
-- Light liquid glass kept (same native view, light scheme, no dark tint, soft shadow). The popover never fades: it appears by moving (a fade over native glass makes it flat) and waits far above the screen when closed.
-- NEEDS YOUR PHONE: how fast it feels.
+## 1. Calendar grows out of the arrow: DONE
+- It now grows out of the arrow's point: it starts at 12% size at the pointer and scales up to full size in 250ms (closing takes 180ms), on the native driver. The month inside fades in as it grows.
+- The fade is on the content INSIDE the glass, never on the glass itself (a fade on a parent makes native glass flat). Everything else (place, pointer, font, size) is unchanged.
+- Why it used to "spawn in": the start value was only given to the native side on the first open, so the first frame showed it full size. Now it is handed over when the screen mounts, so the first frame is the tiny one.
+- Tested: `scripts/test-calendar-drop.js` passes. NEEDS YOUR PHONE: how smooth it feels.
 
-## 2. Practice exercise search: DONE in code (a normal iOS search)
-- Last round the bar appeared at the bottom and the page scrolled on the first letter. Now: a tap on the page's search box opens the app's bar exactly on top of it (same place, same look). It slides up with the keyboard, using the keyboard's own duration, on the native driver. The matching exercises are listed in a card right above the bar; each row opens that exercise's form check. When it closes the bar slides back down onto the page's box.
-- The page does not move, scroll, re-render or receive the text at all. Its own box is only hidden while the app's bar is on top of it (so it never shows twice). Tested on the real page after a real tap: scroll position, canvas scale and height are unchanged.
-- NEEDS YOUR PHONE. The log line is `[TRAIN] search opened: the bar is on the page's own box and rises with the keyboard`.
+## 2. Streak page: DONE
+- Lag: the screen used to wait for your saved sessions first, and only then start loading the page from nothing. Now the page starts loading the moment the screen opens, at the same time as the sessions are read. The streak is handed to the page as soon as both are ready. It is still only shown once it has the real numbers (no "Day 1" flash).
+- Stars: they used to tilt 14 degrees while fading (looked sideways) and jumped to random places (bunched up or odd spots). Now there are 6, upright, in fixed balanced places: 3 on each side of the flame, mirrored (small high, big middle, mid low). Each only fades and gently grows in place, each on its own timing.
+- Tested: `scripts/test-streak.js` passes (upright, still, 3 + 3 mirrored, on screen). Screenshot: `.scratch/streak-stars-r12.png`.
 
-## 3. Muscle maps: DONE
-- The Progress tab's map now has the same dark outlines as Create Workout's: one drawing function (`bodyMapParts` in `lib/bodyMapSvg.ts`) and one ink (`MAP_INK`) drive both. Ranked muscles keep their tier colours on the Progress map. Tested on the real Progress page.
-- Create Workout's map, more polished: a soft light card, each figure lifted by a gentle shadow, small FRONT / BACK labels, muscles ease to dark when picked, and a dark pill that names the chosen group (tap the pill to clear it) instead of a sentence. Figures stay big (142 x 250).
+## 3. Missed day icon: DONE
+- A missed day on the Train tab's week strip and in the calendar now shows its own small icon under the day, in the same spot as the rest-day moon: a small red circle with a white cross.
+- A missed day never shows the moon or the fire icon.
+- Tested: `scripts/test-train-missed.js` passes.
 
-## 4. Exclamation marks: DONE
-"Form check complete!" and "Weight logged!" on the done screens. (Workout complete, Session logged and Workout created have none; say if you want them too.)
+## 4. Create Workout muscle map: DONE
+- Taps are instant now. Before, every tap waited for the page's next pass (about 40ms), then rebuilt the whole card (re-reading both big drawings), and the colour faded in over 180ms under a shadow filter that had to be redrawn. Now the map is built once. A tap changes the muscle colours, the pill and the list right inside the tap (measured: 0.3ms). There is no fade and no shadow filter. `touch-action: manipulation` is set so iOS never waits for a double-tap.
+- Clean shapes: the shapes came from a traced image (straight-line pieces with tiny noise slivers), so with outlines they looked hand-drawn. Now every shape is a smooth curve through the same points. The tiny slivers (2 to 5 point specks along the thighs and shoulders) are left out, and the body outline gets one gentle smoothing pass. Outlines are an even width on screen everywhere: 1.1px on muscles, 1.8px on the body.
+- The Progress map is drawn by the same function, so it got the same clean shapes and stays identical.
+- Tested: `test-create-starter.js` (taps, instant, built once, smooth, even) passes, and so do `test-progress-map.js`, `test-muscle-ranks.js` and `test-muscle-map-back.js`.
 
-## 5. All sets: DONE in code (a normal screen push)
-- It had been a fade that cross-faded with the rep feedback leaving. It is now a normal push: All sets slides in from the right over the screen you are on, the screen under it moves back a little (parallax), and Back slides it out again. When it opens from the rep feedback, the rep feedback stays under it until the slide is over and only then goes, so the summary page is never seen in between. Rep 5 -> All sets -> Back still returns to rep 5.
-- All the other post-workout pages still fade. This reverses the old "no sideways motion" rule for All sets only, because you asked for a normal transition.
-- NEEDS YOUR PHONE.
+## 5. Form checks list: DONE
+- The Progress tab shows only the 2 newest form checks, then a "View all" row.
+- "View all" opens a new screen (`app/form-checks.tsx`) with the full list in the same style. Tapping a row opens that form check, the same way as before.
+- Tested: `scripts/test-practice-sessions.js` passes.
 
-## 6. Edit sheet lag: measured; fix applied for the part I could not measure
-- I measured the two Edit sheets that live inside web pages (Home's "My workout" card and the Train tab card), on the real pages in Chromium with the phone's slower CPU (4x and 6x): the sheet starts to move within 6ms (26 to 34ms at 4x), no long task, about 12 nodes changed, and no frame over 17ms while it slides. They are not the cause (`scripts/measure-edit-sheet.js` prints the numbers).
-- That leaves the native sheet on the workout preview (pencil on an exercise). I cannot measure phone drawing off the phone, but I found a real cost in it: the sheet had a blurred shadow and a rounded clip (`overflow: hidden`) on a view that moves, and iOS redraws both on every frame of the slide. Now there is no clip and no blurred shadow (the dimmed screen behind separates it), and the sheet is drawn once and only moved (`shouldRasterizeIOS`). The earlier fixes stay (the slide starts inside the tap; the cards do not redraw).
-- Two log lines will prove the cause on your phone if it still lags: `[PREVIEW] edit sheet: pencil tapped, slide started Nms after the tap` and `[PREVIEW] edit sheet: screen redrawn Nms after the tap`. Send me both.
+## 6. All sets slide: DONE in code
+- The lag came from the soft shadow on the left edge of the sliding page. A blurred shadow on a full-screen view that moves gets recomputed by iOS on every frame. It is now a fixed 16px gradient strip that looks the same and costs nothing to draw.
+- The white base and video frame behind the page also stay ready while the page is parked, so nothing is built in the same frame the slide starts.
+- Same 320ms native-driver slide.
+- Tested: `test-slide.js`, `test-warm-surfaces.js` and `test-layering.js` pass. NEEDS YOUR PHONE: how smooth it feels.
 
-## 7. Onboarding Bronze icon: DONE
-- The Bronze file is the right picture (the plain shield); the wheel drew every shield at one fixed width and height, which stretched the square ones (Bronze to Champion's tall shape) and relied on a resize setting that is not reliable on every build. Now each shield is drawn at its own proportions: Bronze to Platinum are square (206 x 206), Champion keeps its taller shape (203 x 288), worked out from each picture's real size (`lib/fitInBox.ts`), with the resize setting also in the style. The wheel opens at the start with Bronze in the middle.
-- NEEDS YOUR PHONE: if Bronze still looks like Champion there, send a screenshot: the code and the files are right, so it would be something I cannot see from here.
+## 7. Rank wheel / reel icons always keep their shape: DONE
+- The squished Champion under "Bronze I" was in the rank reveal reel. All rank icons, in both the wheel and the reel, now go through one small component (`RankShield`). It sizes each icon from the image's real width and height, fitted inside its box, with no stretch and no animated filter. Tapping or scrolling can no longer change the shape.
+- Tested: `scripts/test-round11.js` (Champion is 54x76 in the reel, its real proportions) passes.
 
 ## 8. Save Your Progress: DONE
-- The REAL FormPal logo: I searched the repo first. The only logo files in it are the old ATHLT picture and the plain app-icon disc. Your logo is in your Downloads folder as `formpallogo.html`; I rendered its own shapes (the four viewfinder corners and the person with dumbbells) into `assets/images/formpal-logo.png` (white on transparent, 1012 x 1012), and it matches the image you attached. The screen shows that file; the drawn placeholder and wordmark are gone.
-- Background: a dark GYM scene drawn in code (`components/onboarding/GymBackground.tsx`): the back wall in low light with a warm spotlight, a two-shelf dumbbell rack, weight plates at the sides, kettlebells and a rubber floor with soft lines, fading into near-black under the buttons. No space.
-- The Apple logo is 26 (was 18). No back button except on the e-mail form (kept).
-- Edited only `SaveProgressScreen.tsx` plus new files (`GymBackground.tsx`, the logo file) and the logo component.
+- The drawn gym background is gone. It is now a plain dark gradient (dark grey at the top to near-black at the bottom). The real FormPal logo stays. The button says "Continue with Email".
+- Tested: `scripts/test-save-progress.js` and `scripts/test-round11.js` pass.
 
-## Tests
-New: `test-round11.js`, `scripts/measure-edit-sheet.js` (numbers, not a pass/fail test). Rewritten: `test-calendar-drop`, `test-train-search`. Updated: `test-glass-same`, `test-home-header-taps`, `test-progress-map`, `test-create-starter`, `test-save-progress`, `test-done-screen`, `test-slide`, `test-rep-feedback-r10`, `test-round7`.
-`npx tsc --noEmit`: no new errors in files I touched.
+## Checks
+- Full test suite: 110 test files run. 109 pass. The one failure is `test-rep-feedback-injection.js`: it is an old test that needs a scratch file which no longer exists, and it has nothing to do with this round. (`test-body-outline.js` ends on a PASS line and is fine.)
+- TypeScript: no errors in any file I changed. The errors that remain were already there in files I did not touch (drillLibrary, formcheck, calibrate, ar-experiment, onboarding, cueApi).
 
-## Blocked commands
-- `rm scripts/measure-preview-open.js`: it is an empty stub I created and abandoned (the hook blocked deleting it). It is unused; please delete it.
+## For your phone (one pass)
+1. Home: open and close the calendar. It should grow out of the arrow smoothly.
+2. Tap the streak icon. It should open fast, with 6 upright stars, 3 on each side.
+3. Train tab + calendar: a missed day has a small red icon under it.
+4. Create Workout: tap muscles. They should turn dark instantly, with clean, smooth outlines. Then check the Progress map looks the same.
+5. Progress: the Form checks list shows 2 rows plus "View all", which opens the full list.
+6. Finish a workout, then tap All sets. The slide should be smooth.
+7. Onboarding rank wheel and rank reveal: the Champion icon is never squished.
+8. Save Your Progress: a dark gradient background, the logo, and "Continue with Email".
 
-## Files for you to delete (I did not)
-`scripts/measure-preview-open.js` (above), `components/onboarding/SpaceBackground.tsx` (no longer used), plus the earlier list: `components/DoneScreen.tsx`, `components/SavedCheck.tsx`, `lib/doneTimeline.ts` (check first), the `scripts/_*.js` scratch files, `train_wk_webkit.png`, the unused `SessionLogReview` and `handleReviewDone` in `app/formcheck.tsx`, the unused `NotificationBanner` and `nq` styles in `app/onboarding.tsx`, and `lib/progressBodyMap.ts`.
-
-## Questions
-- Item 4: do you want the exclamation mark on the other done titles too?
-- Item 6: if the preview sheet still lags, send the two `[PREVIEW]` log lines.
-- Item 7: if Bronze still looks wrong, send a screenshot.
+## Blocked / for you to delete
+- `rm scripts/measure-preview-open.js` (an empty stub from round 11; the hook blocks rm).
+- `components/onboarding/GymBackground.tsx` and `components/onboarding/SpaceBackground.tsx` are no longer used.

@@ -10,7 +10,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Animated, Dimensions, Platform, ScrollView, Image } from 'react-native';
-import { fitInBox } from '../../lib/fitInBox';
+import RankShield, { shieldSize } from './RankShield';
 import * as Haptics from '../../lib/haptics';
 import { SymbolView } from 'expo-symbols';
 import { LiquidGlassButton } from '../LiquidGlass';
@@ -37,7 +37,7 @@ const TILE_H = 300;
 const SHIELD_BOX_W = ITEM_W * 0.98, SHIELD_BOX_H = TILE_H * 0.96;
 // Every shield is drawn at ITS OWN proportions (round 11): the box is only a limit. The Champion shield is taller than wide (226 x 320) and the rest are square
 // (320 x 320); one fixed width and height stretched the square ones, and the image's resizeMode is not reliable on every build, so the exact size is worked out here.
-const SHIELD_SIZES = RANKS.map((r) => { const a = Image.resolveAssetSource(r.img); return fitInBox(a?.width ?? 320, a?.height ?? 320, SHIELD_BOX_W, SHIELD_BOX_H); });
+export const SHIELD_SIZES = RANKS.map((r) => shieldSize(r.img, SHIELD_BOX_W, SHIELD_BOX_H)); // (round 12: drawn by components/onboarding/RankShield.tsx, never stretched)
 
 export default function RankWheelScreen({
   topInset,
@@ -136,7 +136,7 @@ export default function RankWheelScreen({
           const tx = scrollX.interpolate({ inputRange, outputRange: [30, 0, -30], extrapolate: 'clamp' });
           return (
             <Animated.View key={r.name} style={[s.tile, { opacity, transform: [{ translateX: tx }, { scale }] }]}>
-              <Animated.Image key={r.name} source={r.img} resizeMode="contain" style={[s.shield, SHIELD_SIZES[i], { resizeMode: 'contain' } as any]} testID={'rank-shield-' + r.name} />
+              <RankShield key={r.name} src={r.img} boxW={SHIELD_BOX_W} boxH={SHIELD_BOX_H} shadow testID={'rank-shield-' + r.name} />
             </Animated.View>
           );
         })}
@@ -190,9 +190,6 @@ const s = StyleSheet.create({
   mid: { flex: 1, justifyContent: 'center' },
   flow: { height: TILE_H, flexGrow: 0 },
   tile: { width: ITEM_W, height: TILE_H, alignItems: 'center', justifyContent: 'center' },
-  shield: {
-    ...({ filter: 'drop-shadow(0 16px 24px rgba(17,17,20,0.24))' } as any),
-  },
 
   meta: { paddingHorizontal: 26, alignItems: 'center', marginTop: 2 },
   name: { fontFamily: PJS.extrabold, fontSize: 26, color: '#111114', letterSpacing: -0.8 },

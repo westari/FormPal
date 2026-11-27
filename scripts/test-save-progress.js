@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * scripts/test-save-progress.js  (round 10, item 7)
- * "Save your progress" (round 11): a dark GYM screen (back wall, dumbbell rack, barbells, kettlebells; not space), the REAL FormPal logo, pill buttons
+ * "Save your progress" (round 12): a plain dark gradient (no drawn background), the REAL FormPal logo, pill buttons
  * at the bottom (white Apple, grey email), footer links, a "Last used" tag on the button used last. Rendered with react-native-web in Chromium at
  * 390 x 844 (the sign-in code is replaced by stubs; the screen's own layout and drawing are the real ones). Screenshot: .scratch/save-progress.png
  */
@@ -39,6 +39,7 @@ const FAKE = {
   'react-native-svg': (() => { const el = (tag) => ({ children, style, pointerEvents, ...p }) => h(tag, { ...p, style: tag === 'svg' ? { position: 'absolute', left: 0, top: 0 } : undefined }, children);
     return { __esModule: true, default: el('svg'), Defs: el('defs'), LinearGradient: el('linearGradient'), RadialGradient: el('radialGradient'), Stop: el('stop'), Rect: el('rect'), Circle: el('circle'), Ellipse: el('ellipse'), Path: el('path'), G: el('g'), Line: el('line') }; })(),
   '../../assets/images/formpal-logo.png': { uri: pathToFileURL(path.join(ROOT, 'assets', 'images', 'formpal-logo.png')).href },
+  'expo-linear-gradient': { LinearGradient: ({ colors, style }) => h(RNW.View, { style: [style, { backgroundImage: 'linear-gradient(180deg,' + colors.join(',') + ')' }], testID: 'save-bg' }) },
   './OnbBackButton': { __esModule: true, default: ({ scheme }) => h(RNW.Text, { style: { width: 34, height: 34, fontSize: 1, color: '#0d0d11' } }, 'BACKBTN-' + scheme) },
 };
 const prev = Module._load;
@@ -67,12 +68,13 @@ Module._load = function (r) { if (FAKE[r]) return FAKE[r]; return prev.apply(thi
     const stars = svg ? [...svg.querySelectorAll('circle')].filter((c) => +c.getAttribute('r') < 2 && c.getAttribute('fill') === '#ffffff').length : 0;
     const rects = svg ? svg.querySelectorAll('rect').length : 0;
     const lg = document.querySelector('[data-testid="formpal-logo"]');
-    return { txt, apple: btn('Continue with Apple'), email: btn('Continue with email'), logo: lg ? { ...rect(lg), nat: lg.naturalWidth } : null, rects, priv: rect(find('Privacy policy')), terms: rect(find('Terms of service')), stars, hasSvg: !!svg, root: [...document.querySelectorAll('div')].map((d) => getComputedStyle(d).backgroundColor).find((c) => c === 'rgb(12, 12, 16)') || 'none', back: (txt.match(/BACKBTN-(\w+)/) || [])[1] };
+    const bgEl = document.querySelector('[data-testid="save-bg"]'); const bg = bgEl ? getComputedStyle(bgEl).backgroundImage : '';
+    return { txt, apple: btn('Continue with Apple'), email: btn('Continue with Email'), logo: lg ? { ...rect(lg), nat: lg.naturalWidth } : null, rects, bg, priv: rect(find('Privacy policy')), terms: rect(find('Terms of service')), stars, hasSvg: !!svg, root: [...document.querySelectorAll('div')].map((d) => getComputedStyle(d).backgroundColor).find((c) => c === 'rgb(11, 11, 14)') || 'none', back: (txt.match(/BACKBTN-(\w+)/) || [])[1] };
   });
   console.log('      ', JSON.stringify({ apple: m.apple && m.apple.r, email: m.email && m.email.r, logo: m.logo }));
-  check('the background is a dark GYM drawing (a dumbbell rack, barbells, kettlebells, a floor), not space: many drawn shapes, a near-black base, no star field', m.hasSvg && m.rects >= 30 && m.root === 'rgb(12, 12, 16)' && m.stars < 5, JSON.stringify([m.hasSvg, m.rects, m.root, m.stars]));
+  check('round 12: the background is a PLAIN dark gradient (charcoal to near-black), no drawn picture at all (no svg shapes)', /linear-gradient/.test(m.bg) && /rgb\(38, 38, 44\)/.test(m.bg) && /rgb\(11, 11, 14\)/.test(m.bg) && !m.hasSvg && m.root === 'rgb(11, 11, 14)', JSON.stringify([m.bg, m.hasSvg, m.root]));
   check('the logo is the REAL FormPal logo image (assets/images/formpal-logo.png, 132px), loaded, sitting a little below the middle and centred; no drawn placeholder or wordmark', !!m.logo && m.logo.nat === 1012 && Math.abs(m.logo.w - 132) < 1 && m.logo.t > 844 * 0.42 && m.logo.t < 844 * 0.56 && Math.abs((m.logo.l + m.logo.r) / 2 - 195) < 2 && !/FormPal/.test(m.txt.replace(/BACKBTN-\w+/, '')), JSON.stringify(m.logo));
-  check('the buttons: "Continue with Apple" is white and "Continue with email" is the grey one, both full-width pills about 60px tall, apple above email', !!m.apple && !!m.email && m.apple.bg === 'rgb(255, 255, 255)' && /rgba\(255, 255, 255, 0\.14\)/.test(m.email.bg) && m.apple.r.h >= 56 && m.email.r.h >= 56 && m.apple.r.b < m.email.r.t && Math.abs(m.apple.r.w - 350) < 2, JSON.stringify([m.apple, m.email]));
+  check('the buttons: "Continue with Apple" is white and "Continue with Email" (capital E) is the grey one, both full-width pills about 60px tall, apple above email', !!m.apple && !!m.email && m.apple.bg === 'rgb(255, 255, 255)' && /rgba\(255, 255, 255, 0\.14\)/.test(m.email.bg) && m.apple.r.h >= 56 && m.email.r.h >= 56 && m.apple.r.b < m.email.r.t && Math.abs(m.apple.r.w - 350) < 2, JSON.stringify([m.apple, m.email]));
   check('they sit at the bottom of the screen, with the footer links ("Privacy policy", "Terms of service") under them', m.email.r.b < m.priv.t && m.priv.t > 844 * 0.8 && m.terms.l > m.priv.r && m.terms.t === m.priv.t, JSON.stringify([m.email.r.b, m.priv, m.terms]));
   check('NO back button on the sign-in choices (it is only on the e-mail form), and no progress bar', m.back === undefined && !/BACKBTN/.test(m.txt));
   check('no Google button (Google sign-in is not built, a dead button is worse than none), and the old checkbox sentences are gone', !/Google/.test(m.txt) && !/I agree to FormPal|Send me tips/.test(m.txt));
@@ -81,6 +83,6 @@ Module._load = function (r) { if (FAKE[r]) return FAKE[r]; return prev.apply(thi
   const src = read('components/onboarding/SaveProgressScreen.tsx');
   check('"Last used": the method used is remembered on the phone after a successful sign-in and shown as a small tag on that button', /LAST_SIGNIN_KEY = 'formpal_last_signin'/.test(src) && (src.match(/rememberLast\('(apple|email)'\)/g) || []).length === 2 && /lastUsed === 'apple'/.test(src) && /lastUsed === 'email'/.test(src) && /Last used/.test(src));
   check('sign-in itself is unchanged: Apple -> Supabase signInWithIdToken, email -> signUp / signInWithPassword, then handleAuthed (push or pull the cloud data) and onAdvance', /signInWithIdToken\(\{\s*provider: 'apple'/.test(src) && /supabase\.auth\.signUp\(\{ email, password \}\)/.test(src) && /signInWithPassword\(\{ email, password \}\)/.test(src) && /const handleAuthed = async/.test(src) && /onAdvance\(\);\n  \};/.test(src));
-  check('the Apple logo is a normal size (26, was 18) and the screen uses the gym background and the real logo (no space background left in use)', /name="apple\.logo" size=\{26\}/.test(src) && /import GymBackground/.test(src) && /import FormPalLogo/.test(src) && !/SpaceBackground/.test(src));
+  check('the Apple logo is a normal size (26), the background is the plain gradient (no GymBackground, no SpaceBackground) and the logo is the real one', /name="apple\.logo" size=\{26\}/.test(src) && /LinearGradient/.test(src) && !/GymBackground|SpaceBackground/.test(src) && /import FormPalLogo/.test(src));
   console.log(failed ? `${failed} FAILED` : 'ALL PASSED'); process.exit(failed ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

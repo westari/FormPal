@@ -18,8 +18,11 @@ import { streakInfo, streakPageJs, type StreakInfo } from '../lib/streakInfo';
 
 const STREAK_HTML = require('../assets/app screens/streak.html');
 
-function streakInject(info: StreakInfo): string {
-  return dcScaleFitJs('#ffffff') + streakPageJs(info) + `
+// Round 12 (opening was laggy): the page starts loading the moment the screen mounts, IN PARALLEL with reading the saved sessions (it used
+// to wait for the sessions first, then start the WebView from nothing). The streak itself is handed in by injectJavaScript as soon as both
+// the page and the numbers are there; the page is still only revealed once it shows the real streak (window.__streakApplied).
+function streakInject(): string {
+  return dcScaleFitJs('#ffffff') + `
 (function(){
   function post(m){ try{ window.ReactNativeWebView.postMessage(m); }catch(e){} }
   document.addEventListener('click', function(e){
@@ -30,7 +33,7 @@ function streakInject(info: StreakInfo): string {
     }
   }, true);
   // revealed only once the page shows the real streak (never the design's own Day 1 first): wait for it, 4s at most
-  (function wait(n){ if (window.__streakApplied || n > 100) post('ready'); else setTimeout(function(){ wait(n + 1); }, 40); })(0);
+  (function wait(n){ if (window.__streakApplied || n > 150) post('ready'); else setTimeout(function(){ wait(n + 1); }, 30); })(0);
 })();
 `;
 }
@@ -44,7 +47,15 @@ export default function StreakScreen() {
   useEffect(() => { let on = true; getAllSessions().then(all => { if (on) setInfo(streakInfo(all, Date.now(), passed)); }).catch(() => { if (on) setInfo(streakInfo([], Date.now(), passed)); }); return () => { on = false; }; }, [passed]);
   const dest = params.dest ?? '/(tabs)/';
   const [ready, setReady] = useState(false);
+  // every page load (a packed design file can report more than one while it unpacks) gets the streak once, as soon as the numbers are known
+  const [loads, setLoads] = useState(0);
   const webRef = useRef<WebView>(null);
+  const sentFor = useRef(0);
+  useEffect(() => {
+    if (!info || !loads || sentFor.current === loads) return;
+    sentFor.current = loads;
+    webRef.current?.injectJavaScript(streakPageJs(info));
+  }, [info, loads]);
   // the page is revealed with a short even fade (it used to pop from nothing to everything in one frame)
   const fade = useRef(new Animated.Value(0)).current;
   useEffect(() => { if (ready) Animated.timing(fade, { toValue: 1, duration: 180, easing: Easing.out(Easing.quad), useNativeDriver: true }).start(); }, [ready, fade]);
@@ -60,7 +71,6 @@ export default function StreakScreen() {
     }
   };
 
-  if (!info) return <View style={styles.flex} />;
   return (
     <View style={styles.flex}>
       <Animated.View style={{ flex: 1, opacity: fade }}>
@@ -70,7 +80,8 @@ export default function StreakScreen() {
         originWhitelist={['*']}
         style={styles.web}
         injectedJavaScriptBeforeContentLoaded={DC_VIEWPORT_JS + NO_ZOOM_JS}
-        injectedJavaScript={CONSOLE_FORWARD_JS + streakInject(info)}
+        injectedJavaScript={CONSOLE_FORWARD_JS + streakInject()}
+        onLoadEnd={() => setLoads((n) => n + 1)}
         onMessage={(e) => {
           const m = e.nativeEvent.data;
           if (m === 'ready') { setReady(true); return; }

@@ -105,6 +105,9 @@ check('days before the plan existed are never "missed"', before.length === 1 && 
   await p.evaluate(() => { const r = [...document.querySelectorAll('div[data-scroll]')].find(x => x.style.overflowX === 'auto' && x.children.length === 7); const a = r.children[5].querySelector('a[href="tr:missed:wA"]'); a.click(); });
   await p.waitForTimeout(200);
   check('page: tapping "Do it today" asks the app to open THAT workout (nav missed:wA)', msgs.some(m => m.type === 'nav' && m.to === 'missed:wA'), JSON.stringify(msgs.filter(m => m.type === 'nav')));
+  const strip = await p.evaluate(() => [...document.querySelectorAll('div[style*="height: 76px"][style*="border-radius: 22px"]')].map((c) => { const slot = [...c.querySelectorAll('div')].find((k) => k.style.width === '12px' && k.style.height === '12px' && k.style.position === 'relative'); const kids = slot ? [...slot.children] : []; const moon = kids.find((k) => k.querySelector('path[d^="M20.5 14.6"]')); return { ico: !!(slot && slot.querySelector('[data-missed-ico] circle[fill="#FF3B30"]')), moon: moon ? parseFloat(moon.style.opacity) : null }; }));
+  console.log('      strip:', JSON.stringify(strip));
+  check('round 12: in the week strip each MISSED day (Mon, Wed this week) shows its own small red icon under it and no moon; the real rest days (Sat, Sun, Tue) keep the moon and no red icon', [2, 4].every((i) => strip[i].ico && !strip[i].moon) && [0, 1, 3].every((i) => !strip[i].ico && strip[i].moon === 1) && !strip[5].ico, JSON.stringify(strip));
   await p.screenshot({ path: path.join(ROOT, '.scratch', 'train-missed.png') });
   const src = fs.readFileSync(path.join(ROOT, 'app', '(tabs)', 'train.tsx'), 'utf8');
   check('app: "missed:<id>" opens /workout with that workout\'s id and its Start button (not preview-only)', /to\.startsWith\('missed:'\)\) router\.push\(\{ pathname: '\/workout', params: \{ id: to\.slice\('missed:'\.length\) \} \}/.test(src));

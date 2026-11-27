@@ -229,7 +229,9 @@ check('rows carry the real Flaticon art', A.hits.every(h => h.icon && h.icon.sta
 {
   // body map: only the worked muscles are coloured
   const idByD = {};
-  for (const [id, d] of Object.entries({ ...paths.MUSCLE_MAP_FRONT_PATHS, ...paths.MUSCLE_MAP_BACK_PATHS })) idByD[d] = id;
+  // round 12: the map draws the CLEAN shapes (smooth curves, no slivers: lib/bodyMapSvg cleanPath), so look the fragments up by those
+  const { cleanPath } = require('../lib/bodyMapSvg.ts');
+  for (const [id, d] of Object.entries({ ...paths.MUSCLE_MAP_FRONT_PATHS, ...paths.MUSCLE_MAP_BACK_PATHS })) if (id !== 'silhouette' && cleanPath(d)) idByD[cleanPath(d)] = id;
   const svg = decodeURIComponent(A.bodyMap.replace('data:image/svg+xml;utf8,', ''));
   const colored = new Set();
   for (const m of svg.matchAll(/<path d="([^"]+)" fill="(#[0-9a-fA-F]{6})"/g)) {
@@ -237,10 +239,10 @@ check('rows carry the real Flaticon art', A.hits.every(h => h.icon && h.icon.sta
   }
   const base = [...colored].map(id => id.replace(/-\d+$/, ''));
   const regionIds = (mu) => paths.MUSCLE_MAP_REGIONS[mu].ids;
-  const expected = new Set([...regionIds('shoulders'), ...regionIds('triceps'), ...regionIds('traps')]); // traps are a helper muscle of the press (placeholder weight 0.15), so they are worked too
+  const expected = new Set([...regionIds('shoulders'), ...regionIds('triceps'), ...regionIds('traps')].filter((id) => Object.values(idByD).includes(id))); // traps are a helper muscle of the press (placeholder weight 0.15), so they are worked too
   check('body map colours the worked muscles (shoulders + triceps fragments)', [...expected].every(id => colored.has(id)), `${colored.size}/${expected.size}`);
   check('body map colours NOTHING else (quads/chest/etc stay neutral)', [...colored].every(id => expected.has(id)), [...new Set(base)].join());
-  check('body map has a clear (~1.6px) outline around both figures', (svg.match(/stroke="#454B5C" stroke-width="6"/g) || []).length === 2);
+  check('body map has a clear, even outline around both figures (round 12: 1.8 screen px, non-scaling)', (svg.match(/stroke="#454B5C" stroke-width="1.8" vector-effect="non-scaling-stroke"/g) || []).length === 2);
   check('body map is front + back side by side', svg.includes('viewBox="78 -9 479 833"') && svg.includes('viewBox="641 -13 483 832"'));
 }
 

@@ -23,7 +23,7 @@ check('data: every group exercise really trains that group in the catalogue', DS
     const lit = [...new Set([...st.querySelectorAll('[data-grp]')].filter((c) => c.getAttribute('fill') === '#111114').map((c) => c.getAttribute('data-grp')))];
     const chips = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'].map((g) => ({ t: g, has: st.querySelectorAll('[data-grp="' + g + '"]').length, on: lit.includes(g) }));
     const rows = [...st.querySelectorAll('[data-cw-row]')].map((r) => r.firstChild.textContent);
-    const heading = [...st.children].find((c) => /Popular| exercises$/.test(c.textContent) && c.children.length === 0);
+    const heading = [...st.querySelectorAll(':scope > div, [data-cw-list] > div')].find((c) => /Popular| exercises$/.test(c.textContent) && c.children.length === 0);
     const r = st.getBoundingClientRect();
     return { chips, rows, heading: heading && heading.textContent, vis: getComputedStyle(st).display !== 'none', left: Math.round(r.left), width: Math.round(r.width), vw: innerWidth };
   });
@@ -76,6 +76,30 @@ check('it fits the phone width (no sideways overflow)', s && s.left >= 0 && s.le
   await page.fill('input[placeholder="Search to add an exercise"]', ''); await page.waitForTimeout(500);
   check('clearing the search brings the starter back', (await state()).vis);
   check('no page errors', !logs.some((l) => /pageerror/.test(l)), logs.filter((l) => /pageerror/.test(l)).join());
+  // round 12: taps are INSTANT and the map is clean
+  {
+    await page.evaluate(() => { window.__cwGroup = ''; window.__cwRender && window.__cwRender(); });
+    const r = await page.evaluate(() => {
+      const st = document.querySelector('[data-cw-starter]'); const mapBefore = st.querySelector('[data-cw-map]');
+      const p = st.querySelector('[data-grp="back"]'); const t0 = performance.now();
+      p.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      const ms = performance.now() - t0; // the colour must already be changed when the tap handler returns (no waiting for a later pass)
+      const lit = p.getAttribute('fill') === '#111114', pill = /Back/.test(st.querySelector('[data-cw-pillrow]').textContent);
+      const list = [...st.querySelectorAll('[data-cw-list] > div')].some((d) => d.textContent === 'Back exercises');
+      const same = st.querySelector('[data-cw-map]') === mapBefore;
+      const svg = mapBefore.querySelector('svg'); const paths = [...svg.querySelectorAll('path')];
+      const even = paths.slice(1).every((x) => x.getAttribute('vector-effect') === 'non-scaling-stroke');
+      const smooth = paths.slice(1).every((x) => !/ L /.test(x.getAttribute('d')));
+      const noAnim = paths.every((x) => !/transition/.test(x.getAttribute('style') || '')) && !/filter/.test(mapBefore.innerHTML.slice(0, 0) + [...mapBefore.querySelectorAll('div')].map((d) => d.getAttribute('style')).join());
+      return { ms: Math.round(ms * 10) / 10, lit, pill, list, same, even, smooth, noAnim, ta: getComputedStyle(mapBefore).touchAction };
+    });
+    console.log('      tap:', JSON.stringify(r));
+    check('round 12: a tap on a muscle is INSTANT: its group is dark, the pill and the list are updated before the tap handler returns (well under one frame)', r.lit && r.pill && r.list && r.ms < 16, JSON.stringify(r));
+    check('round 12: the map is built once: a tap never rebuilds the drawing (only recolours it), no fill fade, no shadow filter to redraw, touch-action manipulation', r.same && r.noAnim && r.ta === 'manipulation');
+    check('round 12: clean, premium shapes: every shape is a smooth curve (no straight-line polygon corners) with an even, non-scaling outline', r.smooth && r.even);
+    await shot('create-starter-map-r12');
+    await page.evaluate(() => { window.__cwGroup = ''; window.__cwRender(); });
+  }
   await browser.close();
   console.log(failed ? `${failed} FAILED` : 'ALL PASSED'); process.exit(failed ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

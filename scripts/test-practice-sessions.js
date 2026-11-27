@@ -10,7 +10,7 @@
  */
 const { openProgress, makeData } = require('./lib/progress-harness.js');
 const SL = require('../lib/sessionLog.ts');
-const { buildProgressData } = require('../lib/progressData.ts');
+const PD = require('../lib/progressData.ts'); const { buildProgressData } = PD;
 const { buildProfileData } = require('../lib/profileData.ts');
 const { streakInfo } = require('../lib/streakInfo.ts');
 const { athltSetDataJs } = require('../lib/dcLogicPatch.ts');
@@ -71,7 +71,10 @@ const sessions = [
     return { text: s.innerText.replace(/\n+/g, ' | '), rows: s.querySelectorAll('[data-fc-ts]').length, below: fcTop > pastTop, w: Math.round(s.getBoundingClientRect().width) };
   });
   console.log('      Form checks section:', JSON.stringify(sec));
-  check('12: the Progress page shows a "Form checks" list BELOW Past workouts, one row per practice set', sec && sec.rows === 3 && sec.below && /Practice Pushup Today/.test(sec.text) && /Today · 10 reps · 90% form/.test(sec.text) && /Yesterday · 10 reps/.test(sec.text), sec && sec.text);
+  check('12 + round 12: the Progress page shows a "Form checks" list BELOW Past workouts with only the 2 NEWEST practice sets, then a "View all" row', sec && sec.rows === 2 && sec.below && /Practice Pushup Today/.test(sec.text) && /Today · 10 reps · 90% form/.test(sec.text) && /Yesterday · 10 reps/.test(sec.text) && /View all/.test(sec.text) && !/Old/.test(sec.text), sec && sec.text);
+  const b0 = msgs.length;
+  await page.evaluate(() => document.querySelector('[data-fc-all]').click());
+  check('round 12: "View all" asks the app for the full list (formChecksAll)', msgs.slice(b0).some((x) => x.type === 'formChecksAll'), JSON.stringify(msgs.slice(b0)));
   const past = await page.evaluate(() => [...document.querySelectorAll('#dc-root div[role="img"][aria-label$=" video"]')].map((e) => e.getAttribute('aria-label')));
   check('12: Past workouts on the page show no practice set', past.every((a) => !/Practice/.test(a)), JSON.stringify(past));
   const before = msgs.length;
@@ -79,6 +82,8 @@ const sessions = [
   const m = msgs.slice(before).find((x) => x.type === 'openWorkout');
   check('12: tapping a Form checks row opens that form check (its recap, with the rep feedback)', m && m.ts === pd.practice[0].ts, JSON.stringify(m));
   await page.screenshot({ path: require('path').join(__dirname, '..', '.scratch', 'form-checks.png') });
+  const pg = require('fs').readFileSync(require('path').join(__dirname, '..', 'app', '(tabs)', 'progress.tsx'), 'utf8'), fcs = require('fs').readFileSync(require('path').join(__dirname, '..', 'app', 'form-checks.tsx'), 'utf8');
+  check('round 12: the app opens the full list screen (app/form-checks.tsx) which lists EVERY form check (the same rows, no limit) and opens a recap on tap', /case 'formChecksAll': .*router\.push\('\/form-checks'/.test(pg) && /formCheckRows\(s\)/.test(fcs) && /openRecap\(router, r\.ts\)/.test(fcs) && PD.formCheckRows(sessions, now).length === 3, String(PD.formCheckRows(sessions, now).length));
   // none: the section is hidden
   const none = Object.assign({}, data, { practice: [] });
   await page.evaluate(athltSetDataJs(none)); await page.waitForTimeout(500);

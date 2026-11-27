@@ -107,6 +107,8 @@ export const TRAIN_LOGIC_EXT = `function (Orig) {
       v.streak = String(d.streak);
       v.noWorkouts = d.myWorkouts.length === 0;
       v.hasWorkouts = !v.noWorkouts;
+      // the week strip (round 12): a missed day gets its own small red icon under it (drawn by missedStripIcons below), never the rest-day moon
+      if (v.cal) v.cal = v.cal.map(function (c, i) { var x = d.days[i]; if (x && (x.missed || x.tag)) { c.moon = 0; c.fire = 0; } return c; });
       v.days = v.days.map(function (c, i) {
         var x = d.days[i];
         if (x) {
@@ -464,11 +466,29 @@ export const TRAIN_WEB_INJECT = `
       }
     }
   }
+  // MISSED DAYS IN THE WEEK STRIP (round 12): rest days show the design's grey moon under the day; a missed day shows its own small red icon in the same spot
+  // (a red disc with a white cross, the moon's size), added once per day cell and removed again if the day is no longer missed.
+  var MISSED_ICON = '<svg width="11" height="11" viewBox="0 0 12 12" style="display:block"><circle cx="6" cy="6" r="5.6" fill="#FF3B30"/><path d="M4.1 4.1l3.8 3.8M7.9 4.1L4.1 7.9" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round"/></svg>';
+  function missedStripIcons() {
+    var d = D(); if (!d || !d.days) return;
+    var cells = document.querySelectorAll('div[style*="height: 76px"][style*="border-radius: 22px"]');
+    if (cells.length !== 7) return;
+    for (var i = 0; i < 7; i++) {
+      var slot = null, kids = cells[i].querySelectorAll('div');
+      for (var k = 0; k < kids.length; k++) { var st = kids[k].style; if (st.width === '12px' && st.height === '12px' && st.position === 'relative') { slot = kids[k]; break; } }
+      if (!slot) continue;
+      var want = !!(d.days[i] && (d.days[i].missed || d.days[i].tag));
+      var have = slot.querySelector('[data-missed-ico]');
+      if (want && !have) { var e = document.createElement('div'); e.setAttribute('data-missed-ico', '1'); e.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;line-height:0;'; e.innerHTML = MISSED_ICON; slot.appendChild(e); }
+      else if (!want && have) have.parentNode.removeChild(have);
+    }
+  }
   function tick() {
     ensureCss();
     lockSearch();
     missedTitles();
     missedTags();
+    missedStripIcons();
     done.fit = fit();
     done.header = header();
     done.sheets = sheets();

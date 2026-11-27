@@ -89,6 +89,16 @@ export function primaryMuscle(entries: SessionEntry[]): string | null {
   return best;
 }
 
+/** Every form check (practice sets, not workouts), newest first, as list rows. The Progress page shows the 2 newest and a "View all" row; app/form-checks.tsx shows all. */
+export function formCheckRows(allSessions: SessionEntry[], now: number = Date.now()): { ts: number; name: string; when: string; meta: string }[] {
+  return groupIntoWorkouts(practiceSessions(allSessions)).map(g => {
+    const first = g.entries[0];
+    const scored = g.entries.some(e => e.formChecked !== false);
+    return { ts: g.ts, name: g.entries.length === 1 ? first.displayName : `${first.displayName} + ${g.entries.length - 1} more`, when: dayLabel(g.ts, now),
+      meta: `${g.totalReps} rep${g.totalReps === 1 ? '' : 's'}${scored ? ' · ' + g.pct + '% form' : ''}` };
+  });
+}
+
 export function buildProgressData(
   allSessions: SessionEntry[], tiers: MuscleTiers, weights: WeightEntry[], now: number = Date.now(),
   extras: { insets?: { top: number; bottom: number; tabCover?: number }; photos?: { id: string; ts: number; pose: 'front' | 'side' | 'back'; thumb: string | null }[] } = {},
@@ -96,12 +106,8 @@ export function buildProgressData(
   // form-check practice is its own list ("Form checks"); everything else on this page is workouts only
   const sessions = workoutSessions(allSessions);
   const practiceList = practiceSessions(allSessions);
-  const practiceGroups = groupIntoWorkouts(practiceList).slice(0, 12).map(g => {
-    const first = g.entries[0];
-    const scored = g.entries.some(e => e.formChecked !== false);
-    return { ts: g.ts, name: g.entries.length === 1 ? first.displayName : `${first.displayName} + ${g.entries.length - 1} more`, when: dayLabel(g.ts, now),
-      meta: `${g.totalReps} rep${g.totalReps === 1 ? '' : 's'}${scored ? ' · ' + g.pct + '% form' : ''}` };
-  });
+  const practiceGroups = formCheckRows(allSessions, now).slice(0, 12);
+  void practiceList;
   const standing = computeOverallStanding(tiers);
   const tier = standing?.tier ?? 'bronze'; // nobody is "Unranked": everyone starts at Bronze
   const idx = tierIndex(tier);

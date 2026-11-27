@@ -195,6 +195,7 @@ export default function ProgressScreen() {
       case 'workoutMenu':
         if (msg.ts != null) askRemoveWorkout(msg.ts, () => { void load(); });
         break;
+      case 'formChecksAll': Haptics.selectionAsync(); router.push('/form-checks' as any); break; // (round 12) the full list of form checks
       case 'openWorkout':
         if (msg.ts != null) openRecap(router, msg.ts);
         break;

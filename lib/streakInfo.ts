@@ -60,40 +60,35 @@ export function streakPageJs(info: StreakInfo): string {
       + '<defs><linearGradient id="' + id + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + c0 + '"/>' + (c1 ? '<stop offset="0.45" stop-color="' + c1 + '"/>' : '') + '<stop offset="1" stop-color="' + c2 + '"/></linearGradient></defs>'
       + '<path d="' + FLAME + '" fill="url(#' + id + ')"/></svg>';
   }
-  // 7 big sparkles (20 to 34px) around the flame. Each fades in and out on its own timing and, every time it fades out, comes back somewhere else.
+  // Round 12: the sparkles have FIXED, balanced places (they were random, so they bunched up or sat in odd spots) and they stay UPRIGHT
+  // (they used to tilt 14 degrees, which read as sideways). Three on each side of the flame, mirrored: a small one high, a big one at the
+  // middle, a mid one low (box space: the flame's box is 170 x 192, its middle at 85, 104). Each only fades and gently grows in place,
+  // on its own timing, so the field twinkles without anything moving around.
   var STAR = 'M12 0c.9 6.6 4.4 10.4 12 12-7.6 1.6-11.1 5.4-12 12-.9-6.6-4.4-10.4-12-12 7.6-1.6 11.1-5.4 12-12Z';
-  var COLORS = ['#ffd36b', '#ffb347', '#ff9a3c', '#ffe39a', '#ffc15a'];
-  var N_STARS = 7;
-  function spot(size){
-    // inside the area around the flame (box 170 x 192) but never over the flame itself (an ellipse around its centre)
-    for (var t = 0; t < 60; t++) {
-      var x = -78 + Math.random() * 326, y = -64 + Math.random() * 252;
-      var dx = (x + size / 2 - 85) / 88, dy = (y + size / 2 - 104) / 104;
-      if (dx * dx + dy * dy > 1) return [x, y];
-    }
-    return [-60, 20];
-  }
+  var COLORS = ['#ffd36b', '#ffb347', '#ff9a3c', '#ffe39a', '#ffc15a', '#ffb347'];
+  // [centre x, centre y, size, cycle seconds, start offset seconds]
+  var SPOTS = [[-22, 18, 22, 3.6, 0.0], [-48, 98, 32, 4.4, 1.6], [-20, 176, 26, 4.0, 3.0],
+               [192, 24, 24, 3.8, 2.2], [218, 104, 30, 4.6, 0.8], [190, 170, 22, 3.4, 2.8]];
   function buildStars(box){
     if (box.querySelector('[data-sk-stars]')) return;
     if (!document.getElementById('sk-stars-css')) {
       var st = document.createElement('style'); st.id = 'sk-stars-css';
-      st.textContent = '@keyframes sk-star { 0% { opacity: 0; transform: scale(0.4) rotate(0deg); } 50% { opacity: var(--peak); transform: scale(1) rotate(14deg); } 100% { opacity: 0; transform: scale(0.4) rotate(0deg); } }';
+      st.textContent = '@keyframes sk-star { 0%, 100% { opacity: 0; transform: scale(0.55); } 50% { opacity: var(--peak); transform: scale(1); } }';
       document.head.appendChild(st);
     }
     var wrap = document.createElement('div');
     wrap.setAttribute('data-sk-stars', '1');
     wrap.style.cssText = 'position:absolute;left:0;top:0;width:0;height:0;pointer-events:none;';
     var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    for (var i = 0; i < N_STARS; i++) {
-      var size = 20 + Math.round(Math.random() * 14), p = spot(size), dur = 3.2 + Math.random() * 2.2;
+    for (var i = 0; i < SPOTS.length; i++) {
+      var sp = SPOTS[i], size = sp[2];
       var el = document.createElement('div');
       el.setAttribute('data-sk-star', '1');
-      el.style.cssText = 'position:absolute;line-height:0;left:' + p[0].toFixed(1) + 'px;top:' + p[1].toFixed(1) + 'px;width:' + size + 'px;height:' + size + 'px;--peak:' + (0.55 + Math.random() * 0.4).toFixed(2) + ';opacity:0;';
+      el.style.cssText = 'position:absolute;line-height:0;left:' + (sp[0] - size / 2) + 'px;top:' + (sp[1] - size / 2) + 'px;width:' + size + 'px;height:' + size + 'px;--peak:' + (i % 2 ? 0.8 : 0.95) + ';opacity:0;will-change:opacity,transform;';
       el.innerHTML = '<svg width="100%" height="100%" viewBox="0 0 24 24"><path d="' + STAR + '" fill="' + COLORS[i % COLORS.length] + '"></path></svg>';
       // staggered from the very first frame (a negative delay starts each star part-way through its own cycle)
-      if (!still) el.style.setProperty('animation', 'sk-star ' + dur.toFixed(2) + 's ease-in-out ' + (-Math.random() * dur).toFixed(2) + 's infinite', 'important');
-      else el.style.setProperty('opacity', '0.5');
-      el.addEventListener('animationiteration', function (ev) { var t = ev.currentTarget, sz = parseFloat(t.style.width) || 10, q = spot(sz); t.style.left = q[0].toFixed(1) + 'px'; t.style.top = q[1].toFixed(1) + 'px'; });
+      if (!still) el.style.setProperty('animation', 'sk-star ' + sp[3] + 's ease-in-out ' + (-sp[4]) + 's infinite', 'important');
+      else el.style.setProperty('opacity', '0.6');
       wrap.appendChild(el);
     }
     box.appendChild(wrap);
