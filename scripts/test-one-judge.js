@@ -117,7 +117,8 @@ const rest = (v, n) => Array(n).fill(v);
   const res = P.run(events, { exerciseId: 'shoulderPress' });
   const miss = res.verdicts.filter((v) => v.src === 'missed');
   console.log('  2026-11-15 through the mirror: ' + miss.map((v) => (v.t / 1000).toFixed(1) + 's ' + (v.show ? v.reason : 'withheld')).join(', '));
-  check('REPLAY 2026-11-15: the half reps get an X (at least 5), every one "Go lower" (the bottom was short in this log), none right after a check', miss.filter((v) => v.show).length >= 5 && miss.filter((v) => v.show).every((v) => v.reason === 'Go lower'));
+  // (2026-11-27 audit) the bottom of the shoulder press NUMBER was short = the press never reached the top: "Go higher" (test-cue-direction.js)
+  check('REPLAY 2026-11-15: the half reps get an X (at least 5), every one "Go higher" (the press never reached the top in this log), none right after a check', miss.filter((v) => v.show).length >= 5 && miss.filter((v) => v.show).every((v) => v.reason === 'Go higher'));
   const old = P.run(events, { exerciseId: 'shoulderPress', nativeMissed: false });
   check('on an OLD build (no onAttemptMissed event) nothing shows for half reps, and every rep still gets its check', old.verdicts.filter((v) => v.src === 'missed').length === 0 && old.verdicts.filter((v) => v.show === 'check').length >= 8);
 }

@@ -57,7 +57,7 @@ import { createMovementMatch } from '../lib/movementMatch';
 import { createCameraConfidence } from '../lib/cameraConfidence';
 import { createGuide, createCoach, createCalmLine, createCueHold, createStartReps, guideLine, GUIDE_LINES, handsMatter } from '../lib/guideCoach';
 import { getExerciseDef } from '../constants/exercises';
-import { crossDue, backAtStart, leftStartZone, deepHalfRep, CROSS_MAX_WAIT_MS } from '../lib/verdictTiming';
+import { crossDue, backAtStart, leftStartZone, deepHalfRep, CROSS_MAX_WAIT_MS, CROSS_EXPECTED_RETURN_MS } from '../lib/verdictTiming';
 import { createSilentWatch, createPositionWatch, POSITION_GAP_WINDOW_MS } from '../lib/noSilentReps';
 import { createSetupGuide, SETUP_TUNING, type SetupDecision } from '../lib/setupGuide';
 import { createAttemptDetector, type DetectorEvent } from '../lib/attemptDetector';
@@ -785,6 +785,8 @@ export default function FormCheckScreen() {
   const [goodReps, setGoodReps] = useState(0);
 
   const [setupAllVisible,   setSetupAllVisible]   = useState(false);
+  // (2026-11-27) the native setup's own answer, with its time: joints the exercise needs are not in view = too close
+  const setupAllVisibleRef = useRef<{ v: boolean; at: number; missing: string }>({ v: false, at: 0, missing: '' });
   const [setupHoldProgress, setSetupHoldProgress] = useState(0);
   const [setupHint,         setSetupHint]         = useState('');
   const setupHintRef = useRef('');
@@ -984,6 +986,8 @@ export default function FormCheckScreen() {
   const startLinesRef = useRef<{ topAngle: number; repExitThreshold: number; repEnterThreshold: number } | null>(null);
   { const dl = EXERCISE_DEFINITIONS[exerciseType] as any; startLinesRef.current = dl && typeof dl.topAngle === 'number' && typeof dl.repExitThreshold === 'number' && typeof dl.repEnterThreshold === 'number' ? { topAngle: dl.topAngle, repExitThreshold: dl.repExitThreshold, repEnterThreshold: dl.repEnterThreshold } : null; }
   const deliverCrossRef = useRef<(reason: string, at: number, why: string, value: number | null, strokeOnPath?: boolean) => void>(() => {});
+  // (2026-11-27) a held cross is checked the moment a metric reading arrives and when its expected return time is up, not only on the 200 ms tick
+  const checkHeldCrossRef = useRef<() => void>(() => {});
   const guideProblemRef = useRef(false);   // a camera-problem Guide line is on screen right now: the number follows it down at the quick rate
   const confidenceRef = useRef<number | null>(null);   // the live camera confidence (0-100), read by the meter
   const lastCountAtRef = useRef(0);                      // when the last rep counted (native or soft)
@@ -1025,7 +1029,7 @@ export default function FormCheckScreen() {
     const sub = addDebugLogListener(e => {
       console.log('[DEBUG]', e.message);
       if (e.message.indexOf('[AWAKE] native') === 0) nativeBuildSeen.current = 'new';
-      { const mv = /^\[METRIC\][^\n]*? value=([-\d.]+)/.exec(e.message) || /^\[REP-TRACE\][^\n]*?angle=([-\d.]+)/.exec(e.message); if (mv) lastMetricRef.current = { v: parseFloat(mv[1]), t: Date.now() }; }
+      { const mv = /^\[METRIC\][^\n]*? value=([-\d.]+)/.exec(e.message) || /^\[REP-TRACE\][^\n]*?angle=([-\d.]+)/.exec(e.message); if (mv) { lastMetricRef.current = { v: parseFloat(mv[1]), t: Date.now() }; checkHeldCrossRef.current(); } }
       if (/^\[REP\] rejected .{1,3} tracking unreliable/.test(e.message)) { unreliableAtRef.current = Date.now(); console.log('[CAMERA] the engine rejected a rep: tracking unreliable (the camera cannot judge it): the number drops and the Guide says why'); }
       counterRef.feedLog(e.message, Date.now());
       matchRef.feed(e.message);
@@ -1093,6 +1097,7 @@ export default function FormCheckScreen() {
     const setupSub = addSetupStatusListener(event => {
       if (!mounted) return;
       setSetupAllVisible(event.allJointsVisible);
+      setupAllVisibleRef.current = { v: event.allJointsVisible, at: Date.now(), missing: event.hint || '' };
       setSetupHoldProgress(event.holdProgress);
       if (!trackingActiveRef.current) {
         const broke = steadyGate.feed(event.allJointsVisible, Date.now(), event.passed);
@@ -1258,6 +1263,21 @@ export default function FormCheckScreen() {
 
   // THE ONE PLACE A CROSS IS SHOWN. A half rep arrives from the engine the moment the stroke turns at its shallow bottom, which is EARLIER than a check (the engine
   // reports a counted rep only once the arms are back at the start position): the cross is held until the metric is back at the start zone (lib/verdictTiming.ts).
+  checkHeldCrossRef.current = () => {
+    const pc = pendingCrossRef.current;
+    if (!pc) return;
+    const now = Date.now();
+    const lm = lastMetricRef.current;
+    const lines = startLinesRef.current;
+    // (2026-11-27) only a reading taken AFTER the engine event counts: the last one before it is from the way down, still in the start zone, and showed the cross at the bottom of the rep
+    const val = lm && now - lm.t < 700 && lm.t >= pc.at - 30 ? lm.v : null;
+    const d = lines ? crossDue(pc, now, val, lines) : { due: true, why: 'no start line for this exercise' };
+    // (a real half rep after a rest is shown even while Movement Match is low, but only when a READING shows the arms really came back up: a complete stroke, down and
+    // back. So while Movement Match is low it does not go on the expected return time; it waits for that reading, or the most it may wait.)
+    const mLow = (() => { const mm = matchRef.result(); return mm.haveData && mm.notTrying; })();
+    if (d.due && pc.onPath && mLow && val === null && /about back/.test(d.why)) return;
+    if (d.due) { pendingCrossRef.current = null; deliverCrossRef.current(pc.reason, pc.at, d.why, val, pc.onPath && !!lines && backAtStart(val, lines)); }
+  };
   deliverCrossRef.current = (reason, at, why, value, strokeOnPath) => {
     const now = Date.now();
     silentWatch.noteAnswered(now);
@@ -1265,7 +1285,7 @@ export default function FormCheckScreen() {
     if (outOfPositionRef.current) { console.log('[ONE-RESULT] missed attempt but NO X shown: out of position (not clearly seen), nothing is judged'); return; }
     // the camera cannot judge it while the Guide is saying so (the number is already capped) or nobody is seen
     if (statsRef.current?.personDetected === false || guideProblemRef.current) { console.log('[CUE] missed attempt but NO X shown: the camera cannot judge it (' + (guideProblemRef.current ? 'the Guide shows a camera problem' : 'no person') + ')'); return; }
-    const cv = coachRef.verdict({ now, match: matchRef.result(), source: 'missed', missedReason: reason, strokeOnPath });
+    const cv = coachRef.verdict({ now, match: matchRef.result(), source: 'missed', missedReason: reason, strokeOnPath, exerciseId: exerciseType });
     if (cv.show !== 'x') return;
     lastJudgedAt.current = now;
     setTimeout(() => setJudgedTick(t => t + 1), JUDGED_QUIET_MS + 50);
@@ -1309,7 +1329,7 @@ export default function FormCheckScreen() {
       // X carries a plain FORM reason (never a camera / setup line: that is the Guide's).
       let shownGood = rep.good, shownReason = rep.reason;
       if (!repCounterOnly) {
-        const cv = coachRef.verdict({ now: Date.now(), match: matchRef.result(), source: 'native', good: rep.good, reason: rep.reason, onPath: matchRef.repOnPath(rep.depthAngle) });
+        const cv = coachRef.verdict({ now: Date.now(), match: matchRef.result(), source: 'native', exerciseId: exerciseType, good: rep.good, reason: rep.reason, onPath: matchRef.repOnPath(rep.depthAngle) });
         if (!cv.show) {
           const timeSecC = startTimestamp.current != null ? (Date.now() - startTimestamp.current) / 1000 : 0;
           repEvents.current.push({ timeSec: timeSecC, good: rep.good, reason: rep.reason });
@@ -1348,6 +1368,7 @@ export default function FormCheckScreen() {
       const now0 = Date.now();
       if (pendingCrossRef.current) { const old = pendingCrossRef.current; pendingCrossRef.current = null; deliverCrossRef.current(old.reason, old.at, 'a newer stroke arrived', lastMetricRef.current ? lastMetricRef.current.v : null); }
       pendingCrossRef.current = { reason: ev.reason, at: now0, reached: ev.reached, needed: ev.needed, onPath: ev.reason === 'short_bottom' && !!sl && deepHalfRep(ev.reached, sl) };
+      setTimeout(() => checkHeldCrossRef.current(), CROSS_EXPECTED_RETURN_MS + 5);
       console.log('[TIMING] engine event at the turn of a half rep (metric ' + (lastMetricRef.current ? lastMetricRef.current.v.toFixed(1) : '?') + '): the cross waits for the arms to be back at the start position (at most ' + CROSS_MAX_WAIT_MS + ' ms)');
     });
     const dbgSub = addDebugStatsListener((e: DebugStatsEvent) => {
@@ -1595,12 +1616,13 @@ export default function FormCheckScreen() {
         frameHint, hintLine,
         handsExercise: handsMatter(exerciseType),
         expectSamples: DEBUG_LOG_ENABLED,
+        jointsMissing: setupPersonRef.current.seen === true && setupAllVisibleRef.current.at > 0 && now - setupAllVisibleRef.current.at < 1000 && !setupAllVisibleRef.current.v,
       });
-      if (dec.stage !== guideRef.current?.stage) console.log(`[SETUP-GUIDE] ${dec.stage}: "${dec.text}" (confidence cap ${dec.cap}, placeholder numbers)`);
+      if (dec.stage !== guideRef.current?.stage || dec.text !== guideRef.current?.text) console.log(`[SETUP-GUIDE] ${dec.stage}: "${dec.text}" (confidence cap ${dec.cap}, placeholder numbers)` + (dec.urgent ? ' at once: Vision sees him but the native setup says joints are not in view (too close)' : ''));
       guideRef.current = dec;
       setGuide(prev => (prev && prev.stage === dec.stage && prev.text === dec.text ? prev : dec));
       // the line the user SEES is calm: it stays up at least 2.5s and only changes when the new reason has held ~1.5s (never 3 lines in a second)
-      const shown = setupCalm.feed(now, dec.text);
+      const shown = setupCalm.feed(now, dec.text, dec.urgent);
       if (shown !== lastSetupShown.current) { lastSetupShown.current = shown; console.log('[GUIDE] setup line now "' + shown + '" (wanted "' + dec.text + '")'); setSetupShown(shown); }
     }, 200);
     return () => clearInterval(id);
@@ -1686,17 +1708,7 @@ export default function FormCheckScreen() {
       confidenceRef.current = conf.value;   // (capped below once the Guide's decision is known)
       // a held cross is shown the moment the arms are back at the start position (or after the most it may wait); a stroke with no verdict at all gets its cross here
       {
-        const pc = pendingCrossRef.current;
-        if (pc) {
-          const lm = lastMetricRef.current;
-          const def = EXERCISE_DEFINITIONS[exerciseType] as any;
-          const lines = def && typeof def.topAngle === 'number' && typeof def.repExitThreshold === 'number' ? { topAngle: def.topAngle, repExitThreshold: def.repExitThreshold } : null;
-          // (2026-11-27) only a reading taken AFTER the engine event counts: the last one before it is from the way down, still in the start zone, and showed the cross at the bottom of the rep
-          const val = lm && now - lm.t < 700 && lm.t >= pc.at - 30 ? lm.v : null;
-          const d = lines ? crossDue(pc, now, val, lines) : { due: true, why: 'no start line for this exercise' };
-          // (a real half rep after a rest is shown even while Movement Match is low, but only when the arms really came back up: a complete stroke, down and back)
-          if (d.due) { pendingCrossRef.current = null; deliverCrossRef.current(pc.reason, pc.at, d.why, val, pc.onPath && !!lines && backAtStart(val, lines)); }
-        }
+        checkHeldCrossRef.current();
         const sil = silentWatch.tick(now, { notTrying: m.haveData && m.notTrying, engineRejectedUnreliable: now - unreliableAtRef.current < 8000 || !!m.cut, lastPoseGapAt: counterRef.lastGapAt() });
         if (sil && sil.kind === 'cross') { console.log('[SILENT] stroke #' + sil.n + ' ended with no verdict from the engine: the screen gives it its cross (' + sil.reason + ')'); deliverCrossRef.current(sil.reason, now - 1300, 'no verdict came for stroke #' + sil.n, null); }
         else if (sil && sil.kind === 'camera') console.log('[SILENT] stroke #' + sil.n + ' ended with no verdict because tracking was unreliable: the camera cannot judge it (the number drops, the Guide says why)');

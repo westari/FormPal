@@ -55,7 +55,7 @@ function firstSaid(res, line) { const r = res.rows.find((x) => x.guide === line)
   check('HANDS LOST at the top of the stroke: "Keep your hands in view"', first !== null);
   check('...and it speaks within about 3 s of the first lost-hands moment (not 5 s + 2 s as before)', first !== null && first - cutStart <= 3500, `${first === null ? 'never' : ((first - cutStart) / 1000).toFixed(1) + ' s after'}`);
   check('...with the evidence in the log line: the samples stopped near the TOP', !!sayRow && /near the TOP/.test(sayRow.guideEvidence), sayRow && sayRow.guideEvidence);
-  const logLines = res.logs.filter((l) => /\[GUIDE\] says "Keep your hands in view"/.test(l.m));
+  const logLines = res.logs.filter((l) => l.m.includes('[GUIDE] says "' + GC.GUIDE_LINES.handsInView + '"'));
   check('the [GUIDE] log line carries its evidence, and no line says "no exact cause found"', logLines.some((l) => /because real camera problem, evidence: /.test(l.m)) && !res.logs.some((l) => /no exact cause/.test(l.m)), logLines[0] && logLines[0].m.slice(0, 160));
 }
 {

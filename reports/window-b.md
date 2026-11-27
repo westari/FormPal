@@ -228,3 +228,130 @@ New: `test-one-result.js` (the real 2026-11-27 log, BEFORE / AFTER for a, b, c, 
 
 ## Needs your phone
 Everything in 1, 2 and 5 works through Metro (no build). The black arrow and the smooth scroll also work through Metro. Only the new `[ATTEMPT-DROPPED]` log line needs the next native build.
+
+
+---
+# Round 13 (2026-11-27, evening): cue direction audit, rep timing, small Guide pill, setup "Move back", onboarding lag, fixed back button, Save your progress, paywall, kept logs
+Merged origin/overnight-build first (clean). The new latest.log (a shoulder press set, 20:22-20:23) is saved as `scripts/fixtures/shoulder-press-2026-11-27b.log.txt`.
+
+## 1. Feedback audit: which way is "full range" (the big one)
+**The bug:** the engine reports a half rep in terms of its own number (the "metric"), not the body: "the number never got down to the rep line" or "it never got back up to the start". For EVERY exercise the number falls while the rep is done, but for a squat that means going DOWN and for a shoulder press it means pressing UP (the upper arm's angle from straight up gets smaller). The app turned "number never got down" into "Go lower" for every exercise. That is backwards for 29 of the 56 exercises: all overhead presses, curls, rows, raises, pull-ups, crunch, the tricep extensions, the jumping jack. On your log every one of the 9 half presses said "Go lower".
+
+**The fix:** the words now come from each exercise itself:
+- a half rep short at the work end uses the exercise's own "not enough range" words (the same words the engine already puts on a counted rep that was too short: PRESS HIGHER, GO DEEPER, CURL HIGHER ...), so a short counted rep and a half rep always say the same thing;
+- a rep that did not get back to the start uses a "back to start" word per exercise (new, e.g. "Lower to shoulders" for presses, "Stand tall" for squats);
+- the same words are used by the screen's own backup cross and by the "why is it not counting" line (a bench press used to get "Go higher" there just because its name has "press" in it).
+
+Other wrong meanings found and fixed:
+- a seated chest press said "Go lower" on a short rep (now "Elbows further back"), and its "press all the way up" became "Go higher" (now "Lock arms out", right for bench and chest press);
+- a step-up said "Go lower" (now "Bend knee more");
+- a seated leg curl said "Curl higher" (now "Curl further");
+- "Keep knees bent" (crunch) had become "Soften your knees", which means something else (now "Keep knees bent");
+- "Stay upright" had become "Stand tall" on seated exercises (machine press, lat pulldown): now "Stay upright".
+
+**Test:** `test-cue-direction.js` has its OWN list of which way each exercise is worked (written from how the exercise is done, not from the app's code) and fails if any short-rep, back-to-start or form-fault word points the wrong way, if any exercise is missing, or if a word is longer than 3 words. Before: wrong for 29 exercises. After: 0. Replaying your log: before 9 x "Go lower", after 9 x "Go higher".
+
+The full table ("reps only" exercises show no check or cross, but have their words ready):
+
+| Exercise | Full range (work end) | Half rep, short at the work end | Did not get back to the start | Other form faults (engine cue -> screen) | BEFORE (every exercise) |
+|---|---|---|---|---|---|
+| squat | down | Go lower | Stand tall | CHEST UP -> "Lift your chest" | Go lower / Go higher |
+| pushup | down | Go lower | Lock arms out | HIPS DOWN -> "Hips lower"; HIPS UP -> "Hips higher" | Go lower / Go higher |
+| lunge | down | Go lower | Stand tall | CHEST UP -> "Lift your chest" | Go lower / Go higher |
+| shoulderPress | up | Go higher | Lower to shoulders | STAY UPRIGHT -> "Stay upright"; ARMS STRAIGHT UP -> "Arms straight up" | Go lower / Go higher |
+| jumpingJack | up | Go higher | Arms down fully | JUMP WIDER -> "Jump wider" | Go lower / Go higher |
+| curl | up | Curl higher | Straighten arms | FULL EXTENSION -> "Straighten arms"; KEEP ELBOW STILL -> "Keep elbow still"; STOP SWINGING -> "Too much swing" | Go lower / Go higher |
+| hammerCurl | up | Curl higher | Straighten arms | FULL EXTENSION -> "Straighten arms"; KEEP ELBOW STILL -> "Keep elbow still"; STOP SWINGING -> "Too much swing" | Go lower / Go higher |
+| concentrationCurl | up | Curl higher | Straighten arms | FULL EXTENSION -> "Straighten arms"; KEEP ELBOW STILL -> "Keep elbow still"; STOP SWINGING -> "Too much swing" | Go lower / Go higher |
+| preacherCurl | up | Curl higher | Straighten arms | FULL EXTENSION -> "Straighten arms"; KEEP ELBOW STILL -> "Keep elbow still"; STOP SWINGING -> "Too much swing" | Go lower / Go higher |
+| reverseCurl | up | Curl higher | Straighten arms | FULL EXTENSION -> "Straighten arms"; KEEP ELBOW STILL -> "Keep elbow still"; STOP SWINGING -> "Too much swing" | Go lower / Go higher |
+| cableCurl | up | Curl higher | Straighten arms | FULL EXTENSION -> "Straighten arms"; KEEP ELBOW STILL -> "Keep elbow still"; STOP SWINGING -> "Too much swing" | Go lower / Go higher |
+| gobletSquat | down | Go lower | Stand tall | CHEST UP -> "Lift your chest" | Go lower / Go higher |
+| airSquat | down | Go lower | Stand tall | CHEST UP -> "Lift your chest" | Go lower / Go higher |
+| frontSquat | down | Go lower | Stand tall | CHEST UP -> "Lift your chest" | Go lower / Go higher |
+| backSquat | down | Go lower | Stand tall | CHEST UP -> "Lift your chest" | Go lower / Go higher |
+| sumoSquat | down | Go lower | Stand tall | CHEST UP -> "Lift your chest" | Go lower / Go higher |
+| kneePushup | down | Go lower | Lock arms out | HIPS DOWN -> "Hips lower"; HIPS UP -> "Hips higher" | Go lower / Go higher |
+| inclinePushup | down | Go lower | Lock arms out | HIPS DOWN -> "Hips lower"; HIPS UP -> "Hips higher" | Go lower / Go higher |
+| widePushup | down | Go lower | Lock arms out | HIPS DOWN -> "Hips lower"; HIPS UP -> "Hips higher" | Go lower / Go higher |
+| diamondPushup | down | Go lower | Lock arms out | HIPS DOWN -> "Hips lower"; HIPS UP -> "Hips higher" | Go lower / Go higher |
+| declinePushup | down | Go lower | Lock arms out | HIPS DOWN -> "Hips lower"; HIPS UP -> "Hips higher" | Go lower / Go higher |
+| closegripPushup | down | Go lower | Lock arms out | HIPS DOWN -> "Hips lower"; HIPS UP -> "Hips higher" | Go lower / Go higher |
+| overheadPress | up | Go higher | Lower to shoulders | STAY UPRIGHT -> "Stay upright"; ARMS STRAIGHT UP -> "Arms straight up" | Go lower / Go higher |
+| arnoldPress | up | Go higher | Lower to shoulders | STAY UPRIGHT -> "Stay upright"; ARMS STRAIGHT UP -> "Arms straight up" | Go lower / Go higher |
+| dumbbellShoulderPress | up | Go higher | Lower to shoulders | STAY UPRIGHT -> "Stay upright"; ARMS STRAIGHT UP -> "Arms straight up" | Go lower / Go higher |
+| machineShoulderPress | up | Go higher | Lower to shoulders | STAY UPRIGHT -> "Stay upright"; ARMS STRAIGHT UP -> "Arms straight up" | Go lower / Go higher |
+| chestPress | neither | Elbows further back | Lock arms out | PRESS ALL THE WAY UP -> "Lock arms out" | Go lower / Go higher |
+| barbellBenchPress | down | Go lower | Lock arms out | PRESS ALL THE WAY UP -> "Lock arms out" | Go lower / Go higher |
+| splitSquat | down | Go lower | Stand tall | CHEST UP -> "Lift your chest" | Go lower / Go higher |
+| reverseLunge | down | Go lower | Stand tall | CHEST UP -> "Lift your chest" | Go lower / Go higher |
+| stepUp | down | Bend knee more | Stand tall | CHEST UP -> "Lift your chest" | Go lower / Go higher |
+| bulgarianSplitSquat | down | Go lower | Stand tall | CHEST UP -> "Lift your chest" | Go lower / Go higher |
+| tricepPushdown | down | Straighten arms | Bend elbows more | KEEP ELBOWS IN -> "Tuck elbows in"; STAY UPRIGHT -> "Stay upright" | Go lower / Go higher |
+| overheadTricepExtension | up | Straighten arms | Bend elbows more | KEEP ELBOWS IN -> "Tuck elbows in"; STAY UPRIGHT -> "Stay upright" | Go lower / Go higher |
+| skullcrusher | up | Straighten arms | Bend elbows more | KEEP ELBOWS IN -> "Tuck elbows in" | Go lower / Go higher |
+| bentOverRow | up | Pull higher | Straighten arms | STOP SWINGING -> "Too much swing" | Go lower / Go higher |
+| barbellRow | up | Pull higher | Straighten arms | STOP SWINGING -> "Too much swing" | Go lower / Go higher |
+| singleArmRow | up | Pull higher | Straighten arms | STOP SWINGING -> "Too much swing" | Go lower / Go higher |
+| invertedRow | up | Pull higher | Straighten arms | STOP SWINGING -> "Too much swing" | Go lower / Go higher |
+| tBarRow | up | Pull higher | Straighten arms | STOP SWINGING -> "Too much swing" | Go lower / Go higher |
+| seatedCableRow (reps only) | neither | Pull to stomach | Straighten arms | SIT UP TALL -> "Sit up tall"; DRIVE ELBOWS BACK -> "Elbows back" | Go lower / Go higher |
+| machineRow (reps only) | neither | Pull to stomach | Straighten arms | SIT UP TALL -> "Sit up tall"; DRIVE ELBOWS BACK -> "Elbows back" | Go lower / Go higher |
+| romanianDeadlift | down | Go lower | Stand tall | STRAIGHTEN YOUR BACK -> "Straighten your back" | Go lower / Go higher |
+| deadlift | down | Go lower | Stand tall | STRAIGHTEN YOUR BACK -> "Straighten your back" | Go lower / Go higher |
+| goodMorning | down | Go lower | Stand tall | STRAIGHTEN YOUR BACK -> "Straighten your back" | Go lower / Go higher |
+| kettlebellSwing | down | Go lower | Stand tall | STRAIGHTEN YOUR BACK -> "Straighten your back" | Go lower / Go higher |
+| singleLegRDL | down | Go lower | Stand tall | STRAIGHTEN YOUR BACK -> "Straighten your back" | Go lower / Go higher |
+| cablePullThrough (reps only) | down | Go lower | Stand tall | STRAIGHTEN YOUR BACK -> "Straighten your back" | Go lower / Go higher |
+| lateralRaise | up | Lift higher | Lower arms fully | CONTROL IT, NO SWINGING -> "Too much swing"; RAISE OUT TO THE SIDES -> "Arms out wide" | Go lower / Go higher |
+| frontRaise | up | Lift higher | Lower arms fully | CONTROL IT, NO SWINGING -> "Too much swing" | Go lower / Go higher |
+| latPulldown (reps only) | down | Pull lower | Arms up fully | STAY UPRIGHT, NO SWINGING -> "Stay upright"; ELBOWS DOWN AND BACK, NOT OUT -> "Elbows back" | Go lower / Go higher |
+| facePull (reps only) | neither | Pull further | Straighten arms | (none) | Go lower / Go higher |
+| pullup | up | Pull higher | Straighten arms | STOP SWINGING -> "Too much swing" | Go lower / Go higher |
+| legCurl (reps only) | neither | Curl further | Straighten legs | (none) | Go lower / Go higher |
+| crunch | up | Full movement | Lie back down | KEEP KNEES BENT -> "Keep knees bent"; DON'T SWING ARMS -> "Don't swing arms" | Go lower / Go higher |
+| dips | down | Go lower | Lock arms out | LOCK OUT AT TOP -> "Straighten arms" | Go lower / Go higher |
+
+## 2. Rep timing
+From the [TIMING] lines: the cross came 125-551 ms after the half rep turned (average 350). Cause: the app only gets the arm number about 2.5 times a second, and the held cross waited for a reading that showed the arms back, checked on a 0.2 s tick. Your arms were actually back about 0.2-0.3 s after the turn. Now the cross is checked the instant a reading arrives and lands 250 ms after the turn, unless a reading says the arms are still down at the bottom. Replay of both 11-27 logs: average 310 -> 241 ms and 288 -> 213 ms, worst 445 -> 297 and 552 -> 304 (the replay ticks every 50 ms; on the phone it is a timer, so 250 ms). The one at 304 ms is a half rep right after a rest: while Movement Match is still low, it waits for a reading that proves the arms came back up (so a resting wobble never gets a cross).
+
+The check: the engine counts a press about 0.3 s after the arms are back (a start-position check, then 3 "confirm" frames at about 10 frames a second). For the five shoulder presses it now needs 2 confirm frames (the start-position check is what stops a rep counting mid-way), so the check lands about 0.1 s sooner. It is part of the exercise definition the app sends, so it works through Metro, but only the next log can prove it. Watch for a press counted twice ([REP] # lines closer than 0.8 s): if that happens, tell me and it goes back to 3. Test: `test-rep-timing.js`.
+
+## 3. Guide pill
+Back to the small pill (240 pt, as before). Every Guide line is now 3 words or fewer: "Turn sideways", "Hands in view" (was "Keep your hands in view"), "Body in view" (was "Keep your whole body in view"), "Move phone back" (was "Move your phone back"); the rest were already short ("Move back", "Step back further", "Hold still", "Find more light", "Face the phone", "Step into view", "Start your reps"). All fit on one line in the small pill (`test-guide-pill-one-line.js`).
+
+## 4. Setup: "Move back" right away
+From the log: from 20:22:26.7 Vision saw you, but the camera's own setup said "whole body not in view: missing wrists, hips" (too close) for seconds. The setup Guide only looked at whether the arm number was flowing, so it said "Hold still" (4.6 s of it in a replay of your log), and every line change also waited about 1.5 s to stay calm. Now: when Vision sees you but the camera's setup says joints are not in view, the line is "Move back", shown at once (no calm delay); never "Hold still" then. Replay: "Hold still" while too close 4.6 s -> 0 s, "Move back" within one 0.2 s tick (`test-setup-too-close.js`).
+
+## 5. Onboarding lag (measured)
+Measured in Chromium with the CPU slowed 6x like a phone (`test-onboarding-smooth.js`):
+- The scripts the app injects into "building your plan" and the plan page (fit, polish, the header, scroll reporting, the Cue orb rule) cost nothing measurable: the page with none of them and with all of them use the same time (1681 vs 1741 ms busy per 6 s on "building your plan", 810 vs 827 on the plan page). So they are not what got slower.
+- What DID change: while "building your plan" animated, the app also loaded the plan page, the trial reminder AND the paywall at the same time, and the hidden pages kept animating behind the goal graph. The paywall got heavier on Nov 22-25 (its blur effects and masks kept on, the breathing orb unfrozen). Measured: a hidden paywall keeps the CPU busy about 1765 ms every 6 s (5 animations running) while you look at the goal graph; paused, 4 ms.
+- Fixes: (1) only the plan page loads during "building your plan"; the trial reminder and the paywall load once the goal graph has finished drawing (4.5 s) or as soon as you leave the plan page (Save your progress and Try for free come before them, so they are ready long before they are needed). (2) A loaded page that is not on screen pauses all its animations and resumes when it comes on screen. (3) The pages no longer report every scrolled frame to the app (that was only for the fading back button, now gone).
+- Rank wheel (native, cannot be measured on the computer): two changes on Nov 27 made it heavier. Every shield got a shadow that follows the picture's shape, which the phone re-computes every frame while the wheel scales and fades the shields, and the wheel moved the shields from the JS thread on every frame. Now the shadow is drawn once and kept as a picture, and the shields' motion runs on the UI thread. Only your phone can show this one.
+
+## 6. Onboarding back button
+It stays fixed in place now: no fading, no moving when the page scrolls. The in-page progress bar is fixed too, so both stay put.
+
+## 7. Save your progress
+Added the title "Save your progress" at the top, and "FormPal" right next to the logo (the logo and the word are centred together). Nothing else changed. Checked in a real render (`test-save-progress.js`, screenshot `.scratch/save-progress.png`).
+
+## 8. Paywall
+- One background, edge to edge: the page had a faint blue / green glow and a grey-blue footer; on wider phones the sides showed that glow stretched. Now the page, its footer fade, the sides and the strip under the status bar are the same plain white. Measured from screenshots on 4 iPhone sizes: before, every edge pixel was off-white and most were bluish (e.g. 237,240,251); after, all white.
+- The page never scrolls or moves: it was 28 px taller than the screen (a bottom padding meant for other pages), so it could move. It is now exactly the screen's height, overflow is off and the web view's own scrolling is off for the paywall. Only the list inside scrolls (`test-paywall-bg.js`).
+
+## 9. Logs: old sessions are kept
+`scripts/log-server.js` (started by `npm run dev`): when it starts, the previous latest.log is MOVED to `logs/session-YYYY-MM-DD_HH-MM-SS.log` (the time it was last written) instead of being wiped. A new app session (a reload) keeps the one before it the same way. Only the newest 20 session files are kept; latest.log works as before. Tested with the real server (`test-log-archive.js`). It takes effect the next time you run `npm run dev` from the main folder (after the merge).
+
+## Tests
+New: `test-cue-direction.js`, `test-rep-timing.js`, `test-setup-too-close.js`, `test-onboarding-smooth.js`, `test-paywall-bg.js`, `test-log-archive.js` (and `scripts/lib/onb-perf.js`). Updated: `test-guide-pill-one-line.js` (3 words, small pill), `test-save-progress.js` (title, word next to the logo).
+Also updated for the new behaviour (they pinned the old, wrong words or the old fading back button): `test-attempts.js`, `test-one-judge.js`, `test-half-reps-newbuild.js`, `test-guide-coach-1113.js`, `test-one-result.js` (a half press says "Go higher"), `test-onboarding-header.js`, `test-onboarding-round10.js`, `test-onboarding-r8.js` (bar and back button fixed), `test-setup-guide.js`, `test-guide-truth.js` (3-word lines), `test-verdict-flow.js`, `test-trial-reminder.js`, `test-paywall-screens.js`. Full suite: 119 of 119 pass.
+
+## Needs your phone (one test list)
+1. Shoulder press half reps: the cross says "Go higher" and lands about when the arms are back; checks a little sooner. Send the log (watch for a press counted twice).
+2. Setup standing close to the phone: "Move back" at once, never "Hold still".
+3. Guide pill: small again, every line on one line.
+4. Onboarding: rank wheel, "building your plan", goal graph: smooth again? Back button and bar stay put when a page scrolls.
+5. Save your progress: title at the top, "FormPal" next to the logo.
+6. Paywall: all white edge to edge; only the list scrolls.
+7. After the merge, restart `npm run dev` once: logs/ should get a session-....log of the run before.

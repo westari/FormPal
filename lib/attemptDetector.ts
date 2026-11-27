@@ -23,6 +23,8 @@
  */
 
 // ── placeholders ──────────────────────────────────────────────────────────────────────────────────────────────────
+import { shortRepCue } from './cueDirection';
+
 export const ATTEMPT_TUNING = {
   smoothMs: 250,            // ...but only readings this recent (see smoothed())
   smoothN: 3,               // median of the last N samples (the log gives a value about every 0.33s)
@@ -85,10 +87,11 @@ export interface Detector {
  * The COACH word for a missed stroke (2-3 plain body words). Only a stroke that stayed SHORT gets one. Anything about the camera
  * (tracking, angle, light, a cut path, the engine paused) returns '' here: that is the GUIDE's business (lib/guideCoach.ts), never an X.
  */
-export function blockerCue(blocker: Blocker, _exerciseId: string | undefined): string {
+export function blockerCue(blocker: Blocker, exerciseId: string | undefined): string {
+  // (2026-11-27) 'bottom-short' / 'top-short' are the METRIC's ends: the body words depend on the exercise (lib/cueDirection.ts)
   switch (blocker) {
-    case 'bottom-short': return 'Go lower';
-    case 'top-short':    return 'Go higher';
+    case 'bottom-short': return (exerciseId && shortRepCue(exerciseId, 'short_bottom')) || 'Go lower';
+    case 'top-short':    return (exerciseId && shortRepCue(exerciseId, 'short_top')) || 'Go higher';
     case 'none':         return 'Full movement';
     default:             return '';
   }

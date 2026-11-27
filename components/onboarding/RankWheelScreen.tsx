@@ -126,7 +126,9 @@ export default function RankWheelScreen({
         contentContainerStyle={{ paddingHorizontal: SIDE_PAD }}
         contentOffset={{ x: 0, y: 0 }}
         scrollEventThrottle={16}
-        onScroll={(e) => { scrollX.setValue(e.nativeEvent.contentOffset.x); onScrollFrame(e); }}
+        // (Ari 2026-11-27: the wheel got laggy) the scale / fade / slide of every shield now runs on the UI thread (native driver): it no longer waits for the JS
+        // thread on every frame (which is busy loading the next onboarding pages at this point). The name / haptic still update from the same events.
+        onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: true, listener: onScrollFrame as any })}
         style={s.flow}
       >
         {RANKS.map((r, i) => {

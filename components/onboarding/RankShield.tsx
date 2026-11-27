@@ -21,6 +21,10 @@ export default function RankShield({ src, boxW, boxH, shadow = false, testID }: 
     <View
       testID={testID}
       style={[size, shadow ? { shadowColor: '#111114', shadowOpacity: 0.24, shadowRadius: 12, shadowOffset: { width: 0, height: 14 } } : null]}
+      // (Ari 2026-11-27: the rank wheel got laggy after the shields got their shadow) a shadow that follows the picture's shape is worked out again on EVERY frame
+      // while the wheel scales and fades the shields; drawn once and kept as a picture (rasterized) it costs nothing while it moves
+      shouldRasterizeIOS={shadow}
+      renderToHardwareTextureAndroid={shadow}
     >
       <Image source={src} resizeMode="contain" style={[{ width: size.width, height: size.height }, { resizeMode: 'contain' } as any]} />
     </View>

@@ -34,9 +34,11 @@ export interface SetupInputs {
   handsExercise: boolean;      // wording: hands vs whole body
   /** debug logging on: metric samples are expected, so none at all means the body is not tracked */
   expectSamples?: boolean;
+  /** (Ari 2026-11-27) Vision sees him, but the native setup says joints the exercise needs are NOT in view (wrists, hips ... cut off): he is too close */
+  jointsMissing?: boolean;
 }
 
-export interface SetupDecision { stage: SetupStage; text: string; cap: number; ready: boolean }
+export interface SetupDecision { stage: SetupStage; text: string; cap: number; ready: boolean; /** show it at once, no calm delay */ urgent?: boolean }
 
 export function createSetupGuide() {
   function update(i: SetupInputs): SetupDecision {
@@ -44,6 +46,8 @@ export function createSetupGuide() {
     // that distance Vision often finds no body at all. While setting up, "nobody found" is therefore said as "Move back", never "Step into view".
     const hinted = i.hintLine === GUIDE_LINES.intoPicture ? GUIDE_LINES.backUp : i.hintLine;
     const fitText = hinted ?? (i.handsExercise ? GUIDE_LINES.backHands : GUIDE_LINES.backBody);
+    // (Ari 2026-11-27: "Hold still" showed for 5 s at 25% while the native setup said wrists and hips were not in view: he was too close.) That is "Move back", at once.
+    if (i.jointsMissing) return { stage: 'fit', text: GUIDE_LINES.backUp, cap: SETUP_TUNING.capFit, ready: false, urgent: true };
     const blind = i.expectSamples !== false && !i.seen;
     if (blind || (i.seen && !i.healthy) || i.frameHint) return { stage: 'fit', text: fitText, cap: SETUP_TUNING.capFit, ready: false };
     return { stage: 'ready', text: GUIDE_LINES.holdStill, cap: SETUP_TUNING.capReady, ready: true };

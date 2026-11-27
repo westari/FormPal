@@ -1530,7 +1530,8 @@ const DC_PAGE_INJECT = `
     if(Math.abs(S-lastS)>=0.002){ lastS=S; root.style.setProperty('transform','scale('+S+')','important'); }
     // +28 tail padding so the grey footnote under the CTA is never clipped
     // by a too-tight body height.
-    document.body.style.setProperty('height', Math.ceil(rh*S + 28)+'px','important');
+    // (2026-11-27) not on the paywall (window.__dcNoTail): there the page must never be taller than the screen, so it can never scroll or move
+    document.body.style.setProperty('height', Math.ceil(rh*S + (window.__dcNoTail ? 0 : 28))+'px','important');
   }
   function painted(){
     var r=document.getElementById('dc-root');
@@ -1617,15 +1618,32 @@ const PAYWALL_TIDY_JS = `(function(){
       var r=document.getElementById('dc-root'); var d=r&&r.querySelector('div[style*="width: 390px"]'); var b=d&&d.style&&d.style.background;
       if(!b){ if(n++<40) setTimeout(mk,100); return; }
       if(document.getElementById('__pw_bg')) return;
-      var e=document.createElement('div'); e.id='__pw_bg'; e.style.cssText='position:fixed;left:-600px;right:-600px;top:-600px;bottom:-600px;z-index:-1;pointer-events:none;background:'+b+';background-size:100% 100%;background-repeat:no-repeat;';
+      var e=document.createElement('div'); e.id='__pw_bg'; e.style.cssText='position:fixed;left:-600px;right:-600px;top:-600px;bottom:-600px;z-index:-1;pointer-events:none;background:'+(window.__pwWhite ? '#ffffff' : b)+';background-size:100% 100%;background-repeat:no-repeat;';
       document.body.appendChild(e);
     })();
   })();
   st.textContent += 'html,body{overscroll-behavior:none!important;}';
+  // (Ari 2026-11-27) THE PAYWALL: (1) ONE background, edge to edge: the design's page had a faint blue / green glow and a grey-blue footer, and the sides of a wide
+  // phone showed that glow stretched, which did not match: now the page, its footer fade and everything around it are the same plain white. (2) The whole page
+  // never scrolls or moves: only the list inside it does (the app also turns the web view's own scrolling off for the paywall).
+  var PW_WHITE = '#ffffff', tries2 = 0;
+  (function white(){
+    var r=document.getElementById('dc-root'); var d=r&&r.querySelector('div[style*="width: 390px"]');
+    if(!d){ if(tries2++<40) setTimeout(white,100); return; }
+    if(!r.querySelector('[data-scroll]')) return;   // only the paywall (the gift offer keeps its own page colour)
+    window.__pwWhite = 1;
+    st.textContent += '#dc-root div[style*="width: 390px"][style*="height: 844px"]{background:'+PW_WHITE+'!important;}'
+      + '#dc-root div[style*="rgba(246,247,250,0)"],#dc-root div[style*="rgba(246, 247, 250, 0)"]{background:linear-gradient(180deg,rgba(255,255,255,0) 0%,rgba(255,255,255,0.97) 22%,#ffffff 100%)!important;}'
+      + 'html,body{overflow:hidden!important;height:100%!important;}';
+    var h=document.documentElement.style; h.setProperty('background',PW_WHITE,'important'); document.body.style.setProperty('background','transparent','important');
+    var e=document.getElementById('__pw_bg'); if(e) e.style.background=PW_WHITE;
+    window.scrollTo(0,0);
+  })();
   var tries=0;
   (function bg(){
     var r=document.getElementById('dc-root'); var d=r&&r.querySelector('div[style*="width: 390px"]');
     var b=d&&d.style&&d.style.background;
+    if(window.__pwWhite) return;
     if(b){ var h=document.documentElement.style; h.setProperty('background',b,'important'); h.setProperty('background-repeat','no-repeat','important'); h.setProperty('background-size','100% 100%','important'); h.setProperty('background-attachment','fixed','important'); document.body.style.setProperty('background','transparent','important'); return; }
     if(tries++<40) setTimeout(bg,100);
   })();
@@ -1703,6 +1721,7 @@ const PAYWALL_TIDY_JS = `(function(){
 // out under the plan cards). PAYWALL_TIDY_JS reveals them (data-pw-shown) when the list starts to scroll.
 const PAYWALL_EARLY_JS = `(function(){
   if (window.__pwEarly) return; window.__pwEarly = 1;
+  window.__dcNoTail = 1;   // (2026-11-27) the paywall page is exactly the screen's height: nothing to scroll
   var CSS = '#dc-root [data-scroll]:not([data-pw-shown]) > div:last-child{opacity:0!important;}#dc-root [data-scroll] > div:last-child{transition:opacity 1200ms ease!important;}';
   function add(){ if (document.getElementById('__pw_early')) return; var h = document.head || document.documentElement; if (!h) return; var s = document.createElement('style'); s.id = '__pw_early'; s.textContent = CSS; h.appendChild(s); }
   add(); try { new MutationObserver(add).observe(document, { childList: true, subtree: true }); } catch (e) {}
@@ -1775,8 +1794,9 @@ function onbHeaderJs(progress: number | null, dark: boolean): string {
     var h = document.getElementById('__onb_hdr');
     if (h) return h;
     h = document.createElement('div'); h.id = '__onb_hdr';
-    // top: 12px = where the native bar sat (the web view already starts below the status bar); absolute, NOT fixed: it moves with the document
-    h.style.cssText = 'position:absolute;top:12px;left:0;right:0;height:34px;z-index:2147483000;display:flex;align-items:center;padding:0 20px;box-sizing:border-box;pointer-events:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;';
+    // top: 12px = where the native bar sat (the web view already starts below the status bar). (Ari 2026-11-27) FIXED: the bar and the back button stay put when
+    // the page scrolls (no moving, no fading)
+    h.style.cssText = 'position:fixed;top:12px;left:0;right:0;height:34px;z-index:2147483000;display:flex;align-items:center;padding:0 20px;box-sizing:border-box;pointer-events:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;';
     // (Ari 2026-11-25) the BACK BUTTON is real Liquid Glass again, drawn natively over the page (a web page cannot draw glass); only the progress bar is part of the page.
     // This spacer is the back button's box, so the bar starts where it always did.
     var b = document.createElement('div'); b.style.cssText = 'flex:none;width:34px;height:34px;pointer-events:none;';
@@ -1795,8 +1815,19 @@ function onbHeaderJs(progress: number | null, dark: boolean): string {
 })(); true;`;
 }
 
-// (round 8) Reports how far the page has scrolled, so the native back button + progress bar (drawn above the page) can scroll away with it instead of floating
-// over the text. Only the page's main scroll counts (the window, or a scroller as tall as most of the screen). One message per frame at most.
+// (2026-11-27) A page that is mounted but NOT on screen (the pool keeps the next pages loaded) pauses all its CSS animations, so it does not spend the phone's
+// time animating things nobody sees while the visible page (building your plan, the goal graph) animates. It resumes when it comes on screen.
+const ONB_PAUSE_JS = `(function(){
+  window.__onbPause = function(p){
+    try {
+      var s = document.getElementById('__onb_pause');
+      if (p) { if (!s) { s = document.createElement('style'); s.id = '__onb_pause'; s.textContent = '*,*::before,*::after{animation-play-state:paused!important;}'; (document.head || document.documentElement).appendChild(s); } }
+      else if (s) { s.parentNode.removeChild(s); }
+    } catch (e) {}
+  };
+})(); true;`;
+
+// (round 8, NOT USED since 2026-11-27: the back button stays fixed) Reported how far the page had scrolled.
 const ONB_SCROLL_REPORT_JS = `(function(){
   if (window.__onbScroll) return; window.__onbScroll = 1;
   var last = 0, raf = 0, val = 0;
@@ -1851,10 +1882,8 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
   const [headerOn, setHeaderOn] = useState(false);   // the header (back button, Restore) shows from 450 ms on: a plain switch, never an animated opacity (real glass)
   useEffect(() => { if (inPageHeaderRef.current) webRef.current?.injectJavaScript('window.__onbSetProgress && window.__onbSetProgress(' + (progress == null ? 'null' : progress) + '); true;'); }, [progress]); // eslint-disable-line react-hooks/exhaustive-deps
   const inPageHeaderRef = useRef(!ONB_INPAGE_HEADER_EXCLUDE.includes(htmlKey) && !ONB_NO_HEADER_KEYS.includes(htmlKey));
-  // (round 8) the back button + progress bar are part of the page: when the page scrolls, they scroll away with it (the page reports its scroll, this moves them)
-  const backScroll = useRef(new Animated.Value(1)).current;   // 1 = the page is at the top, 0 = scrolled: the back button fades away (it does not need to stay)
-  const backHiddenRef = useRef(false);
-  const [backHidden, setBackHidden] = useState(false);
+  // (Ari 2026-11-27) the back button stays FIXED in place like the progress bar: no fading or moving when the page scrolls (the scroll reporting is gone too:
+  // it sent a message across to the app on every scrolled frame)
   const webRef = useRef<WebView>(null);
   // the paywall list scrolls by itself about 5 s after the paywall APPEARS (the page was loaded earlier, hidden, in the pool)
   useEffect(() => {
@@ -1886,6 +1915,11 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
   const shown = useRef(false);
   const [webReady, setWebReady] = useState(false);
 
+  // a pool page that is not on screen pauses its animations; on screen they run (and again once the page has loaded: the bundle may rebuild the head)
+  useEffect(() => {
+    if (!inPool) return;
+    webRef.current?.injectJavaScript('window.__onbPause && window.__onbPause(' + (poolActive ? 'false' : 'true') + '); true;');
+  }, [poolActive, webReady]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (inPool) {
       Animated.timing(containerFade, { toValue: poolActive ? 1 : 0, duration: 200, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
@@ -1943,7 +1977,8 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
   const noHeader = ONB_NO_HEADER_KEYS.includes(htmlKey);
   const inPageHeader = !ONB_INPAGE_HEADER_EXCLUDE.includes(htmlKey) && !noHeader;   // (round 9) the back button + progress bar live inside the page
   // the strip above the page (under the status bar) is the page's own top colour, not white: the page fills to the top of the screen (Ari 2026-11-25)
-  const pageBg = (htmlKey === 'paywall' || htmlKey === 'giftOffer') ? '#f4f4f7' : '#ffffff';
+  // (Ari 2026-11-27) the paywall is one plain white background edge to edge (its page is made white too, PAYWALL_TIDY_JS)
+  const pageBg = htmlKey === 'giftOffer' ? '#f4f4f7' : '#ffffff';
   const baseInject = isDcPage ? DC_PAGE_INJECT : ONBOARDING_WEB_INJECT;
   // planReady stays width-fit (its info rows scroll). Everything else fits
   // to height too so the whole artboard — CTA + "Replay" / footnote under
@@ -1976,16 +2011,11 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
           source={htmlOverride != null ? { html: htmlOverride } : (ONB_HTML[htmlKey] as any)}
           originWhitelist={['*']}
           injectedJavaScriptBeforeContentLoaded={isDcPage ? VIEWPORT_JS + '\n' + CUE_ORB_JS + '\n' + (KEEP_FX_KEYS.includes(htmlKey) ? KEEP_FX_JS + '\n' : '') + (htmlKey === 'paywall' ? PAYWALL_EARLY_JS + '\n' : '') + (extraJsBeforeLoad ?? '') : undefined}
-          injectedJavaScript={(extraJs ? baseInject + '\n' + extraJs : baseInject) + '\n' + (inPageHeader ? onbHeaderJs(progress ?? null, !isDcPage) + '\n' + ONB_SCROLL_REPORT_JS : ONB_SCROLL_REPORT_JS)}
+          injectedJavaScript={(extraJs ? baseInject + '\n' + extraJs : baseInject) + '\n' + (inPageHeader ? onbHeaderJs(progress ?? null, !isDcPage) + '\n' : '') + (inPool ? ONB_PAUSE_JS : '')}
           onLoadEnd={() => setWebReady(true)}
           onMessage={(e) => {
             const m = e.nativeEvent.data;
             if (m === 'onbback') { Haptics.selectionAsync(); onBack(); return; }
-            if (m.indexOf('onbscroll:') === 0) {
-              const hide = (Number(m.slice(10)) || 0) > 12;
-              if (hide !== backHiddenRef.current) { backHiddenRef.current = hide; setBackHidden(hide); Animated.timing(backScroll, { toValue: hide ? 0 : 1, duration: 160, useNativeDriver: true }).start(); }
-              return;
-            }
             if (m === '__tap' || m === '__tick') { Haptics.selectionAsync(); return; }
             if (m === 'rendered') { reveal(); return; }
             if (m.indexOf('pwscroll:') === 0) { console.log('[PAYWALL] auto-scroll: ' + m.slice(9)); return; }
@@ -2006,7 +2036,8 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
           }}
           style={{ flex: 1, backgroundColor: isDcPage ? pageBg : 'transparent' }}
           opaque={isDcPage}
-          scrollEnabled
+          // (Ari 2026-11-27) the paywall page itself never scrolls or moves: only its list scrolls (a scroller inside the page)
+          scrollEnabled={htmlKey !== 'paywall'}
           // The paywall and the gift offer do NOT rubber-band (Ari 2026-11-25: scrolling the whole screen showed white at the bottom and on the sides): the page is one
           // full screen with its own inner list, so there is nothing to bounce. Everything else keeps its bounce.
           bounces={isDcPage && htmlKey !== 'paywall' && htmlKey !== 'giftOffer'}
@@ -2062,12 +2093,12 @@ function OnboardingWebScreen({ htmlKey, onAdvance, onBack, onEditInfo, onEditVal
           ) : null}
         </View>
         ) : null
-      ) : (noHeader || !headerOn || backHidden) ? null : (
+      ) : (noHeader || !headerOn) ? null : (
         <View
           pointerEvents="box-none"
           // Same top offset the native question header's back button lands at (insets.top + that row's own 12px paddingVertical). Real glass, drawn natively
-          // over the page; it fades away once the page scrolls (it does not need to stay on screen). The progress bar is part of the page (or, on a native
-          // page, drawn here).
+          // over the page; it stays FIXED where it is when the page scrolls (Ari 2026-11-27), like the progress bar. The progress bar is part of the page (or, on a
+          // native page, drawn here).
           style={{ position: 'absolute', top: topInset + 12, left: 0, right: 0, zIndex: 80 }}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20 }}>
@@ -2101,6 +2132,7 @@ const web = StyleSheet.create({
 // screen) so it stays a normal one-shot screen, not pooled.
 type PoolKey = 'planReady' | 'trialTimeline' | 'paywall';
 const POOL_ORDER: PoolKey[] = ['planReady', 'trialTimeline', 'paywall'];
+const LATE_POOL_MS = 4500;   // the goal graph draws in about 3.7 s (the line, then the target card at 3.05 s + 0.62 s)
 
 function DcPagePool({ activeKey, answers, topInset, progressFor, onAdvance, onBack, onEditInfo, onEditValue }: {
   activeKey: PoolKey | null;
@@ -2165,9 +2197,21 @@ function DcPagePool({ activeKey, answers, topInset, progressFor, onAdvance, onBa
       .replace('{{SUBLINE}}', esc(subline));
   }, [rawPlanReadyHtml, answers]);
 
+  // (Ari 2026-11-27: "building your plan" and the goal graph got laggy) the trial reminder and the paywall (the two heaviest pages: blur effects, masks, a breathing
+  // orb, a carousel) used to start loading together with the plan page, right while "building your plan" animated, and kept animating hidden behind the goal graph.
+  // Now only the plan page loads during "building your plan"; the other two load once the goal graph has finished drawing (4.5 s on the plan page) or as soon as
+  // he leaves it (Save your progress and Try for free come before the trial reminder, so they are ready long before they are needed).
+  const [lateMounted, setLateMounted] = useState(false);
+  const sawPlanReady = useRef(false);
+  useEffect(() => {
+    if (lateMounted) return;
+    if (activeKey === 'trialTimeline' || activeKey === 'paywall') { setLateMounted(true); return; }
+    if (activeKey === 'planReady') { sawPlanReady.current = true; const t = setTimeout(() => setLateMounted(true), LATE_POOL_MS); return () => clearTimeout(t); }
+    if (activeKey === null && sawPlanReady.current) setLateMounted(true);
+  }, [activeKey, lateMounted]);
   return (
     <View style={StyleSheet.absoluteFill}>
-      {POOL_ORDER.map((key) => (
+      {POOL_ORDER.filter((key) => key === 'planReady' || lateMounted).map((key) => (
         <OnboardingWebScreen
           key={key}
           htmlKey={key}

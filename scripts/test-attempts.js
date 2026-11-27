@@ -122,7 +122,8 @@ check('strokes that did NOT reach the line are not counted (lows of 61-68 stay m
   const atts = evs.filter((e) => e.kind === 'attempt');
   console.log('    outcomes: ' + atts.map((a) => a.outcome).join(', '));
   check('NO ADAPTING: lows that keep stopping at ~56 (line 50) are never accepted as a new range (a half rep always gets an X)', !adaptEv && !logs.some((l) => /ADAPT/.test(l)));
-  check('NO ADAPTING: those attempts never become counted reps: every one is missed with "Go lower"', det.softReps() === 0 && atts.length >= 5 && atts.every((x) => x.outcome === 'missed' && x.blocker === 'bottom-short' && x.reason === 'Go lower'), `soft ${det.softReps()} / ` + atts.map((x) => x.outcome + ':' + x.reason).join(','));
+  // (2026-11-27 audit, scripts/test-cue-direction.js) the shoulder press number falls as the arms go UP: a stroke whose number stops at ~56 never reached lockout = "Go higher"
+  check('NO ADAPTING: those attempts never become counted reps: every one is missed with "Go higher" (the press never reached the top)', det.softReps() === 0 && atts.length >= 5 && atts.every((x) => x.outcome === 'missed' && x.blocker === 'bottom-short' && x.reason === 'Go higher'), `soft ${det.softReps()} / ` + atts.map((x) => x.outcome + ':' + x.reason).join(','));
   check('before adapting, each missed attempt carried a reason (never silent)', atts.filter((a) => a.outcome === 'missed').every((a) => a.reason && a.reason.split(' ').length <= 3), atts.filter((a) => a.outcome === 'missed').map((a) => a.reason).join(','));
 }
 // ── a far-off range is NOT adapted (that is form, not camera angle): the real cue is given instead ─────────────────
@@ -150,14 +151,15 @@ function feedSeq(det, values, startAt, stepMs = 330) {
   try { for (const v of half) { clock += 330; evs.push(...det.feed('[METRIC] shoulderPress value=' + v + ' enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top')); } clock += 3000; evs.push(...det.feed('[METRIC] shoulderPress value=62 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top')); } finally { Date.now = realNow; }
   const at = evs.filter((e) => e.kind === 'attempt');
   console.log('    half presses: ' + at.map((a) => a.outcome + '/' + a.blocker + '/"' + a.reason + '"').join(', '));
-  check('HALF REPS get a reaction: every half press (not high enough) is an attempt, missed, with the reason "Go higher"', at.length >= 3 && at.every((a) => a.outcome === 'missed' && a.blocker === 'top-short' && a.reason === 'Go higher'), at.map((a) => a.reason).join(','));
+  // (2026-11-27 audit) 'top-short' is the METRIC's top: for a press the number never got back up to the start = the arms never came back down to the shoulders
+  check('HALF REPS get a reaction: every stroke that never got back to the start is an attempt, missed, with the reason "Lower to shoulders"', at.length >= 3 && at.every((a) => a.outcome === 'missed' && a.blocker === 'top-short' && a.reason === 'Lower to shoulders'), at.map((a) => a.reason).join(','));
 }
 {
   let clock = 2e12; const det = AD.createAttemptDetector({ exerciseId: 'shoulderPress', now: () => clock });
   const realNow = Date.now; const evs = []; Date.now = () => clock;
   try { for (let r = 0; r < 3; r++) for (const v of [86, 82, 74, 66, 61, 60, 63, 72, 82, 86, 87]) { clock += 330; evs.push(...det.feed('[METRIC] shoulderPress value=' + v + ' enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top')); } clock += 3000; evs.push(...det.feed('[METRIC] shoulderPress value=86 enter=50.0000 exit=58.0000 rom=55.0000 top=84.0 state=up phase=top')); } finally { Date.now = realNow; }
   const at = evs.filter((e) => e.kind === 'attempt' && e.outcome === 'missed');
-  check('a rep that tops out fine but does not come down far enough gets "Go lower"', at.length >= 2 && at.every((a) => a.blocker === 'bottom-short' && a.reason === 'Go lower'), at.map((a) => a.reason).join(','));
+  check('a stroke whose number does not get down to the rep line (the press never reached the top) gets "Go higher"', at.length >= 2 && at.every((a) => a.blocker === 'bottom-short' && a.reason === 'Go higher'), at.map((a) => a.reason).join(','));
   check('every missed attempt has a 1-3 word reason (never silent)', at.every((a) => a.reason && a.reason.split(' ').length <= 3));
 }
 // ── reaching for the phone / fumbling is not an attempt ───────────────────────────────────────────────────────────
@@ -202,7 +204,7 @@ function feedSeq(det, values, startAt, stepMs = 330) {
   check('every cue string in the app (' + list.length + ') is shown as 1-3 plain words', tooLong.length === 0, tooLong.slice(0, 4).map(([a, b]) => a + ' => ' + b).join(' | '));
   check('none of them uses gym jargon (compensation, baseline, parallel, lockout, flexion, torso...)', hard.length === 0, hard.slice(0, 4).map(([a, b]) => a + ' => ' + b).join(' | '));
   check('the detector and diagnostic cues are plain 2-3 words too ("Elbows lower" is gone)', ownBad.length === 0 && ![...own].some((o) => /^elbows lower$/i.test(o)), ownBad.join(', '));
-  check('the words used for a short rep are exactly "Go higher" / "Go lower"', AD2.blockerCue('top-short', 'shoulderPress') === 'Go higher' && AD2.blockerCue('bottom-short', 'shoulderPress') === 'Go lower');
+  check('the words used for a short rep are each exercise own (shoulder press: "Go higher" / "Lower to shoulders"; squat: "Go lower" / "Stand tall")', AD2.blockerCue('bottom-short', 'shoulderPress') === 'Go higher' && AD2.blockerCue('top-short', 'shoulderPress') === 'Lower to shoulders' && AD2.blockerCue('bottom-short', 'squat') === 'Go lower' && AD2.blockerCue('top-short', 'squat') === 'Stand tall');
 }
 console.log(failed ? `\n${failed} FAILED` : '\nall passed');
 process.exit(failed ? 1 : 0);

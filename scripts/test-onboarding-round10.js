@@ -92,13 +92,14 @@ const esc = (s) => JSON.stringify(s).slice(1, -1);
 
   console.log('--- the headers ---');
   const ob = read('app/onboarding.tsx');
-  check('no back button and no bar for generatePlan, planReady and trialTimeline', ob.includes("ONB_NO_HEADER_KEYS: string[] = ['generatePlan', 'planReady', 'trialTimeline']") && ob.includes('(noHeader || !headerOn || backHidden) ? null : (') && ob.includes('&& !noHeader;'));
+  check('no back button and no bar for generatePlan, planReady and trialTimeline', ob.includes("ONB_NO_HEADER_KEYS: string[] = ['generatePlan', 'planReady', 'trialTimeline']") && ob.includes('(noHeader || !headerOn) ? null : (') && ob.includes('&& !noHeader;'));
   const sp = read('components/onboarding/SaveProgressScreen.tsx'), tf = read('components/onboarding/TryForFreeScreen.tsx');
   check('Save your progress: no back button and no bar (only its e-mail form keeps a way back to the sign-in choices); Try for free: none at all', sp.includes('{emailMode ? <OnbBackButton') && !sp.includes('progress != null && (') && !tf.includes('<OnbBackButton') && !tf.includes('progress != null &&'));
   const gb = read('components/GlassBackButton.tsx'), ob2 = read('components/onboarding/OnbBackButton.tsx');
   check('the onboarding back button is the standard real glass (not the light imitation) and the chevron is nudged a little left (1.5 pt)', ob2.includes('scheme="standard"') && gb.includes("STANDARD_GLASS.colorScheme") && gb.includes('translateX: -1.5'));
   check('the paywall back button is the ONE standard real glass button, with a shadow outside the glass so it can be seen, and both it and Restore are fixed (nothing moves with the page)', ob.includes('shadowOpacity: 0.22, shadowRadius: 9') && !ob.includes('translateY: headerY') && !/headerY/.test(ob) && !ob.includes('variant="clear" colorScheme="light"'));
-  check('the progress bar is part of the page (flat, scrolls with it), the back button fades away once the page has scrolled', ob.includes("var b = document.createElement('div'); b.style.cssText = 'flex:none;width:34px;height:34px;pointer-events:none;';") && ob.includes('toValue: hide ? 0 : 1'));
+  // (Ari 2026-11-27) both stay FIXED in place when the page scrolls
+  check('the progress bar is part of the page and FIXED (it stays put), and the back button stays put too (no fading)', ob.includes("var b = document.createElement('div'); b.style.cssText = 'flex:none;width:34px;height:34px;pointer-events:none;';") && ob.includes("h.style.cssText = 'position:fixed;top:12px;") && !ob.includes('toValue: hide ? 0 : 1') && !ob.includes('backHidden'));
   console.log(failed ? `\n${failed} FAILED` : '\nall passed');
   process.exit(failed ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

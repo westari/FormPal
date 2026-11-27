@@ -11,6 +11,11 @@
  */
 export const START_ZONE_FRACTION = 0.6;
 export const CROSS_MAX_WAIT_MS = 1100;
+/** (Ari 2026-11-27: "both check and cross still come a bit late") The app sees the metric only about 2.5 times a second ([METRIC] every 0.4 s), so waiting for a
+ *  reading that shows the arms back cost up to 0.4 s plus the 0.2 s screen tick (the 2026-11-27 log: crosses 125-551 ms after the engine event). In that log the arms
+ *  were back about 0.2-0.3 s after the event (the next reading 0.2-0.4 s after it already showed them back), so the cross now lands this long after it unless a reading says the arms are still down at the bottom. A reading that shows the arms still out holds it
+ *  (up to the max); a reading that shows them back shows it at once. PLACEHOLDER from that log. */
+export const CROSS_EXPECTED_RETURN_MS = 250;
 
 export interface StartLines { topAngle: number; repExitThreshold: number }
 
@@ -24,11 +29,14 @@ export function backAtStart(value: number | null, d: StartLines): boolean {
   return d.topAngle >= d.repExitThreshold ? value >= lvl : value <= lvl;
 }
 
-export interface PendingCross { reason: string; at: number }
+export interface PendingCross { reason: string; at: number; /** the half rep's own bottom (engine reached) */ reached?: number }
 
 /** Is this held cross due now? why = the words for the log. */
 export function crossDue(p: PendingCross, now: number, value: number | null, d: StartLines): { due: boolean; why: string } {
   if (backAtStart(value, d)) return { due: true, why: 'the arms are back at the start position' };
+  // the expected return time is up: show it, unless the newest reading says the arms are still down at the half rep's own bottom (a pause there holds it)
+  const stillAtBottom = value !== null && typeof p.reached === 'number' && isFinite(p.reached) && (d.topAngle >= d.repExitThreshold ? value <= p.reached + 3 : value >= p.reached - 3);
+  if (!stillAtBottom && now - p.at >= CROSS_EXPECTED_RETURN_MS) return { due: true, why: `the arms are about back (${CROSS_EXPECTED_RETURN_MS} ms after the turn${value === null ? ', no newer reading' : ', on the way up at ' + value.toFixed(1)})` };
   if (now - p.at >= CROSS_MAX_WAIT_MS) return { due: true, why: `waited the most (${CROSS_MAX_WAIT_MS} ms)` };
   return { due: false, why: '' };
 }

@@ -60,7 +60,7 @@ const EXACT: Record<string, string> = {
   "keep elbows in": "Tuck elbows in",
   "keep elbows in, don't flare": "Tuck elbows in",
   "keep heels down": "Heels on floor",
-  "keep knees bent": "Soften your knees",
+  "keep knees bent": "Keep knees bent",   // (2026-11-27 audit: "Soften your knees" said something else)
   "keep torso still. swinging body": "Keep body still",
   "keep torso still. using body to push": "Keep body still",
   "knees out": "Push knees out",
@@ -70,7 +70,7 @@ const EXACT: Record<string, string> = {
   "lower further": "Go lower",
   "lower more": "Go lower",
   "lower more. not returning to shoulder height": "Lower your arms",
-  "press all the way up": "Go higher",
+  "press all the way up": "Lock arms out",   // (2026-11-27 audit: a seated chest press goes FORWARD, not up; "Lock arms out" is right for bench and chest press)
   "press higher": "Go higher",
   "press higher. not reaching overhead": "Go higher",
   "pull down further": "Pull lower",
@@ -91,8 +91,8 @@ const EXACT: Record<string, string> = {
   "sit up tall": "Sit up tall",
   "stand fully. not returning to standing": "Stand tall",
   "stand fully. not returning upright": "Stand tall",
-  "stay upright": "Stand tall",
-  "stay upright, no swinging": "Stand tall",
+  "stay upright": "Stay upright",   // (2026-11-27 audit: several of these are seated: machine press, lat pulldown)
+  "stay upright, no swinging": "Stay upright",
   "straighten your back": "Straighten your back",
   "turn side-on": "Turn sideways",
   "uneven — one side lagging": "Even it out",
@@ -129,7 +129,9 @@ export const SETUP_ONLY_CUES = new Set(['Adjust position', 'Face the camera', 'F
 const GUIDE_WORDS_IN_TEXT = /\b(phone|camera|frame|picture|light)\b/i;
 
 /** The Coach's word list: every plain form cue the app can show on an X. Never a setup line. */
-export const COACH_WORDS: string[] = Array.from(new Set(['Go higher', 'Go lower', 'Full movement', ...Object.values(EXACT)])).filter((w) => !SETUP_ONLY_CUES.has(w));
+/** (2026-11-27) the words for getting back to the start position after a half rep (lib/cueDirection.ts RETURN_CUE) */
+export const RETURN_WORDS = ['Stand tall', 'Lock arms out', 'Lower to shoulders', 'Arms down fully', 'Straighten arms', 'Bend elbows more', 'Lower arms fully', 'Arms up fully', 'Straighten legs', 'Lie back down'] as const;
+export const COACH_WORDS: string[] = Array.from(new Set(['Go higher', 'Go lower', 'Full movement', 'Bend knee more', 'Elbows further back', 'Curl further', ...RETURN_WORDS, ...Object.values(EXACT)])).filter((w) => !SETUP_ONLY_CUES.has(w));
 
 /** The Coach version of a cue (2-3 plain form words), or null when the text is a setup / camera line (that is the Guide's). */
 export function coachLine(text: string | null | undefined): string | null {

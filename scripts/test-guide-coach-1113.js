@@ -47,7 +47,7 @@ console.log(`replayed ${events.length} lines, ${(events[events.length - 1].t / 1
 // 5. a real half rep (the 07:37 slow press, 0.4R+) gets its X
 {
   const xs = res.verdicts.filter((v) => v.show === 'x' && v.src === 'missed');
-  check('HALF REP: a real half rep (low 73, high 85, a 12-degree stroke) now gets "Go lower" (before: thrown out as "stays up near the top")', xs.some((v) => v.reason === 'Go lower' && v.t > 55000 && v.t < 70000), xs.map((v) => (v.t / 1000).toFixed(1) + 's ' + v.reason).join(', '));
+  check('HALF REP: a real half rep (low 73, high 85, a 12-degree stroke) now gets a cross, "Go higher" for this press (before: thrown out as "stays up near the top")', xs.some((v) => v.reason === 'Go higher' && v.t > 55000 && v.t < 70000), xs.map((v) => (v.t / 1000).toFixed(1) + 's ' + v.reason).join(', '));
   const tiny = res.verdicts.filter((v) => v.src === 'missed' && v.t > 29700 && v.t < 38700);
   check('the flat rest at 73 (07:03 to 07:12) produces no missed-attempt event at all (the engine sees no stroke there)', tiny.length === 0, tiny.length + ' event(s)');
 }

@@ -154,8 +154,15 @@ export default function SaveProgressScreen({
           </Pressable>
         </View>
 
+        {/* (Ari 2026-11-27) the screen's title at the top */}
+        <Text style={s.title} accessibilityRole="header">Save your progress</Text>
+
+        {/* (Ari 2026-11-27) the word "FormPal" right next to the logo */}
         <View style={s.logoWrap} pointerEvents="none">
-          <FormPalLogo size={132} />
+          <View style={s.logoRow}>
+            <FormPalLogo size={132} />
+            <Text style={s.wordmark} testID="formpal-wordmark">FormPal</Text>
+          </View>
         </View>
 
         {!emailMode ? (
@@ -241,6 +248,9 @@ const s = StyleSheet.create({
 
   // the real FormPal logo, a little above the buttons, over the dark floor of the gym
   logoWrap: { position: 'absolute', left: 0, right: 0, top: '47%', alignItems: 'center' },
+  logoRow: { flexDirection: 'row', alignItems: 'center' },
+  wordmark: { fontFamily: PJS.extrabold, fontSize: 44, color: '#ffffff', letterSpacing: -1.2, marginLeft: 10 },
+  title: { fontFamily: PJS.extrabold, fontSize: 32, lineHeight: 38, color: '#ffffff', letterSpacing: -0.8, paddingHorizontal: 20, marginTop: 18 },
 
   // everything below the logo is pushed to the bottom
   body: { flex: 1, justifyContent: 'flex-end', paddingHorizontal: 20 },

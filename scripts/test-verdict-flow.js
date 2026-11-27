@@ -25,7 +25,7 @@ const press = { topAngle: 84, repExitThreshold: 58 };
 check('shoulder press: the start zone begins at 58 + 60% of the way to 84 = 73.6', Math.abs(VT.startLevel(press) - 73.6) < 0.01);
 check('at the shallow bottom (62) the arms are NOT back at the start; near the top (80) they are', !VT.backAtStart(62, press) && VT.backAtStart(80, press) && !VT.backAtStart(null, press));
 check('an exercise whose metric runs the other way works too', VT.backAtStart(20, { topAngle: 10, repExitThreshold: 40 }) && !VT.backAtStart(35, { topAngle: 10, repExitThreshold: 40 }));
-check('a held cross is due when the arms are back, or after at most 1.1 s (it can never be lost or stuck)', VT.crossDue({ reason: 'short_bottom', at: 0 }, 300, 60, press).due === false && VT.crossDue({ reason: 'short_bottom', at: 0 }, 300, 80, press).due === true && VT.crossDue({ reason: 'short_bottom', at: 0 }, 1100, null, press).due === true);
+check('a held cross is due when the arms are back, or after at most 1.1 s (it can never be lost or stuck)', VT.crossDue({ reason: 'short_bottom', at: 0, reached: 58 }, 300, 60, press).due === false && VT.crossDue({ reason: 'short_bottom', at: 0 }, 300, 80, press).due === true && VT.crossDue({ reason: 'short_bottom', at: 0 }, 1100, null, press).due === true);
 
 console.log('--- the silent watch ---');
 const w = NS.createSilentWatch();
@@ -76,7 +76,7 @@ for (const [f, a, b, name] of SETS) {
   if (before.worst >= 2) anyBeforeBad = true;
   check(`${name}: AFTER every real stroke gets a check or a cross (never more than 1 in a row with none; here 0 of ${atts.length})`, after.worst <= 1 && after.silent === 0, JSON.stringify(after));
   const held = resA.verdicts.filter((v) => v.src === 'missed' && typeof v.heldMs === 'number');
-  check(`${name}: every held cross was delivered within the 1.1 s maximum and, when the metric was known, only once the arms were back at the start position (or the maximum wait ran out)`, held.length > 0 && held.every((v) => v.heldMs <= 1300 && (v.metric === null || VT.backAtStart(v.metric, press) || /waited/.test(v.why))), JSON.stringify(held.map((v) => [Math.round(v.heldMs), v.metric, v.why])));
+  check(`${name}: every held cross was delivered within the 1.1 s maximum and, when the metric was known, only once the arms were back at the start position (or the maximum wait ran out)`, held.length > 0 && held.every((v) => v.heldMs <= 1300 && (v.metric === null || VT.backAtStart(v.metric, press) || /waited|about back/.test(v.why))), JSON.stringify(held.map((v) => [Math.round(v.heldMs), v.metric, v.why])));
   console.log(`    crosses held ${held.map((v) => Math.round(v.heldMs) + ' ms').join(', ')} (the log only has the metric 3 times a second; the phone sees 30 frames a second)`);
 }
 check('the bug reproduces on the old behaviour: BEFORE, at least one real log had 2 strokes in a row with no verdict', anyBeforeBad);

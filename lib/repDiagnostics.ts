@@ -58,6 +58,11 @@ const CUE_HOLD_SEC        = 3;
 
 /** The plain reason a too-small movement was not counted, by kind of exercise. */
 export function shortMovementReason(exerciseId: string | undefined): string {
+  // (2026-11-27 audit) the exercise's own "not enough range" words (a bench / chest press used to get "Go higher" from the /press/ match, a tricep extension "Go further")
+  // (loaded lazily: some tests copy this one file on its own; then the old name rules below still answer)
+  let own: string | null = null;
+  try { own = exerciseId ? (require('./cueDirection') as typeof import('./cueDirection')).shortRepCue(exerciseId, 'short_bottom') : null; } catch (e) { own = null; }
+  if (own && own !== 'Full movement') return own;
   const id = exerciseId ?? '';
   if (/press|overhead/i.test(id)) return 'Go higher';
   if (/raise/i.test(id)) return 'Go higher';

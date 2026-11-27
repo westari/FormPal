@@ -41,8 +41,8 @@ check('native question steps: the back button + progress bar + question are INSI
 check('the Continue button stays at the bottom (outside the scroll), as before', /<\/ScrollView>\s*<View style=\{s\.bn\}>/.test(ob));
 
 // ── scrolls away: web pages ──
-check('web screens (round 11): the header does not follow the page scroll and has no animated opacity (real glass): the back button is native glass in a sibling header, hidden once the page has scrolled, the bar is part of the page', ob.includes('testID="onb-header"') && !ob.includes('translateY: headerY') && ob.includes('(noHeader || !headerOn || backHidden) ? null : (') && /onbscroll:/.test(ob));
-check('the scroll message is handled before the haptic/advance fall-through (a scroll can never advance the screen or buzz)', ob.indexOf("m.indexOf('onbscroll:') === 0") > 0 && ob.indexOf("m.indexOf('onbscroll:') === 0") < ob.indexOf("if (m === '__tap' || m === '__tick')"));
+check('web screens (2026-11-27): the header does not follow the page scroll and has no animated opacity (real glass): the back button is native glass in a sibling header, FIXED in place (never hidden by a scroll), the bar is part of the page', ob.includes('testID="onb-header"') && !ob.includes('translateY: headerY') && ob.includes('(noHeader || !headerOn) ? null : (') && !/m\.indexOf\('onbscroll:'\)/.test(ob));
+check('no page sends scroll messages any more (so a scroll can never advance the screen or buzz)', !ob.includes("m.indexOf('onbscroll:')") && !/\+ ONB_SCROLL_REPORT_JS/.test(ob));
 
 (async () => {
   const code = /const ONB_SCROLL_REPORT_JS = `([\s\S]*?)`;\n/.exec(ob);

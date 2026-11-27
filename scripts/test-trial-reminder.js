@@ -119,7 +119,7 @@ const silent = () => {};
   await br.close();
 
   console.log('--- the paywall top, the back button ---');
-  check('the page fills to the very top: the strip above the page (under the status bar) is the page\'s own colour, not white', ob.includes("const pageBg = (htmlKey === 'paywall' || htmlKey === 'giftOffer') ? '#f4f4f7' : '#ffffff';") && ob.includes('backgroundColor: isDcPage ? pageBg'));
+  check('the page fills to the very top: the strip above the page (under the status bar) is the page\'s own colour, not white', ob.includes("const pageBg = htmlKey === 'giftOffer' ? '#f4f4f7' : '#ffffff';") && ob.includes('backgroundColor: isDcPage ? pageBg'));
   const gb = read('components/GlassBackButton.tsx');
   check('the back button on the paywall and gift offer is the standard GlassBackButton with the STANDARD glass (the Finish pill\'s: dark real glass)', ob.includes('<GlassBackButton onPress') && ob.includes('scheme="standard"') && gb.includes("STANDARD_GLASS.colorScheme"));
   // (Ari 2026-11-27) same real glass, but the arrow is BLACK so it is easy to see (and the no-glass fallback is a light disc, so the black arrow shows there too)

@@ -20,7 +20,7 @@ function load() {
   const { computeGoalPlan } = require('../../lib/onboardingGoals.ts');
   const graph = run(slice('const RESTART_GRAPH_ANIM_JS', 'const DURATION_YEARS'), ['RESTART_GRAPH_ANIM_JS', 'PR_LINE_D', 'PR_LINE_D_DOWN', 'planReadyInject', 'planReadyHeaderText', 'planReadyNoNumber'], { computeGoalPlan });
   const dc = run(slice('const DC_CTA_RE', 'const FIT_BOTH_INJECT'), ['DC_CTA_RE', 'DC_PAGE_INJECT', 'VIEWPORT_JS'], {});
-  const hdr = run(slice('const ONB_INPAGE_HEADER_EXCLUDE', '// (round 8) Reports how far the page has scrolled'), ['ONB_INPAGE_HEADER_EXCLUDE', 'onbHeaderJs'], {});
+  const hdr = run(slice('const ONB_INPAGE_HEADER_EXCLUDE', '// (2026-11-27) A page that is mounted but NOT on screen'), ['ONB_INPAGE_HEADER_EXCLUDE', 'onbHeaderJs'], {});
   return { ...graph, ...dc, ...hdr, SRC };
 }
 module.exports = { load, slice, SRC };

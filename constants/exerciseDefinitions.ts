@@ -4309,6 +4309,11 @@ export function isRepCounterExercise(id: string): boolean {
     if (!d) continue;
     // PLACEHOLDERS: startMin is in raw frame-height units (0.015 = about 5% of a standing torso in a full-body frame).
     d.startPositionGate = { metric: SHOULDER_PRESS_GATE_METRIC, startMin: 0.015, peakMax: 0.0 };
+    // (Ari 2026-11-27: "the check still comes a bit late") the engine analyses about 10 frames a second, so the default 3 confirm frames held the check about 0.3 s
+    // after the gate already said the arms were back (2026-11-27 log: arms back 87.9 at 46.22, counted at 46.52). For these presses the directional gate above
+    // (overhead reached, elbows back below the shoulders) is what stops a mid-rep count, so 2 frames are enough: the check lands about 0.1 s sooner.
+    // PLACEHOLDER: watch the next log for a rep counted twice ([REP] # lines closer than 0.8 s).
+    d.exitConfirmFrames = 2;
     d.setupExtraJoints = id === 'machineShoulderPress' ? UPPER : [...UPPER, 'leftHip', 'rightHip'];
     // REP COUNTING THRESHOLDS, from two real device logs of the same exercise (2026-11-02 and 2026-11-08):
     //  - the rack (start) position reads 61-67 in BOTH logs, so the old exit of 72 was above the rack: it was only

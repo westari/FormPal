@@ -22,7 +22,7 @@ const src = fs.readFileSync(path.join(__dirname, '..', 'app', 'onboarding.tsx'),
 
 // ── static ──
 const a0 = src.indexOf("{(htmlKey === 'paywall' || htmlKey === 'giftOffer') ? (");
-const a1 = src.indexOf(') : (noHeader || !headerOn || backHidden) ? null : (', a0);
+const a1 = src.indexOf(') : (noHeader || !headerOn) ? null : (', a0);
 const block = src.slice(a0, a1);
 check('paywall and gift offer: the back control is the standard glass back button (GlassBackButton), top-left, outside everything that moves with the page', a0 > 0 && block.includes('<GlassBackButton') && block.includes('top: topInset + 8') && src.includes("import GlassBackButton from '../components/GlassBackButton';") && !block.includes('headerY'));
 check('paywall and gift offer: NO X (xmark) any more in that block', !/xmark/.test(block));
